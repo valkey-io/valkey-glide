@@ -348,7 +348,7 @@ export function createMSetNX(
 /**
  * @internal
  */
-export function createIncr(key: string): command_request.Command {
+export function createIncr(key: GlideString): command_request.Command {
     return createCommand(RequestType.Incr, [key]);
 }
 
@@ -356,7 +356,7 @@ export function createIncr(key: string): command_request.Command {
  * @internal
  */
 export function createIncrBy(
-    key: string,
+    key: GlideString,
     amount: number,
 ): command_request.Command {
     return createCommand(RequestType.IncrBy, [key, amount.toString()]);
@@ -366,7 +366,7 @@ export function createIncrBy(
  * @internal
  */
 export function createIncrByFloat(
-    key: string,
+    key: GlideString,
     amount: number,
 ): command_request.Command {
     return createCommand(RequestType.IncrByFloat, [key, amount.toString()]);
@@ -412,7 +412,7 @@ export function createHGet(
  * @internal
  */
 export function createHSet(
-    key: string,
+    key: GlideString,
     fieldValueMap: Record<string, string>,
 ): command_request.Command {
     return createCommand(
@@ -424,7 +424,7 @@ export function createHSet(
 /**
  * @internal
  */
-export function createHKeys(key: string): command_request.Command {
+export function createHKeys(key: GlideString): command_request.Command {
     return createCommand(RequestType.HKeys, [key]);
 }
 
@@ -432,9 +432,9 @@ export function createHKeys(key: string): command_request.Command {
  * @internal
  */
 export function createHSetNX(
-    key: string,
-    field: string,
-    value: string,
+    key: GlideString,
+    field: GlideString,
+    value: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.HSetNX, [key, field, value]);
 }
@@ -442,7 +442,7 @@ export function createHSetNX(
 /**
  * @internal
  */
-export function createDecr(key: string): command_request.Command {
+export function createDecr(key: GlideString): command_request.Command {
     return createCommand(RequestType.Decr, [key]);
 }
 
@@ -450,7 +450,7 @@ export function createDecr(key: string): command_request.Command {
  * @internal
  */
 export function createDecrBy(
-    key: string,
+    key: GlideString,
     amount: number,
 ): command_request.Command {
     return createCommand(RequestType.DecrBy, [key, amount.toString()]);
@@ -801,8 +801,8 @@ export function createBitField(
  * @internal
  */
 export function createHDel(
-    key: string,
-    fields: string[],
+    key: GlideString,
+    fields: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.HDel, [key].concat(fields));
 }
@@ -811,8 +811,8 @@ export function createHDel(
  * @internal
  */
 export function createHMGet(
-    key: string,
-    fields: string[],
+    key: GlideString,
+    fields: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.HMGet, [key].concat(fields));
 }
@@ -821,8 +821,8 @@ export function createHMGet(
  * @internal
  */
 export function createHExists(
-    key: string,
-    field: string,
+    key: GlideString,
+    field: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.HExists, [key, field]);
 }
@@ -830,7 +830,7 @@ export function createHExists(
 /**
  * @internal
  */
-export function createHGetAll(key: string): command_request.Command {
+export function createHGetAll(key: GlideString): command_request.Command {
     return createCommand(RequestType.HGetAll, [key]);
 }
 
@@ -942,9 +942,9 @@ export function createBLMove(
  * @internal
  */
 export function createLSet(
-    key: string,
+    key: GlideString,
     index: number,
-    element: string,
+    element: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.LSet, [key, index.toString(), element]);
 }
@@ -953,7 +953,7 @@ export function createLSet(
  * @internal
  */
 export function createLTrim(
-    key: string,
+    key: GlideString,
     start: number,
     end: number,
 ): command_request.Command {
@@ -968,9 +968,9 @@ export function createLTrim(
  * @internal
  */
 export function createLRem(
-    key: string,
+    key: GlideString,
     count: number,
-    element: string,
+    element: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.LRem, [key, count.toString(), element]);
 }
@@ -989,8 +989,8 @@ export function createRPush(
  * @internal
  */
 export function createRPushX(
-    key: string,
-    elements: string[],
+    key: GlideString,
+    elements: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.RPushX, [key].concat(elements));
 }
@@ -1011,8 +1011,8 @@ export function createRPop(
  * @internal
  */
 export function createSAdd(
-    key: string,
-    members: string[],
+    key: GlideString,
+    members: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.SAdd, [key].concat(members));
 }
@@ -1021,8 +1021,8 @@ export function createSAdd(
  * @internal
  */
 export function createSRem(
-    key: string,
-    members: string[],
+    key: GlideString,
+    members: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.SRem, [key].concat(members));
 }
@@ -1031,11 +1031,11 @@ export function createSRem(
  * @internal
  */
 export function createSScan(
-    key: string,
-    cursor: string,
+    key: GlideString,
+    cursor: GlideString,
     options?: BaseScanOptions,
 ): command_request.Command {
-    let args: string[] = [key, cursor];
+    let args: GlideString[] = [key, cursor];
 
     if (options) {
         args = args.concat(convertBaseScanOptionsToArgsArray(options));
@@ -1047,7 +1047,7 @@ export function createSScan(
 /**
  * @internal
  */
-export function createSMembers(key: string): command_request.Command {
+export function createSMembers(key: GlideString): command_request.Command {
     return createCommand(RequestType.SMembers, [key]);
 }
 
@@ -1056,9 +1056,9 @@ export function createSMembers(key: string): command_request.Command {
  * @internal
  */
 export function createSMove(
-    source: string,
-    destination: string,
-    member: string,
+    source: GlideString,
+    destination: GlideString,
+    member: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.SMove, [source, destination, member]);
 }
@@ -1066,14 +1066,14 @@ export function createSMove(
 /**
  * @internal
  */
-export function createSCard(key: string): command_request.Command {
+export function createSCard(key: GlideString): command_request.Command {
     return createCommand(RequestType.SCard, [key]);
 }
 
 /**
  * @internal
  */
-export function createSInter(keys: string[]): command_request.Command {
+export function createSInter(keys: GlideString[]): command_request.Command {
     return createCommand(RequestType.SInter, keys);
 }
 
@@ -1081,10 +1081,10 @@ export function createSInter(keys: string[]): command_request.Command {
  * @internal
  */
 export function createSInterCard(
-    keys: string[],
+    keys: GlideString[],
     limit?: number,
 ): command_request.Command {
-    let args: string[] = keys;
+    let args: GlideString[] = keys;
     args.unshift(keys.length.toString());
 
     if (limit != undefined) {
@@ -1098,8 +1098,8 @@ export function createSInterCard(
  * @internal
  */
 export function createSInterStore(
-    destination: string,
-    keys: string[],
+    destination: GlideString,
+    keys: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.SInterStore, [destination].concat(keys));
 }
@@ -1107,7 +1107,7 @@ export function createSInterStore(
 /**
  * @internal
  */
-export function createSDiff(keys: string[]): command_request.Command {
+export function createSDiff(keys: GlideString[]): command_request.Command {
     return createCommand(RequestType.SDiff, keys);
 }
 
@@ -1115,8 +1115,8 @@ export function createSDiff(keys: string[]): command_request.Command {
  * @internal
  */
 export function createSDiffStore(
-    destination: string,
-    keys: string[],
+    destination: GlideString,
+    keys: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.SDiffStore, [destination].concat(keys));
 }
@@ -1124,7 +1124,7 @@ export function createSDiffStore(
 /**
  * @internal
  */
-export function createSUnion(keys: string[]): command_request.Command {
+export function createSUnion(keys: GlideString[]): command_request.Command {
     return createCommand(RequestType.SUnion, keys);
 }
 
@@ -1132,8 +1132,8 @@ export function createSUnion(keys: string[]): command_request.Command {
  * @internal
  */
 export function createSUnionStore(
-    destination: string,
-    keys: string[],
+    destination: GlideString,
+    keys: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.SUnionStore, [destination].concat(keys));
 }
@@ -1142,8 +1142,8 @@ export function createSUnionStore(
  * @internal
  */
 export function createSIsMember(
-    key: string,
-    member: string,
+    key: GlideString,
+    member: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.SIsMember, [key, member]);
 }
@@ -1152,8 +1152,8 @@ export function createSIsMember(
  * @internal
  */
 export function createSMIsMember(
-    key: string,
-    members: string[],
+    key: GlideString,
+    members: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.SMIsMember, [key].concat(members));
 }
@@ -1162,10 +1162,11 @@ export function createSMIsMember(
  * @internal
  */
 export function createSPop(
-    key: string,
+    key: GlideString,
     count?: number,
 ): command_request.Command {
-    const args: string[] = count == undefined ? [key] : [key, count.toString()];
+    const args: GlideString[] =
+        count == undefined ? [key] : [key, count.toString()];
     return createCommand(RequestType.SPop, args);
 }
 
@@ -1173,10 +1174,11 @@ export function createSPop(
  * @internal
  */
 export function createSRandMember(
-    key: string,
+    key: GlideString,
     count?: number,
 ): command_request.Command {
-    const args: string[] = count == undefined ? [key] : [key, count.toString()];
+    const args: GlideString[] =
+        count == undefined ? [key] : [key, count.toString()];
     return createCommand(RequestType.SRandMember, args);
 }
 
@@ -1191,8 +1193,8 @@ export function createCustomCommand(args: GlideString[]) {
  * @internal
  */
 export function createHIncrBy(
-    key: string,
-    field: string,
+    key: GlideString,
+    field: GlideString,
     amount: number,
 ): command_request.Command {
     return createCommand(RequestType.HIncrBy, [key, field, amount.toString()]);
@@ -1202,8 +1204,8 @@ export function createHIncrBy(
  * @internal
  */
 export function createHIncrByFloat(
-    key: string,
-    field: string,
+    key: GlideString,
+    field: GlideString,
     amount: number,
 ): command_request.Command {
     return createCommand(RequestType.HIncrByFloat, [
@@ -1216,7 +1218,7 @@ export function createHIncrByFloat(
 /**
  * @internal
  */
-export function createHLen(key: string): command_request.Command {
+export function createHLen(key: GlideString): command_request.Command {
     return createCommand(RequestType.HLen, [key]);
 }
 
@@ -1853,7 +1855,7 @@ export function createType(key: GlideString): command_request.Command {
 /**
  * @internal
  */
-export function createStrlen(key: string): command_request.Command {
+export function createStrlen(key: GlideString): command_request.Command {
     return createCommand(RequestType.Strlen, [key]);
 }
 
@@ -2208,8 +2210,8 @@ export function createTime(): command_request.Command {
  * @internal
  */
 export function createPublish(
-    message: string,
-    channel: string,
+    message: GlideString,
+    channel: GlideString,
     sharded: boolean = false,
 ): command_request.Command {
     const request = sharded ? RequestType.SPublish : RequestType.Publish;
@@ -2242,12 +2244,16 @@ export function createBLPop(
  * @internal
  */
 export function createFCall(
-    func: string,
-    keys: string[],
-    args: string[],
+    func: GlideString,
+    keys: GlideString[],
+    args: GlideString[],
 ): command_request.Command {
-    let params: string[] = [];
-    params = params.concat(func, keys.length.toString(), keys, args);
+    const params: GlideString[] = [
+        func,
+        keys.length.toString(),
+        ...keys,
+        ...args,
+    ];
     return createCommand(RequestType.FCall, params);
 }
 
@@ -2255,12 +2261,16 @@ export function createFCall(
  * @internal
  */
 export function createFCallReadOnly(
-    func: string,
-    keys: string[],
-    args: string[],
+    func: GlideString,
+    keys: GlideString[],
+    args: GlideString[],
 ): command_request.Command {
-    let params: string[] = [];
-    params = params.concat(func, keys.length.toString(), keys, args);
+    const params: GlideString[] = [
+        func,
+        keys.length.toString(),
+        ...keys,
+        ...args,
+    ];
     return createCommand(RequestType.FCallReadOnly, params);
 }
 
@@ -2268,7 +2278,7 @@ export function createFCallReadOnly(
  * @internal
  */
 export function createFunctionDelete(
-    libraryCode: string,
+    libraryCode: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.FunctionDelete, [libraryCode]);
 }
@@ -2288,7 +2298,7 @@ export function createFunctionFlush(mode?: FlushMode): command_request.Command {
  * @internal
  */
 export function createFunctionLoad(
-    libraryCode: string,
+    libraryCode: GlideString,
     replace?: boolean,
 ): command_request.Command {
     const args = replace ? ["REPLACE", libraryCode] : [libraryCode];
@@ -2298,7 +2308,7 @@ export function createFunctionLoad(
 /** Optional arguments for `FUNCTION LIST` command. */
 export type FunctionListOptions = {
     /** A wildcard pattern for matching library names. */
-    libNamePattern?: string;
+    libNamePattern?: GlideString;
     /** Specifies whether to request the library code from the server or not. */
     withCode?: boolean;
 };
@@ -2306,7 +2316,7 @@ export type FunctionListOptions = {
 /** Type of the response of `FUNCTION LIST` command. */
 export type FunctionListResponse = Record<
     string,
-    string | Record<string, string | string[]>[]
+    GlideString | Record<string, GlideString | GlideString[]>[]
 >[];
 
 /**
@@ -2315,7 +2325,7 @@ export type FunctionListResponse = Record<
 export function createFunctionList(
     options?: FunctionListOptions,
 ): command_request.Command {
-    const args: string[] = [];
+    const args: GlideString[] = [];
 
     if (options) {
         if (options.libNamePattern) {
@@ -2338,7 +2348,7 @@ export function createFunctionList(
 export type FunctionStatsSingleResponse = Record<
     string,
     | null
-    | Record<string, string | string[] | number> // Running function/script information
+    | Record<string, GlideString | GlideString[] | number> // Running function/script information
     | Record<string, Record<string, number>> // Execution engines information
 >;
 
@@ -3611,15 +3621,15 @@ function createSortImpl(
  * @internal
  */
 export function createHStrlen(
-    key: string,
-    field: string,
+    key: GlideString,
+    field: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.HStrlen, [key, field]);
 }
 
 /** @internal */
 export function createHRandField(
-    key: string,
+    key: GlideString,
     count?: number,
     withValues?: boolean,
 ): command_request.Command {
@@ -3674,8 +3684,8 @@ export function createLastSave(): command_request.Command {
 
 /** @internal */
 export function createLCS(
-    key1: string,
-    key2: string,
+    key1: GlideString,
+    key2: GlideString,
     options?: {
         len?: boolean;
         idx?: { withMatchLen?: boolean; minMatchLen?: number };
@@ -3787,9 +3797,9 @@ export function createZScan(
 
 /** @internal */
 export function createSetRange(
-    key: string,
+    key: GlideString,
     offset: number,
-    value: string,
+    value: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.SetRange, [key, offset.toString(), value]);
 }
@@ -3824,12 +3834,12 @@ export function createLMPop(
  * @internal
  */
 export function createBLMPop(
-    timeout: number,
-    keys: string[],
+    keys: GlideString[],
     direction: ListDirection,
+    timeout: number,
     count?: number,
 ): command_request.Command {
-    const args: string[] = [
+    const args: GlideString[] = [
         timeout.toString(),
         keys.length.toString(),
         ...keys,
@@ -3848,7 +3858,7 @@ export function createBLMPop(
  * @internal
  */
 export function createPubSubChannels(
-    pattern?: string,
+    pattern?: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.PubSubChannels, pattern ? [pattern] : []);
 }
@@ -3873,7 +3883,7 @@ export function createPubSubNumSub(
  * @internal
  */
 export function createPubsubShardChannels(
-    pattern?: string,
+    pattern?: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.PubSubSChannels, pattern ? [pattern] : []);
 }
@@ -3937,7 +3947,7 @@ export enum TimeUnit {
  * @internal
  */
 export function createGetEx(
-    key: string,
+    key: GlideString,
     options?: "persist" | { type: TimeUnit; duration: number },
 ): command_request.Command {
     const args = [key];

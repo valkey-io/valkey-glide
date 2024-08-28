@@ -558,7 +558,7 @@ export class GlideClient extends BaseClient {
      * @remarks Since Valkey version 7.0.0.
      *
      * @param libraryCode - The library name to delete.
-     * @returns A simple OK response.
+     * @returns A simple `"OK"` response.
      *
      * @example
      * ```typescript
@@ -566,8 +566,10 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public async functionDelete(libraryCode: string): Promise<string> {
-        return this.createWritePromise(createFunctionDelete(libraryCode));
+    public async functionDelete(libraryCode: GlideString): Promise<"OK"> {
+        return this.createWritePromise(createFunctionDelete(libraryCode), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
@@ -577,8 +579,10 @@ export class GlideClient extends BaseClient {
      * @remarks Since Valkey version 7.0.0.
      *
      * @param libraryCode - The source code that implements the library.
-     * @param replace - Whether the given library should overwrite a library with the same name if it
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `replace`: Whether the given library should overwrite a library with the same name if it
      *     already exists.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns The library name that was loaded.
      *
      * @example
@@ -589,11 +593,12 @@ export class GlideClient extends BaseClient {
      * ```
      */
     public async functionLoad(
-        libraryCode: string,
-        replace?: boolean,
-    ): Promise<string> {
+        libraryCode: GlideString,
+        options?: { replace?: boolean } & DecoderOption,
+    ): Promise<GlideString> {
         return this.createWritePromise(
-            createFunctionLoad(libraryCode, replace),
+            createFunctionLoad(libraryCode, options?.replace),
+            { decoder: options?.decoder },
         );
     }
 
@@ -603,8 +608,8 @@ export class GlideClient extends BaseClient {
      * @see {@link https://valkey.io/commands/function-flush/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
      *
-     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
-     * @returns A simple OK response.
+     * @param mode - (Optional) The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * @returns A simple `"OK"` response.
      *
      * @example
      * ```typescript
@@ -612,8 +617,10 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public async functionFlush(mode?: FlushMode): Promise<string> {
-        return this.createWritePromise(createFunctionFlush(mode));
+    public async functionFlush(mode?: FlushMode): Promise<"OK"> {
+        return this.createWritePromise(createFunctionFlush(mode), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
@@ -622,7 +629,7 @@ export class GlideClient extends BaseClient {
      * @see {@link https://valkey.io/commands/function-list/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
      *
-     * @param options - Parameters to filter and request additional info.
+     * @param options - (Optional) See {@link FunctionListOptions} and {@link DecoderOption}.
      * @returns Info about all or selected libraries and their functions in {@link FunctionListResponse} format.
      *
      * @example
@@ -645,9 +652,11 @@ export class GlideClient extends BaseClient {
      * ```
      */
     public async functionList(
-        options?: FunctionListOptions,
+        options?: FunctionListOptions & DecoderOption,
     ): Promise<FunctionListResponse> {
-        return this.createWritePromise(createFunctionList(options));
+        return this.createWritePromise(createFunctionList(options), {
+            decoder: options?.decoder,
+        });
     }
 
     /**
@@ -660,6 +669,8 @@ export class GlideClient extends BaseClient {
      * @see {@link https://valkey.io/commands/function-stats/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
      *
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns A Record where the key is the node address and the value is a Record with two keys:
      *          - `"running_script"`: Information about the running script, or `null` if no script is running.
      *          - `"engines"`: Information about available engines and their stats.
@@ -694,8 +705,12 @@ export class GlideClient extends BaseClient {
      * // }
      * ```
      */
-    public async functionStats(): Promise<FunctionStatsFullResponse> {
-        return this.createWritePromise(createFunctionStats());
+    public async functionStats(
+        decoder?: Decoder,
+    ): Promise<FunctionStatsFullResponse> {
+        return this.createWritePromise(createFunctionStats(), {
+            decoder,
+        });
     }
 
     /**
@@ -706,14 +721,16 @@ export class GlideClient extends BaseClient {
      * @see {@link https://valkey.io/commands/function-kill/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
      *
-     * @returns `OK` if function is terminated. Otherwise, throws an error.
+     * @returns `"OK"` if function is terminated. Otherwise, throws an error.
      * @example
      * ```typescript
      * await client.functionKill();
      * ```
      */
     public async functionKill(): Promise<"OK"> {
-        return this.createWritePromise(createFunctionKill());
+        return this.createWritePromise(createFunctionKill(), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
@@ -834,7 +851,10 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 1 - This message was posted to 1 subscription which is configured on primary node
      * ```
      */
-    public async publish(message: string, channel: string): Promise<number> {
+    public async publish(
+        message: GlideString,
+        channel: GlideString,
+    ): Promise<number> {
         return this.createWritePromise(createPublish(message, channel));
     }
 

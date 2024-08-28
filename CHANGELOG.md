@@ -1,5 +1,6 @@
 #### Changes
 * Node: Added binary variant to sorted set commands - part 1 ([#2190](https://github.com/valkey-io/valkey-glide/pull/2190))
+* Node: Added binary variant to HASH commands ([#2194](https://github.com/valkey-io/valkey-glide/pull/2194))
 * Node: Added binary variant to server management commands ([#2179](https://github.com/valkey-io/valkey-glide/pull/2179))
 * Node: Added/updated binary variant to connection management commands and WATCH/UNWATCH ([#2160](https://github.com/valkey-io/valkey-glide/pull/2160))
 * Java: Fix docs for stream commands ([#2086](https://github.com/valkey-io/valkey-glide/pull/2086))
@@ -8,6 +9,7 @@
 * Node: Added binary variant to geo commands ([#2149](https://github.com/valkey-io/valkey-glide/pull/2149))
 * Node: Added binary variant to HYPERLOGLOG commands ([#2176](https://github.com/valkey-io/valkey-glide/pull/2176))
 * Node: Added FUNCTION DUMP and FUNCTION RESTORE commands ([#2129](https://github.com/valkey-io/valkey-glide/pull/2129), [#2173](https://github.com/valkey-io/valkey-glide/pull/2173))
+* Node: Added binary variant to FUNCTION commands ([#2172](https://github.com/valkey-io/valkey-glide/pull/2172))
 * Node: Added ZUNIONSTORE command ([#2145](https://github.com/valkey-io/valkey-glide/pull/2145))
 * Node: Added XREADGROUP command ([#2124](https://github.com/valkey-io/valkey-glide/pull/2124))
 * Node: Added XINFO GROUPS command ([#2122](https://github.com/valkey-io/valkey-glide/pull/2122))
@@ -98,6 +100,7 @@
 * Node: Added ZINTER and ZUNION commands ([#2146](https://github.com/aws/glide-for-redis/pull/2146))
 * Node: Added XACK commands ([#2112](https://github.com/valkey-io/valkey-glide/pull/2112))
 * Node: Added XGROUP SETID command ([#2135]((https://github.com/valkey-io/valkey-glide/pull/2135))
+* Node: Added binary variant to string commands ([#2183](https://github.com/valkey-io/valkey-glide/pull/2183))
 
 #### Breaking Changes
 * Node: (Refactor) Convert classes to types ([#2005](https://github.com/valkey-io/valkey-glide/pull/2005))

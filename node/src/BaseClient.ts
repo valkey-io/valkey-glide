@@ -410,11 +410,15 @@ export type ScriptOptions = {
     /**
      * The keys that are used in the script.
      */
-    keys?: (string | Uint8Array)[];
+    keys?: GlideString[];
     /**
      * The arguments for the script.
      */
-    args?: (string | Uint8Array)[];
+    args?: GlideString[];
+    /**
+     * {@link Decoder} type which defines how to handle the responses. If not set, the default decoder from the client config will be used.
+     */
+    decoder?: Decoder;
 };
 
 function getRequestErrorClass(
@@ -676,23 +680,32 @@ export class BaseClient {
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [
                 (resolveAns: T) => {
-                    if (resolveAns instanceof PointerResponse) {
-                        if (typeof resolveAns === "number") {
-                            resolveAns = valueFromSplitPointer(
-                                0,
-                                resolveAns,
-                                stringDecoder,
-                            ) as T;
-                        } else {
-                            resolveAns = valueFromSplitPointer(
-                                resolveAns.high!,
-                                resolveAns.low!,
-                                stringDecoder,
-                            ) as T;
+                    try {
+                        if (resolveAns instanceof PointerResponse) {
+                            if (typeof resolveAns === "number") {
+                                resolveAns = valueFromSplitPointer(
+                                    0,
+                                    resolveAns,
+                                    stringDecoder,
+                                ) as T;
+                            } else {
+                                resolveAns = valueFromSplitPointer(
+                                    resolveAns.high!,
+                                    resolveAns.low!,
+                                    stringDecoder,
+                                ) as T;
+                            }
                         }
-                    }
 
-                    resolve(resolveAns);
+                        resolve(resolveAns);
+                    } catch (err) {
+                        Logger.log(
+                            "error",
+                            "Decoder",
+                            `Decoding error: '${err}'`,
+                        );
+                        reject(err);
+                    }
                 },
                 reject,
             ];
@@ -974,9 +987,11 @@ export class BaseClient {
      * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key to retrieve from the database.
-     * @param options - (Optional) Set expiriation to the given key.
-     *                  "persist" will retain the time to live associated with the key. Equivalent to `PERSIST` in the VALKEY API.
-     *                  Otherwise, a {@link TimeUnit} and duration of the expire time should be specified.
+     * @param options - (Optional) Additional Parameters:
+     * - (Optional) `expiry`: expiriation to the given key:
+     * `"persist"` will retain the time to live associated with the key. Equivalent to `PERSIST` in the VALKEY API.
+     * Otherwise, a {@link TimeUnit} and duration of the expire time should be specified.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns If `key` exists, returns the value of `key` as a `string`. Otherwise, return `null`.
      *
      * @example
@@ -986,10 +1001,14 @@ export class BaseClient {
      * ```
      */
     public async getex(
-        key: string,
-        options?: "persist" | { type: TimeUnit; duration: number },
-    ): Promise<string | null> {
-        return this.createWritePromise(createGetEx(key, options));
+        key: GlideString,
+        options?: {
+            expiry: "persist" | { type: TimeUnit; duration: number };
+        } & DecoderOption,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createGetEx(key, options?.expiry), {
+            decoder: options?.decoder,
+        });
     }
 
     /**
@@ -1063,7 +1082,7 @@ export class BaseClient {
      *
      * @param key - The key to store.
      * @param value - The value to store with the given key.
-     * @param options - The set options.
+     * @param options - (Optional) See {@link SetOptions} and {@link DecoderOption}.
      * @returns - If the value is successfully set, return OK.
      * If value isn't set because of `onlyIfExists` or `onlyIfDoesNotExist` conditions, return null.
      * If `returnOldValue` is set, return the old value as a string.
@@ -1088,11 +1107,13 @@ export class BaseClient {
      * ```
      */
     public async set(
-        key: string | Uint8Array,
-        value: string | Uint8Array,
-        options?: SetOptions,
-    ): Promise<"OK" | string | null> {
-        return this.createWritePromise(createSet(key, value, options));
+        key: GlideString,
+        value: GlideString,
+        options?: SetOptions & DecoderOption,
+    ): Promise<"OK" | GlideString | null> {
+        return this.createWritePromise(createSet(key, value, options), {
+            decoder: options?.decoder,
+        });
     }
 
     /**
@@ -1281,7 +1302,7 @@ export class BaseClient {
      * console.log(result); // Output: 11
      * ```
      */
-    public async incr(key: string): Promise<number> {
+    public async incr(key: GlideString): Promise<number> {
         return this.createWritePromise(createIncr(key));
     }
 
@@ -1301,7 +1322,7 @@ export class BaseClient {
      * console.log(result); // Output: 15
      * ```
      */
-    public async incrBy(key: string, amount: number): Promise<number> {
+    public async incrBy(key: GlideString, amount: number): Promise<number> {
         return this.createWritePromise(createIncrBy(key, amount));
     }
 
@@ -1323,7 +1344,10 @@ export class BaseClient {
      * console.log(result); // Output: 13.0
      * ```
      */
-    public async incrByFloat(key: string, amount: number): Promise<number> {
+    public async incrByFloat(
+        key: GlideString,
+        amount: number,
+    ): Promise<number> {
         return this.createWritePromise(createIncrByFloat(key, amount));
     }
 
@@ -1342,7 +1366,7 @@ export class BaseClient {
      * console.log(result); // Output: 9
      * ```
      */
-    public async decr(key: string): Promise<number> {
+    public async decr(key: GlideString): Promise<number> {
         return this.createWritePromise(createDecr(key));
     }
 
@@ -1362,7 +1386,7 @@ export class BaseClient {
      * console.log(result); // Output: 5
      * ```
      */
-    public async decrBy(key: string, amount: number): Promise<number> {
+    public async decrBy(key: GlideString, amount: number): Promise<number> {
         return this.createWritePromise(createDecrBy(key, amount));
     }
 
@@ -1638,7 +1662,7 @@ export class BaseClient {
      * ```
      */
     public async hset(
-        key: string,
+        key: GlideString,
         fieldValueMap: Record<string, string>,
     ): Promise<number> {
         return this.createWritePromise(createHSet(key, fieldValueMap));
@@ -1650,6 +1674,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/hkeys/|valkey.io} for details.
      *
      * @param key - The key of the hash.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A list of field names for the hash, or an empty list when the key does not exist.
      *
      * @example
@@ -1660,8 +1685,12 @@ export class BaseClient {
      * console.log(result); // Output: ["field1", "field2", "field3"]  - Returns all the field names stored in the hash "my_hash".
      * ```
      */
-    public async hkeys(key: string): Promise<string[]> {
-        return this.createWritePromise(createHKeys(key));
+
+    public async hkeys(
+        key: GlideString,
+        options?: DecoderOption,
+    ): Promise<GlideString[]> {
+        return this.createWritePromise(createHKeys(key), options);
     }
 
     /** Sets `field` in the hash stored at `key` to `value`, only if `field` does not yet exist.
@@ -1690,9 +1719,9 @@ export class BaseClient {
      * ```
      */
     public async hsetnx(
-        key: string,
-        field: string,
-        value: string,
+        key: GlideString,
+        field: GlideString,
+        value: GlideString,
     ): Promise<boolean> {
         return this.createWritePromise(createHSetNX(key, field, value));
     }
@@ -1714,7 +1743,10 @@ export class BaseClient {
      * console.log(result); // Output: 2 - Indicates that two fields were successfully removed from the hash.
      * ```
      */
-    public async hdel(key: string, fields: string[]): Promise<number> {
+    public async hdel(
+        key: GlideString,
+        fields: GlideString[],
+    ): Promise<number> {
         return this.createWritePromise(createHDel(key, fields));
     }
 
@@ -1724,6 +1756,7 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param fields - The fields in the hash stored at `key` to retrieve from the database.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns a list of values associated with the given fields, in the same order as they are requested.
      * For every field that does not exist in the hash, a null value is returned.
      * If `key` does not exist, it is treated as an empty hash and it returns a list of null values.
@@ -1736,10 +1769,11 @@ export class BaseClient {
      * ```
      */
     public async hmget(
-        key: string,
-        fields: string[],
-    ): Promise<(string | null)[]> {
-        return this.createWritePromise(createHMGet(key, fields));
+        key: GlideString,
+        fields: GlideString[],
+        options?: DecoderOption,
+    ): Promise<(GlideString | null)[]> {
+        return this.createWritePromise(createHMGet(key, fields), options);
     }
 
     /** Returns if `field` is an existing field in the hash stored at `key`.
@@ -1764,7 +1798,10 @@ export class BaseClient {
      * console.log(result); // Output: false
      * ```
      */
-    public async hexists(key: string, field: string): Promise<boolean> {
+    public async hexists(
+        key: GlideString,
+        field: GlideString,
+    ): Promise<boolean> {
         return this.createWritePromise(createHExists(key, field));
     }
 
@@ -1783,7 +1820,7 @@ export class BaseClient {
      * console.log(result); // Output: {"field1": "value1", "field2": "value2"}
      * ```
      */
-    public async hgetall(key: string): Promise<Record<string, string>> {
+    public async hgetall(key: GlideString): Promise<Record<string, string>> {
         return this.createWritePromise(createHGetAll(key));
     }
 
@@ -1806,8 +1843,8 @@ export class BaseClient {
      * ```
      */
     public async hincrBy(
-        key: string,
-        field: string,
+        key: GlideString,
+        field: GlideString,
         amount: number,
     ): Promise<number> {
         return this.createWritePromise(createHIncrBy(key, field, amount));
@@ -1828,12 +1865,12 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the hincrbyfloat method to increment the value of a floating point in a hash by a specified amount
      * const result = await client.hincrbyfloat("my_hash", "field1", 2.5);
-     * console.log(result); // Output: '2.5'
+     * console.log(result); // Output: 2.5
      * ```
      */
     public async hincrByFloat(
-        key: string,
-        field: string,
+        key: GlideString,
+        field: GlideString,
         amount: number,
     ): Promise<number> {
         return this.createWritePromise(createHIncrByFloat(key, field, amount));
@@ -1860,7 +1897,7 @@ export class BaseClient {
      * console.log(result); // Output: 0
      * ```
      */
-    public async hlen(key: string): Promise<number> {
+    public async hlen(key: GlideString): Promise<number> {
         return this.createWritePromise(createHLen(key));
     }
 
@@ -1903,7 +1940,10 @@ export class BaseClient {
      * console.log(result); // Output: 5
      * ```
      */
-    public async hstrlen(key: string, field: string): Promise<number> {
+    public async hstrlen(
+        key: GlideString,
+        field: GlideString,
+    ): Promise<number> {
         return this.createWritePromise(createHStrlen(key, field));
     }
 
@@ -1914,6 +1954,7 @@ export class BaseClient {
      * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key of the hash.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A random field name from the hash stored at `key`, or `null` when
      *     the key does not exist.
      *
@@ -1922,8 +1963,11 @@ export class BaseClient {
      * console.log(await client.hrandfield("myHash")); // Output: 'field'
      * ```
      */
-    public async hrandfield(key: string): Promise<string | null> {
-        return this.createWritePromise(createHRandField(key));
+    public async hrandfield(
+        key: GlideString,
+        options?: DecoderOption,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createHRandField(key), options);
     }
 
     /**
@@ -1979,6 +2023,7 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param count - The number of field names to return.
+     * @param options - (Optional) See {@link DecoderOption}.
      *
      *     If `count` is positive, returns unique elements. If negative, allows for duplicates.
      * @returns An `array` of random field names from the hash stored at `key`,
@@ -1990,10 +2035,11 @@ export class BaseClient {
      * ```
      */
     public async hrandfieldCount(
-        key: string,
+        key: GlideString,
         count: number,
-    ): Promise<string[]> {
-        return this.createWritePromise(createHRandField(key, count));
+        options?: DecoderOption,
+    ): Promise<GlideString[]> {
+        return this.createWritePromise(createHRandField(key, count), options);
     }
 
     /**
@@ -2005,6 +2051,7 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param count - The number of field names to return.
+     * @param options - (Optional) See {@link DecoderOption}.
      *
      *     If `count` is positive, returns unique elements. If negative, allows for duplicates.
      * @returns A 2D `array` of `[fieldName, value]` `arrays`, where `fieldName` is a random
@@ -2018,10 +2065,14 @@ export class BaseClient {
      * ```
      */
     public async hrandfieldWithValues(
-        key: string,
+        key: GlideString,
         count: number,
-    ): Promise<[string, string][]> {
-        return this.createWritePromise(createHRandField(key, count, true));
+        options?: DecoderOption,
+    ): Promise<[GlideString, GlideString][]> {
+        return this.createWritePromise(
+            createHRandField(key, count, true),
+            options,
+        );
     }
 
     /** Inserts all the specified values at the head of the list stored at `key`.
@@ -2325,11 +2376,13 @@ export class BaseClient {
      * ```
      */
     public async lset(
-        key: string,
+        key: GlideString,
         index: number,
-        element: string,
+        element: GlideString,
     ): Promise<"OK"> {
-        return this.createWritePromise(createLSet(key, index, element));
+        return this.createWritePromise(createLSet(key, index, element), {
+            decoder: Decoder.String,
+        });
     }
 
     /** Trim an existing list so that it will contain only the specified range of elements specified.
@@ -2354,8 +2407,14 @@ export class BaseClient {
      * console.log(result); // Output: 'OK' - Indicates that the list has been trimmed to contain elements from 0 to 1.
      * ```
      */
-    public async ltrim(key: string, start: number, end: number): Promise<"OK"> {
-        return this.createWritePromise(createLTrim(key, start, end));
+    public async ltrim(
+        key: GlideString,
+        start: number,
+        end: number,
+    ): Promise<"OK"> {
+        return this.createWritePromise(createLTrim(key, start, end), {
+            decoder: Decoder.String,
+        });
     }
 
     /** Removes the first `count` occurrences of elements equal to `element` from the list stored at `key`.
@@ -2377,9 +2436,9 @@ export class BaseClient {
      * ```
      */
     public async lrem(
-        key: string,
+        key: GlideString,
         count: number,
-        element: string,
+        element: GlideString,
     ): Promise<number> {
         return this.createWritePromise(createLRem(key, count, element));
     }
@@ -2430,7 +2489,10 @@ export class BaseClient {
      * console.log(result);  // Output: 2 - Indicates that the list has two elements.
      * ```
      * */
-    public async rpushx(key: string, elements: string[]): Promise<number> {
+    public async rpushx(
+        key: GlideString,
+        elements: GlideString[],
+    ): Promise<number> {
         return this.createWritePromise(createRPushX(key, elements));
     }
 
@@ -2517,7 +2579,10 @@ export class BaseClient {
      * console.log(result); // Output: 2
      * ```
      */
-    public async sadd(key: string, members: string[]): Promise<number> {
+    public async sadd(
+        key: GlideString,
+        members: GlideString[],
+    ): Promise<number> {
         return this.createWritePromise(createSAdd(key, members));
     }
 
@@ -2537,7 +2602,10 @@ export class BaseClient {
      * console.log(result); // Output: 2
      * ```
      */
-    public async srem(key: string, members: string[]): Promise<number> {
+    public async srem(
+        key: GlideString,
+        members: GlideString[],
+    ): Promise<number> {
         return this.createWritePromise(createSRem(key, members));
     }
 
@@ -2548,7 +2616,7 @@ export class BaseClient {
      *
      * @param key - The key of the set.
      * @param cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of the search.
-     * @param options - The (Optional) {@link BaseScanOptions}.
+     * @param options - (Optional) See {@link BaseScanOptions} and {@link DecoderOption}.
      * @returns An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and for the next iteration of results.
      * The `cursor` will be `"0"` on the last iteration of the set. The second element is always an array of the subset of the set held in `key`.
      *
@@ -2578,11 +2646,14 @@ export class BaseClient {
      * ```
      */
     public async sscan(
-        key: string,
-        cursor: string,
-        options?: BaseScanOptions,
-    ): Promise<[string, string[]]> {
-        return this.createWritePromise(createSScan(key, cursor, options));
+        key: GlideString,
+        cursor: GlideString,
+        options?: BaseScanOptions & DecoderOption,
+    ): Promise<[GlideString, GlideString[]]> {
+        return this.createWritePromise(
+            createSScan(key, cursor, options),
+            options,
+        );
     }
 
     /** Returns all the members of the set value stored at `key`.
@@ -2590,6 +2661,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/smembers/|valkey.io} for details.
      *
      * @param key - The key to return its members.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A `Set` containing all members of the set.
      * If `key` does not exist, it is treated as an empty set and this command returns an empty `Set`.
      *
@@ -2600,10 +2672,14 @@ export class BaseClient {
      * console.log(result); // Output: Set {'member1', 'member2', 'member3'}
      * ```
      */
-    public async smembers(key: string): Promise<Set<string>> {
-        return this.createWritePromise<string[]>(createSMembers(key)).then(
-            (smembes) => new Set<string>(smembes),
-        );
+    public async smembers(
+        key: GlideString,
+        options?: DecoderOption,
+    ): Promise<Set<GlideString>> {
+        return this.createWritePromise<GlideString[]>(
+            createSMembers(key),
+            options,
+        ).then((smembers) => new Set<GlideString>(smembers));
     }
 
     /** Moves `member` from the set at `source` to the set at `destination`, removing it from the source set.
@@ -2624,9 +2700,9 @@ export class BaseClient {
      * ```
      */
     public async smove(
-        source: string,
-        destination: string,
-        member: string,
+        source: GlideString,
+        destination: GlideString,
+        member: GlideString,
     ): Promise<boolean> {
         return this.createWritePromise(
             createSMove(source, destination, member),
@@ -2647,7 +2723,7 @@ export class BaseClient {
      * console.log(result); // Output: 3
      * ```
      */
-    public async scard(key: string): Promise<number> {
+    public async scard(key: GlideString): Promise<number> {
         return this.createWritePromise(createSCard(key));
     }
 
@@ -2657,6 +2733,7 @@ export class BaseClient {
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
      *
      * @param keys - The `keys` of the sets to get the intersection.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns - A set of members which are present in all given sets.
      * If one or more sets do not exist, an empty set will be returned.
      *
@@ -2674,10 +2751,14 @@ export class BaseClient {
      * console.log(result); // Output: Set {} - An empty set is returned since the key does not exist.
      * ```
      */
-    public async sinter(keys: string[]): Promise<Set<string>> {
-        return this.createWritePromise<string[]>(createSInter(keys)).then(
-            (sinter) => new Set<string>(sinter),
-        );
+    public async sinter(
+        keys: GlideString[],
+        options?: DecoderOption,
+    ): Promise<Set<GlideString>> {
+        return this.createWritePromise<GlideString[]>(
+            createSInter(keys),
+            options,
+        ).then((sinter) => new Set<GlideString>(sinter));
     }
 
     /**
@@ -2702,7 +2783,10 @@ export class BaseClient {
      * console.log(result2); // Output: 1 - The computation stops early as the intersection cardinality reaches the limit of 1.
      * ```
      */
-    public async sintercard(keys: string[], limit?: number): Promise<number> {
+    public async sintercard(
+        keys: GlideString[],
+        limit?: number,
+    ): Promise<number> {
         return this.createWritePromise(createSInterCard(keys, limit));
     }
 
@@ -2723,8 +2807,8 @@ export class BaseClient {
      * ```
      */
     public async sinterstore(
-        destination: string,
-        keys: string[],
+        destination: GlideString,
+        keys: GlideString[],
     ): Promise<number> {
         return this.createWritePromise(createSInterStore(destination, keys));
     }
@@ -2736,6 +2820,7 @@ export class BaseClient {
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
      *
      * @param keys - The keys of the sets to diff.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A `Set` of elements representing the difference between the sets.
      * If a key in `keys` does not exist, it is treated as an empty set.
      *
@@ -2747,10 +2832,14 @@ export class BaseClient {
      * console.log(result); // Output: Set {"member1"} - "member2" is in "set1" but not "set2"
      * ```
      */
-    public async sdiff(keys: string[]): Promise<Set<string>> {
-        return this.createWritePromise<string[]>(createSDiff(keys)).then(
-            (sdiff) => new Set<string>(sdiff),
-        );
+    public async sdiff(
+        keys: GlideString[],
+        options?: DecoderOption,
+    ): Promise<Set<GlideString>> {
+        return this.createWritePromise<GlideString[]>(
+            createSDiff(keys),
+            options,
+        ).then((sdiff) => new Set<GlideString>(sdiff));
     }
 
     /**
@@ -2772,8 +2861,8 @@ export class BaseClient {
      * ```
      */
     public async sdiffstore(
-        destination: string,
-        keys: string[],
+        destination: GlideString,
+        keys: GlideString[],
     ): Promise<number> {
         return this.createWritePromise(createSDiffStore(destination, keys));
     }
@@ -2785,6 +2874,7 @@ export class BaseClient {
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
      *
      * @param keys - The keys of the sets.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A `Set` of members which are present in at least one of the given sets.
      * If none of the sets exist, an empty `Set` will be returned.
      *
@@ -2799,10 +2889,13 @@ export class BaseClient {
      * console.log(result2); // Output: Set {'member1', 'member2'}
      * ```
      */
-    public async sunion(keys: string[]): Promise<Set<string>> {
-        return this.createWritePromise<string[]>(createSUnion(keys)).then(
-            (sunion) => new Set<string>(sunion),
-        );
+    public async sunion(
+        keys: GlideString[],
+        options?: DecoderOption,
+    ): Promise<Set<GlideString>> {
+        return this.createWritePromise<GlideString[]>(createSUnion(keys), {
+            decoder: options?.decoder,
+        }).then((sunion) => new Set<GlideString>(sunion));
     }
 
     /**
@@ -2823,8 +2916,8 @@ export class BaseClient {
      * ```
      */
     public async sunionstore(
-        destination: string,
-        keys: string[],
+        destination: GlideString,
+        keys: GlideString[],
     ): Promise<number> {
         return this.createWritePromise(createSUnionStore(destination, keys));
     }
@@ -2852,7 +2945,10 @@ export class BaseClient {
      * console.log(result); // Output: false - Indicates that "non_existing_member" does not exist in the set "my_set".
      * ```
      */
-    public async sismember(key: string, member: string): Promise<boolean> {
+    public async sismember(
+        key: GlideString,
+        member: GlideString,
+    ): Promise<boolean> {
         return this.createWritePromise(createSIsMember(key, member));
     }
 
@@ -2874,8 +2970,8 @@ export class BaseClient {
      * ```
      */
     public async smismember(
-        key: string,
-        members: string[],
+        key: GlideString,
+        members: GlideString[],
     ): Promise<boolean[]> {
         return this.createWritePromise(createSMIsMember(key, members));
     }
@@ -2886,6 +2982,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/spop/|valkey.io} for details.
      *
      * @param key - The key of the set.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns the value of the popped member.
      * If `key` does not exist, null will be returned.
      *
@@ -2903,8 +3000,11 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public async spop(key: string): Promise<string | null> {
-        return this.createWritePromise(createSPop(key));
+    public async spop(
+        key: GlideString,
+        options?: DecoderOption,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createSPop(key), options);
     }
 
     /** Removes and returns up to `count` random members from the set value store at `key`, depending on the set's length.
@@ -2913,6 +3013,7 @@ export class BaseClient {
      *
      * @param key - The key of the set.
      * @param count - The count of the elements to pop from the set.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A `Set` containing the popped elements, depending on the set's length.
      * If `key` does not exist, an empty `Set` will be returned.
      *
@@ -2930,10 +3031,15 @@ export class BaseClient {
      * console.log(result); // Output: Set {} - An empty set is returned since the key does not exist.
      * ```
      */
-    public async spopCount(key: string, count: number): Promise<Set<string>> {
-        return this.createWritePromise<string[]>(createSPop(key, count)).then(
-            (spop) => new Set<string>(spop),
-        );
+    public async spopCount(
+        key: GlideString,
+        count: number,
+        options?: DecoderOption,
+    ): Promise<Set<GlideString>> {
+        return this.createWritePromise<GlideString[]>(
+            createSPop(key, count),
+            options,
+        ).then((spop) => new Set<GlideString>(spop));
     }
 
     /**
@@ -2942,6 +3048,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/srandmember/|valkey.io} for more details.
      *
      * @param key - The key from which to retrieve the set member.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A random element from the set, or null if `key` does not exist.
      *
      * @example
@@ -2958,8 +3065,11 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public async srandmember(key: string): Promise<string | null> {
-        return this.createWritePromise(createSRandMember(key));
+    public async srandmember(
+        key: GlideString,
+        options?: DecoderOption,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createSRandMember(key), options);
     }
 
     /**
@@ -2971,6 +3081,7 @@ export class BaseClient {
      * @param count - The number of members to return.
      *                If `count` is positive, returns unique members.
      *                If `count` is negative, allows for duplicates members.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns a list of members from the set. If the set does not exist or is empty, an empty list will be returned.
      *
      * @example
@@ -2988,10 +3099,11 @@ export class BaseClient {
      * ```
      */
     public async srandmemberCount(
-        key: string,
+        key: GlideString,
         count: number,
-    ): Promise<string[]> {
-        return this.createWritePromise(createSRandMember(key, count));
+        options?: DecoderOption,
+    ): Promise<GlideString[]> {
+        return this.createWritePromise(createSRandMember(key, count), options);
     }
 
     /**
@@ -3282,24 +3394,26 @@ export class BaseClient {
             hash: script.getHash(),
             keys: option?.keys?.map((item) => {
                 if (typeof item === "string") {
-                    // Convert the string to a Uint8Array
+                    // Convert the string to a Buffer
                     return Buffer.from(item);
                 } else {
-                    // If it's already a Uint8Array, just return it
+                    // If it's already a Buffer, just return it
                     return item;
                 }
             }),
             args: option?.args?.map((item) => {
                 if (typeof item === "string") {
-                    // Convert the string to a Uint8Array
+                    // Convert the string to a Buffer
                     return Buffer.from(item);
                 } else {
-                    // If it's already a Uint8Array, just return it
+                    // If it's already a Buffer, just return it
                     return item;
                 }
             }),
         });
-        return this.createWritePromise(scriptInvocation);
+        return this.createWritePromise(scriptInvocation, {
+            decoder: option?.decoder,
+        });
     }
 
     /**
@@ -4177,7 +4291,7 @@ export class BaseClient {
      * console.log(len2); // Output: 0
      * ```
      */
-    public async strlen(key: string): Promise<number> {
+    public async strlen(key: GlideString): Promise<number> {
         return this.createWritePromise(createStrlen(key));
     }
 
@@ -5700,6 +5814,8 @@ export class BaseClient {
      * @param keys - A list of `keys` accessed by the function. To ensure the correct execution of functions,
      *     all names of keys that a function accesses must be explicitly provided as `keys`.
      * @param args - A list of `function` arguments and it should not represent names of keys.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns The invoked function's return value.
      *
      * @example
@@ -5709,11 +5825,14 @@ export class BaseClient {
      * ```
      */
     public async fcall(
-        func: string,
-        keys: string[],
-        args: string[],
-    ): Promise<string> {
-        return this.createWritePromise(createFCall(func, keys, args));
+        func: GlideString,
+        keys: GlideString[],
+        args: GlideString[],
+        decoder?: Decoder,
+    ): Promise<ReturnType> {
+        return this.createWritePromise(createFCall(func, keys, args), {
+            decoder,
+        });
     }
 
     /**
@@ -5727,6 +5846,8 @@ export class BaseClient {
      * @param keys - A list of `keys` accessed by the function. To ensure the correct execution of functions,
      *     all names of keys that a function accesses must be explicitly provided as `keys`.
      * @param args - A list of `function` arguments and it should not represent names of keys.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns The invoked function's return value.
      *
      * @example
@@ -5737,11 +5858,14 @@ export class BaseClient {
      * ```
      */
     public async fcallReadonly(
-        func: string,
-        keys: string[],
-        args: string[],
-    ): Promise<string> {
-        return this.createWritePromise(createFCallReadOnly(func, keys, args));
+        func: GlideString,
+        keys: GlideString[],
+        args: GlideString[],
+        decoder?: Decoder,
+    ): Promise<ReturnType> {
+        return this.createWritePromise(createFCallReadOnly(func, keys, args), {
+            decoder,
+        });
     }
 
     /**
@@ -6243,6 +6367,7 @@ export class BaseClient {
      *
      * @param key1 - The key that stores the first string.
      * @param key2 - The key that stores the second string.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A `String` containing all the longest common subsequence combined between the 2 strings.
      *     An empty `String` is returned if the keys do not exist or have no common subsequences.
      *
@@ -6253,8 +6378,12 @@ export class BaseClient {
      * console.log(result); // Output: 'acd'
      * ```
      */
-    public async lcs(key1: string, key2: string): Promise<string> {
-        return this.createWritePromise(createLCS(key1, key2));
+    public async lcs(
+        key1: GlideString,
+        key2: GlideString,
+        options?: DecoderOption,
+    ): Promise<string> {
+        return this.createWritePromise(createLCS(key1, key2), options);
     }
 
     /**
@@ -6266,6 +6395,7 @@ export class BaseClient {
      *
      * @param key1 - The key that stores the first string.
      * @param key2 - The key that stores the second string.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns The total length of all the longest common subsequences between the 2 strings.
      *
      * @example
@@ -6275,8 +6405,15 @@ export class BaseClient {
      * console.log(result); // Output: 3
      * ```
      */
-    public async lcsLen(key1: string, key2: string): Promise<number> {
-        return this.createWritePromise(createLCS(key1, key2, { len: true }));
+    public async lcsLen(
+        key1: GlideString,
+        key2: GlideString,
+        options?: DecoderOption,
+    ): Promise<number> {
+        return this.createWritePromise(
+            createLCS(key1, key2, { len: true }),
+            options,
+        );
     }
 
     /**
@@ -6289,8 +6426,9 @@ export class BaseClient {
      *
      * @param key1 - The key that stores the first string.
      * @param key2 - The key that stores the second string.
-     * @param withMatchLen - (Optional) If `true`, include the length of the substring matched for the each match.
-     * @param minMatchLen - (Optional) The minimum length of matches to include in the result.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `withMatchLen`: if `true`, include the length of the substring matched for the each match.
+     * - (Optional) `minMatchLen`: the minimum length of matches to include in the result.
      * @returns A `Record` containing the indices of the longest common subsequences between the
      *     2 strings and the lengths of the longest common subsequences. The resulting map contains two
      *     keys, "matches" and "len":
@@ -6326,12 +6464,16 @@ export class BaseClient {
      * ```
      */
     public async lcsIdx(
-        key1: string,
-        key2: string,
-        options?: { withMatchLen?: boolean; minMatchLen?: number },
+        key1: GlideString,
+        key2: GlideString,
+        options?: {
+            withMatchLen?: boolean;
+            minMatchLen?: number;
+        },
     ): Promise<Record<string, (number | [number, number])[][] | number>> {
         return this.createWritePromise(
             createLCS(key1, key2, { idx: options ?? {} }),
+            { decoder: Decoder.String },
         );
     }
 
@@ -6433,9 +6575,9 @@ export class BaseClient {
      * ```
      */
     public async setrange(
-        key: string,
+        key: GlideString,
         offset: number,
-        value: string,
+        value: GlideString,
     ): Promise<number> {
         return this.createWritePromise(createSetRange(key, offset, value));
     }
@@ -6518,13 +6660,13 @@ export class BaseClient {
      * ```
      */
     public async blmpop(
-        keys: string[],
+        keys: GlideString[],
         direction: ListDirection,
         timeout: number,
         count?: number,
     ): Promise<Record<string, string[]>> {
         return this.createWritePromise(
-            createBLMPop(timeout, keys, direction, count),
+            createBLMPop(keys, direction, timeout, count),
         );
     }
 
@@ -6534,8 +6676,10 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/pubsub-channels/|valkey.io} for more details.
      *
-     * @param pattern - A glob-style pattern to match active channels.
-     *                  If not provided, all active channels are returned.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `pattern`: A glob-style pattern to match active channels.
+     *     If not provided, all active channels are returned.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns A list of currently active channels matching the given pattern.
      *          If no pattern is specified, all active channels are returned.
      *
@@ -6548,8 +6692,12 @@ export class BaseClient {
      * console.log(newsChannels); // Output: ["news.sports", "news.weather"]
      * ```
      */
-    public async pubsubChannels(pattern?: string): Promise<string[]> {
-        return this.createWritePromise(createPubSubChannels(pattern));
+    public async pubsubChannels(
+        options?: { pattern?: GlideString } & DecoderOption,
+    ): Promise<GlideString[]> {
+        return this.createWritePromise(createPubSubChannels(options?.pattern), {
+            decoder: options?.decoder,
+        });
     }
 
     /**

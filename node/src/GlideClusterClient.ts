@@ -798,8 +798,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * @param func - The function name.
      * @param args - A list of `function` arguments and it should not represent names of keys.
-     * @param route - The command will be routed to a random node, unless `route` is provided, in which
-     *     case the client will route the command to the nodes defined by `route`.
+     * @param options - (Optional) See {@link RouteOption} and {@link DecoderOption}.
      * @returns The invoked function's return value.
      *
      * @example
@@ -809,12 +808,13 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public async fcallWithRoute(
-        func: string,
-        args: string[],
-        route?: Routes,
+        func: GlideString,
+        args: GlideString[],
+        options?: RouteOption & DecoderOption,
     ): Promise<ClusterResponse<ReturnType>> {
         return this.createWritePromise(createFCall(func, [], args), {
-            route: toProtobufRoute(route),
+            route: toProtobufRoute(options?.route),
+            decoder: options?.decoder,
         });
     }
 
@@ -826,8 +826,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * @param func - The function name.
      * @param args - A list of `function` arguments and it should not represent names of keys.
-     * @param route - The command will be routed to a random node, unless `route` is provided, in which
-     *     case the client will route the command to the nodes defined by `route`.
+     * @param options - (Optional) See {@link RouteOption} and {@link DecoderOption}.
      * @returns The invoked function's return value.
      *
      * @example
@@ -838,12 +837,13 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public async fcallReadonlyWithRoute(
-        func: string,
-        args: string[],
-        route?: Routes,
+        func: GlideString,
+        args: GlideString[],
+        options?: RouteOption & DecoderOption,
     ): Promise<ClusterResponse<ReturnType>> {
         return this.createWritePromise(createFCallReadOnly(func, [], args), {
-            route: toProtobufRoute(route),
+            route: toProtobufRoute(options?.route),
+            decoder: options?.decoder,
         });
     }
 
@@ -854,9 +854,9 @@ export class GlideClusterClient extends BaseClient {
      * @remarks Since Valkey version 7.0.0.
      *
      * @param libraryCode - The library name to delete.
-     * @param route - The command will be routed to all primary node, unless `route` is provided, in which
+     * @param route - (Optional) The command will be routed to all primary node, unless `route` is provided, in which
      *     case the client will route the command to the nodes defined by `route`.
-     * @returns A simple OK response.
+     * @returns A simple `"OK"` response.
      *
      * @example
      * ```typescript
@@ -865,11 +865,12 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public async functionDelete(
-        libraryCode: string,
+        libraryCode: GlideString,
         route?: Routes,
-    ): Promise<string> {
+    ): Promise<"OK"> {
         return this.createWritePromise(createFunctionDelete(libraryCode), {
             route: toProtobufRoute(route),
+            decoder: Decoder.String,
         });
     }
 
@@ -880,10 +881,11 @@ export class GlideClusterClient extends BaseClient {
      * @remarks Since Valkey version 7.0.0.
      *
      * @param libraryCode - The source code that implements the library.
-     * @param replace - Whether the given library should overwrite a library with the same name if it
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `replace`: whether the given library should overwrite a library with the same name if it
      *     already exists.
-     * @param route - The command will be routed to a random node, unless `route` is provided, in which
-     *     case the client will route the command to the nodes defined by `route`.
+     * - (Optional) `route`: see {@link RouteOption}.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns The library name that was loaded.
      *
      * @example
@@ -894,13 +896,18 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public async functionLoad(
-        libraryCode: string,
-        replace?: boolean,
-        route?: Routes,
-    ): Promise<string> {
+        libraryCode: GlideString,
+        options?: {
+            replace?: boolean;
+        } & RouteOption &
+            DecoderOption,
+    ): Promise<GlideString> {
         return this.createWritePromise(
-            createFunctionLoad(libraryCode, replace),
-            { route: toProtobufRoute(route) },
+            createFunctionLoad(libraryCode, options?.replace),
+            {
+                route: toProtobufRoute(options?.route),
+                decoder: options?.decoder,
+            },
         );
     }
 
@@ -910,10 +917,10 @@ export class GlideClusterClient extends BaseClient {
      * @see {@link https://valkey.io/commands/function-flush/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
      *
-     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
-     * @param route - The command will be routed to all primary nodes, unless `route` is provided, in which
-     *   case the client will route the command to the nodes defined by `route`.
-     * @returns A simple OK response.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `mode`: the flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * - (Optional) `route`: see {@link RouteOption}.
+     * @returns A simple `"OK"` response.
      *
      * @example
      * ```typescript
@@ -922,11 +929,13 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public async functionFlush(
-        mode?: FlushMode,
-        route?: Routes,
-    ): Promise<string> {
-        return this.createWritePromise(createFunctionFlush(mode), {
-            route: toProtobufRoute(route),
+        options?: {
+            mode?: FlushMode;
+        } & RouteOption,
+    ): Promise<"OK"> {
+        return this.createWritePromise(createFunctionFlush(options?.mode), {
+            route: toProtobufRoute(options?.route),
+            decoder: Decoder.String,
         });
     }
 
@@ -936,9 +945,7 @@ export class GlideClusterClient extends BaseClient {
      * @see {@link https://valkey.io/commands/function-list/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
      *
-     * @param options - Parameters to filter and request additional info.
-     * @param route - The client will route the command to the nodes defined by `route`.
-     *     If not defined, the command will be routed to a random node.
+     * @param options - (Optional) See {@link FunctionListOptions}, {@link DecoderOption}, and {@link RouteOption}.
      * @returns Info about all or selected libraries and their functions in {@link FunctionListResponse} format.
      *
      * @example
@@ -961,11 +968,11 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public async functionList(
-        options?: FunctionListOptions,
-        route?: Routes,
+        options?: FunctionListOptions & DecoderOption & RouteOption,
     ): Promise<ClusterResponse<FunctionListResponse>> {
         return this.createWritePromise(createFunctionList(options), {
-            route: toProtobufRoute(route),
+            route: toProtobufRoute(options?.route),
+            decoder: options?.decoder,
         });
     }
 
@@ -973,13 +980,10 @@ export class GlideClusterClient extends BaseClient {
      * Returns information about the function that's currently running and information about the
      * available execution engines.
      *
-    
-     *
      * @see {@link https://valkey.io/commands/function-stats/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
      *
-     * @param route - The command will be routed automatically to all nodes, unless `route` is provided, in which
-     *       case the client will route the command to the nodes defined by `route`.
+     * @param options - (Optional) See {@link DecoderOption} and {@link RouteOption}.
      * @returns A `Record` with two keys:
      *     - `"running_script"` with information about the running script.
      *     - `"engines"` with information about available engines and their stats.
@@ -1020,10 +1024,11 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public async functionStats(
-        route?: Routes,
+        options?: RouteOption & DecoderOption,
     ): Promise<ClusterResponse<FunctionStatsSingleResponse>> {
         return this.createWritePromise(createFunctionStats(), {
-            route: toProtobufRoute(route),
+            route: toProtobufRoute(options?.route),
+            decoder: options?.decoder,
         });
     }
 
@@ -1036,7 +1041,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * @param route - (Optional) The client will route the command to the nodes defined by `route`.
      *     If not defined, the command will be routed to all nodes.
-     * @returns `OK` if function is terminated. Otherwise, throws an error.
+     * @returns `"OK"` if function is terminated. Otherwise, throws an error.
      *
      * @example
      * ```typescript
@@ -1046,6 +1051,7 @@ export class GlideClusterClient extends BaseClient {
     public async functionKill(route?: Routes): Promise<"OK"> {
         return this.createWritePromise(createFunctionKill(), {
             route: toProtobufRoute(route),
+            decoder: Decoder.String,
         });
     }
 
@@ -1069,8 +1075,8 @@ export class GlideClusterClient extends BaseClient {
         route?: Routes,
     ): Promise<ClusterResponse<Buffer>> {
         return this.createWritePromise(createFunctionDump(), {
-            decoder: Decoder.Bytes,
             route: toProtobufRoute(route),
+            decoder: Decoder.Bytes,
         });
     }
 
@@ -1081,10 +1087,10 @@ export class GlideClusterClient extends BaseClient {
      * @remarks Since Valkey version 7.0.0.
      *
      * @param payload - The serialized data from {@link functionDump}.
-     * @param policy - (Optional) A policy for handling existing libraries, see {@link FunctionRestorePolicy}.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `policy`: a policy for handling existing libraries, see {@link FunctionRestorePolicy}.
      *     {@link FunctionRestorePolicy.APPEND} is used by default.
-     * @param route - (Optional) The client will route the command to the nodes defined by `route`.
-     *     If not defined, the command will be routed all primary nodes.
+     * - (Optional) `route`: see {@link RouteOption}.
      * @returns `"OK"`.
      *
      * @example
@@ -1094,11 +1100,14 @@ export class GlideClusterClient extends BaseClient {
      */
     public async functionRestore(
         payload: Buffer,
-        options?: { policy?: FunctionRestorePolicy; route?: Routes },
+        options?: { policy?: FunctionRestorePolicy } & RouteOption,
     ): Promise<"OK"> {
         return this.createWritePromise(
             createFunctionRestore(payload, options?.policy),
-            { decoder: Decoder.String, route: toProtobufRoute(options?.route) },
+            {
+                route: toProtobufRoute(options?.route),
+                decoder: Decoder.String,
+            },
         );
     }
 
@@ -1212,8 +1221,8 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public async publish(
-        message: string,
-        channel: string,
+        message: GlideString,
+        channel: GlideString,
         sharded: boolean = false,
     ): Promise<number> {
         return this.createWritePromise(
@@ -1227,8 +1236,10 @@ export class GlideClusterClient extends BaseClient {
      *
      * @see {@link https://valkey.io/commands/pubsub-shardchannels/|valkey.io} for details.
      *
-     * @param pattern - A glob-style pattern to match active shard channels.
-     *                  If not provided, all active shard channels are returned.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `pattern`: A glob-style pattern to match active shard channels.
+     *     If not provided, all active shard channels are returned.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns A list of currently active shard channels matching the given pattern.
      *          If no pattern is specified, all active shard channels are returned.
      *
@@ -1241,8 +1252,15 @@ export class GlideClusterClient extends BaseClient {
      * console.log(filteredChannels); // Output: ["channel1", "channel2"]
      * ```
      */
-    public async pubsubShardChannels(pattern?: string): Promise<string[]> {
-        return this.createWritePromise(createPubsubShardChannels(pattern));
+    public async pubsubShardChannels(
+        options?: {
+            pattern?: GlideString;
+        } & DecoderOption,
+    ): Promise<GlideString[]> {
+        return this.createWritePromise(
+            createPubsubShardChannels(options?.pattern),
+            { decoder: options?.decoder },
+        );
     }
 
     /**

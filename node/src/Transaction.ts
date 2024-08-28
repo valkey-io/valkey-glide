@@ -337,7 +337,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - If `key` exists, returns the value of `key` as a `string`. Otherwise, return `null`.
      */
     public getex(
-        key: string,
+        key: GlideString,
         options?: "persist" | { type: TimeUnit; duration: number },
     ): T {
         return this.addAndReturn(createGetEx(key, options));
@@ -386,7 +386,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `value` isn't set because of `onlyIfExists` or `onlyIfDoesNotExist` conditions, return null.
      * If `returnOldValue` is set, return the old value as a string.
      */
-    public set(key: string, value: string, options?: SetOptions): T {
+    public set(key: GlideString, value: GlideString, options?: SetOptions): T {
         return this.addAndReturn(createSet(key, value, options));
     }
 
@@ -545,7 +545,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - the value of `key` after the increment.
      */
-    public incr(key: string): T {
+    public incr(key: GlideString): T {
         return this.addAndReturn(createIncr(key));
     }
 
@@ -557,7 +557,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - the value of `key` after the increment.
      */
-    public incrBy(key: string, amount: number): T {
+    public incrBy(key: GlideString, amount: number): T {
         return this.addAndReturn(createIncrBy(key, amount));
     }
 
@@ -572,7 +572,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - the value of `key` after the increment.
      *
      */
-    public incrByFloat(key: string, amount: number): T {
+    public incrByFloat(key: GlideString, amount: number): T {
         return this.addAndReturn(createIncrByFloat(key, amount));
     }
 
@@ -594,7 +594,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - the value of `key` after the decrement.
      */
-    public decr(key: string): T {
+    public decr(key: GlideString): T {
         return this.addAndReturn(createDecr(key));
     }
 
@@ -606,7 +606,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - the value of `key` after the decrement.
      */
-    public decrBy(key: string, amount: number): T {
+    public decrBy(key: GlideString, amount: number): T {
         return this.addAndReturn(createDecrBy(key, amount));
     }
 
@@ -809,7 +809,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The number of fields that were added.
      */
-    public hset(key: string, fieldValueMap: Record<string, string>): T {
+    public hset(key: GlideString, fieldValueMap: Record<string, string>): T {
         return this.addAndReturn(createHSet(key, fieldValueMap));
     }
 
@@ -822,7 +822,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - A list of field names for the hash, or an empty list when the key does not exist.
      */
-    public hkeys(key: string): T {
+    public hkeys(key: GlideString): T {
         return this.addAndReturn(createHKeys(key));
     }
 
@@ -837,7 +837,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - `true` if the field was set, `false` if the field already existed and was not set.
      */
-    public hsetnx(key: string, field: string, value: string): T {
+    public hsetnx(key: GlideString, field: GlideString, value: GlideString): T {
         return this.addAndReturn(createHSetNX(key, field, value));
     }
 
@@ -851,7 +851,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - the number of fields that were removed from the hash, not including specified but non existing fields.
      * If `key` does not exist, it is treated as an empty hash and it returns 0.
      */
-    public hdel(key: string, fields: string[]): T {
+    public hdel(key: GlideString, fields: GlideString[]): T {
         return this.addAndReturn(createHDel(key, fields));
     }
 
@@ -865,7 +865,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * For every field that does not exist in the hash, a null value is returned.
      * If `key` does not exist, it is treated as an empty hash and it returns a list of null values.
      */
-    public hmget(key: string, fields: string[]): T {
+    public hmget(key: GlideString, fields: GlideString[]): T {
         return this.addAndReturn(createHMGet(key, fields));
     }
 
@@ -878,7 +878,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - `true` if the hash contains `field`. If the hash does not contain `field`, or if `key` does not exist,
      * the command response will be `false`.
      */
-    public hexists(key: string, field: string): T {
+    public hexists(key: GlideString, field: GlideString): T {
         return this.addAndReturn(createHExists(key, field));
     }
 
@@ -890,7 +890,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - a map of fields and their values stored in the hash. Every field name in the map is followed by its value.
      * If `key` does not exist, it returns an empty map.
      */
-    public hgetall(key: string): T {
+    public hgetall(key: GlideString): T {
         return this.addAndReturn(createHGetAll(key));
     }
 
@@ -905,7 +905,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - the value of `field` in the hash stored at `key` after the increment.
      */
-    public hincrBy(key: string, field: string, amount: number): T {
+    public hincrBy(key: GlideString, field: GlideString, amount: number): T {
         return this.addAndReturn(createHIncrBy(key, field, amount));
     }
 
@@ -920,7 +920,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - the value of `field` in the hash stored at `key` after the increment.
      */
-    public hincrByFloat(key: string, field: string, amount: number): T {
+    public hincrByFloat(
+        key: GlideString,
+        field: GlideString,
+        amount: number,
+    ): T {
         return this.addAndReturn(createHIncrByFloat(key, field, amount));
     }
 
@@ -931,7 +935,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The number of fields in the hash, or 0 when the key does not exist.
      */
-    public hlen(key: string): T {
+    public hlen(key: GlideString): T {
         return this.addAndReturn(createHLen(key));
     }
 
@@ -956,7 +960,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The string length or `0` if `field` or `key` does not exist.
      */
-    public hstrlen(key: string, field: string): T {
+    public hstrlen(key: GlideString, field: GlideString): T {
         return this.addAndReturn(createHStrlen(key, field));
     }
 
@@ -971,7 +975,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A random field name from the hash stored at `key`, or `null` when
      *     the key does not exist.
      */
-    public hrandfield(key: string): T {
+    public hrandfield(key: GlideString): T {
         return this.addAndReturn(createHRandField(key));
     }
 
@@ -1008,7 +1012,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - An `array` of random field names from the hash stored at `key`,
      *     or an `empty array` when the key does not exist.
      */
-    public hrandfieldCount(key: string, count: number): T {
+    public hrandfieldCount(key: GlideString, count: number): T {
         return this.addAndReturn(createHRandField(key, count));
     }
 
@@ -1028,7 +1032,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     field name from the hash and `value` is the associated value of the field name.
      *     If the hash does not exist or is empty, the response will be an empty `array`.
      */
-    public hrandfieldWithValues(key: string, count: number): T {
+    public hrandfieldWithValues(key: GlideString, count: number): T {
         return this.addAndReturn(createHRandField(key, count, true));
     }
 
@@ -1190,7 +1194,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - Always "OK".
      */
-    public lset(key: string, index: number, element: string): T {
+    public lset(key: GlideString, index: number, element: GlideString): T {
         return this.addAndReturn(createLSet(key, index, element));
     }
 
@@ -1209,7 +1213,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `end` exceeds the actual end of the list, it will be treated like the last element of the list.
      * If `key` does not exist the command will be ignored.
      */
-    public ltrim(key: string, start: number, end: number): T {
+    public ltrim(key: GlideString, start: number, end: number): T {
         return this.addAndReturn(createLTrim(key, start, end));
     }
 
@@ -1225,7 +1229,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - the number of the removed elements.
      * If `key` does not exist, 0 is returned.
      */
-    public lrem(key: string, count: number, element: string): T {
+    public lrem(key: GlideString, count: number, element: string): T {
         return this.addAndReturn(createLRem(key, count, element));
     }
 
@@ -1254,7 +1258,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The length of the list after the push operation.
      */
-    public rpushx(key: string, elements: string[]): T {
+    public rpushx(key: GlideString, elements: GlideString[]): T {
         return this.addAndReturn(createRPushX(key, elements));
     }
 
@@ -1293,7 +1297,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - the number of members that were added to the set, not including all the members already present in the set.
      */
-    public sadd(key: string, members: string[]): T {
+    public sadd(key: GlideString, members: GlideString[]): T {
         return this.addAndReturn(createSAdd(key, members));
     }
 
@@ -1306,7 +1310,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - the number of members that were removed from the set, not including non existing members.
      * If `key` does not exist, it is treated as an empty set and this command returns 0.
      */
-    public srem(key: string, members: string[]): T {
+    public srem(key: GlideString, members: GlideString[]): T {
         return this.addAndReturn(createSRem(key, members));
     }
 
@@ -1322,7 +1326,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response -  An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and for the next iteration of results.
      * The `cursor` will be `"0"` on the last iteration of the set. The second element is always an array of the subset of the set held in `key`.
      */
-    public sscan(key: string, cursor: string, options?: BaseScanOptions): T {
+    public sscan(
+        key: GlideString,
+        cursor: GlideString,
+        options?: BaseScanOptions,
+    ): T {
         return this.addAndReturn(createSScan(key, cursor, options));
     }
 
@@ -1334,7 +1342,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - all members of the set.
      * If `key` does not exist, it is treated as an empty set and this command returns empty list.
      */
-    public smembers(key: string): T {
+    public smembers(key: GlideString): T {
         return this.addAndReturn(createSMembers(key), true);
     }
 
@@ -1348,7 +1356,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - `true` on success, or `false` if the `source` set does not exist or the element is not a member of the source set.
      */
-    public smove(source: string, destination: string, member: string): T {
+    public smove(
+        source: GlideString,
+        destination: GlideString,
+        member: GlideString,
+    ): T {
         return this.addAndReturn(createSMove(source, destination, member));
     }
 
@@ -1359,7 +1371,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - the cardinality (number of elements) of the set, or 0 if key does not exist.
      */
-    public scard(key: string): T {
+    public scard(key: GlideString): T {
         return this.addAndReturn(createSCard(key));
     }
 
@@ -1372,7 +1384,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A set of members which are present in all given sets.
      * If one or more sets do not exist, an empty set will be returned.
      */
-    public sinter(keys: string[]): T {
+    public sinter(keys: GlideString[]): T {
         return this.addAndReturn(createSInter(keys), true);
     }
 
@@ -1386,7 +1398,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The cardinality of the intersection result. If one or more sets do not exist, `0` is returned.
      */
-    public sintercard(keys: string[], limit?: number): T {
+    public sintercard(keys: GlideString[], limit?: number): T {
         return this.addAndReturn(createSInterCard(keys, limit));
     }
 
@@ -1400,7 +1412,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The number of elements in the resulting set.
      */
-    public sinterstore(destination: string, keys: string[]): T {
+    public sinterstore(destination: GlideString, keys: GlideString[]): T {
         return this.addAndReturn(createSInterStore(destination, keys));
     }
 
@@ -1414,7 +1426,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A `Set` of elements representing the difference between the sets.
      * If a key in `keys` does not exist, it is treated as an empty set.
      */
-    public sdiff(keys: string[]): T {
+    public sdiff(keys: GlideString[]): T {
         return this.addAndReturn(createSDiff(keys), true);
     }
 
@@ -1428,7 +1440,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The number of elements in the resulting set.
      */
-    public sdiffstore(destination: string, keys: string[]): T {
+    public sdiffstore(destination: GlideString, keys: GlideString[]): T {
         return this.addAndReturn(createSDiffStore(destination, keys));
     }
 
@@ -1442,7 +1454,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A `Set` of members which are present in at least one of the given sets.
      * If none of the sets exist, an empty `Set` will be returned.
      */
-    public sunion(keys: string[]): T {
+    public sunion(keys: GlideString[]): T {
         return this.addAndReturn(createSUnion(keys), true);
     }
 
@@ -1457,7 +1469,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The number of elements in the resulting set.
      */
-    public sunionstore(destination: string, keys: string[]): T {
+    public sunionstore(destination: GlideString, keys: GlideString[]): T {
         return this.addAndReturn(createSUnionStore(destination, keys));
     }
 
@@ -1470,7 +1482,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - `true` if the member exists in the set, `false` otherwise.
      * If `key` doesn't exist, it is treated as an empty set and the command returns `false`.
      */
-    public sismember(key: string, member: string): T {
+    public sismember(key: GlideString, member: GlideString): T {
         return this.addAndReturn(createSIsMember(key, member));
     }
 
@@ -1485,7 +1497,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - An `array` of `boolean` values, each indicating if the respective member exists in the set.
      */
-    public smismember(key: string, members: string[]): T {
+    public smismember(key: GlideString, members: GlideString[]): T {
         return this.addAndReturn(createSMIsMember(key, members));
     }
 
@@ -1498,7 +1510,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - the value of the popped member.
      * If `key` does not exist, null will be returned.
      */
-    public spop(key: string): T {
+    public spop(key: GlideString): T {
         return this.addAndReturn(createSPop(key));
     }
 
@@ -1511,7 +1523,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A list of popped elements will be returned depending on the set's length.
      * If `key` does not exist, empty list will be returned.
      */
-    public spopCount(key: string, count: number): T {
+    public spopCount(key: GlideString, count: number): T {
         return this.addAndReturn(createSPop(key, count), true);
     }
 
@@ -1522,7 +1534,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key - The key from which to retrieve the set member.
      * Command Response - A random element from the set, or null if `key` does not exist.
      */
-    public srandmember(key: string): T {
+    public srandmember(key: GlideString): T {
         return this.addAndReturn(createSRandMember(key));
     }
 
@@ -1536,7 +1548,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *                If `count` is negative, allows for duplicates members.
      * Command Response - A list of members from the set. If the set does not exist or is empty, an empty list will be returned.
      */
-    public srandmemberCount(key: string, count: number): T {
+    public srandmemberCount(key: GlideString, count: number): T {
         return this.addAndReturn(createSRandMember(key, count));
     }
 
@@ -2172,7 +2184,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The length of the string value stored at `key`
      * If `key` does not exist, it is treated as an empty string, and the command returns 0.
      */
-    public strlen(key: string): T {
+    public strlen(key: GlideString): T {
         return this.addAndReturn(createStrlen(key));
     }
 
@@ -3194,7 +3206,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The invoked function's return value.
      */
-    public fcall(func: string, keys: string[], args: string[]): T {
+    public fcall(
+        func: GlideString,
+        keys: GlideString[],
+        args: GlideString[],
+    ): T {
         return this.addAndReturn(createFCall(func, keys, args));
     }
 
@@ -3211,7 +3227,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The invoked function's return value.
      */
-    public fcallReadonly(func: string, keys: string[], args: string[]): T {
+    public fcallReadonly(
+        func: GlideString,
+        keys: GlideString[],
+        args: GlideString[],
+    ): T {
         return this.addAndReturn(createFCallReadOnly(func, keys, args));
     }
 
@@ -3223,9 +3243,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param libraryCode - The library name to delete.
      *
-     * Command Response - `OK`.
+     * Command Response - `"OK"`.
      */
-    public functionDelete(libraryCode: string): T {
+    public functionDelete(libraryCode: GlideString): T {
         return this.addAndReturn(createFunctionDelete(libraryCode));
     }
 
@@ -3236,12 +3256,12 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @remarks Since Valkey version 7.0.0.
      *
      * @param libraryCode - The source code that implements the library.
-     * @param replace - Whether the given library should overwrite a library with the same name if it
+     * @param replace - (Optional) Whether the given library should overwrite a library with the same name if it
      *     already exists.
      *
      * Command Response - The library name that was loaded.
      */
-    public functionLoad(libraryCode: string, replace?: boolean): T {
+    public functionLoad(libraryCode: GlideString, replace?: boolean): T {
         return this.addAndReturn(createFunctionLoad(libraryCode, replace));
     }
 
@@ -3251,8 +3271,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @see {@link https://valkey.io/commands/function-flush/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
      *
-     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
-     * Command Response - `OK`.
+     * @param mode - (Optional) The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * Command Response - `"OK"`.
      */
     public functionFlush(mode?: FlushMode): T {
         return this.addAndReturn(createFunctionFlush(mode));
@@ -3264,7 +3284,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @see {@link https://valkey.io/commands/function-list/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
      *
-     * @param options - Parameters to filter and request additional info.
+     * @param options - (Optional) Parameters to filter and request additional info.
      *
      * Command Response - Info about all or selected libraries and their functions in {@link FunctionListResponse} format.
      */
@@ -3668,7 +3688,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A `String` containing all the longest common subsequence combined between the 2 strings.
      *     An empty `String` is returned if the keys do not exist or have no common subsequences.
      */
-    public lcs(key1: string, key2: string): T {
+    public lcs(key1: GlideString, key2: GlideString): T {
         return this.addAndReturn(createLCS(key1, key2));
     }
 
@@ -3683,7 +3703,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The total length of all the longest common subsequences between the 2 strings.
      */
-    public lcsLen(key1: string, key2: string): T {
+    public lcsLen(key1: GlideString, key2: GlideString): T {
         return this.addAndReturn(createLCS(key1, key2, { len: true }));
     }
 
@@ -3696,8 +3716,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key1 - The key that stores the first string.
      * @param key2 - The key that stores the second string.
-     * @param withMatchLen - (Optional) If `true`, include the length of the substring matched for the each match.
-     * @param minMatchLen - (Optional) The minimum length of matches to include in the result.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `withMatchLen`: if `true`, include the length of the substring matched for the each match.
+     * - (Optional) `minMatchLen`: the minimum length of matches to include in the result.
      *
      * Command Response - A `Record` containing the indices of the longest common subsequences between the
      *     2 strings and the lengths of the longest common subsequences. The resulting map contains two
@@ -3711,8 +3732,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     See example of {@link BaseClient.lcsIdx|lcsIdx} for more details.
      */
     public lcsIdx(
-        key1: string,
-        key2: string,
+        key1: GlideString,
+        key2: GlideString,
         options?: { withMatchLen?: boolean; minMatchLen?: number },
     ): T {
         return this.addAndReturn(createLCS(key1, key2, { idx: options ?? {} }));
@@ -3755,7 +3776,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The length of the string stored at `key` after it was modified.
      */
-    public setrange(key: string, offset: number, value: string): T {
+    public setrange(key: GlideString, offset: number, value: GlideString): T {
         return this.addAndReturn(createSetRange(key, offset, value));
     }
 
@@ -3811,12 +3832,12 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     If no member could be popped and the timeout expired, returns `null`.
      */
     public blmpop(
-        keys: string[],
+        keys: GlideString[],
         direction: ListDirection,
         timeout: number,
         count?: number,
     ): T {
-        return this.addAndReturn(createBLMPop(timeout, keys, direction, count));
+        return this.addAndReturn(createBLMPop(keys, direction, timeout, count));
     }
 
     /**
@@ -3830,7 +3851,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A list of currently active channels matching the given pattern.
      *          If no pattern is specified, all active channels are returned.
      */
-    public pubsubChannels(pattern?: string): T {
+    public pubsubChannels(pattern?: GlideString): T {
         return this.addAndReturn(createPubSubChannels(pattern));
     }
 
@@ -4016,7 +4037,7 @@ export class Transaction extends BaseTransaction<Transaction> {
      * Command Response -  Number of subscriptions in primary node that received the message.
      * Note that this value does not include subscriptions that configured on replicas.
      */
-    public publish(message: string, channel: string): Transaction {
+    public publish(message: GlideString, channel: GlideString): Transaction {
         return this.addAndReturn(createPublish(message, channel));
     }
 }
@@ -4143,8 +4164,8 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * Command Response -  Number of subscriptions in primary node that received the message.
      */
     public publish(
-        message: string,
-        channel: string,
+        message: GlideString,
+        channel: GlideString,
         sharded: boolean = false,
     ): ClusterTransaction {
         return this.addAndReturn(createPublish(message, channel, sharded));
@@ -4161,7 +4182,7 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * Command Response - A list of currently active shard channels matching the given pattern.
      *          If no pattern is specified, all active shard channels are returned.
      */
-    public pubsubShardChannels(pattern?: string): ClusterTransaction {
+    public pubsubShardChannels(pattern?: GlideString): ClusterTransaction {
         return this.addAndReturn(createPubsubShardChannels(pattern));
     }
 
