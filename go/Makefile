@@ -28,9 +28,24 @@ install-tools: install-tools-go1.22.0
 
 build: build-glide-client generate-protobuf
 	go build ./...
+	cd benchmarks && go build -ldflags="-w" ./...
+
+build-debug: build-glide-client-debug generate-protobuf
+	go build -gcflags "-l -N" ./...
+	cd benchmarks && go build -gcflags "-l -N" ./...
+
+clean:
+	go clean
+	rm -f lib.h
+	rm -f benchmarks/benchmarks
+
 
 build-glide-client:
 	cargo build --release
+	cbindgen --config cbindgen.toml --crate glide-rs --output lib.h
+
+build-glide-client-debug:
+	cargo build
 	cbindgen --config cbindgen.toml --crate glide-rs --output lib.h
 
 generate-protobuf:
@@ -58,7 +73,7 @@ format:
 	golines -w --shorten-comments -m 127 .
 
 test:
-	LD_LIBRARY_PATH=$(shell find . -name libglide_rs.so|tail -1|xargs dirname|xargs readlink -f):${LD_LIBRARY_PATH} \
+	LD_LIBRARY_PATH=$(shell find . -name libglide_rs.so|grep -w release|tail -1|xargs dirname|xargs readlink -f):${LD_LIBRARY_PATH} \
 	go test -v -race ./...
 
 # Note: this task is no longer run by CI because:
