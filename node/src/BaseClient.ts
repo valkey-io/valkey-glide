@@ -5213,7 +5213,8 @@ export class BaseClient {
      *
      * @param key - The key of the stream.
      * @param groupName - The newly created consumer group name.
-     * @param options - (Optional) See {@link StreamGroupOptions} and {@link DecoderOption}.
+     * @param id - Stream entry ID that specifies the last delivered entry in the stream from the new
+     *     group’s perspective. The special ID `"$"` can be used to specify the last entry in the stream.
      * @returns `"OK"`.
      *
      * @example
@@ -5226,11 +5227,11 @@ export class BaseClient {
         key: GlideString,
         groupName: GlideString,
         id: GlideString,
-        options?: StreamGroupOptions & DecoderOption,
-    ): Promise<GlideString> {
+        options?: StreamGroupOptions,
+    ): Promise<"OK"> {
         return this.createWritePromise(
             createXGroupCreate(key, groupName, id, options),
-            options,
+            { decoder: Decoder.String },
         );
     }
 
