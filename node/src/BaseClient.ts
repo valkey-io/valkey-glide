@@ -4932,9 +4932,9 @@ export class BaseClient {
      * ```
      */
     public async xpending(
-        key: string,
-        group: string,
-    ): Promise<[number, string, string, [string, number][]]> {
+        key: GlideString,
+        group: GlideString,
+    ): Promise<[number, GlideString, GlideString, [GlideString, number][]]> {
         return this.createWritePromise(createXPending(key, group));
     }
 
@@ -4973,10 +4973,10 @@ export class BaseClient {
      * ```
      */
     public async xpendingWithOptions(
-        key: string,
-        group: string,
+        key: GlideString,
+        group: GlideString,
         options: StreamPendingOptions,
-    ): Promise<[string, string, number, number][]> {
+    ): Promise<[GlideString, GlideString, number, number][]> {
         return this.createWritePromise(createXPending(key, group, options));
     }
 

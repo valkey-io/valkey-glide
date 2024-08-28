@@ -10452,7 +10452,7 @@ export function runBaseTests(config: {
                 // wait to get some minIdleTime
                 await new Promise((resolve) => setTimeout(resolve, 500));
 
-                expect(await client.xpending(key, group)).toEqual([
+                expect(await client.xpending(Buffer.from(key), group)).toEqual([
                     2,
                     "0-1",
                     "0-2",
@@ -10461,7 +10461,7 @@ export function runBaseTests(config: {
 
                 const result = await client.xpendingWithOptions(
                     key,
-                    group,
+                    Buffer.from(group),
                     cluster.checkIfServerVersionLessThan("6.2.0")
                         ? {
                             start: InfBoundary.NegativeInfinity,
@@ -10484,7 +10484,7 @@ export function runBaseTests(config: {
                         start: { value: "0-1", isInclusive: true },
                         end: { value: "0-2", isInclusive: false },
                         count: 12,
-                        consumer: "_",
+                        consumer: Buffer.from("_"),
                     }),
                 ).toEqual([]);
 

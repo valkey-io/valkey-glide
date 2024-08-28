@@ -2654,13 +2654,13 @@ export type StreamPendingOptions = {
     /** Limit the number of messages returned. */
     count: number;
     /** Filter pending entries by consumer. */
-    consumer?: string;
+    consumer?: GlideString;
 };
 
 /** @internal */
 export function createXPending(
-    key: string,
-    group: string,
+    key: GlideString,
+    group: GlideString,
     options?: StreamPendingOptions,
 ): command_request.Command {
     const args = [key, group];

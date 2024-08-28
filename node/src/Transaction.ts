@@ -2714,7 +2714,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - An `array` that includes the summary of the pending messages.
      * See example of {@link BaseClient.xpending|xpending} for more details.
      */
-    public xpending(key: string, group: string): T {
+    public xpending(key: GlideString, group: GlideString): T {
         return this.addAndReturn(createXPending(key, group));
     }
 
@@ -2731,8 +2731,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * See example of {@link BaseClient.xpendingWithOptions|xpendingWithOptions} for more details.
      */
     public xpendingWithOptions(
-        key: string,
-        group: string,
+        key: GlideString,
+        group: GlideString,
         options: StreamPendingOptions,
     ): T {
         return this.addAndReturn(createXPending(key, group, options));
