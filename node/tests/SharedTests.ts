@@ -438,13 +438,17 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
+                const keyEncoded = Buffer.from(key);
                 expect(await client.set(key, "10")).toEqual("OK");
                 expect(await client.incr(key)).toEqual(11);
-                expect(await client.get(key)).toEqual("11");
-                expect(await client.incrBy(key, 4)).toEqual(15);
-                expect(await client.get(key)).toEqual("15");
-                expect(await client.incrByFloat(key, 1.5)).toEqual(16.5);
-                expect(await client.get(key)).toEqual("16.5");
+                expect(await client.incr(keyEncoded)).toEqual(12);
+                expect(await client.get(key)).toEqual("12");
+                expect(await client.incrBy(key, 4)).toEqual(16);
+                expect(await client.incrBy(keyEncoded, 1)).toEqual(17);
+                expect(await client.get(key)).toEqual("17");
+                expect(await client.incrByFloat(key, 1.5)).toEqual(18.5);
+                expect(await client.incrByFloat(key, 1.5)).toEqual(20);
+                expect(await client.get(key)).toEqual("20");
             }, protocol);
         },
         config.timeout,
@@ -550,11 +554,14 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
+                const keyEncoded = Buffer.from(key);
                 expect(await client.set(key, "10")).toEqual("OK");
                 expect(await client.decr(key)).toEqual(9);
-                expect(await client.get(key)).toEqual("9");
-                expect(await client.decrBy(key, 4)).toEqual(5);
-                expect(await client.get(key)).toEqual("5");
+                expect(await client.decr(keyEncoded)).toEqual(8);
+                expect(await client.get(key)).toEqual("8");
+                expect(await client.decrBy(key, 4)).toEqual(4);
+                expect(await client.decrBy(keyEncoded, 1)).toEqual(3);
+                expect(await client.get(key)).toEqual("3");
             }, protocol);
         },
         config.timeout,
@@ -9679,8 +9686,20 @@ export function runBaseTests(config: {
 
                 // keys does not exist or is empty
                 expect(await client.lcs(key1, key2)).toEqual("");
+                expect(
+                    await client.lcs(Buffer.from(key1), Buffer.from(key2)),
+                ).toEqual("");
                 expect(await client.lcsLen(key1, key2)).toEqual(0);
+                expect(
+                    await client.lcsLen(Buffer.from(key1), Buffer.from(key2)),
+                ).toEqual(0);
                 expect(await client.lcsIdx(key1, key2)).toEqual({
+                    matches: [],
+                    len: 0,
+                });
+                expect(
+                    await client.lcsIdx(Buffer.from(key1), Buffer.from(key2)),
+                ).toEqual({
                     matches: [],
                     len: 0,
                 });
@@ -11203,12 +11222,25 @@ export function runBaseTests(config: {
 
                 expect(
                     await client.getex(key1, {
-                        type: TimeUnit.Seconds,
-                        duration: 15,
+                        expiry: {
+                            type: TimeUnit.Seconds,
+                            duration: 15,
+                        },
+                    }),
+                ).toEqual(value);
+                // test the binary option
+                expect(
+                    await client.getex(Buffer.from(key1), {
+                        expiry: {
+                            type: TimeUnit.Seconds,
+                            duration: 1,
+                        },
                     }),
                 ).toEqual(value);
                 expect(await client.ttl(key1)).toBeGreaterThan(0);
-                expect(await client.getex(key1, "persist")).toEqual(value);
+                expect(await client.getex(key1, { expiry: "persist" })).toEqual(
+                    value,
+                );
                 expect(await client.ttl(key1)).toBe(-1);
 
                 // non existent key
@@ -11217,8 +11249,10 @@ export function runBaseTests(config: {
                 // invalid time measurement
                 await expect(
                     client.getex(key1, {
-                        type: TimeUnit.Seconds,
-                        duration: -10,
+                        expiry: {
+                            type: TimeUnit.Seconds,
+                            duration: -10,
+                        },
                     }),
                 ).rejects.toThrow(RequestError);
 
