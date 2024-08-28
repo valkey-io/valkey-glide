@@ -3353,7 +3353,7 @@ describe("PubSub", () => {
 
                 // Test pubsubChannels with pattern
                 const channelsWithPattern = await client2.pubsubChannels({
-                    pattern: pattern,
+                    pattern,
                 });
                 expect(new Set(channelsWithPattern)).toEqual(
                     new Set([channel1, channel2]),
@@ -3697,7 +3697,7 @@ describe("PubSub", () => {
                 // Test pubsubShardchannels with pattern
                 const channelsWithPattern = await (
                     client2 as GlideClusterClient
-                ).pubsubShardChannels({ pattern: pattern });
+                ).pubsubShardChannels({ pattern });
                 expect(new Set(channelsWithPattern)).toEqual(
                     new Set([channel1, channel2]),
                 );

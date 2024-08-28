@@ -1250,9 +1250,7 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<GlideString[]> {
         return this.createWritePromise(
             createPubsubShardChannels(options?.pattern),
-            {
-                decoder: options?.decoder,
-            },
+            { decoder: options?.decoder },
         );
     }
 
