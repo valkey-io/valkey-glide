@@ -987,9 +987,11 @@ export class BaseClient {
      * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key to retrieve from the database.
-     * @param options - (Optional) Set expiriation to the given key.
-     *                  "persist" will retain the time to live associated with the key. Equivalent to `PERSIST` in the VALKEY API.
-     *                  Otherwise, a {@link TimeUnit} and duration of the expire time should be specified.
+     * @param options - (Optional) Additional Parameters:
+     * - (Optional) `expiry`: expiriation to the given key:
+     * `"persist"` will retain the time to live associated with the key. Equivalent to `PERSIST` in the VALKEY API.
+     * Otherwise, a {@link TimeUnit} and duration of the expire time should be specified.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns If `key` exists, returns the value of `key` as a `string`. Otherwise, return `null`.
      *
      * @example
@@ -999,10 +1001,14 @@ export class BaseClient {
      * ```
      */
     public async getex(
-        key: string,
-        options?: "persist" | { type: TimeUnit; duration: number },
-    ): Promise<string | null> {
-        return this.createWritePromise(createGetEx(key, options));
+        key: GlideString,
+        options?: {
+            expiry: "persist" | { type: TimeUnit; duration: number };
+        } & DecoderOption,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createGetEx(key, options?.expiry), {
+            decoder: options?.decoder,
+        });
     }
 
     /**
@@ -1076,7 +1082,7 @@ export class BaseClient {
      *
      * @param key - The key to store.
      * @param value - The value to store with the given key.
-     * @param options - The set options.
+     * @param options - (Optional) See {@link SetOptions} and {@link DecoderOption}.
      * @returns - If the value is successfully set, return OK.
      * If value isn't set because of `onlyIfExists` or `onlyIfDoesNotExist` conditions, return null.
      * If `returnOldValue` is set, return the old value as a string.
@@ -1103,9 +1109,11 @@ export class BaseClient {
     public async set(
         key: GlideString,
         value: GlideString,
-        options?: SetOptions,
-    ): Promise<"OK" | string | null> {
-        return this.createWritePromise(createSet(key, value, options));
+        options?: SetOptions & DecoderOption,
+    ): Promise<"OK" | GlideString | null> {
+        return this.createWritePromise(createSet(key, value, options), {
+            decoder: options?.decoder,
+        });
     }
 
     /**
@@ -1294,7 +1302,7 @@ export class BaseClient {
      * console.log(result); // Output: 11
      * ```
      */
-    public async incr(key: string): Promise<number> {
+    public async incr(key: GlideString): Promise<number> {
         return this.createWritePromise(createIncr(key));
     }
 
@@ -1314,7 +1322,7 @@ export class BaseClient {
      * console.log(result); // Output: 15
      * ```
      */
-    public async incrBy(key: string, amount: number): Promise<number> {
+    public async incrBy(key: GlideString, amount: number): Promise<number> {
         return this.createWritePromise(createIncrBy(key, amount));
     }
 
@@ -1336,7 +1344,10 @@ export class BaseClient {
      * console.log(result); // Output: 13.0
      * ```
      */
-    public async incrByFloat(key: string, amount: number): Promise<number> {
+    public async incrByFloat(
+        key: GlideString,
+        amount: number,
+    ): Promise<number> {
         return this.createWritePromise(createIncrByFloat(key, amount));
     }
 
@@ -1355,7 +1366,7 @@ export class BaseClient {
      * console.log(result); // Output: 9
      * ```
      */
-    public async decr(key: string): Promise<number> {
+    public async decr(key: GlideString): Promise<number> {
         return this.createWritePromise(createDecr(key));
     }
 
@@ -1375,7 +1386,7 @@ export class BaseClient {
      * console.log(result); // Output: 5
      * ```
      */
-    public async decrBy(key: string, amount: number): Promise<number> {
+    public async decrBy(key: GlideString, amount: number): Promise<number> {
         return this.createWritePromise(createDecrBy(key, amount));
     }
 
@@ -6319,6 +6330,7 @@ export class BaseClient {
      *
      * @param key1 - The key that stores the first string.
      * @param key2 - The key that stores the second string.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A `String` containing all the longest common subsequence combined between the 2 strings.
      *     An empty `String` is returned if the keys do not exist or have no common subsequences.
      *
@@ -6329,8 +6341,12 @@ export class BaseClient {
      * console.log(result); // Output: 'acd'
      * ```
      */
-    public async lcs(key1: string, key2: string): Promise<string> {
-        return this.createWritePromise(createLCS(key1, key2));
+    public async lcs(
+        key1: GlideString,
+        key2: GlideString,
+        options?: DecoderOption,
+    ): Promise<string> {
+        return this.createWritePromise(createLCS(key1, key2), options);
     }
 
     /**
@@ -6342,6 +6358,7 @@ export class BaseClient {
      *
      * @param key1 - The key that stores the first string.
      * @param key2 - The key that stores the second string.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns The total length of all the longest common subsequences between the 2 strings.
      *
      * @example
@@ -6351,8 +6368,15 @@ export class BaseClient {
      * console.log(result); // Output: 3
      * ```
      */
-    public async lcsLen(key1: string, key2: string): Promise<number> {
-        return this.createWritePromise(createLCS(key1, key2, { len: true }));
+    public async lcsLen(
+        key1: GlideString,
+        key2: GlideString,
+        options?: DecoderOption,
+    ): Promise<number> {
+        return this.createWritePromise(
+            createLCS(key1, key2, { len: true }),
+            options,
+        );
     }
 
     /**
@@ -6365,8 +6389,9 @@ export class BaseClient {
      *
      * @param key1 - The key that stores the first string.
      * @param key2 - The key that stores the second string.
-     * @param withMatchLen - (Optional) If `true`, include the length of the substring matched for the each match.
-     * @param minMatchLen - (Optional) The minimum length of matches to include in the result.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `withMatchLen`: if `true`, include the length of the substring matched for the each match.
+     * - (Optional) `minMatchLen`: the minimum length of matches to include in the result.
      * @returns A `Record` containing the indices of the longest common subsequences between the
      *     2 strings and the lengths of the longest common subsequences. The resulting map contains two
      *     keys, "matches" and "len":
@@ -6402,12 +6427,16 @@ export class BaseClient {
      * ```
      */
     public async lcsIdx(
-        key1: string,
-        key2: string,
-        options?: { withMatchLen?: boolean; minMatchLen?: number },
+        key1: GlideString,
+        key2: GlideString,
+        options?: {
+            withMatchLen?: boolean;
+            minMatchLen?: number;
+        },
     ): Promise<Record<string, (number | [number, number])[][] | number>> {
         return this.createWritePromise(
             createLCS(key1, key2, { idx: options ?? {} }),
+            { decoder: Decoder.String },
         );
     }
 
@@ -6509,9 +6538,9 @@ export class BaseClient {
      * ```
      */
     public async setrange(
-        key: string,
+        key: GlideString,
         offset: number,
-        value: string,
+        value: GlideString,
     ): Promise<number> {
         return this.createWritePromise(createSetRange(key, offset, value));
     }
