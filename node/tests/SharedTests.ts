@@ -1368,6 +1368,7 @@ export function runBaseTests(config: {
                     [field1]: value,
                     [field2]: value2,
                 };
+                const field2Encoded = Buffer.from(field2);
 
                 // set up hash with two keys/values
                 expect(await client.hset(key, fieldValueMap)).toEqual(2);
@@ -1379,7 +1380,7 @@ export function runBaseTests(config: {
                     await client.hkeys(Buffer.from(key), {
                         decoder: Decoder.Bytes,
                     }),
-                ).toEqual([field2]);
+                ).toEqual([field2Encoded]);
 
                 // non-existing key returns an empty list
                 expect(await client.hkeys("nonExistingKey")).toEqual([]);
@@ -1988,6 +1989,8 @@ export function runBaseTests(config: {
                 const data = { "f 1": "v 1", "f 2": "v 2", "f 3": "v 3" };
                 const fields = Object.keys(data);
                 const entries = Object.entries(data);
+                const encodedFields = fields.map(Buffer.from);
+                const encodedEntries = entries.map((e) => e.map(Buffer.from));
                 expect(await client.hset(key1, data)).toEqual(3);
 
                 expect(fields).toContain(await client.hrandfield(key1));
@@ -2001,7 +2004,7 @@ export function runBaseTests(config: {
                     decoder: Decoder.Bytes,
                 });
                 expect(result.length).toEqual(5);
-                result.map((r) => expect(fields).toContain(r));
+                result.map((r) => expect(encodedFields).toContain(r));
 
                 // With values - positive count
                 let result2 = await client.hrandfieldWithValues(
@@ -2009,7 +2012,7 @@ export function runBaseTests(config: {
                     5,
                     { decoder: Decoder.Bytes },
                 );
-                expect(result2).toEqual(entries);
+                expect(result2).toEqual(encodedEntries);
 
                 // With values - negative count
                 result2 = await client.hrandfieldWithValues(key1, -5);
