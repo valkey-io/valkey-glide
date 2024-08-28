@@ -1711,22 +1711,24 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key - The key to return its timeout.
      *
-     * Command Response -  TTL in seconds, -2 if `key` does not exist or -1 if `key` exists but has no associated expire.
+     * Command Response - TTL in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
      */
     public ttl(key: GlideString): T {
         return this.addAndReturn(createTTL(key));
     }
 
-    /** Adds members with their scores to the sorted set stored at `key`.
+    /**
+     * Adds members with their scores to the sorted set stored at `key`.
      * If a member is already a part of the sorted set, its score is updated.
+     *
      * @see {@link https://valkey.io/commands/zadd/|valkey.io} for details.
      *
      * @param key - The key of the sorted set.
      * @param membersScoresMap - A mapping of members to their corresponding scores.
-     * @param options - The ZAdd options.
+     * @param options - (Optional) The ZAdd options - see {@link ZAddOptions}.
      *
      * Command Response - The number of elements added to the sorted set.
-     * If `changed` is set, returns the number of elements updated in the sorted set.
+     * If {@link ZAddOptions.changed|changed} is set, returns the number of elements updated in the sorted set.
      */
     public zadd(
         key: string,
@@ -1736,7 +1738,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createZAdd(key, membersScoresMap, options));
     }
 
-    /** Increments the score of member in the sorted set stored at `key` by `increment`.
+    /**
+     * Increments the score of member in the sorted set stored at `key` by `increment`.
      * If `member` does not exist in the sorted set, it is added with `increment` as its score (as if its previous score was 0.0).
      * If `key` does not exist, a new sorted set with the specified member as its sole member is created.
      * @see {@link https://valkey.io/commands/zadd/|valkey.io} for details.
@@ -1744,7 +1747,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key - The key of the sorted set.
      * @param member - A member in the sorted set to increment.
      * @param increment - The score to increment the member.
-     * @param options - The ZAdd options.
+     * @param options - (Optional) The ZAdd options - see {@link ZAddOptions}.
      *
      * Command Response - The score of the member.
      * If there was a conflict with the options, the operation aborts and null is returned.
@@ -1774,15 +1777,17 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createZRem(key, members));
     }
 
-    /** Returns the cardinality (number of elements) of the sorted set stored at `key`.
+    /**
+     * Returns the cardinality (number of elements) of the sorted set stored at `key`.
+     *
      * @see {@link https://valkey.io/commands/zcard/|valkey.io} for details.
      *
      * @param key - The key of the sorted set.
      *
      * Command Response - The number of elements in the sorted set.
-     * If `key` does not exist, it is treated as an empty sorted set, and this command returns 0.
+     * If `key` does not exist, it is treated as an empty sorted set, and this command returns `0`.
      */
-    public zcard(key: string): T {
+    public zcard(key: GlideString): T {
         return this.addAndReturn(createZCard(key));
     }
 
@@ -1798,7 +1803,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The cardinality of the intersection of the given sorted sets.
      */
-    public zintercard(keys: string[], limit?: number): T {
+    public zintercard(keys: GlideString[], limit?: number): T {
         return this.addAndReturn(createZInterCard(keys, limit));
     }
 
@@ -1814,7 +1819,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - An `array` of elements representing the difference between the sorted sets.
      * If the first key does not exist, it is treated as an empty sorted set, and the command returns an empty `array`.
      */
-    public zdiff(keys: string[]): T {
+    public zdiff(keys: GlideString[]): T {
         return this.addAndReturn(createZDiff(keys));
     }
 
@@ -1830,7 +1835,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A map of elements and their scores representing the difference between the sorted sets.
      * If the first key does not exist, it is treated as an empty sorted set, and the command returns an empty `array`.
      */
-    public zdiffWithScores(keys: string[]): T {
+    public zdiffWithScores(keys: GlideString[]): T {
         return this.addAndReturn(createZDiffWithScores(keys));
     }
 
@@ -1847,7 +1852,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The number of members in the resulting sorted set stored at `destination`.
      */
-    public zdiffstore(destination: string, keys: string[]): T {
+    public zdiffstore(destination: GlideString, keys: GlideString[]): T {
         return this.addAndReturn(createZDiffStore(destination, keys));
     }
 
@@ -1905,7 +1910,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createZMScore(key, members));
     }
 
-    /** Returns the number of members in the sorted set stored at `key` with scores between `minScore` and `maxScore`.
+    /**
+     * Returns the number of members in the sorted set stored at `key` with scores between `minScore` and `maxScore`.
+     *
      * @see {@link https://valkey.io/commands/zcount/|valkey.io} for details.
      *
      * @param key - The key of the sorted set.
@@ -1913,11 +1920,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param maxScore - The maximum score to count up to. Can be positive/negative infinity, or specific score and inclusivity.
      *
      * Command Response - The number of members in the specified score range.
-     * If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
-     * If `minScore` is greater than `maxScore`, 0 is returned.
+     * If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
+     * If `minScore` is greater than `maxScore`, `0` is returned.
      */
     public zcount(
-        key: string,
+        key: GlideString,
         minScore: Boundary<number>,
         maxScore: Boundary<number>,
     ): T {
@@ -2005,24 +2012,22 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Computes the intersection of sorted sets given by the specified `keys` and stores the result in `destination`.
      * If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
      *
-     * When in cluster mode, `destination` and all keys in `keys` must map to the same hash slot.
-     *
      * @see {@link https://valkey.io/commands/zinterstore/|valkey.io} for details.
      *
      * @remarks Since Valkey version 6.2.0.
      *
      * @param destination - The key of the destination sorted set.
      * @param keys - The keys of the sorted sets with possible formats:
-     *  string[] - for keys only.
-     *  KeyWeight[] - for weighted keys with score multipliers.
+     *  - `GlideString[]` - for keys only.
+     *  - `KeyWeight[]` - for weighted keys with score multipliers.
      * @param aggregationType - (Optional) Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
      * If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
      *
      * Command Response - The number of elements in the resulting sorted set stored at `destination`.
      */
     public zinterstore(
-        destination: string,
-        keys: string[] | KeyWeight[],
+        destination: GlideString,
+        keys: GlideString[] | KeyWeight[],
         aggregationType?: AggregationType,
     ): T {
         return this.addAndReturn(
@@ -2043,7 +2048,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The resulting array of intersecting elements.
      */
-    public zinter(keys: string[]): T {
+    public zinter(keys: GlideString[]): T {
         return this.addAndReturn(createZInter(keys));
     }
 
@@ -2057,15 +2062,15 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @remarks Since Valkey version 6.2.0.
      *
      * @param keys - The keys of the sorted sets with possible formats:
-     *  - string[] - for keys only.
-     *  - KeyWeight[] - for weighted keys with score multipliers.
+     *  - `GlideString[]` - for keys only.
+     *  - `KeyWeight[]` - for weighted keys with score multipliers.
      * @param aggregationType - (Optional) Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
      * If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
      *
      * Command Response - The resulting sorted set with scores.
      */
     public zinterWithScores(
-        keys: string[] | KeyWeight[],
+        keys: GlideString[] | KeyWeight[],
         aggregationType?: AggregationType,
     ): T {
         return this.addAndReturn(createZInter(keys, aggregationType, true));
@@ -2214,7 +2219,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - An `array` containing the key where the member was popped out, the member, itself, and the member score.
      *     If no member could be popped and the `timeout` expired, returns `null`.
      */
-    public bzpopmin(keys: string[], timeout: number): T {
+    public bzpopmin(keys: GlideString[], timeout: number): T {
         return this.addAndReturn(createBZPopMin(keys, timeout));
     }
 
@@ -2249,7 +2254,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - An `array` containing the key where the member was popped out, the member, itself, and the member score.
      *     If no member could be popped and the `timeout` expired, returns `null`.
      */
-    public bzpopmax(keys: string[], timeout: number): T {
+    public bzpopmax(keys: GlideString[], timeout: number): T {
         return this.addAndReturn(createBZPopMax(keys, timeout));
     }
 
@@ -2273,7 +2278,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key - The key to return its timeout.
      *
-     * Command Response - TTL in milliseconds. -2 if `key` does not exist, -1 if `key` exists but has no associated expire.
+     * Command Response - TTL in milliseconds, `-2` if `key` does not exist, `-1` if `key` exists but has no associated expire.
      */
     public pttl(key: GlideString): T {
         return this.addAndReturn(createPTTL(key));
@@ -3573,7 +3578,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     If no member could be popped, returns `null`.
      */
     public bzmpop(
-        keys: string[],
+        keys: GlideString[],
         modifier: ScoreFilter,
         timeout: number,
         count?: number,
@@ -3594,7 +3599,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The new score of `member`.
      */
-    public zincrby(key: string, increment: number, member: string): T {
+    public zincrby(
+        key: GlideString,
+        increment: number,
+        member: GlideString,
+    ): T {
         return this.addAndReturn(createZIncrBy(key, increment, member));
     }
 
