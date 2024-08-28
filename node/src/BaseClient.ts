@@ -1663,7 +1663,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/hkeys/|valkey.io} for details.
      *
      * @param key - The key of the hash.
-     * @param options - (Optional) Parameter to change encoding of returned object. See {@link DecoderOption}.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A list of field names for the hash, or an empty list when the key does not exist.
      *
      * @example
@@ -1745,7 +1745,7 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param fields - The fields in the hash stored at `key` to retrieve from the database.
-     * @param options - (Optional) Parameter to change encoding of returned object. See {@link DecoderOption}.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns a list of values associated with the given fields, in the same order as they are requested.
      * For every field that does not exist in the hash, a null value is returned.
      * If `key` does not exist, it is treated as an empty hash and it returns a list of null values.
@@ -1943,7 +1943,7 @@ export class BaseClient {
      * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key of the hash.
-     * @param options - (Optional) Parameter to change encoding of returned object. See {@link DecoderOption}.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A random field name from the hash stored at `key`, or `null` when
      *     the key does not exist.
      *
@@ -2012,7 +2012,7 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param count - The number of field names to return.
-     * @param options - (Optional) Parameter to change encoding of returned object. See {@link DecoderOption}.
+     * @param options - (Optional) See {@link DecoderOption}.
      *
      *     If `count` is positive, returns unique elements. If negative, allows for duplicates.
      * @returns An `array` of random field names from the hash stored at `key`,
@@ -2040,7 +2040,7 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param count - The number of field names to return.
-     * @param options - (Optional) Parameter to change encoding of returned object. See {@link DecoderOption}.
+     * @param options - (Optional) See {@link DecoderOption}.
      *
      *     If `count` is positive, returns unique elements. If negative, allows for duplicates.
      * @returns A 2D `array` of `[fieldName, value]` `arrays`, where `fieldName` is a random
