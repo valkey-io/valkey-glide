@@ -100,7 +100,6 @@ func (client *baseClient) executeCommand(requestType C.RequestType, args []strin
 	}
 
 	cArgs, argLengths := toCStrings(args)
-	defer freeCStrings(cArgs)
 
 	resultChannel := make(chan payload)
 	resultChannelPtr := uintptr(unsafe.Pointer(&resultChannel))
@@ -120,21 +119,24 @@ func (client *baseClient) executeCommand(requestType C.RequestType, args []strin
 	return payload.value, nil
 }
 
-// TODO: Handle passing the arguments as strings without assuming null termination assumption.
-func toCStrings(args []string) ([]*C.char, []C.ulong) {
-	cStrings := make([]*C.char, len(args))
+// Convert `s` of type `string` into `[]byte`
+func StringToBytes(s string) []byte {
+	p := unsafe.StringData(s)
+	b := unsafe.Slice(p, len(s))
+	return b
+}
+
+// Zero copying conversion from go's []string into C pointers
+func toCStrings(args []string) ([]C.uintptr_t, []C.ulong) {
+	cStrings := make([]C.uintptr_t, len(args))
 	stringLengths := make([]C.ulong, len(args))
 	for i, str := range args {
-		cStrings[i] = C.CString(str)
+		bytes := StringToBytes(str)
+		ptr := uintptr(unsafe.Pointer(&bytes[0]))
+		cStrings[i] = C.uintptr_t(ptr)
 		stringLengths[i] = C.size_t(len(str))
 	}
 	return cStrings, stringLengths
-}
-
-func freeCStrings(cArgs []*C.char) {
-	for _, arg := range cArgs {
-		C.free(unsafe.Pointer(arg))
-	}
 }
 
 func (client *baseClient) Set(key string, value string) (string, error) {
