@@ -7106,7 +7106,7 @@ export function runBaseTests(config: {
                         id: streamId1_1,
                     }),
                 ).toEqual(streamId1_1);
-                const fullResult = (await client.xinfoStream(key, 1)) as {
+                const fullResult = (await client.xinfoStream(Buffer.from(key), 1)) as {
                     length: number;
                     "radix-tree-keys": number;
                     "radix-tree-nodes": number;

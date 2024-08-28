@@ -2556,7 +2556,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A {@link ReturnTypeXinfoStream} of detailed stream information for the given `key`.
      *     See example of {@link BaseClient.xinfoStream} for more details.
      */
-    public xinfoStream(key: string, fullOptions?: boolean | number): T {
+    public xinfoStream(key: GlideString, fullOptions?: boolean | number): T {
         return this.addAndReturn(createXInfoStream(key, fullOptions ?? false));
     }
 

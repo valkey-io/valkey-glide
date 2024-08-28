@@ -2598,6 +2598,7 @@ export function createXReadGroup(
 /**
  * Represents a the return type for XInfo Stream in the response
  */
+// TODO: change return type to be compatible with GlideString
 export type ReturnTypeXinfoStream = {
     [key: string]:
     | StreamEntries
@@ -2613,10 +2614,10 @@ export type StreamEntries = string | number | (string | number | string[])[][];
  * @internal
  */
 export function createXInfoStream(
-    key: string,
+    key: GlideString,
     options: boolean | number,
 ): command_request.Command {
-    const args: string[] = [key];
+    const args: GlideString[] = [key];
 
     if (options != false) {
         args.push("FULL");
