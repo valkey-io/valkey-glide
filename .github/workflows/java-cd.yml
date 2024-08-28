@@ -50,13 +50,16 @@ jobs:
               shell: bash
               run: |
                 if ${{ github.event_name == 'workflow_dispatch' }}; then
-                    R_VERSION="${{ github.event.inputs.version }}"
+                    R_VERSION="${{ env.INPUT_VERSION }}"
                 else
                     R_VERSION=${GITHUB_REF:11}
                 fi
                     echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
                     echo "Release version detected: $R_VERSION"
                 echo "RELEASE_VERSION=$R_VERSION" >> $GITHUB_OUTPUT
+              env:
+                EVENT_NAME: ${{ github.event_name }}
+                INPUT_VERSION: ${{ github.event.inputs.version }}
 
     create-binaries-to-publish:
         needs: [set-release-version, load-platform-matrix]
@@ -182,72 +185,72 @@ jobs:
                 path: |
                   build
 
-            - name: Publish to Maven Central
-              id: maven-deployment
-              run: |
-                  BEARER_TOKEN=$(echo "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" | base64)
-                  export DEPLOYMENT_ID=`curl --request POST \
-                  --header "Authorization: Bearer $BEARER_TOKEN" \
-                  --form bundle=@build.zip \
-                  https://central.sonatype.com/api/v1/publisher/upload | tail -n 1`
-                  echo "DEPLOYMENT_ID=$DEPLOYMENT_ID" >> $GITHUB_ENV
-                  echo "BEARER_TOKEN=$BEARER_TOKEN" >> $GITHUB_ENV
-                  echo "DEPLOYMENT_ID=$DEPLOYMENT_ID" >> $GITHUB_OUTPUT
-                  echo $DEPLOYMENT_ID
-
-            - name: Check status of deployment
-              run: |
-                  sleep 20
-                  export DEPLOYMENT_STATUS=`curl --request POST \
-                  --header "Authorization: Bearer ${{ env.BEARER_TOKEN }}" \
-                  "https://central.sonatype.com/api/v1/publisher/status?id=${{ env.DEPLOYMENT_ID }}" \
-                  | jq '.deploymentState'`
-                  echo $DEPLOYMENT_STATUS
-                  if [[ $DEPLOYMENT_STATUS != ""\"VALIDATED"\"" || $DEPLOYMENT_STATUS -eq null ]]; then exit 1 ; fi
-
-            - uses: actions/checkout@v4
-              with:
-                submodules: recursive
-
-            - name: Set up JDK
-              uses: actions/setup-java@v4
-              with:
-                distribution: "temurin"
-                java-version: '11'
-
-            - name: Install protoc (protobuf)
-              uses: arduino/setup-protoc@v3
-              with:
-                version: "26.1"
-                repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Test deployment
-              working-directory: java
-              run: |
-                  export ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderName="Authorization"
-                  export ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderValue="Bearer ${{ env.BEARER_TOKEN }}"
-                  export RUN_DEPLOYMENT_TEST=true
-                  export GLIDE_RELEASE_VERSION=${{ env.RELEASE_VERSION }}
-                  ./gradlew run
-
-            - name: Drop deployment if validation fails
-              if: ${{ failure() }}
-              run: |
-                  curl --request DELETE \
-                  --header "Authorization: Bearer ${{ env.BEARER_TOKEN }}" \
-                  "https://central.sonatype.com/api/v1/publisher/deployment/${{ env.DEPLOYMENT_ID }}"
-
-    publish-release-to-maven:
-        if: ${{ inputs.maven_publish == true || github.event_name == 'push' }}
-        needs: [publish-to-maven-central-deployment]
-        runs-on: ubuntu-latest
-        environment: AWS_ACTIONS
-        env:
-            DEPLOYMENT_ID: ${{ needs.publish-to-maven-central-deployment.outputs.DEPLOYMENT_ID }}
-        steps:
-            - name: Publish to Maven
-              run: |
-                  BEARER_TOKEN=$(echo "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" | base64)
-                  curl --request POST \
-                  --header "Authorization: Bearer $BEARER_TOKEN" \
-                  "https://central.sonatype.com/api/v1/publisher/deployment/${{ env.DEPLOYMENT_ID }}"
+#            - name: Publish to Maven Central
+#              id: maven-deployment
+#              run: |
+#                  BEARER_TOKEN=$(echo "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" | base64)
+#                  export DEPLOYMENT_ID=`curl --request POST \
+#                  --header "Authorization: Bearer $BEARER_TOKEN" \
+#                  --form bundle=@build.zip \
+#                  https://central.sonatype.com/api/v1/publisher/upload | tail -n 1`
+#                  echo "DEPLOYMENT_ID=$DEPLOYMENT_ID" >> $GITHUB_ENV
+#                  echo "BEARER_TOKEN=$BEARER_TOKEN" >> $GITHUB_ENV
+#                  echo "DEPLOYMENT_ID=$DEPLOYMENT_ID" >> $GITHUB_OUTPUT
+#                  echo $DEPLOYMENT_ID
+#
+#            - name: Check status of deployment
+#              run: |
+#                  sleep 20
+#                  export DEPLOYMENT_STATUS=`curl --request POST \
+#                  --header "Authorization: Bearer ${{ env.BEARER_TOKEN }}" \
+#                  "https://central.sonatype.com/api/v1/publisher/status?id=${{ env.DEPLOYMENT_ID }}" \
+#                  | jq '.deploymentState'`
+#                  echo $DEPLOYMENT_STATUS
+#                  if [[ $DEPLOYMENT_STATUS != ""\"VALIDATED"\"" || $DEPLOYMENT_STATUS -eq null ]]; then exit 1 ; fi
+#
+#            - uses: actions/checkout@v4
+#              with:
+#                submodules: recursive
+#
+#            - name: Set up JDK
+#              uses: actions/setup-java@v4
+#              with:
+#                distribution: "temurin"
+#                java-version: '11'
+#
+#            - name: Install protoc (protobuf)
+#              uses: arduino/setup-protoc@v3
+#              with:
+#                version: "26.1"
+#                repo-token: ${{ secrets.GITHUB_TOKEN }}
+#
+#            - name: Test deployment
+#              working-directory: java
+#              run: |
+#                  export ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderName="Authorization"
+#                  export ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderValue="Bearer ${{ env.BEARER_TOKEN }}"
+#                  export RUN_DEPLOYMENT_TEST=true
+#                  export GLIDE_RELEASE_VERSION=${{ env.RELEASE_VERSION }}
+#                  ./gradlew run
+#
+#            - name: Drop deployment if validation fails
+#              if: ${{ failure() }}
+#              run: |
+#                  curl --request DELETE \
+#                  --header "Authorization: Bearer ${{ env.BEARER_TOKEN }}" \
+#                  "https://central.sonatype.com/api/v1/publisher/deployment/${{ env.DEPLOYMENT_ID }}"
+#
+#    publish-release-to-maven:
+#        if: ${{ inputs.maven_publish == true || github.event_name == 'push' }}
+#        needs: [publish-to-maven-central-deployment]
+#        runs-on: ubuntu-latest
+#        environment: AWS_ACTIONS
+#        env:
+#            DEPLOYMENT_ID: ${{ needs.publish-to-maven-central-deployment.outputs.DEPLOYMENT_ID }}
+#        steps:
+#            - name: Publish to Maven
+#              run: |
+#                  BEARER_TOKEN=$(echo "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" | base64)
+#                  curl --request POST \
+#                  --header "Authorization: Bearer $BEARER_TOKEN" \
+#                  "https://central.sonatype.com/api/v1/publisher/deployment/${{ env.DEPLOYMENT_ID }}"
