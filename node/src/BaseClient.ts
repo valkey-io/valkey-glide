@@ -6610,8 +6610,10 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/pubsub-channels/|valkey.io} for more details.
      *
-     * @param pattern - A glob-style pattern to match active channels.
-     *                  If not provided, all active channels are returned.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `pattern`: A glob-style pattern to match active channels.
+     *     If not provided, all active channels are returned.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns A list of currently active channels matching the given pattern.
      *          If no pattern is specified, all active channels are returned.
      *
@@ -6624,8 +6626,12 @@ export class BaseClient {
      * console.log(newsChannels); // Output: ["news.sports", "news.weather"]
      * ```
      */
-    public async pubsubChannels(pattern?: string): Promise<string[]> {
-        return this.createWritePromise(createPubSubChannels(pattern));
+    public async pubsubChannels(
+        options?: { pattern?: GlideString } & DecoderOption,
+    ): Promise<GlideString[]> {
+        return this.createWritePromise(createPubSubChannels(options?.pattern), {
+            decoder: options?.decoder,
+        });
     }
 
     /**
