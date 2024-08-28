@@ -6390,7 +6390,7 @@ export function runBaseTests(config: {
                     },
                 );
                 expect(id).not.toBeNull();
-                expect(await client.xlen(key)).toEqual(2);
+                expect(await client.xlen(Buffer.from(key))).toEqual(2);
 
                 // this will trim the 2nd entry.
                 expect(

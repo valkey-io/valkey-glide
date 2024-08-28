@@ -4905,7 +4905,7 @@ export class BaseClient {
      * console.log(numEntries); // Output: 2 - "my_stream" contains 2 entries.
      * ```
      */
-    public async xlen(key: string): Promise<number> {
+    public async xlen(key: GlideString): Promise<number> {
         return this.createWritePromise(createXLen(key));
     }
 

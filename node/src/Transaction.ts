@@ -2695,7 +2695,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The number of entries in the stream. If `key` does not exist, returns `0`.
      */
-    public xlen(key: string): T {
+    public xlen(key: GlideString): T {
         return this.addAndReturn(createXLen(key));
     }
 

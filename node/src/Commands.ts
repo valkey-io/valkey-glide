@@ -2639,7 +2639,7 @@ export function createXInfoGroups(key: string): command_request.Command {
 /**
  * @internal
  */
-export function createXLen(key: string): command_request.Command {
+export function createXLen(key: GlideString): command_request.Command {
     return createCommand(RequestType.XLen, [key]);
 }
 
