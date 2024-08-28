@@ -1421,7 +1421,7 @@ export function createZAdd(
 /**
  * `KeyWeight` - pair of variables represents a weighted key for the `ZINTERSTORE` and `ZUNIONSTORE` sorted sets commands.
  */
-export type KeyWeight = [string, number];
+export type KeyWeight = [GlideString, number];
 /**
  * `AggregationType` - representing aggregation types for `ZINTERSTORE` and `ZUNIONSTORE` sorted set commands.
  */
@@ -1431,8 +1431,8 @@ export type AggregationType = "SUM" | "MIN" | "MAX";
  * @internal
  */
 export function createZInterstore(
-    destination: string,
-    keys: string[] | KeyWeight[],
+    destination: GlideString,
+    keys: GlideString[] | KeyWeight[],
     aggregationType?: AggregationType,
 ): command_request.Command {
     const args = createZCmdArgs(keys, {
@@ -1447,7 +1447,7 @@ export function createZInterstore(
  * @internal
  */
 export function createZInter(
-    keys: string[] | KeyWeight[],
+    keys: GlideString[] | KeyWeight[],
     aggregationType?: AggregationType,
     withScores?: boolean,
 ): command_request.Command {
@@ -1472,14 +1472,14 @@ export function createZUnion(
  * Helper function for Zcommands (ZInter, ZinterStore, ZUnion..) that arranges arguments in the server's required order.
  */
 function createZCmdArgs(
-    keys: string[] | KeyWeight[],
+    keys: GlideString[] | KeyWeight[],
     options: {
         aggregationType?: AggregationType;
         withScores?: boolean;
-        destination?: string;
+        destination?: GlideString;
     },
-): string[] {
-    const args = [];
+): GlideString[] {
+    const args: GlideString[] = [];
 
     const destination = options.destination;
 
@@ -1489,11 +1489,12 @@ function createZCmdArgs(
 
     args.push(keys.length.toString());
 
-    if (typeof keys[0] === "string") {
-        args.push(...(keys as string[]));
+    if (!Array.isArray(keys[0])) {
+        // KeyWeight is an array
+        args.push(...(keys as GlideString[]));
     } else {
         const weightsKeys = keys.map(([key]) => key);
-        args.push(...(weightsKeys as string[]));
+        args.push(...(weightsKeys as GlideString[]));
         const weights = keys.map(([, weight]) => weight.toString());
         args.push("WEIGHTS", ...weights);
     }
@@ -1524,7 +1525,7 @@ export function createZRem(
 /**
  * @internal
  */
-export function createZCard(key: string): command_request.Command {
+export function createZCard(key: GlideString): command_request.Command {
     return createCommand(RequestType.ZCard, [key]);
 }
 
@@ -1532,14 +1533,14 @@ export function createZCard(key: string): command_request.Command {
  * @internal
  */
 export function createZInterCard(
-    keys: string[],
+    keys: GlideString[],
     limit?: number,
 ): command_request.Command {
-    let args: string[] = keys;
+    const args = keys;
     args.unshift(keys.length.toString());
 
     if (limit != undefined) {
-        args = args.concat(["LIMIT", limit.toString()]);
+        args.push("LIMIT", limit.toString());
     }
 
     return createCommand(RequestType.ZInterCard, args);
@@ -1548,8 +1549,8 @@ export function createZInterCard(
 /**
  * @internal
  */
-export function createZDiff(keys: string[]): command_request.Command {
-    const args: string[] = keys;
+export function createZDiff(keys: GlideString[]): command_request.Command {
+    const args = keys;
     args.unshift(keys.length.toString());
     return createCommand(RequestType.ZDiff, args);
 }
@@ -1557,8 +1558,10 @@ export function createZDiff(keys: string[]): command_request.Command {
 /**
  * @internal
  */
-export function createZDiffWithScores(keys: string[]): command_request.Command {
-    const args: string[] = keys;
+export function createZDiffWithScores(
+    keys: GlideString[],
+): command_request.Command {
+    const args = keys;
     args.unshift(keys.length.toString());
     args.push("WITHSCORES");
     return createCommand(RequestType.ZDiff, args);
@@ -1568,10 +1571,10 @@ export function createZDiffWithScores(keys: string[]): command_request.Command {
  * @internal
  */
 export function createZDiffStore(
-    destination: string,
-    keys: string[],
+    destination: GlideString,
+    keys: GlideString[],
 ): command_request.Command {
-    const args: string[] = [destination, keys.length.toString(), ...keys];
+    const args = [destination, keys.length.toString(), ...keys];
     return createCommand(RequestType.ZDiffStore, args);
 }
 
@@ -1790,7 +1793,7 @@ function createZRangeArgs(
  * @internal
  */
 export function createZCount(
-    key: string,
+    key: GlideString,
     minScore: Boundary<number>,
     maxScore: Boundary<number>,
 ): command_request.Command {
@@ -3455,12 +3458,12 @@ export function createZMPop(
  * @internal
  */
 export function createBZMPop(
-    keys: string[],
+    keys: GlideString[],
     modifier: ScoreFilter,
     timeout: number,
     count?: number,
 ): command_request.Command {
-    const args: string[] = [
+    const args = [
         timeout.toString(),
         keys.length.toString(),
         ...keys,
@@ -3479,9 +3482,9 @@ export function createBZMPop(
  * @internal
  */
 export function createZIncrBy(
-    key: string,
+    key: GlideString,
     increment: number,
-    member: string,
+    member: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.ZIncrBy, [
         key,
@@ -3898,7 +3901,7 @@ export function createPubSubShardNumSub(
  * @internal
  */
 export function createBZPopMax(
-    keys: string[],
+    keys: GlideString[],
     timeout: number,
 ): command_request.Command {
     return createCommand(RequestType.BZPopMax, [...keys, timeout.toString()]);
@@ -3908,7 +3911,7 @@ export function createBZPopMax(
  * @internal
  */
 export function createBZPopMin(
-    keys: string[],
+    keys: GlideString[],
     timeout: number,
 ): command_request.Command {
     return createCommand(RequestType.BZPopMin, [...keys, timeout.toString()]);
