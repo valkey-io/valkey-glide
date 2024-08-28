@@ -809,7 +809,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The number of fields that were added.
      */
-    public hset(key: string, fieldValueMap: Record<string, string>): T {
+    public hset(key: GlideString, fieldValueMap: Record<string, string>): T {
         return this.addAndReturn(createHSet(key, fieldValueMap));
     }
 
@@ -822,7 +822,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - A list of field names for the hash, or an empty list when the key does not exist.
      */
-    public hkeys(key: string): T {
+    public hkeys(key: GlideString): T {
         return this.addAndReturn(createHKeys(key));
     }
 
@@ -837,7 +837,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - `true` if the field was set, `false` if the field already existed and was not set.
      */
-    public hsetnx(key: string, field: string, value: string): T {
+    public hsetnx(key: GlideString, field: GlideString, value: GlideString): T {
         return this.addAndReturn(createHSetNX(key, field, value));
     }
 
@@ -851,7 +851,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - the number of fields that were removed from the hash, not including specified but non existing fields.
      * If `key` does not exist, it is treated as an empty hash and it returns 0.
      */
-    public hdel(key: string, fields: string[]): T {
+    public hdel(key: GlideString, fields: GlideString[]): T {
         return this.addAndReturn(createHDel(key, fields));
     }
 
@@ -865,7 +865,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * For every field that does not exist in the hash, a null value is returned.
      * If `key` does not exist, it is treated as an empty hash and it returns a list of null values.
      */
-    public hmget(key: string, fields: string[]): T {
+    public hmget(key: GlideString, fields: GlideString[]): T {
         return this.addAndReturn(createHMGet(key, fields));
     }
 
@@ -878,7 +878,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - `true` if the hash contains `field`. If the hash does not contain `field`, or if `key` does not exist,
      * the command response will be `false`.
      */
-    public hexists(key: string, field: string): T {
+    public hexists(key: GlideString, field: GlideString): T {
         return this.addAndReturn(createHExists(key, field));
     }
 
@@ -890,7 +890,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - a map of fields and their values stored in the hash. Every field name in the map is followed by its value.
      * If `key` does not exist, it returns an empty map.
      */
-    public hgetall(key: string): T {
+    public hgetall(key: GlideString): T {
         return this.addAndReturn(createHGetAll(key));
     }
 
@@ -905,7 +905,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - the value of `field` in the hash stored at `key` after the increment.
      */
-    public hincrBy(key: string, field: string, amount: number): T {
+    public hincrBy(key: GlideString, field: GlideString, amount: number): T {
         return this.addAndReturn(createHIncrBy(key, field, amount));
     }
 
@@ -920,7 +920,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - the value of `field` in the hash stored at `key` after the increment.
      */
-    public hincrByFloat(key: string, field: string, amount: number): T {
+    public hincrByFloat(
+        key: GlideString,
+        field: GlideString,
+        amount: number,
+    ): T {
         return this.addAndReturn(createHIncrByFloat(key, field, amount));
     }
 
@@ -931,7 +935,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The number of fields in the hash, or 0 when the key does not exist.
      */
-    public hlen(key: string): T {
+    public hlen(key: GlideString): T {
         return this.addAndReturn(createHLen(key));
     }
 
@@ -956,7 +960,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The string length or `0` if `field` or `key` does not exist.
      */
-    public hstrlen(key: string, field: string): T {
+    public hstrlen(key: GlideString, field: GlideString): T {
         return this.addAndReturn(createHStrlen(key, field));
     }
 
@@ -971,7 +975,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A random field name from the hash stored at `key`, or `null` when
      *     the key does not exist.
      */
-    public hrandfield(key: string): T {
+    public hrandfield(key: GlideString): T {
         return this.addAndReturn(createHRandField(key));
     }
 
@@ -1008,7 +1012,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - An `array` of random field names from the hash stored at `key`,
      *     or an `empty array` when the key does not exist.
      */
-    public hrandfieldCount(key: string, count: number): T {
+    public hrandfieldCount(key: GlideString, count: number): T {
         return this.addAndReturn(createHRandField(key, count));
     }
 
@@ -1028,7 +1032,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     field name from the hash and `value` is the associated value of the field name.
      *     If the hash does not exist or is empty, the response will be an empty `array`.
      */
-    public hrandfieldWithValues(key: string, count: number): T {
+    public hrandfieldWithValues(key: GlideString, count: number): T {
         return this.addAndReturn(createHRandField(key, count, true));
     }
 

@@ -1651,7 +1651,7 @@ export class BaseClient {
      * ```
      */
     public async hset(
-        key: string,
+        key: GlideString,
         fieldValueMap: Record<string, string>,
     ): Promise<number> {
         return this.createWritePromise(createHSet(key, fieldValueMap));
@@ -1663,6 +1663,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/hkeys/|valkey.io} for details.
      *
      * @param key - The key of the hash.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A list of field names for the hash, or an empty list when the key does not exist.
      *
      * @example
@@ -1673,8 +1674,12 @@ export class BaseClient {
      * console.log(result); // Output: ["field1", "field2", "field3"]  - Returns all the field names stored in the hash "my_hash".
      * ```
      */
-    public async hkeys(key: string): Promise<string[]> {
-        return this.createWritePromise(createHKeys(key));
+
+    public async hkeys(
+        key: GlideString,
+        options?: DecoderOption,
+    ): Promise<GlideString[]> {
+        return this.createWritePromise(createHKeys(key), options);
     }
 
     /** Sets `field` in the hash stored at `key` to `value`, only if `field` does not yet exist.
@@ -1703,9 +1708,9 @@ export class BaseClient {
      * ```
      */
     public async hsetnx(
-        key: string,
-        field: string,
-        value: string,
+        key: GlideString,
+        field: GlideString,
+        value: GlideString,
     ): Promise<boolean> {
         return this.createWritePromise(createHSetNX(key, field, value));
     }
@@ -1727,7 +1732,10 @@ export class BaseClient {
      * console.log(result); // Output: 2 - Indicates that two fields were successfully removed from the hash.
      * ```
      */
-    public async hdel(key: string, fields: string[]): Promise<number> {
+    public async hdel(
+        key: GlideString,
+        fields: GlideString[],
+    ): Promise<number> {
         return this.createWritePromise(createHDel(key, fields));
     }
 
@@ -1737,6 +1745,7 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param fields - The fields in the hash stored at `key` to retrieve from the database.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns a list of values associated with the given fields, in the same order as they are requested.
      * For every field that does not exist in the hash, a null value is returned.
      * If `key` does not exist, it is treated as an empty hash and it returns a list of null values.
@@ -1749,10 +1758,11 @@ export class BaseClient {
      * ```
      */
     public async hmget(
-        key: string,
-        fields: string[],
-    ): Promise<(string | null)[]> {
-        return this.createWritePromise(createHMGet(key, fields));
+        key: GlideString,
+        fields: GlideString[],
+        options?: DecoderOption,
+    ): Promise<(GlideString | null)[]> {
+        return this.createWritePromise(createHMGet(key, fields), options);
     }
 
     /** Returns if `field` is an existing field in the hash stored at `key`.
@@ -1777,7 +1787,10 @@ export class BaseClient {
      * console.log(result); // Output: false
      * ```
      */
-    public async hexists(key: string, field: string): Promise<boolean> {
+    public async hexists(
+        key: GlideString,
+        field: GlideString,
+    ): Promise<boolean> {
         return this.createWritePromise(createHExists(key, field));
     }
 
@@ -1796,7 +1809,7 @@ export class BaseClient {
      * console.log(result); // Output: {"field1": "value1", "field2": "value2"}
      * ```
      */
-    public async hgetall(key: string): Promise<Record<string, string>> {
+    public async hgetall(key: GlideString): Promise<Record<string, string>> {
         return this.createWritePromise(createHGetAll(key));
     }
 
@@ -1819,8 +1832,8 @@ export class BaseClient {
      * ```
      */
     public async hincrBy(
-        key: string,
-        field: string,
+        key: GlideString,
+        field: GlideString,
         amount: number,
     ): Promise<number> {
         return this.createWritePromise(createHIncrBy(key, field, amount));
@@ -1841,12 +1854,12 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the hincrbyfloat method to increment the value of a floating point in a hash by a specified amount
      * const result = await client.hincrbyfloat("my_hash", "field1", 2.5);
-     * console.log(result); // Output: '2.5'
+     * console.log(result); // Output: 2.5
      * ```
      */
     public async hincrByFloat(
-        key: string,
-        field: string,
+        key: GlideString,
+        field: GlideString,
         amount: number,
     ): Promise<number> {
         return this.createWritePromise(createHIncrByFloat(key, field, amount));
@@ -1873,7 +1886,7 @@ export class BaseClient {
      * console.log(result); // Output: 0
      * ```
      */
-    public async hlen(key: string): Promise<number> {
+    public async hlen(key: GlideString): Promise<number> {
         return this.createWritePromise(createHLen(key));
     }
 
@@ -1916,7 +1929,10 @@ export class BaseClient {
      * console.log(result); // Output: 5
      * ```
      */
-    public async hstrlen(key: string, field: string): Promise<number> {
+    public async hstrlen(
+        key: GlideString,
+        field: GlideString,
+    ): Promise<number> {
         return this.createWritePromise(createHStrlen(key, field));
     }
 
@@ -1927,6 +1943,7 @@ export class BaseClient {
      * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key of the hash.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A random field name from the hash stored at `key`, or `null` when
      *     the key does not exist.
      *
@@ -1935,8 +1952,11 @@ export class BaseClient {
      * console.log(await client.hrandfield("myHash")); // Output: 'field'
      * ```
      */
-    public async hrandfield(key: string): Promise<string | null> {
-        return this.createWritePromise(createHRandField(key));
+    public async hrandfield(
+        key: GlideString,
+        options?: DecoderOption,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createHRandField(key), options);
     }
 
     /**
@@ -1992,6 +2012,7 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param count - The number of field names to return.
+     * @param options - (Optional) See {@link DecoderOption}.
      *
      *     If `count` is positive, returns unique elements. If negative, allows for duplicates.
      * @returns An `array` of random field names from the hash stored at `key`,
@@ -2003,10 +2024,11 @@ export class BaseClient {
      * ```
      */
     public async hrandfieldCount(
-        key: string,
+        key: GlideString,
         count: number,
-    ): Promise<string[]> {
-        return this.createWritePromise(createHRandField(key, count));
+        options?: DecoderOption,
+    ): Promise<GlideString[]> {
+        return this.createWritePromise(createHRandField(key, count), options);
     }
 
     /**
@@ -2018,6 +2040,7 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param count - The number of field names to return.
+     * @param options - (Optional) See {@link DecoderOption}.
      *
      *     If `count` is positive, returns unique elements. If negative, allows for duplicates.
      * @returns A 2D `array` of `[fieldName, value]` `arrays`, where `fieldName` is a random
@@ -2031,10 +2054,14 @@ export class BaseClient {
      * ```
      */
     public async hrandfieldWithValues(
-        key: string,
+        key: GlideString,
         count: number,
-    ): Promise<[string, string][]> {
-        return this.createWritePromise(createHRandField(key, count, true));
+        options?: DecoderOption,
+    ): Promise<[GlideString, GlideString][]> {
+        return this.createWritePromise(
+            createHRandField(key, count, true),
+            options,
+        );
     }
 
     /** Inserts all the specified values at the head of the list stored at `key`.

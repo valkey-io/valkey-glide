@@ -412,7 +412,7 @@ export function createHGet(
  * @internal
  */
 export function createHSet(
-    key: string,
+    key: GlideString,
     fieldValueMap: Record<string, string>,
 ): command_request.Command {
     return createCommand(
@@ -424,7 +424,7 @@ export function createHSet(
 /**
  * @internal
  */
-export function createHKeys(key: string): command_request.Command {
+export function createHKeys(key: GlideString): command_request.Command {
     return createCommand(RequestType.HKeys, [key]);
 }
 
@@ -432,9 +432,9 @@ export function createHKeys(key: string): command_request.Command {
  * @internal
  */
 export function createHSetNX(
-    key: string,
-    field: string,
-    value: string,
+    key: GlideString,
+    field: GlideString,
+    value: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.HSetNX, [key, field, value]);
 }
@@ -801,8 +801,8 @@ export function createBitField(
  * @internal
  */
 export function createHDel(
-    key: string,
-    fields: string[],
+    key: GlideString,
+    fields: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.HDel, [key].concat(fields));
 }
@@ -811,8 +811,8 @@ export function createHDel(
  * @internal
  */
 export function createHMGet(
-    key: string,
-    fields: string[],
+    key: GlideString,
+    fields: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.HMGet, [key].concat(fields));
 }
@@ -821,8 +821,8 @@ export function createHMGet(
  * @internal
  */
 export function createHExists(
-    key: string,
-    field: string,
+    key: GlideString,
+    field: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.HExists, [key, field]);
 }
@@ -830,7 +830,7 @@ export function createHExists(
 /**
  * @internal
  */
-export function createHGetAll(key: string): command_request.Command {
+export function createHGetAll(key: GlideString): command_request.Command {
     return createCommand(RequestType.HGetAll, [key]);
 }
 
@@ -1193,8 +1193,8 @@ export function createCustomCommand(args: GlideString[]) {
  * @internal
  */
 export function createHIncrBy(
-    key: string,
-    field: string,
+    key: GlideString,
+    field: GlideString,
     amount: number,
 ): command_request.Command {
     return createCommand(RequestType.HIncrBy, [key, field, amount.toString()]);
@@ -1204,8 +1204,8 @@ export function createHIncrBy(
  * @internal
  */
 export function createHIncrByFloat(
-    key: string,
-    field: string,
+    key: GlideString,
+    field: GlideString,
     amount: number,
 ): command_request.Command {
     return createCommand(RequestType.HIncrByFloat, [
@@ -1218,7 +1218,7 @@ export function createHIncrByFloat(
 /**
  * @internal
  */
-export function createHLen(key: string): command_request.Command {
+export function createHLen(key: GlideString): command_request.Command {
     return createCommand(RequestType.HLen, [key]);
 }
 
@@ -3618,15 +3618,15 @@ function createSortImpl(
  * @internal
  */
 export function createHStrlen(
-    key: string,
-    field: string,
+    key: GlideString,
+    field: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.HStrlen, [key, field]);
 }
 
 /** @internal */
 export function createHRandField(
-    key: string,
+    key: GlideString,
     count?: number,
     withValues?: boolean,
 ): command_request.Command {
