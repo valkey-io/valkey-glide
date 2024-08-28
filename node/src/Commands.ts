@@ -6,7 +6,7 @@ import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "glide-rs";
 import Long from "long";
 
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-import { BaseClient } from "src/BaseClient";
+import { BaseClient, GlideRecord, SortedSetDataType } from "src/BaseClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 import { GlideClient } from "src/GlideClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
@@ -1555,8 +1555,10 @@ export function createZDiff(keys: string[]): command_request.Command {
 /**
  * @internal
  */
-export function createZDiffWithScores(keys: string[]): command_request.Command {
-    const args: string[] = keys;
+export function createZDiffWithScores(
+    keys: GlideString[],
+): command_request.Command {
+    const args = keys;
     args.unshift(keys.length.toString());
     args.push("WITHSCORES");
     return createCommand(RequestType.ZDiff, args);
@@ -2584,20 +2586,6 @@ export function createXReadGroup(
 }
 
 /**
- * Represents a the return type for XInfo Stream in the response
- */
-export type ReturnTypeXinfoStream = {
-    [key: string]:
-        | StreamEntries
-        | Record<string, StreamEntries | Record<string, StreamEntries>[]>[];
-};
-
-/**
- * Represents an array of Stream Entires in the response
- */
-export type StreamEntries = string | number | (string | number | string[])[][];
-
-/**
  * @internal
  */
 export function createXInfoStream(
@@ -3434,11 +3422,12 @@ export enum ScoreFilter {
  * @internal
  */
 export function createZMPop(
-    keys: string[],
+    keys: GlideString[],
     modifier: ScoreFilter,
     count?: number,
 ): command_request.Command {
-    const args: string[] = [keys.length.toString()].concat(keys);
+    const args = keys;
+    args.unshift(keys.length.toString());
     args.push(modifier);
 
     if (count !== undefined) {
@@ -3453,12 +3442,12 @@ export function createZMPop(
  * @internal
  */
 export function createBZMPop(
-    keys: string[],
+    keys: GlideString[],
     modifier: ScoreFilter,
     timeout: number,
     count?: number,
 ): command_request.Command {
-    const args: string[] = [
+    const args = [
         timeout.toString(),
         keys.length.toString(),
         ...keys,
