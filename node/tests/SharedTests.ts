@@ -1407,7 +1407,7 @@ export function runBaseTests(config: {
         },
         config.timeout,
     );
-    // TO DO: fix this test.
+
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hscan test_%p`,
         async (protocol) => {
@@ -1419,33 +1419,27 @@ export function runBaseTests(config: {
                 const resultCollectionIndex = 1;
 
                 // Setup test data - use a large number of entries to force an iterative cursor.
-                const numberFieldList: HashDataType = [];
+                const numberMap: Record<string, string> = {};
 
                 for (let i = 0; i < 50000; i++) {
-                    numberFieldList.push({
-                        field: i.toString(),
-                        value: "num" + i,
-                    });
+                    numberMap[i.toString()] = "num" + i;
                 }
 
                 const charMembers = ["a", "b", "c", "d", "e"];
-                const charFieldList: HashDataType = [];
+                const charMap: Record<string, string> = {};
 
                 for (let i = 0; i < charMembers.length; i++) {
-                    charFieldList.push({
-                        field: charMembers[i],
-                        value: i.toString(),
-                    });
+                    charMap[charMembers[i]] = i.toString();
                 }
 
                 // Result contains the whole set
-                expect(await client.hset(key1, charFieldList)).toEqual(
+                expect(await client.hset(key1, charMap)).toEqual(
                     charMembers.length,
                 );
                 let result = await client.hscan(key1, initialCursor);
                 expect(result[resultCursorIndex]).toEqual(initialCursor);
                 expect(result[resultCollectionIndex].length).toEqual(
-                    charFieldList.length * 2, // Length includes the score which is twice the map size
+                    Object.keys(charMap).length * 2, // Length includes the score which is twice the map size
                 );
 
                 const resultArray = result[resultCollectionIndex];
@@ -1454,25 +1448,18 @@ export function runBaseTests(config: {
 
                 for (let i = 0; i < resultArray.length; i += 2) {
                     resultKeys.push(resultArray[i]);
-                    resultValues.push(resultArray[i + 1].toString());
+                    resultValues.push(resultArray[i + 1]);
                 }
 
                 // Verify if all keys from charMap are in resultKeys
-                const fieldValuesArray = charFieldList.map((o) =>
-                    o.field.toString(),
-                );
-                const allKeysIncluded = resultKeys.every((key) =>
-                    fieldValuesArray.includes(key.toString()),
+                const allKeysIncluded = resultKeys.every(
+                    (key) => key in charMap,
                 );
                 expect(allKeysIncluded).toEqual(true);
 
-                const allValuesIncluded = charFieldList
-                    .map((o) => o.value)
-                    .every((value) => {
-                        console.log(value);
-                        return resultValues.includes(value.toString());
-                    });
-
+                const allValuesIncluded = Object.values(charMap).every(
+                    (value) => value in resultValues,
+                );
                 expect(allValuesIncluded).toEqual(true);
 
                 // Test hscan with match
@@ -1484,8 +1471,8 @@ export function runBaseTests(config: {
                 expect(result[resultCollectionIndex]).toEqual(["a", "0"]);
 
                 // Set up testing data with the numberMap set to be used for the next set test keys and test results.
-                expect(await client.hset(key1, numberFieldList)).toEqual(
-                    numberFieldList.length,
+                expect(await client.hset(key1, numberMap)).toEqual(
+                    Object.keys(numberMap).length,
                 );
 
                 let resultCursor = initialCursor;
@@ -1524,28 +1511,20 @@ export function runBaseTests(config: {
                     );
 
                     for (let i = 0; i < secondResultEntry.length; i += 2) {
-                        secondResultAllKeys.push(
-                            secondResultEntry[i].toString(),
-                        );
-                        secondResultAllValues.push(
-                            secondResultEntry[i + 1].toString(),
-                        );
+                        secondResultAllKeys.push(secondResultEntry[i]);
+                        secondResultAllValues.push(secondResultEntry[i + 1]);
                     }
                 } while (resultCursor != initialCursor); // 0 is returned for the cursor of the last iteration.
 
                 // Verify all data is found in hscan
-                const allSecondResultKeys = numberFieldList
-                    .map((o) => o.field)
-                    .every((key) =>
-                        secondResultAllKeys.includes(key.toString()),
-                    );
+                const allSecondResultKeys = Object.keys(numberMap).every(
+                    (key) => key in secondResultAllKeys,
+                );
                 expect(allSecondResultKeys).toEqual(true);
 
-                const allSecondResultValues = numberFieldList
-                    .map((o) => o.value)
-                    .every((value) =>
-                        secondResultAllValues.includes(value.toString()),
-                    );
+                const allSecondResultValues = Object.keys(numberMap).every(
+                    (value) => value in secondResultAllValues,
+                );
                 expect(allSecondResultValues).toEqual(true);
 
                 // Test match pattern
