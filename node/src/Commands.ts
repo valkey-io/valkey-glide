@@ -1375,7 +1375,7 @@ export type ZAddOptions = {
  */
 export function createZAdd(
     key: GlideString,
-    membersAndScores: SortedSetDataType,
+    membersAndScores: SortedSetDataType | Record<string, number>,
     options?: ZAddOptions,
     incr: boolean = false,
 ): command_request.Command {
@@ -1407,6 +1407,13 @@ export function createZAdd(
 
     if (incr) {
         args.push("INCR");
+    }
+
+    if (!Array.isArray(membersAndScores)) {
+        // convert Record<string, number> to SortedSetDataType
+        membersAndScores = Object.entries(membersAndScores).map((p) => {
+            return { element: p[0], score: p[1] };
+        });
     }
 
     membersAndScores.forEach((p) => args.push(p.score.toString(), p.element));

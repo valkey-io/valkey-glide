@@ -3468,7 +3468,6 @@ export class BaseClient {
         return this.createWritePromise(createXRevRange(key, end, start, count));
     }
 
-    // TODO restore old API
     /**
      * Adds members with their scores to the sorted set stored at `key`.
      * If a member is already a part of the sorted set, its score is updated.
@@ -3476,7 +3475,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/zadd/|valkey.io} for more details.
      *
      * @param key - The key of the sorted set.
-     * @param membersAndScores - A list of members and their corresponding scores.
+     * @param membersAndScores - A list of members and their corresponding scores or a mapping of members to their corresponding scores.
      * @param options - (Optional) The `ZADD` options - see {@link ZAddOptions}.
      * @returns The number of elements added to the sorted set.
      * If {@link ZAddOptions.changed} is set to `true`, returns the number of elements updated in the sorted set.
@@ -3493,14 +3492,13 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the zadd method to update scores in an existing sorted set
      * const options = { conditionalChange: ConditionalChange.ONLY_IF_EXISTS, changed: true };
-     * const data = [{ element: "member1", score: 15.0 }, { element: "member2", score: 5.5 }]
-     * const result = await client.zadd("existing_sorted_set", data, options);
+     * const result = await client.zadd("existing_sorted_set", { "member1": 10.5, "member2": 8.2 }, options);
      * console.log(result); // Output: 2 - Updates the scores of two existing members in the sorted set "existing_sorted_set."
      * ```
      */
     public async zadd(
         key: GlideString,
-        membersAndScores: SortedSetDataType,
+        membersAndScores: SortedSetDataType | Record<string, number>,
         options?: ZAddOptions,
     ): Promise<number> {
         return this.createWritePromise(
@@ -3646,9 +3644,9 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * await client.zadd("zset1", [{ element: "member1", score: 1.0 }, { element: "member2", score: 2.0 }, { element: "member3", score: 3.0 }]);
-     * await client.zadd("zset2", [{ element: "member2", score: 2.0 }]);
-     * await client.zadd("zset3", [{ element: "member3": 3.0 }]);
+     * await client.zadd("zset1", {"member1": 1.0, "member2": 2.0, "member3": 3.0});
+     * await client.zadd("zset2", {"member2": 2.0});
+     * await client.zadd("zset3", {"member3": 3.0});
      * const result = await client.zdiff(["zset1", "zset2", "zset3"]);
      * console.log(result); // Output: ["member1"] - "member1" is in "zset1" but not "zset2" or "zset3".
      * ```
@@ -3671,9 +3669,9 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * await client.zadd("zset1", [{ element: "member1", score: 1.0 }, { element: "member2", score: 2.0 }, { element: "member3", score: 3.0 }]);
-     * await client.zadd("zset2", [{ element: "member2", score: 2.0 }]);
-     * await client.zadd("zset3", [{ element: "member3": 3.0 }]);
+     * await client.zadd("zset1", {"member1": 1.0, "member2": 2.0, "member3": 3.0});
+     * await client.zadd("zset2", {"member2": 2.0});
+     * await client.zadd("zset3", {"member3": 3.0});
      * const result = await client.zdiffWithScores(["zset1", "zset2", "zset3"]);
      * console.log(result); // Output: {"member1": 1.0} - "member1" is in "zset1" but not "zset2" or "zset3".
      * ```
@@ -3699,8 +3697,8 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * await client.zadd("zset1", [{ element: "member1", score: 1.0 }, { element: "member2", score: 2.0 }]);
-     * await client.zadd("zset2", [{ element: "member1", score: 1.0 }]);
+     * await client.zadd("zset1", {"member1": 1.0, "member2": 2.0});
+     * await client.zadd("zset2", {"member1": 1.0});
      * const result1 = await client.zdiffstore("zset3", ["zset1", "zset2"]);
      * console.log(result1); // Output: 1 - One member exists in "key1" but not "key2", and this member was stored in "zset3".
      *
@@ -3771,8 +3769,8 @@ export class BaseClient {
      *
      * * @example
      * ```typescript
-     * await client.zadd("key1", [{ element: "member1", score: 10.5 }, { element: "member2", score: 8.2 }])
-     * await client.zadd("key2", [{ element: "member1", score: 9.5 }])
+     * await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
+     * await client.zadd("key2", {"member1": 9.5})
      *
      * // use `zunionstore` with default aggregation and weights
      * console.log(await client.zunionstore("my_sorted_set", ["key1", "key2"]))
@@ -3871,8 +3869,9 @@ export class BaseClient {
      * - For range queries by index (rank), use {@link RangeByIndex}.
      * - For range queries by lexicographical order, use {@link RangeByLex}.
      * - For range queries by score, use {@link RangeByScore}.
-     * @param reverse - If `true`, reverses the sorted set, with index `0` as the element with the highest score.
-     * @param options - (Optional) See {@link DecoderOption}.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `reverse`: if `true`, reverses the sorted set, with index `0` as the element with the highest score.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns A list of elements within the specified range.
      * If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty array.
      *
@@ -3880,27 +3879,28 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zrange method to retrieve all members of a sorted set in ascending order
      * const result = await client.zrange("my_sorted_set", { start: 0, stop: -1 });
-     * console.log(result1); // Output: ['member1', 'member2', 'member3'] - Returns all members in ascending order.
+     * console.log(result1); // Output: all members in ascending order
+     * // ['member1', 'member2', 'member3']
      * ```
      * @example
      * ```typescript
-     * // Example usage of zrange method to retrieve members within a score range in ascending order
+     * // Example usage of zrange method to retrieve members within a score range in descending order
      * const result = await client.zrange("my_sorted_set", {
      *              start: InfBoundary.NegativeInfinity,
      *              stop: { value: 3, isInclusive: false },
      *              type: "byScore",
-     *           });
-     * console.log(result); // Output: ['member2', 'member3'] - Returns members with scores within the range of negative infinity to 3, in ascending order.
+     *           }, { reverse: true });
+     * console.log(result); // Output: members with scores within the range of negative infinity to 3, in descending order
+     * // ['member3', 'member2']
      * ```
      */
     public async zrange(
         key: GlideString,
         rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
-        reverse: boolean = false,
-        options?: DecoderOption,
-    ): Promise<string[]> {
+        options?: { reverse: boolean } & DecoderOption,
+    ): Promise<GlideString[]> {
         return this.createWritePromise(
-            createZRange(key, rangeQuery, reverse),
+            createZRange(key, rangeQuery, options?.reverse),
             options,
         );
     }
@@ -3916,7 +3916,9 @@ export class BaseClient {
      * - For range queries by index (rank), use {@link RangeByIndex}.
      * - For range queries by lexicographical order, use {@link RangeByLex}.
      * - For range queries by score, use {@link RangeByScore}.
-     * @param reverse - If `true`, reverses the sorted set, with index `0` as the element with the highest score.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `reverse`: if `true`, reverses the sorted set, with index `0` as the element with the highest score.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns A map of elements and their scores within the specified range.
      * If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty map.
      *
@@ -3928,7 +3930,8 @@ export class BaseClient {
      *              stop: { value: 20, isInclusive: false },
      *              type: "byScore",
      *           });
-     * console.log(result); // Output: {'member1': 10.5, 'member2': 15.2} - Returns members with scores between 10 and 20 with their scores.
+     * console.log(result); // Output: members with scores between 10 and 20 with their scores
+     * // {'member1': 10.5, 'member2': 15.2}
      * ```
      * @example
      * ```typescript
@@ -3937,17 +3940,19 @@ export class BaseClient {
      *              start: InfBoundary.NegativeInfinity,
      *              stop: { value: 3, isInclusive: false },
      *              type: "byScore",
-     *           });
-     * console.log(result); // Output: {'member4': -2.0, 'member7': 1.5} - Returns members with scores within the range of negative infinity to 3, with their scores.
+     *           }, { reverse: true });
+     * console.log(result); // Output: members with scores within the range of negative infinity to 3, with their scores in descending order
+     * // {'member7': 1.5, 'member4': -2.0}
      * ```
      */
     public async zrangeWithScores(
         key: GlideString,
         rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
-        reverse: boolean = false,
+        options?: { reverse: boolean } & DecoderOption,
     ): Promise<Record<string, number>> {
         return this.createWritePromise(
-            createZRangeWithScores(key, rangeQuery, reverse),
+            createZRangeWithScores(key, rangeQuery, options?.reverse),
+            options,
         );
     }
 
@@ -3991,7 +3996,7 @@ export class BaseClient {
         source: GlideString,
         rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
         reverse: boolean = false,
-    ): Promise<string[]> {
+    ): Promise<number> {
         return this.createWritePromise(
             createZRangeStore(destination, source, rangeQuery, reverse),
         );
@@ -4016,8 +4021,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of zinterstore command with an existing key
-     * await client.zadd("key1", [{ element: "member1", score: 10.5 }, { element: "member2", score: 8.2 }])
-     * await client.zadd("key2", [{ element: "member1", score: 9.5 }])
+     * await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
+     * await client.zadd("key2", {"member1": 9.5})
      * await client.zinterstore("my_sorted_set", ["key1", "key2"]) // Output: 1 - Indicates that the sorted set "my_sorted_set" contains one element.
      * await client.zrangeWithScores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 20}  - "member1"  is now stored in "my_sorted_set" with score of 20.
      * await client.zinterstore("my_sorted_set", ["key1", "key2"] , AggregationType.MAX ) // Output: 1 - Indicates that the sorted set "my_sorted_set" contains one element, and it's score is the maximum score between the sets.
@@ -4050,8 +4055,8 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * await client.zadd("key1", [{ element: "member1", score: 10.5 }, { element: "member2", score: 8.2 }])
-     * await client.zadd("key2", [{ element: "member1", score: 9.5 }])
+     * await client.zadd("key1", {"member1": 10.5, "member2": 8.2});
+     * await client.zadd("key2", {"member1": 9.5});
      * const result = await client.zinter(["key1", "key2"]);
      * console.log(result); // Output: ['member1']
      * ```
@@ -4080,8 +4085,8 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * await client.zadd("key1", [{ element: "member1", score: 10.5 }, { element: "member2", score: 8.2 }])
-     * await client.zadd("key2", [{ element: "member1", score: 9.5 }])
+     * await client.zadd("key1", {"member1": 10.5, "member2": 8.2});
+     * await client.zadd("key2", {"member1": 9.5});
      * const result1 = await client.zinterWithScores(["key1", "key2"]);
      * console.log(result1); // Output: {'member1': 20} - "member1" with score of 20 is the result
      * const result2 = await client.zinterWithScores(["key1", "key2"], AggregationType.MAX)
@@ -4101,7 +4106,7 @@ export class BaseClient {
      * Computes the union of sorted sets given by the specified `keys` and returns a list of union elements.
      *
      * To get the scores as well, see {@link zunionWithScores}.
-     * To store the result in a key as a sorted set, see {@link zunionstore}.
+     * To store the result in a key as a sorted set, see {@link zunionStore}.
      *
      * @see {@link https://valkey.io/commands/zunion/|valkey.io} for details.
      * @remarks When in cluster mode, all keys in `keys` must map to the same hash slot.
@@ -4109,12 +4114,12 @@ export class BaseClient {
      *
      * @param keys - The keys of the sorted sets.
      * @param options - (Optional) See {@link DecoderOption}.
-     * @returns The resulting array with a union of sorted set elements.
+     * @returns The resulting array of union elements.
      *
      * @example
      * ```typescript
-     * await client.zadd("key1", [{ element: "member1", score: 10.5 }, { element: "member2", score: 8.2 }])
-     * await client.zadd("key2", [{ element: "member1", score: 9.5 }])
+     * await client.zadd("key1", {"member1": 10.5, "member2": 8.2});
+     * await client.zadd("key2", {"member1": 9.5});
      * const result = await client.zunion(["key1", "key2"]);
      * console.log(result); // Output: ['member1', 'member2']
      * ```
@@ -4130,21 +4135,25 @@ export class BaseClient {
      * Computes the intersection of sorted sets given by the specified `keys` and returns a list of union elements with scores.
      * To get the elements only, see {@link zunion}.
      *
-     * @see {@link https://valkey.io/commands/zunion/|valkey.io} for details.
      * @remarks When in cluster mode, all keys in `keys` must map to the same hash slot.
+     *
+     * @see {@link https://valkey.io/commands/zunion/|valkey.io} for details.
+     *
      * @remarks Since Valkey version 6.2.0.
      *
      * @param keys - The keys of the sorted sets with possible formats:
-     *  - `GlideString[]` - for keys only.
-     *  - `KeyWeight[]` - for weighted keys with their score multipliers.
-     * @param aggregationType - (Optional) Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
-     * If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
+     *  - string[] - for keys only.
+     *  - KeyWeight[] - for weighted keys with score multipliers.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `aggregationType`: the aggregation strategy to apply when combining the scores of elements.
+     *     If `aggregationType` is not specified, defaults to `AggregationType.SUM`. See {@link AggregationType}.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns The resulting sorted set with scores.
      *
      * @example
      * ```typescript
-     * await client.zadd("key1", [{ element: "member1", score: 10.5 }, { element: "member2", score: 8.2 }])
-     * await client.zadd("key2", [{ element: "member1", score: 9.5 }])
+     * await client.zadd("key1", {"member1": 10.5, "member2": 8.2});
+     * await client.zadd("key2", {"member1": 9.5});
      * const result1 = await client.zunionWithScores(["key1", "key2"]);
      * console.log(result1); // {'member1': 20, 'member2': 8.2}
      * const result2 = await client.zunionWithScores(["key1", "key2"], "MAX");
@@ -4153,10 +4162,11 @@ export class BaseClient {
      */
     public async zunionWithScores(
         keys: GlideString[] | KeyWeight[],
-        aggregationType?: AggregationType,
+        options?: { aggregationType?: AggregationType } & DecoderOption,
     ): Promise<Record<string, number>> {
         return this.createWritePromise(
-            createZUnion(keys, aggregationType, true),
+            createZUnion(keys, options?.aggregationType, true),
+            options,
         );
     }
 
@@ -6180,8 +6190,8 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * await client.zadd("zSet1", [{ element: 'one', score: 1.0 }, { element: 'two', score: 2.0}, { element: 'three', score: 3.0 }]);
-     * await client.zadd("zSet2", [{ element: 'four', score: 4.0 }]);
+     * await client.zadd("zSet1", { one: 1.0, two: 2.0, three: 3.0 });
+     * await client.zadd("zSet2", { four: 4.0 });
      * console.log(await client.zmpop(["zSet1", "zSet2"], ScoreFilter.MAX, 2));
      * // Output: [ "zSet1", { three: 3, two: 2 } ] - "three" with score 3 and "two" with score 2 were popped from "zSet1".
      * ```
@@ -6220,8 +6230,8 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * await client.zadd("zSet1", [{ element: 'one', score: 1.0 }, { element: 'two', score: 2.0}, { element: 'three', score: 3.0 }]);
-     * await client.zadd("zSet2", [{ element: 'four', score: 4.0 }]);
+     * await client.zadd("zSet1", { one: 1.0, two: 2.0, three: 3.0 });
+     * await client.zadd("zSet2", { four: 4.0 });
      * console.log(await client.bzmpop(["zSet1", "zSet2"], ScoreFilter.MAX, 0.1, 2));
      * // Output: [ "zSet1", { three: 3, two: 2 } ] - "three" with score 3 and "two" with score 2 were popped from "zSet1".
      * ```
@@ -6253,10 +6263,10 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of zincrBy method to increment the value of a member's score
-     * await client.zadd("my_sorted_set", [{ element: "member1", score: 10.5 }, { element: "member2", score: 8.2 }]);
-     * console.log(await client.zincrby("my_sorted_set", 1.2, "member1"));
+     * await client.zadd("my_sorted_set", {"member": 10.5, "member2": 8.2});
+     * console.log(await client.zincrby("my_sorted_set", 1.2, "member"));
      * // Output: 11.7 - The member existed in the set before score was altered, the new score is 11.7.
-     * console.log(await client.zincrby("my_sorted_set", -1.7, "member1"));
+     * console.log(await client.zincrby("my_sorted_set", -1.7, "member"));
      * // Output: 10.0 - Negative increment, decrements the score.
      * console.log(await client.zincrby("my_sorted_set", 5.5, "non_existing_member"));
      * // Output: 5.5 - A new member is added to the sorted set with the score of 5.5.
@@ -6312,10 +6322,10 @@ export class BaseClient {
         cursor: string,
         options?: BaseScanOptions & DecoderOption,
     ): Promise<[string, GlideString[]]> {
-        return this.createWritePromise(
+        return this.createWritePromise<[GlideString, GlideString[]]>(
             createZScan(key, cursor, options),
             options,
-        );
+        ).then((res) => [res[0].toString(), res[1]]); // convert cursor back to string
     }
 
     /**

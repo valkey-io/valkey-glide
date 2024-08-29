@@ -5,7 +5,7 @@
 import {
     BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
     GlideString,
-    ReadFrom,
+    ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
     SortedSetDataType, // eslint-disable-line @typescript-eslint/no-unused-vars
 } from "./BaseClient";
 
@@ -1729,15 +1729,10 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zadd(
         key: GlideString,
-        membersScoresMap: SortedSetDataType | Record<string, number>,
+        membersAndScores: SortedSetDataType | Record<string, number>,
         options?: ZAddOptions,
     ): T {
-        if (!Array.isArray(membersScoresMap)) {
-            membersScoresMap = Object.entries(membersScoresMap).map((p) => {
-                return { element: p[0], score: p[1] };
-            });
-        }
-        return this.addAndReturn(createZAdd(key, membersScoresMap, options));
+        return this.addAndReturn(createZAdd(key, membersAndScores, options));
     }
 
     /**
@@ -2096,9 +2091,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * To get the scores as well, see {@link zunionWithScores}.
      * To store the result in a key as a sorted set, see {@link zunionstore}.
      *
-     * @remarks Since Valkey version 6.2.0.
-     *
      * @see {@link https://valkey.io/commands/zunion/|valkey.io} for details.
+     * @remarks Since Valkey version 6.2.0.
      *
      * @param keys - The keys of the sorted sets.
      *
