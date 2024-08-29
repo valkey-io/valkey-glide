@@ -1335,12 +1335,12 @@ export function runBaseTests(config: {
                 const value = uuidv4();
                 const fieldValueList: HashDataType = [
                     {
-                        field: field1,
-                        value,
+                        field: Buffer.from(field1),
+                        value: Buffer.from(value),
                     },
                     {
-                        field: field2,
-                        value,
+                        field: Buffer.from(field2),
+                        value: Buffer.from(value),
                     },
                 ];
                 const valueEncoded = Buffer.from(value);

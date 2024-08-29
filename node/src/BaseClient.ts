@@ -1661,7 +1661,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/hset/|valkey.io} for details.
      *
      * @param key - The key of the hash.
-     * @param fieldValueList - A list of objects containing field and value as keys of the objects.
+     * @param fieldValueList - A list of field names and their values.
      * @returns The number of fields that were added.
      *
      * @example
