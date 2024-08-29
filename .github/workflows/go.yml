@@ -52,7 +52,6 @@ jobs:
             fail-fast: false
             matrix:
                 go:
-                    # - '1.18.10'
                     - '1.22.0'
                 engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
                 host:
@@ -130,7 +129,6 @@ jobs:
             fail-fast: false
             matrix:
                 go:
-                    - 1.18.10
                     - 1.22.0
         runs-on: ubuntu-latest
         container: amazonlinux:latest

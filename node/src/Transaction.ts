@@ -338,7 +338,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - If `key` exists, returns the value of `key` as a `string`. Otherwise, return `null`.
      */
     public getex(
-        key: string,
+        key: GlideString,
         options?: "persist" | { type: TimeUnit; duration: number },
     ): T {
         return this.addAndReturn(createGetEx(key, options));
@@ -387,7 +387,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `value` isn't set because of `onlyIfExists` or `onlyIfDoesNotExist` conditions, return null.
      * If `returnOldValue` is set, return the old value as a string.
      */
-    public set(key: string, value: string, options?: SetOptions): T {
+    public set(key: GlideString, value: GlideString, options?: SetOptions): T {
         return this.addAndReturn(createSet(key, value, options));
     }
 
@@ -546,7 +546,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - the value of `key` after the increment.
      */
-    public incr(key: string): T {
+    public incr(key: GlideString): T {
         return this.addAndReturn(createIncr(key));
     }
 
@@ -558,7 +558,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - the value of `key` after the increment.
      */
-    public incrBy(key: string, amount: number): T {
+    public incrBy(key: GlideString, amount: number): T {
         return this.addAndReturn(createIncrBy(key, amount));
     }
 
@@ -573,7 +573,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - the value of `key` after the increment.
      *
      */
-    public incrByFloat(key: string, amount: number): T {
+    public incrByFloat(key: GlideString, amount: number): T {
         return this.addAndReturn(createIncrByFloat(key, amount));
     }
 
@@ -595,7 +595,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - the value of `key` after the decrement.
      */
-    public decr(key: string): T {
+    public decr(key: GlideString): T {
         return this.addAndReturn(createDecr(key));
     }
 
@@ -607,7 +607,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - the value of `key` after the decrement.
      */
-    public decrBy(key: string, amount: number): T {
+    public decrBy(key: GlideString, amount: number): T {
         return this.addAndReturn(createDecrBy(key, amount));
     }
 
@@ -810,7 +810,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The number of fields that were added.
      */
-    public hset(key: string, fieldValueMap: Record<string, string>): T {
+    public hset(key: GlideString, fieldValueMap: Record<string, string>): T {
         return this.addAndReturn(createHSet(key, fieldValueMap));
     }
 
@@ -823,7 +823,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - A list of field names for the hash, or an empty list when the key does not exist.
      */
-    public hkeys(key: string): T {
+    public hkeys(key: GlideString): T {
         return this.addAndReturn(createHKeys(key));
     }
 
@@ -838,7 +838,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - `true` if the field was set, `false` if the field already existed and was not set.
      */
-    public hsetnx(key: string, field: string, value: string): T {
+    public hsetnx(key: GlideString, field: GlideString, value: GlideString): T {
         return this.addAndReturn(createHSetNX(key, field, value));
     }
 
@@ -852,7 +852,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - the number of fields that were removed from the hash, not including specified but non existing fields.
      * If `key` does not exist, it is treated as an empty hash and it returns 0.
      */
-    public hdel(key: string, fields: string[]): T {
+    public hdel(key: GlideString, fields: GlideString[]): T {
         return this.addAndReturn(createHDel(key, fields));
     }
 
@@ -866,7 +866,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * For every field that does not exist in the hash, a null value is returned.
      * If `key` does not exist, it is treated as an empty hash and it returns a list of null values.
      */
-    public hmget(key: string, fields: string[]): T {
+    public hmget(key: GlideString, fields: GlideString[]): T {
         return this.addAndReturn(createHMGet(key, fields));
     }
 
@@ -879,7 +879,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - `true` if the hash contains `field`. If the hash does not contain `field`, or if `key` does not exist,
      * the command response will be `false`.
      */
-    public hexists(key: string, field: string): T {
+    public hexists(key: GlideString, field: GlideString): T {
         return this.addAndReturn(createHExists(key, field));
     }
 
@@ -891,7 +891,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - a map of fields and their values stored in the hash. Every field name in the map is followed by its value.
      * If `key` does not exist, it returns an empty map.
      */
-    public hgetall(key: string): T {
+    public hgetall(key: GlideString): T {
         return this.addAndReturn(createHGetAll(key));
     }
 
@@ -906,7 +906,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - the value of `field` in the hash stored at `key` after the increment.
      */
-    public hincrBy(key: string, field: string, amount: number): T {
+    public hincrBy(key: GlideString, field: GlideString, amount: number): T {
         return this.addAndReturn(createHIncrBy(key, field, amount));
     }
 
@@ -921,7 +921,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - the value of `field` in the hash stored at `key` after the increment.
      */
-    public hincrByFloat(key: string, field: string, amount: number): T {
+    public hincrByFloat(
+        key: GlideString,
+        field: GlideString,
+        amount: number,
+    ): T {
         return this.addAndReturn(createHIncrByFloat(key, field, amount));
     }
 
@@ -932,7 +936,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The number of fields in the hash, or 0 when the key does not exist.
      */
-    public hlen(key: string): T {
+    public hlen(key: GlideString): T {
         return this.addAndReturn(createHLen(key));
     }
 
@@ -957,7 +961,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The string length or `0` if `field` or `key` does not exist.
      */
-    public hstrlen(key: string, field: string): T {
+    public hstrlen(key: GlideString, field: GlideString): T {
         return this.addAndReturn(createHStrlen(key, field));
     }
 
@@ -972,7 +976,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A random field name from the hash stored at `key`, or `null` when
      *     the key does not exist.
      */
-    public hrandfield(key: string): T {
+    public hrandfield(key: GlideString): T {
         return this.addAndReturn(createHRandField(key));
     }
 
@@ -1009,7 +1013,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - An `array` of random field names from the hash stored at `key`,
      *     or an `empty array` when the key does not exist.
      */
-    public hrandfieldCount(key: string, count: number): T {
+    public hrandfieldCount(key: GlideString, count: number): T {
         return this.addAndReturn(createHRandField(key, count));
     }
 
@@ -1029,7 +1033,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     field name from the hash and `value` is the associated value of the field name.
      *     If the hash does not exist or is empty, the response will be an empty `array`.
      */
-    public hrandfieldWithValues(key: string, count: number): T {
+    public hrandfieldWithValues(key: GlideString, count: number): T {
         return this.addAndReturn(createHRandField(key, count, true));
     }
 
@@ -1708,7 +1712,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key - The key to return its timeout.
      *
-     * Command Response -  TTL in seconds, -2 if `key` does not exist or -1 if `key` exists but has no associated expire.
+     * Command Response - TTL in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
      */
     public ttl(key: GlideString): T {
         return this.addAndReturn(createTTL(key));
@@ -1782,15 +1786,17 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createZRem(key, members));
     }
 
-    /** Returns the cardinality (number of elements) of the sorted set stored at `key`.
+    /**
+     * Returns the cardinality (number of elements) of the sorted set stored at `key`.
+     *
      * @see {@link https://valkey.io/commands/zcard/|valkey.io} for details.
      *
      * @param key - The key of the sorted set.
      *
      * Command Response - The number of elements in the sorted set.
-     * If `key` does not exist, it is treated as an empty sorted set, and this command returns 0.
+     * If `key` does not exist, it is treated as an empty sorted set, and this command returns `0`.
      */
-    public zcard(key: string): T {
+    public zcard(key: GlideString): T {
         return this.addAndReturn(createZCard(key));
     }
 
@@ -1806,7 +1812,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The cardinality of the intersection of the given sorted sets.
      */
-    public zintercard(keys: string[], limit?: number): T {
+    public zintercard(keys: GlideString[], limit?: number): T {
         return this.addAndReturn(createZInterCard(keys, limit));
     }
 
@@ -1822,7 +1828,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - An `array` of elements representing the difference between the sorted sets.
      * If the first key does not exist, it is treated as an empty sorted set, and the command returns an empty `array`.
      */
-    public zdiff(keys: string[]): T {
+    public zdiff(keys: GlideString[]): T {
         return this.addAndReturn(createZDiff(keys));
     }
 
@@ -1838,7 +1844,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A map of elements and their scores representing the difference between the sorted sets.
      * If the first key does not exist, it is treated as an empty sorted set, and the command returns an empty `array`.
      */
-    public zdiffWithScores(keys: string[]): T {
+    public zdiffWithScores(keys: GlideString[]): T {
         return this.addAndReturn(createZDiffWithScores(keys));
     }
 
@@ -1855,7 +1861,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The number of members in the resulting sorted set stored at `destination`.
      */
-    public zdiffstore(destination: string, keys: string[]): T {
+    public zdiffstore(destination: GlideString, keys: GlideString[]): T {
         return this.addAndReturn(createZDiffStore(destination, keys));
     }
 
@@ -1915,7 +1921,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createZMScore(key, members));
     }
 
-    /** Returns the number of members in the sorted set stored at `key` with scores between `minScore` and `maxScore`.
+    /**
+     * Returns the number of members in the sorted set stored at `key` with scores between `minScore` and `maxScore`.
+     *
      * @see {@link https://valkey.io/commands/zcount/|valkey.io} for details.
      *
      * @param key - The key of the sorted set.
@@ -1923,11 +1931,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param maxScore - The maximum score to count up to. Can be positive/negative infinity, or specific score and inclusivity.
      *
      * Command Response - The number of members in the specified score range.
-     * If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
-     * If `minScore` is greater than `maxScore`, 0 is returned.
+     * If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
+     * If `minScore` is greater than `maxScore`, `0` is returned.
      */
     public zcount(
-        key: string,
+        key: GlideString,
         minScore: Boundary<number>,
         maxScore: Boundary<number>,
     ): T {
@@ -2019,24 +2027,22 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Computes the intersection of sorted sets given by the specified `keys` and stores the result in `destination`.
      * If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
      *
-     * When in cluster mode, `destination` and all keys in `keys` must map to the same hash slot.
-     *
      * @see {@link https://valkey.io/commands/zinterstore/|valkey.io} for details.
      *
      * @remarks Since Valkey version 6.2.0.
      *
      * @param destination - The key of the destination sorted set.
      * @param keys - The keys of the sorted sets with possible formats:
-     *  string[] - for keys only.
-     *  KeyWeight[] - for weighted keys with score multipliers.
+     *  - `GlideString[]` - for keys only.
+     *  - `KeyWeight[]` - for weighted keys with score multipliers.
      * @param aggregationType - (Optional) Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
      * If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
      *
      * Command Response - The number of elements in the resulting sorted set stored at `destination`.
      */
     public zinterstore(
-        destination: string,
-        keys: string[] | KeyWeight[],
+        destination: GlideString,
+        keys: GlideString[] | KeyWeight[],
         aggregationType?: AggregationType,
     ): T {
         return this.addAndReturn(
@@ -2057,7 +2063,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The resulting array of intersecting elements.
      */
-    public zinter(keys: string[]): T {
+    public zinter(keys: GlideString[]): T {
         return this.addAndReturn(createZInter(keys));
     }
 
@@ -2071,15 +2077,15 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @remarks Since Valkey version 6.2.0.
      *
      * @param keys - The keys of the sorted sets with possible formats:
-     *  - string[] - for keys only.
-     *  - KeyWeight[] - for weighted keys with score multipliers.
+     *  - `GlideString[]` - for keys only.
+     *  - `KeyWeight[]` - for weighted keys with score multipliers.
      * @param aggregationType - (Optional) Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
      * If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
      *
      * Command Response - The resulting sorted set with scores.
      */
     public zinterWithScores(
-        keys: string[] | KeyWeight[],
+        keys: GlideString[] | KeyWeight[],
         aggregationType?: AggregationType,
     ): T {
         return this.addAndReturn(createZInter(keys, aggregationType, true));
@@ -2233,7 +2239,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - An `array` containing the key where the member was popped out, the member, itself, and the member score.
      *     If no member could be popped and the `timeout` expired, returns `null`.
      */
-    public bzpopmin(keys: string[], timeout: number): T {
+    public bzpopmin(keys: GlideString[], timeout: number): T {
         return this.addAndReturn(createBZPopMin(keys, timeout));
     }
 
@@ -2270,7 +2276,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - An `array` containing the key where the member was popped out, the member, itself, and the member score.
      *     If no member could be popped and the `timeout` expired, returns `null`.
      */
-    public bzpopmax(keys: string[], timeout: number): T {
+    public bzpopmax(keys: GlideString[], timeout: number): T {
         return this.addAndReturn(createBZPopMax(keys, timeout));
     }
 
@@ -2294,7 +2300,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key - The key to return its timeout.
      *
-     * Command Response - TTL in milliseconds. -2 if `key` does not exist, -1 if `key` exists but has no associated expire.
+     * Command Response - TTL in milliseconds, `-2` if `key` does not exist, `-1` if `key` exists but has no associated expire.
      */
     public pttl(key: GlideString): T {
         return this.addAndReturn(createPTTL(key));
@@ -2527,8 +2533,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The id of the added entry, or `null` if `options.makeStream` is set to `false` and no stream with the matching `key` exists.
      */
     public xadd(
-        key: string,
-        values: [string, string][],
+        key: GlideString,
+        values: [GlideString, GlideString][],
         options?: StreamAddOptions,
     ): T {
         return this.addAndReturn(createXAdd(key, values, options));
@@ -2545,7 +2551,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The number of entries removed from the stream. This number may be less than the number of entries in
      *      `ids`, if the specified `ids` don't exist in the stream.
      */
-    public xdel(key: string, ids: string[]): T {
+    public xdel(key: GlideString, ids: GlideString[]): T {
         return this.addAndReturn(createXDel(key, ids));
     }
 
@@ -2783,11 +2789,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A `Record` of message entries that are claimed by the consumer.
      */
     public xclaim(
-        key: string,
-        group: string,
-        consumer: string,
+        key: GlideString,
+        group: GlideString,
+        consumer: GlideString,
         minIdleTime: number,
-        ids: string[],
+        ids: GlideString[],
         options?: StreamClaimOptions,
     ): T {
         return this.addAndReturn(
@@ -2847,11 +2853,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     These IDs are deleted from the Pending Entries List.
      */
     public xautoclaim(
-        key: string,
-        group: string,
-        consumer: string,
+        key: GlideString,
+        group: GlideString,
+        consumer: GlideString,
         minIdleTime: number,
-        start: string,
+        start: GlideString,
         count?: number,
     ): T {
         return this.addAndReturn(
@@ -2917,9 +2923,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - `"OK"`.
      */
     public xgroupCreate(
-        key: string,
-        groupName: string,
-        id: string,
+        key: GlideString,
+        groupName: GlideString,
+        id: GlideString,
         options?: StreamGroupOptions,
     ): T {
         return this.addAndReturn(
@@ -2937,7 +2943,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - `true` if the consumer group is destroyed. Otherwise, `false`.
      */
-    public xgroupDestroy(key: string, groupName: string): T {
+    public xgroupDestroy(key: GlideString, groupName: GlideString): T {
         return this.addAndReturn(createXGroupDestroy(key, groupName));
     }
 
@@ -2953,9 +2959,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - `true` if the consumer is created. Otherwise, returns `false`.
      */
     public xgroupCreateConsumer(
-        key: string,
-        groupName: string,
-        consumerName: string,
+        key: GlideString,
+        groupName: GlideString,
+        consumerName: GlideString,
     ): T {
         return this.addAndReturn(
             createXGroupCreateConsumer(key, groupName, consumerName),
@@ -2974,9 +2980,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The number of pending messages the `consumer` had before it was deleted.
      */
     public xgroupDelConsumer(
-        key: string,
-        groupName: string,
-        consumerName: string,
+        key: GlideString,
+        groupName: GlideString,
+        consumerName: GlideString,
     ): T {
         return this.addAndReturn(
             createXGroupDelConsumer(key, groupName, consumerName),
@@ -2995,7 +3001,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The number of messages that were successfully acknowledged.
      */
-    public xack(key: string, group: string, ids: string[]): T {
+    public xack(key: GlideString, group: GlideString, ids: GlideString[]): T {
         return this.addAndReturn(createXAck(key, group, ids));
     }
 
@@ -3013,9 +3019,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - `"OK"`.
      */
     public xgroupSetId(
-        key: string,
-        groupName: string,
-        id: string,
+        key: GlideString,
+        groupName: GlideString,
+        id: GlideString,
         entriesRead?: number,
     ): T {
         return this.addAndReturn(
@@ -3605,7 +3611,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     If no member could be popped, returns `null`.
      */
     public bzmpop(
-        keys: string[],
+        keys: GlideString[],
         modifier: ScoreFilter,
         timeout: number,
         count?: number,
@@ -3626,7 +3632,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The new score of `member`.
      */
-    public zincrby(key: string, increment: number, member: string): T {
+    public zincrby(
+        key: GlideString,
+        increment: number,
+        member: GlideString,
+    ): T {
         return this.addAndReturn(createZIncrBy(key, increment, member));
     }
 
@@ -3715,7 +3725,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A `String` containing all the longest common subsequence combined between the 2 strings.
      *     An empty `String` is returned if the keys do not exist or have no common subsequences.
      */
-    public lcs(key1: string, key2: string): T {
+    public lcs(key1: GlideString, key2: GlideString): T {
         return this.addAndReturn(createLCS(key1, key2));
     }
 
@@ -3730,7 +3740,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The total length of all the longest common subsequences between the 2 strings.
      */
-    public lcsLen(key1: string, key2: string): T {
+    public lcsLen(key1: GlideString, key2: GlideString): T {
         return this.addAndReturn(createLCS(key1, key2, { len: true }));
     }
 
@@ -3743,8 +3753,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key1 - The key that stores the first string.
      * @param key2 - The key that stores the second string.
-     * @param withMatchLen - (Optional) If `true`, include the length of the substring matched for the each match.
-     * @param minMatchLen - (Optional) The minimum length of matches to include in the result.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `withMatchLen`: if `true`, include the length of the substring matched for the each match.
+     * - (Optional) `minMatchLen`: the minimum length of matches to include in the result.
      *
      * Command Response - A `Record` containing the indices of the longest common subsequences between the
      *     2 strings and the lengths of the longest common subsequences. The resulting map contains two
@@ -3758,8 +3769,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     See example of {@link BaseClient.lcsIdx|lcsIdx} for more details.
      */
     public lcsIdx(
-        key1: string,
-        key2: string,
+        key1: GlideString,
+        key2: GlideString,
         options?: { withMatchLen?: boolean; minMatchLen?: number },
     ): T {
         return this.addAndReturn(createLCS(key1, key2, { idx: options ?? {} }));
@@ -3802,7 +3813,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The length of the string stored at `key` after it was modified.
      */
-    public setrange(key: string, offset: number, value: string): T {
+    public setrange(key: GlideString, offset: number, value: GlideString): T {
         return this.addAndReturn(createSetRange(key, offset, value));
     }
 
@@ -3877,7 +3888,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A list of currently active channels matching the given pattern.
      *          If no pattern is specified, all active channels are returned.
      */
-    public pubsubChannels(pattern?: string): T {
+    public pubsubChannels(pattern?: GlideString): T {
         return this.addAndReturn(createPubSubChannels(pattern));
     }
 
@@ -4063,7 +4074,7 @@ export class Transaction extends BaseTransaction<Transaction> {
      * Command Response -  Number of subscriptions in primary node that received the message.
      * Note that this value does not include subscriptions that configured on replicas.
      */
-    public publish(message: string, channel: string): Transaction {
+    public publish(message: GlideString, channel: GlideString): Transaction {
         return this.addAndReturn(createPublish(message, channel));
     }
 }
@@ -4190,8 +4201,8 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * Command Response -  Number of subscriptions in primary node that received the message.
      */
     public publish(
-        message: string,
-        channel: string,
+        message: GlideString,
+        channel: GlideString,
         sharded: boolean = false,
     ): ClusterTransaction {
         return this.addAndReturn(createPublish(message, channel, sharded));
@@ -4208,7 +4219,7 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * Command Response - A list of currently active shard channels matching the given pattern.
      *          If no pattern is specified, all active shard channels are returned.
      */
-    public pubsubShardChannels(pattern?: string): ClusterTransaction {
+    public pubsubShardChannels(pattern?: GlideString): ClusterTransaction {
         return this.addAndReturn(createPubsubShardChannels(pattern));
     }
 

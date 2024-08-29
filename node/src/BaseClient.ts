@@ -998,9 +998,11 @@ export class BaseClient {
      * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key to retrieve from the database.
-     * @param options - (Optional) Set expiriation to the given key.
-     *                  "persist" will retain the time to live associated with the key. Equivalent to `PERSIST` in the VALKEY API.
-     *                  Otherwise, a {@link TimeUnit} and duration of the expire time should be specified.
+     * @param options - (Optional) Additional Parameters:
+     * - (Optional) `expiry`: expiriation to the given key:
+     * `"persist"` will retain the time to live associated with the key. Equivalent to `PERSIST` in the VALKEY API.
+     * Otherwise, a {@link TimeUnit} and duration of the expire time should be specified.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns If `key` exists, returns the value of `key` as a `string`. Otherwise, return `null`.
      *
      * @example
@@ -1010,10 +1012,14 @@ export class BaseClient {
      * ```
      */
     public async getex(
-        key: string,
-        options?: "persist" | { type: TimeUnit; duration: number },
-    ): Promise<string | null> {
-        return this.createWritePromise(createGetEx(key, options));
+        key: GlideString,
+        options?: {
+            expiry: "persist" | { type: TimeUnit; duration: number };
+        } & DecoderOption,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createGetEx(key, options?.expiry), {
+            decoder: options?.decoder,
+        });
     }
 
     /**
@@ -1087,7 +1093,7 @@ export class BaseClient {
      *
      * @param key - The key to store.
      * @param value - The value to store with the given key.
-     * @param options - The set options.
+     * @param options - (Optional) See {@link SetOptions} and {@link DecoderOption}.
      * @returns - If the value is successfully set, return OK.
      * If value isn't set because of `onlyIfExists` or `onlyIfDoesNotExist` conditions, return null.
      * If `returnOldValue` is set, return the old value as a string.
@@ -1114,9 +1120,11 @@ export class BaseClient {
     public async set(
         key: GlideString,
         value: GlideString,
-        options?: SetOptions,
-    ): Promise<"OK" | string | null> {
-        return this.createWritePromise(createSet(key, value, options));
+        options?: SetOptions & DecoderOption,
+    ): Promise<"OK" | GlideString | null> {
+        return this.createWritePromise(createSet(key, value, options), {
+            decoder: options?.decoder,
+        });
     }
 
     /**
@@ -1305,7 +1313,7 @@ export class BaseClient {
      * console.log(result); // Output: 11
      * ```
      */
-    public async incr(key: string): Promise<number> {
+    public async incr(key: GlideString): Promise<number> {
         return this.createWritePromise(createIncr(key));
     }
 
@@ -1325,7 +1333,7 @@ export class BaseClient {
      * console.log(result); // Output: 15
      * ```
      */
-    public async incrBy(key: string, amount: number): Promise<number> {
+    public async incrBy(key: GlideString, amount: number): Promise<number> {
         return this.createWritePromise(createIncrBy(key, amount));
     }
 
@@ -1347,7 +1355,10 @@ export class BaseClient {
      * console.log(result); // Output: 13.0
      * ```
      */
-    public async incrByFloat(key: string, amount: number): Promise<number> {
+    public async incrByFloat(
+        key: GlideString,
+        amount: number,
+    ): Promise<number> {
         return this.createWritePromise(createIncrByFloat(key, amount));
     }
 
@@ -1366,7 +1377,7 @@ export class BaseClient {
      * console.log(result); // Output: 9
      * ```
      */
-    public async decr(key: string): Promise<number> {
+    public async decr(key: GlideString): Promise<number> {
         return this.createWritePromise(createDecr(key));
     }
 
@@ -1386,7 +1397,7 @@ export class BaseClient {
      * console.log(result); // Output: 5
      * ```
      */
-    public async decrBy(key: string, amount: number): Promise<number> {
+    public async decrBy(key: GlideString, amount: number): Promise<number> {
         return this.createWritePromise(createDecrBy(key, amount));
     }
 
@@ -1662,7 +1673,7 @@ export class BaseClient {
      * ```
      */
     public async hset(
-        key: string,
+        key: GlideString,
         fieldValueMap: Record<string, string>,
     ): Promise<number> {
         return this.createWritePromise(createHSet(key, fieldValueMap));
@@ -1674,6 +1685,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/hkeys/|valkey.io} for details.
      *
      * @param key - The key of the hash.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A list of field names for the hash, or an empty list when the key does not exist.
      *
      * @example
@@ -1684,8 +1696,12 @@ export class BaseClient {
      * console.log(result); // Output: ["field1", "field2", "field3"]  - Returns all the field names stored in the hash "my_hash".
      * ```
      */
-    public async hkeys(key: string): Promise<string[]> {
-        return this.createWritePromise(createHKeys(key));
+
+    public async hkeys(
+        key: GlideString,
+        options?: DecoderOption,
+    ): Promise<GlideString[]> {
+        return this.createWritePromise(createHKeys(key), options);
     }
 
     /** Sets `field` in the hash stored at `key` to `value`, only if `field` does not yet exist.
@@ -1714,9 +1730,9 @@ export class BaseClient {
      * ```
      */
     public async hsetnx(
-        key: string,
-        field: string,
-        value: string,
+        key: GlideString,
+        field: GlideString,
+        value: GlideString,
     ): Promise<boolean> {
         return this.createWritePromise(createHSetNX(key, field, value));
     }
@@ -1738,7 +1754,10 @@ export class BaseClient {
      * console.log(result); // Output: 2 - Indicates that two fields were successfully removed from the hash.
      * ```
      */
-    public async hdel(key: string, fields: string[]): Promise<number> {
+    public async hdel(
+        key: GlideString,
+        fields: GlideString[],
+    ): Promise<number> {
         return this.createWritePromise(createHDel(key, fields));
     }
 
@@ -1748,6 +1767,7 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param fields - The fields in the hash stored at `key` to retrieve from the database.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns a list of values associated with the given fields, in the same order as they are requested.
      * For every field that does not exist in the hash, a null value is returned.
      * If `key` does not exist, it is treated as an empty hash and it returns a list of null values.
@@ -1760,10 +1780,11 @@ export class BaseClient {
      * ```
      */
     public async hmget(
-        key: string,
-        fields: string[],
-    ): Promise<(string | null)[]> {
-        return this.createWritePromise(createHMGet(key, fields));
+        key: GlideString,
+        fields: GlideString[],
+        options?: DecoderOption,
+    ): Promise<(GlideString | null)[]> {
+        return this.createWritePromise(createHMGet(key, fields), options);
     }
 
     /** Returns if `field` is an existing field in the hash stored at `key`.
@@ -1788,7 +1809,10 @@ export class BaseClient {
      * console.log(result); // Output: false
      * ```
      */
-    public async hexists(key: string, field: string): Promise<boolean> {
+    public async hexists(
+        key: GlideString,
+        field: GlideString,
+    ): Promise<boolean> {
         return this.createWritePromise(createHExists(key, field));
     }
 
@@ -1807,7 +1831,7 @@ export class BaseClient {
      * console.log(result); // Output: {"field1": "value1", "field2": "value2"}
      * ```
      */
-    public async hgetall(key: string): Promise<Record<string, string>> {
+    public async hgetall(key: GlideString): Promise<Record<string, string>> {
         return this.createWritePromise(createHGetAll(key));
     }
 
@@ -1830,8 +1854,8 @@ export class BaseClient {
      * ```
      */
     public async hincrBy(
-        key: string,
-        field: string,
+        key: GlideString,
+        field: GlideString,
         amount: number,
     ): Promise<number> {
         return this.createWritePromise(createHIncrBy(key, field, amount));
@@ -1852,12 +1876,12 @@ export class BaseClient {
      * ```typescript
      * // Example usage of the hincrbyfloat method to increment the value of a floating point in a hash by a specified amount
      * const result = await client.hincrbyfloat("my_hash", "field1", 2.5);
-     * console.log(result); // Output: '2.5'
+     * console.log(result); // Output: 2.5
      * ```
      */
     public async hincrByFloat(
-        key: string,
-        field: string,
+        key: GlideString,
+        field: GlideString,
         amount: number,
     ): Promise<number> {
         return this.createWritePromise(createHIncrByFloat(key, field, amount));
@@ -1884,7 +1908,7 @@ export class BaseClient {
      * console.log(result); // Output: 0
      * ```
      */
-    public async hlen(key: string): Promise<number> {
+    public async hlen(key: GlideString): Promise<number> {
         return this.createWritePromise(createHLen(key));
     }
 
@@ -1927,7 +1951,10 @@ export class BaseClient {
      * console.log(result); // Output: 5
      * ```
      */
-    public async hstrlen(key: string, field: string): Promise<number> {
+    public async hstrlen(
+        key: GlideString,
+        field: GlideString,
+    ): Promise<number> {
         return this.createWritePromise(createHStrlen(key, field));
     }
 
@@ -1938,6 +1965,7 @@ export class BaseClient {
      * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key of the hash.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A random field name from the hash stored at `key`, or `null` when
      *     the key does not exist.
      *
@@ -1946,8 +1974,11 @@ export class BaseClient {
      * console.log(await client.hrandfield("myHash")); // Output: 'field'
      * ```
      */
-    public async hrandfield(key: string): Promise<string | null> {
-        return this.createWritePromise(createHRandField(key));
+    public async hrandfield(
+        key: GlideString,
+        options?: DecoderOption,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createHRandField(key), options);
     }
 
     /**
@@ -2003,6 +2034,7 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param count - The number of field names to return.
+     * @param options - (Optional) See {@link DecoderOption}.
      *
      *     If `count` is positive, returns unique elements. If negative, allows for duplicates.
      * @returns An `array` of random field names from the hash stored at `key`,
@@ -2014,10 +2046,11 @@ export class BaseClient {
      * ```
      */
     public async hrandfieldCount(
-        key: string,
+        key: GlideString,
         count: number,
-    ): Promise<string[]> {
-        return this.createWritePromise(createHRandField(key, count));
+        options?: DecoderOption,
+    ): Promise<GlideString[]> {
+        return this.createWritePromise(createHRandField(key, count), options);
     }
 
     /**
@@ -2029,6 +2062,7 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param count - The number of field names to return.
+     * @param options - (Optional) See {@link DecoderOption}.
      *
      *     If `count` is positive, returns unique elements. If negative, allows for duplicates.
      * @returns A 2D `array` of `[fieldName, value]` `arrays`, where `fieldName` is a random
@@ -2042,10 +2076,14 @@ export class BaseClient {
      * ```
      */
     public async hrandfieldWithValues(
-        key: string,
+        key: GlideString,
         count: number,
-    ): Promise<[string, string][]> {
-        return this.createWritePromise(createHRandField(key, count, true));
+        options?: DecoderOption,
+    ): Promise<[GlideString, GlideString][]> {
+        return this.createWritePromise(
+            createHRandField(key, count, true),
+            options,
+        );
     }
 
     /** Inserts all the specified values at the head of the list stored at `key`.
@@ -3310,7 +3348,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/ttl/|valkey.io} for details.
      *
      * @param key - The key to return its timeout.
-     * @returns TTL in seconds, -2 if `key` does not exist or -1 if `key` exists but has no associated expire.
+     * @returns TTL in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
      *
      * @example
      * ```typescript
@@ -3582,13 +3620,14 @@ export class BaseClient {
         return this.createWritePromise(createZRem(key, members));
     }
 
-    /** Returns the cardinality (number of elements) of the sorted set stored at `key`.
+    /**
+     * Returns the cardinality (number of elements) of the sorted set stored at `key`.
      *
      * @see {@link https://valkey.io/commands/zcard/|valkey.io} for more details.
      *
      * @param key - The key of the sorted set.
      * @returns The number of elements in the sorted set.
-     * If `key` does not exist, it is treated as an empty sorted set, and this command returns 0.
+     * If `key` does not exist, it is treated as an empty sorted set, and this command returns `0`.
      *
      * @example
      * ```typescript
@@ -3604,7 +3643,7 @@ export class BaseClient {
      * console.log(result); // Output: 0
      * ```
      */
-    public async zcard(key: string): Promise<number> {
+    public async zcard(key: GlideString): Promise<number> {
         return this.createWritePromise(createZCard(key));
     }
 
@@ -3626,7 +3665,10 @@ export class BaseClient {
      * console.log(cardinality); // Output: 3 - The intersection of the sorted sets at "key1" and "key2" has a cardinality of 3.
      * ```
      */
-    public async zintercard(keys: string[], limit?: number): Promise<number> {
+    public async zintercard(
+        keys: GlideString[],
+        limit?: number,
+    ): Promise<number> {
         return this.createWritePromise(createZInterCard(keys, limit));
     }
 
@@ -3639,6 +3681,7 @@ export class BaseClient {
      * @remarks Since Valkey version 6.2.0.
      *
      * @param keys - The keys of the sorted sets.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns An `array` of elements representing the difference between the sorted sets.
      * If the first key does not exist, it is treated as an empty sorted set, and the command returns an empty `array`.
      *
@@ -3651,8 +3694,11 @@ export class BaseClient {
      * console.log(result); // Output: ["member1"] - "member1" is in "zset1" but not "zset2" or "zset3".
      * ```
      */
-    public async zdiff(keys: string[]): Promise<string[]> {
-        return this.createWritePromise(createZDiff(keys));
+    public async zdiff(
+        keys: GlideString[],
+        options?: DecoderOption,
+    ): Promise<GlideString[]> {
+        return this.createWritePromise(createZDiff(keys), options);
     }
 
     /**
@@ -3664,6 +3710,7 @@ export class BaseClient {
      * @remarks Since Valkey version 6.2.0.
      *
      * @param keys - The keys of the sorted sets.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A map of elements and their scores representing the difference between the sorted sets.
      * If the first key does not exist, it is treated as an empty sorted set, and the command returns an empty `array`.
      *
@@ -3677,9 +3724,11 @@ export class BaseClient {
      * ```
      */
     public async zdiffWithScores(
-        keys: string[],
+        keys: GlideString[],
+        options?: DecoderOption,
     ): Promise<Record<string, number>> {
-        return this.createWritePromise(createZDiffWithScores(keys));
+        // TODO GlideString in Record and add a test
+        return this.createWritePromise(createZDiffWithScores(keys), options);
     }
 
     /**
@@ -3707,8 +3756,8 @@ export class BaseClient {
      * ```
      */
     public async zdiffstore(
-        destination: string,
-        keys: string[],
+        destination: GlideString,
+        keys: GlideString[],
     ): Promise<number> {
         return this.createWritePromise(createZDiffStore(destination, keys));
     }
@@ -3823,7 +3872,8 @@ export class BaseClient {
         return this.createWritePromise(createZMScore(key, members));
     }
 
-    /** Returns the number of members in the sorted set stored at `key` with scores between `minScore` and `maxScore`.
+    /**
+     * Returns the number of members in the sorted set stored at `key` with scores between `minScore` and `maxScore`.
      *
      * @see {@link https://valkey.io/commands/zcount/|valkey.io} for more details.
      *
@@ -3831,8 +3881,8 @@ export class BaseClient {
      * @param minScore - The minimum score to count from. Can be positive/negative infinity, or specific score and inclusivity.
      * @param maxScore - The maximum score to count up to. Can be positive/negative infinity, or specific score and inclusivity.
      * @returns The number of members in the specified score range.
-     * If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
-     * If `minScore` is greater than `maxScore`, 0 is returned.
+     * If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
+     * If `minScore` is greater than `maxScore`, `0` is returned.
      *
      * @example
      * ```typescript
@@ -3849,7 +3899,7 @@ export class BaseClient {
      * ```
      */
     public async zcount(
-        key: string,
+        key: GlideString,
         minScore: Boundary<number>,
         maxScore: Boundary<number>,
     ): Promise<number> {
@@ -4012,26 +4062,33 @@ export class BaseClient {
      *
      * @param destination - The key of the destination sorted set.
      * @param keys - The keys of the sorted sets with possible formats:
-     *  string[] - for keys only.
-     *  KeyWeight[] - for weighted keys with score multipliers.
+     *  - `GlideString[]` - for keys only.
+     *  - `KeyWeight[]` - for weighted keys with score multipliers.
      * @param aggregationType - (Optional) Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
      * If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
      * @returns The number of elements in the resulting sorted set stored at `destination`.
      *
      * @example
      * ```typescript
-     * // Example usage of zinterstore command with an existing key
      * await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
      * await client.zadd("key2", {"member1": 9.5})
-     * await client.zinterstore("my_sorted_set", ["key1", "key2"]) // Output: 1 - Indicates that the sorted set "my_sorted_set" contains one element.
-     * await client.zrangeWithScores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 20}  - "member1"  is now stored in "my_sorted_set" with score of 20.
-     * await client.zinterstore("my_sorted_set", ["key1", "key2"] , AggregationType.MAX ) // Output: 1 - Indicates that the sorted set "my_sorted_set" contains one element, and it's score is the maximum score between the sets.
-     * await client.zrangeWithScores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 10.5}  - "member1"  is now stored in "my_sorted_set" with score of 10.5.
+     *
+     * // use `zinterstore` with default aggregation and weights
+     * console.log(await client.zinterstore("my_sorted_set", ["key1", "key2"]))
+     * // Output: 1 - Indicates that the sorted set "my_sorted_set" contains one element.
+     * console.log(await client.zrangeWithScores("my_sorted_set", {start: 0, stop: -1}))
+     * // Output: {'member1': 20} - "member1" is now stored in "my_sorted_set" with score of 20.
+     *
+     * // use `zinterstore` with default weights
+     * console.log(await client.zinterstore("my_sorted_set", ["key1", "key2"] , AggregationType.MAX))
+     * // Output: 1 - Indicates that the sorted set "my_sorted_set" contains one element, and it's score is the maximum score between the sets.
+     * console.log(await client.zrangeWithScores("my_sorted_set", {start: 0, stop: -1}))
+     * // Output: {'member1': 10.5} - "member1" is now stored in "my_sorted_set" with score of 10.5.
      * ```
      */
     public async zinterstore(
-        destination: string,
-        keys: string[] | KeyWeight[],
+        destination: GlideString,
+        keys: GlideString[] | KeyWeight[],
         aggregationType?: AggregationType,
     ): Promise<number> {
         return this.createWritePromise(
@@ -4051,6 +4108,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/zinter/|valkey.io} for details.
      *
      * @param keys - The keys of the sorted sets.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns The resulting array of intersecting elements.
      *
      * @example
@@ -4061,8 +4119,11 @@ export class BaseClient {
      * console.log(result); // Output: ['member1']
      * ```
      */
-    public async zinter(keys: string[]): Promise<string[]> {
-        return this.createWritePromise(createZInter(keys));
+    public async zinter(
+        keys: GlideString[],
+        options?: DecoderOption,
+    ): Promise<GlideString[]> {
+        return this.createWritePromise(createZInter(keys), options);
     }
 
     /**
@@ -4077,10 +4138,12 @@ export class BaseClient {
      * @remarks Since Valkey version 6.2.0.
      *
      * @param keys - The keys of the sorted sets with possible formats:
-     *  - string[] - for keys only.
-     *  - KeyWeight[] - for weighted keys with score multipliers.
-     * @param aggregationType - (Optional) Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
-     * If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
+     *  - `GlideString[]` - for keys only.
+     *  - `KeyWeight[]` - for weighted keys with score multipliers.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `aggregationType`: the aggregation strategy to apply when combining the scores of elements.
+     *     If `aggregationType` is not specified, defaults to `AggregationType.SUM`. See {@link AggregationType}.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns The resulting sorted set with scores.
      *
      * @example
@@ -4094,11 +4157,13 @@ export class BaseClient {
      * ```
      */
     public async zinterWithScores(
-        keys: string[] | KeyWeight[],
-        aggregationType?: AggregationType,
+        keys: GlideString[] | KeyWeight[],
+        options?: { aggregationType?: AggregationType } & DecoderOption,
     ): Promise<Record<string, number>> {
+        // TODO Record with GlideString and add tests
         return this.createWritePromise(
-            createZInter(keys, aggregationType, true),
+            createZInter(keys, options?.aggregationType, true),
+            options,
         );
     }
 
@@ -4378,6 +4443,7 @@ export class BaseClient {
      * @param keys - The keys of the sorted sets.
      * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of
      *     `0` will block indefinitely. Since 6.0.0: timeout is interpreted as a double instead of an integer.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns An `array` containing the key where the member was popped out, the member, itself, and the member score.
      *     If no member could be popped and the `timeout` expired, returns `null`.
      *
@@ -4388,10 +4454,11 @@ export class BaseClient {
      * ```
      */
     public async bzpopmin(
-        keys: string[],
+        keys: GlideString[],
         timeout: number,
-    ): Promise<[string, string, number] | null> {
-        return this.createWritePromise(createBZPopMin(keys, timeout));
+        options?: DecoderOption,
+    ): Promise<[GlideString, GlideString, number] | null> {
+        return this.createWritePromise(createBZPopMin(keys, timeout), options);
     }
 
     /**
@@ -4446,6 +4513,7 @@ export class BaseClient {
      * @param keys - The keys of the sorted sets.
      * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of
      *     `0` will block indefinitely. Since 6.0.0: timeout is interpreted as a double instead of an integer.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns An `array` containing the key where the member was popped out, the member, itself, and the member score.
      *     If no member could be popped and the `timeout` expired, returns `null`.
      *
@@ -4456,10 +4524,11 @@ export class BaseClient {
      * ```
      */
     public async bzpopmax(
-        keys: string[],
+        keys: GlideString[],
         timeout: number,
-    ): Promise<[string, string, number] | null> {
-        return this.createWritePromise(createBZPopMax(keys, timeout));
+        options?: DecoderOption,
+    ): Promise<[GlideString, GlideString, number] | null> {
+        return this.createWritePromise(createBZPopMax(keys, timeout), options);
     }
 
     /**
@@ -4468,7 +4537,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/pttl/|valkey.io} for more details.
      *
      * @param key - The key to return its timeout.
-     * @returns TTL in milliseconds. -2 if `key` does not exist, -1 if `key` exists but has no associated expire.
+     * @returns TTL in milliseconds, `-2` if `key` does not exist, `-1` if `key` exists but has no associated expire.
      *
      * @example
      * ```typescript
@@ -4752,14 +4821,18 @@ export class BaseClient {
      * @param key - The key of the stream.
      * @param values - field-value pairs to be added to the entry.
      * @param options - options detailing how to add to the stream.
+     * @param options - (Optional) See {@link StreamAddOptions} and {@link DecoderOption}.
      * @returns The id of the added entry, or `null` if `options.makeStream` is set to `false` and no stream with the matching `key` exists.
      */
     public async xadd(
-        key: string,
-        values: [string, string][],
-        options?: StreamAddOptions,
-    ): Promise<string | null> {
-        return this.createWritePromise(createXAdd(key, values, options));
+        key: GlideString,
+        values: [GlideString, GlideString][],
+        options?: StreamAddOptions & DecoderOption,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(
+            createXAdd(key, values, options),
+            options,
+        );
     }
 
     /**
@@ -4778,7 +4851,7 @@ export class BaseClient {
      * // Output is 2 since the stream marked 2 entries as deleted.
      * ```
      */
-    public async xdel(key: string, ids: string[]): Promise<number> {
+    public async xdel(key: GlideString, ids: GlideString[]): Promise<number> {
         return this.createWritePromise(createXDel(key, ids));
     }
 
@@ -5045,7 +5118,7 @@ export class BaseClient {
      * @param consumer - The group consumer.
      * @param minIdleTime - The minimum idle time for the message to be claimed.
      * @param ids - An array of entry ids.
-     * @param options - (Optional) Stream claim options {@link StreamClaimOptions}.
+     * @param options - (Optional) See {@link StreamClaimOptions} and {@link DecoderOption}.
      * @returns A `Record` of message entries that are claimed by the consumer.
      *
      * @example
@@ -5059,13 +5132,14 @@ export class BaseClient {
      * ```
      */
     public async xclaim(
-        key: string,
-        group: string,
-        consumer: string,
+        key: GlideString,
+        group: GlideString,
+        consumer: GlideString,
         minIdleTime: number,
-        ids: string[],
-        options?: StreamClaimOptions,
+        ids: GlideString[],
+        options?: StreamClaimOptions & DecoderOption,
     ): Promise<Record<string, [string, string][]>> {
+        // TODO: convert Record return type to Object array
         return this.createWritePromise(
             createXClaim(key, group, consumer, minIdleTime, ids, options),
         );
@@ -5114,13 +5188,14 @@ export class BaseClient {
      * ```
      */
     public async xautoclaim(
-        key: string,
-        group: string,
-        consumer: string,
+        key: GlideString,
+        group: GlideString,
+        consumer: GlideString,
         minIdleTime: number,
-        start: string,
+        start: GlideString,
         count?: number,
     ): Promise<[string, Record<string, [string, string][]>, string[]?]> {
+        // TODO: convert Record return type to Object array
         return this.createWritePromise(
             createXAutoClaim(key, group, consumer, minIdleTime, start, count),
         );
@@ -5239,13 +5314,14 @@ export class BaseClient {
      * ```
      */
     public async xgroupCreate(
-        key: string,
-        groupName: string,
-        id: string,
+        key: GlideString,
+        groupName: GlideString,
+        id: GlideString,
         options?: StreamGroupOptions,
-    ): Promise<string> {
+    ): Promise<"OK"> {
         return this.createWritePromise(
             createXGroupCreate(key, groupName, id, options),
+            { decoder: Decoder.String },
         );
     }
 
@@ -5265,8 +5341,8 @@ export class BaseClient {
      * ```
      */
     public async xgroupDestroy(
-        key: string,
-        groupName: string,
+        key: GlideString,
+        groupName: GlideString,
     ): Promise<boolean> {
         return this.createWritePromise(createXGroupDestroy(key, groupName));
     }
@@ -5361,9 +5437,9 @@ export class BaseClient {
      * ```
      */
     public async xgroupCreateConsumer(
-        key: string,
-        groupName: string,
-        consumerName: string,
+        key: GlideString,
+        groupName: GlideString,
+        consumerName: GlideString,
     ): Promise<boolean> {
         return this.createWritePromise(
             createXGroupCreateConsumer(key, groupName, consumerName),
@@ -5387,9 +5463,9 @@ export class BaseClient {
      * ```
      */
     public async xgroupDelConsumer(
-        key: string,
-        groupName: string,
-        consumerName: string,
+        key: GlideString,
+        groupName: GlideString,
+        consumerName: GlideString,
     ): Promise<number> {
         return this.createWritePromise(
             createXGroupDelConsumer(key, groupName, consumerName),
@@ -5427,9 +5503,9 @@ export class BaseClient {
      * ```
      */
     public async xack(
-        key: string,
-        group: string,
-        ids: string[],
+        key: GlideString,
+        group: GlideString,
+        ids: GlideString[],
     ): Promise<number> {
         return this.createWritePromise(createXAck(key, group, ids));
     }
@@ -5445,7 +5521,6 @@ export class BaseClient {
      *     group.
      * @param entriesRead - (Optional) A value representing the number of stream entries already read by the group.
      *     This option can only be specified if you are using Valkey version 7.0.0 or above.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns `"OK"`.
      *
      * * @example
@@ -5454,16 +5529,15 @@ export class BaseClient {
      * ```
      */
     public async xgroupSetId(
-        key: string,
-        groupName: string,
-        id: string,
+        key: GlideString,
+        groupName: GlideString,
+        id: GlideString,
         entriesRead?: number,
-        decoder?: Decoder,
     ): Promise<"OK"> {
         return this.createWritePromise(
             createXGroupSetid(key, groupName, id, entriesRead),
             {
-                decoder: decoder,
+                decoder: Decoder.String,
             },
         );
     }
@@ -6223,7 +6297,9 @@ export class BaseClient {
      *     {@link ScoreFilter.MAX} to pop the member with the lowest/highest score accordingly.
      * @param timeout - The number of seconds to wait for a blocking operation to complete.
      *     A value of 0 will block indefinitely.
-     * @param count - (Optional) The number of elements to pop. If not supplied, only one element will be popped.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `count`: the number of elements to pop. If not supplied, only one element will be popped.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns A two-element `array` containing the key name of the set from which the element
      *     was popped, and a member-score `Record` of the popped element.
      *     If no member could be popped, returns `null`.
@@ -6237,13 +6313,15 @@ export class BaseClient {
      * ```
      */
     public async bzmpop(
-        keys: string[],
+        keys: GlideString[],
         modifier: ScoreFilter,
         timeout: number,
-        count?: number,
-    ): Promise<[string, [Record<string, number>]] | null> {
+        options?: { count?: number } & DecoderOption,
+    ): Promise<[string, Record<string, number>] | null> {
+        // TODO GlideString in Record
         return this.createWritePromise(
-            createBZMPop(keys, modifier, timeout, count),
+            createBZMPop(keys, modifier, timeout, options?.count),
+            options,
         );
     }
 
@@ -6273,9 +6351,9 @@ export class BaseClient {
      * ```
      */
     public async zincrby(
-        key: string,
+        key: GlideString,
         increment: number,
-        member: string,
+        member: GlideString,
     ): Promise<number> {
         return this.createWritePromise(createZIncrBy(key, increment, member));
     }
@@ -6391,6 +6469,7 @@ export class BaseClient {
      *
      * @param key1 - The key that stores the first string.
      * @param key2 - The key that stores the second string.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A `String` containing all the longest common subsequence combined between the 2 strings.
      *     An empty `String` is returned if the keys do not exist or have no common subsequences.
      *
@@ -6401,8 +6480,12 @@ export class BaseClient {
      * console.log(result); // Output: 'acd'
      * ```
      */
-    public async lcs(key1: string, key2: string): Promise<string> {
-        return this.createWritePromise(createLCS(key1, key2));
+    public async lcs(
+        key1: GlideString,
+        key2: GlideString,
+        options?: DecoderOption,
+    ): Promise<string> {
+        return this.createWritePromise(createLCS(key1, key2), options);
     }
 
     /**
@@ -6414,6 +6497,7 @@ export class BaseClient {
      *
      * @param key1 - The key that stores the first string.
      * @param key2 - The key that stores the second string.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns The total length of all the longest common subsequences between the 2 strings.
      *
      * @example
@@ -6423,8 +6507,15 @@ export class BaseClient {
      * console.log(result); // Output: 3
      * ```
      */
-    public async lcsLen(key1: string, key2: string): Promise<number> {
-        return this.createWritePromise(createLCS(key1, key2, { len: true }));
+    public async lcsLen(
+        key1: GlideString,
+        key2: GlideString,
+        options?: DecoderOption,
+    ): Promise<number> {
+        return this.createWritePromise(
+            createLCS(key1, key2, { len: true }),
+            options,
+        );
     }
 
     /**
@@ -6437,8 +6528,9 @@ export class BaseClient {
      *
      * @param key1 - The key that stores the first string.
      * @param key2 - The key that stores the second string.
-     * @param withMatchLen - (Optional) If `true`, include the length of the substring matched for the each match.
-     * @param minMatchLen - (Optional) The minimum length of matches to include in the result.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `withMatchLen`: if `true`, include the length of the substring matched for the each match.
+     * - (Optional) `minMatchLen`: the minimum length of matches to include in the result.
      * @returns A `Record` containing the indices of the longest common subsequences between the
      *     2 strings and the lengths of the longest common subsequences. The resulting map contains two
      *     keys, "matches" and "len":
@@ -6474,12 +6566,16 @@ export class BaseClient {
      * ```
      */
     public async lcsIdx(
-        key1: string,
-        key2: string,
-        options?: { withMatchLen?: boolean; minMatchLen?: number },
+        key1: GlideString,
+        key2: GlideString,
+        options?: {
+            withMatchLen?: boolean;
+            minMatchLen?: number;
+        },
     ): Promise<Record<string, (number | [number, number])[][] | number>> {
         return this.createWritePromise(
             createLCS(key1, key2, { idx: options ?? {} }),
+            { decoder: Decoder.String },
         );
     }
 
@@ -6581,9 +6677,9 @@ export class BaseClient {
      * ```
      */
     public async setrange(
-        key: string,
+        key: GlideString,
         offset: number,
-        value: string,
+        value: GlideString,
     ): Promise<number> {
         return this.createWritePromise(createSetRange(key, offset, value));
     }
@@ -6682,8 +6778,10 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/pubsub-channels/|valkey.io} for more details.
      *
-     * @param pattern - A glob-style pattern to match active channels.
-     *                  If not provided, all active channels are returned.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `pattern`: A glob-style pattern to match active channels.
+     *     If not provided, all active channels are returned.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns A list of currently active channels matching the given pattern.
      *          If no pattern is specified, all active channels are returned.
      *
@@ -6696,8 +6794,12 @@ export class BaseClient {
      * console.log(newsChannels); // Output: ["news.sports", "news.weather"]
      * ```
      */
-    public async pubsubChannels(pattern?: string): Promise<string[]> {
-        return this.createWritePromise(createPubSubChannels(pattern));
+    public async pubsubChannels(
+        options?: { pattern?: GlideString } & DecoderOption,
+    ): Promise<GlideString[]> {
+        return this.createWritePromise(createPubSubChannels(options?.pattern), {
+            decoder: options?.decoder,
+        });
     }
 
     /**

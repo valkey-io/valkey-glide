@@ -348,7 +348,7 @@ export function createMSetNX(
 /**
  * @internal
  */
-export function createIncr(key: string): command_request.Command {
+export function createIncr(key: GlideString): command_request.Command {
     return createCommand(RequestType.Incr, [key]);
 }
 
@@ -356,7 +356,7 @@ export function createIncr(key: string): command_request.Command {
  * @internal
  */
 export function createIncrBy(
-    key: string,
+    key: GlideString,
     amount: number,
 ): command_request.Command {
     return createCommand(RequestType.IncrBy, [key, amount.toString()]);
@@ -366,7 +366,7 @@ export function createIncrBy(
  * @internal
  */
 export function createIncrByFloat(
-    key: string,
+    key: GlideString,
     amount: number,
 ): command_request.Command {
     return createCommand(RequestType.IncrByFloat, [key, amount.toString()]);
@@ -412,7 +412,7 @@ export function createHGet(
  * @internal
  */
 export function createHSet(
-    key: string,
+    key: GlideString,
     fieldValueMap: Record<string, string>,
 ): command_request.Command {
     return createCommand(
@@ -424,7 +424,7 @@ export function createHSet(
 /**
  * @internal
  */
-export function createHKeys(key: string): command_request.Command {
+export function createHKeys(key: GlideString): command_request.Command {
     return createCommand(RequestType.HKeys, [key]);
 }
 
@@ -432,9 +432,9 @@ export function createHKeys(key: string): command_request.Command {
  * @internal
  */
 export function createHSetNX(
-    key: string,
-    field: string,
-    value: string,
+    key: GlideString,
+    field: GlideString,
+    value: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.HSetNX, [key, field, value]);
 }
@@ -442,7 +442,7 @@ export function createHSetNX(
 /**
  * @internal
  */
-export function createDecr(key: string): command_request.Command {
+export function createDecr(key: GlideString): command_request.Command {
     return createCommand(RequestType.Decr, [key]);
 }
 
@@ -450,7 +450,7 @@ export function createDecr(key: string): command_request.Command {
  * @internal
  */
 export function createDecrBy(
-    key: string,
+    key: GlideString,
     amount: number,
 ): command_request.Command {
     return createCommand(RequestType.DecrBy, [key, amount.toString()]);
@@ -801,8 +801,8 @@ export function createBitField(
  * @internal
  */
 export function createHDel(
-    key: string,
-    fields: string[],
+    key: GlideString,
+    fields: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.HDel, [key].concat(fields));
 }
@@ -811,8 +811,8 @@ export function createHDel(
  * @internal
  */
 export function createHMGet(
-    key: string,
-    fields: string[],
+    key: GlideString,
+    fields: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.HMGet, [key].concat(fields));
 }
@@ -821,8 +821,8 @@ export function createHMGet(
  * @internal
  */
 export function createHExists(
-    key: string,
-    field: string,
+    key: GlideString,
+    field: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.HExists, [key, field]);
 }
@@ -830,7 +830,7 @@ export function createHExists(
 /**
  * @internal
  */
-export function createHGetAll(key: string): command_request.Command {
+export function createHGetAll(key: GlideString): command_request.Command {
     return createCommand(RequestType.HGetAll, [key]);
 }
 
@@ -1193,8 +1193,8 @@ export function createCustomCommand(args: GlideString[]) {
  * @internal
  */
 export function createHIncrBy(
-    key: string,
-    field: string,
+    key: GlideString,
+    field: GlideString,
     amount: number,
 ): command_request.Command {
     return createCommand(RequestType.HIncrBy, [key, field, amount.toString()]);
@@ -1204,8 +1204,8 @@ export function createHIncrBy(
  * @internal
  */
 export function createHIncrByFloat(
-    key: string,
-    field: string,
+    key: GlideString,
+    field: GlideString,
     amount: number,
 ): command_request.Command {
     return createCommand(RequestType.HIncrByFloat, [
@@ -1218,7 +1218,7 @@ export function createHIncrByFloat(
 /**
  * @internal
  */
-export function createHLen(key: string): command_request.Command {
+export function createHLen(key: GlideString): command_request.Command {
     return createCommand(RequestType.HLen, [key]);
 }
 
@@ -1433,8 +1433,8 @@ export type AggregationType = "SUM" | "MIN" | "MAX";
  * @internal
  */
 export function createZInterstore(
-    destination: string,
-    keys: string[] | KeyWeight[],
+    destination: GlideString,
+    keys: GlideString[] | KeyWeight[],
     aggregationType?: AggregationType,
 ): command_request.Command {
     const args = createZCmdArgs(keys, {
@@ -1449,7 +1449,7 @@ export function createZInterstore(
  * @internal
  */
 export function createZInter(
-    keys: string[] | KeyWeight[],
+    keys: GlideString[] | KeyWeight[],
     aggregationType?: AggregationType,
     withScores?: boolean,
 ): command_request.Command {
@@ -1491,11 +1491,12 @@ function createZCmdArgs(
 
     args.push(keys.length.toString());
 
-    if (typeof keys[0] === "string") {
-        args.push(...(keys as string[]));
+    if (!Array.isArray(keys[0])) {
+        // KeyWeight is an array
+        args.push(...(keys as GlideString[]));
     } else {
         const weightsKeys = keys.map(([key]) => key);
-        args.push(...(weightsKeys as string[]));
+        args.push(...(weightsKeys as GlideString[]));
         const weights = keys.map(([, weight]) => weight.toString());
         args.push("WEIGHTS", ...weights);
     }
@@ -1526,7 +1527,7 @@ export function createZRem(
 /**
  * @internal
  */
-export function createZCard(key: string): command_request.Command {
+export function createZCard(key: GlideString): command_request.Command {
     return createCommand(RequestType.ZCard, [key]);
 }
 
@@ -1534,14 +1535,14 @@ export function createZCard(key: string): command_request.Command {
  * @internal
  */
 export function createZInterCard(
-    keys: string[],
+    keys: GlideString[],
     limit?: number,
 ): command_request.Command {
-    let args: string[] = keys;
+    const args = keys;
     args.unshift(keys.length.toString());
 
     if (limit != undefined) {
-        args = args.concat(["LIMIT", limit.toString()]);
+        args.push("LIMIT", limit.toString());
     }
 
     return createCommand(RequestType.ZInterCard, args);
@@ -1550,8 +1551,8 @@ export function createZInterCard(
 /**
  * @internal
  */
-export function createZDiff(keys: string[]): command_request.Command {
-    const args: string[] = keys;
+export function createZDiff(keys: GlideString[]): command_request.Command {
+    const args = keys;
     args.unshift(keys.length.toString());
     return createCommand(RequestType.ZDiff, args);
 }
@@ -1559,8 +1560,10 @@ export function createZDiff(keys: string[]): command_request.Command {
 /**
  * @internal
  */
-export function createZDiffWithScores(keys: string[]): command_request.Command {
-    const args: string[] = keys;
+export function createZDiffWithScores(
+    keys: GlideString[],
+): command_request.Command {
+    const args = keys;
     args.unshift(keys.length.toString());
     args.push("WITHSCORES");
     return createCommand(RequestType.ZDiff, args);
@@ -1570,10 +1573,10 @@ export function createZDiffWithScores(keys: string[]): command_request.Command {
  * @internal
  */
 export function createZDiffStore(
-    destination: string,
-    keys: string[],
+    destination: GlideString,
+    keys: GlideString[],
 ): command_request.Command {
-    const args: string[] = [destination, keys.length.toString(), ...keys];
+    const args = [destination, keys.length.toString(), ...keys];
     return createCommand(RequestType.ZDiffStore, args);
 }
 
@@ -1792,7 +1795,7 @@ function createZRangeArgs(
  * @internal
  */
 export function createZCount(
-    key: string,
+    key: GlideString,
     minScore: Boundary<number>,
     maxScore: Boundary<number>,
 ): command_request.Command {
@@ -2051,7 +2054,7 @@ export type StreamAddOptions = {
     trim?: StreamTrimOptions;
 };
 
-function addTrimOptions(options: StreamTrimOptions, args: string[]) {
+function addTrimOptions(options: StreamTrimOptions, args: GlideString[]) {
     if (options.method === "maxlen") {
         args.push("MAXLEN");
     } else if (options.method === "minid") {
@@ -2080,8 +2083,8 @@ function addTrimOptions(options: StreamTrimOptions, args: string[]) {
  * @internal
  */
 export function createXAdd(
-    key: string,
-    values: [string, string][],
+    key: GlideString,
+    values: [GlideString, GlideString][],
     options?: StreamAddOptions,
 ): command_request.Command {
     const args = [key];
@@ -2112,8 +2115,8 @@ export function createXAdd(
  * @internal
  */
 export function createXDel(
-    key: string,
-    ids: string[],
+    key: GlideString,
+    ids: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.XDel, [key, ...ids]);
 }
@@ -2172,9 +2175,9 @@ export function createXRevRange(
  * @internal
  */
 export function createXGroupCreateConsumer(
-    key: string,
-    groupName: string,
-    consumerName: string,
+    key: GlideString,
+    groupName: GlideString,
+    consumerName: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.XGroupCreateConsumer, [
         key,
@@ -2187,9 +2190,9 @@ export function createXGroupCreateConsumer(
  * @internal
  */
 export function createXGroupDelConsumer(
-    key: string,
-    groupName: string,
-    consumerName: string,
+    key: GlideString,
+    groupName: GlideString,
+    consumerName: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.XGroupDelConsumer, [
         key,
@@ -2209,8 +2212,8 @@ export function createTime(): command_request.Command {
  * @internal
  */
 export function createPublish(
-    message: string,
-    channel: string,
+    message: GlideString,
+    channel: GlideString,
     sharded: boolean = false,
 ): command_request.Command {
     const request = sharded ? RequestType.SPublish : RequestType.Publish;
@@ -2713,11 +2716,11 @@ export type StreamClaimOptions = {
 
 /** @internal */
 export function createXClaim(
-    key: string,
-    group: string,
-    consumer: string,
+    key: GlideString,
+    group: GlideString,
+    consumer: GlideString,
     minIdleTime: number,
-    ids: string[],
+    ids: GlideString[],
     options?: StreamClaimOptions,
     justId?: boolean,
 ): command_request.Command {
@@ -2739,11 +2742,11 @@ export function createXClaim(
 
 /** @internal */
 export function createXAutoClaim(
-    key: string,
-    group: string,
-    consumer: string,
+    key: GlideString,
+    group: GlideString,
+    consumer: GlideString,
     minIdleTime: number,
-    start: string,
+    start: GlideString,
     count?: number,
     justId?: boolean,
 ): command_request.Command {
@@ -2783,12 +2786,12 @@ export type StreamGroupOptions = {
  * @internal
  */
 export function createXGroupCreate(
-    key: string,
-    groupName: string,
-    id: string,
+    key: GlideString,
+    groupName: GlideString,
+    id: GlideString,
     options?: StreamGroupOptions,
 ): command_request.Command {
-    const args: string[] = [key, groupName, id];
+    const args: GlideString[] = [key, groupName, id];
 
     if (options) {
         if (options.mkStream) {
@@ -2808,8 +2811,8 @@ export function createXGroupCreate(
  * @internal
  */
 export function createXGroupDestroy(
-    key: string,
-    groupName: string,
+    key: GlideString,
+    groupName: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.XGroupDestroy, [key, groupName]);
 }
@@ -3458,12 +3461,12 @@ export function createZMPop(
  * @internal
  */
 export function createBZMPop(
-    keys: string[],
+    keys: GlideString[],
     modifier: ScoreFilter,
     timeout: number,
     count?: number,
 ): command_request.Command {
-    const args: string[] = [
+    const args = [
         timeout.toString(),
         keys.length.toString(),
         ...keys,
@@ -3482,9 +3485,9 @@ export function createBZMPop(
  * @internal
  */
 export function createZIncrBy(
-    key: string,
+    key: GlideString,
     increment: number,
-    member: string,
+    member: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.ZIncrBy, [
         key,
@@ -3621,15 +3624,15 @@ function createSortImpl(
  * @internal
  */
 export function createHStrlen(
-    key: string,
-    field: string,
+    key: GlideString,
+    field: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.HStrlen, [key, field]);
 }
 
 /** @internal */
 export function createHRandField(
-    key: string,
+    key: GlideString,
     count?: number,
     withValues?: boolean,
 ): command_request.Command {
@@ -3684,8 +3687,8 @@ export function createLastSave(): command_request.Command {
 
 /** @internal */
 export function createLCS(
-    key1: string,
-    key2: string,
+    key1: GlideString,
+    key2: GlideString,
     options?: {
         len?: boolean;
         idx?: { withMatchLen?: boolean; minMatchLen?: number };
@@ -3799,9 +3802,9 @@ export function createZScan(
 
 /** @internal */
 export function createSetRange(
-    key: string,
+    key: GlideString,
     offset: number,
-    value: string,
+    value: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.SetRange, [key, offset.toString(), value]);
 }
@@ -3860,7 +3863,7 @@ export function createBLMPop(
  * @internal
  */
 export function createPubSubChannels(
-    pattern?: string,
+    pattern?: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.PubSubChannels, pattern ? [pattern] : []);
 }
@@ -3885,7 +3888,7 @@ export function createPubSubNumSub(
  * @internal
  */
 export function createPubsubShardChannels(
-    pattern?: string,
+    pattern?: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.PubSubSChannels, pattern ? [pattern] : []);
 }
@@ -3903,7 +3906,7 @@ export function createPubSubShardNumSub(
  * @internal
  */
 export function createBZPopMax(
-    keys: string[],
+    keys: GlideString[],
     timeout: number,
 ): command_request.Command {
     return createCommand(RequestType.BZPopMax, [...keys, timeout.toString()]);
@@ -3913,7 +3916,7 @@ export function createBZPopMax(
  * @internal
  */
 export function createBZPopMin(
-    keys: string[],
+    keys: GlideString[],
     timeout: number,
 ): command_request.Command {
     return createCommand(RequestType.BZPopMin, [...keys, timeout.toString()]);
@@ -3949,7 +3952,7 @@ export enum TimeUnit {
  * @internal
  */
 export function createGetEx(
-    key: string,
+    key: GlideString,
     options?: "persist" | { type: TimeUnit; duration: number },
 ): command_request.Command {
     const args = [key];
@@ -3977,9 +3980,9 @@ export function createGetEx(
  * @internal
  */
 export function createXAck(
-    key: string,
-    group: string,
-    ids: string[],
+    key: GlideString,
+    group: GlideString,
+    ids: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.XAck, [key, group, ...ids]);
 }
@@ -3988,9 +3991,9 @@ export function createXAck(
  * @internal
  */
 export function createXGroupSetid(
-    key: string,
-    groupName: string,
-    id: string,
+    key: GlideString,
+    groupName: GlideString,
+    id: GlideString,
     entriesRead?: number,
 ): command_request.Command {
     const args = [key, groupName, id];
