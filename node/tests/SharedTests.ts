@@ -1448,7 +1448,6 @@ export function runBaseTests(config: {
                     charMembers.length,
                 );
                 let result = await client.hscan(key1, initialCursor);
-                console.log("result=====", result);
                 expect(result[resultCursorIndex]).toEqual(initialCursor);
                 expect(result[resultCollectionIndex].length).toEqual(
                     charFieldList.length * 2, // Length includes the score which is twice the map size
@@ -1460,19 +1459,25 @@ export function runBaseTests(config: {
 
                 for (let i = 0; i < resultArray.length; i += 2) {
                     resultKeys.push(resultArray[i]);
-                    resultValues.push(resultArray[i + 1]);
+                    resultValues.push(resultArray[i + 1].toString());
                 }
 
                 // Verify if all keys from charMap are in resultKeys
-                const fieldValuesArray = charFieldList.map((o) => o.field);
-                const allKeysIncluded = resultKeys.every(
-                    (key) => key in fieldValuesArray,
+                let fieldValuesArray = charFieldList.map((o) =>
+                    o.field.toString(),
+                );
+                const allKeysIncluded = resultKeys.every((key) =>
+                    fieldValuesArray.includes(key.toString()),
                 );
                 expect(allKeysIncluded).toEqual(true);
-                //TO DO: remove toString() after updating string in return type of hscan to GlideString
+
                 const allValuesIncluded = charFieldList
                     .map((o) => o.value)
-                    .every((value) => value.toString() in resultValues);
+                    .every((value) => {
+                        console.log(value);
+                        return resultValues.includes(value.toString());
+                    });
+
                 expect(allValuesIncluded).toEqual(true);
 
                 // Test hscan with match
@@ -1524,21 +1529,27 @@ export function runBaseTests(config: {
                     );
 
                     for (let i = 0; i < secondResultEntry.length; i += 2) {
-                        secondResultAllKeys.push(secondResultEntry[i]);
-                        secondResultAllValues.push(secondResultEntry[i + 1]);
+                        secondResultAllKeys.push(
+                            secondResultEntry[i].toString(),
+                        );
+                        secondResultAllValues.push(
+                            secondResultEntry[i + 1].toString(),
+                        );
                     }
                 } while (resultCursor != initialCursor); // 0 is returned for the cursor of the last iteration.
 
                 // Verify all data is found in hscan
                 const allSecondResultKeys = numberFieldList
                     .map((o) => o.field)
-                    .every((key) => key.toString() in secondResultAllKeys);
+                    .every((key) =>
+                        secondResultAllKeys.includes(key.toString()),
+                    );
                 expect(allSecondResultKeys).toEqual(true);
 
                 const allSecondResultValues = numberFieldList
                     .map((o) => o.value)
-                    .every(
-                        (value) => value.toString() in secondResultAllValues,
+                    .every((value) =>
+                        secondResultAllValues.includes(value.toString()),
                     );
                 expect(allSecondResultValues).toEqual(true);
 
