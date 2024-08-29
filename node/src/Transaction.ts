@@ -805,7 +805,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @see {@link https://valkey.io/commands/hset/|valkey.io} for details.
      *
      * @param key - The key of the hash.
-     * @param fieldValueList - A list of objects with field and value as keys of the objects. See - @type {HashDataType}
+     * @param fieldValueList - A list of objects containing field and value as keys of the objects.
      * to be set in the hash stored at the specified key.
      *
      * Command Response - The number of fields that were added.

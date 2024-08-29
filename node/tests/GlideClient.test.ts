@@ -1167,7 +1167,7 @@ describe("GlideClient", () => {
             const ages = ["30", "25", "35", "20", "40"];
 
             for (let i = 0; i < ages.length; i++) {
-                let fieldValueList: HashDataType = [
+                const fieldValueList: HashDataType = [
                     { field: "name", value: names[i] },
                     { field: "age", value: ages[i] },
                 ];

@@ -1436,6 +1436,7 @@ export function runBaseTests(config: {
 
                 const charMembers = ["a", "b", "c", "d", "e"];
                 const charFieldList: HashDataType = [];
+
                 for (let i = 0; i < charMembers.length; i++) {
                     charFieldList.push({
                         field: charMembers[i],
@@ -1463,7 +1464,7 @@ export function runBaseTests(config: {
                 }
 
                 // Verify if all keys from charMap are in resultKeys
-                let fieldValuesArray = charFieldList.map((o) =>
+                const fieldValuesArray = charFieldList.map((o) =>
                     o.field.toString(),
                 );
                 const allKeysIncluded = resultKeys.every((key) =>
