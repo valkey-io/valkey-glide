@@ -186,13 +186,11 @@ jobs:
             - name: Publish to Maven Central
               id: maven-deployment
               run: |
-                  BEARER_TOKEN=$(echo "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" | base64)
                   export DEPLOYMENT_ID=`curl --request POST \
-                  --header "Authorization: Bearer $BEARER_TOKEN" \
+                  -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
                   --form bundle=@build.zip \
                   https://central.sonatype.com/api/v1/publisher/upload | tail -n 1`
                   echo "DEPLOYMENT_ID=$DEPLOYMENT_ID" >> $GITHUB_ENV
-                  echo "BEARER_TOKEN=$BEARER_TOKEN" >> $GITHUB_ENV
                   echo "DEPLOYMENT_ID=$DEPLOYMENT_ID" >> $GITHUB_OUTPUT
                   echo $DEPLOYMENT_ID
 
@@ -200,7 +198,7 @@ jobs:
               run: |
                   sleep 20
                   export DEPLOYMENT_STATUS=`curl --request POST \
-                  --header "Authorization: Bearer ${{ env.BEARER_TOKEN }}" \
+                  -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
                   "https://central.sonatype.com/api/v1/publisher/status?id=${{ env.DEPLOYMENT_ID }}" \
                   | jq '.deploymentState'`
                   echo $DEPLOYMENT_STATUS
@@ -225,8 +223,9 @@ jobs:
             - name: Test deployment
               working-directory: java
               run: |
+                  BEARER_TOKEN=$(echo "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" | base64)
                   export ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderName="Authorization"
-                  export ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderValue="Bearer ${{ env.BEARER_TOKEN }}"
+                  export ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderValue="Bearer $BEARER_TOKEN"
                   export RUN_DEPLOYMENT_TEST=true
                   export GLIDE_RELEASE_VERSION=${{ env.RELEASE_VERSION }}
                   ./gradlew run
@@ -235,7 +234,7 @@ jobs:
               if: ${{ failure() }}
               run: |
                   curl --request DELETE \
-                  --header "Authorization: Bearer ${{ env.BEARER_TOKEN }}" \
+                  -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
                   "https://central.sonatype.com/api/v1/publisher/deployment/${{ env.DEPLOYMENT_ID }}"
 
     publish-release-to-maven:
@@ -248,7 +247,6 @@ jobs:
         steps:
             - name: Publish to Maven
               run: |
-                  BEARER_TOKEN=$(echo "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" | base64)
                   curl --request POST \
-                  --header "Authorization: Bearer $BEARER_TOKEN" \
+                  -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
                   "https://central.sonatype.com/api/v1/publisher/deployment/${{ env.DEPLOYMENT_ID }}"
