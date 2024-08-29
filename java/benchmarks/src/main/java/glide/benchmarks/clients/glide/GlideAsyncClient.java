@@ -6,6 +6,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
+import glide.api.logging.Logger;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
@@ -31,8 +32,10 @@ public class GlideAsyncClient implements AsyncClient<String> {
                                             .port(connectionSettings.port)
                                             .build())
                             .useTLS(connectionSettings.useSsl)
+                            .requestTimeout(2000)
                             .build();
             try {
+                Logger.init(Logger.Level.INFO, "logger_output.log");
                 glideClient = GlideClusterClient.createClient(config).get(10, SECONDS);
             } catch (InterruptedException | ExecutionException | TimeoutException e) {
                 throw new RuntimeException(e);
