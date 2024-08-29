@@ -3481,7 +3481,7 @@ export class BaseClient {
      * ```
      */
     public async xrange(
-        key: string,
+        key: GlideString,
         start: Boundary<string>,
         end: Boundary<string>,
         count?: number,

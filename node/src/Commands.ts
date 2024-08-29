@@ -2142,7 +2142,7 @@ export function createXTrim(
  * @internal
  */
 export function createXRange(
-    key: string,
+    key: GlideString,
     start: Boundary<string>,
     end: Boundary<string>,
     count?: number,

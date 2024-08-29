@@ -6522,7 +6522,7 @@ export function runBaseTests(config: {
                 if (!cluster.checkIfServerVersionLessThan("6.2.0")) {
                     expect(
                         await client.xrange(
-                            key,
+                            Buffer.from(key),
                             { isInclusive: false, value: streamId2 },
                             { value: "5" },
                             1,
