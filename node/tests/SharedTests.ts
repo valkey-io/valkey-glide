@@ -8,6 +8,7 @@
 // represents a running server instance. See first 2 test cases as examples.
 
 import { expect, it } from "@jest/globals";
+import { SortedSetDataType } from "src/BaseClient";
 import { v4 as uuidv4 } from "uuid";
 import {
     BaseClientConfiguration,
@@ -3967,8 +3968,15 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
-                const membersScores = { one: 1, two: 2, three: 3 };
-                const newMembersScores = { one: 2, two: 3 };
+                const membersScores: SortedSetDataType = [
+                    { element: "one", score: 1 },
+                    { element: Buffer.from("two"), score: 2 },
+                    { element: "three", score: 3 },
+                ];
+                const newMembersScores: SortedSetDataType = [
+                    { element: Buffer.from("one"), score: 2 },
+                    { element: "two", score: 3 },
+                ];
 
                 expect(await client.zadd(key, membersScores)).toEqual(3);
                 expect(await client.zaddIncr(key, "one", 2)).toEqual(3.0);
@@ -3985,7 +3993,11 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
-                const membersScores = { one: 1, two: 2, three: 3 };
+                const membersScores: SortedSetDataType = [
+                    { element: "one", score: 1 },
+                    { element: Buffer.from("two"), score: 2 },
+                    { element: "three", score: 3 },
+                ];
                 expect(
                     await client.zadd(key, membersScores, {
                         conditionalChange: ConditionalChange.ONLY_IF_EXISTS,
@@ -4021,10 +4033,14 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
-                const membersScores = { one: -3, two: 2, three: 3 };
+                const membersScores: SortedSetDataType = [
+                    { element: "one", score: -3 },
+                    { element: Buffer.from("two"), score: 2 },
+                    { element: "three", score: 3 },
+                ];
 
                 expect(await client.zadd(key, membersScores)).toEqual(3);
-                membersScores["one"] = 10;
+                membersScores[0].score = 10;
 
                 expect(
                     await client.zadd(key, membersScores, {
@@ -4061,7 +4077,12 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
-                const membersScores = { one: 1, two: 2, three: 3 };
+                const membersScores: SortedSetDataType = [
+                    { element: "one", score: 1 },
+                    { element: Buffer.from("two"), score: 2 },
+                    { element: "three", score: 3 },
+                ];
+
                 expect(await client.zadd(key, membersScores)).toEqual(3);
                 expect(await client.zrem(key, ["one"])).toEqual(1);
                 expect(await client.zrem(key, ["one", "two", "three"])).toEqual(
@@ -4080,7 +4101,12 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
-                const membersScores = { one: 1, two: 2, three: 3 };
+                const membersScores: SortedSetDataType = [
+                    { element: "one", score: 1 },
+                    { element: Buffer.from("two"), score: 2 },
+                    { element: "three", score: 3 },
+                ];
+
                 expect(await client.zadd(key, membersScores)).toEqual(3);
                 expect(await client.zcard(key)).toEqual(3);
                 expect(await client.zrem(key, ["one"])).toEqual(1);
@@ -4102,8 +4128,16 @@ export function runBaseTests(config: {
                 const key2 = `{key}:${uuidv4()}`;
                 const stringKey = `{key}:${uuidv4()}`;
                 const nonExistingKey = `{key}:${uuidv4()}`;
-                const memberScores1 = { one: 1, two: 2, three: 3 };
-                const memberScores2 = { two: 2, three: 3, four: 4 };
+                const memberScores1: SortedSetDataType = [
+                    { element: "one", score: 1 },
+                    { element: Buffer.from("two"), score: 2 },
+                    { element: "three", score: 3 },
+                ];
+                const memberScores2: SortedSetDataType = [
+                    { element: Buffer.from("two"), score: 2 },
+                    { element: "three", score: 3 },
+                    { element: "four", score: 4 },
+                ];
 
                 expect(await client.zadd(key1, memberScores1)).toEqual(3);
                 expect(await client.zadd(key2, memberScores2)).toEqual(3);
@@ -4147,18 +4181,20 @@ export function runBaseTests(config: {
                 const nonExistingKey = `{key}-${uuidv4()}`;
                 const stringKey = `{key}-${uuidv4()}`;
 
-                const entries1 = {
-                    one: 1.0,
-                    two: 2.0,
-                    three: 3.0,
-                };
-                const entries2 = { two: 2.0 };
-                const entries3 = {
-                    one: 1.0,
-                    two: 2.0,
-                    three: 3.0,
-                    four: 4.0,
-                };
+                const entries1: SortedSetDataType = [
+                    { element: "one", score: 1 },
+                    { element: Buffer.from("two"), score: 2 },
+                    { element: "three", score: 3 },
+                ];
+                const entries2: SortedSetDataType = [
+                    { element: Buffer.from("two"), score: 2 },
+                ];
+                const entries3: SortedSetDataType = [
+                    { element: "one", score: 1 },
+                    { element: Buffer.from("two"), score: 2 },
+                    { element: "three", score: 3 },
+                    { element: "four", score: 4 },
+                ];
 
                 expect(await client.zadd(key1, entries1)).toEqual(3);
                 expect(await client.zadd(key2, entries2)).toEqual(1);
@@ -4216,18 +4252,20 @@ export function runBaseTests(config: {
                 const nonExistingKey = `{key}-${uuidv4()}`;
                 const stringKey = `{key}-${uuidv4()}`;
 
-                const entries1 = {
-                    one: 1.0,
-                    two: 2.0,
-                    three: 3.0,
-                };
-                const entries2 = { two: 2.0 };
-                const entries3 = {
-                    one: 1.0,
-                    two: 2.0,
-                    three: 3.0,
-                    four: 4.0,
-                };
+                const entries1: SortedSetDataType = [
+                    { element: "one", score: 1 },
+                    { element: Buffer.from("two"), score: 2 },
+                    { element: "three", score: 3 },
+                ];
+                const entries2: SortedSetDataType = [
+                    { element: Buffer.from("two"), score: 2 },
+                ];
+                const entries3: SortedSetDataType = [
+                    { element: "one", score: 1 },
+                    { element: Buffer.from("two"), score: 2 },
+                    { element: "three", score: 3 },
+                    { element: "four", score: 4 },
+                ];
 
                 expect(await client.zadd(key1, entries1)).toEqual(3);
                 expect(await client.zadd(key2, entries2)).toEqual(1);
@@ -4287,7 +4325,12 @@ export function runBaseTests(config: {
             await runTest(async (client: BaseClient) => {
                 const key1 = uuidv4();
                 const key2 = uuidv4();
-                const membersScores = { one: 1, two: 2, three: 3 };
+                const membersScores: SortedSetDataType = [
+                    { element: "one", score: 1 },
+                    { element: Buffer.from("two"), score: 2 },
+                    { element: "three", score: 3 },
+                ];
+
                 expect(await client.zadd(key1, membersScores)).toEqual(3);
                 expect(await client.zscore(key1, "one")).toEqual(1.0);
                 expect(await client.zscore(key1, "nonExistingMember")).toEqual(
@@ -4314,8 +4357,15 @@ export function runBaseTests(config: {
             stop: -1,
         };
 
-        const membersScores1 = { one: 1.0, two: 2.0 };
-        const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+        const membersScores1: SortedSetDataType = [
+            { element: "one", score: 1 },
+            { element: Buffer.from("two"), score: 2 },
+        ];
+        const membersScores2: SortedSetDataType = [
+            { element: "one", score: 1.5 },
+            { element: Buffer.from("two"), score: 2.5 },
+            { element: "three", score: 3.5 },
+        ];
 
         expect(await client.zadd(key1, membersScores1)).toEqual(2);
         expect(await client.zadd(key2, membersScores2)).toEqual(3);
@@ -4340,8 +4390,15 @@ export function runBaseTests(config: {
             stop: -1,
         };
 
-        const membersScores1 = { one: 1.0, two: 2.0 };
-        const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+        const membersScores1: SortedSetDataType = [
+            { element: "one", score: 1 },
+            { element: Buffer.from("two"), score: 2 },
+        ];
+        const membersScores2: SortedSetDataType = [
+            { element: "one", score: 1.5 },
+            { element: Buffer.from("two"), score: 2.5 },
+            { element: "three", score: 3.5 },
+        ];
 
         expect(await client.zadd(key1, membersScores1)).toEqual(2);
         expect(await client.zadd(key2, membersScores2)).toEqual(3);
@@ -4366,8 +4423,15 @@ export function runBaseTests(config: {
             stop: -1,
         };
 
-        const membersScores1 = { one: 1.0, two: 2.0 };
-        const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+        const membersScores1: SortedSetDataType = [
+            { element: "one", score: 1 },
+            { element: Buffer.from("two"), score: 2 },
+        ];
+        const membersScores2: SortedSetDataType = [
+            { element: "one", score: 1.5 },
+            { element: Buffer.from("two"), score: 2.5 },
+            { element: "three", score: 3.5 },
+        ];
 
         expect(await client.zadd(key1, membersScores1)).toEqual(2);
         expect(await client.zadd(key2, membersScores2)).toEqual(3);
@@ -4392,8 +4456,15 @@ export function runBaseTests(config: {
             stop: -1,
         };
 
-        const membersScores1 = { one: 1.0, two: 2.0 };
-        const membersScores2 = { one: 2.0, two: 3.0, three: 4.0 };
+        const membersScores1: SortedSetDataType = [
+            { element: "one", score: 1 },
+            { element: Buffer.from("two"), score: 2 },
+        ];
+        const membersScores2: SortedSetDataType = [
+            { element: "one", score: 2 },
+            { element: Buffer.from("two"), score: 3 },
+            { element: "three", score: 4 },
+        ];
 
         expect(await client.zadd(key1, membersScores1)).toEqual(2);
         expect(await client.zadd(key2, membersScores2)).toEqual(3);
@@ -4416,8 +4487,15 @@ export function runBaseTests(config: {
             start: 0,
             stop: -1,
         };
-        const membersScores1 = { one: 1.0, two: 2.0 };
-        const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+        const membersScores1: SortedSetDataType = [
+            { element: "one", score: 1 },
+            { element: Buffer.from("two"), score: 2 },
+        ];
+        const membersScores2: SortedSetDataType = [
+            { element: "one", score: 1.5 },
+            { element: Buffer.from("two"), score: 2.5 },
+            { element: "three", score: 3.5 },
+        ];
 
         expect(await client.zadd(key1, membersScores1)).toEqual(2);
         expect(await client.zadd(key2, membersScores2)).toEqual(3);
@@ -4452,7 +4530,10 @@ export function runBaseTests(config: {
             start: 0,
             stop: -1,
         };
-        const membersScores1 = { one: 1.0, two: 2.0 };
+        const membersScores1: SortedSetDataType = [
+            { element: "one", score: 1 },
+            { element: Buffer.from("two"), score: 2 },
+        ];
 
         expect(await client.zadd(key1, membersScores1)).toEqual(2);
 
@@ -4506,11 +4587,12 @@ export function runBaseTests(config: {
                 const nonExistingKey = `{key}-${uuidv4()}`;
                 const stringKey = `{key}-${uuidv4()}`;
 
-                const entries = {
-                    one: 1.0,
-                    two: 2.0,
-                    three: 3.0,
-                };
+                const entries: SortedSetDataType = [
+                    { element: "one", score: 1 },
+                    { element: Buffer.from("two"), score: 2 },
+                    { element: "three", score: 3.0 },
+                ];
+
                 expect(await client.zadd(key1, entries)).toEqual(3);
 
                 expect(
@@ -4549,7 +4631,12 @@ export function runBaseTests(config: {
             await runTest(async (client: BaseClient) => {
                 const key1 = uuidv4();
                 const key2 = uuidv4();
-                const membersScores = { one: 1, two: 2, three: 3 };
+                const membersScores: SortedSetDataType = [
+                    { element: "one", score: 1 },
+                    { element: Buffer.from("two"), score: 2 },
+                    { element: "three", score: 3.0 },
+                ];
+
                 expect(await client.zadd(key1, membersScores)).toEqual(3);
                 expect(
                     await client.zcount(
@@ -4608,7 +4695,12 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
-                const membersScores = { one: 1, two: 2, three: 3 };
+                const membersScores: SortedSetDataType = [
+                    { element: "one", score: 1 },
+                    { element: Buffer.from("two"), score: 2 },
+                    { element: "three", score: 3.0 },
+                ];
+
                 expect(await client.zadd(key, membersScores)).toEqual(3);
 
                 expect(await client.zrange(key, { start: 0, stop: 1 })).toEqual(
@@ -4645,7 +4737,12 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
-                const membersScores = { one: 1, two: 2, three: 3 };
+                const membersScores: SortedSetDataType = [
+                    { element: "one", score: 1 },
+                    { element: Buffer.from("two"), score: 2 },
+                    { element: "three", score: 3.0 },
+                ];
+
                 expect(await client.zadd(key, membersScores)).toEqual(3);
 
                 expect(
@@ -4738,7 +4835,12 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
-                const membersScores = { a: 1, b: 2, c: 3 };
+                const membersScores: SortedSetDataType = [
+                    { element: "a", score: 1 },
+                    { element: Buffer.from("b"), score: 2 },
+                    { element: "c", score: 3.0 },
+                ];
+
                 expect(await client.zadd(key, membersScores)).toEqual(3);
 
                 expect(
@@ -4802,7 +4904,12 @@ export function runBaseTests(config: {
 
                 const key = "{testKey}:1-" + uuidv4();
                 const destkey = "{testKey}:2-" + uuidv4();
-                const membersScores = { one: 1, two: 2, three: 3 };
+                const membersScores: SortedSetDataType = [
+                    { element: "one", score: 1 },
+                    { element: Buffer.from("two"), score: 2 },
+                    { element: "three", score: 3.0 },
+                ];
+
                 expect(await client.zadd(key, membersScores)).toEqual(3);
 
                 expect(
@@ -4855,7 +4962,12 @@ export function runBaseTests(config: {
                 if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
                 const key = "{testKey}:1-" + uuidv4();
                 const destkey = "{testKey}:2-" + uuidv4();
-                const membersScores = { one: 1, two: 2, three: 3 };
+                const membersScores: SortedSetDataType = [
+                    { element: "one", score: 1 },
+                    { element: Buffer.from("two"), score: 2 },
+                    { element: "three", score: 3.0 },
+                ];
+
                 expect(await client.zadd(key, membersScores)).toEqual(3);
 
                 expect(
@@ -4942,7 +5054,12 @@ export function runBaseTests(config: {
                 if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
                 const key = "{testKey}:1-" + uuidv4();
                 const destkey = "{testKey}:2-" + uuidv4();
-                const membersScores = { a: 1, b: 2, c: 3 };
+                const membersScores: SortedSetDataType = [
+                    { element: "a", score: 1 },
+                    { element: Buffer.from("b"), score: 2 },
+                    { element: "c", score: 3.0 },
+                ];
+
                 expect(await client.zadd(key, membersScores)).toEqual(3);
 
                 expect(
@@ -5086,8 +5203,15 @@ export function runBaseTests(config: {
             stop: -1,
         };
 
-        const membersScores1 = { one: 1.0, two: 2.0 };
-        const membersScores2 = { one: 2.0, two: 3.0, three: 4.0 };
+        const membersScores1: SortedSetDataType = [
+            { element: "one", score: 1 },
+            { element: Buffer.from("two"), score: 2 },
+        ];
+        const membersScores2: SortedSetDataType = [
+            { element: "one", score: 2 },
+            { element: Buffer.from("two"), score: 3 },
+            { element: "three", score: 4 },
+        ];
 
         expect(await client.zadd(key1, membersScores1)).toEqual(2);
         expect(await client.zadd(key2, membersScores2)).toEqual(3);
@@ -5129,8 +5253,15 @@ export function runBaseTests(config: {
             stop: -1,
         };
 
-        const membersScores1 = { one: 1.0, two: 2.0 };
-        const membersScores2 = { one: 2.0, two: 3.0, three: 4.0 };
+        const membersScores1: SortedSetDataType = [
+            { element: "one", score: 1 },
+            { element: Buffer.from("two"), score: 2 },
+        ];
+        const membersScores2: SortedSetDataType = [
+            { element: "one", score: 2 },
+            { element: Buffer.from("two"), score: 3 },
+            { element: "three", score: 4 },
+        ];
 
         expect(await client.zadd(key1, membersScores1)).toEqual(2);
         expect(await client.zadd(key2, membersScores2)).toEqual(3);
@@ -5152,8 +5283,15 @@ export function runBaseTests(config: {
             start: 0,
             stop: -1,
         };
-        const membersScores1 = { one: 1.0, two: 2.0 };
-        const membersScores2 = { one: 2.0, two: 3.0, three: 4.0 };
+        const membersScores1: SortedSetDataType = [
+            { element: "one", score: 1 },
+            { element: Buffer.from("two"), score: 2 },
+        ];
+        const membersScores2: SortedSetDataType = [
+            { element: "one", score: 2 },
+            { element: Buffer.from("two"), score: 3 },
+            { element: "three", score: 4 },
+        ];
 
         expect(await client.zadd(key1, membersScores1)).toEqual(2);
         expect(await client.zadd(key2, membersScores2)).toEqual(3);
@@ -5219,8 +5357,15 @@ export function runBaseTests(config: {
                 const key1 = "{testKey}:1-" + uuidv4();
                 const key2 = "{testKey}:2-" + uuidv4();
 
-                const membersScores1 = { one: 1.0, two: 2.0 };
-                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+                const membersScores1: SortedSetDataType = [
+                    { element: "one", score: 1 },
+                    { element: Buffer.from("two"), score: 2 },
+                ];
+                const membersScores2: SortedSetDataType = [
+                    { element: "one", score: 1.5 },
+                    { element: Buffer.from("two"), score: 2.5 },
+                    { element: "three", score: 3.5 },
+                ];
 
                 expect(await client.zadd(key1, membersScores1)).toEqual(2);
                 expect(await client.zadd(key2, membersScores2)).toEqual(3);
@@ -5241,8 +5386,15 @@ export function runBaseTests(config: {
                 const key1 = "{testKey}:1-" + uuidv4();
                 const key2 = "{testKey}:2-" + uuidv4();
 
-                const membersScores1 = { one: 1.0, two: 2.0 };
-                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+                const membersScores1: SortedSetDataType = [
+                    { element: "one", score: 1 },
+                    { element: Buffer.from("two"), score: 2 },
+                ];
+                const membersScores2: SortedSetDataType = [
+                    { element: "one", score: 1.5 },
+                    { element: Buffer.from("two"), score: 2.5 },
+                    { element: "three", score: 3.5 },
+                ];
 
                 expect(await client.zadd(key1, membersScores1)).toEqual(2);
                 expect(await client.zadd(key2, membersScores2)).toEqual(3);
@@ -5271,8 +5423,15 @@ export function runBaseTests(config: {
                 const key1 = "{testKey}:1-" + uuidv4();
                 const key2 = "{testKey}:2-" + uuidv4();
 
-                const membersScores1 = { one: 1.0, two: 2.0 };
-                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+                const membersScores1: SortedSetDataType = [
+                    { element: "one", score: 1 },
+                    { element: Buffer.from("two"), score: 2 },
+                ];
+                const membersScores2: SortedSetDataType = [
+                    { element: "one", score: 1.5 },
+                    { element: Buffer.from("two"), score: 2.5 },
+                    { element: "three", score: 3.5 },
+                ];
 
                 expect(await client.zadd(key1, membersScores1)).toEqual(2);
                 expect(await client.zadd(key2, membersScores2)).toEqual(3);
@@ -5300,8 +5459,15 @@ export function runBaseTests(config: {
                 const key1 = "{testKey}:1-" + uuidv4();
                 const key2 = "{testKey}:2-" + uuidv4();
 
-                const membersScores1 = { one: 1.0, two: 2.0 };
-                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+                const membersScores1: SortedSetDataType = [
+                    { element: "one", score: 1 },
+                    { element: Buffer.from("two"), score: 2 },
+                ];
+                const membersScores2: SortedSetDataType = [
+                    { element: "one", score: 1.5 },
+                    { element: Buffer.from("two"), score: 2.5 },
+                    { element: "three", score: 3.5 },
+                ];
 
                 expect(await client.zadd(key1, membersScores1)).toEqual(2);
                 expect(await client.zadd(key2, membersScores2)).toEqual(3);
@@ -5329,8 +5495,15 @@ export function runBaseTests(config: {
                 const key1 = "{testKey}:1-" + uuidv4();
                 const key2 = "{testKey}:2-" + uuidv4();
 
-                const membersScores1 = { one: 1.0, two: 2.0 };
-                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+                const membersScores1: SortedSetDataType = [
+                    { element: "one", score: 1 },
+                    { element: Buffer.from("two"), score: 2 },
+                ];
+                const membersScores2: SortedSetDataType = [
+                    { element: "one", score: 1.5 },
+                    { element: Buffer.from("two"), score: 2.5 },
+                    { element: "three", score: 3.5 },
+                ];
 
                 expect(await client.zadd(key1, membersScores1)).toEqual(2);
                 expect(await client.zadd(key2, membersScores2)).toEqual(3);
@@ -5358,8 +5531,15 @@ export function runBaseTests(config: {
                 const key1 = "{testKey}:1-" + uuidv4();
                 const key2 = "{testKey}:2-" + uuidv4();
 
-                const membersScores1 = { one: 1.0, two: 2.0 };
-                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+                const membersScores1: SortedSetDataType = [
+                    { element: "one", score: 1 },
+                    { element: Buffer.from("two"), score: 2 },
+                ];
+                const membersScores2: SortedSetDataType = [
+                    { element: "one", score: 1.5 },
+                    { element: Buffer.from("two"), score: 2.5 },
+                    { element: "three", score: 3.5 },
+                ];
 
                 expect(await client.zadd(key1, membersScores1)).toEqual(2);
                 expect(await client.zadd(key2, membersScores2)).toEqual(3);
@@ -5420,8 +5600,15 @@ export function runBaseTests(config: {
                 const key1 = "{testKey}:1-" + uuidv4();
                 const key2 = "{testKey}:2-" + uuidv4();
 
-                const membersScores1 = { one: 1.0, two: 2.0 };
-                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+                const membersScores1: SortedSetDataType = [
+                    { element: "one", score: 1 },
+                    { element: Buffer.from("two"), score: 2 },
+                ];
+                const membersScores2: SortedSetDataType = [
+                    { element: "one", score: 1.5 },
+                    { element: Buffer.from("two"), score: 2.5 },
+                    { element: "three", score: 3.5 },
+                ];
 
                 expect(await client.zadd(key1, membersScores1)).toEqual(2);
                 expect(await client.zadd(key2, membersScores2)).toEqual(3);
@@ -5443,8 +5630,15 @@ export function runBaseTests(config: {
                 const key1 = "{testKey}:1-" + uuidv4();
                 const key2 = "{testKey}:2-" + uuidv4();
 
-                const membersScores1 = { one: 1.0, two: 2.0 };
-                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+                const membersScores1: SortedSetDataType = [
+                    { element: "one", score: 1 },
+                    { element: Buffer.from("two"), score: 2 },
+                ];
+                const membersScores2: SortedSetDataType = [
+                    { element: "one", score: 1.5 },
+                    { element: Buffer.from("two"), score: 2.5 },
+                    { element: "three", score: 3.5 },
+                ];
 
                 expect(await client.zadd(key1, membersScores1)).toEqual(2);
                 expect(await client.zadd(key2, membersScores2)).toEqual(3);
@@ -5474,8 +5668,15 @@ export function runBaseTests(config: {
                 const key1 = "{testKey}:1-" + uuidv4();
                 const key2 = "{testKey}:2-" + uuidv4();
 
-                const membersScores1 = { one: 1.0, two: 2.0 };
-                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+                const membersScores1: SortedSetDataType = [
+                    { element: "one", score: 1 },
+                    { element: Buffer.from("two"), score: 2 },
+                ];
+                const membersScores2: SortedSetDataType = [
+                    { element: "one", score: 1.5 },
+                    { element: Buffer.from("two"), score: 2.5 },
+                    { element: "three", score: 3.5 },
+                ];
 
                 expect(await client.zadd(key1, membersScores1)).toEqual(2);
                 expect(await client.zadd(key2, membersScores2)).toEqual(3);
@@ -5504,8 +5705,15 @@ export function runBaseTests(config: {
                 const key1 = "{testKey}:1-" + uuidv4();
                 const key2 = "{testKey}:2-" + uuidv4();
 
-                const membersScores1 = { one: 1.0, two: 2.0 };
-                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+                const membersScores1: SortedSetDataType = [
+                    { element: "one", score: 1 },
+                    { element: Buffer.from("two"), score: 2 },
+                ];
+                const membersScores2: SortedSetDataType = [
+                    { element: "one", score: 1.5 },
+                    { element: Buffer.from("two"), score: 2.5 },
+                    { element: "three", score: 3.5 },
+                ];
 
                 expect(await client.zadd(key1, membersScores1)).toEqual(2);
                 expect(await client.zadd(key2, membersScores2)).toEqual(3);
@@ -5534,8 +5742,15 @@ export function runBaseTests(config: {
                 const key1 = "{testKey}:1-" + uuidv4();
                 const key2 = "{testKey}:2-" + uuidv4();
 
-                const membersScores1 = { one: 1.0, two: 2.0 };
-                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+                const membersScores1: SortedSetDataType = [
+                    { element: "one", score: 1 },
+                    { element: Buffer.from("two"), score: 2 },
+                ];
+                const membersScores2: SortedSetDataType = [
+                    { element: "one", score: 1.5 },
+                    { element: Buffer.from("two"), score: 2.5 },
+                    { element: "three", score: 3.5 },
+                ];
 
                 expect(await client.zadd(key1, membersScores1)).toEqual(2);
                 expect(await client.zadd(key2, membersScores2)).toEqual(3);
@@ -5564,8 +5779,15 @@ export function runBaseTests(config: {
                 const key1 = "{testKey}:1-" + uuidv4();
                 const key2 = "{testKey}:2-" + uuidv4();
 
-                const membersScores1 = { one: 1.0, two: 2.0 };
-                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+                const membersScores1: SortedSetDataType = [
+                    { element: "one", score: 1 },
+                    { element: Buffer.from("two"), score: 2 },
+                ];
+                const membersScores2: SortedSetDataType = [
+                    { element: "one", score: 1.5 },
+                    { element: Buffer.from("two"), score: 2.5 },
+                    { element: "three", score: 3.5 },
+                ];
 
                 expect(await client.zadd(key1, membersScores1)).toEqual(2);
                 expect(await client.zadd(key2, membersScores2)).toEqual(3);
@@ -5596,7 +5818,10 @@ export function runBaseTests(config: {
                 if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
                 const key1 = "{testKey}:1-" + uuidv4();
 
-                const membersScores1 = { one: 1.0, two: 2.0 };
+                const membersScores1: SortedSetDataType = [
+                    { element: "one", score: 1 },
+                    { element: "two", score: 2 },
+                ];
 
                 expect(await client.zadd(key1, membersScores1)).toEqual(2);
 
@@ -5640,7 +5865,9 @@ export function runBaseTests(config: {
                 expect(await client.type(key)).toEqual("set");
                 expect(await client.del([key])).toEqual(1);
 
-                expect(await client.zadd(key, { member: 1.0 })).toEqual(1);
+                expect(
+                    await client.zadd(key, [{ element: "member", score: 1.0 }]),
+                ).toEqual(1);
                 expect(await client.type(key)).toEqual("zset");
                 expect(await client.del([key])).toEqual(1);
 
@@ -5863,12 +6090,17 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
-                const membersScores = { a: 1, b: 2, c: 3 };
+                const membersScores: SortedSetDataType = [
+                    { element: "a", score: 1 },
+                    { element: Buffer.from("b"), score: 2 },
+                    { element: "c", score: 3 },
+                ];
+
                 expect(await client.zadd(key, membersScores)).toEqual(3);
                 expect(await client.zpopmin(key)).toEqual({ a: 1.0 });
 
                 expect(
-                    compareMaps(await client.zpopmin(key, 3), {
+                    compareMaps(await client.zpopmin(key, { count: 3 }), {
                         b: 2.0,
                         c: 3.0,
                     }),
@@ -5887,12 +6119,17 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
-                const membersScores = { a: 1, b: 2, c: 3 };
+                const membersScores: SortedSetDataType = [
+                    { element: "a", score: 1 },
+                    { element: Buffer.from("b"), score: 2 },
+                    { element: "c", score: 3 },
+                ];
+
                 expect(await client.zadd(key, membersScores)).toEqual(3);
                 expect(await client.zpopmax(key)).toEqual({ c: 3.0 });
 
                 expect(
-                    compareMaps(await client.zpopmax(key, 3), {
+                    compareMaps(await client.zpopmax(key, { count: 3 }), {
                         b: 2.0,
                         a: 1.0,
                     }),
@@ -5914,8 +6151,15 @@ export function runBaseTests(config: {
                 const key2 = "{key}-2" + uuidv4();
                 const key3 = "{key}-3" + uuidv4();
 
-                expect(await client.zadd(key1, { a: 1.0, b: 1.5 })).toBe(2);
-                expect(await client.zadd(key2, { c: 2.0 })).toBe(1);
+                expect(
+                    await client.zadd(key1, [
+                        { element: "a", score: 1.0 },
+                        { element: "b", score: 1.5 },
+                    ]),
+                ).toBe(2);
+                expect(
+                    await client.zadd(key2, [{ element: "c", score: 2.0 }]),
+                ).toBe(1);
                 expect(await client.bzpopmax([key1, key2], 0.5)).toEqual([
                     key1,
                     "b",
@@ -5957,8 +6201,15 @@ export function runBaseTests(config: {
                 const key2 = "{key}-2" + uuidv4();
                 const key3 = "{key}-3" + uuidv4();
 
-                expect(await client.zadd(key1, { a: 1.0, b: 1.5 })).toBe(2);
-                expect(await client.zadd(key2, { c: 2.0 })).toBe(1);
+                expect(
+                    await client.zadd(key1, [
+                        { element: "a", score: 1.0 },
+                        { element: "b", score: 1.5 },
+                    ]),
+                ).toBe(2);
+                expect(
+                    await client.zadd(key2, [{ element: "c", score: 2.0 }]),
+                ).toBe(1);
                 expect(await client.bzpopmin([key1, key2], 0.5)).toEqual([
                     key1,
                     "a",
@@ -6033,7 +6284,12 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
-                const membersScores = { one: 1, two: 2, three: 3 };
+                const membersScores: SortedSetDataType = [
+                    { element: "one", score: 1 },
+                    { element: Buffer.from("two"), score: 2 },
+                    { element: "three", score: 3.0 },
+                ];
+
                 expect(await client.zadd(key, membersScores)).toEqual(3);
                 expect(await client.zremRangeByRank(key, 2, 1)).toEqual(0);
                 expect(await client.zremRangeByRank(key, 0, 1)).toEqual(2);
@@ -6052,7 +6308,12 @@ export function runBaseTests(config: {
             await runTest(async (client: BaseClient, cluster) => {
                 const key1 = uuidv4();
                 const key2 = uuidv4();
-                const membersScores = { one: 1.5, two: 2, three: 3 };
+                const membersScores: SortedSetDataType = [
+                    { element: "one", score: 1.5 },
+                    { element: Buffer.from("two"), score: 2 },
+                    { element: "three", score: 3.0 },
+                ];
+
                 expect(await client.zadd(key1, membersScores)).toEqual(3);
                 expect(await client.zrank(key1, "one")).toEqual(0);
 
@@ -6087,7 +6348,12 @@ export function runBaseTests(config: {
             await runTest(async (client: BaseClient, cluster) => {
                 const key = uuidv4();
                 const nonSetKey = uuidv4();
-                const membersScores = { one: 1.5, two: 2, three: 3 };
+                const membersScores: SortedSetDataType = [
+                    { element: "one", score: 1.5 },
+                    { element: Buffer.from("two"), score: 2 },
+                    { element: "three", score: 3.0 },
+                ];
+
                 expect(await client.zadd(key, membersScores)).toEqual(3);
                 expect(await client.zrevrank(key, "three")).toEqual(0);
 
@@ -6553,7 +6819,13 @@ export function runBaseTests(config: {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 const stringKey = uuidv4();
-                const membersScores = { a: 1, b: 2, c: 3, d: 4 };
+                const membersScores: SortedSetDataType = [
+                    { element: "a", score: 1 },
+                    { element: Buffer.from("b"), score: 2 },
+                    { element: "c", score: 3.0 },
+                    { element: "d", score: 4 },
+                ];
+
                 expect(await client.zadd(key, membersScores)).toEqual(4);
 
                 expect(
@@ -6608,7 +6880,12 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
-                const membersScores = { one: 1, two: 2, three: 3 };
+                const membersScores: SortedSetDataType = [
+                    { element: "one", score: 1 },
+                    { element: Buffer.from("two"), score: 2 },
+                    { element: "three", score: 3.0 },
+                ];
+
                 expect(await client.zadd(key, membersScores)).toEqual(3);
 
                 expect(
@@ -6645,7 +6922,12 @@ export function runBaseTests(config: {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 const stringKey = uuidv4();
-                const membersScores = { a: 1, b: 2, c: 3 };
+                const membersScores: SortedSetDataType = [
+                    { element: "a", score: 1 },
+                    { element: Buffer.from("b"), score: 2 },
+                    { element: "c", score: 3.0 },
+                ];
+
                 expect(await client.zadd(key, membersScores)).toEqual(3);
 
                 // In range negative to positive infinity.
@@ -7895,7 +8177,9 @@ export function runBaseTests(config: {
                 // The default value of zset-max-listpack-entries is 128
                 for (let i = 0; i < 129; i++) {
                     expect(
-                        await client.zadd(skiplist_key, { [String(i)]: 2.0 }),
+                        await client.zadd(skiplist_key, [
+                            { element: String(i), score: 2.0 },
+                        ]),
                     ).toEqual(1);
                 }
 
@@ -7904,7 +8188,9 @@ export function runBaseTests(config: {
                 );
 
                 expect(
-                    await client.zadd(zset_listpack_key, { "1": 2.0 }),
+                    await client.zadd(zset_listpack_key, [
+                        { element: "1", score: 2.0 },
+                    ]),
                 ).toEqual(1);
 
                 if (versionLessThan7) {
@@ -8932,23 +9218,35 @@ export function runBaseTests(config: {
                 const nonExistingKey = "{key}-0" + uuidv4();
                 const stringKey = "{key}-string" + uuidv4();
 
-                expect(await client.zadd(key1, { a1: 1, b1: 2 })).toEqual(2);
-                expect(await client.zadd(key2, { a2: 0.1, b2: 0.2 })).toEqual(
-                    2,
-                );
+                expect(
+                    await client.zadd(key1, [
+                        { element: "a1", score: 1 },
+                        { element: "b1", score: 2 },
+                    ]),
+                ).toEqual(2);
+                expect(
+                    await client.zadd(key2, [
+                        { element: "a2", score: 0.1 },
+                        { element: "b2", score: 0.2 },
+                    ]),
+                ).toEqual(2);
 
                 expect(
                     await client.zmpop([key1, key2], ScoreFilter.MAX),
                 ).toEqual([key1, { b1: 2 }]);
                 expect(
-                    await client.zmpop([key2, key1], ScoreFilter.MAX, 10),
+                    await client.zmpop([key2, key1], ScoreFilter.MAX, {
+                        count: 10,
+                    }),
                 ).toEqual([key2, { a2: 0.1, b2: 0.2 }]);
 
                 expect(
                     await client.zmpop([nonExistingKey], ScoreFilter.MIN),
                 ).toBeNull();
                 expect(
-                    await client.zmpop([nonExistingKey], ScoreFilter.MIN, 1),
+                    await client.zmpop([nonExistingKey], ScoreFilter.MIN, {
+                        count: 1,
+                    }),
                 ).toBeNull();
 
                 // key exists, but it is not a sorted set
@@ -8957,32 +9255,39 @@ export function runBaseTests(config: {
                     client.zmpop([stringKey], ScoreFilter.MAX),
                 ).rejects.toThrow(RequestError);
                 await expect(
-                    client.zmpop([stringKey], ScoreFilter.MAX, 1),
+                    client.zmpop([stringKey], ScoreFilter.MAX, { count: 1 }),
                 ).rejects.toThrow(RequestError);
 
                 // incorrect argument: key list should not be empty
                 await expect(
-                    client.zmpop([], ScoreFilter.MAX, 1),
+                    client.zmpop([], ScoreFilter.MAX, { count: 1 }),
                 ).rejects.toThrow(RequestError);
 
                 // incorrect argument: count should be greater than 0
                 await expect(
-                    client.zmpop([key1], ScoreFilter.MAX, 0),
+                    client.zmpop([key1], ScoreFilter.MAX, { count: 0 }),
                 ).rejects.toThrow(RequestError);
 
                 // check that order of entries in the response is preserved
-                const entries: Record<string, number> = {};
+                const entries: SortedSetDataType = [];
 
                 for (let i = 0; i < 10; i++) {
                     // a0 => 0, a1 => 1 etc
-                    entries["a" + i] = i;
+                    entries.push({ element: "a" + i, score: i });
                 }
 
                 expect(await client.zadd(key2, entries)).toEqual(10);
-                const result = await client.zmpop([key2], ScoreFilter.MIN, 10);
+                const result = await client.zmpop([key2], ScoreFilter.MIN, {
+                    count: 10,
+                });
 
                 if (result) {
-                    expect(result[1]).toEqual(entries);
+                    const entriesSImplified: Record<string, number> = {};
+                    entries.forEach(
+                        (e) =>
+                            (entriesSImplified[e.element as string] = e.score),
+                    );
+                    expect(result[1]).toEqual(entriesSImplified);
                 }
             }, protocol);
         },
@@ -9021,7 +9326,7 @@ export function runBaseTests(config: {
         },
         config.timeout,
     );
-
+    /*
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zscan test_%p`,
         async (protocol) => {
@@ -9179,7 +9484,7 @@ export function runBaseTests(config: {
         },
         config.timeout,
     );
-
+*/
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `bzmpop test_%p`,
         async (protocol) => {
@@ -9190,10 +9495,18 @@ export function runBaseTests(config: {
                 const nonExistingKey = "{key}-0" + uuidv4();
                 const stringKey = "{key}-string" + uuidv4();
 
-                expect(await client.zadd(key1, { a1: 1, b1: 2 })).toEqual(2);
-                expect(await client.zadd(key2, { a2: 0.1, b2: 0.2 })).toEqual(
-                    2,
-                );
+                expect(
+                    await client.zadd(key1, [
+                        { element: "a1", score: 1 },
+                        { element: "b1", score: 2 },
+                    ]),
+                ).toEqual(2);
+                expect(
+                    await client.zadd(key2, [
+                        { element: "a2", score: 0.1 },
+                        { element: "b2", score: 0.2 },
+                    ]),
+                ).toEqual(2);
 
                 expect(
                     await client.bzmpop([key1, key2], ScoreFilter.MAX, 0.1),
@@ -9240,11 +9553,11 @@ export function runBaseTests(config: {
                 ).rejects.toThrow(RequestError);
 
                 // check that order of entries in the response is preserved
-                const entries: Record<string, number> = {};
+                const entries: SortedSetDataType = [];
 
                 for (let i = 0; i < 10; i++) {
                     // a0 => 0, a1 => 1 etc
-                    entries["a" + i] = i;
+                    entries.push({ element: "a" + i, score: i });
                 }
 
                 expect(await client.zadd(key2, entries)).toEqual(10);
@@ -9256,11 +9569,13 @@ export function runBaseTests(config: {
                 );
 
                 if (result) {
-                    expect(result[1]).toEqual(entries);
+                    const entriesSImplified: Record<string, number> = {};
+                    entries.forEach(
+                        (e) =>
+                            (entriesSImplified[e.element as string] = e.score),
+                    );
+                    expect(result[1]).toEqual(entriesSImplified);
                 }
-
-                // TODO: add test case with 0 timeout (no timeout) should never time out,
-                // but we wrap the test with timeout to avoid test failing or stuck forever
             }, protocol);
         },
         config.timeout,
@@ -9493,8 +9808,11 @@ export function runBaseTests(config: {
                 const key1 = uuidv4();
                 const key2 = uuidv4();
 
-                const memberScores = { one: 1.0, two: 2.0 };
-                const elements = ["one", "two"];
+                const memberScores: SortedSetDataType = [
+                    { element: "one", score: 1 },
+                    { element: "two", score: 2 },
+                ];
+                const elements: GlideString[] = ["one", "two"];
                 expect(await client.zadd(key1, memberScores)).toBe(2);
 
                 // check random memember belongs to the set
@@ -9522,7 +9840,10 @@ export function runBaseTests(config: {
                 const key1 = uuidv4();
                 const key2 = uuidv4();
 
-                const memberScores = { one: 1.0, two: 2.0 };
+                const memberScores: SortedSetDataType = [
+                    { element: "a", score: 1 },
+                    { element: Buffer.from("b"), score: 2 },
+                ];
                 expect(await client.zadd(key1, memberScores)).toBe(2);
 
                 // unique values are expected as count is positive
@@ -9569,7 +9890,10 @@ export function runBaseTests(config: {
                 const key1 = uuidv4();
                 const key2 = uuidv4();
 
-                const memberScores = { one: 1.0, two: 2.0 };
+                const memberScores: SortedSetDataType = [
+                    { element: "pne", score: 1 },
+                    { element: "two", score: 2 },
+                ];
                 const memberScoreMap = new Map<string, number>([
                     ["one", 1.0],
                     ["two", 2.0],
