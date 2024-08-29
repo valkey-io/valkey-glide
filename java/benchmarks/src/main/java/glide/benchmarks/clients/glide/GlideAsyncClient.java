@@ -53,6 +53,7 @@ public class GlideAsyncClient implements AsyncClient<String> {
                             .build();
 
             try {
+                Logger.init(Logger.Level.INFO, "logger_output.log");
                 glideClient = GlideClient.createClient(config).get(10, SECONDS);
             } catch (InterruptedException | ExecutionException | TimeoutException e) {
                 throw new RuntimeException(e);
