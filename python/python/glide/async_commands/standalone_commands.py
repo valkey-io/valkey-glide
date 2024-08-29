@@ -1027,3 +1027,19 @@ class StandaloneCommands(CoreCommands):
             List[Union[bytes, List[bytes]]],
             await self._execute_command(RequestType.Scan, args),
         )
+
+    async def script_kill(self) -> TOK:
+        """
+        Kill the currently executing Lua script, assuming no write operation was yet performed by the script.
+        The command is routed to all nodes, and aggregates the response to a single array.
+
+        See https://valkey.io/commands/script-kill for more details.
+
+        Returns:
+            TOK: A simple `OK` response.
+
+        Examples:
+            >>> await client.script_kill()
+                "OK"
+        """
+        return cast(TOK, await self._execute_command(RequestType.ScriptKill, []))

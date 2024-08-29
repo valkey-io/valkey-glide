@@ -5470,21 +5470,6 @@ class CoreCommands(Protocol):
             ),
         )
 
-    async def script_kill(self) -> TOK:
-        """
-        Kill the currently executing Lua script, assuming no write operation was yet performed by the script.
-
-        See https://valkey.io/commands/script-kill for more details.
-
-        Returns:
-            TOK: A simple `OK` response.
-
-        Examples:
-            >>> await client.script_kill()
-                "OK"
-        """
-        return cast(TOK, await self._execute_command(RequestType.ScriptKill, []))
-
     async def pfadd(self, key: TEncodable, elements: List[TEncodable]) -> int:
         """
         Adds all elements to the HyperLogLog data structure stored at the specified `key`.
