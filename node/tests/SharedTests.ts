@@ -7002,15 +7002,24 @@ export function runBaseTests(config: {
                 const group = uuidv4();
                 const consumer = uuidv4();
 
-                // setup data
+                // setup data & test binary parameters in XGROUP CREATE commands
                 expect(
-                    await client.xgroupCreate(key1, group, "0", {
-                        mkStream: true,
-                    }),
+                    await client.xgroupCreate(
+                        Buffer.from(key1),
+                        Buffer.from(group),
+                        Buffer.from("0"),
+                        {
+                            mkStream: true,
+                        },
+                    ),
                 ).toEqual("OK");
 
                 expect(
-                    await client.xgroupCreateConsumer(key1, group, consumer),
+                    await client.xgroupCreateConsumer(
+                        Buffer.from(key1),
+                        Buffer.from(group),
+                        Buffer.from(consumer),
+                    ),
                 ).toBeTruthy();
 
                 const entry1 = (await client.xadd(key1, [
@@ -10012,9 +10021,11 @@ export function runBaseTests(config: {
                 expect(await client.xdel(key, [streamId1, streamId3])).toEqual(
                     1,
                 );
-                expect(await client.xdel(nonExistentKey, [streamId3])).toEqual(
-                    0,
-                );
+                expect(
+                    await client.xdel(Buffer.from(nonExistentKey), [
+                        Buffer.from(streamId3),
+                    ]),
+                ).toEqual(0);
 
                 // invalid argument - id list should not be empty
                 await expect(client.xdel(key, [])).rejects.toThrow(
@@ -10448,6 +10459,15 @@ export function runBaseTests(config: {
                     "OK",
                 );
 
+                // Testing binary parameters with an non-existing ID
+                expect(
+                    await client.xgroupSetId(
+                        Buffer.from(key),
+                        Buffer.from(groupName),
+                        Buffer.from("99-99"),
+                    ),
+                ).toBe("OK");
+
                 // key exists, but is not a stream
                 expect(await client.set(stringKey, "xgroup setid")).toBe("OK");
                 await expect(
@@ -10642,7 +10662,13 @@ export function runBaseTests(config: {
 
                 // incorrect IDs - response is empty
                 expect(
-                    await client.xclaim(key, group, "consumer", 0, ["000"]),
+                    await client.xclaim(
+                        Buffer.from(key),
+                        Buffer.from(group),
+                        Buffer.from("consumer"),
+                        0,
+                        [Buffer.from("000")],
+                    ),
                 ).toEqual({});
                 expect(
                     await client.xclaimJustId(key, group, "consumer", 0, [
@@ -10712,12 +10738,13 @@ export function runBaseTests(config: {
                     },
                 });
 
+                // testing binary parameters
                 let result = await client.xautoclaim(
-                    key,
-                    group,
-                    "consumer",
+                    Buffer.from(key),
+                    Buffer.from(group),
+                    Buffer.from("consumer"),
                     0,
-                    "0-0",
+                    Buffer.from("0-0"),
                     1,
                 );
                 let expected: typeof result = [
@@ -10850,6 +10877,15 @@ export function runBaseTests(config: {
                         stream_id1_0,
                         stream_id1_1,
                     ]),
+                ).toBe(0);
+
+                // testing binary parameters
+                expect(
+                    await client.xack(
+                        Buffer.from(key),
+                        Buffer.from(groupName),
+                        [Buffer.from(stream_id1_0), Buffer.from(stream_id1_1)],
+                    ),
                 ).toBe(0);
 
                 // read the last unacknowledged entry
@@ -11137,12 +11173,14 @@ export function runBaseTests(config: {
                 ).toEqual(0);
 
                 // Add two stream entries
-                const streamid1: string | null = await client.xadd(key, [
+                const streamid1: GlideString | null = await client.xadd(key, [
                     ["field1", "value1"],
                 ]);
                 expect(streamid1).not.toBeNull();
-                const streamid2 = await client.xadd(key, [
-                    ["field2", "value2"],
+
+                // testing binary parameters
+                const streamid2 = await client.xadd(Buffer.from(key), [
+                    [Buffer.from("field2"), Buffer.from("value2")],
                 ]);
                 expect(streamid2).not.toBeNull();
 
@@ -11158,9 +11196,13 @@ export function runBaseTests(config: {
                     },
                 });
 
-                // delete one of the streams
+                // delete one of the streams & testing binary parameters
                 expect(
-                    await client.xgroupDelConsumer(key, groupName, consumer),
+                    await client.xgroupDelConsumer(
+                        Buffer.from(key),
+                        Buffer.from(groupName),
+                        Buffer.from(consumer),
+                    ),
                 ).toEqual(2);
 
                 // attempting to call XGROUP CREATECONSUMER or XGROUP DELCONSUMER with a non-existing key should raise an error
@@ -11236,6 +11278,13 @@ export function runBaseTests(config: {
                 expect(await client.xgroupDestroy(key, groupName1)).toEqual(
                     false,
                 );
+                // calling again with binary parameters, expecting the same result
+                expect(
+                    await client.xgroupDestroy(
+                        Buffer.from(key),
+                        Buffer.from(groupName1),
+                    ),
+                ).toEqual(false);
 
                 // attempting to destroy a group for a non-existing key should raise an error
                 await expect(

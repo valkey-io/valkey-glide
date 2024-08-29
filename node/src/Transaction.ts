@@ -2505,8 +2505,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The id of the added entry, or `null` if `options.makeStream` is set to `false` and no stream with the matching `key` exists.
      */
     public xadd(
-        key: string,
-        values: [string, string][],
+        key: GlideString,
+        values: [GlideString, GlideString][],
         options?: StreamAddOptions,
     ): T {
         return this.addAndReturn(createXAdd(key, values, options));
@@ -2523,7 +2523,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The number of entries removed from the stream. This number may be less than the number of entries in
      *      `ids`, if the specified `ids` don't exist in the stream.
      */
-    public xdel(key: string, ids: string[]): T {
+    public xdel(key: GlideString, ids: GlideString[]): T {
         return this.addAndReturn(createXDel(key, ids));
     }
 
@@ -2761,11 +2761,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A `Record` of message entries that are claimed by the consumer.
      */
     public xclaim(
-        key: string,
-        group: string,
-        consumer: string,
+        key: GlideString,
+        group: GlideString,
+        consumer: GlideString,
         minIdleTime: number,
-        ids: string[],
+        ids: GlideString[],
         options?: StreamClaimOptions,
     ): T {
         return this.addAndReturn(
@@ -2825,11 +2825,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     These IDs are deleted from the Pending Entries List.
      */
     public xautoclaim(
-        key: string,
-        group: string,
-        consumer: string,
+        key: GlideString,
+        group: GlideString,
+        consumer: GlideString,
         minIdleTime: number,
-        start: string,
+        start: GlideString,
         count?: number,
     ): T {
         return this.addAndReturn(
@@ -2895,9 +2895,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - `"OK"`.
      */
     public xgroupCreate(
-        key: string,
-        groupName: string,
-        id: string,
+        key: GlideString,
+        groupName: GlideString,
+        id: GlideString,
         options?: StreamGroupOptions,
     ): T {
         return this.addAndReturn(
@@ -2915,7 +2915,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - `true` if the consumer group is destroyed. Otherwise, `false`.
      */
-    public xgroupDestroy(key: string, groupName: string): T {
+    public xgroupDestroy(key: GlideString, groupName: GlideString): T {
         return this.addAndReturn(createXGroupDestroy(key, groupName));
     }
 
@@ -2931,9 +2931,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - `true` if the consumer is created. Otherwise, returns `false`.
      */
     public xgroupCreateConsumer(
-        key: string,
-        groupName: string,
-        consumerName: string,
+        key: GlideString,
+        groupName: GlideString,
+        consumerName: GlideString,
     ): T {
         return this.addAndReturn(
             createXGroupCreateConsumer(key, groupName, consumerName),
@@ -2952,9 +2952,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The number of pending messages the `consumer` had before it was deleted.
      */
     public xgroupDelConsumer(
-        key: string,
-        groupName: string,
-        consumerName: string,
+        key: GlideString,
+        groupName: GlideString,
+        consumerName: GlideString,
     ): T {
         return this.addAndReturn(
             createXGroupDelConsumer(key, groupName, consumerName),
@@ -2973,7 +2973,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The number of messages that were successfully acknowledged.
      */
-    public xack(key: string, group: string, ids: string[]): T {
+    public xack(key: GlideString, group: GlideString, ids: GlideString[]): T {
         return this.addAndReturn(createXAck(key, group, ids));
     }
 
@@ -2991,9 +2991,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - `"OK"`.
      */
     public xgroupSetId(
-        key: string,
-        groupName: string,
-        id: string,
+        key: GlideString,
+        groupName: GlideString,
+        id: GlideString,
         entriesRead?: number,
     ): T {
         return this.addAndReturn(
