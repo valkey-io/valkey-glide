@@ -6861,6 +6861,7 @@ export class BaseClient {
      * @remarks When in cluster mode, the command is routed to all nodes, and aggregates the response into a single list.
      *
      * @param channels - The list of channels to query for the number of subscribers.
+     * @param options - (Optional) see {@link DecoderOption}.
      * @returns A list of the channel names and their numbers of subscribers.
      *
      * @example
@@ -6874,7 +6875,7 @@ export class BaseClient {
      * ```
      */
     public async pubsubNumSub(
-        channels: string[],
+        channels: GlideString[],
         options?: DecoderOption,
     ): Promise<{ channel: GlideString; numSub: number }[]> {
         return this.createWritePromise<GlideRecord<number>>(

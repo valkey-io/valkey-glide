@@ -3869,7 +3869,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - A list of the channel names and their numbers of subscribers.
      */
-    public pubsubNumSub(channels?: string[]): T {
+    public pubsubNumSub(channels: GlideString[]): T {
         return this.addAndReturn(createPubSubNumSub(channels));
     }
 }
@@ -4166,6 +4166,7 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      *
      * @param pattern - A glob-style pattern to match active shard channels.
      *                  If not provided, all active shard channels are returned.
+     *
      * Command Response - A list of currently active shard channels matching the given pattern.
      *          If no pattern is specified, all active shard channels are returned.
      */
@@ -4176,16 +4177,14 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
     /**
      * Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified shard channels.
      *
-     * Note that it is valid to call this command without channels. In this case, it will just return an empty map.
-     * The command is routed to all nodes, and aggregates the response to a single map of the channels and their number of subscriptions.
-     *
      * @see {@link https://valkey.io/commands/pubsub-shardnumsub|valkey.io} for more details.
+     * @remarks The command is routed to all nodes, and aggregates the response into a single list.
      *
      * @param channels - The list of shard channels to query for the number of subscribers.
-     *                   If not provided, returns an empty map.
-     * @returns A map where keys are the shard channel names and values are the number of subscribers.
+     *
+     * Command Response - A list of the shard channel names and their numbers of subscribers.
      */
-    public pubsubShardNumSub(channels?: string[]): ClusterTransaction {
+    public pubsubShardNumSub(channels: GlideString[]): ClusterTransaction {
         return this.addAndReturn(createPubSubShardNumSub(channels));
     }
 }

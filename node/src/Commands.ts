@@ -6,7 +6,7 @@ import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "glide-rs";
 import Long from "long";
 
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-import { BaseClient, GlideRecord, SortedSetDataType } from "src/BaseClient";
+import { BaseClient } from "src/BaseClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 import { GlideClient } from "src/GlideClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
@@ -3858,7 +3858,7 @@ export function createPubSubNumPat(): command_request.Command {
  * @internal
  */
 export function createPubSubNumSub(
-    channels?: string[],
+    channels?: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.PubSubNumSub, channels ? channels : []);
 }
@@ -3876,7 +3876,7 @@ export function createPubsubShardChannels(
  * @internal
  */
 export function createPubSubShardNumSub(
-    channels?: string[],
+    channels?: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.PubSubSNumSub, channels ? channels : []);
 }

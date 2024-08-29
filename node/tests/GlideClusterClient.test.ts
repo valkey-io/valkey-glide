@@ -304,8 +304,8 @@ describe("GlideClusterClient", () => {
 
                 transaction.pubsubShardChannels();
                 expectedRes.push(["pubsubShardChannels()", []]);
-                transaction.pubsubShardNumSub();
-                expectedRes.push(["pubsubShardNumSub()", {}]);
+                transaction.pubsubShardNumSub([]);
+                expectedRes.push(["pubsubShardNumSub()", []]);
             }
 
             const result = await client.exec(transaction);

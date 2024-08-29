@@ -8,6 +8,7 @@ import {
     BaseClientConfiguration,
     Decoder,
     DecoderOption,
+    GlideRecord,
     GlideString,
     PubSubMsg,
     ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -1257,28 +1258,35 @@ export class GlideClusterClient extends BaseClient {
     /**
      * Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified shard channels.
      *
-     * Note that it is valid to call this command without channels. In this case, it will just return an empty map.
-     * The command is routed to all nodes, and aggregates the response to a single map of the channels and their number of subscriptions.
-     *
      * @see {@link https://valkey.io/commands/pubsub-shardnumsub/|valkey.io} for details.
+     * @remarks The command is routed to all nodes, and aggregates the response into a single list.
      *
      * @param channels - The list of shard channels to query for the number of subscribers.
-     *                   If not provided, returns an empty map.
-     * @returns A map where keys are the shard channel names and values are the number of subscribers.
+     * @param options - (Optional) see {@link DecoderOption}.
+     * @returns A list of the shard channel names and their numbers of subscribers.
      *
      * @example
      * ```typescript
      * const result1 = await client.pubsubShardnumsub(["channel1", "channel2"]);
-     * console.log(result1); // Output: { "channel1": 3, "channel2": 5 }
+     * console.log(result1); // Output:
+     * // [{ channel: "channel1", numSub: 3}, { channel: "channel2", numSub: 5 }]
      *
-     * const result2 = await client.pubsubShardnumsub();
-     * console.log(result2); // Output: {}
+     * const result2 = await client.pubsubShardnumsub([]);
+     * console.log(result2); // Output: []
      * ```
      */
     public async pubsubShardNumSub(
-        channels?: string[],
-    ): Promise<Record<string, number>> {
-        return this.createWritePromise(createPubSubShardNumSub(channels));
+        channels: GlideString[],
+        options?: DecoderOption,
+    ): Promise<{ channel: GlideString; numSub: number }[]> {
+        return this.createWritePromise<GlideRecord<number>>(
+            createPubSubShardNumSub(channels),
+            options,
+        ).then((res) =>
+            res.map((r) => {
+                return { channel: r.key, numSub: r.value };
+            }),
+        );
     }
 
     /**

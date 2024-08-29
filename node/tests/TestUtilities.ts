@@ -689,8 +689,8 @@ export async function transactionTest(
     responseData.push(["pubsubChannels()", []]);
     baseTransaction.pubsubNumPat();
     responseData.push(["pubsubNumPat()", 0]);
-    baseTransaction.pubsubNumSub();
-    responseData.push(["pubsubNumSub()", {}]);
+    baseTransaction.pubsubNumSub([]);
+    responseData.push(["pubsubNumSub()", []]);
 
     baseTransaction.flushall();
     responseData.push(["flushall()", "OK"]);
