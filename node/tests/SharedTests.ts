@@ -1379,20 +1379,14 @@ export function runBaseTests(config: {
                 const field2 = uuidv4();
                 const value = uuidv4();
                 const value2 = uuidv4();
-                const fieldValueList = [
-                    {
-                        field: field1,
-                        value,
-                    },
-                    {
-                        field: field2,
-                        value: value2,
-                    },
-                ];
+                const fieldValueMap = {
+                    [field1]: value,
+                    [field2]: value2,
+                };
                 const field2Encoded = Buffer.from(field2);
 
                 // set up hash with two keys/values
-                expect(await client.hset(key, fieldValueList)).toEqual(2);
+                expect(await client.hset(key, fieldValueMap)).toEqual(2);
                 expect(await client.hkeys(key)).toEqual([field1, field2]);
 
                 // remove one key

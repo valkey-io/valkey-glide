@@ -297,6 +297,20 @@ export type DecoderOption = {
     decoder?: Decoder;
 };
 
+export function convertFieldsAndValuesForHset(
+    fieldsAndValues: HashDataType | Record<string, GlideString>,
+): HashDataType {
+    let finalFieldAndValues = [];
+    if (typeof fieldsAndValues === "object") {
+        finalFieldAndValues = Object.entries(fieldsAndValues).map((e) => {
+            return { field: e[0], value: e[1] };
+        });
+    } else {
+        finalFieldAndValues = fieldsAndValues;
+    }
+    return finalFieldAndValues;
+}
+
 /**
  * Our purpose in creating PointerResponse type is to mark when response is of number/long pointer response type.
  * Consequently, when the response is returned, we can check whether it is instanceof the PointerResponse type and pass it to the Rust core function with the proper parameters.
@@ -1661,7 +1675,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/hset/|valkey.io} for details.
      *
      * @param key - The key of the hash.
-     * @param fieldValueList - A list of field names and their values.
+     * @param fieldsAndValues - A list of field names and their values.
      * @returns The number of fields that were added.
      *
      * @example
@@ -1673,9 +1687,11 @@ export class BaseClient {
      */
     public async hset(
         key: GlideString,
-        fieldValueList: HashDataType,
+        fieldsAndValues: HashDataType | Record<string, GlideString>,
     ): Promise<number> {
-        return this.createWritePromise(createHSet(key, fieldValueList));
+        return this.createWritePromise(
+            createHSet(key, convertFieldsAndValuesForHset(fieldsAndValues)),
+        );
     }
 
     /**

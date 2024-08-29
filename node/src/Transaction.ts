@@ -6,7 +6,8 @@ import {
     BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
     GlideString,
     HashDataType,
-    ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
+    ReadFrom,
+    convertFieldsAndValuesForHset, // eslint-disable-line @typescript-eslint/no-unused-vars
 } from "./BaseClient";
 
 import {
@@ -810,8 +811,13 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The number of fields that were added.
      */
-    public hset(key: GlideString, fieldValueList: HashDataType): T {
-        return this.addAndReturn(createHSet(key, fieldValueList));
+    public hset(
+        key: GlideString,
+        fieldsAndValues: HashDataType | Record<string, GlideString>,
+    ): T {
+        return this.addAndReturn(
+            createHSet(key, convertFieldsAndValuesForHset(fieldsAndValues)),
+        );
     }
 
     /**

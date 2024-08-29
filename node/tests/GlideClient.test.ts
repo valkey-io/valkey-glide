@@ -1337,10 +1337,10 @@ describe("GlideClient", () => {
                     { field: "name", value: "Alice" },
                     { field: "age", value: "30" },
                 ])
-                .hset(hashPrefix + 2, [
-                    { field: "name", value: "Bob" },
-                    { field: "age", value: "25" },
-                ])
+                .hset(hashPrefix + 2, {
+                    name: "Bob",
+                    age: "25",
+                })
                 .del([list])
                 .lpush(list, ["2", "1"])
                 .sort(list, {
