@@ -301,6 +301,7 @@ export function convertFieldsAndValuesForHset(
     fieldsAndValues: HashDataType | Record<string, GlideString>,
 ): HashDataType {
     let finalFieldAndValues = [];
+
     if (typeof fieldsAndValues === "object") {
         finalFieldAndValues = Object.entries(fieldsAndValues).map((e) => {
             return { field: e[0], value: e[1] };
@@ -308,6 +309,7 @@ export function convertFieldsAndValuesForHset(
     } else {
         finalFieldAndValues = fieldsAndValues;
     }
+
     return finalFieldAndValues;
 }
 
