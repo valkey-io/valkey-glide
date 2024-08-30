@@ -1028,6 +1028,53 @@ class StandaloneCommands(CoreCommands):
             await self._execute_command(RequestType.Scan, args),
         )
 
+    async def script_exists(self, sha1s: List[TEncodable]) -> List[bool]:
+        """
+        Check existence of scripts in the script cache by their SHA1 digest.
+
+        See https://valkey.io/commands/script-exists for more details.
+
+        Args:
+            sha1s (List[TEncodable]): List of SHA1 digests of the scripts to check.
+
+        Returns:
+            List[bool]: A list of boolean values indicating the existence of each script.
+
+        Examples:
+            >>> await client.script_exists(["sha1_digest1", "sha1_digest2"])
+                [True, False]
+        """
+        return cast(
+            List[bool], await self._execute_command(RequestType.ScriptExists, sha1s)
+        )
+
+    async def script_flush(self, mode: Optional[FlushMode] = None) -> TOK:
+        """
+        Flush the Lua scripts cache.
+
+        See https://valkey.io/commands/script-flush for more details.
+
+        Args:
+            mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
+
+        Returns:
+            TOK: A simple `OK` response.
+
+        Examples:
+            >>> await client.script_flush()
+                "OK"
+
+            >>> await client.script_flush(FlushMode.ASYNC)
+                "OK"
+        """
+
+        return cast(
+            TOK,
+            await self._execute_command(
+                RequestType.ScriptFlush, [mode.value] if mode else []
+            ),
+        )
+
     async def script_kill(self) -> TOK:
         """
         Kill the currently executing Lua script, assuming no write operation was yet performed by the script.

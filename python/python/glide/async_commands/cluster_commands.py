@@ -1273,6 +1273,62 @@ class ClusterCommands(CoreCommands):
             await self._cluster_scan(cursor, match, count, type),
         )
 
+    async def script_exists(
+        self, sha1s: List[TEncodable], route: Optional[Route] = None
+    ) -> TClusterResponse[List[bool]]:
+        """
+        Check existence of scripts in the script cache by their SHA1 digest.
+
+        See https://valkey.io/commands/script-exists for more details.
+
+        Args:
+            sha1s (List[TEncodable]): List of SHA1 digests of the scripts to check.
+            route (Optional[Route]): The command will be routed automatically based on the passed command's default request policy, unless `route` is provided, in which
+            case the client will route the command to the nodes defined by `route`. Defaults to None.
+
+        Returns:
+            List[bool]: A list of boolean values indicating the existence of each script.
+
+        Examples:
+            >>> await client.script_exists(["sha1_digest1", "sha1_digest2"])
+                [True, False]
+        """
+        return cast(
+            List[bool],
+            await self._execute_command(RequestType.ScriptExists, sha1s, route),
+        )
+
+    async def script_flush(
+        self, mode: Optional[FlushMode] = None, route: Optional[Route] = None
+    ) -> TClusterResponse[TOK]:
+        """
+        Flush the Lua scripts cache.
+
+        See https://valkey.io/commands/script-flush for more details.
+
+        Args:
+            mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
+            route (Optional[Route]): The command will be routed automatically based on the passed command's default request policy, unless `route` is provided, in which
+            case the client will route the command to the nodes defined by `route`. Defaults to None.
+
+        Returns:
+            TOK: A simple `OK` response.
+
+        Examples:
+            >>> await client.script_flush()
+                "OK"
+
+            >>> await client.script_flush(FlushMode.ASYNC)
+                "OK"
+        """
+
+        return cast(
+            TOK,
+            await self._execute_command(
+                RequestType.ScriptFlush, [mode.value] if mode else [], route
+            ),
+        )
+
     async def script_kill(self, route: Optional[Route] = None) -> TClusterResponse[TOK]:
         """
         Kill the currently executing Lua script, assuming no write operation was yet performed by the script.
@@ -1282,6 +1338,8 @@ class ClusterCommands(CoreCommands):
 
         Returns:
             TOK: A simple `OK` response.
+            route (Optional[Route]): The command will be routed automatically based on the passed command's default request policy, unless `route` is provided, in which
+            case the client will route the command to the nodes defined by `route`. Defaults to None.
 
         Examples:
             >>> await client.script_kill()

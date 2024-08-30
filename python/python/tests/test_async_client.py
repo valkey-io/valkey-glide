@@ -97,6 +97,7 @@ from tests.utils.utils import (
     compare_maps,
     convert_bytes_to_string_object,
     convert_string_to_bytes_object,
+    create_long_running_lua_script,
     create_lua_lib_with_long_running_function,
     generate_lua_lib_code,
     get_first_result,
@@ -10296,11 +10297,7 @@ class TestScripts:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_script_flush(self, glide_client: TGlideClient):
         # Load a script
-        lib_name = f"mylib1C{get_random_string(5)}"
-        func_name = f"myfunc1c{get_random_string(5)}"
-        script = Script(
-            create_lua_lib_with_long_running_function(lib_name, func_name, 5, True)
-        )
+        script = Script("return 'Hello'")
         await glide_client.invoke_script(script)
 
         # Check that the script exists
@@ -10328,11 +10325,8 @@ class TestScripts:
         assert "No scripts in execution right now" in str(e)
 
         # Create a long-running script
-        lib_name = f"mylib1C{get_random_string(5)}"
-        func_name = f"myfunc1c{get_random_string(5)}"
-        long_script = Script(
-            create_lua_lib_with_long_running_function(lib_name, func_name, 10, True)
-        )
+        long_script = Script(create_long_running_lua_script(10))
+        # long_script = Script("while true do end")
 
         # Create a second client to run the script
         test_client = await create_client(
