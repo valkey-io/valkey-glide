@@ -300,7 +300,7 @@ export type DecoderOption = {
 /**
  * This function converts an input from HashDataType or Record types to HashDataType.
  *
- * @param fieldsAndValues field names and their values.
+ * @param fieldsAndValues - field names and their values.
  * @returns HashDataType array containing field names and their values.
  */
 export function convertFieldsAndValuesForHset(
