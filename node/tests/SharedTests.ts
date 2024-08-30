@@ -1967,10 +1967,8 @@ export function runBaseTests(config: {
                 const key2 = uuidv4();
                 const field = uuidv4();
 
-                expect(
-                    await client.hset(key1, [{ field, value: "value" }]),
-                ).toBe(1);
-                expect(await client.hstrlen(key1, field)).toBe(5);
+                expect(await client.hset(key1, { field: "value" })).toBe(1);
+                expect(await client.hstrlen(key1, "field")).toBe(5);
 
                 // missing value
                 expect(await client.hstrlen(key1, "nonExistingField")).toBe(0);
@@ -2011,12 +2009,9 @@ export function runBaseTests(config: {
                 const data = { "f 1": "v 1", "f 2": "v 2", "f 3": "v 3" };
                 const fields = Object.keys(data);
                 const entries = Object.entries(data);
-                const dataList: HashDataType = entries.map((e) => {
-                    return { field: e[0], value: e[1] };
-                });
                 const encodedFields = fields.map(Buffer.from);
                 const encodedEntries = entries.map((e) => e.map(Buffer.from));
-                expect(await client.hset(key1, dataList)).toEqual(3);
+                expect(await client.hset(key1, data)).toEqual(3);
 
                 expect(fields).toContain(await client.hrandfield(key1));
 
@@ -5752,11 +5747,7 @@ export function runBaseTests(config: {
                 expect(await client.type(key)).toEqual("zset");
                 expect(await client.del([key])).toEqual(1);
 
-                expect(
-                    await client.hset(key, [
-                        { field: "field", value: "value" },
-                    ]),
-                ).toEqual(1);
+                expect(await client.hset(key, { field: "value" })).toEqual(1);
                 expect(await client.type(Buffer.from(key))).toEqual("hash");
                 expect(await client.del([key])).toEqual(1);
 
@@ -7997,12 +7988,9 @@ export function runBaseTests(config: {
                 // The default value of hash-max-listpack-entries is 512
                 for (let i = 0; i < 513; i++) {
                     expect(
-                        await client.hset(hash_hashtable_key, [
-                            {
-                                field: i.toString(),
-                                value: "2",
-                            },
-                        ]),
+                        await client.hset(hash_hashtable_key, {
+                            [String(i)]: "2",
+                        }),
                     ).toEqual(1);
                 }
 
@@ -8011,9 +7999,7 @@ export function runBaseTests(config: {
                 );
 
                 expect(
-                    await client.hset(hash_listpack_key, [
-                        { field: "1", value: "2" },
-                    ]),
+                    await client.hset(hash_listpack_key, { "1": "2" }),
                 ).toEqual(1);
 
                 if (versionLessThan7) {
