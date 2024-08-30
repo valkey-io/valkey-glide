@@ -1671,22 +1671,13 @@ export function runBaseTests(config: {
                 const field2 = uuidv4();
                 const field3 = uuidv4();
                 const value = uuidv4();
-                const fieldValueList = [
-                    {
-                        field: field1,
-                        value,
-                    },
-                    {
-                        field: field2,
-                        value,
-                    },
-                    {
-                        field: field3,
-                        value,
-                    },
-                ];
+                const fieldValueMap = {
+                    [field1]: value,
+                    [field2]: value,
+                    [field3]: value,
+                };
 
-                expect(await client.hset(key, fieldValueList)).toEqual(3);
+                expect(await client.hset(key, fieldValueMap)).toEqual(3);
                 expect(
                     await client.hdel(Buffer.from(key), [field1, field2]),
                 ).toEqual(2);
@@ -1744,17 +1735,11 @@ export function runBaseTests(config: {
                 const key = uuidv4();
                 const field1 = uuidv4();
                 const field2 = uuidv4();
-                const fieldValueList = [
-                    {
-                        field: field1,
-                        value: "value1",
-                    },
-                    {
-                        field: field2,
-                        value: "value2",
-                    },
-                ];
-                expect(await client.hset(key, fieldValueList)).toEqual(2);
+                const fieldValueMap = {
+                    [field1]: "value1",
+                    [field2]: "value2",
+                };
+                expect(await client.hset(key, fieldValueMap)).toEqual(2);
                 expect(
                     await client.hexists(Buffer.from(key), Buffer.from(field1)),
                 ).toEqual(true);
@@ -1936,21 +1921,15 @@ export function runBaseTests(config: {
                 const key2 = uuidv4();
                 const field1 = uuidv4();
                 const field2 = uuidv4();
-                const fieldValueList = [
-                    {
-                        field: field1,
-                        value: "value1",
-                    },
-                    {
-                        field: field2,
-                        value: "value2",
-                    },
-                ];
+                const fieldValueMap = {
+                    [field1]: "value1",
+                    [field2]: "value2",
+                };
                 const value1Encoded = Buffer.from("value1");
                 const value2Encoded = Buffer.from("value2");
 
                 expect(
-                    await client.hset(Buffer.from(key1), fieldValueList),
+                    await client.hset(Buffer.from(key1), fieldValueMap),
                 ).toEqual(2);
                 expect(await client.hvals(key1)).toEqual(["value1", "value2"]);
                 expect(await client.hdel(key1, [field1])).toEqual(1);
@@ -1960,7 +1939,7 @@ export function runBaseTests(config: {
                 expect(await client.hvals("nonExistingHash")).toEqual([]);
 
                 //hvals with binary buffers
-                expect(await client.hset(key2, fieldValueList)).toEqual(2);
+                expect(await client.hset(key2, fieldValueMap)).toEqual(2);
                 expect(await client.hvals(key2, Decoder.Bytes)).toEqual([
                     value1Encoded,
                     value2Encoded,
