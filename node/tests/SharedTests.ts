@@ -8,6 +8,7 @@
 // represents a running server instance. See first 2 test cases as examples.
 
 import { expect, it } from "@jest/globals";
+import { HashDataType } from "src/BaseClient";
 import { v4 as uuidv4 } from "uuid";
 import {
     BaseClientConfiguration,
@@ -31,7 +32,6 @@ import {
     GlideClient,
     GlideClusterClient,
     GlideString,
-    HashDataType,
     InfBoundary,
     InfoOptions,
     InsertPosition,
@@ -1343,6 +1343,7 @@ export function runBaseTests(config: {
                         value: Buffer.from(value),
                     },
                 ];
+
                 const valueEncoded = Buffer.from(value);
 
                 expect(await client.hset(key, fieldValueList)).toEqual(2);

@@ -6,7 +6,7 @@ import {
     BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
     GlideString,
     HashDataType,
-    convertFieldsAndValuesForHset, // eslint-disable-line @typescript-eslint/no-unused-vars
+    convertFieldsAndValuesForHset,
 } from "./BaseClient";
 
 import {

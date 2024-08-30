@@ -296,20 +296,23 @@ export type DecoderOption = {
      */
     decoder?: Decoder;
 };
-
+/**
+ * This function converts an input from HashDataType or Record<string, GlideString> types to HashDataType.
+ *
+ * @param fieldsAndValues field names and their values.
+ * @returns An array of field names and their values
+ */
 export function convertFieldsAndValuesForHset(
     fieldsAndValues: HashDataType | Record<string, GlideString>,
 ): HashDataType {
     let finalFieldAndValues = [];
-
-    if (typeof fieldsAndValues === "object") {
+    if (!Array.isArray(fieldsAndValues)) {
         finalFieldAndValues = Object.entries(fieldsAndValues).map((e) => {
             return { field: e[0], value: e[1] };
         });
     } else {
         finalFieldAndValues = fieldsAndValues;
     }
-
     return finalFieldAndValues;
 }
 
@@ -1682,8 +1685,12 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * // Example usage of the hset method
+     * // Example usage of the hset method using HashDataType as input type
      * const result = await client.hset("my_hash", [{"field": "field1", "value": "value1"}, {"field": "field2", "value": "value2"}]);
+     * console.log(result); // Output: 2 - Indicates that 2 fields were successfully set in the hash "my_hash".
+     *
+     * // Example usage of the hset method using Record<string, GlideString> as input
+     * const result = await client.hset("my_hash", {"field1": "value", "field2": "value2"});
      * console.log(result); // Output: 2 - Indicates that 2 fields were successfully set in the hash "my_hash".
      * ```
      */
