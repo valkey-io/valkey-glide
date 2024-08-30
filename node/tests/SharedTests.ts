@@ -4303,7 +4303,7 @@ export function runBaseTests(config: {
                 expect(await client.zdiffstore(key4, [key1, key2])).toEqual(2);
                 const result1 = await client.zrangeWithScores(key4, {
                     start: 0,
-                    stop: -1,
+                    end: -1,
                 });
                 const expected1 = { one: 1.0, three: 3.0 };
                 expect(compareMaps(result1, expected1)).toBe(true);
@@ -4317,7 +4317,7 @@ export function runBaseTests(config: {
                 ).toEqual(1);
                 const result2 = await client.zrangeWithScores(key4, {
                     start: 0,
-                    stop: -1,
+                    end: -1,
                 });
                 expect(compareMaps(result2, { four: 4.0 })).toBe(true);
 
@@ -4326,7 +4326,7 @@ export function runBaseTests(config: {
                 ).toEqual(0);
                 const result3 = await client.zrangeWithScores(key4, {
                     start: 0,
-                    stop: -1,
+                    end: -1,
                 });
                 expect(compareMaps(result3, {})).toBe(true);
 
@@ -4335,7 +4335,7 @@ export function runBaseTests(config: {
                 ).toEqual(0);
                 const result4 = await client.zrangeWithScores(key4, {
                     start: 0,
-                    stop: -1,
+                    end: -1,
                 });
                 expect(compareMaps(result4, {})).toBe(true);
 
@@ -4384,7 +4384,7 @@ export function runBaseTests(config: {
         const key3 = "{testKey}:3-" + uuidv4();
         const range = {
             start: 0,
-            stop: -1,
+            end: -1,
         };
 
         const membersScores1 = { one: 1.0, two: 2.0 };
@@ -4410,7 +4410,7 @@ export function runBaseTests(config: {
         const key3 = "{testKey}:3-" + uuidv4();
         const range = {
             start: 0,
-            stop: -1,
+            end: -1,
         };
 
         const membersScores1 = { one: 1.0, two: 2.0 };
@@ -4436,7 +4436,7 @@ export function runBaseTests(config: {
         const key3 = "{testKey}:3-" + uuidv4();
         const range = {
             start: 0,
-            stop: -1,
+            end: -1,
         };
 
         const membersScores1 = { one: 1.0, two: 2.0 };
@@ -4462,7 +4462,7 @@ export function runBaseTests(config: {
         const key3 = "{testKey}:3-" + uuidv4();
         const range = {
             start: 0,
-            stop: -1,
+            end: -1,
         };
 
         const membersScores1 = { one: 1.0, two: 2.0 };
@@ -4487,7 +4487,7 @@ export function runBaseTests(config: {
         const key3 = "{testKey}:3-" + uuidv4();
         const range = {
             start: 0,
-            stop: -1,
+            end: -1,
         };
         const membersScores1 = { one: 1.0, two: 2.0 };
         const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
@@ -4523,7 +4523,7 @@ export function runBaseTests(config: {
         const key2 = "{testKey}:2-" + uuidv4();
         const range = {
             start: 0,
-            stop: -1,
+            end: -1,
         };
         const membersScores1 = { one: 1.0, two: 2.0 };
 
@@ -4688,12 +4688,13 @@ export function runBaseTests(config: {
                 const membersScores = { one: 1, two: 2, three: 3 };
                 expect(await client.zadd(key, membersScores)).toEqual(3);
 
-                expect(await client.zrange(key, { start: 0, stop: 1 })).toEqual(
-                    ["one", "two"],
-                );
+                expect(await client.zrange(key, { start: 0, end: 1 })).toEqual([
+                    "one",
+                    "two",
+                ]);
                 const result = await client.zrangeWithScores(key, {
                     start: 0,
-                    stop: -1,
+                    end: -1,
                 });
 
                 expect(
@@ -4704,13 +4705,13 @@ export function runBaseTests(config: {
                     }),
                 ).toBe(true);
                 expect(
-                    await client.zrange(key, { start: 0, stop: 1 }, true),
+                    await client.zrange(key, { start: 0, end: 1 }, true),
                 ).toEqual(["three", "two"]);
-                expect(await client.zrange(key, { start: 3, stop: 1 })).toEqual(
+                expect(await client.zrange(key, { start: 3, end: 1 })).toEqual(
                     [],
                 );
                 expect(
-                    await client.zrangeWithScores(key, { start: 3, stop: 1 }),
+                    await client.zrangeWithScores(key, { start: 3, end: 1 }),
                 ).toEqual({});
             }, protocol);
         },
@@ -4728,13 +4729,13 @@ export function runBaseTests(config: {
                 expect(
                     await client.zrange(key, {
                         start: InfBoundary.NegativeInfinity,
-                        stop: { value: 3, isInclusive: false },
+                        end: { value: 3, isInclusive: false },
                         type: "byScore",
                     }),
                 ).toEqual(["one", "two"]);
                 const result = await client.zrangeWithScores(key, {
                     start: InfBoundary.NegativeInfinity,
-                    stop: InfBoundary.PositiveInfinity,
+                    end: InfBoundary.PositiveInfinity,
                     type: "byScore",
                 });
 
@@ -4750,7 +4751,7 @@ export function runBaseTests(config: {
                         key,
                         {
                             start: { value: 3, isInclusive: false },
-                            stop: InfBoundary.NegativeInfinity,
+                            end: InfBoundary.NegativeInfinity,
                             type: "byScore",
                         },
                         true,
@@ -4760,7 +4761,7 @@ export function runBaseTests(config: {
                 expect(
                     await client.zrange(key, {
                         start: InfBoundary.NegativeInfinity,
-                        stop: InfBoundary.PositiveInfinity,
+                        end: InfBoundary.PositiveInfinity,
                         limit: { offset: 1, count: 2 },
                         type: "byScore",
                     }),
@@ -4771,7 +4772,7 @@ export function runBaseTests(config: {
                         key,
                         {
                             start: InfBoundary.NegativeInfinity,
-                            stop: { value: 3, isInclusive: false },
+                            end: { value: 3, isInclusive: false },
                             type: "byScore",
                         },
                         true,
@@ -4781,7 +4782,7 @@ export function runBaseTests(config: {
                 expect(
                     await client.zrange(key, {
                         start: InfBoundary.PositiveInfinity,
-                        stop: { value: 3, isInclusive: false },
+                        end: { value: 3, isInclusive: false },
                         type: "byScore",
                     }),
                 ).toEqual([]);
@@ -4791,7 +4792,7 @@ export function runBaseTests(config: {
                         key,
                         {
                             start: InfBoundary.NegativeInfinity,
-                            stop: { value: 3, isInclusive: false },
+                            end: { value: 3, isInclusive: false },
                             type: "byScore",
                         },
                         true,
@@ -4801,7 +4802,7 @@ export function runBaseTests(config: {
                 expect(
                     await client.zrangeWithScores(key, {
                         start: InfBoundary.PositiveInfinity,
-                        stop: { value: 3, isInclusive: false },
+                        end: { value: 3, isInclusive: false },
                         type: "byScore",
                     }),
                 ).toEqual({});
@@ -4821,7 +4822,7 @@ export function runBaseTests(config: {
                 expect(
                     await client.zrange(key, {
                         start: InfBoundary.NegativeInfinity,
-                        stop: { value: "c", isInclusive: false },
+                        end: { value: "c", isInclusive: false },
                         type: "byLex",
                     }),
                 ).toEqual(["a", "b"]);
@@ -4829,7 +4830,7 @@ export function runBaseTests(config: {
                 expect(
                     await client.zrange(key, {
                         start: InfBoundary.NegativeInfinity,
-                        stop: InfBoundary.PositiveInfinity,
+                        end: InfBoundary.PositiveInfinity,
                         limit: { offset: 1, count: 2 },
                         type: "byLex",
                     }),
@@ -4840,7 +4841,7 @@ export function runBaseTests(config: {
                         key,
                         {
                             start: { value: "c", isInclusive: false },
-                            stop: InfBoundary.NegativeInfinity,
+                            end: InfBoundary.NegativeInfinity,
                             type: "byLex",
                         },
                         true,
@@ -4852,7 +4853,7 @@ export function runBaseTests(config: {
                         key,
                         {
                             start: InfBoundary.NegativeInfinity,
-                            stop: { value: "c", isInclusive: false },
+                            end: { value: "c", isInclusive: false },
                             type: "byLex",
                         },
                         true,
@@ -4862,7 +4863,7 @@ export function runBaseTests(config: {
                 expect(
                     await client.zrange(key, {
                         start: InfBoundary.PositiveInfinity,
-                        stop: { value: "c", isInclusive: false },
+                        end: { value: "c", isInclusive: false },
                         type: "byLex",
                     }),
                 ).toEqual([]);
@@ -4885,13 +4886,13 @@ export function runBaseTests(config: {
                 expect(
                     await client.zrangeStore(destkey, key, {
                         start: 0,
-                        stop: 1,
+                        end: 1,
                     }),
                 ).toEqual(2);
                 expect(
                     await client.zrange(destkey, {
                         start: 0,
-                        stop: -1,
+                        end: -1,
                     }),
                 ).toEqual(["one", "two"]);
 
@@ -4899,7 +4900,7 @@ export function runBaseTests(config: {
                     await client.zrangeStore(
                         destkey,
                         key,
-                        { start: 0, stop: 1 },
+                        { start: 0, end: 1 },
                         true,
                     ),
                 ).toEqual(2);
@@ -4908,7 +4909,7 @@ export function runBaseTests(config: {
                         destkey,
                         {
                             start: 0,
-                            stop: -1,
+                            end: -1,
                         },
                         true,
                     ),
@@ -4917,7 +4918,7 @@ export function runBaseTests(config: {
                 expect(
                     await client.zrangeStore(destkey, key, {
                         start: 3,
-                        stop: 1,
+                        end: 1,
                     }),
                 ).toEqual(0);
             }, protocol);
@@ -4938,14 +4939,14 @@ export function runBaseTests(config: {
                 expect(
                     await client.zrangeStore(destkey, key, {
                         start: InfBoundary.NegativeInfinity,
-                        stop: { value: 3, isInclusive: false },
+                        end: { value: 3, isInclusive: false },
                         type: "byScore",
                     }),
                 ).toEqual(2);
                 expect(
                     await client.zrange(destkey, {
                         start: 0,
-                        stop: -1,
+                        end: -1,
                     }),
                 ).toEqual(["one", "two"]);
 
@@ -4955,7 +4956,7 @@ export function runBaseTests(config: {
                         key,
                         {
                             start: { value: 3, isInclusive: false },
-                            stop: InfBoundary.NegativeInfinity,
+                            end: InfBoundary.NegativeInfinity,
                             type: "byScore",
                         },
                         true,
@@ -4966,7 +4967,7 @@ export function runBaseTests(config: {
                         destkey,
                         {
                             start: 0,
-                            stop: -1,
+                            end: -1,
                         },
                         true,
                     ),
@@ -4975,7 +4976,7 @@ export function runBaseTests(config: {
                 expect(
                     await client.zrangeStore(destkey, key, {
                         start: InfBoundary.NegativeInfinity,
-                        stop: InfBoundary.PositiveInfinity,
+                        end: InfBoundary.PositiveInfinity,
                         limit: { offset: 1, count: 2 },
                         type: "byScore",
                     }),
@@ -4983,7 +4984,7 @@ export function runBaseTests(config: {
                 expect(
                     await client.zrange(destkey, {
                         start: 0,
-                        stop: -1,
+                        end: -1,
                     }),
                 ).toEqual(["two", "three"]);
 
@@ -4993,7 +4994,7 @@ export function runBaseTests(config: {
                         key,
                         {
                             start: InfBoundary.NegativeInfinity,
-                            stop: { value: 3, isInclusive: false },
+                            end: { value: 3, isInclusive: false },
                             type: "byScore",
                         },
                         true,
@@ -5003,7 +5004,7 @@ export function runBaseTests(config: {
                 expect(
                     await client.zrangeStore(destkey, key, {
                         start: InfBoundary.PositiveInfinity,
-                        stop: { value: 3, isInclusive: false },
+                        end: { value: 3, isInclusive: false },
                         type: "byScore",
                     }),
                 ).toEqual(0);
@@ -5025,21 +5026,21 @@ export function runBaseTests(config: {
                 expect(
                     await client.zrangeStore(destkey, key, {
                         start: InfBoundary.NegativeInfinity,
-                        stop: { value: "c", isInclusive: false },
+                        end: { value: "c", isInclusive: false },
                         type: "byLex",
                     }),
                 ).toEqual(2);
                 expect(
                     await client.zrange(destkey, {
                         start: 0,
-                        stop: -1,
+                        end: -1,
                     }),
                 ).toEqual(["a", "b"]);
 
                 expect(
                     await client.zrangeStore(destkey, key, {
                         start: InfBoundary.NegativeInfinity,
-                        stop: InfBoundary.PositiveInfinity,
+                        end: InfBoundary.PositiveInfinity,
                         limit: { offset: 1, count: 2 },
                         type: "byLex",
                     }),
@@ -5047,7 +5048,7 @@ export function runBaseTests(config: {
                 expect(
                     await client.zrange(destkey, {
                         start: 0,
-                        stop: -1,
+                        end: -1,
                     }),
                 ).toEqual(["b", "c"]);
 
@@ -5057,7 +5058,7 @@ export function runBaseTests(config: {
                         key,
                         {
                             start: { value: "c", isInclusive: false },
-                            stop: InfBoundary.NegativeInfinity,
+                            end: InfBoundary.NegativeInfinity,
                             type: "byLex",
                         },
                         true,
@@ -5068,7 +5069,7 @@ export function runBaseTests(config: {
                         destkey,
                         {
                             start: 0,
-                            stop: -1,
+                            end: -1,
                         },
                         true,
                     ),
@@ -5080,7 +5081,7 @@ export function runBaseTests(config: {
                         key,
                         {
                             start: InfBoundary.NegativeInfinity,
-                            stop: { value: "c", isInclusive: false },
+                            end: { value: "c", isInclusive: false },
                             type: "byLex",
                         },
                         true,
@@ -5090,7 +5091,7 @@ export function runBaseTests(config: {
                 expect(
                     await client.zrangeStore(destkey, key, {
                         start: InfBoundary.PositiveInfinity,
-                        stop: { value: "c", isInclusive: false },
+                        end: { value: "c", isInclusive: false },
                         type: "byLex",
                     }),
                 ).toEqual(0);
@@ -5111,14 +5112,14 @@ export function runBaseTests(config: {
                 expect(
                     await client.zrange(nonExistingKey, {
                         start: 0,
-                        stop: 1,
+                        end: 1,
                     }),
                 ).toEqual([]);
 
                 expect(
                     await client.zrangeWithScores(nonExistingKey, {
                         start: 0,
-                        stop: 1,
+                        end: 1,
                     }),
                 ).toEqual({});
 
@@ -5126,11 +5127,11 @@ export function runBaseTests(config: {
                 expect(await client.set(key, "value")).toEqual("OK");
 
                 await expect(
-                    client.zrange(key, { start: 0, stop: 1 }),
+                    client.zrange(key, { start: 0, end: 1 }),
                 ).rejects.toThrow();
 
                 await expect(
-                    client.zrangeWithScores(key, { start: 0, stop: 1 }),
+                    client.zrangeWithScores(key, { start: 0, end: 1 }),
                 ).rejects.toThrow();
 
                 // test zrangeStore - added in version 6.2.0
@@ -5140,13 +5141,13 @@ export function runBaseTests(config: {
                 expect(
                     await client.zrangeStore(destkey, nonExistingKey, {
                         start: 0,
-                        stop: 1,
+                        end: 1,
                     }),
                 ).toEqual(0);
 
                 // test against a non-sorted set - throw RequestError
                 await expect(
-                    client.zrangeStore(destkey, key, { start: 0, stop: 1 }),
+                    client.zrangeStore(destkey, key, { start: 0, end: 1 }),
                 ).rejects.toThrow();
             }, protocol);
         },
@@ -5160,7 +5161,7 @@ export function runBaseTests(config: {
         const key3 = "{testKey}:3-" + uuidv4();
         const range = {
             start: 0,
-            stop: -1,
+            end: -1,
         };
 
         const membersScores1 = { one: 1.0, two: 2.0 };
@@ -5207,7 +5208,7 @@ export function runBaseTests(config: {
         const key3 = "{testKey}:3-" + uuidv4();
         const range = {
             start: 0,
-            stop: -1,
+            end: -1,
         };
 
         const membersScores1 = { one: 1.0, two: 2.0 };
@@ -5231,7 +5232,7 @@ export function runBaseTests(config: {
         const key3 = "{testKey}:3-" + uuidv4();
         const range = {
             start: 0,
-            stop: -1,
+            end: -1,
         };
         const membersScores1 = { one: 1.0, two: 2.0 };
         const membersScores2 = { one: 2.0, two: 3.0, three: 4.0 };
@@ -8618,7 +8619,7 @@ export function runBaseTests(config: {
                     ),
                 ).toEqual(4);
                 expect(
-                    await client.zrange(key2, { start: 0, stop: -1 }),
+                    await client.zrange(key2, { start: 0, end: -1 }),
                 ).toEqual(searchResult);
 
                 // order search result
@@ -8640,7 +8641,7 @@ export function runBaseTests(config: {
                     ),
                 ).toEqual(4);
                 expect(
-                    await client.zrange(key2, { start: 0, stop: -1 }),
+                    await client.zrange(key2, { start: 0, end: -1 }),
                 ).toEqual(searchResult);
 
                 // order and query all extra data
@@ -8686,7 +8687,7 @@ export function runBaseTests(config: {
                     ),
                 ).toEqual(1);
                 expect(
-                    await client.zrange(key2, { start: 0, stop: -1 }),
+                    await client.zrange(key2, { start: 0, end: -1 }),
                 ).toEqual([members[0]]);
 
                 // test search by box, unit: meters, from member, with distance
@@ -8720,7 +8721,7 @@ export function runBaseTests(config: {
                 expect(
                     await client.zrangeWithScores(
                         key2,
-                        { start: 0, stop: -1 },
+                        { start: 0, end: -1 },
                         true,
                     ),
                 ).toEqual({
@@ -8761,7 +8762,7 @@ export function runBaseTests(config: {
                     ),
                 ).toEqual(2);
                 expect(
-                    await client.zrangeWithScores(key2, { start: 0, stop: -1 }),
+                    await client.zrangeWithScores(key2, { start: 0, end: -1 }),
                 ).toEqual({
                     Palermo: 3479099956230698,
                     edge1: 3479273021651468,
@@ -8787,7 +8788,7 @@ export function runBaseTests(config: {
                     ),
                 ).toEqual(1);
                 expect(
-                    await client.zrange(key2, { start: 0, stop: -1 }),
+                    await client.zrange(key2, { start: 0, end: -1 }),
                 ).toEqual(searchResult);
 
                 // test search by radius, units: feet, from member
@@ -8810,7 +8811,7 @@ export function runBaseTests(config: {
                     ),
                 ).toEqual(2);
                 expect(
-                    await client.zrange(key2, { start: 0, stop: -1 }),
+                    await client.zrange(key2, { start: 0, end: -1 }),
                 ).toEqual(searchResult);
 
                 // Test search by radius, unit: meters, from member
@@ -8833,7 +8834,7 @@ export function runBaseTests(config: {
                     ),
                 ).toEqual(2);
                 expect(
-                    await client.zrange(key2, { start: 0, stop: -1 }, true),
+                    await client.zrange(key2, { start: 0, end: -1 }, true),
                 ).toEqual(searchResult);
 
                 searchResult = await client.geosearch(
@@ -8874,7 +8875,7 @@ export function runBaseTests(config: {
                     ),
                 ).toEqual(4);
                 expect(
-                    await client.zrange(key2, { start: 0, stop: -1 }, true),
+                    await client.zrange(key2, { start: 0, end: -1 }, true),
                 ).toEqual(searchResult);
 
                 // Test search by radius, unit: kilometers, from a geospatial data, with limited count to 2
@@ -8906,7 +8907,7 @@ export function runBaseTests(config: {
                     ),
                 ).toEqual(2);
                 expect(
-                    await client.zrange(key2, { start: 0, stop: -1 }),
+                    await client.zrange(key2, { start: 0, end: -1 }),
                 ).toEqual(members.slice(0, 2));
 
                 // Test search by radius, unit: kilometers, from a geospatial data, with limited ANY count to 1
@@ -8939,7 +8940,7 @@ export function runBaseTests(config: {
                     ),
                 ).toEqual(1);
                 expect(
-                    await client.zrange(key2, { start: 0, stop: -1 }),
+                    await client.zrange(key2, { start: 0, end: -1 }),
                 ).toEqual([searchResult[0][0]]);
 
                 // no members within the area
@@ -9567,7 +9568,7 @@ export function runBaseTests(config: {
                     ),
                 ).toEqual(4);
                 expect(
-                    await client.zrange(key2, { start: 0, stop: -1 }),
+                    await client.zrange(key2, { start: 0, end: -1 }),
                 ).toEqual(searchResult);
             }, protocol);
         },

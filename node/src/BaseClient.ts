@@ -3730,7 +3730,7 @@ export class BaseClient {
      * const result1 = await client.zdiffstore("zset3", ["zset1", "zset2"]);
      * console.log(result1); // Output: 1 - One member exists in "key1" but not "key2", and this member was stored in "zset3".
      *
-     * const result2 = await client.zrange("zset3", {start: 0, stop: -1});
+     * const result2 = await client.zrange("zset3", {start: 0, end: -1});
      * console.log(result2); // Output: ["member2"] - "member2" is now stored in "my_sorted_set".
      * ```
      */
@@ -3889,7 +3889,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of zrange method to retrieve all members of a sorted set in ascending order
-     * const result = await client.zrange("my_sorted_set", { start: 0, stop: -1 });
+     * const result = await client.zrange("my_sorted_set", { start: 0, end: -1 });
      * console.log(result1); // Output: ['member1', 'member2', 'member3'] - Returns all members in ascending order.
      * ```
      * @example
@@ -3897,7 +3897,7 @@ export class BaseClient {
      * // Example usage of zrange method to retrieve members within a score range in ascending order
      * const result = await client.zrange("my_sorted_set", {
      *              start: InfBoundary.NegativeInfinity,
-     *              stop: { value: 3, isInclusive: false },
+     *              end: { value: 3, isInclusive: false },
      *              type: "byScore",
      *           });
      * console.log(result); // Output: ['member2', 'member3'] - Returns members with scores within the range of negative infinity to 3, in ascending order.
@@ -3930,7 +3930,7 @@ export class BaseClient {
      * // Example usage of zrangeWithScores method to retrieve members within a score range with their scores
      * const result = await client.zrangeWithScores("my_sorted_set", {
      *              start: { value: 10, isInclusive: false },
-     *              stop: { value: 20, isInclusive: false },
+     *              end: { value: 20, isInclusive: false },
      *              type: "byScore",
      *           });
      * console.log(result); // Output: {'member1': 10.5, 'member2': 15.2} - Returns members with scores between 10 and 20 with their scores.
@@ -3940,7 +3940,7 @@ export class BaseClient {
      * // Example usage of zrangeWithScores method to retrieve members within a score range with their scores
      * const result = await client.zrangeWithScores("my_sorted_set", {
      *              start: InfBoundary.NegativeInfinity,
-     *              stop: { value: 3, isInclusive: false },
+     *              end: { value: 3, isInclusive: false },
      *              type: "byScore",
      *           });
      * console.log(result); // Output: {'member4': -2.0, 'member7': 1.5} - Returns members with scores within the range of negative infinity to 3, with their scores.
@@ -3977,7 +3977,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of zrangeStore to retrieve and store all members of a sorted set in ascending order.
-     * const result = await client.zrangeStore("destination_key", "my_sorted_set", { start: 0, stop: -1 });
+     * const result = await client.zrangeStore("destination_key", "my_sorted_set", { start: 0, end: -1 });
      * console.log(result); // Output: 7 - "destination_key" contains a sorted set with the 7 members from "my_sorted_set".
      * ```
      * @example
@@ -3985,7 +3985,7 @@ export class BaseClient {
      * // Example usage of zrangeStore method to retrieve members within a score range in ascending order and store in "destination_key"
      * const result = await client.zrangeStore("destination_key", "my_sorted_set", {
      *              start: InfBoundary.NegativeInfinity,
-     *              stop: { value: 3, isInclusive: false },
+     *              end: { value: 3, isInclusive: false },
      *              type: "byScore",
      *           });
      * console.log(result); // Output: 5 - Stores 5 members with scores within the range of negative infinity to 3, in ascending order, in "destination_key".
@@ -4026,13 +4026,13 @@ export class BaseClient {
      * // use `zinterstore` with default aggregation and weights
      * console.log(await client.zinterstore("my_sorted_set", ["key1", "key2"]))
      * // Output: 1 - Indicates that the sorted set "my_sorted_set" contains one element.
-     * console.log(await client.zrangeWithScores("my_sorted_set", {start: 0, stop: -1}))
+     * console.log(await client.zrangeWithScores("my_sorted_set", {start: 0, end: -1}))
      * // Output: {'member1': 20} - "member1" is now stored in "my_sorted_set" with score of 20.
      *
      * // use `zinterstore` with default weights
      * console.log(await client.zinterstore("my_sorted_set", ["key1", "key2"] , AggregationType.MAX))
      * // Output: 1 - Indicates that the sorted set "my_sorted_set" contains one element, and it's score is the maximum score between the sets.
-     * console.log(await client.zrangeWithScores("my_sorted_set", {start: 0, stop: -1}))
+     * console.log(await client.zrangeWithScores("my_sorted_set", {start: 0, end: -1}))
      * // Output: {'member1': 10.5} - "member1" is now stored in "my_sorted_set" with score of 10.5.
      * ```
      */
@@ -6068,7 +6068,7 @@ export class BaseClient {
      * // search for locations within 200 km circle around stored member named 'Palermo' and store in `destination`:
      * await client.geosearchstore("destination", "mySortedSet", { member: "Palermo" }, { radius: 200, unit: GeoUnit.KILOMETERS });
      * // query the stored results
-     * const result1 = await client.zrangeWithScores("destination", { start: 0, stop: -1 });
+     * const result1 = await client.zrangeWithScores("destination", { start: 0, end: -1 });
      * console.log(result1); // Output:
      * // {
      * //     Palermo: 3479099956230698,   // geohash of the location is stored as element's score
@@ -6089,7 +6089,7 @@ export class BaseClient {
      *     },
      * );
      * // query the stored results
-     * const result2 = await client.zrangeWithScores("destination", { start: 0, stop: -1 });
+     * const result2 = await client.zrangeWithScores("destination", { start: 0, end: -1 });
      * console.log(result2); // Output:
      * // {
      * //     Palermo: 190.4424,   // distance from the search area center is stored as element's score
