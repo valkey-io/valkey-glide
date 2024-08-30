@@ -1356,14 +1356,16 @@ export function runBaseTests(config: {
                 );
 
                 //hget with binary buffer
-                expect(await client.hget(key, field1, Decoder.Bytes)).toEqual(
-                    valueEncoded,
-                );
-                expect(await client.hget(key, field2, Decoder.Bytes)).toEqual(
-                    valueEncoded,
-                );
                 expect(
-                    await client.hget(key, "nonExistingField", Decoder.Bytes),
+                    await client.hget(key, field1, { decoder: Decoder.Bytes }),
+                ).toEqual(valueEncoded);
+                expect(
+                    await client.hget(key, field2, { decoder: Decoder.Bytes }),
+                ).toEqual(valueEncoded);
+                expect(
+                    await client.hget(key, "nonExistingField", {
+                        decoder: Decoder.Bytes,
+                    }),
                 ).toEqual(null);
             }, protocol);
         },

@@ -1649,8 +1649,7 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param field - The field in the hash stored at `key` to retrieve from the database.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns the value associated with `field`, or null when `field` is not present in the hash or `key` does not exist.
      *
      * @example
@@ -1671,11 +1670,9 @@ export class BaseClient {
     public async hget(
         key: GlideString,
         field: GlideString,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString | null> {
-        return this.createWritePromise(createHGet(key, field), {
-            decoder: decoder,
-        });
+        return this.createWritePromise(createHGet(key, field), options);
     }
 
     /** Sets the specified fields to their respective values in the hash stored at `key`.
