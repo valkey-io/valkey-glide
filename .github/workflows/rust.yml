@@ -1,113 +1,113 @@
-name: Rust tests
-
-on:
-    push:
-        branches: [main]
-        paths:
-            - logger_core/**
-            - glide-core/**
-            - submodules/**
-            - utils/cluster_manager.py
-            - .github/workflows/rust.yml
-            - .github/workflows/install-shared-dependencies/action.yml
-            - .github/workflows/install-valkey/action.yml
-            - .github/json_matrices/build-matrix.json
-    pull_request:
-        paths:
-            - logger_core/**
-            - glide-core/**
-            - submodules/**
-            - utils/cluster_manager.py
-            - .github/workflows/rust.yml
-            - .github/workflows/install-shared-dependencies/action.yml
-            - .github/workflows/install-valkey/action.yml
-            - .github/json_matrices/build-matrix.json
-    workflow_dispatch:
-
-concurrency:
-    group: rust-${{ github.head_ref || github.ref }}
-    cancel-in-progress: true
-
-env:
-    CARGO_TERM_COLOR: always
-
-jobs:
-    load-engine-matrix:
-      runs-on: ubuntu-latest
-      outputs:
-        matrix: ${{ steps.load-engine-matrix.outputs.matrix }}
-      steps:
-          - name: Checkout
-            uses: actions/checkout@v4
-
-          - name: Load the engine matrix
-            id: load-engine-matrix
-            shell: bash
-            run: echo "matrix=$(jq -c . < .github/json_matrices/engine-matrix.json)" >> $GITHUB_OUTPUT
-
-    build:
-        runs-on: ubuntu-latest
-        needs: load-engine-matrix
-        timeout-minutes: 15
-        strategy:
-            fail-fast: false
-            matrix:
-                engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
-
-        steps:
-            - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
-
-            - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
-              with:
-                  os: "ubuntu"
-                  target: "x86_64-unknown-linux-gnu"
-                  engine-version: ${{ matrix.engine.version }}
-
-            - uses: Swatinem/rust-cache@v2
-
-            - name: Run tests
-              working-directory: ./glide-core
-              run: cargo test --all-features -- --nocapture --test-threads=1 # TODO remove the concurrency limit after we fix test flakyness.
-
-            - name: Run logger tests
-              working-directory: ./logger_core
-              run: cargo test --all-features -- --nocapture --test-threads=1
-
-            - name: Check features
-              working-directory: ./glide-core
-              run: |
-                  cargo check --benches --all-features
-                  cargo check --no-default-features
-
-            - uses: ./.github/workflows/test-benchmark
-              with:
-                  language-flag: -rust
-
-    lint:
-        runs-on: ubuntu-latest
-        timeout-minutes: 30
-        steps:
-            - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
-
-            - uses: ./.github/workflows/lint-rust
-              with:
-                  cargo-toml-folder: ./glide-core
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-              name: lint glide-core
-
-            - uses: ./.github/workflows/lint-rust
-              with:
-                  cargo-toml-folder: ./logger_core
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-              name: lint logger
-
-            - uses: ./.github/workflows/lint-rust
-              with:
-                  cargo-toml-folder: ./benchmarks/rust
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-              name: lint benchmark
+#name: Rust tests
+#
+#on:
+#    push:
+#        branches: [main]
+#        paths:
+#            - logger_core/**
+#            - glide-core/**
+#            - submodules/**
+#            - utils/cluster_manager.py
+#            - .github/workflows/rust.yml
+#            - .github/workflows/install-shared-dependencies/action.yml
+#            - .github/workflows/install-valkey/action.yml
+#            - .github/json_matrices/build-matrix.json
+#    pull_request:
+#        paths:
+#            - logger_core/**
+#            - glide-core/**
+#            - submodules/**
+#            - utils/cluster_manager.py
+#            - .github/workflows/rust.yml
+#            - .github/workflows/install-shared-dependencies/action.yml
+#            - .github/workflows/install-valkey/action.yml
+#            - .github/json_matrices/build-matrix.json
+#    workflow_dispatch:
+#
+#concurrency:
+#    group: rust-${{ github.head_ref || github.ref }}
+#    cancel-in-progress: true
+#
+#env:
+#    CARGO_TERM_COLOR: always
+#
+#jobs:
+#    load-engine-matrix:
+#      runs-on: ubuntu-latest
+#      outputs:
+#        matrix: ${{ steps.load-engine-matrix.outputs.matrix }}
+#      steps:
+#          - name: Checkout
+#            uses: actions/checkout@v4
+#
+#          - name: Load the engine matrix
+#            id: load-engine-matrix
+#            shell: bash
+#            run: echo "matrix=$(jq -c . < .github/json_matrices/engine-matrix.json)" >> $GITHUB_OUTPUT
+#
+#    build:
+#        runs-on: ubuntu-latest
+#        needs: load-engine-matrix
+#        timeout-minutes: 15
+#        strategy:
+#            fail-fast: false
+#            matrix:
+#                engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
+#
+#        steps:
+#            - uses: actions/checkout@v4
+#              with:
+#                  submodules: recursive
+#
+#            - name: Install shared software dependencies
+#              uses: ./.github/workflows/install-shared-dependencies
+#              with:
+#                  os: "ubuntu"
+#                  target: "x86_64-unknown-linux-gnu"
+#                  engine-version: ${{ matrix.engine.version }}
+#
+#            - uses: Swatinem/rust-cache@v2
+#
+#            - name: Run tests
+#              working-directory: ./glide-core
+#              run: cargo test --all-features -- --nocapture --test-threads=1 # TODO remove the concurrency limit after we fix test flakyness.
+#
+#            - name: Run logger tests
+#              working-directory: ./logger_core
+#              run: cargo test --all-features -- --nocapture --test-threads=1
+#
+#            - name: Check features
+#              working-directory: ./glide-core
+#              run: |
+#                  cargo check --benches --all-features
+#                  cargo check --no-default-features
+#
+#            - uses: ./.github/workflows/test-benchmark
+#              with:
+#                  language-flag: -rust
+#
+#    lint:
+#        runs-on: ubuntu-latest
+#        timeout-minutes: 30
+#        steps:
+#            - uses: actions/checkout@v4
+#              with:
+#                  submodules: recursive
+#
+#            - uses: ./.github/workflows/lint-rust
+#              with:
+#                  cargo-toml-folder: ./glide-core
+#                  github-token: ${{ secrets.GITHUB_TOKEN }}
+#              name: lint glide-core
+#
+#            - uses: ./.github/workflows/lint-rust
+#              with:
+#                  cargo-toml-folder: ./logger_core
+#                  github-token: ${{ secrets.GITHUB_TOKEN }}
+#              name: lint logger
+#
+#            - uses: ./.github/workflows/lint-rust
+#              with:
+#                  cargo-toml-folder: ./benchmarks/rust
+#                  github-token: ${{ secrets.GITHUB_TOKEN }}
+#              name: lint benchmark

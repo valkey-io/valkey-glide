@@ -7,10 +7,10 @@ on:
     workflow_dispatch:
         inputs:
             version:
-                description: 'The release version of GLIDE, formatted as *.*.* or *.*.*-rc*'
+                description: "The release version of GLIDE, formatted as *.*.* or *.*.*-rc*"
                 required: true
             maven_publish:
-                description: 'Publish to Maven Central'
+                description: "Publish to Maven Central"
                 required: true
                 type: boolean
 
@@ -24,7 +24,7 @@ permissions:
 jobs:
     load-platform-matrix:
         runs-on: ubuntu-latest
-        environment: AWS_ACTIONS
+#        environment: AWS_ACTIONS
         outputs:
             PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.PLATFORM_MATRIX }}
         steps:
@@ -49,24 +49,24 @@ jobs:
               id: release-version
               shell: bash
               run: |
-                if ${{ github.event_name == 'workflow_dispatch' }}; then
-                    R_VERSION="${{ env.INPUT_VERSION }}"
-                else
-                    R_VERSION=${GITHUB_REF:11}
-                fi
-                    echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
-                    echo "Release version detected: $R_VERSION"
-                echo "RELEASE_VERSION=$R_VERSION" >> $GITHUB_OUTPUT
+                  if ${{ github.event_name == 'workflow_dispatch' }}; then
+                      R_VERSION="${{ env.INPUT_VERSION }}"
+                  else
+                      R_VERSION=${GITHUB_REF:11}
+                  fi
+                      echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
+                      echo "Release version detected: $R_VERSION"
+                  echo "RELEASE_VERSION=$R_VERSION" >> $GITHUB_OUTPUT
               env:
-                EVENT_NAME: ${{ github.event_name }}
-                INPUT_VERSION: ${{ github.event.inputs.version }}
+                  EVENT_NAME: ${{ github.event_name }}
+                  INPUT_VERSION: ${{ github.event.inputs.version }}
 
     create-binaries-to-publish:
         needs: [set-release-version, load-platform-matrix]
         if: github.repository_owner == 'valkey-io'
         timeout-minutes: 35
         env:
-            JAVA_VERSION: '11'
+            JAVA_VERSION: "11"
             RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
         strategy:
             # Run all jobs
@@ -158,15 +158,15 @@ jobs:
 
             - name: Move all required files to one directory
               run: |
-                mkdir maven-files
-                cd maven-files
-                for file in $(find ../. -name "*.jar"); do jar xf "$file" ; done
+                  mkdir maven-files
+                  cd maven-files
+                  for file in $(find ../. -name "*.jar"); do jar xf "$file" ; done
 
             - name: Generate sha1 and md5 files for all Maven files
               run: |
-                cd maven-files
-                for i in *.jar *.pom *.module; do md5sum $i | cut -d ' ' -f 1 > $i.md5; done
-                for i in *.jar *.pom *.module; do sha1sum $i | cut -d ' ' -f 1 > $i.sha1; done
+                  cd maven-files
+                  for i in *.jar *.pom *.module; do md5sum $i | cut -d ' ' -f 1 > $i.md5; done
+                  for i in *.jar *.pom *.module; do sha1sum $i | cut -d ' ' -f 1 > $i.sha1; done
 
             - name: Move files to the correct directory tree
               run: |
@@ -179,9 +179,9 @@ jobs:
             - name: Upload artifacts to publish
               uses: actions/upload-artifact@v4
               with:
-                name: valkey-${{ env.RELEASE_VERSION }}
-                path: |
-                  build
+                  name: valkey-${{ env.RELEASE_VERSION }}
+                  path: |
+                      build
 
             - name: Publish to Maven Central
               id: maven-deployment
@@ -196,29 +196,37 @@ jobs:
 
             - name: Check status of deployment
               run: |
-                  sleep 20
-                  export DEPLOYMENT_STATUS=`curl --request POST \
+                  for ((retries = 0; retries < 5; retries++)); do
+                      sleep 5
+                      export DEPLOYMENT_STATUS=`curl --request POST \
+                      -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
+                      "https://central.sonatype.com/api/v1/publisher/status?id=${{ env.DEPLOYMENT_ID }}" \
+                      | jq '.deploymentState'`
+
+                      if [[ $DEPLOYMENT_STATUS -eq ""\"VALIDATED"\"" ]]; then exit 0; fi
+                  done
+
+                  curl --request POST \
                   -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
                   "https://central.sonatype.com/api/v1/publisher/status?id=${{ env.DEPLOYMENT_ID }}" \
-                  | jq '.deploymentState'`
-                  echo $DEPLOYMENT_STATUS
-                  if [[ $DEPLOYMENT_STATUS != ""\"VALIDATED"\"" || $DEPLOYMENT_STATUS -eq null ]]; then exit 1 ; fi
+                  | jq
+                  exit 1
 
             - uses: actions/checkout@v4
               with:
-                submodules: recursive
+                  submodules: recursive
 
             - name: Set up JDK
               uses: actions/setup-java@v4
               with:
-                distribution: "temurin"
-                java-version: '11'
+                  distribution: "temurin"
+                  java-version: "11"
 
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
               with:
-                version: "26.1"
-                repo-token: ${{ secrets.GITHUB_TOKEN }}
+                  version: "26.1"
+                  repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Test deployment
               working-directory: java
@@ -230,22 +238,23 @@ jobs:
                   ./gradlew run
 
             - name: Drop deployment if validation fails
-              if: ${{ failure() }}
+              if: always()
+#              if: ${{ failure() }}
               run: |
                   curl --request DELETE \
                   -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
                   "https://central.sonatype.com/api/v1/publisher/deployment/${{ env.DEPLOYMENT_ID }}"
 
-    publish-release-to-maven:
-        if: ${{ inputs.maven_publish == true || github.event_name == 'push' }}
-        needs: [publish-to-maven-central-deployment]
-        runs-on: ubuntu-latest
-        environment: AWS_ACTIONS
-        env:
-            DEPLOYMENT_ID: ${{ needs.publish-to-maven-central-deployment.outputs.DEPLOYMENT_ID }}
-        steps:
-            - name: Publish to Maven
-              run: |
-                  curl --request POST \
-                  -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
-                  "https://central.sonatype.com/api/v1/publisher/deployment/${{ env.DEPLOYMENT_ID }}"
+#    publish-release-to-maven:
+#        if: ${{ inputs.maven_publish == true || github.event_name == 'push' }}
+#        needs: [publish-to-maven-central-deployment]
+#        runs-on: ubuntu-latest
+#        environment: AWS_ACTIONS
+#        env:
+#            DEPLOYMENT_ID: ${{ needs.publish-to-maven-central-deployment.outputs.DEPLOYMENT_ID }}
+#        steps:
+#            - name: Publish to Maven
+#              run: |
+#                  curl --request POST \
+#                  -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
+#                  "https://central.sonatype.com/api/v1/publisher/deployment/${{ env.DEPLOYMENT_ID }}"

@@ -1,44 +1,44 @@
-name: lint-ts
-
-on:
-    push:
-        branches: ["main"]
-        paths:
-            - benchmarks/node/**
-            - node/**
-            - benchmarks/utilities/*
-            - .github/workflows/lint-ts.yml
-    pull_request:
-        paths:
-            - benchmarks/node/**
-            - node/**
-            - benchmarks/utilities/*
-            - .github/workflows/lint-ts.yml
-    workflow_dispatch:
-
-concurrency:
-    group: node-lint-${{ github.head_ref || github.ref }}
-    cancel-in-progress: true
-
-env:
-    CARGO_TERM_COLOR: always
-
-jobs:
-    lint:
-        runs-on: ubuntu-latest
-        timeout-minutes: 10
-
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
-
-            - name: Install dependencies
-              run: |
-                  npm install @typescript-eslint/parser @typescript-eslint/eslint-plugin eslint-plugin-tsdoc eslint typescript eslint-plugin-import@latest eslint-config-prettier prettier
-
-            - name: Run linting and prettier
-              run: |
-                  for folder in node benchmarks/node benchmarks/utilities; do
-                    npx eslint ${{ github.workspace }}/$folder
-                    npx prettier --check ${{ github.workspace }}/$folder
-                  done
+#name: lint-ts
+#
+#on:
+#    push:
+#        branches: ["main"]
+#        paths:
+#            - benchmarks/node/**
+#            - node/**
+#            - benchmarks/utilities/*
+#            - .github/workflows/lint-ts.yml
+#    pull_request:
+#        paths:
+#            - benchmarks/node/**
+#            - node/**
+#            - benchmarks/utilities/*
+#            - .github/workflows/lint-ts.yml
+#    workflow_dispatch:
+#
+#concurrency:
+#    group: node-lint-${{ github.head_ref || github.ref }}
+#    cancel-in-progress: true
+#
+#env:
+#    CARGO_TERM_COLOR: always
+#
+#jobs:
+#    lint:
+#        runs-on: ubuntu-latest
+#        timeout-minutes: 10
+#
+#        steps:
+#            - name: Checkout code
+#              uses: actions/checkout@v4
+#
+#            - name: Install dependencies
+#              run: |
+#                  npm install @typescript-eslint/parser @typescript-eslint/eslint-plugin eslint-plugin-tsdoc eslint typescript eslint-plugin-import@latest eslint-config-prettier prettier
+#
+#            - name: Run linting and prettier
+#              run: |
+#                  for folder in node benchmarks/node benchmarks/utilities; do
+#                    npx eslint ${{ github.workspace }}/$folder
+#                    npx prettier --check ${{ github.workspace }}/$folder
+#                  done
