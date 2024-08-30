@@ -296,16 +296,18 @@ export type DecoderOption = {
      */
     decoder?: Decoder;
 };
+
 /**
- * This function converts an input from HashDataType or Record<string, GlideString> types to HashDataType.
+ * This function converts an input from HashDataType or Record types to HashDataType.
  *
  * @param fieldsAndValues field names and their values.
- * @returns An array of field names and their values
+ * @returns HashDataType array containing field names and their values.
  */
 export function convertFieldsAndValuesForHset(
     fieldsAndValues: HashDataType | Record<string, GlideString>,
 ): HashDataType {
     let finalFieldAndValues = [];
+
     if (!Array.isArray(fieldsAndValues)) {
         finalFieldAndValues = Object.entries(fieldsAndValues).map((e) => {
             return { field: e[0], value: e[1] };
@@ -313,6 +315,7 @@ export function convertFieldsAndValuesForHset(
     } else {
         finalFieldAndValues = fieldsAndValues;
     }
+
     return finalFieldAndValues;
 }
 
@@ -753,17 +756,17 @@ export class BaseClient {
     ) {
         const message = Array.isArray(command)
             ? command_request.CommandRequest.create({
-                  callbackIdx,
-                  transaction: command_request.Transaction.create({
-                      commands: command,
-                  }),
-              })
+                callbackIdx,
+                transaction: command_request.Transaction.create({
+                    commands: command,
+                }),
+            })
             : command instanceof command_request.Command
-              ? command_request.CommandRequest.create({
+                ? command_request.CommandRequest.create({
                     callbackIdx,
                     singleCommand: command,
                 })
-              : command_request.CommandRequest.create({
+                : command_request.CommandRequest.create({
                     callbackIdx,
                     scriptInvocation: command,
                 });
@@ -5421,9 +5424,9 @@ export class BaseClient {
         ReadFrom,
         connection_request.ReadFrom
     > = {
-        primary: connection_request.ReadFrom.Primary,
-        preferReplica: connection_request.ReadFrom.PreferReplica,
-    };
+            primary: connection_request.ReadFrom.Primary,
+            preferReplica: connection_request.ReadFrom.PreferReplica,
+        };
 
     /**
      * Returns the number of messages that were successfully acknowledged by the consumer group member of a stream.
@@ -6799,11 +6802,11 @@ export class BaseClient {
             : connection_request.ReadFrom.Primary;
         const authenticationInfo =
             options.credentials !== undefined &&
-            "password" in options.credentials
+                "password" in options.credentials
                 ? {
-                      password: options.credentials.password,
-                      username: options.credentials.username,
-                  }
+                    password: options.credentials.password,
+                    username: options.credentials.username,
+                }
                 : undefined;
         const protocol = options.protocol as
             | connection_request.ProtocolVersion
