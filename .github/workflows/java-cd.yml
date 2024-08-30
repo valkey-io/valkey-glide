@@ -203,7 +203,7 @@ jobs:
                       "https://central.sonatype.com/api/v1/publisher/status?id=${{ env.DEPLOYMENT_ID }}" \
                       | jq '.deploymentState'`
 
-                      if [[ $DEPLOYMENT_STATUS -eq ""\"VALIDATED"\"" ]]; then exit 0; fi
+                      if [[ $DEPLOYMENT_STATUS == ""\"VALIDATED"\"" ]]; then exit 0; fi
                   done
 
                   curl --request POST \
