@@ -1698,16 +1698,10 @@ export function runBaseTests(config: {
                 const field1 = uuidv4();
                 const field2 = uuidv4();
                 const value = uuidv4();
-                const fieldValueMap = [
-                    {
-                        field: field1,
-                        value,
-                    },
-                    {
-                        field: field2,
-                        value,
-                    },
-                ];
+                const fieldValueMap = {
+                    [field1]: value,
+                    [field2]: value,
+                };
                 expect(await client.hset(key, fieldValueMap)).toEqual(2);
                 expect(
                     await client.hmget(key, [
@@ -1762,17 +1756,11 @@ export function runBaseTests(config: {
                 const field1 = uuidv4();
                 const field2 = uuidv4();
                 const value = uuidv4();
-                const fieldValueList = [
-                    {
-                        field: field1,
-                        value,
-                    },
-                    {
-                        field: field2,
-                        value,
-                    },
-                ];
-                expect(await client.hset(key, fieldValueList)).toEqual(2);
+                const fieldValueMap = {
+                    [field1]: value,
+                    [field2]: value,
+                };
+                expect(await client.hset(key, fieldValueMap)).toEqual(2);
 
                 expect(await client.hgetall(key)).toEqual({
                     [field1]: value,
@@ -1793,13 +1781,10 @@ export function runBaseTests(config: {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 const field = uuidv4();
-                const fieldValueList = [
-                    {
-                        field,
-                        value: "10",
-                    },
-                ];
-                expect(await client.hset(key, fieldValueList)).toEqual(1);
+                const fieldValueMap = {
+                    [field]: "10",
+                };
+                expect(await client.hset(key, fieldValueMap)).toEqual(1);
                 expect(await client.hincrBy(key, field, 1)).toEqual(11);
                 expect(
                     await client.hincrBy(
@@ -1827,20 +1812,17 @@ export function runBaseTests(config: {
                 const key1 = uuidv4();
                 const key2 = uuidv4();
                 const field = uuidv4();
-                const fieldValueList = [
-                    {
-                        field,
-                        value: "10",
-                    },
-                ];
+                const fieldValueMap = {
+                    [field]: "10",
+                };
                 expect(
                     await client.hincrBy("nonExistingKey", field, 1),
                 ).toEqual(1);
-                expect(await client.hset(key1, fieldValueList)).toEqual(1);
+                expect(await client.hset(key1, fieldValueMap)).toEqual(1);
                 expect(
                     await client.hincrBy(key1, "nonExistingField", 2),
                 ).toEqual(2);
-                expect(await client.hset(key2, fieldValueList)).toEqual(1);
+                expect(await client.hset(key2, fieldValueMap)).toEqual(1);
                 expect(
                     await client.hincrByFloat(key2, "nonExistingField", -0.5),
                 ).toEqual(-0.5);
@@ -1855,13 +1837,10 @@ export function runBaseTests(config: {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 const field = uuidv4();
-                const fieldValueList = [
-                    {
-                        field,
-                        value: "foo",
-                    },
-                ];
-                expect(await client.hset(key, fieldValueList)).toEqual(1);
+                const fieldValueMap = {
+                    [field]: "foo",
+                };
+                expect(await client.hset(key, fieldValueMap)).toEqual(1);
 
                 try {
                     expect(await client.hincrBy(key, field, 2)).toThrow();
