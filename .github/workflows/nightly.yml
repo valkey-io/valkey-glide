@@ -3,8 +3,7 @@ name: Nightly tests
 on:
     workflow_dispatch: # note: if started manually, it won't run all matrix
     schedule:
-        - cron: "*/10 * * * *"
-#        - cron: "0 3 * * *"  #  Runs at 03:00 (3 AM) UTC every day
+        - cron: "0 3 * * *"  #  Runs at 03:00 (3 AM) UTC every day
 
 concurrency:
     group: nightly-${{ github.head_ref || github.ref }}-${{ inputs }}
