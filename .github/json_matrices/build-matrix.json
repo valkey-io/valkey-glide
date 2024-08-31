@@ -9,11 +9,13 @@
                         "pypi",
                         "npm"
                 ],
-                "run": [
-                        "always",
+                "run": "always",
+                "languages": [
                         "python",
                         "node",
-                        "java"
+                        "java",
+                        "go",
+                        "csharp"
                 ]
         },
         {
@@ -31,10 +33,12 @@
                         "npm"
                 ],
                 "CONTAINER": "2_28",
-                "run": [
+                "languages": [
                         "python",
                         "node",
-                        "java"
+                        "java",
+                        "go",
+                        "csharp"
                 ]
         },
         {
@@ -47,10 +51,12 @@
                         "pypi",
                         "npm"
                 ],
-                "run": [
+                "languages": [
                         "python",
                         "node",
-                        "java"
+                        "java",
+                        "go",
+                        "csharp"
                 ]
         },
         {
@@ -63,10 +69,12 @@
                         "pypi",
                         "npm"
                 ],
-                "run": [
+                "languages": [
                         "python",
                         "node",
-                        "java"
+                        "java",
+                        "go",
+                        "csharp"
                 ]
         },
         {
@@ -84,7 +92,7 @@
                 "PACKAGE_MANAGERS": [
                         "npm"
                 ],
-                "run": [
+                "languages": [
                         "node"
                 ]
         },
@@ -99,7 +107,7 @@
                 "PACKAGE_MANAGERS": [
                         "npm"
                 ],
-                "run": [
+                "languages": [
                         "node"
                 ]
         }

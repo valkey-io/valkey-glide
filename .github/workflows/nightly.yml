@@ -1,0 +1,43 @@
+name: Nightly tests
+
+on:
+    workflow_dispatch: # note: if started manually, it won't run all matrix
+    schedule:
+        - cron: "*/10 * * * *"
+#        - cron: "0 3 * * *"  #  Runs at 03:00 (3 AM) UTC every day
+
+concurrency:
+    group: nightly-${{ github.head_ref || github.ref }}-${{ inputs }}
+    cancel-in-progress: true
+
+# TODO matrix by workflow (`uses`) - not supported yet by GH
+jobs:
+    run-full-tests-for-java:
+        uses: ./.github/workflows/java.yml
+        name: Run CI for java client
+        secrets: inherit
+
+    run-full-tests-for-python:
+        uses: ./.github/workflows/python.yml
+        name: Run CI for python client
+        secrets: inherit
+
+    run-full-tests-for-node:
+        uses: ./.github/workflows/node.yml
+        name: Run CI for node client
+        secrets: inherit
+
+    run-full-tests-for-csharp:
+        uses: ./.github/workflows/csharp.yml
+        name: Run CI for csharp client
+        secrets: inherit
+
+    run-full-tests-for-go:
+        uses: ./.github/workflows/go.yml
+        name: Run CI for go client
+        secrets: inherit
+
+    run-full-tests-for-rust:
+        uses: ./.github/workflows/rust.yml
+        name: Run CI for GLIDE core lib
+        secrets: inherit

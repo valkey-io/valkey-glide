@@ -7,65 +7,78 @@ on:
             - glide-core/src/**
             - submodules/**
             - go/**
+            - utils/cluster_manager.py
             - .github/workflows/go.yml
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
             - .github/workflows/install-valkey/action.yml
-            - .github/json_matrices/build-matrix.json
+            - .github/workflows/create-test-matrices/action.yml
+            - .github/json_matrices/**
+
     pull_request:
         paths:
             - glide-core/src/**
             - submodules/**
             - go/**
+            - utils/cluster_manager.py
             - .github/workflows/go.yml
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
             - .github/workflows/install-valkey/action.yml
-            - .github/json_matrices/build-matrix.json
+            - .github/workflows/create-test-matrices/action.yml
+            - .github/json_matrices/**
+
     workflow_dispatch:
+        inputs:
+            full-matrix:
+                description: "Run the full engine, host, and language version matrix"
+                required: false
+                type: boolean
+                default: "false"
+            name:
+                required: false
+                type: string
+                description: "(Optional) Test run name"
+
+    workflow_call:
 
 concurrency:
     group: go-${{ github.head_ref || github.ref }}
     cancel-in-progress: true
 
+run-name:
+    # Set custom name if job is started manually and name is given
+    ${{ github.event_name == 'workflow_dispatch' && (inputs.name == '' && format('{0} @ {1}', github.ref_name, github.sha) || inputs.name) || '' }}
+
 jobs:
-    load-engine-matrix:
-      runs-on: ubuntu-latest
-      outputs:
-        matrix: ${{ steps.load-engine-matrix.outputs.matrix }}
-      steps:
-          - name: Checkout
-            uses: actions/checkout@v4
+    get-matrices:
+        runs-on: ubuntu-latest
+        # Avoid running on schedule for forks
+        if: (github.repository_owner == 'valkey-io' || github.event_name != 'schedule') || github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+        outputs:
+            engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
+            host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
+            version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
+        steps:
+            - uses: actions/checkout@v4
+            - id: get-matrices
+              uses: ./.github/workflows/create-test-matrices
+              with:
+                  language-name: go
+                  # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
+                  run-full-matrix: ${{ github.event.inputs.full-matrix || github.event_name == 'schedule' || 'false' }}
 
-          - name: Load the engine matrix
-            id: load-engine-matrix
-            shell: bash
-            run: echo "matrix=$(jq -c . < .github/json_matrices/engine-matrix.json)" >> $GITHUB_OUTPUT
-
-    build-and-test-go-client:
-        needs: load-engine-matrix
+    test-go:
+        needs: get-matrices
         timeout-minutes: 35
         strategy:
-            # Run all jobs
             fail-fast: false
             matrix:
-                go:
-                    - '1.22.0'
-                engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
-                host:
-                  - {
-                    OS: ubuntu,
-                    RUNNER: ubuntu-latest,
-                    TARGET: x86_64-unknown-linux-gnu
-                  }
-                  # - {
-                  #   OS: macos,
-                  #   RUNNER: macos-latest,
-                  #   TARGET: aarch64-apple-darwin
-                  # }
-
+                go: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output) }}
+                engine: ${{ fromJson(needs.get-matrices.outputs.engine-matrix-output) }}
+                host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
         runs-on: ${{ matrix.host.RUNNER }}
 
         steps:
@@ -123,7 +136,7 @@ jobs:
                       benchmarks/results/**
 
     build-amazonlinux-latest:
-        if: github.repository_owner == 'valkey-io'
+        if: github.repository_owner == 'valkey-io' && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.full-matrix == 'true'))
         strategy:
             # Run all jobs
             fail-fast: false

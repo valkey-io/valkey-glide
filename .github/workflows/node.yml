@@ -14,7 +14,9 @@ on:
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
             - .github/workflows/install-valkey/action.yml
-            - .github/json_matrices/build-matrix.json
+            - .github/workflows/create-test-matrices/action.yml
+            - .github/json_matrices/**
+
     pull_request:
         paths:
             - glide-core/src/**
@@ -27,16 +29,22 @@ on:
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
             - .github/workflows/install-valkey/action.yml
-            - .github/json_matrices/build-matrix.json
+            - .github/workflows/create-test-matrices/action.yml
+            - .github/json_matrices/**
+
     workflow_dispatch:
         inputs:
             full-matrix:
-                description: "Run the full matrix"
+                description: "Run the full engine, host, and language version matrix"
                 required: false
+                type: boolean
                 default: "false"
+            name:
+                required: false
+                type: string
+                description: "(Optional) Test run name"
 
-    schedule:
-        - cron: "0 1 * * *"
+    workflow_call:
 
 concurrency:
     group: node-${{ github.head_ref || github.ref }}
@@ -45,11 +53,15 @@ concurrency:
 env:
     CARGO_TERM_COLOR: always
 
+run-name:
+    # Set custom name if job is started manually and name is given
+    ${{ github.event_name == 'workflow_dispatch' && (inputs.name == '' && format('{0} @ {1}', github.ref_name, github.sha) || inputs.name) || '' }}
+
 jobs:
     get-matrices:
         runs-on: ubuntu-latest
         # Avoid running on schedule for forks
-        if: (github.repository_owner == 'valkey-io' || github.event_name != 'schedule')
+        if: (github.repository_owner == 'valkey-io' || github.event_name != 'schedule') || github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
         outputs:
             engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
             host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
@@ -61,7 +73,8 @@ jobs:
               uses: ./.github/workflows/create-test-matrices
               with:
                   language-name: node
-                  dispatch-run-full-matrix: ${{ github.event.inputs.full-matrix || 'false' }}
+                  # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
+                  run-full-matrix: ${{ github.event.inputs.full-matrix || github.event_name == 'schedule' || 'false' }}
 
     test-node:
         runs-on: ubuntu-latest
@@ -72,7 +85,7 @@ jobs:
             matrix:
                 engine: ${{ fromJson(needs.get-matrices.outputs.engine-matrix-output) }}
                 host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
-                node: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output)}}
+                node: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output) }}
         steps:
             - uses: actions/checkout@v4
               with:
@@ -144,7 +157,7 @@ jobs:
               name: lint node rust
 
     build-amazonlinux-latest:
-        if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule')
+        if: github.repository_owner == 'valkey-io' && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.full-matrix == 'true'))
         runs-on: ubuntu-latest
         container: amazonlinux:latest
         timeout-minutes: 15

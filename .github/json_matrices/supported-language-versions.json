@@ -1,0 +1,27 @@
+[
+    {
+        "language": "java",
+        "versions": ["11", "17"],
+        "always-run-versions": ["17"]
+    },
+    {
+        "language": "python",
+        "versions": ["3.8", "3.9", "3.10", "3.11", "3.12"],
+        "always-run-versions": ["3.8", "3.12"]
+    },
+    {
+        "language": "node",
+        "versions": ["16.x", "17.x", "18.x", "19.x", "20.x"],
+        "always-run-versions": ["16.x", "20.x"]
+    },
+    {
+        "language": "csharp",
+        "versions": ["8.0", "6.0"],
+        "always-run-versions": ["8.0"]
+    },
+    {
+        "language": "go",
+        "versions": ["1.22.0", "1.18.10"],
+        "always-run-versions": ["1.22.0"]
+    }
+]
