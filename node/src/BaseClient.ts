@@ -2008,10 +2008,10 @@ export class BaseClient {
      * ```
      */
     public async hscan(
-        key: string,
-        cursor: string,
-        options?: BaseScanOptions,
-    ): Promise<[string, string[]]> {
+        key: GlideString,
+        cursor: GlideString,
+        options?: BaseScanOptions & DecoderOption,
+    ): Promise<[GlideString, GlideString[]]> {
         return this.createWritePromise(createHScan(key, cursor, options));
     }
 
@@ -6299,8 +6299,8 @@ export class BaseClient {
     public async zscan(
         key: string,
         cursor: string,
-        options?: BaseScanOptions,
-    ): Promise<[string, string[]]> {
+        options?: BaseScanOptions & DecoderOption,
+    ): Promise<[GlideString, GlideString[]]> {
         return this.createWritePromise(createZScan(key, cursor, options));
     }
 

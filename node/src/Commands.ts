@@ -1183,6 +1183,52 @@ export function createSRandMember(
 }
 
 /**
+ * Enumeration representing the data types supported by the database.
+ */
+export enum ObjectType {
+    /**
+     * Represents a string data type.
+     */
+    String = "String",
+    /**
+     * Represents a list data type.
+     */
+    List = "List",
+    /**
+     * Represents a set data type.
+     */
+    Set = "Set",
+    /**
+     * Represents a sorted set data type.
+     */
+    ZSet = "ZSet",
+    /**
+     * Represents a hash data type.
+     */
+    Hash = "Hash",
+    /**
+     * Represents a stream data type.
+     */
+    Stream = "Stream",
+}
+
+/**
+ * @internal
+ */
+export function createScan(
+    cursor: GlideString,
+    options?: BaseScanOptions & {objectType: ObjectType},
+): command_request.Command {
+    let args: GlideString[] = [cursor];
+
+    if (options) {
+        args = args.concat(convertScanOptionsToArgsArray(options));
+    }
+
+    return createCommand(RequestType.Scan, args);
+}
+
+/**
  * @internal
  */
 export function createCustomCommand(args: GlideString[]) {
@@ -3643,11 +3689,11 @@ export function createHRandField(
  * @internal
  */
 export function createHScan(
-    key: string,
-    cursor: string,
+    key: GlideString,
+    cursor: GlideString,
     options?: BaseScanOptions,
 ): command_request.Command {
-    let args: string[] = [key, cursor];
+    let args: GlideString[] = [key, cursor];
 
     if (options) {
         args = args.concat(convertBaseScanOptionsToArgsArray(options));
@@ -3752,7 +3798,7 @@ export type BaseScanOptions = {
      * items that match the pattern specified. This is due to the default `COUNT` being `10` which indicates
      * that it will only fetch and match `10` items from the list.
      */
-    readonly match?: string;
+    readonly match?: GlideString;
     /**
      * `COUNT` is a just a hint for the command for how many elements to fetch from the
      * sorted set. `COUNT` could be ignored until the sorted set is large enough for the `SCAN` commands to
@@ -3764,8 +3810,8 @@ export type BaseScanOptions = {
 /**
  * @internal
  */
-function convertBaseScanOptionsToArgsArray(options: BaseScanOptions): string[] {
-    const args: string[] = [];
+function convertBaseScanOptionsToArgsArray(options: BaseScanOptions): GlideString[] {
+    const args: GlideString[] = [];
 
     if (options.match) {
         args.push("MATCH", options.match);
@@ -3781,12 +3827,25 @@ function convertBaseScanOptionsToArgsArray(options: BaseScanOptions): string[] {
 /**
  * @internal
  */
+function convertScanOptionsToArgsArray(options: BaseScanOptions & {objectType: ObjectType}): GlideString[] {
+    const args: GlideString[] = convertBaseScanOptionsToArgsArray(options);
+
+    if (options.objectType) {
+        args.push("TYPE", options.objectType);
+    }
+
+    return args;
+}
+
+/**
+ * @internal
+ */
 export function createZScan(
-    key: string,
-    cursor: string,
+    key: GlideString,
+    cursor: GlideString,
     options?: BaseScanOptions,
 ): command_request.Command {
-    let args: string[] = [key, cursor];
+    let args: GlideString[] = [key, cursor];
 
     if (options) {
         args = args.concat(convertBaseScanOptionsToArgsArray(options));

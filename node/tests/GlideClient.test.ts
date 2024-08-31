@@ -1589,6 +1589,35 @@ describe("GlideClient", () => {
         TIMEOUT,
     );
 
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "scan simple test_%p",
+        async (protocol) => {
+            const client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const key = "{key}" + uuidv4();
+            
+            expectedKeys = [...Array(100).keys()].map((value) => key + ":" + value);
+            await client.mset(expectedKeys.reduce((prevObject, key) => { return {...prevObject, [key]: "value"} } , {}));
+            const encodedExpectedKeys = expectedKeys.map(Buffer.from);
+            var keys = [];
+            var cursor = Buffer.from("0");
+            while (true) {
+                const result = await client.scan(cursor);
+                cursor = result[0];
+                newKeys = result[1];
+                keys = keys.concat(newKeys);
+                if (cursor == Buffer.from("0")) {
+                    break;
+                }
+            }
+            expect(encodedExpectedKeys).toEqual(keys);
+            client.close();
+        },
+        TIMEOUT,
+    );
+
     runBaseTests({
         init: async (protocol, configOverrides) => {
             const config = getClientConfigurationOption(

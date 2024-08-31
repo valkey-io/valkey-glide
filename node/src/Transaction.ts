@@ -994,7 +994,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * hash held in `key`. The array in the second element is always a flattened series of string pairs,
      * where the value is at even indices and the value is at odd indices.
      */
-    public hscan(key: string, cursor: string, options?: BaseScanOptions): T {
+    public hscan(key: GlideString, cursor: GlideString, options?: BaseScanOptions): T {
         return this.addAndReturn(createHScan(key, cursor, options));
     }
 
@@ -3623,7 +3623,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *      of the sorted set held in `key`. The `Array` in the second element is always a flattened series of
      *      `String` pairs, where the value is at even indices and the score is at odd indices.
      */
-    public zscan(key: string, cursor: string, options?: BaseScanOptions): T {
+    public zscan(key: GlideString, cursor: GlideString, options?: BaseScanOptions): T {
         return this.addAndReturn(createZScan(key, cursor, options));
     }
 

@@ -14,6 +14,7 @@ import {
     ReturnType,
 } from "./BaseClient";
 import {
+    BaseScanOptions,
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
@@ -21,6 +22,7 @@ import {
     FunctionStatsFullResponse,
     InfoOptions,
     LolwutOptions,
+    ObjectType,
     SortOptions,
     createClientGetName,
     createClientId,
@@ -49,6 +51,7 @@ import {
     createPing,
     createPublish,
     createRandomKey,
+    createScan,
     createSelect,
     createSort,
     createSortReadOnly,
@@ -856,6 +859,71 @@ export class GlideClient extends BaseClient {
         channel: GlideString,
     ): Promise<number> {
         return this.createWritePromise(createPublish(message, channel));
+    }
+
+    /*
+        Examples:
+        >>> result = await client.scan(b'0')
+            print(result) #[b'17', [b'key1', b'key2', b'key3', b'key4', b'key5', b'set1', b'set2', b'set3']]
+            first_cursor_result = result[0]
+            result = await client.scan(first_cursor_result)
+            print(result) #[b'349', [b'key4', b'key5', b'set1', b'hash1', b'zset1', b'list1', b'list2',
+                                    b'list3', b'zset2', b'zset3', b'zset4', b'zset5', b'zset6']]
+            result = await client.scan(result[0])
+            print(result) #[b'0', [b'key6', b'key7']]
+        >>> result = await client.scan(first_cursor_result, match=b'key*', count=2)
+            print(result) #[b'6', [b'key4', b'key5']]
+        >>> result = await client.scan("0", type=ObjectType.Set)
+            print(result) #[b'362', [b'set1', b'set2', b'set3']]
+
+    */
+
+    /**
+     * Incrementally iterate over a collection of keys.
+     * SCAN is a cursor based iterator. This means that at every call of the command,
+     * the server returns an updated cursor that the user needs to use as the cursor argument in the next call.
+     * An iteration starts when the cursor is set to "0", and terminates when the cursor returned by the server is "0".
+     * A full iteration always retrieves all the elements that were present
+     * in the collection from the start to the end of a full iteration.
+     * Elements that were not constantly present in the collection during a full iteration, may be returned or not.
+     * 
+     * @see {@link https://valkey.io/commands/scan/|valkey.io} for more details.
+     * 
+     * @param - cursor The cursor used for iteration. For the first iteration, the cursor should be set to "0".
+     * Using a non-zero cursor in the first iteration,
+     * or an invalid cursor at any iteration, will lead to undefined results.
+     * Using the same cursor in multiple iterations will, in case nothing changed between the iterations,
+     * return the same elements multiple times.
+     * If the the db has changed, it may result an undefined behavior.
+     * @param options - (Optional) See {@link BaseScanOptions}, {@link ObjectType} and {@link DecoderOption}.
+     * @returns An array containing the next cursor value and an array of keys,
+     * formatted as [cursor, [key1, key2, ...]]
+     * 
+     * @example
+     * ```typescript
+     * // Example usage of scan command
+     * var result = await client.scan(Buffer.from("0"));
+     * console.log(result); // Output: [b'17', [b'key1', b'key2', b'key3', b'key4', b'key5', b'set1', b'set2', b'set3']]
+     * const firstCursorResult = result[0];
+     * result = await client.scan(firstCursorResult);
+     * console.log(result); // Output: [b'349', [b'key4', b'key5', b'set1', b'hash1', b'zset1', b'list1', b'list2',
+     *                                  b'list3', b'zset2', b'zset3', b'zset4', b'zset5', b'zset6']]
+     * result = await client.scan(result[0]);
+     * console.log(result); // Output: [b'0', [b'key6', b'key7']]
+     * result = await client.scan(firstCursorResult, { match: Buffer.from("key"), count: 2 });
+     * console.log(result); // Output: [b'6', [b'key4', b'key5']]
+     * result = await client.scan("0", { objectType: ObjectType.Set });
+     * console.log(result); // Output: [b'362', [b'set1', b'set2', b'set3']]
+     * ```
+     */
+    public async scan(
+        cursor: GlideString,
+        options?: BaseScanOptions & {objectType: ObjectType} & DecoderOption,
+    ): Promise<[GlideString, GlideString[]]> {
+        return this.createWritePromise(
+            createScan(cursor, options),
+            options,
+        );
     }
 
     /**
