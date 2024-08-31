@@ -297,6 +297,14 @@ export type DecoderOption = {
     decoder?: Decoder;
 };
 
+/** A replacement for `Record<GlideString, T>` - array of key-value pairs. */
+export type GlideRecord<T> = {
+    /** The value name. */
+    key: GlideString;
+    /** The value itself. */
+    value: T;
+}[];
+
 /**
  * This function converts an input from HashDataType or Record types to HashDataType.
  *
@@ -4841,9 +4849,14 @@ export class BaseClient {
      * ```
      */
     public async xread(
-        keys_and_ids: Record<string, string>,
+        keys_and_ids: Record<string, GlideString> | GlideRecord<GlideString>,
         options?: StreamReadOptions,
     ): Promise<Record<string, Record<string, [string, string][]>>> {
+        if (!Array.isArray(keys_and_ids)) {
+            keys_and_ids = Object.entries(keys_and_ids).map((e) => {
+                return {key: e[0], value: e[1]}
+            })
+        }
         return this.createWritePromise(createXRead(keys_and_ids, options));
     }
 
@@ -4878,14 +4891,19 @@ export class BaseClient {
      * ```
      */
     public async xreadgroup(
-        group: string,
-        consumer: string,
-        keys_and_ids: Record<string, string>,
+        group: GlideString,
+        consumer: GlideString,
+        keys_and_ids: Record<string, GlideString> | GlideRecord<GlideString>,
         options?: StreamReadGroupOptions,
     ): Promise<Record<
         string,
         Record<string, [string, string][] | null>
     > | null> {
+        if (!Array.isArray(keys_and_ids)) {
+            keys_and_ids = Object.entries(keys_and_ids).map((e) => {
+                return {key: e[0], value: e[1]}
+            })
+        }
         return this.createWritePromise(
             createXReadGroup(group, consumer, keys_and_ids, options),
         );

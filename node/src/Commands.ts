@@ -6,7 +6,7 @@ import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "glide-rs";
 import Long from "long";
 
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-import { BaseClient, HashDataType } from "src/BaseClient";
+import { BaseClient, GlideRecord, HashDataType } from "src/BaseClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 import { GlideClient } from "src/GlideClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
@@ -2538,7 +2538,7 @@ export type StreamReadGroupOptions = StreamReadOptions & {
 };
 
 /** @internal */
-function addReadOptions(options?: StreamReadOptions): string[] {
+function addReadOptions(options?: StreamReadOptions): GlideString[] {
     const args = [];
 
     if (options?.count !== undefined) {
@@ -2555,11 +2555,11 @@ function addReadOptions(options?: StreamReadOptions): string[] {
 }
 
 /** @internal */
-function addStreamsArgs(keys_and_ids: Record<string, string>): string[] {
+function addStreamsArgs(keys_and_ids: GlideRecord<GlideString>): GlideString[] {
     return [
         "STREAMS",
-        ...Object.keys(keys_and_ids),
-        ...Object.values(keys_and_ids),
+        ...keys_and_ids.map((e) => e.key),
+        ...keys_and_ids.map((e) => e.value)
     ];
 }
 
@@ -2567,23 +2567,22 @@ function addStreamsArgs(keys_and_ids: Record<string, string>): string[] {
  * @internal
  */
 export function createXRead(
-    keys_and_ids: Record<string, string>,
+    keys_and_ids: GlideRecord<GlideString>,
     options?: StreamReadOptions,
 ): command_request.Command {
     const args = addReadOptions(options);
     args.push(...addStreamsArgs(keys_and_ids));
-
     return createCommand(RequestType.XRead, args);
 }
 
 /** @internal */
 export function createXReadGroup(
-    group: string,
-    consumer: string,
-    keys_and_ids: Record<string, string>,
+    group: GlideString,
+    consumer: GlideString,
+    keys_and_ids: GlideRecord<GlideString>,
     options?: StreamReadGroupOptions,
 ): command_request.Command {
-    const args: string[] = ["GROUP", group, consumer];
+    const args: GlideString[] = ["GROUP", group, consumer];
 
     if (options) {
         args.push(...addReadOptions(options));

@@ -6868,10 +6868,10 @@ export function runBaseTests(config: {
                 ]);
 
                 const result = await client.xread(
-                    {
-                        [key1]: timestamp_1_1 as string,
-                        [key2]: timestamp_2_1 as string,
-                    },
+                    [
+                        {key: Buffer.from(key1), value: timestamp_1_1 as string},
+                        {key: key2, value: Buffer.from(timestamp_2_1 as string)},
+                    ],
                     {
                         block: 1,
                     },
@@ -6955,7 +6955,9 @@ export function runBaseTests(config: {
 
                 // read the entire stream for the consumer and mark messages as pending
                 expect(
-                    await client.xreadgroup(group, consumer, { [key1]: ">" }),
+                    await client.xreadgroup(Buffer.from(group), Buffer.from(consumer), 
+                    [{ key: Buffer.from(key1), value: Buffer.from(">") }]
+                ),
                 ).toEqual({
                     [key1]: {
                         [entry1]: [["a", "b"]],

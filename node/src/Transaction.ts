@@ -4,6 +4,7 @@
 
 import {
     BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GlideRecord, // eslint-disable-line @typescript-eslint/no-unused-vars
     GlideString,
     HashDataType,
     convertFieldsAndValuesForHset,
@@ -2655,9 +2656,14 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A `Record` of stream keys, each key is mapped to a `Record` of stream ids, to an `Array` of entries.
      */
     public xread(
-        keys_and_ids: Record<string, string>,
+        keys_and_ids: Record<string, GlideString> | GlideRecord<GlideString>,
         options?: StreamReadOptions,
     ): T {
+        if (!Array.isArray(keys_and_ids)) {
+            keys_and_ids = Object.entries(keys_and_ids).map((e) => {
+                return {key: e[0], value: e[1]}
+            })
+        }
         return this.addAndReturn(createXRead(keys_and_ids, options));
     }
 
@@ -2676,11 +2682,16 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     Returns `null` if there is no stream that can be served.
      */
     public xreadgroup(
-        group: string,
-        consumer: string,
-        keys_and_ids: Record<string, string>,
+        group: GlideString,
+        consumer: GlideString,
+        keys_and_ids: Record<string, GlideString> | GlideRecord<GlideString>,
         options?: StreamReadGroupOptions,
     ): T {
+        if (!Array.isArray(keys_and_ids)) {
+            keys_and_ids = Object.entries(keys_and_ids).map((e) => {
+                return {key: e[0], value: e[1]}
+            })
+        }
         return this.addAndReturn(
             createXReadGroup(group, consumer, keys_and_ids, options),
         );
