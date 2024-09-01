@@ -15318,7 +15318,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: object:0.36.3
+Package: object:0.36.4
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -20297,7 +20297,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: rustls-native-certs:0.7.2
+Package: rustls-native-certs:0.7.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -21012,7 +21012,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: rustls-webpki:0.102.6
+Package: rustls-webpki:0.102.7
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -23537,7 +23537,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: syn:2.0.76
+Package: syn:2.0.77
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -25638,7 +25638,7 @@ the following restrictions:
 
 ----
 
-Package: tokio:1.39.3
+Package: tokio:1.40.0
 
 The following copyrights and licenses were found in the source code of this package:
 
