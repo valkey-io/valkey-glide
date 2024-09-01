@@ -13,6 +13,7 @@ import (
 	"unsafe"
 
 	"github.com/valkey-io/valkey-glide/go/glide/protobuf"
+	"github.com/valkey-io/valkey-glide/go/glide/utils"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -119,19 +120,12 @@ func (client *baseClient) executeCommand(requestType C.RequestType, args []strin
 	return payload.value, nil
 }
 
-// Convert `s` of type `string` into `[]byte`
-func StringToBytes(s string) []byte {
-	p := unsafe.StringData(s)
-	b := unsafe.Slice(p, len(s))
-	return b
-}
-
 // Zero copying conversion from go's []string into C pointers
 func toCStrings(args []string) ([]C.uintptr_t, []C.ulong) {
 	cStrings := make([]C.uintptr_t, len(args))
 	stringLengths := make([]C.ulong, len(args))
 	for i, str := range args {
-		bytes := StringToBytes(str)
+		bytes := utils.StringToBytes(str)
 		ptr := uintptr(unsafe.Pointer(&bytes[0]))
 		cStrings[i] = C.uintptr_t(ptr)
 		stringLengths[i] = C.size_t(len(str))
@@ -161,4 +155,47 @@ func (client *baseClient) Get(key string) (string, error) {
 		return "", err
 	}
 	return handleStringOrNullResponse(result), nil
+}
+
+func (client *baseClient) Incr(key string) (int64, error) {
+	result, err := client.executeCommand(C.Incr, []string{key})
+	if err != nil {
+		return 0, err
+	}
+	return handleLongResponse(result), nil
+}
+
+func (client *baseClient) IncrBy(key string, amount int64) (int64, error) {
+	result, err := client.executeCommand(C.IncrBy, []string{key, utils.IntToString(amount)})
+	if err != nil {
+		return 0, err
+	}
+	return handleLongResponse(result), nil
+}
+
+func (client *baseClient) IncrByFloat(key string, amount float64) (float64, error) {
+	result, err := client.executeCommand(
+		C.IncrByFloat,
+		[]string{key, utils.FloatToString(amount)},
+	)
+	if err != nil {
+		return 0, err
+	}
+	return handleDoubleResponse(result), nil
+}
+
+func (client *baseClient) Decr(key string) (int64, error) {
+	result, err := client.executeCommand(C.Decr, []string{key})
+	if err != nil {
+		return 0, err
+	}
+	return handleLongResponse(result), nil
+}
+
+func (client *baseClient) DecrBy(key string, amount int64) (int64, error) {
+	result, err := client.executeCommand(C.DecrBy, []string{key, utils.IntToString(amount)})
+	if err != nil {
+		return 0, err
+	}
+	return handleLongResponse(result), nil
 }

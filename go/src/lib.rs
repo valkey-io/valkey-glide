@@ -371,6 +371,14 @@ pub unsafe extern "C" fn command(
                 command_response.string_value_len = len;
                 Ok(Some(command_response))
             }
+            Value::Int(num) => {
+                command_response.int_value = num;
+                Ok(Some(command_response))
+            }
+            Value::Double(num) => {
+                command_response.float_value = num;
+                Ok(Some(command_response))
+            }
             // TODO: Add support for other return types.
             _ => todo!(),
         };
