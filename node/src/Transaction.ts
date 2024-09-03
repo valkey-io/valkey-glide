@@ -64,6 +64,7 @@ import {
     StreamTrimOptions,
     TimeUnit,
     ZAddOptions,
+    convertElementsAndScores,
     createAppend,
     createBLMPop,
     createBLMove,
@@ -1736,7 +1737,13 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         membersAndScores: SortedSetDataType | Record<string, number>,
         options?: ZAddOptions,
     ): T {
-        return this.addAndReturn(createZAdd(key, membersAndScores, options));
+        return this.addAndReturn(
+            createZAdd(
+                key,
+                convertElementsAndScores(membersAndScores),
+                options,
+            ),
+        );
     }
 
     /**

@@ -55,6 +55,7 @@ import {
     StreamTrimOptions,
     TimeUnit,
     ZAddOptions,
+    convertElementsAndScores,
     createAppend,
     createBLMPop,
     createBLMove,
@@ -3540,7 +3541,11 @@ export class BaseClient {
         options?: ZAddOptions,
     ): Promise<number> {
         return this.createWritePromise(
-            createZAdd(key, membersAndScores, options),
+            createZAdd(
+                key,
+                convertElementsAndScores(membersAndScores),
+                options,
+            ),
         );
     }
 
@@ -3826,13 +3831,19 @@ export class BaseClient {
      * // Output: 2 - Indicates that the sorted set "my_sorted_set" contains two elements.
      * console.log(await client.zrangeWithScores("my_sorted_set", {start: 0, stop: -1}))
      * // Output: {'member1': 20, 'member2': 8.2} - "member1" is now stored in "my_sorted_set" with score of 20 and "member2" with score of 8.2.
+     * ```
      *
+     * @example
+     * ```typescript
      * // use `zunionstore` with default weights
      * console.log(await client.zunionstore("my_sorted_set", ["key1", "key2"], AggregationType.MAX))
      * // Output: 2 - Indicates that the sorted set "my_sorted_set" contains two elements, and each score is the maximum score between the sets.
      * console.log(await client.zrangeWithScores("my_sorted_set", {start: 0, stop: -1}))
      * // Output: {'member1': 10.5, 'member2': 8.2} - "member1" is now stored in "my_sorted_set" with score of 10.5 and "member2" with score of 8.2.
+     * ```
      *
+     * @example
+     * ```typescript
      * // use `zunionstore` with default aggregation
      * console.log(await client.zunionstore("my_sorted_set", [["key1", 2], ["key2", 1]])) // Output: 2
      * console.log(await client.zrangeWithScores("my_sorted_set", {start: 0, stop: -1})) // Output: { member2: 16.4, member1: 30.5 }
@@ -3941,7 +3952,7 @@ export class BaseClient {
      *              type: "byScore",
      *           }, { reverse: true });
      * console.log(result); // Output: members with scores within the range of negative infinity to 3, in descending order
-     * // ['member3', 'member2']
+     * // ['member2', 'member1']
      * ```
      */
     public async zrange(

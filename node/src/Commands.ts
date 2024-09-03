@@ -1372,10 +1372,27 @@ export type ZAddOptions = {
 
 /**
  * @internal
+ * Convert input from `Record` to `SortedSetDataType` to ensure the only one type.
+ */
+export function convertElementsAndScores(
+    membersAndScores: SortedSetDataType | Record<string, number>,
+): SortedSetDataType {
+    if (!Array.isArray(membersAndScores)) {
+        // convert Record<string, number> to SortedSetDataType
+        membersAndScores = Object.entries(membersAndScores).map((element) => {
+            return { element: element[0], score: element[1] };
+        });
+    }
+
+    return membersAndScores;
+}
+
+/**
+ * @internal
  */
 export function createZAdd(
     key: GlideString,
-    membersAndScores: SortedSetDataType | Record<string, number>,
+    membersAndScores: SortedSetDataType,
     options?: ZAddOptions,
     incr: boolean = false,
 ): command_request.Command {
@@ -1407,13 +1424,6 @@ export function createZAdd(
 
     if (incr) {
         args.push("INCR");
-    }
-
-    if (!Array.isArray(membersAndScores)) {
-        // convert Record<string, number> to SortedSetDataType
-        membersAndScores = Object.entries(membersAndScores).map((element) => {
-            return { element: p[0], score: p[1] };
-        });
     }
 
     membersAndScores.forEach((p) => args.push(p.score.toString(), p.element));
