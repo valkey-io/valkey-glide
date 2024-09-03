@@ -861,23 +861,6 @@ export class GlideClient extends BaseClient {
         return this.createWritePromise(createPublish(message, channel));
     }
 
-    /*
-        Examples:
-        >>> result = await client.scan(b'0')
-            print(result) #[b'17', [b'key1', b'key2', b'key3', b'key4', b'key5', b'set1', b'set2', b'set3']]
-            first_cursor_result = result[0]
-            result = await client.scan(first_cursor_result)
-            print(result) #[b'349', [b'key4', b'key5', b'set1', b'hash1', b'zset1', b'list1', b'list2',
-                                    b'list3', b'zset2', b'zset3', b'zset4', b'zset5', b'zset6']]
-            result = await client.scan(result[0])
-            print(result) #[b'0', [b'key6', b'key7']]
-        >>> result = await client.scan(first_cursor_result, match=b'key*', count=2)
-            print(result) #[b'6', [b'key4', b'key5']]
-        >>> result = await client.scan("0", type=ObjectType.Set)
-            print(result) #[b'362', [b'set1', b'set2', b'set3']]
-
-    */
-
     /**
      * Incrementally iterate over a collection of keys.
      * SCAN is a cursor based iterator. This means that at every call of the command,

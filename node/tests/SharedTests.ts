@@ -3169,7 +3169,7 @@ export function runBaseTests(config: {
                 expect(await client.sadd(key1, charMembers)).toEqual(
                     charMembers.length,
                 );
-                let result = await client.sscan(key1, initialCursor);
+                let result = await client.sscan(Buffer.from(key1), Buffer.from(initialCursor));
                 expect(await result[resultCursorIndex]).toEqual(initialCursor);
                 expect(result[resultCollectionIndex].length).toEqual(
                     charMembers.length,

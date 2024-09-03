@@ -44,6 +44,7 @@ import {
     ListDirection,
     LolwutOptions,
     MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
+    ObjectType,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
@@ -197,6 +198,7 @@ import {
     createSScan,
     createSUnion,
     createSUnionStore,
+    createScan,
     createSelect,
     createSet,
     createSetBit,
@@ -1286,6 +1288,34 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public rpopCount(key: GlideString, count: number): T {
         return this.addAndReturn(createRPop(key, count));
+    }
+
+    /**
+     * Incrementally iterate over a collection of keys.
+     * SCAN is a cursor based iterator. This means that at every call of the command,
+     * the server returns an updated cursor that the user needs to use as the cursor argument in the next call.
+     * An iteration starts when the cursor is set to "0", and terminates when the cursor returned by the server is "0".
+     * A full iteration always retrieves all the elements that were present
+     * in the collection from the start to the end of a full iteration.
+     * Elements that were not constantly present in the collection during a full iteration, may be returned or not.
+     * 
+     * @see {@link https://valkey.io/commands/scan/|valkey.io} for more details.
+     * 
+     * @param - cursor The cursor used for iteration. For the first iteration, the cursor should be set to "0".
+     * Using a non-zero cursor in the first iteration,
+     * or an invalid cursor at any iteration, will lead to undefined results.
+     * Using the same cursor in multiple iterations will, in case nothing changed between the iterations,
+     * return the same elements multiple times.
+     * If the the db has changed, it may result an undefined behavior.
+     * @param options - (Optional) See {@link BaseScanOptions}, {@link ObjectType} and {@link DecoderOption}.
+     * Command Response - An array containing the next cursor value and an array of keys,
+     * formatted as [cursor, [key1, key2, ...]]
+     */
+    public scan(
+        cursor: GlideString,
+        options?: BaseScanOptions & {objectType: ObjectType},
+    ): T {
+        return this.addAndReturn(createScan(cursor, options));
     }
 
     /** Adds the specified members to the set stored at `key`. Specified members that are already a member of this set are ignored.
