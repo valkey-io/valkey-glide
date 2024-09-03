@@ -1307,7 +1307,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * 
      * @see {@link https://valkey.io/commands/scan/|valkey.io} for more details.
      * 
-     * @param - cursor The cursor used for iteration. For the first iteration, the cursor should be set to "0".
+     * @param cursor - The cursor used for iteration. For the first iteration, the cursor should be set to "0".
      * Using a non-zero cursor in the first iteration,
      * or an invalid cursor at any iteration, will lead to undefined results.
      * Using the same cursor in multiple iterations will, in case nothing changed between the iterations,

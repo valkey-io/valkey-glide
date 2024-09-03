@@ -1722,7 +1722,7 @@ describe("GlideClient", () => {
             var cursor = "0";
             var keys = [];
             while (true) {
-                consst result = await client.scan(cursor, { match: "key:*" });
+                const result = await client.scan(cursor, { match: "key:*" });
                 cursor = result[0];
                 keys.push(...result[1]);
                 if (cursor == "0") {
