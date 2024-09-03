@@ -238,7 +238,7 @@ jobs:
                   ./gradlew run
 
             - name: Drop deployment if validation fails
-              if: always()
+              if: ${{ failure() }}
               run: |
                   curl --request DELETE \
                   -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
