@@ -2542,7 +2542,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The number of entries deleted from the stream. If `key` doesn't exist, 0 is returned.
      */
-    public xtrim(key: string, options: StreamTrimOptions): T {
+    public xtrim(key: GlideString, options: StreamTrimOptions): T {
         return this.addAndReturn(createXTrim(key, options));
     }
 

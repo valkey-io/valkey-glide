@@ -2020,7 +2020,7 @@ export type StreamTrimOptions = (
          * Equivalent to `MINID` in the Redis API.
          */
         method: "minid";
-        threshold: string;
+        threshold: GlideString;
     }
     | {
         /**
@@ -2130,7 +2130,7 @@ export function createXDel(
  * @internal
  */
 export function createXTrim(
-    key: string,
+    key: GlideString,
     options: StreamTrimOptions,
 ): command_request.Command {
     const args = [key];

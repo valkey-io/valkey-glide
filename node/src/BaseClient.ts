@@ -4817,7 +4817,7 @@ export class BaseClient {
      * @returns The number of entries deleted from the stream. If `key` doesn't exist, 0 is returned.
      */
     public async xtrim(
-        key: string,
+        key: GlideString,
         options: StreamTrimOptions,
     ): Promise<number> {
         return this.createWritePromise(createXTrim(key, options));

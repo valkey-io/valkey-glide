@@ -6412,7 +6412,7 @@ export function runBaseTests(config: {
                 expect(await client.xlen(key)).toEqual(2);
 
                 expect(
-                    await client.xtrim(key, {
+                    await client.xtrim(Buffer.from(key), {
                         method: "maxlen",
                         threshold: 1,
                         exact: true,
