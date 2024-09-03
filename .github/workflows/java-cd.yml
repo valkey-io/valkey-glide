@@ -192,7 +192,7 @@ jobs:
                   https://central.sonatype.com/api/v1/publisher/upload | tail -n 1`
                   echo "DEPLOYMENT_ID=$DEPLOYMENT_ID" >> $GITHUB_ENV
                   echo "DEPLOYMENT_ID=$DEPLOYMENT_ID" >> $GITHUB_OUTPUT
-                  echo $DEPLOYMENT_ID
+                  echo Uploaded to Maven deployment with deployment ID $DEPLOYMENT_ID. Will be released if smoke tests pass and approved for release.
 
             - name: Check status of deployment
               run: |
@@ -239,22 +239,21 @@ jobs:
 
             - name: Drop deployment if validation fails
               if: always()
-#              if: ${{ failure() }}
               run: |
                   curl --request DELETE \
                   -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
                   "https://central.sonatype.com/api/v1/publisher/deployment/${{ env.DEPLOYMENT_ID }}"
 
-#    publish-release-to-maven:
-#        if: ${{ inputs.maven_publish == true || github.event_name == 'push' }}
-#        needs: [publish-to-maven-central-deployment]
-#        runs-on: ubuntu-latest
-#        environment: AWS_ACTIONS
-#        env:
-#            DEPLOYMENT_ID: ${{ needs.publish-to-maven-central-deployment.outputs.DEPLOYMENT_ID }}
-#        steps:
-#            - name: Publish to Maven
-#              run: |
-#                  curl --request POST \
-#                  -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
-#                  "https://central.sonatype.com/api/v1/publisher/deployment/${{ env.DEPLOYMENT_ID }}"
+    publish-release-to-maven:
+        if: ${{ inputs.maven_publish == true || github.event_name == 'push' }}
+        needs: [publish-to-maven-central-deployment]
+        runs-on: ubuntu-latest
+        environment: AWS_ACTIONS
+        env:
+            DEPLOYMENT_ID: ${{ needs.publish-to-maven-central-deployment.outputs.DEPLOYMENT_ID }}
+        steps:
+            - name: Publish to Maven
+              run: |
+                  curl --request POST \
+                  -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
+                  "https://central.sonatype.com/api/v1/publisher/deployment/${{ env.DEPLOYMENT_ID }}"

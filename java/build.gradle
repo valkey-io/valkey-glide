@@ -12,6 +12,7 @@ repositories {
 
 subprojects {
     repositories {
+        // Runs for GITHUB_ACTIONS for testing release Maven deployment.
         if(System.getenv("RUN_DEPLOYMENT_TEST")) {
             maven {
                 name = "centralManualTesting"
