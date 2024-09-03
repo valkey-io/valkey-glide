@@ -1,6 +1,10 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.benchmarks.utils;
 
+import static glide.api.logging.Logger.Level.ERROR;
+import static glide.api.logging.Logger.log;
+
+import glide.api.models.exceptions.TimeoutException;
 import glide.benchmarks.BenchmarkingApp;
 import glide.benchmarks.clients.AsyncClient;
 import glide.benchmarks.clients.Client;
@@ -59,7 +63,12 @@ public class Benchmarking {
         try {
             actions.get(action).go(client);
         } catch (ExecutionException e) {
-            throw new RuntimeException("Client error", e);
+            if (e.getCause() instanceof TimeoutException) {
+                // log and ignore timeout errors - this will affect our output
+                log(ERROR, "glide", "Timeout encountered: " + e.getMessage());
+            } else {
+                throw new RuntimeException("Client error", e);
+            }
         } catch (InterruptedException e) {
             if (Thread.currentThread().isInterrupted()) {
                 // restore interrupt
@@ -182,8 +191,16 @@ public class Benchmarking {
                         // wait for all futures to complete
                         CompletableFuture.allOf(completableAsyncTaskArray).get();
                     } catch (InterruptedException | ExecutionException e) {
-                        e.printStackTrace();
-                        throw new RuntimeException(e);
+                        if (e.getCause() instanceof TimeoutException) {
+                            // log and ignore timeout errors - this will affect our output
+                            log(ERROR, "glide", "Timeout encountered: " + e.getMessage());
+                        } else if (e.getCause() instanceof RuntimeException && e.getCause().getCause() instanceof TimeoutException) {
+                            // log and ignore timeout errors - this will affect our output
+                            log(ERROR, "glide", "Timeout encountered: " + e.getMessage());
+                        } else {
+                            e.printStackTrace();
+                            throw new RuntimeException(e);
+                        }
                     }
                     long after = System.nanoTime();
 
