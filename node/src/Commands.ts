@@ -6,7 +6,7 @@ import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "glide-rs";
 import Long from "long";
 
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-import { BaseClient } from "src/BaseClient";
+import { BaseClient, HashDataType } from "src/BaseClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 import { GlideClient } from "src/GlideClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
@@ -413,11 +413,18 @@ export function createHGet(
  */
 export function createHSet(
     key: GlideString,
-    fieldValueMap: Record<string, string>,
+    fieldValueList: HashDataType,
 ): command_request.Command {
     return createCommand(
         RequestType.HSet,
-        [key].concat(Object.entries(fieldValueMap).flat()),
+        [key].concat(
+            fieldValueList
+                .map((fieldValueObject) => [
+                    fieldValueObject.field,
+                    fieldValueObject.value,
+                ])
+                .flat(),
+        ),
     );
 }
 
@@ -2098,7 +2105,7 @@ export type StreamAddOptions = {
     trim?: StreamTrimOptions;
 };
 
-function addTrimOptions(options: StreamTrimOptions, args: string[]) {
+function addTrimOptions(options: StreamTrimOptions, args: GlideString[]) {
     if (options.method === "maxlen") {
         args.push("MAXLEN");
     } else if (options.method === "minid") {
@@ -2127,8 +2134,8 @@ function addTrimOptions(options: StreamTrimOptions, args: string[]) {
  * @internal
  */
 export function createXAdd(
-    key: string,
-    values: [string, string][],
+    key: GlideString,
+    values: [GlideString, GlideString][],
     options?: StreamAddOptions,
 ): command_request.Command {
     const args = [key];
@@ -2159,8 +2166,8 @@ export function createXAdd(
  * @internal
  */
 export function createXDel(
-    key: string,
-    ids: string[],
+    key: GlideString,
+    ids: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.XDel, [key, ...ids]);
 }
@@ -2219,9 +2226,9 @@ export function createXRevRange(
  * @internal
  */
 export function createXGroupCreateConsumer(
-    key: string,
-    groupName: string,
-    consumerName: string,
+    key: GlideString,
+    groupName: GlideString,
+    consumerName: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.XGroupCreateConsumer, [
         key,
@@ -2234,9 +2241,9 @@ export function createXGroupCreateConsumer(
  * @internal
  */
 export function createXGroupDelConsumer(
-    key: string,
-    groupName: string,
-    consumerName: string,
+    key: GlideString,
+    groupName: GlideString,
+    consumerName: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.XGroupDelConsumer, [
         key,
@@ -2760,11 +2767,11 @@ export type StreamClaimOptions = {
 
 /** @internal */
 export function createXClaim(
-    key: string,
-    group: string,
-    consumer: string,
+    key: GlideString,
+    group: GlideString,
+    consumer: GlideString,
     minIdleTime: number,
-    ids: string[],
+    ids: GlideString[],
     options?: StreamClaimOptions,
     justId?: boolean,
 ): command_request.Command {
@@ -2786,11 +2793,11 @@ export function createXClaim(
 
 /** @internal */
 export function createXAutoClaim(
-    key: string,
-    group: string,
-    consumer: string,
+    key: GlideString,
+    group: GlideString,
+    consumer: GlideString,
     minIdleTime: number,
-    start: string,
+    start: GlideString,
     count?: number,
     justId?: boolean,
 ): command_request.Command {
@@ -2830,12 +2837,12 @@ export type StreamGroupOptions = {
  * @internal
  */
 export function createXGroupCreate(
-    key: string,
-    groupName: string,
-    id: string,
+    key: GlideString,
+    groupName: GlideString,
+    id: GlideString,
     options?: StreamGroupOptions,
 ): command_request.Command {
-    const args: string[] = [key, groupName, id];
+    const args: GlideString[] = [key, groupName, id];
 
     if (options) {
         if (options.mkStream) {
@@ -2855,8 +2862,8 @@ export function createXGroupCreate(
  * @internal
  */
 export function createXGroupDestroy(
-    key: string,
-    groupName: string,
+    key: GlideString,
+    groupName: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.XGroupDestroy, [key, groupName]);
 }
@@ -4034,9 +4041,9 @@ export function createGetEx(
  * @internal
  */
 export function createXAck(
-    key: string,
-    group: string,
-    ids: string[],
+    key: GlideString,
+    group: GlideString,
+    ids: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.XAck, [key, group, ...ids]);
 }
@@ -4045,9 +4052,9 @@ export function createXAck(
  * @internal
  */
 export function createXGroupSetid(
-    key: string,
-    groupName: string,
-    id: string,
+    key: GlideString,
+    groupName: GlideString,
+    id: GlideString,
     entriesRead?: number,
 ): command_request.Command {
     const args = [key, groupName, id];

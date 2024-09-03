@@ -8,6 +8,7 @@
 // represents a running server instance. See first 2 test cases as examples.
 
 import { expect, it } from "@jest/globals";
+import { HashDataType } from "src/BaseClient";
 import { v4 as uuidv4 } from "uuid";
 import {
     BaseClientConfiguration,
@@ -1324,13 +1325,20 @@ export function runBaseTests(config: {
                 const field1 = uuidv4();
                 const field2 = uuidv4();
                 const value = uuidv4();
-                const fieldValueMap = {
-                    [field1]: value,
-                    [field2]: value,
-                };
+                const fieldValueList: HashDataType = [
+                    {
+                        field: Buffer.from(field1),
+                        value: Buffer.from(value),
+                    },
+                    {
+                        field: Buffer.from(field2),
+                        value: Buffer.from(value),
+                    },
+                ];
+
                 const valueEncoded = Buffer.from(value);
 
-                expect(await client.hset(key, fieldValueMap)).toEqual(2);
+                expect(await client.hset(key, fieldValueList)).toEqual(2);
                 expect(
                     await client.hget(Buffer.from(key), Buffer.from(field1)),
                 ).toEqual(value);
@@ -1340,14 +1348,16 @@ export function runBaseTests(config: {
                 );
 
                 //hget with binary buffer
-                expect(await client.hget(key, field1, Decoder.Bytes)).toEqual(
-                    valueEncoded,
-                );
-                expect(await client.hget(key, field2, Decoder.Bytes)).toEqual(
-                    valueEncoded,
-                );
                 expect(
-                    await client.hget(key, "nonExistingField", Decoder.Bytes),
+                    await client.hget(key, field1, { decoder: Decoder.Bytes }),
+                ).toEqual(valueEncoded);
+                expect(
+                    await client.hget(key, field2, { decoder: Decoder.Bytes }),
+                ).toEqual(valueEncoded);
+                expect(
+                    await client.hget(key, "nonExistingField", {
+                        decoder: Decoder.Bytes,
+                    }),
                 ).toEqual(null);
             }, protocol);
         },
@@ -1856,12 +1866,18 @@ export function runBaseTests(config: {
                 const key1 = uuidv4();
                 const field1 = uuidv4();
                 const field2 = uuidv4();
-                const fieldValueMap = {
-                    [field1]: "value1",
-                    [field2]: "value2",
-                };
+                const fieldValueList = [
+                    {
+                        field: field1,
+                        value: "value1",
+                    },
+                    {
+                        field: field2,
+                        value: "value2",
+                    },
+                ];
 
-                expect(await client.hset(key1, fieldValueMap)).toEqual(2);
+                expect(await client.hset(key1, fieldValueList)).toEqual(2);
                 expect(await client.hlen(key1)).toEqual(2);
                 expect(await client.hdel(key1, [field1])).toEqual(1);
                 expect(await client.hlen(Buffer.from(key1))).toEqual(1);
@@ -1883,7 +1899,6 @@ export function runBaseTests(config: {
                     [field1]: "value1",
                     [field2]: "value2",
                 };
-
                 const value1Encoded = Buffer.from("value1");
                 const value2Encoded = Buffer.from("value2");
 
@@ -1899,14 +1914,13 @@ export function runBaseTests(config: {
 
                 //hvals with binary buffers
                 expect(await client.hset(key2, fieldValueMap)).toEqual(2);
-                expect(await client.hvals(key2, Decoder.Bytes)).toEqual([
-                    value1Encoded,
-                    value2Encoded,
-                ]);
+                expect(
+                    await client.hvals(key2, { decoder: Decoder.Bytes }),
+                ).toEqual([value1Encoded, value2Encoded]);
                 expect(await client.hdel(key2, [field1])).toEqual(1);
-                expect(await client.hvals(key2, Decoder.Bytes)).toEqual([
-                    value2Encoded,
-                ]);
+                expect(
+                    await client.hvals(key2, { decoder: Decoder.Bytes }),
+                ).toEqual([value2Encoded]);
             }, protocol);
         },
         config.timeout,
@@ -6714,15 +6728,24 @@ export function runBaseTests(config: {
                 const group = uuidv4();
                 const consumer = uuidv4();
 
-                // setup data
+                // setup data & test binary parameters in XGROUP CREATE commands
                 expect(
-                    await client.xgroupCreate(key1, group, "0", {
-                        mkStream: true,
-                    }),
+                    await client.xgroupCreate(
+                        Buffer.from(key1),
+                        Buffer.from(group),
+                        Buffer.from("0"),
+                        {
+                            mkStream: true,
+                        },
+                    ),
                 ).toEqual("OK");
 
                 expect(
-                    await client.xgroupCreateConsumer(key1, group, consumer),
+                    await client.xgroupCreateConsumer(
+                        Buffer.from(key1),
+                        Buffer.from(group),
+                        Buffer.from(consumer),
+                    ),
                 ).toBeTruthy();
 
                 const entry1 = (await client.xadd(key1, [
@@ -9696,9 +9719,11 @@ export function runBaseTests(config: {
                 expect(await client.xdel(key, [streamId1, streamId3])).toEqual(
                     1,
                 );
-                expect(await client.xdel(nonExistentKey, [streamId3])).toEqual(
-                    0,
-                );
+                expect(
+                    await client.xdel(Buffer.from(nonExistentKey), [
+                        Buffer.from(streamId3),
+                    ]),
+                ).toEqual(0);
 
                 // invalid argument - id list should not be empty
                 await expect(client.xdel(key, [])).rejects.toThrow(
@@ -10132,6 +10157,15 @@ export function runBaseTests(config: {
                     "OK",
                 );
 
+                // Testing binary parameters with an non-existing ID
+                expect(
+                    await client.xgroupSetId(
+                        Buffer.from(key),
+                        Buffer.from(groupName),
+                        Buffer.from("99-99"),
+                    ),
+                ).toBe("OK");
+
                 // key exists, but is not a stream
                 expect(await client.set(stringKey, "xgroup setid")).toBe("OK");
                 await expect(
@@ -10326,7 +10360,13 @@ export function runBaseTests(config: {
 
                 // incorrect IDs - response is empty
                 expect(
-                    await client.xclaim(key, group, "consumer", 0, ["000"]),
+                    await client.xclaim(
+                        Buffer.from(key),
+                        Buffer.from(group),
+                        Buffer.from("consumer"),
+                        0,
+                        [Buffer.from("000")],
+                    ),
                 ).toEqual({});
                 expect(
                     await client.xclaimJustId(key, group, "consumer", 0, [
@@ -10396,12 +10436,13 @@ export function runBaseTests(config: {
                     },
                 });
 
+                // testing binary parameters
                 let result = await client.xautoclaim(
-                    key,
-                    group,
-                    "consumer",
+                    Buffer.from(key),
+                    Buffer.from(group),
+                    Buffer.from("consumer"),
                     0,
-                    "0-0",
+                    Buffer.from("0-0"),
                     1,
                 );
                 let expected: typeof result = [
@@ -10534,6 +10575,15 @@ export function runBaseTests(config: {
                         stream_id1_0,
                         stream_id1_1,
                     ]),
+                ).toBe(0);
+
+                // testing binary parameters
+                expect(
+                    await client.xack(
+                        Buffer.from(key),
+                        Buffer.from(groupName),
+                        [Buffer.from(stream_id1_0), Buffer.from(stream_id1_1)],
+                    ),
                 ).toBe(0);
 
                 // read the last unacknowledged entry
@@ -10821,12 +10871,14 @@ export function runBaseTests(config: {
                 ).toEqual(0);
 
                 // Add two stream entries
-                const streamid1: string | null = await client.xadd(key, [
+                const streamid1: GlideString | null = await client.xadd(key, [
                     ["field1", "value1"],
                 ]);
                 expect(streamid1).not.toBeNull();
-                const streamid2 = await client.xadd(key, [
-                    ["field2", "value2"],
+
+                // testing binary parameters
+                const streamid2 = await client.xadd(Buffer.from(key), [
+                    [Buffer.from("field2"), Buffer.from("value2")],
                 ]);
                 expect(streamid2).not.toBeNull();
 
@@ -10842,9 +10894,13 @@ export function runBaseTests(config: {
                     },
                 });
 
-                // delete one of the streams
+                // delete one of the streams & testing binary parameters
                 expect(
-                    await client.xgroupDelConsumer(key, groupName, consumer),
+                    await client.xgroupDelConsumer(
+                        Buffer.from(key),
+                        Buffer.from(groupName),
+                        Buffer.from(consumer),
+                    ),
                 ).toEqual(2);
 
                 // attempting to call XGROUP CREATECONSUMER or XGROUP DELCONSUMER with a non-existing key should raise an error
@@ -10920,6 +10976,13 @@ export function runBaseTests(config: {
                 expect(await client.xgroupDestroy(key, groupName1)).toEqual(
                     false,
                 );
+                // calling again with binary parameters, expecting the same result
+                expect(
+                    await client.xgroupDestroy(
+                        Buffer.from(key),
+                        Buffer.from(groupName1),
+                    ),
+                ).toEqual(false);
 
                 // attempting to destroy a group for a non-existing key should raise an error
                 await expect(

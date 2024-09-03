@@ -298,6 +298,28 @@ export type DecoderOption = {
 };
 
 /**
+ * This function converts an input from HashDataType or Record types to HashDataType.
+ *
+ * @param fieldsAndValues - field names and their values.
+ * @returns HashDataType array containing field names and their values.
+ */
+export function convertFieldsAndValuesForHset(
+    fieldsAndValues: HashDataType | Record<string, GlideString>,
+): HashDataType {
+    let finalFieldAndValues = [];
+
+    if (!Array.isArray(fieldsAndValues)) {
+        finalFieldAndValues = Object.entries(fieldsAndValues).map((e) => {
+            return { field: e[0], value: e[1] };
+        });
+    } else {
+        finalFieldAndValues = fieldsAndValues;
+    }
+
+    return finalFieldAndValues;
+}
+
+/**
  * Our purpose in creating PointerResponse type is to mark when response is of number/long pointer response type.
  * Consequently, when the response is returned, we can check whether it is instanceof the PointerResponse type and pass it to the Rust core function with the proper parameters.
  */
@@ -318,6 +340,17 @@ class PointerResponse {
         this.low = low;
     }
 }
+
+/**
+ * Data type which represents how data are returned from hashes or insterted there.
+ * Similar to `Record<GlideString, GlideString>` - see {@link GlideRecord}.
+ */
+export type HashDataType = {
+    /** The hash element name. */
+    field: GlideString;
+    /** The hash element value. */
+    value: GlideString;
+}[];
 
 /** Represents the credentials for connecting to a server. */
 export type RedisCredentials = {
@@ -1616,8 +1649,7 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param field - The field in the hash stored at `key` to retrieve from the database.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns the value associated with `field`, or null when `field` is not present in the hash or `key` does not exist.
      *
      * @example
@@ -1638,11 +1670,9 @@ export class BaseClient {
     public async hget(
         key: GlideString,
         field: GlideString,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString | null> {
-        return this.createWritePromise(createHGet(key, field), {
-            decoder: decoder,
-        });
+        return this.createWritePromise(createHGet(key, field), options);
     }
 
     /** Sets the specified fields to their respective values in the hash stored at `key`.
@@ -1650,22 +1680,27 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/hset/|valkey.io} for details.
      *
      * @param key - The key of the hash.
-     * @param fieldValueMap - A field-value map consisting of fields and their corresponding values
-     * to be set in the hash stored at the specified key.
+     * @param fieldsAndValues - A list of field names and their values.
      * @returns The number of fields that were added.
      *
      * @example
      * ```typescript
-     * // Example usage of the hset method
-     * const result = await client.hset("my_hash", {"field": "value", "field2": "value2"});
+     * // Example usage of the hset method using HashDataType as input type
+     * const result = await client.hset("my_hash", [{"field": "field1", "value": "value1"}, {"field": "field2", "value": "value2"}]);
+     * console.log(result); // Output: 2 - Indicates that 2 fields were successfully set in the hash "my_hash".
+     *
+     * // Example usage of the hset method using Record<string, GlideString> as input
+     * const result = await client.hset("my_hash", {"field1": "value", "field2": "value2"});
      * console.log(result); // Output: 2 - Indicates that 2 fields were successfully set in the hash "my_hash".
      * ```
      */
     public async hset(
         key: GlideString,
-        fieldValueMap: Record<string, string>,
+        fieldsAndValues: HashDataType | Record<string, GlideString>,
     ): Promise<number> {
-        return this.createWritePromise(createHSet(key, fieldValueMap));
+        return this.createWritePromise(
+            createHSet(key, convertFieldsAndValuesForHset(fieldsAndValues)),
+        );
     }
 
     /**
@@ -1906,8 +1941,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/hvals/|valkey.io} for more details.
      *
      * @param key - The key of the hash.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns a list of values in the hash, or an empty list when the key does not exist.
      *
      * @example
@@ -1919,9 +1953,9 @@ export class BaseClient {
      */
     public async hvals(
         key: GlideString,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString[]> {
-        return this.createWritePromise(createHVals(key), { decoder: decoder });
+        return this.createWritePromise(createHVals(key), options);
     }
 
     /**
@@ -4731,14 +4765,18 @@ export class BaseClient {
      * @param key - The key of the stream.
      * @param values - field-value pairs to be added to the entry.
      * @param options - options detailing how to add to the stream.
+     * @param options - (Optional) See {@link StreamAddOptions} and {@link DecoderOption}.
      * @returns The id of the added entry, or `null` if `options.makeStream` is set to `false` and no stream with the matching `key` exists.
      */
     public async xadd(
-        key: string,
-        values: [string, string][],
-        options?: StreamAddOptions,
-    ): Promise<string | null> {
-        return this.createWritePromise(createXAdd(key, values, options));
+        key: GlideString,
+        values: [GlideString, GlideString][],
+        options?: StreamAddOptions & DecoderOption,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(
+            createXAdd(key, values, options),
+            options,
+        );
     }
 
     /**
@@ -4757,7 +4795,7 @@ export class BaseClient {
      * // Output is 2 since the stream marked 2 entries as deleted.
      * ```
      */
-    public async xdel(key: string, ids: string[]): Promise<number> {
+    public async xdel(key: GlideString, ids: GlideString[]): Promise<number> {
         return this.createWritePromise(createXDel(key, ids));
     }
 
@@ -5024,7 +5062,7 @@ export class BaseClient {
      * @param consumer - The group consumer.
      * @param minIdleTime - The minimum idle time for the message to be claimed.
      * @param ids - An array of entry ids.
-     * @param options - (Optional) Stream claim options {@link StreamClaimOptions}.
+     * @param options - (Optional) See {@link StreamClaimOptions} and {@link DecoderOption}.
      * @returns A `Record` of message entries that are claimed by the consumer.
      *
      * @example
@@ -5038,13 +5076,14 @@ export class BaseClient {
      * ```
      */
     public async xclaim(
-        key: string,
-        group: string,
-        consumer: string,
+        key: GlideString,
+        group: GlideString,
+        consumer: GlideString,
         minIdleTime: number,
-        ids: string[],
-        options?: StreamClaimOptions,
+        ids: GlideString[],
+        options?: StreamClaimOptions & DecoderOption,
     ): Promise<Record<string, [string, string][]>> {
+        // TODO: convert Record return type to Object array
         return this.createWritePromise(
             createXClaim(key, group, consumer, minIdleTime, ids, options),
         );
@@ -5093,13 +5132,14 @@ export class BaseClient {
      * ```
      */
     public async xautoclaim(
-        key: string,
-        group: string,
-        consumer: string,
+        key: GlideString,
+        group: GlideString,
+        consumer: GlideString,
         minIdleTime: number,
-        start: string,
+        start: GlideString,
         count?: number,
     ): Promise<[string, Record<string, [string, string][]>, string[]?]> {
+        // TODO: convert Record return type to Object array
         return this.createWritePromise(
             createXAutoClaim(key, group, consumer, minIdleTime, start, count),
         );
@@ -5218,13 +5258,14 @@ export class BaseClient {
      * ```
      */
     public async xgroupCreate(
-        key: string,
-        groupName: string,
-        id: string,
+        key: GlideString,
+        groupName: GlideString,
+        id: GlideString,
         options?: StreamGroupOptions,
-    ): Promise<string> {
+    ): Promise<"OK"> {
         return this.createWritePromise(
             createXGroupCreate(key, groupName, id, options),
+            { decoder: Decoder.String },
         );
     }
 
@@ -5244,8 +5285,8 @@ export class BaseClient {
      * ```
      */
     public async xgroupDestroy(
-        key: string,
-        groupName: string,
+        key: GlideString,
+        groupName: GlideString,
     ): Promise<boolean> {
         return this.createWritePromise(createXGroupDestroy(key, groupName));
     }
@@ -5340,9 +5381,9 @@ export class BaseClient {
      * ```
      */
     public async xgroupCreateConsumer(
-        key: string,
-        groupName: string,
-        consumerName: string,
+        key: GlideString,
+        groupName: GlideString,
+        consumerName: GlideString,
     ): Promise<boolean> {
         return this.createWritePromise(
             createXGroupCreateConsumer(key, groupName, consumerName),
@@ -5366,9 +5407,9 @@ export class BaseClient {
      * ```
      */
     public async xgroupDelConsumer(
-        key: string,
-        groupName: string,
-        consumerName: string,
+        key: GlideString,
+        groupName: GlideString,
+        consumerName: GlideString,
     ): Promise<number> {
         return this.createWritePromise(
             createXGroupDelConsumer(key, groupName, consumerName),
@@ -5406,9 +5447,9 @@ export class BaseClient {
      * ```
      */
     public async xack(
-        key: string,
-        group: string,
-        ids: string[],
+        key: GlideString,
+        group: GlideString,
+        ids: GlideString[],
     ): Promise<number> {
         return this.createWritePromise(createXAck(key, group, ids));
     }
@@ -5424,7 +5465,6 @@ export class BaseClient {
      *     group.
      * @param entriesRead - (Optional) A value representing the number of stream entries already read by the group.
      *     This option can only be specified if you are using Valkey version 7.0.0 or above.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns `"OK"`.
      *
      * * @example
@@ -5433,16 +5473,15 @@ export class BaseClient {
      * ```
      */
     public async xgroupSetId(
-        key: string,
-        groupName: string,
-        id: string,
+        key: GlideString,
+        groupName: GlideString,
+        id: GlideString,
         entriesRead?: number,
-        decoder?: Decoder,
     ): Promise<"OK"> {
         return this.createWritePromise(
             createXGroupSetid(key, groupName, id, entriesRead),
             {
-                decoder: decoder,
+                decoder: Decoder.String,
             },
         );
     }
