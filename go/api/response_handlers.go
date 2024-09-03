@@ -30,3 +30,13 @@ func handleStringOrNullResponse(response *C.struct_CommandResponse) string {
 	}
 	return handleStringResponse(response)
 }
+
+func handleLongResponse(response *C.struct_CommandResponse) int64 {
+	defer C.free_command_response(response)
+	return int64(response.int_value)
+}
+
+func handleDoubleResponse(response *C.struct_CommandResponse) float64 {
+	defer C.free_command_response(response)
+	return float64(response.float_value)
+}

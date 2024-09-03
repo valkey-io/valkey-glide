@@ -6,7 +6,7 @@ import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "glide-rs";
 import Long from "long";
 
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-import { BaseClient, SortedSetDataType } from "src/BaseClient";
+import { BaseClient, HashDataType, SortedSetDataType } from "src/BaseClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 import { GlideClient } from "src/GlideClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
@@ -413,11 +413,18 @@ export function createHGet(
  */
 export function createHSet(
     key: GlideString,
-    fieldValueMap: Record<string, string>,
+    fieldValueList: HashDataType,
 ): command_request.Command {
     return createCommand(
         RequestType.HSet,
-        [key].concat(Object.entries(fieldValueMap).flat()),
+        [key].concat(
+            fieldValueList
+                .map((fieldValueObject) => [
+                    fieldValueObject.field,
+                    fieldValueObject.value,
+                ])
+                .flat(),
+        ),
     );
 }
 

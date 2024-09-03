@@ -762,7 +762,7 @@ export async function transactionTest(
     responseData.push(["append(key1, value)", 3]);
     baseTransaction.del([key1]);
     responseData.push(["del([key1])", 1]);
-    baseTransaction.hset(key4, { [field]: value });
+    baseTransaction.hset(key4, [{ field, value }]);
     responseData.push(["hset(key4, { [field]: value })", 1]);
     baseTransaction.hscan(key4, "0");
     responseData.push(['hscan(key4, "0")', ["0", [field, value]]]);

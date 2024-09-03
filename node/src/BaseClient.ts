@@ -310,6 +310,28 @@ export type SortedSetDataType = {
 }[];
 
 /**
+ * This function converts an input from HashDataType or Record types to HashDataType.
+ *
+ * @param fieldsAndValues - field names and their values.
+ * @returns HashDataType array containing field names and their values.
+ */
+export function convertFieldsAndValuesForHset(
+    fieldsAndValues: HashDataType | Record<string, GlideString>,
+): HashDataType {
+    let finalFieldAndValues = [];
+
+    if (!Array.isArray(fieldsAndValues)) {
+        finalFieldAndValues = Object.entries(fieldsAndValues).map((e) => {
+            return { field: e[0], value: e[1] };
+        });
+    } else {
+        finalFieldAndValues = fieldsAndValues;
+    }
+
+    return finalFieldAndValues;
+}
+
+/**
  * Our purpose in creating PointerResponse type is to mark when response is of number/long pointer response type.
  * Consequently, when the response is returned, we can check whether it is instanceof the PointerResponse type and pass it to the Rust core function with the proper parameters.
  */
@@ -330,6 +352,17 @@ class PointerResponse {
         this.low = low;
     }
 }
+
+/**
+ * Data type which represents how data are returned from hashes or insterted there.
+ * Similar to `Record<GlideString, GlideString>` - see {@link GlideRecord}.
+ */
+export type HashDataType = {
+    /** The hash element name. */
+    field: GlideString;
+    /** The hash element value. */
+    value: GlideString;
+}[];
 
 /** Represents the credentials for connecting to a server. */
 export type RedisCredentials = {
@@ -1628,8 +1661,7 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param field - The field in the hash stored at `key` to retrieve from the database.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns the value associated with `field`, or null when `field` is not present in the hash or `key` does not exist.
      *
      * @example
@@ -1650,11 +1682,9 @@ export class BaseClient {
     public async hget(
         key: GlideString,
         field: GlideString,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString | null> {
-        return this.createWritePromise(createHGet(key, field), {
-            decoder: decoder,
-        });
+        return this.createWritePromise(createHGet(key, field), options);
     }
 
     /** Sets the specified fields to their respective values in the hash stored at `key`.
@@ -1662,22 +1692,27 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/hset/|valkey.io} for details.
      *
      * @param key - The key of the hash.
-     * @param fieldValueMap - A field-value map consisting of fields and their corresponding values
-     * to be set in the hash stored at the specified key.
+     * @param fieldsAndValues - A list of field names and their values.
      * @returns The number of fields that were added.
      *
      * @example
      * ```typescript
-     * // Example usage of the hset method
-     * const result = await client.hset("my_hash", {"field": "value", "field2": "value2"});
+     * // Example usage of the hset method using HashDataType as input type
+     * const result = await client.hset("my_hash", [{"field": "field1", "value": "value1"}, {"field": "field2", "value": "value2"}]);
+     * console.log(result); // Output: 2 - Indicates that 2 fields were successfully set in the hash "my_hash".
+     *
+     * // Example usage of the hset method using Record<string, GlideString> as input
+     * const result = await client.hset("my_hash", {"field1": "value", "field2": "value2"});
      * console.log(result); // Output: 2 - Indicates that 2 fields were successfully set in the hash "my_hash".
      * ```
      */
     public async hset(
         key: GlideString,
-        fieldValueMap: Record<string, string>,
+        fieldsAndValues: HashDataType | Record<string, GlideString>,
     ): Promise<number> {
-        return this.createWritePromise(createHSet(key, fieldValueMap));
+        return this.createWritePromise(
+            createHSet(key, convertFieldsAndValuesForHset(fieldsAndValues)),
+        );
     }
 
     /**
@@ -1918,8 +1953,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/hvals/|valkey.io} for more details.
      *
      * @param key - The key of the hash.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns a list of values in the hash, or an empty list when the key does not exist.
      *
      * @example
@@ -1931,9 +1965,9 @@ export class BaseClient {
      */
     public async hvals(
         key: GlideString,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString[]> {
-        return this.createWritePromise(createHVals(key), { decoder: decoder });
+        return this.createWritePromise(createHVals(key), options);
     }
 
     /**
