@@ -13,7 +13,7 @@
         "RUNNER": ["self-hosted", "Linux", "ARM64"],
         "ARCH": "arm64",
         "TARGET": "aarch64-unknown-linux-gnu",
-        "PACKAGE_MANAGERS": ["pypi", "npm"],
+        "PACKAGE_MANAGERS": ["pypi", "npm", "maven"],
         "CONTAINER": "2_28"
     },
     {
@@ -22,7 +22,7 @@
         "RUNNER": "macos-12",
         "ARCH": "x64",
         "TARGET": "x86_64-apple-darwin",
-        "PACKAGE_MANAGERS": ["pypi", "npm"]
+        "PACKAGE_MANAGERS": ["pypi", "npm", "maven"]
     },
     {
         "OS": "macos",
