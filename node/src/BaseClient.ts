@@ -1941,8 +1941,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/hvals/|valkey.io} for more details.
      *
      * @param key - The key of the hash.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns a list of values in the hash, or an empty list when the key does not exist.
      *
      * @example
@@ -1954,9 +1953,9 @@ export class BaseClient {
      */
     public async hvals(
         key: GlideString,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString[]> {
-        return this.createWritePromise(createHVals(key), { decoder: decoder });
+        return this.createWritePromise(createHVals(key), options);
     }
 
     /**

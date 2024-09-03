@@ -1922,14 +1922,13 @@ export function runBaseTests(config: {
 
                 //hvals with binary buffers
                 expect(await client.hset(key2, fieldValueMap)).toEqual(2);
-                expect(await client.hvals(key2, Decoder.Bytes)).toEqual([
-                    value1Encoded,
-                    value2Encoded,
-                ]);
+                expect(
+                    await client.hvals(key2, { decoder: Decoder.Bytes }),
+                ).toEqual([value1Encoded, value2Encoded]);
                 expect(await client.hdel(key2, [field1])).toEqual(1);
-                expect(await client.hvals(key2, Decoder.Bytes)).toEqual([
-                    value2Encoded,
-                ]);
+                expect(
+                    await client.hvals(key2, { decoder: Decoder.Bytes }),
+                ).toEqual([value2Encoded]);
             }, protocol);
         },
         config.timeout,
