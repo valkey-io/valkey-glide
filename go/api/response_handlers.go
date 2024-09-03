@@ -31,6 +31,17 @@ func handleStringOrNullResponse(response *C.struct_CommandResponse) string {
 	return handleStringResponse(response)
 }
 
+func handleStringArrayResponse(response *C.struct_CommandResponse) []string {
+	defer C.free_command_response(response)
+	var len []C.long
+	len = append(len, unsafe.Slice(response.array_elements_len, response.array_value_len)...)
+	var slice []string
+	for k, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		slice = append(slice, convertCharArrayToString(v, len[k]))
+	}
+	return slice
+}
+
 func handleLongResponse(response *C.struct_CommandResponse) int64 {
 	defer C.free_command_response(response)
 	return int64(response.int_value)
@@ -39,4 +50,9 @@ func handleLongResponse(response *C.struct_CommandResponse) int64 {
 func handleDoubleResponse(response *C.struct_CommandResponse) float64 {
 	defer C.free_command_response(response)
 	return float64(response.float_value)
+}
+
+func handleBooleanResponse(response *C.struct_CommandResponse) bool {
+	defer C.free_command_response(response)
+	return bool(response.bool_value)
 }
