@@ -2161,7 +2161,7 @@ export function createXRange(
  * @internal
  */
 export function createXRevRange(
-    key: string,
+    key: GlideString,
     start: Boundary<string>,
     end: Boundary<string>,
     count?: number,

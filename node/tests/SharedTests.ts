@@ -6488,7 +6488,7 @@ export function runBaseTests(config: {
 
                 expect(
                     await client.xrevrange(
-                        key,
+                        Buffer.from(key),
                         InfBoundary.PositiveInfinity,
                         InfBoundary.NegativeInfinity,
                     ),

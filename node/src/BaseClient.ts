@@ -3529,7 +3529,7 @@ export class BaseClient {
      * ```
      */
     public async xrevrange(
-        key: string,
+        key: GlideString,
         end: Boundary<string>,
         start: Boundary<string>,
         count?: number,

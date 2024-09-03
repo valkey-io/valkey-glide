@@ -2637,7 +2637,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A map of stream entry ids, to an array of entries, or `null` if `count` is non-positive.
      */
     public xrevrange(
-        key: string,
+        key: GlideString,
         end: Boundary<string>,
         start: Boundary<string>,
         count?: number,
