@@ -1411,7 +1411,7 @@ export function createZAdd(
 
     if (!Array.isArray(membersAndScores)) {
         // convert Record<string, number> to SortedSetDataType
-        membersAndScores = Object.entries(membersAndScores).map((p) => {
+        membersAndScores = Object.entries(membersAndScores).map((element) => {
             return { element: p[0], score: p[1] };
         });
     }

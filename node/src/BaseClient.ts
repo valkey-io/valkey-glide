@@ -298,7 +298,7 @@ export type DecoderOption = {
 };
 
 /**
- * Data type which represents how data are returned from sorted sets or insterted there.
+ * Data type which represents sorted sets data, including elements and their respective scores.
  * Similar to `Record<GlideString, number>` - see {@link GlideRecord}.
  */
 export type SortedSetDataType = {
@@ -3816,7 +3816,7 @@ export class BaseClient {
      * @param aggregationType - Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
      * @returns The number of elements in the resulting sorted set stored at `destination`.
      *
-     * * @example
+     * @example
      * ```typescript
      * await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
      * await client.zadd("key2", {"member1": 9.5})
@@ -6378,7 +6378,7 @@ export class BaseClient {
      * // Assume "key1" contains a sorted set with multiple members
      * let cursor = "0";
      * do {
-     *      let result = await client.zscan(key1, cursor, {
+     *      const result = await client.zscan(key1, cursor, {
      *          match: "*",
      *          count: 5,
      *      });
