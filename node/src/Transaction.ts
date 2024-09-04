@@ -4,7 +4,7 @@
 
 import {
     BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
-    GlideRecord, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GlideRecord,
     GlideString,
     HashDataType,
     convertFieldsAndValuesForHset,
