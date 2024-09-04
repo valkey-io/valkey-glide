@@ -1618,7 +1618,7 @@ describe("GlideClient", () => {
             let keys = [];
             let cursor = Buffer.from("0");
 
-            while (true) {
+            for (;;) {
                 const result = await client.scan(cursor);
                 cursor = result[0];
                 const newKeys = result[1];
@@ -1670,7 +1670,8 @@ describe("GlideClient", () => {
 
             const keys = [];
             let cursor = Buffer.from("0");
-            while (true) {
+
+            for (;;) {
                 const result = await client.scan(cursor, {
                     match: Buffer.from("key:*"),
                     objectType: ObjectType.String,
@@ -1683,6 +1684,7 @@ describe("GlideClient", () => {
                     break;
                 }
             }
+
             const keysSet = new Set(keys);
             expect(new Set(expectedKeys)).toEqual(keysSet);
             expect(
@@ -1718,7 +1720,7 @@ describe("GlideClient", () => {
             let cursor = Buffer.from("0");
             let successfulComparedScans = 0;
 
-            while (true) {
+            for (;;) {
                 const resultOf1 = await client.scan(cursor, { count: 1 });
                 cursor = resultOf1[0];
                 const keysOf1 = resultOf1[1];
@@ -1774,19 +1776,19 @@ describe("GlideClient", () => {
             let cursor = "0";
             const keys = [];
 
-            while (true) {
+            for (;;) {
                 const result = await client.scan(cursor, { match: "key:*" });
                 cursor = result[0];
                 keys.push(...result[1]);
+
                 if (cursor == "0") {
                     break;
                 }
             }
 
-            const encodedExpectedKeysSet = new Set(encodedExpectedKeys);
             const keysSet = new Set(keys);
-            expect(encodedExpectedKeysSet).toEqual(keysSet);
-            expect(encodedExpectedKeysSet.intersection(keysSet).size).toEqual(
+            expect(new Set(encodedExpectedKeys)).toEqual(keysSet);
+            expect(new Set(encodedUnexpectedKeys).intersection(keysSet).size).toEqual(
                 0,
             );
 
@@ -1838,7 +1840,7 @@ describe("GlideClient", () => {
                 (value) => key + ":" + (value + 300),
             );
 
-            for (let key of listKeys) {
+            for (const key of listKeys) {
                 await client.lpush(key, ["value"]);
             }
 
@@ -1867,13 +1869,14 @@ describe("GlideClient", () => {
             let cursor = "0";
             let keys = [];
 
-            while (true) {
+            for (;;) {
                 const result = await client.scan(cursor, {
                     objectType: ObjectType.String,
                 });
                 cursor = result[0];
                 const newKeys = result[1];
                 keys.push(...newKeys);
+
                 if (cursor == "0") {
                     break;
                 }
@@ -1896,13 +1899,14 @@ describe("GlideClient", () => {
 
             keys = [];
 
-            while (true) {
+            for (;;) {
                 const result = await client.scan(cursor, {
                     objectType: ObjectType.Set,
                 });
                 cursor = result[0];
                 const newKeys = result[1];
                 keys.push(...newKeys);
+
                 if (cursor == "0") {
                     break;
                 }
@@ -1918,13 +1922,14 @@ describe("GlideClient", () => {
 
             keys = [];
 
-            while (true) {
+            for (;;) {
                 const result = await client.scan(cursor, {
                     objectType: ObjectType.Hash,
                 });
                 cursor = result[0];
                 const newKeys = result[1];
                 keys.push(...newKeys);
+
                 if (cursor == "0") {
                     break;
                 }
@@ -1940,13 +1945,14 @@ describe("GlideClient", () => {
 
             keys = [];
 
-            while (true) {
+            for (;;) {
                 const result = await client.scan(cursor, {
                     objectType: ObjectType.List,
                 });
                 cursor = result[0];
                 const newKeys = result[1];
                 keys.push(...newKeys);
+
                 if (cursor == "0") {
                     break;
                 }
@@ -1962,13 +1968,14 @@ describe("GlideClient", () => {
 
             keys = [];
 
-            while (true) {
+            for (;;) {
                 const result = await client.scan(cursor, {
                     objectType: ObjectType.ZSet,
                 });
                 cursor = result[0];
                 const newKeys = result[1];
                 keys.push(...newKeys);
+
                 if (cursor == "0") {
                     break;
                 }
@@ -1984,13 +1991,14 @@ describe("GlideClient", () => {
 
             keys = [];
 
-            while (true) {
+            for (;;) {
                 const result = await client.scan(cursor, {
                     objectType: ObjectType.Stream,
                 });
                 cursor = result[0];
                 const newKeys = result[1];
                 keys.push(...newKeys);
+
                 if (cursor == "0") {
                     break;
                 }
