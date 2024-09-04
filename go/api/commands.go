@@ -166,6 +166,7 @@ type StringCommands interface {
 	//
 	// For example:
 	//	result, err := client.GetDel("key")
+	//
 	//[valkey.io]: https://valkey.io/commands/getdel/
 	GetDel(key string) (string, error)
 }
