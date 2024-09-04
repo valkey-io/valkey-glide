@@ -1323,7 +1323,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public scan(
         cursor: GlideString,
-        options?: BaseScanOptions & { objectType: ObjectType },
+        options?: BaseScanOptions & { objectType?: ObjectType },
     ): T {
         return this.addAndReturn(createScan(cursor, options));
     }
