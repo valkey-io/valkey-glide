@@ -1605,21 +1605,30 @@ describe("GlideClient", () => {
             );
 
             const key = "{key}" + uuidv4();
-            
-            expectedKeys = [...Array(100).keys()].map((value) => key + ":" + value);
-            await client.mset(expectedKeys.reduce((prevObject, key) => { return {...prevObject, [key]: "value"} } , {}));
+
+            expectedKeys = [...Array(100).keys()].map(
+                (value) => key + ":" + value,
+            );
+            await client.mset(
+                expectedKeys.reduce((prevObject, key) => {
+                    return { ...prevObject, [key]: "value" };
+                }, {}),
+            );
             const encodedExpectedKeys = expectedKeys.map(Buffer.from);
-            var keys = [];
-            var cursor = Buffer.from("0");
+            let keys = [];
+            let cursor = Buffer.from("0");
+
             while (true) {
                 const result = await client.scan(cursor);
                 cursor = result[0];
-                newKeys = result[1];
+                const newKeys = result[1];
                 keys = keys.concat(newKeys);
+
                 if (cursor == Buffer.from("0")) {
                     break;
                 }
             }
+
             expect(encodedExpectedKeys).toEqual(keys);
             client.close();
         },
@@ -1635,31 +1644,53 @@ describe("GlideClient", () => {
 
             const key = "{key}" + uuidv4();
 
-            const expectedKeys = [...Array(100).keys()].map((value) => key + ":" + value);
-            await client.mset(expectedKeys.reduce((prevObject, key) => { return {...prevObject, [key]: "value"} } , {}));
-            const unexpectedTypeKeys = [...Array(100).keys()].map((value) => "key:" + (value + 100));
-            for (let key of unexpectedTypeKeys) {
+            const expectedKeys = [...Array(100).keys()].map(
+                (value) => key + ":" + value,
+            );
+            await client.mset(
+                expectedKeys.reduce((prevObject, key) => {
+                    return { ...prevObject, [key]: "value" };
+                }, {}),
+            );
+            const unexpectedTypeKeys = [...Array(100).keys()].map(
+                (value) => "key:" + (value + 100),
+            );
+
+            for (const key of unexpectedTypeKeys) {
                 await client.sadd(key, ["value"]);
             }
-            const unexpectedPatternKeys = [...Array(100).keys()].map((value) => String(value + 200));
-            for (let key of unexpectedPatternKeys) {
+
+            const unexpectedPatternKeys = [...Array(100).keys()].map((value) =>
+                String(value + 200),
+            );
+
+            for (const key of unexpectedPatternKeys) {
                 await client.set(key, "value");
             }
-            var keys = [];
-            var cursor = Buffer.from("0");
+
+            const keys = [];
+            let cursor = Buffer.from("0");
             while (true) {
-                const result = await client.scan(cursor, { match: Buffer.from("key:*"), objectType: ObjectType.String });
+                const result = await client.scan(cursor, {
+                    match: Buffer.from("key:*"),
+                    objectType: ObjectType.String,
+                });
 
                 cursor = result[0];
                 keys.push(...result[1]);
+
                 if (cursor == Buffer.from("0")) {
                     break;
                 }
             }
             const keysSet = new Set(keys);
             expect(new Set(expectedKeys)).toEqual(keysSet);
-            expect(new Set(unexpectedTypeKeys).intersection(keysSet).size).toEqual(0);
-            expect(new Set(unexpectedPatternKeys).intersection(keysSet).size).toEqual(0);
+            expect(
+                new Set(unexpectedTypeKeys).intersection(keysSet).size,
+            ).toEqual(0);
+            expect(
+                new Set(unexpectedPatternKeys).intersection(keysSet).size,
+            ).toEqual(0);
 
             client.close();
         },
@@ -1674,12 +1705,19 @@ describe("GlideClient", () => {
             );
 
             const key = "{key}" + uuidv4();
-            const expectedKeys = [...Array(100).keys()].map((value) => key + ":" + value);
-            await client.mset(expectedKeys.reduce((prevObject, key) => { return {...prevObject, [key]: "value"} } , {}));
+            const expectedKeys = [...Array(100).keys()].map(
+                (value) => key + ":" + value,
+            );
+            await client.mset(
+                expectedKeys.reduce((prevObject, key) => {
+                    return { ...prevObject, [key]: "value" };
+                }, {}),
+            );
             const encodedExpectedKeys = expectedKeys.map(Buffer.from);
-            var keys = [];
-            var cursor = Buffer.from("0");
-            var successfulComparedScan = 0;
+            const keys = [];
+            let cursor = Buffer.from("0");
+            let successfulComparedScans = 0;
+
             while (true) {
                 const resultOf1 = await client.scan(cursor, { count: 1 });
                 cursor = resultOf1[0];
@@ -1689,16 +1727,18 @@ describe("GlideClient", () => {
                 cursor = resultOf100[0];
                 const keysOf100 = resultOf100[1];
                 keys.push(...keysOf100);
+
                 if (keysOf100.size > keysOf1.size) {
                     successfulComparedScans += 1;
                 }
+
                 if (cursor == "0") {
                     break;
                 }
             }
 
             expect(new Set(encodedExpectedKeys)).toEqual(new Set(keys));
-            expect(successfulComparedScan).toBeGreaterThan(0);
+            expect(successfulComparedScans).toBeGreaterThan(0);
 
             client.close();
         },
@@ -1713,14 +1753,27 @@ describe("GlideClient", () => {
             );
 
             const key = "{key}" + uuidv4();
-            const expectedKeys = [...Array(100).keys()].map((value) => key + ":" + value);
-            await client.mset(expectedKeys.reduce((prevObject, key) => { return {...prevObject, [key]: "value"} } , {}));
+            const expectedKeys = [...Array(100).keys()].map(
+                (value) => key + ":" + value,
+            );
+            await client.mset(
+                expectedKeys.reduce((prevObject, key) => {
+                    return { ...prevObject, [key]: "value" };
+                }, {}),
+            );
             const encodedExpectedKeys = expectedKeys.map(Buffer.from);
-            const unexpectedKeys = [...Array(100).keys()].map((value) => String(value));
-            await client.mset(unexpectedKeys.reduce((prevObject, key) => { return {...prevObject, [key]: "value"} } , {}));
-            encodedUnexpectedKeys = unexpectedKeys.map(Buffer.from);
-            var cursor = "0";
-            var keys = [];
+            const unexpectedKeys = [...Array(100).keys()].map((value) =>
+                String(value),
+            );
+            await client.mset(
+                unexpectedKeys.reduce((prevObject, key) => {
+                    return { ...prevObject, [key]: "value" };
+                }, {}),
+            );
+            const encodedUnexpectedKeys = unexpectedKeys.map(Buffer.from);
+            let cursor = "0";
+            const keys = [];
+
             while (true) {
                 const result = await client.scan(cursor, { match: "key:*" });
                 cursor = result[0];
@@ -1733,7 +1786,9 @@ describe("GlideClient", () => {
             const encodedExpectedKeysSet = new Set(encodedExpectedKeys);
             const keysSet = new Set(keys);
             expect(encodedExpectedKeysSet).toEqual(keysSet);
-            expect(encodedExpectedKeysSet.intersection(keysSet).size).toEqual(0);
+            expect(encodedExpectedKeysSet.intersection(keysSet).size).toEqual(
+                0,
+            );
 
             client.close();
         },
@@ -1749,44 +1804,73 @@ describe("GlideClient", () => {
 
             // We test that the scan command work for all types of keys
             const key = "{key}" + uuidv4();
-            const stringKeys = [...Array(100).keys()].map((value) => key + ":" + value);
-            await client.mset(stringKeys.reduce((prevObject, key) => { return {...prevObject, [key]: "value"} } , {}));
-            encodedStringKeys = stringKeys.map(Buffer.from);
+            const stringKeys = [...Array(100).keys()].map(
+                (value) => key + ":" + value,
+            );
+            await client.mset(
+                stringKeys.reduce((prevObject, key) => {
+                    return { ...prevObject, [key]: "value" };
+                }, {}),
+            );
+            const encodedStringKeys = stringKeys.map(Buffer.from);
 
-            const setKeys = [...Array(100).keys()].map((value) => key + ":" + (value + 100));
-            for (let key of setKeys) {
+            const setKeys = [...Array(100).keys()].map(
+                (value) => key + ":" + (value + 100),
+            );
+
+            for (const key of setKeys) {
                 await client.sadd(key, ["value"]);
             }
+
             const encodedSetKeys = setKeys.map(Buffer.from);
 
-            const hashKeys = [...Array(100).keys()].map((value) => key + ":" + (value + 200));
-            for (let key of hashKeys) {
-                await client.hset(key, { "field": "value" });
+            const hashKeys = [...Array(100).keys()].map(
+                (value) => key + ":" + (value + 200),
+            );
+
+            for (const key of hashKeys) {
+                await client.hset(key, { field: "value" });
             }
+
             const encodedHashKeys = hashKeys.map(Buffer.from);
 
-            const listKeys = [...Array(100).keys()].map((value) => key + ":" + (value + 300));
+            const listKeys = [...Array(100).keys()].map(
+                (value) => key + ":" + (value + 300),
+            );
+
             for (let key of listKeys) {
                 await client.lpush(key, ["value"]);
             }
+
             const encodedListKeys = listKeys.map(Buffer.from);
 
-            const zsetKeys = [...Array(100).keys()].map((value) => key + ":" + (value + 400));
-            for (let key of zsetKeys) {
-                await client.zadd(key, {"value": 1});
+            const zsetKeys = [...Array(100).keys()].map(
+                (value) => key + ":" + (value + 400),
+            );
+
+            for (const key of zsetKeys) {
+                await client.zadd(key, { value: 1 });
             }
+
             const encodedZSetKeys = zsetKeys.map(Buffer.from);
 
-            const streamKeys = [...Array(100).keys()].map((value) => key + ":" + (value + 500));
-            for (let key of streamKeys) {
+            const streamKeys = [...Array(100).keys()].map(
+                (value) => key + ":" + (value + 500),
+            );
+
+            for (const key of streamKeys) {
                 await client.xadd(key, [["field", "value"]]);
             }
+
             const encodedStreamKeys = streamKeys.map(Buffer.from);
 
-            var cursor = "0";
-            var keys = [];
+            let cursor = "0";
+            let keys = [];
+
             while (true) {
-                const result = await client.scan($cursor, { objectType: ObjectType.String });
+                const result = await client.scan(cursor, {
+                    objectType: ObjectType.String,
+                });
                 cursor = result[0];
                 const newKeys = result[1];
                 keys.push(...newKeys);
@@ -1794,6 +1878,7 @@ describe("GlideClient", () => {
                     break;
                 }
             }
+
             const keysSet = new Set(keys);
             const encodedStringKeysSet = new Set(encodedStringKeys);
             const encodedSetKeysSet = new Set(encodedSetKeys);
@@ -1810,15 +1895,19 @@ describe("GlideClient", () => {
             expect(encodedStreamKeysSet.intersection(keysSet).size).toEqual(0);
 
             keys = [];
+
             while (true) {
-                const result = await client.scan(cursor, { objectType: ObjectType.Set });
+                const result = await client.scan(cursor, {
+                    objectType: ObjectType.Set,
+                });
                 cursor = result[0];
-                newKeys = result[1];
+                const newKeys = result[1];
                 keys.push(...newKeys);
                 if (cursor == "0") {
                     break;
                 }
             }
+
             const keysSet = new Set(keys);
             expect(encodedSetKeysSet).toEqual(keysSet);
             expect(encodedStringKeysSet.intersection(keysSet).size).toEqual(0);
@@ -1828,15 +1917,19 @@ describe("GlideClient", () => {
             expect(encodedStreamKeysSet.intersection(keysSet).size).toEqual(0);
 
             keys = [];
+
             while (true) {
-                const result = await client.scan(cursor, { objectType: ObjectType.Hash });
+                const result = await client.scan(cursor, {
+                    objectType: ObjectType.Hash,
+                });
                 cursor = result[0];
-                newKeys = result[1];
+                const newKeys = result[1];
                 keys.push(...newKeys);
                 if (cursor == "0") {
                     break;
                 }
             }
+
             const keysSet = new Set(keys);
             expect(encodedHashKeysSet).toEqual(keysSet);
             expect(encodedStringKeysSet.intersection(keysSet).size).toEqual(0);
@@ -1846,15 +1939,19 @@ describe("GlideClient", () => {
             expect(encodedStreamKeysSet.intersection(keysSet).size).toEqual(0);
 
             keys = [];
+
             while (true) {
-                const result = await client.scan(cursor, { objectType: ObjectType.List });
+                const result = await client.scan(cursor, {
+                    objectType: ObjectType.List,
+                });
                 cursor = result[0];
-                newKeys = result[1];
+                const newKeys = result[1];
                 keys.push(...newKeys);
                 if (cursor == "0") {
                     break;
                 }
             }
+
             const keysSet = new Set(keys);
             expect(encodedListKeysSet).toEqual(keysSet);
             expect(encodedStringKeysSet.intersection(keysSet).size).toEqual(0);
@@ -1864,15 +1961,19 @@ describe("GlideClient", () => {
             expect(encodedStreamKeysSet.intersection(keysSet).size).toEqual(0);
 
             keys = [];
+
             while (true) {
-                const result = await client.scan(cursor, { objectType: ObjectType.ZSet });
+                const result = await client.scan(cursor, {
+                    objectType: ObjectType.ZSet,
+                });
                 cursor = result[0];
-                newKeys = result[1];
+                const newKeys = result[1];
                 keys.push(...newKeys);
                 if (cursor == "0") {
                     break;
                 }
             }
+
             const keysSet = new Set(keys);
             expect(encodedZSetKeysSet).toEqual(keysSet);
             expect(encodedStringKeysSet.intersection(keysSet).size).toEqual(0);
@@ -1882,15 +1983,19 @@ describe("GlideClient", () => {
             expect(encodedStreamKeysSet.intersection(keysSet).size).toEqual(0);
 
             keys = [];
+
             while (true) {
-                const result = await client.scan(cursor, { objectType: ObjectType.Stream });
+                const result = await client.scan(cursor, {
+                    objectType: ObjectType.Stream,
+                });
                 cursor = result[0];
-                newKeys = result[1];
+                const newKeys = result[1];
                 keys.push(...newKeys);
                 if (cursor == "0") {
                     break;
                 }
             }
+
             const keysSet = new Set(keys);
             expect(encodedZSetKeysSet).toEqual(keysSet);
             expect(encodedStringKeysSet.intersection(keysSet).size).toEqual(0);

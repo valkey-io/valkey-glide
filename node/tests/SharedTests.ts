@@ -1431,7 +1431,10 @@ export function runBaseTests(config: {
                 expect(await client.hset(key1, charMap)).toEqual(
                     charMembers.length,
                 );
-                let result = await client.hscan(Buffer.from(key1), Buffer.from(initialCursor));
+                let result = await client.hscan(
+                    Buffer.from(key1),
+                    Buffer.from(initialCursor),
+                );
                 expect(result[resultCursorIndex]).toEqual(initialCursor);
                 expect(result[resultCollectionIndex].length).toEqual(
                     Object.keys(charMap).length * 2, // Length includes the score which is twice the map size
@@ -3183,7 +3186,10 @@ export function runBaseTests(config: {
                 expect(await client.sadd(key1, charMembers)).toEqual(
                     charMembers.length,
                 );
-                let result = await client.sscan(Buffer.from(key1), Buffer.from(initialCursor));
+                let result = await client.sscan(
+                    Buffer.from(key1),
+                    Buffer.from(initialCursor),
+                );
                 expect(await result[resultCursorIndex]).toEqual(initialCursor);
                 expect(result[resultCollectionIndex].length).toEqual(
                     charMembers.length,

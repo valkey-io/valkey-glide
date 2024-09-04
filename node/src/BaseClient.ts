@@ -2044,7 +2044,7 @@ export class BaseClient {
     public async hscan(
         key: GlideString,
         cursor: GlideString,
-        options?: BaseScanOptions & DecoderOption,
+        options?: BaseScanOptions & { noValues?: boolean } & DecoderOption,
     ): Promise<[GlideString, GlideString[]]> {
         return this.createWritePromise(createHScan(key, cursor, options));
     }

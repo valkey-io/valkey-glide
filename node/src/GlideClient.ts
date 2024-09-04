@@ -869,9 +869,9 @@ export class GlideClient extends BaseClient {
      * A full iteration always retrieves all the elements that were present
      * in the collection from the start to the end of a full iteration.
      * Elements that were not constantly present in the collection during a full iteration, may be returned or not.
-     * 
+     *
      * @see {@link https://valkey.io/commands/scan/|valkey.io} for more details.
-     * 
+     *
      * @param cursor - The cursor used for iteration. For the first iteration, the cursor should be set to "0".
      * Using a non-zero cursor in the first iteration,
      * or an invalid cursor at any iteration, will lead to undefined results.
@@ -881,7 +881,7 @@ export class GlideClient extends BaseClient {
      * @param options - (Optional) See {@link BaseScanOptions}, {@link ObjectType} and {@link DecoderOption}.
      * @returns An array containing the next cursor value and an array of keys,
      * formatted as [cursor, [key1, key2, ...]]
-     * 
+     *
      * @example
      * ```typescript
      * // Example usage of scan command
@@ -901,12 +901,9 @@ export class GlideClient extends BaseClient {
      */
     public async scan(
         cursor: GlideString,
-        options?: BaseScanOptions & {objectType: ObjectType} & DecoderOption,
+        options?: BaseScanOptions & { objectType?: ObjectType } & DecoderOption,
     ): Promise<[GlideString, GlideString[]]> {
-        return this.createWritePromise(
-            createScan(cursor, options),
-            options,
-        );
+        return this.createWritePromise(createScan(cursor, options), options);
     }
 
     /**

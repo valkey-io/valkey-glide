@@ -1002,7 +1002,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * hash held in `key`. The array in the second element is always a flattened series of string pairs,
      * where the value is at even indices and the value is at odd indices.
      */
-    public hscan(key: GlideString, cursor: GlideString, options?: BaseScanOptions): T {
+    public hscan(
+        key: GlideString,
+        cursor: GlideString,
+        options?: BaseScanOptions,
+    ): T {
         return this.addAndReturn(createHScan(key, cursor, options));
     }
 
@@ -1304,9 +1308,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * A full iteration always retrieves all the elements that were present
      * in the collection from the start to the end of a full iteration.
      * Elements that were not constantly present in the collection during a full iteration, may be returned or not.
-     * 
+     *
      * @see {@link https://valkey.io/commands/scan/|valkey.io} for more details.
-     * 
+     *
      * @param cursor - The cursor used for iteration. For the first iteration, the cursor should be set to "0".
      * Using a non-zero cursor in the first iteration,
      * or an invalid cursor at any iteration, will lead to undefined results.
@@ -1319,7 +1323,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public scan(
         cursor: GlideString,
-        options?: BaseScanOptions & {objectType: ObjectType},
+        options?: BaseScanOptions & { objectType: ObjectType },
     ): T {
         return this.addAndReturn(createScan(cursor, options));
     }
@@ -3659,7 +3663,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *      of the sorted set held in `key`. The `Array` in the second element is always a flattened series of
      *      `String` pairs, where the value is at even indices and the score is at odd indices.
      */
-    public zscan(key: GlideString, cursor: GlideString, options?: BaseScanOptions): T {
+    public zscan(
+        key: GlideString,
+        cursor: GlideString,
+        options?: BaseScanOptions,
+    ): T {
         return this.addAndReturn(createZScan(key, cursor, options));
     }
 

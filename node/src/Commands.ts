@@ -1224,7 +1224,7 @@ export enum ObjectType {
  */
 export function createScan(
     cursor: GlideString,
-    options?: BaseScanOptions & {objectType: ObjectType},
+    options?: BaseScanOptions & { objectType: ObjectType },
 ): command_request.Command {
     let args: GlideString[] = [cursor];
 
@@ -3817,7 +3817,9 @@ export type BaseScanOptions = {
 /**
  * @internal
  */
-function convertBaseScanOptionsToArgsArray(options: BaseScanOptions): GlideString[] {
+function convertBaseScanOptionsToArgsArray(
+    options: BaseScanOptions,
+): GlideString[] {
     const args: GlideString[] = [];
 
     if (options.match) {
@@ -3834,7 +3836,9 @@ function convertBaseScanOptionsToArgsArray(options: BaseScanOptions): GlideStrin
 /**
  * @internal
  */
-function convertScanOptionsToArgsArray(options: BaseScanOptions & {objectType: ObjectType}): GlideString[] {
+function convertScanOptionsToArgsArray(
+    options: BaseScanOptions & { objectType: ObjectType },
+): GlideString[] {
     const args: GlideString[] = convertBaseScanOptionsToArgsArray(options);
 
     if (options.objectType) {
