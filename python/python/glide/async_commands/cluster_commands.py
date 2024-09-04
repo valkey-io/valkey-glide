@@ -25,7 +25,7 @@ from glide.constants import (
 from glide.protobuf.command_request_pb2 import RequestType
 from glide.routes import Route
 
-from ..glide import ClusterScanCursor
+from ..glide import ClusterScanCursor, Script
 
 
 class ClusterCommands(CoreCommands):
@@ -1283,7 +1283,7 @@ class ClusterCommands(CoreCommands):
 
         Args:
             sha1s (List[TEncodable]): List of SHA1 digests of the scripts to check.
-            route (Optional[Route]): The command will be routed automatically based on the passed command's default request policy, unless `route` is provided, in which
+            route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided, in which
             case the client will route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:
@@ -1308,8 +1308,8 @@ class ClusterCommands(CoreCommands):
 
         Args:
             mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
-            route (Optional[Route]): The command will be routed automatically based on the passed command's default request policy, unless `route` is provided, in which
-            case the client will route the command to the nodes defined by `route`. Defaults to None.
+            route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in which
+                case the client will route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:
             TOK: A simple `OK` response.
@@ -1338,11 +1338,44 @@ class ClusterCommands(CoreCommands):
 
         Returns:
             TOK: A simple `OK` response.
-            route (Optional[Route]): The command will be routed automatically based on the passed command's default request policy, unless `route` is provided, in which
-            case the client will route the command to the nodes defined by `route`. Defaults to None.
+            route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in which
+                case the client will route the command to the nodes defined by `route`. Defaults to None.
 
         Examples:
             >>> await client.script_kill()
                 "OK"
         """
         return cast(TOK, await self._execute_command(RequestType.ScriptKill, [], route))
+
+    async def invoke_script(
+        self,
+        script: Script,
+        keys: Optional[List[TEncodable]] = None,
+        args: Optional[List[TEncodable]] = None,
+        route: Optional[Route] = None,
+    ) -> TClusterResponse[TResult]:
+        """
+        Invokes a Lua script with its keys and arguments.
+        This method simplifies the process of invoking scripts on a server by using an object that represents a Lua script.
+        The script loading, argument preparation, and execution will all be handled internally.
+        If the script has not already been loaded, it will be loaded automatically using the `SCRIPT LOAD` command.
+        After that, it will be invoked using the `EVALSHA` command.
+
+        See https://valkey.io/commands/script-load/ and https://valkey.io/commands/evalsha/ for more details.
+
+        Args:
+            script (Script): The Lua script to execute.
+            keys (Optional[List[TEncodable]]): The keys that are used in the script.
+            args (Optional[List[TEncodable]]): The arguments for the script.
+            route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in which
+                case the client will route the command to the nodes defined by `route`. Defaults to None.
+
+        Returns:
+            TResult: a value that depends on the script that was executed.
+
+        Examples:
+            >>> lua_script = Script("return { KEYS[1], ARGV[1] }")
+            >>> await invoke_script(lua_script, keys=["foo"], args=["bar"] );
+                [b"foo", b"bar"]
+        """
+        return await self._execute_script(script.get_hash(), keys, args, route)

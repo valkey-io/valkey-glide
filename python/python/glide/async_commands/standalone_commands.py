@@ -1078,7 +1078,6 @@ class StandaloneCommands(CoreCommands):
     async def script_kill(self) -> TOK:
         """
         Kill the currently executing Lua script, assuming no write operation was yet performed by the script.
-        The command is routed to all nodes, and aggregates the response to a single array.
 
         See https://valkey.io/commands/script-kill for more details.
 

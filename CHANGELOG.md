@@ -109,6 +109,8 @@
 * Node: Added binary variant to stream commands ([#2200](https://github.com/valkey-io/valkey-glide/pull/2200), [#2222](https://github.com/valkey-io/valkey-glide/pull/2222))
 * Python, Node, Java: change BITCOUNT end param to optional ([#2248](https://github.com/valkey-io/valkey-glide/pull/2248))
 
+* Node: Added binary variant to stream commands ([#2200](https://github.com/valkey-io/valkey-glide/pull/2200))
+* Python: Add Script commands ([#2208](https://github.com/valkey-io/valkey-glide/pull/2208))
 
 #### Breaking Changes
 * Node: (Refactor) Convert classes to types ([#2005](https://github.com/valkey-io/valkey-glide/pull/2005))
