@@ -2416,7 +2416,7 @@ export function createFunctionRestore(
 }
 
 /**
- * Represents offsets specifying a string interval to analyze in the {@link BaseClient.bitcount|bitcount} command. The offsets are
+ * Represents offsets specifying a string interval to analyze in the {@link BaseClient.bitcount|bitcount and @link BaseClient.bitpos} command. The offsets are
  * zero-based indexes, with `0` being the first index of the string, `1` being the next index and so on.
  * The offsets can also be negative numbers indicating offsets starting at the end of the string, with `-1` being
  * the last index of the string, `-2` being the penultimate, and so on.
@@ -2425,9 +2425,9 @@ export function createFunctionRestore(
  */
 export type BitOffsetOptions = {
     /** The starting offset index. */
-    start: number;
+    start?: number;
     /** The ending offset index. */
-    end: number;
+    end?: number;
     /**
      * The index offset type. This option can only be specified if you are using server version 7.0.0 or above.
      * Could be either {@link BitmapIndexType.BYTE} or {@link BitmapIndexType.BIT}.
@@ -2446,8 +2446,8 @@ export function createBitCount(
     const args = [key];
 
     if (options) {
-        args.push(options.start.toString());
-        args.push(options.end.toString());
+        if (options.start) args.push(options.start.toString());
+        if (options.end) args.push(options.end.toString());
         if (options.indexType) args.push(options.indexType);
     }
 
@@ -2474,24 +2474,15 @@ export enum BitmapIndexType {
 export function createBitPos(
     key: GlideString,
     bit: number,
-    start?: number,
-    end?: number,
-    indexType?: BitmapIndexType,
+    options?: BitOffsetOptions,
 ): command_request.Command {
     const args: GlideString[] = [key, bit.toString()];
 
-    if (start !== undefined) {
-        args.push(start.toString());
+    if (options) {
+        if (options.start != undefined) args.push(options.start.toString());
+        if (options.end != undefined) args.push(options.end.toString());
+        if (options.indexType) args.push(options.indexType);
     }
-
-    if (end !== undefined) {
-        args.push(end.toString());
-    }
-
-    if (indexType) {
-        args.push(indexType);
-    }
-
     return createCommand(RequestType.BitPos, args);
 }
 
