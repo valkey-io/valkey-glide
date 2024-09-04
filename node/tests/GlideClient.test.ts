@@ -1788,9 +1788,9 @@ describe("GlideClient", () => {
 
             const keysSet = new Set(keys);
             expect(new Set(encodedExpectedKeys)).toEqual(keysSet);
-            expect(new Set(encodedUnexpectedKeys).intersection(keysSet).size).toEqual(
-                0,
-            );
+            expect(
+                new Set(encodedUnexpectedKeys).intersection(keysSet).size,
+            ).toEqual(0);
 
             client.close();
         },
