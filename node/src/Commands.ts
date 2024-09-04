@@ -1386,7 +1386,7 @@ export function convertElementsAndScores(
 ): SortedSetDataType {
     if (!Array.isArray(membersAndScores)) {
         // convert Record<string, number> to SortedSetDataType
-        membersAndScores = Object.entries(membersAndScores).map((element) => {
+        return Object.entries(membersAndScores).map((element) => {
             return { element: element[0], score: element[1] };
         });
     }

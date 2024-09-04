@@ -3992,7 +3992,7 @@ export class BaseClient {
     public async zrange(
         key: GlideString,
         rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
-        options?: { reverse: boolean } & DecoderOption,
+        options?: { reverse?: boolean } & DecoderOption,
     ): Promise<GlideString[]> {
         return this.createWritePromise(
             createZRange(key, rangeQuery, options?.reverse),
@@ -4043,7 +4043,7 @@ export class BaseClient {
     public async zrangeWithScores(
         key: GlideString,
         rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
-        options?: { reverse: boolean } & DecoderOption,
+        options?: { reverse?: boolean } & DecoderOption,
     ): Promise<Record<string, number>> {
         return this.createWritePromise(
             createZRangeWithScores(key, rangeQuery, options?.reverse),
