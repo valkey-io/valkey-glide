@@ -22,6 +22,7 @@ import (
 // BaseClient defines an interface for methods common to both [GlideClient] and [GlideClusterClient].
 type BaseClient interface {
 	StringCommands
+	HashCommands
 
 	// Close terminates the client by closing all associated resources.
 	Close()
@@ -146,7 +147,8 @@ func (client *baseClient) Set(key string, value string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return handleStringResponse(result), nil
+
+	return handleStringResponse(result)
 }
 
 func (client *baseClient) SetWithOptions(key string, value string, options *SetOptions) (string, error) {
@@ -154,7 +156,8 @@ func (client *baseClient) SetWithOptions(key string, value string, options *SetO
 	if err != nil {
 		return "", err
 	}
-	return handleStringOrNullResponse(result), nil
+
+	return handleStringOrNullResponse(result)
 }
 
 func (client *baseClient) Get(key string) (string, error) {
@@ -162,7 +165,8 @@ func (client *baseClient) Get(key string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return handleStringOrNullResponse(result), nil
+
+	return handleStringOrNullResponse(result)
 }
 
 func (client *baseClient) MSet(keyValueMap map[string]string) (string, error) {
@@ -170,7 +174,7 @@ func (client *baseClient) MSet(keyValueMap map[string]string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return handleStringResponse(result), nil
+	return handleStringResponse(result)
 }
 
 func (client *baseClient) MSetNX(keyValueMap map[string]string) (bool, error) {
@@ -178,7 +182,8 @@ func (client *baseClient) MSetNX(keyValueMap map[string]string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return handleBooleanResponse(result), nil
+
+	return handleBooleanResponse(result)
 }
 
 func (client *baseClient) MGet(keys []string) ([]string, error) {
@@ -186,7 +191,8 @@ func (client *baseClient) MGet(keys []string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return handleStringArrayResponse(result), nil
+
+	return handleStringArrayResponse(result)
 }
 
 func (client *baseClient) Incr(key string) (int64, error) {
@@ -194,7 +200,7 @@ func (client *baseClient) Incr(key string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return handleLongResponse(result), nil
+	return handleLongResponse(result)
 }
 
 func (client *baseClient) IncrBy(key string, amount int64) (int64, error) {
@@ -202,7 +208,7 @@ func (client *baseClient) IncrBy(key string, amount int64) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return handleLongResponse(result), nil
+	return handleLongResponse(result)
 }
 
 func (client *baseClient) IncrByFloat(key string, amount float64) (float64, error) {
@@ -213,7 +219,8 @@ func (client *baseClient) IncrByFloat(key string, amount float64) (float64, erro
 	if err != nil {
 		return 0, err
 	}
-	return handleDoubleResponse(result), nil
+
+	return handleDoubleResponse(result)
 }
 
 func (client *baseClient) Decr(key string) (int64, error) {
@@ -221,7 +228,7 @@ func (client *baseClient) Decr(key string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return handleLongResponse(result), nil
+	return handleLongResponse(result)
 }
 
 func (client *baseClient) DecrBy(key string, amount int64) (int64, error) {
@@ -229,7 +236,7 @@ func (client *baseClient) DecrBy(key string, amount int64) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return handleLongResponse(result), nil
+	return handleLongResponse(result)
 }
 
 func (client *baseClient) Strlen(key string) (int64, error) {
@@ -237,7 +244,7 @@ func (client *baseClient) Strlen(key string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return handleLongResponse(result), nil
+	return handleLongResponse(result)
 }
 
 func (client *baseClient) SetRange(key string, offset int, value string) (int64, error) {
@@ -245,7 +252,7 @@ func (client *baseClient) SetRange(key string, offset int, value string) (int64,
 	if err != nil {
 		return 0, err
 	}
-	return handleLongResponse(result), nil
+	return handleLongResponse(result)
 }
 
 func (client *baseClient) GetRange(key string, start int, end int) (string, error) {
@@ -253,7 +260,8 @@ func (client *baseClient) GetRange(key string, start int, end int) (string, erro
 	if err != nil {
 		return "", err
 	}
-	return handleStringResponse(result), nil
+
+	return handleStringResponse(result)
 }
 
 func (client *baseClient) Append(key string, value string) (int64, error) {
@@ -261,7 +269,8 @@ func (client *baseClient) Append(key string, value string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return handleLongResponse(result), nil
+
+	return handleLongResponse(result)
 }
 
 func (client *baseClient) LCS(key1 string, key2 string) (string, error) {
@@ -269,7 +278,8 @@ func (client *baseClient) LCS(key1 string, key2 string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return handleStringResponse(result), nil
+
+	return handleStringResponse(result)
 }
 
 func (client *baseClient) GetDel(key string) (string, error) {
@@ -282,5 +292,109 @@ func (client *baseClient) GetDel(key string) (string, error) {
 		return "", err
 	}
 
-	return handleStringOrNullResponse(result), nil
+	return handleStringOrNullResponse(result)
+}
+
+func (client *baseClient) HGet(key string, field string) (string, error) {
+	result, err := client.executeCommand(C.HGet, []string{key, field})
+	if err != nil {
+		return "", err
+	}
+
+	return handleStringOrNullResponse(result)
+}
+
+func (client *baseClient) HGetAll(key string) (map[string]string, error) {
+	result, err := client.executeCommand(C.HGetAll, []string{key})
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := handleStringToStringMapResponse(result)
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
+func (client *baseClient) HMGet(key string, fields []string) ([]string, error) {
+	result, err := client.executeCommand(C.HMGet, append([]string{key}, fields...))
+	if err != nil {
+		return []string{}, err
+	}
+
+	return handleStringArrayResponse(result)
+}
+
+func (client *baseClient) HSet(key string, values map[string]string) (int64, error) {
+	result, err := client.executeCommand(C.HSet, utils.ConvertMapToKeyValueStringArray(key, values))
+	if err != nil {
+		return 0, err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) HSetNX(key string, field string, value string) (bool, error) {
+	result, err := client.executeCommand(C.HSetNX, []string{key, field, value})
+	if err != nil {
+		return false, err
+	}
+
+	return handleBooleanResponse(result)
+}
+
+func (client *baseClient) HDel(key string, fields []string) (int64, error) {
+	result, err := client.executeCommand(C.HDel, append([]string{key}, fields...))
+	if err != nil {
+		return 0, err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) HLen(key string) (int64, error) {
+	result, err := client.executeCommand(C.HLen, []string{key})
+	if err != nil {
+		return 0, err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) HVals(key string) ([]string, error) {
+	result, err := client.executeCommand(C.HVals, []string{key})
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayResponse(result)
+}
+
+func (client *baseClient) HExists(key string, field string) (bool, error) {
+	result, err := client.executeCommand(C.HExists, []string{key, field})
+	if err != nil {
+		return false, err
+	}
+
+	return handleBooleanResponse(result)
+}
+
+func (client *baseClient) HKeys(key string) ([]string, error) {
+	result, err := client.executeCommand(C.HKeys, []string{key})
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayResponse(result)
+}
+
+func (client *baseClient) HStrLen(key string, field string) (int64, error) {
+	result, err := client.executeCommand(C.HStrlen, []string{key, field})
+	if err != nil {
+		return 0, err
+	}
+
+	return handleLongResponse(result)
 }
