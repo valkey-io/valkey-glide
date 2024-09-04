@@ -4854,9 +4854,10 @@ export class BaseClient {
     ): Promise<Record<string, Record<string, [string, string][]>>> {
         if (!Array.isArray(keys_and_ids)) {
             keys_and_ids = Object.entries(keys_and_ids).map((e) => {
-                return {key: e[0], value: e[1]}
-            })
+                return { key: e[0], value: e[1] };
+            });
         }
+
         return this.createWritePromise(createXRead(keys_and_ids, options));
     }
 
@@ -4901,9 +4902,10 @@ export class BaseClient {
     > | null> {
         if (!Array.isArray(keys_and_ids)) {
             keys_and_ids = Object.entries(keys_and_ids).map((e) => {
-                return {key: e[0], value: e[1]}
-            })
+                return { key: e[0], value: e[1] };
+            });
         }
+
         return this.createWritePromise(
             createXReadGroup(group, consumer, keys_and_ids, options),
         );

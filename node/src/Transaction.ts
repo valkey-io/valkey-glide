@@ -2661,9 +2661,10 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     ): T {
         if (!Array.isArray(keys_and_ids)) {
             keys_and_ids = Object.entries(keys_and_ids).map((e) => {
-                return {key: e[0], value: e[1]}
-            })
+                return { key: e[0], value: e[1] };
+            });
         }
+
         return this.addAndReturn(createXRead(keys_and_ids, options));
     }
 
@@ -2689,9 +2690,10 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     ): T {
         if (!Array.isArray(keys_and_ids)) {
             keys_and_ids = Object.entries(keys_and_ids).map((e) => {
-                return {key: e[0], value: e[1]}
-            })
+                return { key: e[0], value: e[1] };
+            });
         }
+
         return this.addAndReturn(
             createXReadGroup(group, consumer, keys_and_ids, options),
         );
