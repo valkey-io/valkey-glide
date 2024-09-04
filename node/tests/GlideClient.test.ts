@@ -15,9 +15,12 @@ import { v4 as uuidv4 } from "uuid";
 import {
     Decoder,
     GlideClient,
+    GlideRecord,
+    GlideString,
     ProtocolVersion,
     RequestError,
     Transaction,
+    glideRecordToRecord,
 } from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
 import {
@@ -1580,8 +1583,14 @@ describe("GlideClient", () => {
 
             if (result != null) {
                 expect(result[0]).toEqual("0-1"); // xadd
-                expect(result[1]).toEqual(expectedXinfoStreamResult);
-                expect(result[2]).toEqual(expectedXinfoStreamFullResult);
+                const res1 = glideRecordToRecord(
+                    result[1] as GlideRecord<[GlideString, GlideString][]>,
+                );
+                const res2 = glideRecordToRecord(
+                    result[2] as GlideRecord<[GlideString, GlideString][]>,
+                );
+                expect(res1).toEqual(expectedXinfoStreamResult);
+                expect(res2).toEqual(expectedXinfoStreamFullResult);
             }
 
             client.close();

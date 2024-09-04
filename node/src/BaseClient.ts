@@ -348,7 +348,9 @@ function convertGlideRecordForZSet(
  * @internal
  * Downcast `GlideRecord` to `Record`. Use if you are 146% aware that `data` keys are always strings.
  */
-function glideRecordToRecord<T>(data: GlideRecord<T>): Record<string, T> {
+export function glideRecordToRecord<T>(
+    data: GlideRecord<T>,
+): Record<string, T> {
     const res: Record<string, T> = {};
 
     for (const pair of data) {
@@ -5417,23 +5419,28 @@ export class BaseClient {
         >(createXInfoStream(key, options?.fullOptions ?? false), options).then(
             (xinfoStream) => {
                 const converted = glideRecordToRecord(xinfoStream);
-                const groups = (
-                    converted["groups"] as GlideRecord<
-                        | GlideRecord<StreamEntries>[]
-                        | Record<string, StreamEntries>[]
-                    >[]
-                ).map(glideRecordToRecord);
 
-                for (const group of groups) {
-                    group.consumers = (
-                        group.consumers as GlideRecord<StreamEntries>[]
+                if (options?.fullOptions) {
+                    const groups = (
+                        converted["groups"] as GlideRecord<
+                            | GlideRecord<StreamEntries>[]
+                            | Record<string, StreamEntries>[]
+                        >[]
                     ).map(glideRecordToRecord);
+
+                    for (const group of groups) {
+                        group.consumers = (
+                            group.consumers as GlideRecord<StreamEntries>[]
+                        ).map(glideRecordToRecord);
+                    }
+
+                    (converted as ReturnTypeXinfoStream).groups =
+                        groups as Record<
+                            string,
+                            Record<string, StreamEntries>[]
+                        >[];
                 }
 
-                (converted as ReturnTypeXinfoStream).groups = groups as Record<
-                    string,
-                    Record<string, StreamEntries>[]
-                >[];
                 return converted as ReturnTypeXinfoStream;
             },
         );

@@ -6,7 +6,7 @@ import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "glide-rs";
 import Long from "long";
 
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-import { BaseClient } from "src/BaseClient";
+import { BaseClient, GlideRecord, SortedSetDataType } from "src/BaseClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 import { GlideClient } from "src/GlideClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
@@ -1367,6 +1367,24 @@ export type ZAddOptions = {
      */
     changed?: boolean;
 };
+
+// TODO merge with https://github.com/valkey-io/valkey-glide/pull/2210
+/**
+ * @internal
+ * Convert input from `Record` to `SortedSetDataType` to ensure the only one type.
+ */
+export function convertElementsAndScores(
+    membersAndScores: SortedSetDataType | Record<string, number>,
+): SortedSetDataType {
+    if (!Array.isArray(membersAndScores)) {
+        // convert Record<string, number> to SortedSetDataType
+        membersAndScores = Object.entries(membersAndScores).map((element) => {
+            return { element: element[0], score: element[1] };
+        });
+    }
+
+    return membersAndScores;
+}
 
 /**
  * @internal
