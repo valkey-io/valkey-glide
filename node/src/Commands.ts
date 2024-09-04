@@ -2483,6 +2483,7 @@ export function createBitPos(
         if (options.end != undefined) args.push(options.end.toString());
         if (options.indexType) args.push(options.indexType);
     }
+
     return createCommand(RequestType.BitPos, args);
 }
 

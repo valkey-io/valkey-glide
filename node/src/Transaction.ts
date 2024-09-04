@@ -20,7 +20,6 @@ import {
     BitOffset, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitOffsetMultiplier, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitOffsetOptions,
-    BitmapIndexType,
     BitwiseOperation,
     Boundary,
     CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars

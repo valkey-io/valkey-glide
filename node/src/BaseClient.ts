@@ -20,7 +20,6 @@ import {
     BitOffset, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitOffsetMultiplier, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitOffsetOptions,
-    BitmapIndexType,
     BitwiseOperation,
     Boundary,
     CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -1523,6 +1522,7 @@ export class BaseClient {
      *
      * @returns  The position of the first occurrence of `bit` in the binary value of the string held at `key`.
      *      If `start` was provided, the search begins at the offset indicated by `start`.
+     *
      * @example
      * ```typescript
      * await client.set("key1", "A1");  // "A1" has binary value 01000001 00110001
