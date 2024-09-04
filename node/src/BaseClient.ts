@@ -328,6 +328,24 @@ export function convertFieldsAndValuesForHset(
 }
 
 /**
+ * This function converts an input from Record or GlideRecord types to GlideRecord.
+ *
+ * @param record - input record in either Record or GlideRecord types.
+ * @returns same data in GlideRecord type.
+ */
+export function convertRecordToGlideRecord(
+    record: Record<string, GlideString> | GlideRecord<GlideString>,
+): GlideRecord<GlideString> {
+    if (!Array.isArray(record)) {
+        return Object.entries(record).map((e) => {
+            return { key: e[0], value: e[1] };
+        });
+    }
+
+    return record;
+}
+
+/**
  * Our purpose in creating PointerResponse type is to mark when response is of number/long pointer response type.
  * Consequently, when the response is returned, we can check whether it is instanceof the PointerResponse type and pass it to the Rust core function with the proper parameters.
  */
@@ -4852,11 +4870,7 @@ export class BaseClient {
         keys_and_ids: Record<string, GlideString> | GlideRecord<GlideString>,
         options?: StreamReadOptions,
     ): Promise<Record<string, Record<string, [string, string][]>>> {
-        if (!Array.isArray(keys_and_ids)) {
-            keys_and_ids = Object.entries(keys_and_ids).map((e) => {
-                return { key: e[0], value: e[1] };
-            });
-        }
+        keys_and_ids = convertRecordToGlideRecord(keys_and_ids);
 
         return this.createWritePromise(createXRead(keys_and_ids, options));
     }
@@ -4900,11 +4914,7 @@ export class BaseClient {
         string,
         Record<string, [string, string][] | null>
     > | null> {
-        if (!Array.isArray(keys_and_ids)) {
-            keys_and_ids = Object.entries(keys_and_ids).map((e) => {
-                return { key: e[0], value: e[1] };
-            });
-        }
+        keys_and_ids = convertRecordToGlideRecord(keys_and_ids);
 
         return this.createWritePromise(
             createXReadGroup(group, consumer, keys_and_ids, options),
