@@ -6,7 +6,7 @@ import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "glide-rs";
 import Long from "long";
 
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-import { BaseClient, GlideRecord, SortedSetDataType } from "src/BaseClient";
+import { BaseClient, HashDataType, SortedSetDataType } from "src/BaseClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 import { GlideClient } from "src/GlideClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
@@ -406,6 +406,25 @@ export function createHGet(
     field: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.HGet, [key, field]);
+}
+
+// TODO merge with https://github.com/valkey-io/valkey-glide/pull/2209
+/**
+ * This function converts an input from HashDataType or Record types to HashDataType.
+ *
+ * @param fieldsAndValues - field names and their values.
+ * @returns HashDataType array containing field names and their values.
+ */
+export function convertFieldsAndValues(
+    fieldsAndValues: HashDataType | Record<string, GlideString>,
+): HashDataType {
+    if (!Array.isArray(fieldsAndValues)) {
+        return Object.entries(fieldsAndValues).map((e) => {
+            return { field: e[0], value: e[1] };
+        });
+    }
+
+    return fieldsAndValues;
 }
 
 /**

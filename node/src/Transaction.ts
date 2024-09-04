@@ -7,9 +7,6 @@ import {
     GlideRecord, // eslint-disable-line @typescript-eslint/no-unused-vars
     GlideString,
     ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
-    ReturnTypeXinfoStream, // eslint-disable-line @typescript-eslint/no-unused-vars
-    SortedSetDataType, // eslint-disable-line @typescript-eslint/no-unused-vars
-    StreamEntryDataType, // eslint-disable-line @typescript-eslint/no-unused-vars
 } from "./BaseClient";
 
 import {
@@ -892,7 +889,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key - The key of the hash.
      *
-     * Command Response - A list of fields and their values stored in the hash. Every field name in the map is followed by its value.
+     * Command Response - A list of fields and their values stored in the hash.
      * If `key` does not exist, it returns an empty list.
      */
     public hgetall(key: string): T {
@@ -1820,8 +1817,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param keys - The keys of the sorted sets.
      *
-     * Command Response - {@link SortedSetDataType} - a list of elements and their scores representing the difference between the sorted sets.
-     * If the first key does not exist, it is treated as an empty sorted set, and the command returns an empty `array`.
+     * Command Response - A list of elements and their scores representing the difference between the sorted sets.
+     *     If the first key does not exist, it is treated as an empty sorted set, and the command returns an empty `array`.
+     *     The response comes in format `GlideRecord<number>`, see {@link GlideRecord}.
      */
     public zdiffWithScores(keys: string[]): T {
         return this.addAndReturn(createZDiffWithScores(keys));
@@ -1952,8 +1950,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * - For range queries by score, use {@link RangeByScore}.
      * @param reverse - If `true`, reverses the sorted set, with index `0` as the element with the highest score.
      *
-     * Command Response - A map of elements and their scores within the specified range.
-     * If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty map.
+     * Command Response - A list of elements and their scores within the specified range.
+     *     If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty list.
+     *     The response comes in format `GlideRecord<number>`, see {@link GlideRecord}.
      */
     public zrangeWithScores(
         key: string,
@@ -2055,8 +2054,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param aggregationType - (Optional) Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
      * If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
      *
-     * Command Response - {@link SortedSetDataType} - a list of elements and their scores representing the intersection of the sorted sets.
-     * If a key does not exist, it is treated as an empty sorted set, and the command returns an empty result.
+     * Command Response - A list of elements and their scores representing the intersection of the sorted sets.
+     *     If a key does not exist, it is treated as an empty sorted set, and the command returns an empty result.
+     *     The response comes in format `GlideRecord<number>`, see {@link GlideRecord}.
      */
     public zinterWithScores(
         keys: string[] | KeyWeight[],
@@ -2097,7 +2097,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param aggregationType - (Optional) Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
      * If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
      *
-     * Command Response - {@link SortedSetDataType} - a list of elements and their scores representing the intersection of the sorted sets.
+     * Command Response - A list of elements and their scores representing the intersection of the sorted sets.
+     *     The response comes in format `GlideRecord<number>`, see {@link GlideRecord}.
      */
     public zunionWithScores(
         keys: string[] | KeyWeight[],
@@ -2187,9 +2188,10 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key - The key of the sorted set.
      * @param count - Specifies the quantity of members to pop. If not specified, pops one member.
      *
-     * Command Response - {@link SortedSetDataType} - a list of the removed members and their scores, ordered from the one with the lowest score to the one with the highest.
-     * If `key` doesn't exist, it will be treated as an empty sorted set and the command returns an empty map.
-     * If `count` is higher than the sorted set's cardinality, returns all members and their scores.
+     * Command Response - A list of the removed members and their scores, ordered from the one with the lowest score to the one with the highest.
+     *     If `key` doesn't exist, it will be treated as an empty sorted set and the command returns an empty map.
+     *     If `count` is higher than the sorted set's cardinality, returns all members and their scores.
+     *     The response comes in format `GlideRecord<number>`, see {@link GlideRecord}.
      */
     public zpopmin(key: string, count?: number): T {
         return this.addAndReturn(createZPopMin(key, count));
@@ -2224,9 +2226,10 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key - The key of the sorted set.
      * @param count - Specifies the quantity of members to pop. If not specified, pops one member.
      *
-     * Command Response - {@link SortedSetDataType} - a list of the removed members and their scores, ordered from the one with the highest score to the one with the lowest.
-     * If `key` doesn't exist, it will be treated as an empty sorted set and the command returns an empty map.
-     * If `count` is higher than the sorted set's cardinality, returns all members and their scores, ordered from highest to lowest.
+     * Command Response - A list of the removed members and their scores, ordered from the one with the lowest score to the one with the highest.
+     *     If `key` doesn't exist, it will be treated as an empty sorted set and the command returns an empty map.
+     *     If `count` is higher than the sorted set's cardinality, returns all members and their scores.
+     *     The response comes in format `GlideRecord<number>`, see {@link GlideRecord}.
      */
     public zpopmax(key: string, count?: number): T {
         return this.addAndReturn(createZPopMax(key, count));
@@ -2540,8 +2543,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `number` is specified, returns verbose information limiting the returned PEL entries.
      * If `0` is specified, returns verbose information with no limit.
      *
-     * Command Response - A {@link ReturnTypeXinfoStream} of detailed stream information for the given `key`.
+     * Command Response - Detailed stream information for the given `key`.
      *     See example of {@link BaseClient.xinfoStream} for more details.
+     *     The response comes in format `GlideRecord<StreamEntries | GlideRecord<StreamEntries | GlideRecord<StreamEntries>[]>[]>`, see {@link GlideRecord}.
      */
     public xinfoStream(key: string, fullOptions?: boolean | number): T {
         return this.addAndReturn(createXInfoStream(key, fullOptions ?? false));
@@ -2556,6 +2560,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response -  An `Array` of `Records`, where each mapping represents the
      *     attributes of a consumer group for the stream at `key`.
+     *     The response comes in format `GlideRecord<GlideString | number | null>[]`, see {@link GlideRecord}.
      */
     public xinfoGroups(key: string): T {
         return this.addAndReturn(createXInfoGroups(key));
@@ -2591,7 +2596,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param count - An optional argument specifying the maximum count of stream entries to return.
      *     If `count` is not provided, all stream entries in the range will be returned.
      *
-     * Command Response - A map of stream entry ids, to an array of entries, or `null` if `count` is non-positive.
+     * Command Response - A list of stream entry ids, to an array of entries, or `null` if `count` is non-positive.
+     *     The response comes in format `GlideRecord<[GlideString, GlideString][]> | null`, see {@link GlideRecord}.
      */
     public xrange(
         key: string,
@@ -2620,7 +2626,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param count - An optional argument specifying the maximum count of stream entries to return.
      *     If `count` is not provided, all stream entries in the range will be returned.
      *
-     * Command Response - A map of stream entry ids, to an array of entries, or `null` if `count` is non-positive.
+     * Command Response - A list of stream entry ids, to an array of entries, or `null` if `count` is non-positive.
+     *     The response comes in format `GlideRecord<[GlideString, GlideString][]> | null`, see {@link GlideRecord}.
      */
     public xrevrange(
         key: string,
@@ -2639,8 +2646,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param keys_and_ids - An object of stream keys and entry IDs to read from.
      * @param options - (Optional) Parameters detailing how to read the stream - see {@link StreamReadOptions}.
      *
-     * Command Response - A list of stream keys with a `Record` of stream IDs mapped to an `Array` of entries.
-     *     The response comes in format `GlideRecord<StreamEntryDataType>`, see {@link GlideRecord} and {@link StreamEntryDataType}.
+     * Command Response - A list of stream keys with a `Record` of stream IDs mapped to an `Array` of entries or `null` if key does not exist.
+     *     The response comes in format `GlideRecord<GlideRecord<[GlideString, GlideString][]>>`, see {@link GlideRecord}.
      */
     public xread(
         keys_and_ids: Record<string, string>,
@@ -2662,7 +2669,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - A list of stream keys with a `Record` of stream IDs mapped to an `Array` of entries.
      *     Returns `null` if there is no stream that can be served.
-     *     The response comes in format `GlideRecord<StreamEntryDataType>`, see {@link GlideRecord} and {@link StreamEntryDataType}.
+     *     The response comes in format `GlideRecord<GlideRecord<[GlideString, GlideString][]>>`, see {@link GlideRecord}.
      */
     public xreadgroup(
         group: string,
@@ -2692,16 +2699,12 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Returns stream message summary information for pending messages matching a given range of IDs.
      *
      * @see {@link https://valkey.io/commands/xpending/|valkey.io} for details.
-     * Returns the list of all consumers and their attributes for the given consumer group of the
-     * stream stored at `key`.
-     *
-     * @see {@link https://valkey.io/commands/xinfo-consumers/|valkey.io} for details.
      *
      * @param key - The key of the stream.
      * @param group - The consumer group name.
      *
      * Command Response - An `array` that includes the summary of the pending messages.
-     * See example of {@link BaseClient.xpending|xpending} for more details.
+     *     See example of {@link BaseClient.xpending|xpending} for more details.
      */
     public xpending(key: string, group: string): T {
         return this.addAndReturn(createXPending(key, group));
@@ -2735,6 +2738,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - An `Array` of `Records`, where each mapping contains the attributes
      *     of a consumer for the given consumer group of the stream at `key`.
+     *     The response comes in format `GlideRecord<GlideString | number>[]`, see {@link GlideRecord}.
      */
     public xinfoConsumers(key: string, group: string): T {
         return this.addAndReturn(createXInfoConsumers(key, group));
@@ -2752,7 +2756,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param ids - An array of entry ids.
      * @param options - (Optional) Stream claim options {@link StreamClaimOptions}.
      *
-     * Command Response - A `Record` of message entries that are claimed by the consumer.
+     * Command Response - Message entries that are claimed by the consumer.
+     *     The response comes in format `GlideRecord<[GlideString, GlideString][]>`, see {@link GlideRecord}.
      */
     public xclaim(
         key: string,
@@ -2817,6 +2822,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *   - If you are using Valkey 7.0.0 or above, the response list will also include a list containing
      *     the message IDs that were in the Pending Entries List but no longer exist in the stream.
      *     These IDs are deleted from the Pending Entries List.
+     *
+     *     The response comes in format `[GlideString, GlideRecord<[GlideString, GlideString][]>, GlideString[]?]`, see {@link GlideRecord}.
      */
     public xautoclaim(
         key: string,
@@ -3546,7 +3553,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param count - (Optional) The number of elements to pop. If not supplied, only one element will be popped.
      *
      * Command Response - A two-element `array` containing the key name of the set from which the
-     *     was popped, and a {@link SortedSetDataType} of the popped elements.
+     *     was popped, and a `GlideRecord<number>` of the popped elements - see {@link GlideRecord}.
      *     If no member could be popped, returns `null`.
      */
     public zmpop(keys: string[], modifier: ScoreFilter, count?: number): T {
@@ -3569,7 +3576,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param count - (Optional) The number of elements to pop. If not supplied, only one element will be popped.
      *
      * Command Response - A two-element `array` containing the key name of the set from which the element
-     *     was popped, and a {@link SortedSetDataType} of the popped elements.
+     *     was popped, and a `GlideRecord<number>` of the popped elements - see {@link GlideRecord}.
      *     If no member could be popped, returns `null`.
      */
     public bzmpop(
@@ -3710,8 +3717,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param withMatchLen - (Optional) If `true`, include the length of the substring matched for the each match.
      * @param minMatchLen - (Optional) The minimum length of matches to include in the result.
      *
-     * Command Response - A `Record` containing the indices of the longest common subsequences between the
-     *     2 strings and the lengths of the longest common subsequences. The resulting map contains two
+     * Command Response - A {@link GlideRecord} containing the indices of the longest common subsequences between
+     *     the 2 strings and the lengths of the longest common subsequences. The resulting map contains two
      *     keys, "matches" and "len":
      *     - `"len"` is mapped to the total length of the all longest common subsequences between the 2 strings
      *           stored as an integer. This value doesn't count towards the `minMatchLen` filter.
@@ -3795,7 +3802,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param direction - The direction based on which elements are popped from - see {@link ListDirection}.
      * @param count - (Optional) The maximum number of popped elements.
      *
-     * Command Response - A `Record` of `key` name mapped array of popped elements.
+     * Command Response - A `Record` which stores the key name where elements were popped out and the array of popped elements.
      */
     public lmpop(
         keys: GlideString[],
@@ -3818,7 +3825,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     `0` will block indefinitely.
      * @param count - (Optional) The maximum number of popped elements.
      *
-     * Command Response - A `Record` of `key` name mapped array of popped elements.
+     * Command Response - A `Record` which stores the key name where elements were popped out and the array of popped elements.
      *     If no member could be popped and the timeout expired, returns `null`.
      */
     public blmpop(

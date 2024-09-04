@@ -3453,7 +3453,7 @@ export class BaseClient {
         return this.createWritePromise<GlideRecord<
             [GlideString, GlideString][]
         > | null>(createXRange(key, start, end, options?.count), options).then(
-            (res) => (res == null ? glideRecordToRecord(res!) : null),
+            (res) => (res === null ? null : glideRecordToRecord(res!)),
         );
     }
 
@@ -3499,9 +3499,9 @@ export class BaseClient {
         return this.createWritePromise<GlideRecord<
             [GlideString, GlideString][]
         > | null>(
-            createXRevRange(key, start, end, options?.count),
+            createXRevRange(key, end, start, options?.count),
             options,
-        ).then((res) => (res == null ? glideRecordToRecord(res!) : null));
+        ).then((res) => (res === null ? null : glideRecordToRecord(res!)));
     }
 
     /** Adds members with their scores to the sorted set stored at `key`.
@@ -3923,8 +3923,8 @@ export class BaseClient {
      * - For range queries by lexicographical order, use {@link RangeByLex}.
      * - For range queries by score, use {@link RangeByScore}.
      * @param reverse - If `true`, reverses the sorted set, with index `0` as the element with the highest score.
-     * @returns A map of elements and their scores within the specified range.
-     * If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty map.
+     * @returns A list of elements and their scores within the specified range.
+     * If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty list.
      *
      * @example
      * ```typescript
@@ -4807,7 +4807,7 @@ export class BaseClient {
      *
      * @param keys_and_ids - An object of stream keys and entry IDs to read from.
      * @param options - (Optional) Parameters detailing how to read the stream - see {@link StreamReadOptions} and {@link DecoderOption}.
-     * @returns A list of stream keys with a `Record` of stream IDs mapped to an `Array` of entries.
+     * @returns A list of stream keys with a `Record` of stream IDs mapped to an `Array` of entries or `null` if key does not exist.
      *
      * @example
      * ```typescript
@@ -4834,16 +4834,18 @@ export class BaseClient {
     public async xread(
         keys_and_ids: Record<string, string>,
         options?: StreamReadOptions & DecoderOption,
-    ): Promise<GlideRecord<StreamEntryDataType>> {
-        return this.createWritePromise<
-            GlideRecord<GlideRecord<[GlideString, GlideString][]>>
-        >(createXRead(keys_and_ids, options), options).then((res) =>
-            res.map((k) => {
-                return {
-                    key: k.key,
-                    value: glideRecordToRecord(k.value),
-                };
-            }),
+    ): Promise<GlideRecord<StreamEntryDataType> | null> {
+        return this.createWritePromise<GlideRecord<
+            GlideRecord<[GlideString, GlideString][]>
+        > | null>(createXRead(keys_and_ids, options), options).then((res) =>
+            res === null
+                ? null
+                : res.map((k) => {
+                      return {
+                          key: k.key,
+                          value: glideRecordToRecord(k.value),
+                      };
+                  }),
         );
     }
 
@@ -5177,7 +5179,7 @@ export class BaseClient {
             [
                 GlideString,
                 GlideRecord<[GlideString, GlideString][]>,
-                GlideString[]?,
+                GlideString[],
             ]
         >(
             createXAutoClaim(
@@ -5190,9 +5192,9 @@ export class BaseClient {
             ),
             options,
         ).then((res) =>
-            res.length == 2
-                ? [res[0], glideRecordToRecord(res[1])]
-                : [res[0], glideRecordToRecord(res[1]), res[2]],
+            res.length === 3
+                ? [res[0], glideRecordToRecord(res[1]), res[2]]
+                : [res[0], glideRecordToRecord(res[1])],
         );
     }
 
@@ -6308,12 +6310,11 @@ export class BaseClient {
         modifier: ScoreFilter,
         options?: { count?: number } & DecoderOption,
     ): Promise<[GlideString, SortedSetDataType] | null> {
-        return this.createWritePromise(
-            createZMPop(keys, modifier, options?.count),
-            options,
-        )
-            .then((res) => res as [GlideString, GlideRecord<number>])
-            .then((res) => [res[0], convertGlideRecordForZSet(res[1])]);
+        return this.createWritePromise<
+            [GlideString, GlideRecord<number>] | null
+        >(createZMPop(keys, modifier, options?.count), options).then((res) =>
+            res === null ? null : [res[0], convertGlideRecordForZSet(res[1])],
+        );
     }
 
     /**
@@ -6357,12 +6358,14 @@ export class BaseClient {
         timeout: number,
         options?: { count?: number } & DecoderOption,
     ): Promise<[GlideString, SortedSetDataType] | null> {
-        return this.createWritePromise(
-            createBZMPop(keys, modifier, timeout, options?.count),
-            options,
-        )
-            .then((res) => res as [GlideString, GlideRecord<number>])
-            .then((res) => [res[0], convertGlideRecordForZSet(res[1])]);
+        return this.createWritePromise<
+            [GlideString, GlideRecord<number>] | null
+        >(createBZMPop(keys, modifier, timeout, options?.count), options).then(
+            (res) =>
+                res === null
+                    ? null
+                    : [res[0], convertGlideRecordForZSet(res[1])],
+        );
     }
 
     /**
@@ -6745,8 +6748,7 @@ export class BaseClient {
      * @param options - (Optional) Additional parameters:
      * - (Optional) `count`: the maximum number of popped elements. If not specified, pops one member.
      * - (Optional) `decoder`: see {@link DecoderOption}.
-     * @returns A `Record` which stores the key where elements were popped out and the array of popped elements.
-     *     If no member could be popped and the timeout expired, returns `null`.
+     * @returns A `Record` which stores the key name where elements were popped out and the array of popped elements.
      *
      * @example
      * ```typescript
@@ -6787,7 +6789,7 @@ export class BaseClient {
      * @param options - (Optional) Additional parameters:
      * - (Optional) `count`: the maximum number of popped elements. If not specified, pops one member.
      * - (Optional) `decoder`: see {@link DecoderOption}.
-     * @returns A `Record` which stores the key where elements were popped out and the array of popped elements.
+     * @returns A `Record` which stores the key name where elements were popped out and the array of popped elements.
      *     If no member could be popped and the timeout expired, returns `null`.
      *
      * @example

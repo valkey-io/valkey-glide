@@ -24,6 +24,7 @@ import {
     GeospatialData,
     GlideClient,
     GlideClusterClient,
+    GlideRecord,
     GlideString,
     InfBoundary,
     InsertPosition,
@@ -216,6 +217,15 @@ export function getFirstResult(
     }
 
     return Object.values(res).at(0);
+}
+
+/** Reverse of {@link glideRecordToRecord}. */
+export function recordToGlideRecord<T>(
+    data: Record<string, T>,
+): GlideRecord<T> {
+    return Object.entries(data).map(([k, v]) => {
+        return { key: k, value: v };
+    });
 }
 
 // TODO use matcher instead of predicate
@@ -790,7 +800,10 @@ export async function transactionTest(
     baseTransaction.hget(key4, field);
     responseData.push(["hget(key4, field)", value]);
     baseTransaction.hgetall(key4);
-    responseData.push(["hgetall(key4)", { [field]: value }]);
+    responseData.push([
+        "hgetall(key4)",
+        recordToGlideRecord({ [field]: value }),
+    ]);
     baseTransaction.hdel(key4, [field]);
     responseData.push(["hdel(key4, [field])", 1]);
     baseTransaction.hmget(key4, [field]);
@@ -1003,7 +1016,12 @@ export async function transactionTest(
     baseTransaction.zrangeWithScores(key8, { start: 0, stop: -1 });
     responseData.push([
         "zrangeWithScores(key8, { start: 0, stop: -1 })",
-        { member2: 3, member3: 3.5, member4: 4, member5: 5 },
+        recordToGlideRecord({
+            member2: 3,
+            member3: 3.5,
+            member4: 4,
+            member5: 5,
+        }),
     ]);
     baseTransaction.zadd(key12, { one: 1, two: 2 });
     responseData.push(["zadd(key12, { one: 1, two: 2 })", 2]);
@@ -1026,7 +1044,10 @@ export async function transactionTest(
         baseTransaction.zdiff([key13, key12]);
         responseData.push(["zdiff([key13, key12])", ["three"]]);
         baseTransaction.zdiffWithScores([key13, key12]);
-        responseData.push(["zdiffWithScores([key13, key12])", { three: 3.5 }]);
+        responseData.push([
+            "zdiffWithScores([key13, key12])",
+            recordToGlideRecord({ three: 3.5 }),
+        ]);
         baseTransaction.zdiffstore(key13, [key13, key13]);
         responseData.push(["zdiffstore(key13, [key13, key13])", 0]);
         baseTransaction.zunionstore(key5, [key12, key13]);
@@ -1049,12 +1070,14 @@ export async function transactionTest(
             baseTransaction.zinterWithScores([key27, key26]);
             responseData.push([
                 "zinterWithScores([key27, key26])",
-                { one: 2, two: 4 },
+                recordToGlideRecord({ one: 2, two: 4 }),
             ]);
             baseTransaction.zunionWithScores([key27, key26]);
             responseData.push([
                 "zunionWithScores([key27, key26])",
-                { one: 2, two: 4, three: 3.5 },
+                recordToGlideRecord({ one: 2, two: 4, three: 3.5 }).sort(
+                    (a, b) => a.value - b.value,
+                ),
             ]);
         }
     } else {
@@ -1077,9 +1100,9 @@ export async function transactionTest(
         4,
     ]);
     baseTransaction.zpopmin(key8);
-    responseData.push(["zpopmin(key8)", { member2: 3.0 }]);
+    responseData.push(["zpopmin(key8)", recordToGlideRecord({ member2: 3.0 })]);
     baseTransaction.zpopmax(key8);
-    responseData.push(["zpopmax(key8)", { member5: 5 }]);
+    responseData.push(["zpopmax(key8)", recordToGlideRecord({ member5: 5 })]);
     baseTransaction.zadd(key8, { member6: 6 });
     responseData.push(["zadd(key8, {member6: 6})", 1]);
     baseTransaction.bzpopmax([key8], 0.5);
@@ -1111,20 +1134,26 @@ export async function transactionTest(
         baseTransaction.zintercard([key8, key14], 1);
         responseData.push(["zintercard([key8, key14], 1)", 0]);
         baseTransaction.zmpop([key14], ScoreFilter.MAX);
-        responseData.push(["zmpop([key14], MAX)", [key14, { two: 2.0 }]]);
+        responseData.push([
+            "zmpop([key14], MAX)",
+            [key14, recordToGlideRecord({ two: 2.0 })],
+        ]);
         baseTransaction.zmpop([key14], ScoreFilter.MAX, 1);
-        responseData.push(["zmpop([key14], MAX, 1)", [key14, { one: 1.0 }]]);
+        responseData.push([
+            "zmpop([key14], MAX, 1)",
+            [key14, recordToGlideRecord({ one: 1.0 })],
+        ]);
         baseTransaction.zadd(key14, { one: 1.0, two: 2.0 });
         responseData.push(["zadd(key14, { one: 1.0, two: 2.0 })", 2]);
         baseTransaction.bzmpop([key14], ScoreFilter.MAX, 0.1);
         responseData.push([
             "bzmpop([key14], ScoreFilter.MAX, 0.1)",
-            [key14, { two: 2.0 }],
+            [key14, recordToGlideRecord({ two: 2.0 })],
         ]);
         baseTransaction.bzmpop([key14], ScoreFilter.MAX, 0.1, 1);
         responseData.push([
             "bzmpop([key14], ScoreFilter.MAX, 0.1, 1)",
-            [key14, { one: 1.0 }],
+            [key14, recordToGlideRecord({ one: 1.0 })],
         ]);
     }
 
@@ -1146,18 +1175,24 @@ export async function transactionTest(
     baseTransaction.xlen(key9);
     responseData.push(["xlen(key9)", 3]);
     baseTransaction.xrange(key9, { value: "0-1" }, { value: "0-1" });
-    responseData.push(["xrange(key9)", { "0-1": [["field", "value1"]] }]);
+    responseData.push([
+        "xrange(key9)",
+        recordToGlideRecord({ "0-1": [["field", "value1"]] }),
+    ]);
     baseTransaction.xrevrange(key9, { value: "0-1" }, { value: "0-1" });
-    responseData.push(["xrevrange(key9)", { "0-1": [["field", "value1"]] }]);
+    responseData.push([
+        "xrevrange(key9)",
+        recordToGlideRecord({ "0-1": [["field", "value1"]] }),
+    ]);
     baseTransaction.xread({ [key9]: "0-1" });
     responseData.push([
         'xread({ [key9]: "0-1" })',
-        {
-            [key9]: {
+        recordToGlideRecord({
+            [key9]: recordToGlideRecord({
                 "0-2": [["field", "value2"]],
                 "0-3": [["field", "value3"]],
-            },
-        },
+            }),
+        }),
     ]);
     baseTransaction.xtrim(key9, {
         method: "minid",
@@ -1192,7 +1227,9 @@ export async function transactionTest(
     baseTransaction.xreadgroup(groupName1, consumer, { [key9]: ">" });
     responseData.push([
         'xreadgroup(groupName1, consumer, {[key9]: ">"})',
-        { [key9]: { "0-2": [["field", "value2"]] } },
+        recordToGlideRecord({
+            [key9]: recordToGlideRecord({ "0-2": [["field", "value2"]] }),
+        }),
     ]);
     baseTransaction.xpending(key9, groupName1);
     responseData.push([
@@ -1211,7 +1248,7 @@ export async function transactionTest(
     baseTransaction.xclaim(key9, groupName1, consumer, 0, ["0-2"]);
     responseData.push([
         'xclaim(key9, groupName1, consumer, 0, ["0-2"])',
-        { "0-2": [["field", "value2"]] },
+        recordToGlideRecord({ "0-2": [["field", "value2"]] }),
     ]);
     baseTransaction.xclaim(key9, groupName1, consumer, 0, ["0-2"], {
         isForce: true,
@@ -1220,7 +1257,7 @@ export async function transactionTest(
     });
     responseData.push([
         'xclaim(key9, groupName1, consumer, 0, ["0-2"], { isForce: true, retryCount: 0, idle: 0})',
-        { "0-2": [["field", "value2"]] },
+        recordToGlideRecord({ "0-2": [["field", "value2"]] }),
     ]);
     baseTransaction.xclaimJustId(key9, groupName1, consumer, 0, ["0-2"]);
     responseData.push([
@@ -1242,8 +1279,15 @@ export async function transactionTest(
         responseData.push([
             'xautoclaim(key9, groupName1, consumer, 0, "0-0", 1)',
             gte(version, "7.0.0")
-                ? ["0-0", { "0-2": [["field", "value2"]] }, []]
-                : ["0-0", { "0-2": [["field", "value2"]] }],
+                ? [
+                      "0-0",
+                      recordToGlideRecord({ "0-2": [["field", "value2"]] }),
+                      [],
+                  ]
+                : [
+                      "0-0",
+                      recordToGlideRecord({ "0-2": [["field", "value2"]] }),
+                  ],
         ]);
         baseTransaction.xautoclaimJustId(key9, groupName1, consumer, 0, "0-0");
         responseData.push([
@@ -1515,10 +1559,15 @@ export async function transactionTest(
         baseTransaction.functionStats();
         responseData.push([
             "functionStats()",
-            {
+            recordToGlideRecord({
                 running_script: null,
-                engines: { LUA: { libraries_count: 1, functions_count: 1 } },
-            },
+                engines: recordToGlideRecord({
+                    LUA: recordToGlideRecord({
+                        libraries_count: 1,
+                        functions_count: 1,
+                    }),
+                }),
+            }),
         ]);
         baseTransaction.functionDelete(libName);
         responseData.push(["functionDelete(libName)", "OK"]);
@@ -1554,7 +1603,7 @@ export async function transactionTest(
             ["lcsLen(key1, key3)", 0],
             [
                 "lcsIdx(key1, key2)",
-                {
+                recordToGlideRecord({
                     matches: [
                         [
                             [1, 3],
@@ -1562,11 +1611,11 @@ export async function transactionTest(
                         ],
                     ],
                     len: 3,
-                },
+                }),
             ],
             [
                 "lcsIdx(key1, key2, {minMatchLen: 1})",
-                {
+                recordToGlideRecord({
                     matches: [
                         [
                             [1, 3],
@@ -1574,15 +1623,15 @@ export async function transactionTest(
                         ],
                     ],
                     len: 3,
-                },
+                }),
             ],
             [
                 "lcsIdx(key1, key2, {withMatchLen: true})",
-                { matches: [[[1, 3], [0, 2], 3]], len: 3 },
+                recordToGlideRecord({ matches: [[[1, 3], [0, 2], 3]], len: 3 }),
             ],
             [
                 "lcsIdx(key1, key2, {withMatchLen: true, minMatchLen: 1})",
-                { matches: [[[1, 3], [0, 2], 3]], len: 3 },
+                recordToGlideRecord({ matches: [[[1, 3], [0, 2], 3]], len: 3 }),
             ],
             ["del([key1, key2, key3])", 3],
         );
