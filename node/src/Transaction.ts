@@ -671,6 +671,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * The offset can also be a negative number indicating an offset starting at the end of the list, with `-1` being
      * the last byte of the list, `-2` being the penultimate, and so on.
      *
+     * If you are using Valkey 7.0.0 or above, the optional `indexType` can also be provided to specify whether the
+     * `start` and `end` offsets specify BIT or BYTE offsets. If `indexType` is not provided, BYTE offsets
+     * are assumed. If BIT is specified, `start=0` and `end=2` means to look at the first three bits. If BYTE is
+     * specified, `start=0` and `end=2` means to look at the first three bytes.
+     *
      * @see {@link https://valkey.io/commands/bitpos/|valkey.io} for details.
      *
      * @param key - The key of the string.
