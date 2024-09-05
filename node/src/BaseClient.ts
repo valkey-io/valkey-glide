@@ -1033,7 +1033,6 @@ export class BaseClient {
      *
      * @param key - The key to retrieve from the database.
      * @param options - (Optional) See {@link DecoderOption}.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns If `key` exists, returns the value of `key`. Otherwise, return null.
      *
      * @example
