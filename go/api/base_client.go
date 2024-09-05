@@ -13,6 +13,7 @@ import (
 	"unsafe"
 
 	"github.com/valkey-io/valkey-glide/go/glide/protobuf"
+	"github.com/valkey-io/valkey-glide/go/glide/utils"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -100,7 +101,6 @@ func (client *baseClient) executeCommand(requestType C.RequestType, args []strin
 	}
 
 	cArgs, argLengths := toCStrings(args)
-	defer freeCStrings(cArgs)
 
 	resultChannel := make(chan payload)
 	resultChannelPtr := uintptr(unsafe.Pointer(&resultChannel))
@@ -120,21 +120,17 @@ func (client *baseClient) executeCommand(requestType C.RequestType, args []strin
 	return payload.value, nil
 }
 
-// TODO: Handle passing the arguments as strings without assuming null termination assumption.
-func toCStrings(args []string) ([]*C.char, []C.ulong) {
-	cStrings := make([]*C.char, len(args))
+// Zero copying conversion from go's []string into C pointers
+func toCStrings(args []string) ([]C.uintptr_t, []C.ulong) {
+	cStrings := make([]C.uintptr_t, len(args))
 	stringLengths := make([]C.ulong, len(args))
 	for i, str := range args {
-		cStrings[i] = C.CString(str)
+		bytes := utils.StringToBytes(str)
+		ptr := uintptr(unsafe.Pointer(&bytes[0]))
+		cStrings[i] = C.uintptr_t(ptr)
 		stringLengths[i] = C.size_t(len(str))
 	}
 	return cStrings, stringLengths
-}
-
-func freeCStrings(cArgs []*C.char) {
-	for _, arg := range cArgs {
-		C.free(unsafe.Pointer(arg))
-	}
 }
 
 func (client *baseClient) Set(key string, value string) (string, error) {
@@ -159,4 +155,47 @@ func (client *baseClient) Get(key string) (string, error) {
 		return "", err
 	}
 	return handleStringOrNullResponse(result), nil
+}
+
+func (client *baseClient) Incr(key string) (int64, error) {
+	result, err := client.executeCommand(C.Incr, []string{key})
+	if err != nil {
+		return 0, err
+	}
+	return handleLongResponse(result), nil
+}
+
+func (client *baseClient) IncrBy(key string, amount int64) (int64, error) {
+	result, err := client.executeCommand(C.IncrBy, []string{key, utils.IntToString(amount)})
+	if err != nil {
+		return 0, err
+	}
+	return handleLongResponse(result), nil
+}
+
+func (client *baseClient) IncrByFloat(key string, amount float64) (float64, error) {
+	result, err := client.executeCommand(
+		C.IncrByFloat,
+		[]string{key, utils.FloatToString(amount)},
+	)
+	if err != nil {
+		return 0, err
+	}
+	return handleDoubleResponse(result), nil
+}
+
+func (client *baseClient) Decr(key string) (int64, error) {
+	result, err := client.executeCommand(C.Decr, []string{key})
+	if err != nil {
+		return 0, err
+	}
+	return handleLongResponse(result), nil
+}
+
+func (client *baseClient) DecrBy(key string, amount int64) (int64, error) {
+	result, err := client.executeCommand(C.DecrBy, []string{key, utils.IntToString(amount)})
+	if err != nil {
+		return 0, err
+	}
+	return handleLongResponse(result), nil
 }

@@ -17,6 +17,7 @@ import {
     GlideClient,
     GlideRecord,
     GlideString,
+    HashDataType,
     ProtocolVersion,
     RequestError,
     Transaction,
@@ -1175,11 +1176,12 @@ describe("GlideClient", () => {
             const ages = ["30", "25", "35", "20", "40"];
 
             for (let i = 0; i < ages.length; i++) {
+                const fieldValueList: HashDataType = [
+                    { field: "name", value: names[i] },
+                    { field: "age", value: ages[i] },
+                ];
                 expect(
-                    await client.hset(setPrefix + (i + 1), {
-                        name: names[i],
-                        age: ages[i],
-                    }),
+                    await client.hset(setPrefix + (i + 1), fieldValueList),
                 ).toEqual(2);
             }
 
@@ -1340,8 +1342,14 @@ describe("GlideClient", () => {
 
             // transaction test
             const transaction = new Transaction()
-                .hset(hashPrefix + 1, { name: "Alice", age: "30" })
-                .hset(hashPrefix + 2, { name: "Bob", age: "25" })
+                .hset(hashPrefix + 1, [
+                    { field: "name", value: "Alice" },
+                    { field: "age", value: "30" },
+                ])
+                .hset(hashPrefix + 2, {
+                    name: "Bob",
+                    age: "25",
+                })
                 .del([list])
                 .lpush(list, ["2", "1"])
                 .sort(list, {

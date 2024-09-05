@@ -24,7 +24,6 @@ import {
     GeospatialData,
     GlideClient,
     GlideClusterClient,
-    GlideRecord,
     GlideString,
     InfBoundary,
     InsertPosition,
@@ -38,6 +37,7 @@ import {
     TimeUnit,
     Transaction,
     UnsignedEncoding,
+    recordToGlideRecord,
 } from "..";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -217,15 +217,6 @@ export function getFirstResult(
     }
 
     return Object.values(res).at(0);
-}
-
-/** Reverse of {@link glideRecordToRecord}. */
-export function recordToGlideRecord<T>(
-    data: Record<string, T>,
-): GlideRecord<T> {
-    return Object.entries(data).map(([k, v]) => {
-        return { key: k, value: v };
-    });
 }
 
 // TODO use matcher instead of predicate
@@ -772,7 +763,7 @@ export async function transactionTest(
     responseData.push(["append(key1, value)", 3]);
     baseTransaction.del([key1]);
     responseData.push(["del([key1])", 1]);
-    baseTransaction.hset(key4, { [field]: value });
+    baseTransaction.hset(key4, [{ field, value }]);
     responseData.push(["hset(key4, { [field]: value })", 1]);
     baseTransaction.hscan(key4, "0");
     responseData.push(['hscan(key4, "0")', ["0", [field, value]]]);

@@ -5,6 +5,7 @@ package integTest
 import (
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/glide/api"
 )
@@ -168,5 +169,94 @@ func (suite *GlideTestSuite) TestSetWithOptions_ReturnOldValue_nonExistentKey() 
 
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "", result)
+	})
+}
+
+func (suite *GlideTestSuite) TestIncrCommands_existingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		suite.verifyOK(client.Set(key, "10"))
+
+		res1, err := client.Incr(key)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(11), res1)
+
+		res2, err := client.IncrBy(key, 10)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(21), res2)
+
+		res3, err := client.IncrByFloat(key, float64(10.1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), float64(31.1), res3)
+	})
+}
+
+func (suite *GlideTestSuite) TestIncrCommands_nonExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.New().String()
+		res1, err := client.Incr(key1)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res1)
+
+		key2 := uuid.New().String()
+		res2, err := client.IncrBy(key2, 10)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(10), res2)
+
+		key3 := uuid.New().String()
+		res3, err := client.IncrByFloat(key3, float64(10.1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), float64(10.1), res3)
+	})
+}
+
+func (suite *GlideTestSuite) TestIncrCommands_TypeError() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		suite.verifyOK(client.Set(key, "stringValue"))
+
+		res1, err := client.Incr(key)
+		assert.Equal(suite.T(), int64(0), res1)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		res2, err := client.IncrBy(key, 10)
+		assert.Equal(suite.T(), int64(0), res2)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		res3, err := client.IncrByFloat(key, float64(10.1))
+		assert.Equal(suite.T(), float64(0), res3)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestDecrCommands_existingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		suite.verifyOK(client.Set(key, "10"))
+
+		res1, err := client.Decr(key)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(9), res1)
+
+		res2, err := client.DecrBy(key, 10)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(-1), res2)
+	})
+}
+
+func (suite *GlideTestSuite) TestDecrCommands_nonExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.New().String()
+		res1, err := client.Decr(key1)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(-1), res1)
+
+		key2 := uuid.New().String()
+		res2, err := client.DecrBy(key2, 10)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(-10), res2)
 	})
 }
