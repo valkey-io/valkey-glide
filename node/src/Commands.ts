@@ -3669,12 +3669,16 @@ export function createHRandField(
 export function createHScan(
     key: string,
     cursor: string,
-    options?: BaseScanOptions,
+    options?: HScanOptions,
 ): command_request.Command {
     let args: GlideString[] = [key, cursor];
 
     if (options) {
         args = args.concat(convertBaseScanOptionsToArgsArray(options));
+
+        if (options.noValues) {
+            args.push("NOVALUES");
+        }
     }
 
     return createCommand(RequestType.HScan, args);
@@ -3764,9 +3768,8 @@ export function createWait(
 }
 
 /**
- * This base class represents the common set of optional arguments for the `SCAN` family of commands.
- * Concrete implementations of this class are tied to specific SCAN commands (`SCAN`, `HSCAN`, `SSCAN`,
- * and `ZSCAN`).
+ * This base class represents the common set of optional arguments for the SCAN family of commands.
+ * Concrete implementations of this class are tied to specific SCAN commands (`SCAN`, `SSCAN`).
  */
 export type BaseScanOptions = {
     /**
@@ -3782,7 +3785,29 @@ export type BaseScanOptions = {
      * sorted set. `COUNT` could be ignored until the sorted set is large enough for the `SCAN` commands to
      * represent the results as compact single-allocation packed encoding.
      */
-    count?: number;
+    readonly count?: number;
+};
+
+/**
+ * Options specific to the ZSCAN command, extending from the base scan options.
+ */
+export type ZScanOptions = BaseScanOptions & {
+    /**
+     * If true, the scores are not included in the results.
+     * Supported from Valkey 8.0.0 and above.
+     */
+    readonly noScores?: boolean;
+};
+
+/**
+ * Options specific to the HSCAN command, extending from the base scan options.
+ */
+export type HScanOptions = BaseScanOptions & {
+    /**
+     * If true, the values of the fields are not included in the results.
+     * Supported from Valkey 8.0.0 and above.
+     */
+    readonly noValues?: boolean;
 };
 
 /**
@@ -3810,12 +3835,16 @@ function convertBaseScanOptionsToArgsArray(
 export function createZScan(
     key: GlideString,
     cursor: string,
-    options?: BaseScanOptions,
+    options?: ZScanOptions,
 ): command_request.Command {
     let args = [key, cursor];
 
     if (options) {
         args = args.concat(convertBaseScanOptionsToArgsArray(options));
+
+        if (options.noScores) {
+            args.push("NOSCORES");
+        }
     }
 
     return createCommand(RequestType.ZScan, args);

@@ -22,7 +22,9 @@ import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeysBinary
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZAddOptions;
 import glide.api.models.commands.scan.ZScanOptions;
+import glide.api.models.commands.scan.ZScanOptions.ZScanOptionsBuilder;
 import glide.api.models.commands.scan.ZScanOptionsBinary;
+import glide.api.models.commands.scan.ZScanOptionsBinary.ZScanOptionsBinaryBuilder;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -2789,8 +2791,10 @@ public interface SortedSetBaseCommands {
      *     </code> returned on the last iteration of the sorted set. The second element is always an
      *     <code>
      *     Array</code> of the subset of the sorted set held in <code>key</code>. The array in the
-     *     second element is always a flattened series of <code>String</code> pairs, where the value
-     *     is at even indices and the score is at odd indices.
+     *     second element is a flattened series of <code>String</code> pairs, where the value is at
+     *     even indices and the score is at odd indices. If {@link ZScanOptionsBuilder#noScores} is to
+     *     <code>true
+     *     </code>, the second element will only contain the members without scores.
      * @example
      *     <pre>{@code
      * // Assume key contains a set with 200 member-score pairs
@@ -2826,8 +2830,10 @@ public interface SortedSetBaseCommands {
      *     </code> returned on the last iteration of the sorted set. The second element is always an
      *     <code>
      *     Array</code> of the subset of the sorted set held in <code>key</code>. The array in the
-     *     second element is always a flattened series of <code>String</code> pairs, where the value
-     *     is at even indices and the score is at odd indices.
+     *     second element is a flattened series of <code>String</code> pairs, where the value is at
+     *     even indices and the score is at odd indices. If {@link ZScanOptionsBinaryBuilder#noScores}
+     *     is to <code>true
+     *     </code>, the second element will only contain the members without scores.
      * @example
      *     <pre>{@code
      * // Assume key contains a set with 200 member-score pairs

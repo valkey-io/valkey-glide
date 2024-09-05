@@ -77,6 +77,8 @@ function initialize() {
     const {
         AggregationType,
         BaseScanOptions,
+        ZScanOptions,
+        HScanOptions,
         BitEncoding,
         BitFieldGet,
         BitFieldIncrBy,
@@ -185,6 +187,8 @@ function initialize() {
     module.exports = {
         AggregationType,
         BaseScanOptions,
+        HScanOptions,
+        ZScanOptions,
         BitEncoding,
         BitFieldGet,
         BitFieldIncrBy,

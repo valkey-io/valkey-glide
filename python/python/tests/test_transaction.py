@@ -306,6 +306,9 @@ async def transaction_test(
     args.append([b"0", [key3.encode(), b"10.5"]])
     transaction.hscan(key4, "0", match="*", count=10)
     args.append([b"0", [key3.encode(), b"10.5"]])
+    if not await check_if_server_version_lt(glide_client, "7.9.0"):
+        transaction.hscan(key4, "0", match="*", count=10, no_values=True)
+        args.append([b"0", [key3.encode()]])
     transaction.hrandfield(key4)
     args.append(key3_bytes)
     transaction.hrandfield_count(key4, 1)
@@ -458,6 +461,9 @@ async def transaction_test(
     args.append([b"0", [b"three", b"3"]])
     transaction.zscan(key8, "0", match="*", count=20)
     args.append([b"0", [b"three", b"3"]])
+    if not await check_if_server_version_lt(glide_client, "7.9.0"):
+        transaction.zscan(key8, "0", match="*", count=20, no_scores=True)
+        args.append([b"0", [b"three"]])
     transaction.zpopmax(key8)
     args.append({b"three": 3.0})
     transaction.zpopmin(key8)

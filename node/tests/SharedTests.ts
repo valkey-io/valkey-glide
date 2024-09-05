@@ -1415,7 +1415,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hscan test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
+            await runTest(async (client: BaseClient, cluster) => {
                 const key1 = "{key}-1" + uuidv4();
                 const initialCursor = "0";
                 const defaultCount = 20;
@@ -1556,6 +1556,22 @@ export function runBaseTests(config: {
                 });
                 expect(result[resultCursorIndex]).not.toEqual(initialCursor);
                 expect(result[resultCollectionIndex].length).toBeGreaterThan(0);
+
+                if (!cluster.checkIfServerVersionLessThan("7.9.0")) {
+                    const result = await client.hscan(key1, initialCursor, {
+                        noValues: true,
+                    });
+                    const resultCursor = result[resultCursorIndex];
+                    const fieldsArray = result[
+                        resultCollectionIndex
+                    ] as string[];
+
+                    // Verify that the cursor is not "0" and values are not included
+                    expect(resultCursor).not.toEqual("0");
+                    expect(
+                        fieldsArray.every((field) => !field.startsWith("num")),
+                    ).toBeTruthy();
+                }
             }, protocol);
         },
         config.timeout,
@@ -9256,7 +9272,7 @@ export function runBaseTests(config: {
                 const numberMap: Record<string, number> = {};
 
                 for (let i = 0; i < 50000; i++) {
-                    numberMap[i.toString()] = i;
+                    numberMap["member" + i.toString()] = i;
                 }
 
                 const charMembers = ["a", "b", "c", "d", "e"];
@@ -9369,11 +9385,29 @@ export function runBaseTests(config: {
 
                 // Test count with match returns a non-empty list
                 result = await client.zscan(key1, initialCursor, {
-                    match: "1*",
+                    match: "member1*",
                     count: 20,
                 });
                 expect(result[resultCursorIndex]).not.toEqual("0");
                 expect(result[resultCollectionIndex].length).toBeGreaterThan(0);
+
+                if (!cluster.checkIfServerVersionLessThan("7.9.0")) {
+                    const result = await client.zscan(key1, initialCursor, {
+                        noScores: true,
+                    });
+                    const resultCursor = result[resultCursorIndex];
+                    const fieldsArray = result[
+                        resultCollectionIndex
+                    ] as string[];
+
+                    // Verify that the cursor is not "0" and values are not included
+                    expect(resultCursor).not.toEqual("0");
+                    expect(
+                        fieldsArray.every((field) =>
+                            field.startsWith("member"),
+                        ),
+                    ).toBeTruthy();
+                }
 
                 // Exceptions
                 // Non-set key
