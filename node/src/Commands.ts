@@ -332,21 +332,34 @@ export function createMGet(keys: GlideString[]): command_request.Command {
  * @internal
  */
 export function createMSet(
-    keyValueMap: Record<string, string>,
+    keysAndValues: Record<string, GlideString> | GlideRecord<GlideString>,
 ): command_request.Command {
-    return createCommand(RequestType.MSet, Object.entries(keyValueMap).flat());
+    let flatArray;
+
+    if (!Array.isArray(keysAndValues)) {
+        flatArray = Object.entries(keysAndValues).flatMap((e) => [e[0], e[1]]);
+    } else {
+        flatArray = keysAndValues.flatMap((e) => [e.key, e.value]);
+    }
+
+    return createCommand(RequestType.MSet, flatArray);
 }
 
 /**
  * @internal
  */
 export function createMSetNX(
-    keyValueMap: Record<string, string>,
+    keysAndValues: Record<string, GlideString> | GlideRecord<GlideString>,
 ): command_request.Command {
-    return createCommand(
-        RequestType.MSetNX,
-        Object.entries(keyValueMap).flat(),
-    );
+    let flatArray;
+
+    if (!Array.isArray(keysAndValues)) {
+        flatArray = Object.entries(keysAndValues).flatMap((e) => [e[0], e[1]]);
+    } else {
+        flatArray = keysAndValues.flatMap((e) => [e.key, e.value]);
+    }
+
+    return createCommand(RequestType.MSetNX, flatArray);
 }
 
 /**

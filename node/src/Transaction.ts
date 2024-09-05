@@ -4,7 +4,7 @@
 
 import {
     BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
-    GlideRecord,
+    GlideRecord, // eslint-disable-line @typescript-eslint/no-unused-vars
     GlideString,
     HashDataType,
     ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -528,7 +528,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - always "OK".
      */
-    public mset(keyValueMap: Record<string, string>): T {
+    public mset(
+        keyValueMap: Record<string, GlideString> | GlideRecord<GlideString>,
+    ): T {
         return this.addAndReturn(createMSet(keyValueMap));
     }
 
@@ -541,7 +543,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
      * Command Response - `true` if all keys were set. `false` if no key was set.
      */
-    public msetnx(keyValueMap: Record<string, string>): T {
+    public msetnx(
+        keyValueMap: Record<string, GlideString> | GlideRecord<GlideString>,
+    ): T {
         return this.addAndReturn(createMSetNX(keyValueMap));
     }
 

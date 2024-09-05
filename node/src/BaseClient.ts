@@ -300,6 +300,7 @@ export type DecoderOption = {
     decoder?: Decoder;
 };
 
+
 /** A replacement for `Record<GlideString, T>` - array of key-value pairs. */
 export type GlideRecord<T> = {
     /** The value name. */
@@ -328,17 +329,13 @@ export type SortedSetDataType = {
 export function convertFieldsAndValuesForHset(
     fieldsAndValues: HashDataType | Record<string, GlideString>,
 ): HashDataType {
-    let finalFieldAndValues = [];
-
     if (!Array.isArray(fieldsAndValues)) {
-        finalFieldAndValues = Object.entries(fieldsAndValues).map((e) => {
+        return Object.entries(fieldsAndValues).map((e) => {
             return { field: e[0], value: e[1] };
         });
-    } else {
-        finalFieldAndValues = fieldsAndValues;
     }
 
-    return finalFieldAndValues;
+    return fieldsAndValues;
 }
 
 /**
@@ -1323,7 +1320,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/mset/|valkey.io} for details.
      * @remarks When in cluster mode, the command may route to multiple nodes when keys in `keyValueMap` map to different hash slots.
      *
-     * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
+     * @param keysAndValues - A list of key-value objects consisting of keys and their respective values to set.
      * @returns always "OK".
      *
      * @example
@@ -1333,8 +1330,10 @@ export class BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public async mset(keyValueMap: Record<string, string>): Promise<"OK"> {
-        return this.createWritePromise(createMSet(keyValueMap));
+    public async mset(
+        keysAndValues: Record<string, GlideString> | GlideRecord<GlideString>,
+    ): Promise<"OK"> {
+        return this.createWritePromise(createMSet(keysAndValues));
     }
 
     /**
@@ -1344,7 +1343,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/msetnx/|valkey.io} for more details.
      * @remarks When in cluster mode, all keys in `keyValueMap` must map to the same hash slot.
      *
-     * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
+     * @param keysAndValues - A list of key-value objects consisting of keys and their respective values to set.
      * @returns `true` if all keys were set. `false` if no key was set.
      *
      * @example
@@ -1356,8 +1355,10 @@ export class BaseClient {
      * console.log(result2); // Output: `false`
      * ```
      */
-    public async msetnx(keyValueMap: Record<string, string>): Promise<boolean> {
-        return this.createWritePromise(createMSetNX(keyValueMap));
+    public async msetnx(
+        keysAndValues: Record<string, GlideString> | GlideRecord<GlideString>,
+    ): Promise<boolean> {
+        return this.createWritePromise(createMSetNX(keysAndValues));
     }
 
     /** Increments the number stored at `key` by one. If `key` does not exist, it is set to 0 before performing the operation.
