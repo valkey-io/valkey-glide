@@ -1,6 +1,6 @@
 #### Changes
 * Node: Added binary variant to sorted set commands ([#2190](https://github.com/valkey-io/valkey-glide/pull/2190), [#2210](https://github.com/valkey-io/valkey-glide/pull/2210))
-* Node: Added binary variant for MSET, MSETNX commands ([#TODO](https://github.com/valkey-io/valkey-glide/pull/TODO))
+* Node: Added binary variant for MSET, MSETNX commands ([#2229](https://github.com/valkey-io/valkey-glide/pull/2229))
 * Node: Added binary variant to sorted set commands - part 1 ([#2190](https://github.com/valkey-io/valkey-glide/pull/2190))
 * Node: Added binary variant to HASH commands ([#2194](https://github.com/valkey-io/valkey-glide/pull/2194))
 * Node: Added binary variant to server management commands ([#2179](https://github.com/valkey-io/valkey-glide/pull/2179))
