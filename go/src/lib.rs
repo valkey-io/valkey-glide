@@ -411,9 +411,9 @@ pub unsafe extern "C" fn command(
                             vec_elements_len.push(0);
                             return std::ptr::null_mut();
                         }
-                        let res = <String>::from_redis_value(value)
-                            .expect("Couldn't read string from RedisValue")
-                            .chars()
+                        let res = <Vec<u8>>::from_redis_value(value)
+                            .expect("Couldn't read bytes from RedisValue")
+                            .into_iter()
                             .map(|b| b as c_char)
                             .collect::<Vec<_>>();
                         let (res_ptr, res_len) = convert_vec_to_pointer(res);
