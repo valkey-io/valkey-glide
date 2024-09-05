@@ -1048,9 +1048,11 @@ export class BaseClient {
      */
     public async get(
         key: GlideString,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString | null> {
-        return this.createWritePromise(createGet(key), { decoder: decoder });
+        return this.createWritePromise(createGet(key), {
+            decoder: options?.decoder,
+        });
     }
 
     /**
