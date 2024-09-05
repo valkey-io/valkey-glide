@@ -7343,10 +7343,12 @@ export function runBaseTests(config: {
 
                 // Restore to a new key without option
                 expect(await client.restore(key2, 0, data)).toEqual("OK");
-                expect(await client.get(key2, Decoder.String)).toEqual(value);
-                expect(await client.get(key2, Decoder.Bytes)).toEqual(
-                    valueEncode,
-                );
+                expect(
+                    await client.get(key2, { decoder: Decoder.String }),
+                ).toEqual(value);
+                expect(
+                    await client.get(key2, { decoder: Decoder.Bytes }),
+                ).toEqual(valueEncode);
 
                 // Restore to an existing key
                 await expect(client.restore(key2, 0, data)).rejects.toThrow(
@@ -7649,9 +7651,9 @@ export function runBaseTests(config: {
                 expect(await client.append(key3, valueEncoded)).toBe(
                     valueEncoded.length * 2,
                 );
-                expect(await client.get(key3, Decoder.Bytes)).toEqual(
-                    Buffer.concat([valueEncoded, valueEncoded]),
-                );
+                expect(
+                    await client.get(key3, { decoder: Decoder.Bytes }),
+                ).toEqual(Buffer.concat([valueEncoded, valueEncoded]));
             }, protocol);
         },
         config.timeout,
