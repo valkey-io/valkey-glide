@@ -1352,7 +1352,6 @@ class ClusterCommands(CoreCommands):
         script: Script,
         keys: Optional[List[TEncodable]] = None,
         args: Optional[List[TEncodable]] = None,
-        route: Optional[Route] = None,
     ) -> TClusterResponse[TResult]:
         """
         Invokes a Lua script with its keys and arguments.
@@ -1367,8 +1366,6 @@ class ClusterCommands(CoreCommands):
             script (Script): The Lua script to execute.
             keys (Optional[List[TEncodable]]): The keys that are used in the script.
             args (Optional[List[TEncodable]]): The arguments for the script.
-            route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in which
-                case the client will route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:
             TResult: a value that depends on the script that was executed.
@@ -1378,4 +1375,35 @@ class ClusterCommands(CoreCommands):
             >>> await invoke_script(lua_script, keys=["foo"], args=["bar"] );
                 [b"foo", b"bar"]
         """
-        return await self._execute_script(script.get_hash(), keys, args, route)
+        return await self._execute_script(script.get_hash(), keys, args)
+
+    async def invoke_script_route(
+        self,
+        script: Script,
+        args: Optional[List[TEncodable]] = None,
+        route: Optional[Route] = None,
+    ) -> TClusterResponse[TResult]:
+        """
+        Invokes a Lua script with its arguments and route.
+        This method simplifies the process of invoking scripts on a server by using an object that represents a Lua script.
+        The script loading, argument preparation, and execution will all be handled internally.
+        If the script has not already been loaded, it will be loaded automatically using the `SCRIPT LOAD` command.
+        After that, it will be invoked using the `EVALSHA` command.
+
+        See https://valkey.io/commands/script-load/ and https://valkey.io/commands/evalsha/ for more details.
+
+        Args:
+            script (Script): The Lua script to execute.
+            args (Optional[List[TEncodable]]): The arguments for the script.
+            route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in which
+                case the client will route the command to the nodes defined by `route`. Defaults to None.
+
+        Returns:
+            TResult: a value that depends on the script that was executed.
+
+        Examples:
+            >>> lua_script = Script("return { KEYS[1], ARGV[1] }")
+            >>> await invoke_script(lua_script, args=["bar"], route=AllPrimaries());
+                [b"foo", b"bar"]
+        """
+        return await self._execute_script(script.get_hash(), args=args, route=route)

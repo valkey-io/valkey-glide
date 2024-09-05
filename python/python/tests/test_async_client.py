@@ -10317,7 +10317,7 @@ class TestScripts:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("single_route", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_script_kill(
+    async def test_script_kill1(
         self,
         request,
         cluster_mode,
@@ -10344,7 +10344,7 @@ class TestScripts:
         async def run_long_script():
             with pytest.raises(RequestError) as e:
                 if is_cluster:
-                    await cast(GlideClusterClient, test_client).invoke_script(
+                    await cast(GlideClusterClient, test_client).invoke_script_route(
                         long_script, route=route
                     )
                 else:
