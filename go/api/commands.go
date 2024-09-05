@@ -257,7 +257,7 @@ type StringCommands interface {
 	// [valkey.io]: https://valkey.io/commands/strlen/
 	Strlen(key string) (int64, error)
 
-	// Overwrites part of the string stored at key, starting at the specified offset, for the entire length of value.
+	// Overwrites part of the string stored at key, starting at the specified byte's offset, for the entire length of value.
 	// If the offset is larger than the current length of the string at key, the string is padded with zero bytes to make
 	// offset fit.
 	// Creates the key if it doesn't exist.
@@ -273,15 +273,19 @@ type StringCommands interface {
 	//  The length of the string stored at key after it was modified.
 	//
 	// For example:
-	//  result, err := client.SetRange("key", 6, "GLIDE");
-	//  result: 11 (New key created with length of 11 chars)
-	//  value, err  := client.Get("key")
-	//  value: "\x00\x00\x00\x00\x00\x00GLIDE"
+	//  1. result, err := client.SetRange("key", 6, "GLIDE");
+	//     result: 11 (New key created with length of 11 bytes)
+	//     value, err  := client.Get("key")
+	//     value: "\x00\x00\x00\x00\x00\x00GLIDE"
+	//  2. "key": "愛" (value char takes 3 bytes)
+	//     result, err = client.SetRange("key", 1, "a")
+	//     "key": �a� // (becomes an invalid UTF-8 string)
 	//
 	// [valkey.io]: https://valkey.io/commands/setrange/
 	SetRange(key string, offset int, value string) (int64, error)
 
-	// Returns the substring of the string value stored at key, determined by the offsets start and end (both are inclusive).
+	// Returns the substring of the string value stored at key, determined by the byte's offsets start and end (both are
+	// inclusive).
 	// Negative offsets can be used in order to provide an offset starting from the end of the string. So -1 means the last
 	// character, -2 the penultimate and so forth.
 	//
@@ -297,11 +301,14 @@ type StringCommands interface {
 	//  An ("") empty string is returned if the offset is out of bounds.
 	//
 	// For example:
-	//  mykey: "This is a string"
-	//  result, err := client.GetRange("mykey", 0, 3);
-	//  result: "This"
-	//  result, err := client.GetRange("mykey", -3, -1);
-	//  result: "ing" (extracted last 3 characters of a string)
+	//  1. mykey: "This is a string"
+	//     result, err := client.GetRange("mykey", 0, 3);
+	//     result: "This"
+	//     result, err := client.GetRange("mykey", -3, -1);
+	//     result: "ing" (extracted last 3 characters of a string)
+	//  2. "key": "愛" (value char takes 3 bytes)
+	//     result, err = client.GetRange("key", 0, 1)
+	//     result: � // (returns an invalid UTF-8 string)
 	//
 	// [valkey.io]: https://valkey.io/commands/getrange/
 	GetRange(key string, start int, end int) (string, error)
