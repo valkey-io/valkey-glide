@@ -298,6 +298,14 @@ export type DecoderOption = {
     decoder?: Decoder;
 };
 
+/** A replacement for `Record<GlideString, T>` - array of key-value pairs. */
+export type GlideRecord<T> = {
+    /** The value name. */
+    key: GlideString;
+    /** The value itself. */
+    value: T;
+}[];
+
 /**
  * Data type which represents sorted sets data, including elements and their respective scores.
  * Similar to `Record<GlideString, number>` - see {@link GlideRecord}.
@@ -329,6 +337,24 @@ export function convertFieldsAndValuesForHset(
     }
 
     return finalFieldAndValues;
+}
+
+/**
+ * This function converts an input from Record or GlideRecord types to GlideRecord.
+ *
+ * @param record - input record in either Record or GlideRecord types.
+ * @returns same data in GlideRecord type.
+ */
+export function convertRecordToGlideRecord(
+    record: Record<string, GlideString> | GlideRecord<GlideString>,
+): GlideRecord<GlideString> {
+    if (!Array.isArray(record)) {
+        return Object.entries(record).map((e) => {
+            return { key: e[0], value: e[1] };
+        });
+    }
+
+    return record;
 }
 
 /**
@@ -3493,7 +3519,7 @@ export class BaseClient {
      * ```
      */
     public async xrange(
-        key: string,
+        key: GlideString,
         start: Boundary<string>,
         end: Boundary<string>,
         count?: number,
@@ -3533,7 +3559,7 @@ export class BaseClient {
      * ```
      */
     public async xrevrange(
-        key: string,
+        key: GlideString,
         end: Boundary<string>,
         start: Boundary<string>,
         count?: number,
@@ -4910,7 +4936,7 @@ export class BaseClient {
      * @returns The number of entries deleted from the stream. If `key` doesn't exist, 0 is returned.
      */
     public async xtrim(
-        key: string,
+        key: GlideString,
         options: StreamTrimOptions,
     ): Promise<number> {
         return this.createWritePromise(createXTrim(key, options));
@@ -4942,9 +4968,11 @@ export class BaseClient {
      * ```
      */
     public async xread(
-        keys_and_ids: Record<string, string>,
+        keys_and_ids: Record<string, GlideString> | GlideRecord<GlideString>,
         options?: StreamReadOptions,
     ): Promise<Record<string, Record<string, [string, string][]>>> {
+        keys_and_ids = convertRecordToGlideRecord(keys_and_ids);
+
         return this.createWritePromise(createXRead(keys_and_ids, options));
     }
 
@@ -4979,14 +5007,16 @@ export class BaseClient {
      * ```
      */
     public async xreadgroup(
-        group: string,
-        consumer: string,
-        keys_and_ids: Record<string, string>,
+        group: GlideString,
+        consumer: GlideString,
+        keys_and_ids: Record<string, GlideString> | GlideRecord<GlideString>,
         options?: StreamReadGroupOptions,
     ): Promise<Record<
         string,
         Record<string, [string, string][] | null>
     > | null> {
+        keys_and_ids = convertRecordToGlideRecord(keys_and_ids);
+
         return this.createWritePromise(
             createXReadGroup(group, consumer, keys_and_ids, options),
         );
@@ -5006,7 +5036,7 @@ export class BaseClient {
      * console.log(numEntries); // Output: 2 - "my_stream" contains 2 entries.
      * ```
      */
-    public async xlen(key: string): Promise<number> {
+    public async xlen(key: GlideString): Promise<number> {
         return this.createWritePromise(createXLen(key));
     }
 
@@ -5033,9 +5063,9 @@ export class BaseClient {
      * ```
      */
     public async xpending(
-        key: string,
-        group: string,
-    ): Promise<[number, string, string, [string, number][]]> {
+        key: GlideString,
+        group: GlideString,
+    ): Promise<[number, GlideString, GlideString, [GlideString, number][]]> {
         return this.createWritePromise(createXPending(key, group));
     }
 
@@ -5074,10 +5104,10 @@ export class BaseClient {
      * ```
      */
     public async xpendingWithOptions(
-        key: string,
-        group: string,
+        key: GlideString,
+        group: GlideString,
         options: StreamPendingOptions,
-    ): Promise<[string, string, number, number][]> {
+    ): Promise<[GlideString, GlideString, number, number][]> {
         return this.createWritePromise(createXPending(key, group, options));
     }
 
@@ -5108,8 +5138,9 @@ export class BaseClient {
      * ```
      */
     public async xinfoConsumers(
-        key: string,
-        group: string,
+        key: GlideString,
+        group: GlideString,
+        // TODO: change return type to be compatible with GlideString
     ): Promise<Record<string, string | number>[]> {
         return this.createWritePromise(createXInfoConsumers(key, group));
     }
@@ -5457,7 +5488,7 @@ export class BaseClient {
      * ```
      */
     public async xinfoStream(
-        key: string,
+        key: GlideString,
         fullOptions?: boolean | number,
     ): Promise<ReturnTypeXinfoStream> {
         return this.createWritePromise(
