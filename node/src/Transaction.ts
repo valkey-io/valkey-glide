@@ -4,6 +4,7 @@
 
 import {
     BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GlideRecord,
     GlideString,
     HashDataType,
     convertFieldsAndValuesForHset,
@@ -2541,7 +2542,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The number of entries deleted from the stream. If `key` doesn't exist, 0 is returned.
      */
-    public xtrim(key: string, options: StreamTrimOptions): T {
+    public xtrim(key: GlideString, options: StreamTrimOptions): T {
         return this.addAndReturn(createXTrim(key, options));
     }
 
@@ -2556,7 +2557,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A {@link ReturnTypeXinfoStream} of detailed stream information for the given `key`.
      *     See example of {@link BaseClient.xinfoStream} for more details.
      */
-    public xinfoStream(key: string, fullOptions?: boolean | number): T {
+    public xinfoStream(key: GlideString, fullOptions?: boolean | number): T {
         return this.addAndReturn(createXInfoStream(key, fullOptions ?? false));
     }
 
@@ -2607,7 +2608,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A map of stream entry ids, to an array of entries, or `null` if `count` is non-positive.
      */
     public xrange(
-        key: string,
+        key: GlideString,
         start: Boundary<string>,
         end: Boundary<string>,
         count?: number,
@@ -2636,7 +2637,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A map of stream entry ids, to an array of entries, or `null` if `count` is non-positive.
      */
     public xrevrange(
-        key: string,
+        key: GlideString,
         end: Boundary<string>,
         start: Boundary<string>,
         count?: number,
@@ -2655,9 +2656,15 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A `Record` of stream keys, each key is mapped to a `Record` of stream ids, to an `Array` of entries.
      */
     public xread(
-        keys_and_ids: Record<string, string>,
+        keys_and_ids: Record<string, GlideString> | GlideRecord<GlideString>,
         options?: StreamReadOptions,
     ): T {
+        if (!Array.isArray(keys_and_ids)) {
+            keys_and_ids = Object.entries(keys_and_ids).map((e) => {
+                return { key: e[0], value: e[1] };
+            });
+        }
+
         return this.addAndReturn(createXRead(keys_and_ids, options));
     }
 
@@ -2676,11 +2683,17 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     Returns `null` if there is no stream that can be served.
      */
     public xreadgroup(
-        group: string,
-        consumer: string,
-        keys_and_ids: Record<string, string>,
+        group: GlideString,
+        consumer: GlideString,
+        keys_and_ids: Record<string, GlideString> | GlideRecord<GlideString>,
         options?: StreamReadGroupOptions,
     ): T {
+        if (!Array.isArray(keys_and_ids)) {
+            keys_and_ids = Object.entries(keys_and_ids).map((e) => {
+                return { key: e[0], value: e[1] };
+            });
+        }
+
         return this.addAndReturn(
             createXReadGroup(group, consumer, keys_and_ids, options),
         );
@@ -2695,7 +2708,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The number of entries in the stream. If `key` does not exist, returns `0`.
      */
-    public xlen(key: string): T {
+    public xlen(key: GlideString): T {
         return this.addAndReturn(createXLen(key));
     }
 
@@ -2714,7 +2727,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - An `array` that includes the summary of the pending messages.
      * See example of {@link BaseClient.xpending|xpending} for more details.
      */
-    public xpending(key: string, group: string): T {
+    public xpending(key: GlideString, group: GlideString): T {
         return this.addAndReturn(createXPending(key, group));
     }
 
@@ -2731,8 +2744,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * See example of {@link BaseClient.xpendingWithOptions|xpendingWithOptions} for more details.
      */
     public xpendingWithOptions(
-        key: string,
-        group: string,
+        key: GlideString,
+        group: GlideString,
         options: StreamPendingOptions,
     ): T {
         return this.addAndReturn(createXPending(key, group, options));
@@ -2747,7 +2760,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - An `Array` of `Records`, where each mapping contains the attributes
      *     of a consumer for the given consumer group of the stream at `key`.
      */
-    public xinfoConsumers(key: string, group: string): T {
+    public xinfoConsumers(key: GlideString, group: GlideString): T {
         return this.addAndReturn(createXInfoConsumers(key, group));
     }
 

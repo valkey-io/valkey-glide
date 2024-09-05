@@ -6,7 +6,7 @@ import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "glide-rs";
 import Long from "long";
 
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-import { BaseClient, HashDataType } from "src/BaseClient";
+import { BaseClient, GlideRecord, HashDataType } from "src/BaseClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 import { GlideClient } from "src/GlideClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
@@ -2020,7 +2020,7 @@ export type StreamTrimOptions = (
            * Equivalent to `MINID` in the Redis API.
            */
           method: "minid";
-          threshold: string;
+          threshold: GlideString;
       }
     | {
           /**
@@ -2130,7 +2130,7 @@ export function createXDel(
  * @internal
  */
 export function createXTrim(
-    key: string,
+    key: GlideString,
     options: StreamTrimOptions,
 ): command_request.Command {
     const args = [key];
@@ -2142,7 +2142,7 @@ export function createXTrim(
  * @internal
  */
 export function createXRange(
-    key: string,
+    key: GlideString,
     start: Boundary<string>,
     end: Boundary<string>,
     count?: number,
@@ -2161,7 +2161,7 @@ export function createXRange(
  * @internal
  */
 export function createXRevRange(
-    key: string,
+    key: GlideString,
     start: Boundary<string>,
     end: Boundary<string>,
     count?: number,
@@ -2538,7 +2538,7 @@ export type StreamReadGroupOptions = StreamReadOptions & {
 };
 
 /** @internal */
-function addReadOptions(options?: StreamReadOptions): string[] {
+function addReadOptions(options?: StreamReadOptions): GlideString[] {
     const args = [];
 
     if (options?.count !== undefined) {
@@ -2555,11 +2555,11 @@ function addReadOptions(options?: StreamReadOptions): string[] {
 }
 
 /** @internal */
-function addStreamsArgs(keys_and_ids: Record<string, string>): string[] {
+function addStreamsArgs(keys_and_ids: GlideRecord<GlideString>): GlideString[] {
     return [
         "STREAMS",
-        ...Object.keys(keys_and_ids),
-        ...Object.values(keys_and_ids),
+        ...keys_and_ids.map((e) => e.key),
+        ...keys_and_ids.map((e) => e.value),
     ];
 }
 
@@ -2567,23 +2567,22 @@ function addStreamsArgs(keys_and_ids: Record<string, string>): string[] {
  * @internal
  */
 export function createXRead(
-    keys_and_ids: Record<string, string>,
+    keys_and_ids: GlideRecord<GlideString>,
     options?: StreamReadOptions,
 ): command_request.Command {
     const args = addReadOptions(options);
     args.push(...addStreamsArgs(keys_and_ids));
-
     return createCommand(RequestType.XRead, args);
 }
 
 /** @internal */
 export function createXReadGroup(
-    group: string,
-    consumer: string,
-    keys_and_ids: Record<string, string>,
+    group: GlideString,
+    consumer: GlideString,
+    keys_and_ids: GlideRecord<GlideString>,
     options?: StreamReadGroupOptions,
 ): command_request.Command {
-    const args: string[] = ["GROUP", group, consumer];
+    const args: GlideString[] = ["GROUP", group, consumer];
 
     if (options) {
         args.push(...addReadOptions(options));
@@ -2598,6 +2597,7 @@ export function createXReadGroup(
 /**
  * Represents a the return type for XInfo Stream in the response
  */
+// TODO: change return type to be compatible with GlideString
 export type ReturnTypeXinfoStream = {
     [key: string]:
         | StreamEntries
@@ -2613,10 +2613,10 @@ export type StreamEntries = string | number | (string | number | string[])[][];
  * @internal
  */
 export function createXInfoStream(
-    key: string,
+    key: GlideString,
     options: boolean | number,
 ): command_request.Command {
-    const args: string[] = [key];
+    const args: GlideString[] = [key];
 
     if (options != false) {
         args.push("FULL");
@@ -2638,7 +2638,7 @@ export function createXInfoGroups(key: string): command_request.Command {
 /**
  * @internal
  */
-export function createXLen(key: string): command_request.Command {
+export function createXLen(key: GlideString): command_request.Command {
     return createCommand(RequestType.XLen, [key]);
 }
 
@@ -2653,13 +2653,13 @@ export type StreamPendingOptions = {
     /** Limit the number of messages returned. */
     count: number;
     /** Filter pending entries by consumer. */
-    consumer?: string;
+    consumer?: GlideString;
 };
 
 /** @internal */
 export function createXPending(
-    key: string,
-    group: string,
+    key: GlideString,
+    group: GlideString,
     options?: StreamPendingOptions,
 ): command_request.Command {
     const args = [key, group];
@@ -2680,8 +2680,8 @@ export function createXPending(
 
 /** @internal */
 export function createXInfoConsumers(
-    key: string,
-    group: string,
+    key: GlideString,
+    group: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.XInfoConsumers, [key, group]);
 }
