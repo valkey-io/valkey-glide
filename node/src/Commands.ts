@@ -2244,8 +2244,8 @@ export function createTime(): command_request.Command {
  * @internal
  */
 export function createPublish(
-    message: string,
-    channel: string,
+    message: GlideString,
+    channel: GlideString,
     sharded: boolean = false,
 ): command_request.Command {
     const request = sharded ? RequestType.SPublish : RequestType.Publish;
@@ -3879,7 +3879,7 @@ export function createBLMPop(
  * @internal
  */
 export function createPubSubChannels(
-    pattern?: string,
+    pattern?: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.PubSubChannels, pattern ? [pattern] : []);
 }
@@ -3904,7 +3904,7 @@ export function createPubSubNumSub(
  * @internal
  */
 export function createPubsubShardChannels(
-    pattern?: string,
+    pattern?: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.PubSubSChannels, pattern ? [pattern] : []);
 }

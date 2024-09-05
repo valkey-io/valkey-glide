@@ -851,7 +851,10 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 1 - This message was posted to 1 subscription which is configured on primary node
      * ```
      */
-    public async publish(message: string, channel: string): Promise<number> {
+    public async publish(
+        message: GlideString,
+        channel: GlideString,
+    ): Promise<number> {
         return this.createWritePromise(createPublish(message, channel));
     }
 

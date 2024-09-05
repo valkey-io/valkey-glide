@@ -523,9 +523,9 @@ function getRequestErrorClass(
 }
 
 export type PubSubMsg = {
-    message: string;
-    channel: string;
-    pattern?: string | null;
+    message: GlideString;
+    channel: GlideString;
+    pattern?: GlideString | null;
 };
 
 export type WritePromiseOptions = {
@@ -953,19 +953,21 @@ export class BaseClient {
         let msg: PubSubMsg | null = null;
         const responsePointer = pushNotification.respPointer;
         let nextPushNotificationValue: Record<string, unknown> = {};
+        const isStringDecoder =
+            (decoder ?? this.defaultDecoder) === Decoder.String;
 
         if (responsePointer) {
             if (typeof responsePointer !== "number") {
                 nextPushNotificationValue = valueFromSplitPointer(
                     responsePointer.high,
                     responsePointer.low,
-                    decoder === Decoder.String,
+                    isStringDecoder,
                 ) as Record<string, unknown>;
             } else {
                 nextPushNotificationValue = valueFromSplitPointer(
                     0,
                     responsePointer,
-                    decoder === Decoder.String,
+                    isStringDecoder,
                 ) as Record<string, unknown>;
             }
 
@@ -982,7 +984,9 @@ export class BaseClient {
                 messageKind === "PMessage" ||
                 messageKind === "SMessage"
             ) {
-                const values = nextPushNotificationValue["values"] as string[];
+                const values = nextPushNotificationValue[
+                    "values"
+                ] as GlideString[];
 
                 if (messageKind === "PMessage") {
                     msg = {
@@ -6824,8 +6828,10 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/pubsub-channels/|valkey.io} for more details.
      *
-     * @param pattern - A glob-style pattern to match active channels.
-     *                  If not provided, all active channels are returned.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `pattern`: A glob-style pattern to match active channels.
+     *     If not provided, all active channels are returned.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns A list of currently active channels matching the given pattern.
      *          If no pattern is specified, all active channels are returned.
      *
@@ -6838,8 +6844,12 @@ export class BaseClient {
      * console.log(newsChannels); // Output: ["news.sports", "news.weather"]
      * ```
      */
-    public async pubsubChannels(pattern?: string): Promise<string[]> {
-        return this.createWritePromise(createPubSubChannels(pattern));
+    public async pubsubChannels(
+        options?: { pattern?: GlideString } & DecoderOption,
+    ): Promise<GlideString[]> {
+        return this.createWritePromise(createPubSubChannels(options?.pattern), {
+            decoder: options?.decoder,
+        });
     }
 
     /**

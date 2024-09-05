@@ -1222,8 +1222,8 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public async publish(
-        message: string,
-        channel: string,
+        message: GlideString,
+        channel: GlideString,
         sharded: boolean = false,
     ): Promise<number> {
         return this.createWritePromise(
@@ -1237,8 +1237,10 @@ export class GlideClusterClient extends BaseClient {
      *
      * @see {@link https://valkey.io/commands/pubsub-shardchannels/|valkey.io} for details.
      *
-     * @param pattern - A glob-style pattern to match active shard channels.
-     *                  If not provided, all active shard channels are returned.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `pattern`: A glob-style pattern to match active shard channels.
+     *     If not provided, all active shard channels are returned.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns A list of currently active shard channels matching the given pattern.
      *          If no pattern is specified, all active shard channels are returned.
      *
@@ -1251,8 +1253,15 @@ export class GlideClusterClient extends BaseClient {
      * console.log(filteredChannels); // Output: ["channel1", "channel2"]
      * ```
      */
-    public async pubsubShardChannels(pattern?: string): Promise<string[]> {
-        return this.createWritePromise(createPubsubShardChannels(pattern));
+    public async pubsubShardChannels(
+        options?: {
+            pattern?: GlideString;
+        } & DecoderOption,
+    ): Promise<GlideString[]> {
+        return this.createWritePromise(
+            createPubsubShardChannels(options?.pattern),
+            { decoder: options?.decoder },
+        );
     }
 
     /**
