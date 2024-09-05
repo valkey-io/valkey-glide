@@ -24,7 +24,7 @@ permissions:
 jobs:
     load-platform-matrix:
         runs-on: ubuntu-latest
-#        environment: AWS_ACTIONS
+        environment: AWS_ACTIONS
         outputs:
             PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.PLATFORM_MATRIX }}
         steps:
@@ -40,7 +40,6 @@ jobs:
                   echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
 
     set-release-version:
-        needs: load-platform-matrix
         runs-on: ubuntu-latest
         outputs:
             RELEASE_VERSION: ${{ steps.release-version.outputs.RELEASE_VERSION }}
@@ -72,7 +71,7 @@ jobs:
             # Run all jobs
             fail-fast: false
             matrix:
-                host: ${{fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX)}}
+                host: ${{ fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX) }}
 
         runs-on: ${{ matrix.host.RUNNER }}
 
@@ -196,7 +195,7 @@ jobs:
 
             - name: Check status of deployment
               run: |
-                  for ((retries = 0; retries < 5; retries++)); do
+                  for ((retries = 0; retries < 20; retries++)); do
                       sleep 5
                       export DEPLOYMENT_STATUS=`curl --request POST \
                       -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
@@ -210,6 +209,7 @@ jobs:
                   -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
                   "https://central.sonatype.com/api/v1/publisher/status?id=${{ env.DEPLOYMENT_ID }}" \
                   | jq
+                  echo "Deployment ${{ env.DEPLOYMENT_ID }} was unsuccessful with status $DEPLOYMENT_STATUS"
                   exit 1
 
             - uses: actions/checkout@v4
