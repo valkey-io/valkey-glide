@@ -310,7 +310,9 @@ describe("SocketConnectionInternals", () => {
                         },
                     );
                 });
-                const result = await connection.get("foo", { decoder: Decoder.String });
+                const result = await connection.get("foo", {
+                    decoder: Decoder.String,
+                });
                 expect(result).toEqual(expected);
             });
         };
@@ -696,8 +698,8 @@ describe("SocketConnectionInternals", () => {
                 } else {
                     throw new Error(
                         "unexpected command: [" +
-                        request.singleCommand!.argsArray!.args!.at(0) +
-                        "]",
+                            request.singleCommand!.argsArray!.args!.at(0) +
+                            "]",
                     );
                 }
 
