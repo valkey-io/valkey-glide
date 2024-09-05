@@ -260,9 +260,9 @@ describe("GlideClusterClient", () => {
                 ).toEqual("OK");
                 // check the restore
                 expect(await client.get(key)).toEqual(value);
-                expect(await client.get(key, Decoder.Bytes)).toEqual(
-                    valueEncoded,
-                );
+                expect(
+                    await client.get(key, { decoder: Decoder.Bytes }),
+                ).toEqual(valueEncoded);
             }
         },
         TIMEOUT,

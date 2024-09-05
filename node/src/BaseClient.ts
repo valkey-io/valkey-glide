@@ -1106,9 +1106,11 @@ export class BaseClient {
      */
     public async getdel(
         key: GlideString,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString | null> {
-        return this.createWritePromise(createGetDel(key), { decoder: decoder });
+        return this.createWritePromise(createGetDel(key), {
+            decoder: options?.decoder,
+        });
     }
 
     /**
@@ -1144,10 +1146,10 @@ export class BaseClient {
         key: GlideString,
         start: number,
         end: number,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString | null> {
         return this.createWritePromise(createGetRange(key, start, end), {
-            decoder: decoder,
+            decoder: options?.decoder,
         });
     }
 
@@ -1315,9 +1317,11 @@ export class BaseClient {
      */
     public async mget(
         keys: GlideString[],
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<(GlideString | null)[]> {
-        return this.createWritePromise(createMGet(keys), { decoder: decoder });
+        return this.createWritePromise(createMGet(keys), {
+            decoder: options?.decoder,
+        });
     }
 
     /** Set multiple keys to multiple values in a single operation.
@@ -2255,9 +2259,11 @@ export class BaseClient {
      */
     public async lpop(
         key: GlideString,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString | null> {
-        return this.createWritePromise(createLPop(key), { decoder: decoder });
+        return this.createWritePromise(createLPop(key), {
+            decoder: options?.decoder,
+        });
     }
 
     /** Removes and returns up to `count` elements of the list stored at `key`, depending on the list's length.
@@ -2288,10 +2294,10 @@ export class BaseClient {
     public async lpopCount(
         key: GlideString,
         count: number,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString[] | null> {
         return this.createWritePromise(createLPop(key, count), {
-            decoder: decoder,
+            decoder: options?.decoder,
         });
     }
 
@@ -2337,10 +2343,10 @@ export class BaseClient {
         key: GlideString,
         start: number,
         end: number,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString[]> {
         return this.createWritePromise(createLRange(key, start, end), {
-            decoder: decoder,
+            decoder: options?.decoder,
         });
     }
 
@@ -2399,11 +2405,11 @@ export class BaseClient {
         destination: GlideString,
         whereFrom: ListDirection,
         whereTo: ListDirection,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString | null> {
         return this.createWritePromise(
             createLMove(source, destination, whereFrom, whereTo),
-            { decoder: decoder },
+            { decoder: options?.decoder },
         );
     }
 
@@ -2447,11 +2453,11 @@ export class BaseClient {
         whereFrom: ListDirection,
         whereTo: ListDirection,
         timeout: number,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString | null> {
         return this.createWritePromise(
             createBLMove(source, destination, whereFrom, whereTo, timeout),
-            { decoder: decoder },
+            { decoder: options?.decoder },
         );
     }
 
@@ -2623,9 +2629,11 @@ export class BaseClient {
      */
     public async rpop(
         key: GlideString,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString | null> {
-        return this.createWritePromise(createRPop(key), { decoder: decoder });
+        return this.createWritePromise(createRPop(key), {
+            decoder: options?.decoder,
+        });
     }
 
     /** Removes and returns up to `count` elements from the list stored at `key`, depending on the list's length.
@@ -2656,10 +2664,10 @@ export class BaseClient {
     public async rpopCount(
         key: GlideString,
         count: number,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString[] | null> {
         return this.createWritePromise(createRPop(key, count), {
-            decoder: decoder,
+            decoder: options?.decoder,
         });
     }
 
@@ -5677,10 +5685,10 @@ export class BaseClient {
     public async lindex(
         key: GlideString,
         index: number,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString | null> {
         return this.createWritePromise(createLIndex(key, index), {
-            decoder: decoder,
+            decoder: options?.decoder,
         });
     }
 
@@ -5812,10 +5820,10 @@ export class BaseClient {
     public async brpop(
         keys: GlideString[],
         timeout: number,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<[GlideString, GlideString] | null> {
         return this.createWritePromise(createBRPop(keys, timeout), {
-            decoder: decoder,
+            decoder: options?.decoder,
         });
     }
 
@@ -5844,10 +5852,10 @@ export class BaseClient {
     public async blpop(
         keys: GlideString[],
         timeout: number,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<[GlideString, GlideString] | null> {
         return this.createWritePromise(createBLPop(keys, timeout), {
-            decoder: decoder,
+            decoder: options?.decoder,
         });
     }
 
@@ -6027,10 +6035,10 @@ export class BaseClient {
         func: GlideString,
         keys: GlideString[],
         args: GlideString[],
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<ReturnType> {
         return this.createWritePromise(createFCall(func, keys, args), {
-            decoder,
+            decoder: options?.decoder,
         });
     }
 
@@ -6060,10 +6068,10 @@ export class BaseClient {
         func: GlideString,
         keys: GlideString[],
         args: GlideString[],
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<ReturnType> {
         return this.createWritePromise(createFCallReadOnly(func, keys, args), {
-            decoder,
+            decoder: options?.decoder,
         });
     }
 

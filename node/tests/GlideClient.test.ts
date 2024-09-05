@@ -177,8 +177,12 @@ describe("GlideClient", () => {
             expect(result).toEqual("OK");
 
             expect(await client.get(key)).toEqual(valueEncoded);
-            expect(await client.get(key, Decoder.String)).toEqual(value);
-            expect(await client.get(key, Decoder.Bytes)).toEqual(valueEncoded);
+            expect(await client.get(key, { decoder: Decoder.String })).toEqual(
+                value,
+            );
+            expect(await client.get(key, { decoder: Decoder.Bytes })).toEqual(
+                valueEncoded,
+            );
             client.close();
         },
     );
@@ -201,8 +205,12 @@ describe("GlideClient", () => {
             expect(result).toEqual("OK");
 
             expect(await client.get(key)).toEqual(value);
-            expect(await client.get(key, Decoder.String)).toEqual(value);
-            expect(await client.get(key, Decoder.Bytes)).toEqual(valueEncoded);
+            expect(await client.get(key, { decoder: Decoder.String })).toEqual(
+                value,
+            );
+            expect(await client.get(key, { decoder: Decoder.Bytes })).toEqual(
+                valueEncoded,
+            );
             client.close();
         },
     );
@@ -671,7 +679,7 @@ describe("GlideClient", () => {
                         Buffer.from(funcName),
                         [],
                         [Buffer.from("one"), "two"],
-                        Decoder.Bytes,
+                        { decoder: Decoder.Bytes },
                     ),
                 ).toEqual(Buffer.from("one"));
                 expect(
@@ -679,7 +687,7 @@ describe("GlideClient", () => {
                         Buffer.from(funcName),
                         [],
                         ["one", Buffer.from("two")],
-                        Decoder.Bytes,
+                        { decoder: Decoder.Bytes },
                     ),
                 ).toEqual(Buffer.from("one"));
 
