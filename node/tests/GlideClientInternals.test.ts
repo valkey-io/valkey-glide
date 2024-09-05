@@ -324,8 +324,8 @@ describe("SocketConnectionInternals", () => {
 
         it("should pass maps received from socket", async () => {
             await test_receiving_value({ foo: "bar", bar: "baz" }, [
-                { key: "foo", value: "bar" },
                 { key: "bar", value: "baz" },
+                { key: "foo", value: "bar" },
             ]);
         });
 

@@ -363,7 +363,7 @@ describe("GlideClient", () => {
             const key = uuidv4();
             const maxmemoryPolicyKey = "maxmemory-policy";
             const config = await client.configGet([maxmemoryPolicyKey]);
-            const maxmemoryPolicy = String(config[maxmemoryPolicyKey]);
+            const maxmemoryPolicy = config[maxmemoryPolicyKey];
 
             try {
                 const transaction = new Transaction();
@@ -383,14 +383,11 @@ describe("GlideClient", () => {
                     expect(response[2]).toBeGreaterThanOrEqual(0);
                 }
             } finally {
-                /*
-                TODO uncomment once ClusterResponse fixed for configGet
                 expect(
                     await client.configSet({
                         [maxmemoryPolicyKey]: maxmemoryPolicy,
                     }),
                 ).toEqual("OK");
-                */
             }
 
             client.close();
@@ -407,7 +404,7 @@ describe("GlideClient", () => {
             const key = uuidv4();
             const maxmemoryPolicyKey = "maxmemory-policy";
             const config = await client.configGet([maxmemoryPolicyKey]);
-            const maxmemoryPolicy = String(config[maxmemoryPolicyKey]);
+            const maxmemoryPolicy = config[maxmemoryPolicyKey];
 
             try {
                 const transaction = new Transaction();
@@ -431,14 +428,11 @@ describe("GlideClient", () => {
                     expect(response[2]).toBeGreaterThanOrEqual(0);
                 }
             } finally {
-                /*
-                TODO uncomment once ClusterResponse fixed for configGet
                 expect(
                     await client.configSet({
                         [maxmemoryPolicyKey]: maxmemoryPolicy,
                     }),
                 ).toEqual("OK");
-                */
             }
 
             client.close();

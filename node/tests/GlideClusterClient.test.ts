@@ -21,6 +21,7 @@ import {
     InfoOptions,
     ListDirection,
     ProtocolVersion,
+    recordToGlideRecord,
     RequestError,
     ReturnType,
     Routes,
@@ -274,13 +275,14 @@ describe("GlideClusterClient", () => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            const transaction = new ClusterTransaction();
-            transaction.configSet({ timeout: "1000" });
-            transaction.configGet(["timeout"]);
+            const transaction = new ClusterTransaction()
+                .configSet({ timeout: "1000" })
+                .configGet(["timeout"]);
             const result = await client.exec(transaction);
-            expect(intoString(result)).toEqual(
-                intoString(["OK", { timeout: "1000" }]),
-            );
+            expect(result).toEqual([
+                "OK",
+                recordToGlideRecord({ timeout: "1000" }),
+            ]);
         },
         TIMEOUT,
     );
@@ -469,7 +471,7 @@ describe("GlideClusterClient", () => {
             const key = uuidv4();
             const maxmemoryPolicyKey = "maxmemory-policy";
             const config = await client.configGet([maxmemoryPolicyKey]);
-            const maxmemoryPolicy = String(config[maxmemoryPolicyKey]);
+            const maxmemoryPolicy = config[maxmemoryPolicyKey] as string;
 
             try {
                 const transaction = new ClusterTransaction();
@@ -489,14 +491,11 @@ describe("GlideClusterClient", () => {
                     expect(response[2]).toBeGreaterThanOrEqual(0);
                 }
             } finally {
-                /*
-                TODO uncomment once ClusterResponse fixed for configGet
                 expect(
                     await client.configSet({
                         [maxmemoryPolicyKey]: maxmemoryPolicy,
                     }),
                 ).toEqual("OK");
-                */
             }
 
             client.close();
@@ -513,7 +512,7 @@ describe("GlideClusterClient", () => {
             const key = uuidv4();
             const maxmemoryPolicyKey = "maxmemory-policy";
             const config = await client.configGet([maxmemoryPolicyKey]);
-            const maxmemoryPolicy = String(config[maxmemoryPolicyKey]);
+            const maxmemoryPolicy = config[maxmemoryPolicyKey] as string;
 
             try {
                 const transaction = new ClusterTransaction();
@@ -537,14 +536,11 @@ describe("GlideClusterClient", () => {
                     expect(response[2]).toBeGreaterThanOrEqual(0);
                 }
             } finally {
-                /*
-                TODO uncomment once ClusterResponse fixed for configGet
                 expect(
                     await client.configSet({
                         [maxmemoryPolicyKey]: maxmemoryPolicy,
                     }),
                 ).toEqual("OK");
-                */
             }
 
             client.close();

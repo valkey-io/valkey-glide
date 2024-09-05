@@ -30,6 +30,7 @@ import {
     GeospatialData,
     GlideClient,
     GlideClusterClient,
+    GlideRecord,
     GlideString,
     HashDataType,
     InfBoundary,
@@ -55,12 +56,7 @@ import {
     parseInfoResponse,
 } from "../";
 import { RedisCluster } from "../../utils/TestUtils";
-import {
-    Client,
-    GetAndSetRandomValue,
-    compareMaps,
-    getFirstResult,
-} from "./TestUtilities";
+import { Client, GetAndSetRandomValue, getFirstResult } from "./TestUtilities";
 
 export type BaseClient = GlideClient | GlideClusterClient;
 
@@ -141,9 +137,11 @@ export function runBaseTests(config: {
         `Check protocol version is RESP3`,
         async () => {
             await runTest(async (client: BaseClient) => {
-                const result = (await client.customCommand(["HELLO"])) as {
-                    proto: number;
-                };
+                const result = glideRecordToRecord(
+                    (await client.customCommand([
+                        "HELLO",
+                    ])) as GlideRecord<number>,
+                );
                 expect(result?.proto).toEqual(3);
             }, ProtocolVersion.RESP3);
         },
@@ -154,9 +152,11 @@ export function runBaseTests(config: {
         `Check possible to opt-in to RESP2`,
         async () => {
             await runTest(async (client: BaseClient) => {
-                const result = (await client.customCommand(["HELLO"])) as {
-                    proto: number;
-                };
+                const result = glideRecordToRecord(
+                    (await client.customCommand([
+                        "HELLO",
+                    ])) as GlideRecord<number>,
+                );
                 expect(result?.proto).toEqual(2);
             }, ProtocolVersion.RESP2);
         },
@@ -8214,7 +8214,7 @@ export function runBaseTests(config: {
                 const nonExistingKey = uuidv4();
                 const maxmemoryPolicyKey = "maxmemory-policy";
                 const config = await client.configGet([maxmemoryPolicyKey]);
-                const maxmemoryPolicy = String(config[maxmemoryPolicyKey]);
+                const maxmemoryPolicy = config[maxmemoryPolicyKey] as string;
 
                 try {
                     expect(
@@ -8230,13 +8230,11 @@ export function runBaseTests(config: {
                         await client.objectFreq(Buffer.from(key)),
                     ).toBeGreaterThanOrEqual(0);
                 } finally {
-                    /*
                     expect(
                         await client.configSet({
                             [maxmemoryPolicyKey]: maxmemoryPolicy,
                         }),
                     ).toEqual("OK");
-                    */
                 }
             }, protocol);
         },
@@ -8251,7 +8249,7 @@ export function runBaseTests(config: {
                 const nonExistingKey = uuidv4();
                 const maxmemoryPolicyKey = "maxmemory-policy";
                 const config = await client.configGet([maxmemoryPolicyKey]);
-                const maxmemoryPolicy = String(config[maxmemoryPolicyKey]);
+                const maxmemoryPolicy = config[maxmemoryPolicyKey] as string;
 
                 try {
                     expect(
@@ -8271,13 +8269,11 @@ export function runBaseTests(config: {
                         await client.objectIdletime(Buffer.from(key)),
                     ).toBeGreaterThan(0);
                 } finally {
-                    /*
                     expect(
                         await client.configSet({
                             [maxmemoryPolicyKey]: maxmemoryPolicy,
                         }),
                     ).toEqual("OK");
-                    */
                 }
             }, protocol);
         },
@@ -11223,7 +11219,10 @@ export function runBaseTests(config: {
 
                 // pushing to the arrays to be popped
                 expect(await client.lpush(key4, lpushArgs)).toEqual(5);
-                const expectedWithKey4 = { [key4]: ["one", "two"] };
+                const expectedWithKey4 = {
+                    key: key4,
+                    elements: ["one", "two"],
+                };
 
                 // checking correct result from popping
                 expect(

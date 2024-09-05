@@ -8,20 +8,14 @@ import {
     BaseClientConfiguration,
     Decoder,
     DecoderOption,
+    GlideRecord,
+    glideRecordToRecord,
     GlideString,
     PubSubMsg,
     ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
     ReturnType,
 } from "./BaseClient";
 import {
-    FlushMode,
-    FunctionListOptions,
-    FunctionListResponse,
-    FunctionRestorePolicy,
-    FunctionStatsFullResponse,
-    InfoOptions,
-    LolwutOptions,
-    SortOptions,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -54,6 +48,14 @@ import {
     createSortReadOnly,
     createTime,
     createUnWatch,
+    FlushMode,
+    FunctionListOptions,
+    FunctionListResponse,
+    FunctionRestorePolicy,
+    FunctionStatsFullResponse,
+    InfoOptions,
+    LolwutOptions,
+    SortOptions,
 } from "./Commands";
 import { connection_request } from "./ProtobufMessage";
 import { Transaction } from "./Transaction";
@@ -397,9 +399,12 @@ export class GlideClient extends BaseClient {
         parameters: string[],
         decoder?: Decoder,
     ): Promise<Record<string, GlideString>> {
-        return this.createWritePromise(createConfigGet(parameters), {
-            decoder: decoder,
-        });
+        return this.createWritePromise<GlideRecord<GlideString>>(
+            createConfigGet(parameters),
+            {
+                decoder,
+            },
+        ).then(glideRecordToRecord);
     }
 
     /**
@@ -654,9 +659,12 @@ export class GlideClient extends BaseClient {
     public async functionList(
         options?: FunctionListOptions & DecoderOption,
     ): Promise<FunctionListResponse> {
-        return this.createWritePromise(createFunctionList(options), {
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise<GlideRecord<unknown>[]>(
+            createFunctionList(options),
+            {
+                decoder: options?.decoder,
+            },
+        ).then((res) => res.map(glideRecordToRecord) as FunctionListResponse);
     }
 
     /**
@@ -708,9 +716,12 @@ export class GlideClient extends BaseClient {
     public async functionStats(
         decoder?: Decoder,
     ): Promise<FunctionStatsFullResponse> {
-        return this.createWritePromise(createFunctionStats(), {
-            decoder,
-        });
+        return this.createWritePromise<GlideRecord<unknown>>(
+            createFunctionStats(),
+            {
+                decoder,
+            },
+        ).then((res) => glideRecordToRecord(res) as FunctionStatsFullResponse);
     }
 
     /**

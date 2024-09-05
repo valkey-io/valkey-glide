@@ -348,7 +348,7 @@ function convertGlideRecordForZSet(
 
 /**
  * @internal
- * Downcast `GlideRecord` to `Record`. Use if you are 146% aware that `data` keys are always strings.
+ * Recursively downcast `GlideRecord` to `Record`. Use if `data` keys are always strings.
  */
 export function glideRecordToRecord<T>(
     data: GlideRecord<T>,
@@ -356,10 +356,44 @@ export function glideRecordToRecord<T>(
     const res: Record<string, T> = {};
 
     for (const pair of data) {
-        res[pair.key as string] = pair.value;
+        let newVal = pair.value;
+
+        if (isGlideRecord(pair.value)) {
+            newVal = glideRecordToRecord(
+                pair.value as GlideRecord<unknown>,
+            ) as T;
+        } else if (isGlideRecordArray(pair.value)) {
+            newVal = (pair.value as GlideRecord<unknown>[]).map(
+                glideRecordToRecord,
+            ) as T;
+        }
+
+        res[pair.key as string] = newVal;
     }
 
     return res;
+}
+
+/**
+ * @internal
+ * Check whether an object is a `GlideRecord` (see {@link GlideRecord}).
+ */
+function isGlideRecord(obj?: unknown): boolean {
+    return (
+        Array.isArray(obj) &&
+        obj.length > 0 &&
+        typeof obj[0] === "object" &&
+        "key" in obj[0] &&
+        "value" in obj[0]
+    );
+}
+
+/**
+ * @internal
+ * Check whether an object is a `GlideRecord[]` (see {@link GlideRecord}).
+ */
+function isGlideRecordArray(obj?: unknown): boolean {
+    return Array.isArray(obj) && obj.length > 0 && isGlideRecord(obj[0]);
 }
 
 /** Represents the return type of {@link xinfoStream} command. */
@@ -5665,32 +5699,8 @@ export class BaseClient {
                 | GlideRecord<StreamEntries | GlideRecord<StreamEntries>[]>[]
             >
         >(createXInfoStream(key, options?.fullOptions ?? false), options).then(
-            (xinfoStream) => {
-                const converted = glideRecordToRecord(xinfoStream);
-
-                if (options?.fullOptions) {
-                    const groups = (
-                        converted["groups"] as GlideRecord<
-                            | GlideRecord<StreamEntries>[]
-                            | Record<string, StreamEntries>[]
-                        >[]
-                    ).map(glideRecordToRecord);
-
-                    for (const group of groups) {
-                        group.consumers = (
-                            group.consumers as GlideRecord<StreamEntries>[]
-                        ).map(glideRecordToRecord);
-                    }
-
-                    (converted as ReturnTypeXinfoStream).groups =
-                        groups as Record<
-                            string,
-                            Record<string, StreamEntries>[]
-                        >[];
-                }
-
-                return converted as ReturnTypeXinfoStream;
-            },
+            (xinfoStream) =>
+                glideRecordToRecord(xinfoStream) as ReturnTypeXinfoStream,
         );
     }
 

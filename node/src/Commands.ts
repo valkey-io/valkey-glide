@@ -2358,7 +2358,7 @@ export type FunctionListOptions = {
 /** Type of the response of `FUNCTION LIST` command. */
 export type FunctionListResponse = Record<
     string,
-    GlideString | Record<string, GlideString | GlideString[]>[]
+    GlideString | Record<string, GlideString | null | GlideString[]>[]
 >[];
 
 /**
