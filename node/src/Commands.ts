@@ -5,8 +5,12 @@
 import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "glide-rs";
 import Long from "long";
 
-/* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-import { BaseClient, HashDataType } from "src/BaseClient";
+import {
+    BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GlideRecord,
+    HashDataType,
+    SortedSetDataType,
+} from "src/BaseClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 import { GlideClient } from "src/GlideClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
@@ -1379,14 +1383,31 @@ export type ZAddOptions = {
 
 /**
  * @internal
+ * Convert input from `Record` to `SortedSetDataType` to ensure the only one type.
+ */
+export function convertElementsAndScores(
+    membersAndScores: SortedSetDataType | Record<string, number>,
+): SortedSetDataType {
+    if (!Array.isArray(membersAndScores)) {
+        // convert Record<string, number> to SortedSetDataType
+        return Object.entries(membersAndScores).map((element) => {
+            return { element: element[0], score: element[1] };
+        });
+    }
+
+    return membersAndScores;
+}
+
+/**
+ * @internal
  */
 export function createZAdd(
-    key: string,
-    membersScoresMap: Record<string, number>,
+    key: GlideString,
+    membersAndScores: SortedSetDataType,
     options?: ZAddOptions,
     incr: boolean = false,
 ): command_request.Command {
-    let args = [key];
+    const args = [key];
 
     if (options) {
         if (options.conditionalChange) {
@@ -1416,12 +1437,7 @@ export function createZAdd(
         args.push("INCR");
     }
 
-    args = args.concat(
-        Object.entries(membersScoresMap).flatMap(([key, value]) => [
-            value.toString(),
-            key,
-        ]),
-    );
+    membersAndScores.forEach((p) => args.push(p.score.toString(), p.element));
     return createCommand(RequestType.ZAdd, args);
 }
 
@@ -1466,7 +1482,7 @@ export function createZInter(
  * @internal
  */
 export function createZUnion(
-    keys: string[] | KeyWeight[],
+    keys: GlideString[] | KeyWeight[],
     aggregationType?: AggregationType,
     withScores?: boolean,
 ): command_request.Command {
@@ -1486,7 +1502,7 @@ function createZCmdArgs(
         destination?: GlideString;
     },
 ): GlideString[] {
-    const args: GlideString[] = [];
+    const args = [];
 
     const destination = options.destination;
 
@@ -1523,8 +1539,8 @@ function createZCmdArgs(
  * @internal
  */
 export function createZRem(
-    key: string,
-    members: string[],
+    key: GlideString,
+    members: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.ZRem, [key].concat(members));
 }
@@ -1589,8 +1605,8 @@ export function createZDiffStore(
  * @internal
  */
 export function createZScore(
-    key: string,
-    member: string,
+    key: GlideString,
+    member: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.ZScore, [key, member]);
 }
@@ -1599,8 +1615,8 @@ export function createZScore(
  * @internal
  */
 export function createZUnionStore(
-    destination: string,
-    keys: string[] | KeyWeight[],
+    destination: GlideString,
+    keys: GlideString[] | KeyWeight[],
     aggregationType?: AggregationType,
 ): command_request.Command {
     const args = createZCmdArgs(keys, { destination, aggregationType });
@@ -1611,8 +1627,8 @@ export function createZUnionStore(
  * @internal
  */
 export function createZMScore(
-    key: string,
-    members: string[],
+    key: GlideString,
+    members: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.ZMScore, [key, ...members]);
 }
@@ -1656,7 +1672,7 @@ export type Boundary<T> =
  */
 export type RangeByIndex = {
     /**
-     *  The start index of the range.
+     * The start index of the range.
      */
     start: number;
     /**
@@ -1700,12 +1716,10 @@ type SortedSetRange<T> = {
 };
 
 export type RangeByScore = SortedSetRange<number> & { type: "byScore" };
-export type RangeByLex = SortedSetRange<string> & { type: "byLex" };
+export type RangeByLex = SortedSetRange<GlideString> & { type: "byLex" };
 
 /** Returns a string representation of a score boundary as a command argument. */
-function getScoreBoundaryArg(
-    score: Boundary<number> | Boundary<string>,
-): string {
+function getScoreBoundaryArg(score: Boundary<number>): string {
     if (typeof score === "string") {
         // InfBoundary
         return score + "inf";
@@ -1719,23 +1733,25 @@ function getScoreBoundaryArg(
 }
 
 /** Returns a string representation of a lex boundary as a command argument. */
-function getLexBoundaryArg(score: Boundary<number> | Boundary<string>): string {
+function getLexBoundaryArg(score: Boundary<GlideString>): GlideString {
     if (typeof score === "string") {
         // InfBoundary
         return score;
     }
 
     if (score.isInclusive == false) {
-        return "(" + score.value;
+        return typeof score.value === "string"
+            ? "(" + score.value
+            : Buffer.concat([Buffer.from("("), score.value]);
     }
 
-    return "[" + score.value;
+    return typeof score.value === "string"
+        ? "[" + score.value
+        : Buffer.concat([Buffer.from("["), score.value]);
 }
 
 /** Returns a string representation of a stream boundary as a command argument. */
-function getStreamBoundaryArg(
-    boundary: Boundary<number> | Boundary<string>,
-): string {
+function getStreamBoundaryArg(boundary: Boundary<string>): string {
     if (typeof boundary === "string") {
         // InfBoundary
         return boundary;
@@ -1749,12 +1765,12 @@ function getStreamBoundaryArg(
 }
 
 function createZRangeArgs(
-    key: string,
+    key: GlideString,
     rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
     reverse: boolean,
     withScores: boolean,
-): string[] {
-    const args: string[] = [key];
+): GlideString[] {
+    const args: GlideString[] = [key];
 
     if (typeof rangeQuery.start != "number") {
         rangeQuery = rangeQuery as RangeByScore | RangeByLex;
@@ -1816,7 +1832,7 @@ export function createZCount(
  * @internal
  */
 export function createZRange(
-    key: string,
+    key: GlideString,
     rangeQuery: RangeByIndex | RangeByScore | RangeByLex,
     reverse: boolean = false,
 ): command_request.Command {
@@ -1828,7 +1844,7 @@ export function createZRange(
  * @internal
  */
 export function createZRangeWithScores(
-    key: string,
+    key: GlideString,
     rangeQuery: RangeByIndex | RangeByScore | RangeByLex,
     reverse: boolean = false,
 ): command_request.Command {
@@ -1840,8 +1856,8 @@ export function createZRangeWithScores(
  * @internal
  */
 export function createZRangeStore(
-    destination: string,
-    source: string,
+    destination: GlideString,
+    source: GlideString,
     rangeQuery: RangeByIndex | RangeByScore | RangeByLex,
     reverse: boolean = false,
 ): command_request.Command {
@@ -1906,10 +1922,10 @@ export function createLInsert(
  * @internal
  */
 export function createZPopMin(
-    key: string,
+    key: GlideString,
     count?: number,
 ): command_request.Command {
-    const args: string[] = count == undefined ? [key] : [key, count.toString()];
+    const args = count == undefined ? [key] : [key, count.toString()];
     return createCommand(RequestType.ZPopMin, args);
 }
 
@@ -1917,10 +1933,10 @@ export function createZPopMin(
  * @internal
  */
 export function createZPopMax(
-    key: string,
+    key: GlideString,
     count?: number,
 ): command_request.Command {
-    const args: string[] = count == undefined ? [key] : [key, count.toString()];
+    const args = count == undefined ? [key] : [key, count.toString()];
     return createCommand(RequestType.ZPopMax, args);
 }
 
@@ -1942,7 +1958,7 @@ export function createPTTL(key: GlideString): command_request.Command {
  * @internal
  */
 export function createZRemRangeByRank(
-    key: string,
+    key: GlideString,
     start: number,
     stop: number,
 ): command_request.Command {
@@ -1957,9 +1973,9 @@ export function createZRemRangeByRank(
  * @internal
  */
 export function createZRemRangeByLex(
-    key: string,
-    minLex: Boundary<string>,
-    maxLex: Boundary<string>,
+    key: GlideString,
+    minLex: Boundary<GlideString>,
+    maxLex: Boundary<GlideString>,
 ): command_request.Command {
     const args = [key, getLexBoundaryArg(minLex), getLexBoundaryArg(maxLex)];
     return createCommand(RequestType.ZRemRangeByLex, args);
@@ -1969,7 +1985,7 @@ export function createZRemRangeByLex(
  * @internal
  */
 export function createZRemRangeByScore(
-    key: string,
+    key: GlideString,
     minScore: Boundary<number>,
     maxScore: Boundary<number>,
 ): command_request.Command {
@@ -1990,9 +2006,9 @@ export function createPersist(key: GlideString): command_request.Command {
  * @internal
  */
 export function createZLexCount(
-    key: string,
-    minLex: Boundary<string>,
-    maxLex: Boundary<string>,
+    key: GlideString,
+    minLex: Boundary<GlideString>,
+    maxLex: Boundary<GlideString>,
 ): command_request.Command {
     const args = [key, getLexBoundaryArg(minLex), getLexBoundaryArg(maxLex)];
     return createCommand(RequestType.ZLexCount, args);
@@ -2000,8 +2016,8 @@ export function createZLexCount(
 
 /** @internal */
 export function createZRank(
-    key: string,
-    member: string,
+    key: GlideString,
+    member: GlideString,
     withScores?: boolean,
 ): command_request.Command {
     const args = [key, member];
@@ -2020,7 +2036,7 @@ export type StreamTrimOptions = (
            * Equivalent to `MINID` in the Redis API.
            */
           method: "minid";
-          threshold: string;
+          threshold: GlideString;
       }
     | {
           /**
@@ -2130,7 +2146,7 @@ export function createXDel(
  * @internal
  */
 export function createXTrim(
-    key: string,
+    key: GlideString,
     options: StreamTrimOptions,
 ): command_request.Command {
     const args = [key];
@@ -2142,7 +2158,7 @@ export function createXTrim(
  * @internal
  */
 export function createXRange(
-    key: string,
+    key: GlideString,
     start: Boundary<string>,
     end: Boundary<string>,
     count?: number,
@@ -2161,7 +2177,7 @@ export function createXRange(
  * @internal
  */
 export function createXRevRange(
-    key: string,
+    key: GlideString,
     start: Boundary<string>,
     end: Boundary<string>,
     count?: number,
@@ -2538,7 +2554,7 @@ export type StreamReadGroupOptions = StreamReadOptions & {
 };
 
 /** @internal */
-function addReadOptions(options?: StreamReadOptions): string[] {
+function addReadOptions(options?: StreamReadOptions): GlideString[] {
     const args = [];
 
     if (options?.count !== undefined) {
@@ -2555,11 +2571,11 @@ function addReadOptions(options?: StreamReadOptions): string[] {
 }
 
 /** @internal */
-function addStreamsArgs(keys_and_ids: Record<string, string>): string[] {
+function addStreamsArgs(keys_and_ids: GlideRecord<GlideString>): GlideString[] {
     return [
         "STREAMS",
-        ...Object.keys(keys_and_ids),
-        ...Object.values(keys_and_ids),
+        ...keys_and_ids.map((e) => e.key),
+        ...keys_and_ids.map((e) => e.value),
     ];
 }
 
@@ -2567,23 +2583,22 @@ function addStreamsArgs(keys_and_ids: Record<string, string>): string[] {
  * @internal
  */
 export function createXRead(
-    keys_and_ids: Record<string, string>,
+    keys_and_ids: GlideRecord<GlideString>,
     options?: StreamReadOptions,
 ): command_request.Command {
     const args = addReadOptions(options);
     args.push(...addStreamsArgs(keys_and_ids));
-
     return createCommand(RequestType.XRead, args);
 }
 
 /** @internal */
 export function createXReadGroup(
-    group: string,
-    consumer: string,
-    keys_and_ids: Record<string, string>,
+    group: GlideString,
+    consumer: GlideString,
+    keys_and_ids: GlideRecord<GlideString>,
     options?: StreamReadGroupOptions,
 ): command_request.Command {
-    const args: string[] = ["GROUP", group, consumer];
+    const args: GlideString[] = ["GROUP", group, consumer];
 
     if (options) {
         args.push(...addReadOptions(options));
@@ -2598,6 +2613,7 @@ export function createXReadGroup(
 /**
  * Represents a the return type for XInfo Stream in the response
  */
+// TODO: change return type to be compatible with GlideString
 export type ReturnTypeXinfoStream = {
     [key: string]:
         | StreamEntries
@@ -2613,10 +2629,10 @@ export type StreamEntries = string | number | (string | number | string[])[][];
  * @internal
  */
 export function createXInfoStream(
-    key: string,
+    key: GlideString,
     options: boolean | number,
 ): command_request.Command {
-    const args: string[] = [key];
+    const args: GlideString[] = [key];
 
     if (options != false) {
         args.push("FULL");
@@ -2638,7 +2654,7 @@ export function createXInfoGroups(key: string): command_request.Command {
 /**
  * @internal
  */
-export function createXLen(key: string): command_request.Command {
+export function createXLen(key: GlideString): command_request.Command {
     return createCommand(RequestType.XLen, [key]);
 }
 
@@ -2653,13 +2669,13 @@ export type StreamPendingOptions = {
     /** Limit the number of messages returned. */
     count: number;
     /** Filter pending entries by consumer. */
-    consumer?: string;
+    consumer?: GlideString;
 };
 
 /** @internal */
 export function createXPending(
-    key: string,
-    group: string,
+    key: GlideString,
+    group: GlideString,
     options?: StreamPendingOptions,
 ): command_request.Command {
     const args = [key, group];
@@ -2680,8 +2696,8 @@ export function createXPending(
 
 /** @internal */
 export function createXInfoConsumers(
-    key: string,
-    group: string,
+    key: GlideString,
+    group: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.XInfoConsumers, [key, group]);
 }
@@ -3415,8 +3431,8 @@ function convertGeoSearchOptionsToArgs(
  * @internal
  */
 export function createZRevRank(
-    key: string,
-    member: string,
+    key: GlideString,
+    member: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.ZRevRank, [key, member]);
 }
@@ -3425,8 +3441,8 @@ export function createZRevRank(
  * @internal
  */
 export function createZRevRankWithScore(
-    key: string,
-    member: string,
+    key: GlideString,
+    member: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.ZRevRank, [key, member, "WITHSCORE"]);
 }
@@ -3446,11 +3462,12 @@ export enum ScoreFilter {
  * @internal
  */
 export function createZMPop(
-    keys: string[],
+    keys: GlideString[],
     modifier: ScoreFilter,
     count?: number,
 ): command_request.Command {
-    const args: string[] = [keys.length.toString()].concat(keys);
+    const args = keys;
+    args.unshift(keys.length.toString());
     args.push(modifier);
 
     if (count !== undefined) {
@@ -3654,7 +3671,7 @@ export function createHScan(
     cursor: string,
     options?: BaseScanOptions,
 ): command_request.Command {
-    let args: string[] = [key, cursor];
+    let args: GlideString[] = [key, cursor];
 
     if (options) {
         args = args.concat(convertBaseScanOptionsToArgsArray(options));
@@ -3667,7 +3684,7 @@ export function createHScan(
  * @internal
  */
 export function createZRandMember(
-    key: string,
+    key: GlideString,
     count?: number,
     withscores?: boolean,
 ): command_request.Command {
@@ -3747,9 +3764,9 @@ export function createWait(
 }
 
 /**
- * This base class represents the common set of optional arguments for the SCAN family of commands.
- * Concrete implementations of this class are tied to specific SCAN commands (SCAN, HSCAN, SSCAN,
- * and ZSCAN).
+ * This base class represents the common set of optional arguments for the `SCAN` family of commands.
+ * Concrete implementations of this class are tied to specific SCAN commands (`SCAN`, `HSCAN`, `SSCAN`,
+ * and `ZSCAN`).
  */
 export type BaseScanOptions = {
     /**
@@ -3759,20 +3776,22 @@ export type BaseScanOptions = {
      * items that match the pattern specified. This is due to the default `COUNT` being `10` which indicates
      * that it will only fetch and match `10` items from the list.
      */
-    readonly match?: string;
+    match?: GlideString;
     /**
      * `COUNT` is a just a hint for the command for how many elements to fetch from the
      * sorted set. `COUNT` could be ignored until the sorted set is large enough for the `SCAN` commands to
      * represent the results as compact single-allocation packed encoding.
      */
-    readonly count?: number;
+    count?: number;
 };
 
 /**
  * @internal
  */
-function convertBaseScanOptionsToArgsArray(options: BaseScanOptions): string[] {
-    const args: string[] = [];
+function convertBaseScanOptionsToArgsArray(
+    options: BaseScanOptions,
+): GlideString[] {
+    const args: GlideString[] = [];
 
     if (options.match) {
         args.push("MATCH", options.match);
@@ -3789,11 +3808,11 @@ function convertBaseScanOptionsToArgsArray(options: BaseScanOptions): string[] {
  * @internal
  */
 export function createZScan(
-    key: string,
+    key: GlideString,
     cursor: string,
     options?: BaseScanOptions,
 ): command_request.Command {
-    let args: string[] = [key, cursor];
+    let args = [key, cursor];
 
     if (options) {
         args = args.concat(convertBaseScanOptionsToArgsArray(options));
