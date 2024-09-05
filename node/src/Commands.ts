@@ -5,8 +5,12 @@
 import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "glide-rs";
 import Long from "long";
 
-/* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-import { BaseClient, GlideRecord, HashDataType, SortedSetDataType } from "src/BaseClient";
+import {
+    BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GlideRecord,
+    HashDataType,
+    SortedSetDataType,
+} from "src/BaseClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 import { GlideClient } from "src/GlideClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
