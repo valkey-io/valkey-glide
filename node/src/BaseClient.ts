@@ -1032,7 +1032,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/get/|valkey.io} for details.
      *
      * @param key - The key to retrieve from the database.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     * @param options - (Optional) See {@link DecoderOption}.
      *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns If `key` exists, returns the value of `key`. Otherwise, return null.
      *
@@ -1092,8 +1092,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/getdel/|valkey.io} for details.
      *
      * @param key - The key to retrieve from the database.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns If `key` exists, returns the `value` of `key`. Otherwise, return `null`.
      *
      * @example
@@ -1125,8 +1124,7 @@ export class BaseClient {
      * @param key - The key of the string.
      * @param start - The starting offset.
      * @param end - The ending offset.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A substring extracted from the value stored at `key`.
      *
      * @example
@@ -1301,8 +1299,7 @@ export class BaseClient {
      * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
      *
      * @param keys - A list of keys to retrieve values for.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A list of values corresponding to the provided keys. If a key is not found,
      * its corresponding value in the list will be null.
      *
@@ -2238,8 +2235,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/lpop/|valkey.io} for details.
      *
      * @param key - The key of the list.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns The value of the first element.
      * If `key` does not exist null will be returned.
      *
@@ -2272,8 +2268,7 @@ export class BaseClient {
      *
      * @param key - The key of the list.
      * @param count - The count of the elements to pop from the list.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A list of the popped elements will be returned depending on the list's length.
      * If `key` does not exist null will be returned.
      *
@@ -2311,8 +2306,7 @@ export class BaseClient {
      * @param key - The key of the list.
      * @param start - The starting point of the range.
      * @param end - The end of the range.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns list of elements in the specified range.
      * If `start` exceeds the end of the list, or if `start` is greater than `end`, an empty list will be returned.
      * If `end` exceeds the actual end of the list, the range will stop at the actual end of the list.
@@ -2381,8 +2375,7 @@ export class BaseClient {
      * @param destination - The key to the destination list.
      * @param whereFrom - The {@link ListDirection} to remove the element from.
      * @param whereTo - The {@link ListDirection} to add the element to.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns The popped element, or `null` if `source` does not exist.
      *
      * @example
@@ -2429,8 +2422,7 @@ export class BaseClient {
      * @param whereFrom - The {@link ListDirection} to remove the element from.
      * @param whereTo - The {@link ListDirection} to add the element to.
      * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns The popped element, or `null` if `source` does not exist or if the operation timed-out.
      *
      * @example
@@ -2608,8 +2600,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/rpop/|valkey.io} for details.
      *
      * @param key - The key of the list.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns The value of the last element.
      * If `key` does not exist null will be returned.
      *
@@ -2642,8 +2633,7 @@ export class BaseClient {
      *
      * @param key - The key of the list.
      * @param count - The count of the elements to pop from the list.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A list of popped elements will be returned depending on the list's length.
      * If `key` does not exist null will be returned.
      *
@@ -5663,8 +5653,7 @@ export class BaseClient {
      *
      * @param key - The `key` of the list.
      * @param index - The `index` of the element in the list to retrieve.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns - The element at `index` in the list stored at `key`.
      * If `index` is out of range or if `key` does not exist, null is returned.
      *
@@ -5805,8 +5794,7 @@ export class BaseClient {
      *
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns - An `array` containing the `key` from which the element was popped and the value of the popped element,
      * formatted as [key, value]. If no element could be popped and the timeout expired, returns `null`.
      *
@@ -5838,8 +5826,7 @@ export class BaseClient {
      *
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns - An `array` containing the `key` from which the element was popped and the value of the popped element,
      * formatted as [key, value]. If no element could be popped and the timeout expired, returns `null`.
      *
@@ -6021,8 +6008,7 @@ export class BaseClient {
      * @param keys - A list of `keys` accessed by the function. To ensure the correct execution of functions,
      *     all names of keys that a function accesses must be explicitly provided as `keys`.
      * @param args - A list of `function` arguments and it should not represent names of keys.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns The invoked function's return value.
      *
      * @example
@@ -6053,8 +6039,7 @@ export class BaseClient {
      * @param keys - A list of `keys` accessed by the function. To ensure the correct execution of functions,
      *     all names of keys that a function accesses must be explicitly provided as `keys`.
      * @param args - A list of `function` arguments and it should not represent names of keys.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns The invoked function's return value.
      *
      * @example
