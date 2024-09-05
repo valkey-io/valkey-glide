@@ -3664,8 +3664,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *      `String` pairs, where the value is at even indices and the score is at odd indices.
      */
     public zscan(
-        key: GlideString,
-        cursor: GlideString,
+        key: string,
+        cursor: string,
         options?: BaseScanOptions,
     ): T {
         return this.addAndReturn(createZScan(key, cursor, options));
