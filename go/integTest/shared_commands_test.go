@@ -381,6 +381,30 @@ func (suite *GlideTestSuite) TestSetRange_existingAndNonExistingKeys() {
 	})
 }
 
+func (suite *GlideTestSuite) TestSetRange_existingAndNonExistingKeys_binaryString() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		nonUtf8String := "Dummy \xFF string"
+		key := uuid.New().String()
+		res, err := client.SetRange(key, 0, nonUtf8String)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(14), res)
+
+		res, err = client.SetRange(key, 6, "values ")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(14), res)
+		res1, err := client.Get(key)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "Dummy values g", res1)
+
+		res, err = client.SetRange(key, 15, "test")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(19), res)
+		res1, err = client.Get(key)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "Dummy values g\x00test", res1)
+	})
+}
+
 func (suite *GlideTestSuite) TestGetRange_existingAndNonExistingKeys() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
@@ -406,6 +430,18 @@ func (suite *GlideTestSuite) TestGetRange_existingAndNonExistingKeys() {
 		res, err = client.GetRange(nonExistingKey, 0, 5)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "", res)
+	})
+}
+
+func (suite *GlideTestSuite) TestGetRange_binaryString() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		nonUtf8String := "Dummy \xFF string"
+		suite.verifyOK(client.Set(key, nonUtf8String))
+
+		res, err := client.GetRange(key, 4, 6)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "y \xFF", res)
 	})
 }
 
