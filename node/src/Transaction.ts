@@ -7,6 +7,8 @@ import {
     GlideRecord,
     GlideString,
     HashDataType,
+    ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
+    SortedSetDataType, // eslint-disable-line @typescript-eslint/no-unused-vars
     convertFieldsAndValuesForHset,
 } from "./BaseClient";
 
@@ -65,6 +67,7 @@ import {
     StreamTrimOptions,
     TimeUnit,
     ZAddOptions,
+    convertElementsAndScores,
     createAppend,
     createBLMPop,
     createBLMove,
@@ -1731,47 +1734,61 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @see {@link https://valkey.io/commands/zadd/|valkey.io} for details.
      *
      * @param key - The key of the sorted set.
-     * @param membersScoresMap - A mapping of members to their corresponding scores.
-     * @param options - (Optional) The ZAdd options - see {@link ZAddOptions}.
+     * @param membersAndScores - A list of members and their corresponding scores or a mapping of members to their corresponding scores.
+     * @param options - (Optional) The `ZADD` options - see {@link ZAddOptions}.
      *
      * Command Response - The number of elements added to the sorted set.
-     * If {@link ZAddOptions.changed|changed} is set, returns the number of elements updated in the sorted set.
+     * If {@link ZAddOptions.changed} is set to `true`, returns the number of elements updated in the sorted set.
      */
     public zadd(
-        key: string,
-        membersScoresMap: Record<string, number>,
+        key: GlideString,
+        membersAndScores: SortedSetDataType | Record<string, number>,
         options?: ZAddOptions,
     ): T {
-        return this.addAndReturn(createZAdd(key, membersScoresMap, options));
+        return this.addAndReturn(
+            createZAdd(
+                key,
+                convertElementsAndScores(membersAndScores),
+                options,
+            ),
+        );
     }
 
     /**
      * Increments the score of member in the sorted set stored at `key` by `increment`.
      * If `member` does not exist in the sorted set, it is added with `increment` as its score (as if its previous score was 0.0).
      * If `key` does not exist, a new sorted set with the specified member as its sole member is created.
+     *
      * @see {@link https://valkey.io/commands/zadd/|valkey.io} for details.
      *
      * @param key - The key of the sorted set.
      * @param member - A member in the sorted set to increment.
      * @param increment - The score to increment the member.
-     * @param options - (Optional) The ZAdd options - see {@link ZAddOptions}.
+     * @param options - (Optional) The `ZADD` options - see {@link ZAddOptions}.
      *
      * Command Response - The score of the member.
-     * If there was a conflict with the options, the operation aborts and null is returned.
+     * If there was a conflict with the options, the operation aborts and `null` is returned.
      */
     public zaddIncr(
-        key: string,
-        member: string,
+        key: GlideString,
+        member: GlideString,
         increment: number,
         options?: ZAddOptions,
     ): T {
         return this.addAndReturn(
-            createZAdd(key, { [member]: increment }, options, true),
+            createZAdd(
+                key,
+                [{ element: member, score: increment }],
+                options,
+                true,
+            ),
         );
     }
 
-    /** Removes the specified members from the sorted set stored at `key`.
+    /**
+     * Removes the specified members from the sorted set stored at `key`.
      * Specified members that are not a member of this set are ignored.
+     *
      * @see {@link https://valkey.io/commands/zrem/|valkey.io} for details.
      *
      * @param key - The key of the sorted set.
@@ -1780,7 +1797,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The number of members that were removed from the sorted set, not including non-existing members.
      * If `key` does not exist, it is treated as an empty sorted set, and this command returns 0.
      */
-    public zrem(key: string, members: string[]): T {
+    public zrem(key: GlideString, members: GlideString[]): T {
         return this.addAndReturn(createZRem(key, members));
     }
 
@@ -1863,7 +1880,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createZDiffStore(destination, keys));
     }
 
-    /** Returns the score of `member` in the sorted set stored at `key`.
+    /**
+     * Returns the score of `member` in the sorted set stored at `key`.
+     *
      * @see {@link https://valkey.io/commands/zscore/|valkey.io} for details.
      *
      * @param key - The key of the sorted set.
@@ -1873,7 +1892,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `member` does not exist in the sorted set, null is returned.
      * If `key` does not exist, null is returned.
      */
-    public zscore(key: string, member: string): T {
+    public zscore(key: GlideString, member: GlideString): T {
         return this.addAndReturn(createZScore(key, member));
     }
 
@@ -1885,15 +1904,15 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @see {@link https://valkey.io/commands/zunionstore/|valkey.io} for details.
      * @param destination - The key of the destination sorted set.
      * @param keys - The keys of the sorted sets with possible formats:
-     *        string[] - for keys only.
-     *        KeyWeight[] - for weighted keys with score multipliers.
+     *  - `GlideString[]` - for keys only.
+     *  - `KeyWeight[]` - for weighted keys with their score multipliers.
      * @param aggregationType - Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
      *
      * Command Response - The number of elements in the resulting sorted set stored at `destination`.
      */
     public zunionstore(
-        destination: string,
-        keys: string[] | KeyWeight[],
+        destination: GlideString,
+        keys: GlideString[] | KeyWeight[],
         aggregationType?: AggregationType,
     ): T {
         return this.addAndReturn(
@@ -1913,7 +1932,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - An `array` of scores corresponding to `members`.
      * If a member does not exist in the sorted set, the corresponding value in the list will be `null`.
      */
-    public zmscore(key: string, members: string[]): T {
+    public zmscore(key: GlideString, members: GlideString[]): T {
         return this.addAndReturn(createZMScore(key, members));
     }
 
@@ -1938,11 +1957,13 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createZCount(key, minScore, maxScore));
     }
 
-    /** Returns the specified range of elements in the sorted set stored at `key`.
-     * ZRANGE can perform different types of range queries: by index (rank), by the score, or by lexicographical order.
+    /**
+     * Returns the specified range of elements in the sorted set stored at `key`.
+     * `ZRANGE` can perform different types of range queries: by index (rank), by the score, or by lexicographical order.
+     *
+     * To get the elements with their scores, see {@link zrangeWithScores}.
      *
      * @see {@link https://valkey.io/commands/zrange/|valkey.io} for details.
-     * To get the elements with their scores, see `zrangeWithScores`.
      *
      * @param key - The key of the sorted set.
      * @param rangeQuery - The range query object representing the type of range query to perform.
@@ -1955,15 +1976,17 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty array.
      */
     public zrange(
-        key: string,
+        key: GlideString,
         rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
         reverse: boolean = false,
     ): T {
         return this.addAndReturn(createZRange(key, rangeQuery, reverse));
     }
 
-    /** Returns the specified range of elements with their scores in the sorted set stored at `key`.
-     * Similar to ZRANGE but with a WITHSCORE flag.
+    /**
+     * Returns the specified range of elements with their scores in the sorted set stored at `key`.
+     * Similar to {@link ZRange} but with a `WITHSCORE` flag.
+     *
      * @see {@link https://valkey.io/commands/zrange/|valkey.io} for details.
      *
      * @param key - The key of the sorted set.
@@ -1977,7 +2000,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty map.
      */
     public zrangeWithScores(
-        key: string,
+        key: GlideString,
         rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
         reverse: boolean = false,
     ): T {
@@ -2005,8 +2028,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The number of elements in the resulting sorted set.
      */
     public zrangeStore(
-        destination: string,
-        source: string,
+        destination: GlideString,
+        source: GlideString,
         rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
         reverse: boolean = false,
     ): T {
@@ -2085,19 +2108,18 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Computes the union of sorted sets given by the specified `keys` and returns a list of union elements.
+     *
      * To get the scores as well, see {@link zunionWithScores}.
-     *
-     * To store the result in a key as a sorted set, see {@link zunionStore}.
-     *
-     * @remarks Since Valkey version 6.2.0.
+     * To store the result in a key as a sorted set, see {@link zunionstore}.
      *
      * @see {@link https://valkey.io/commands/zunion/|valkey.io} for details.
+     * @remarks Since Valkey version 6.2.0.
      *
      * @param keys - The keys of the sorted sets.
      *
-     * Command Response - The resulting array of union elements.
+     * Command Response - The resulting array with a union of sorted set elements.
      */
-    public zunion(keys: string[]): T {
+    public zunion(keys: GlideString[]): T {
         return this.addAndReturn(createZUnion(keys));
     }
 
@@ -2110,15 +2132,15 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @remarks Since Valkey version 6.2.0.
      *
      * @param keys - The keys of the sorted sets with possible formats:
-     *  - string[] - for keys only.
-     *  - KeyWeight[] - for weighted keys with score multipliers.
+     *  - `GlideString[]` - for keys only.
+     *  - `KeyWeight[]` - for weighted keys with their score multipliers.
      * @param aggregationType - (Optional) Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
      * If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
      *
      * Command Response - The resulting sorted set with scores.
      */
     public zunionWithScores(
-        keys: string[] | KeyWeight[],
+        keys: GlideString[] | KeyWeight[],
         aggregationType?: AggregationType,
     ): T {
         return this.addAndReturn(createZUnion(keys, aggregationType, true));
@@ -2130,10 +2152,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @see {@link https://valkey.io/commands/zrandmember/|valkey.io} for details.
      *
      * @param keys - The key of the sorted set.
+     *
      * Command Response - A string representing a random member from the sorted set.
      *     If the sorted set does not exist or is empty, the response will be `null`.
      */
-    public zrandmember(key: string): T {
+    public zrandmember(key: GlideString): T {
         return this.addAndReturn(createZRandMember(key));
     }
 
@@ -2146,10 +2169,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param count - The number of members to return.
      *     If `count` is positive, returns unique members.
      *     If negative, allows for duplicates.
+     *
      * Command Response - An `array` of members from the sorted set.
      *     If the sorted set does not exist or is empty, the response will be an empty `array`.
      */
-    public zrandmemberWithCount(key: string, count: number): T {
+    public zrandmemberWithCount(key: GlideString, count: number): T {
         return this.addAndReturn(createZRandMember(key, count));
     }
 
@@ -2162,11 +2186,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param count - The number of members to return.
      *     If `count` is positive, returns unique members.
      *     If negative, allows for duplicates.
-     * Command Response - A 2D `array` of `[member, score]` `arrays`, where
-     *     member is a `string` and score is a `number`.
+     *
+     * Command Response - A list of {@link KeyWeight} tuples, which store member names and their respective scores.
      *     If the sorted set does not exist or is empty, the response will be an empty `array`.
      */
-    public zrandmemberWithCountWithScores(key: string, count: number): T {
+    public zrandmemberWithCountWithScores(key: GlideString, count: number): T {
         return this.addAndReturn(createZRandMember(key, count, true));
     }
 
@@ -2183,21 +2207,25 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createType(key));
     }
 
-    /** Returns the length of the string value stored at `key`.
+    /**
+     * Returns the length of the string value stored at `key`.
+     *
      * @see {@link https://valkey.io/commands/strlen/|valkey.io} for details.
      *
      * @param key - The `key` to check its length.
      *
      * Command Response - The length of the string value stored at `key`
-     * If `key` does not exist, it is treated as an empty string, and the command returns 0.
+     * If `key` does not exist, it is treated as an empty string, and the command returns `0`.
      */
     public strlen(key: GlideString): T {
         return this.addAndReturn(createStrlen(key));
     }
 
-    /** Removes and returns the members with the lowest scores from the sorted set stored at `key`.
+    /**
+     * Removes and returns the members with the lowest scores from the sorted set stored at `key`.
      * If `count` is provided, up to `count` members with the lowest scores are removed and returned.
      * Otherwise, only one member with the lowest score is removed and returned.
+     *
      * @see {@link https://valkey.io/commands/zpopmin/|valkey.io} for more details.
      *
      * @param key - The key of the sorted set.
@@ -2207,7 +2235,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `key` doesn't exist, it will be treated as an empty sorted set and the command returns an empty map.
      * If `count` is higher than the sorted set's cardinality, returns all members and their scores.
      */
-    public zpopmin(key: string, count?: number): T {
+    public zpopmin(key: GlideString, count?: number): T {
         return this.addAndReturn(createZPopMin(key, count));
     }
 
@@ -2230,9 +2258,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createBZPopMin(keys, timeout));
     }
 
-    /** Removes and returns the members with the highest scores from the sorted set stored at `key`.
+    /**
+     * Removes and returns the members with the highest scores from the sorted set stored at `key`.
      * If `count` is provided, up to `count` members with the highest scores are removed and returned.
      * Otherwise, only one member with the highest score is removed and returned.
+     *
      * @see {@link https://valkey.io/commands/zpopmax/|valkey.io} for more details.
      *
      * @param key - The key of the sorted set.
@@ -2242,7 +2272,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `key` doesn't exist, it will be treated as an empty sorted set and the command returns an empty map.
      * If `count` is higher than the sorted set's cardinality, returns all members and their scores, ordered from highest to lowest.
      */
-    public zpopmax(key: string, count?: number): T {
+    public zpopmax(key: GlideString, count?: number): T {
         return this.addAndReturn(createZPopMax(key, count));
     }
 
@@ -2291,9 +2321,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createPTTL(key));
     }
 
-    /** Removes all elements in the sorted set stored at `key` with rank between `start` and `end`.
+    /**
+     * Removes all elements in the sorted set stored at `key` with rank between `start` and `end`.
      * Both `start` and `end` are zero-based indexes with 0 being the element with the lowest score.
      * These indexes can be negative numbers, where they indicate offsets starting at the element with the highest score.
+     *
      * @see {@link https://valkey.io/commands/zremrangebyrank/|valkey.io} for details.
      *
      * @param key - The key of the sorted set.
@@ -2305,7 +2337,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `end` exceeds the actual end of the sorted set, the range will stop at the actual end of the sorted set.
      * If `key` does not exist 0 will be returned.
      */
-    public zremRangeByRank(key: string, start: number, end: number): T {
+    public zremRangeByRank(key: GlideString, start: number, end: number): T {
         return this.addAndReturn(createZRemRangeByRank(key, start, end));
     }
 
@@ -2315,34 +2347,36 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @see {@link https://valkey.io/commands/zremrangebylex/|valkey.io} for details.
      *
      * @param key - The key of the sorted set.
-     * @param minLex - The minimum lex to count from. Can be positive/negative infinity, or a specific lex and inclusivity.
-     * @param maxLex - The maximum lex to count up to. Can be positive/negative infinity, or a specific lex and inclusivity.
+     * @param minLex - The minimum lex to count from. Can be negative infinity, or a specific lex and inclusivity.
+     * @param maxLex - The maximum lex to count up to. Can be positive infinity, or a specific lex and inclusivity.
      *
      * Command Response - The number of members removed.
      * If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
      * If `minLex` is greater than `maxLex`, 0 is returned.
      */
     public zremRangeByLex(
-        key: string,
-        minLex: Boundary<string>,
-        maxLex: Boundary<string>,
+        key: GlideString,
+        minLex: Boundary<GlideString>,
+        maxLex: Boundary<GlideString>,
     ): T {
         return this.addAndReturn(createZRemRangeByLex(key, minLex, maxLex));
     }
 
-    /** Removes all elements in the sorted set stored at `key` with a score between `minScore` and `maxScore`.
+    /**
+     * Removes all elements in the sorted set stored at `key` with a score between `minScore` and `maxScore`.
+     *
      * @see {@link https://valkey.io/commands/zremrangebyscore/|valkey.io} for details.
      *
      * @param key - The key of the sorted set.
-     * @param minScore - The minimum score to remove from. Can be positive/negative infinity, or specific score and inclusivity.
-     * @param maxScore - The maximum score to remove to. Can be positive/negative infinity, or specific score and inclusivity.
+     * @param minScore - The minimum score to remove from. Can be negative infinity, or specific score and inclusivity.
+     * @param maxScore - The maximum score to remove to. Can be positive infinity, or specific score and inclusivity.
      *
      * Command Response - the number of members removed.
      * If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
      * If `minScore` is greater than `maxScore`, 0 is returned.
      */
     public zremRangeByScore(
-        key: string,
+        key: GlideString,
         minScore: Boundary<number>,
         maxScore: Boundary<number>,
     ): T {
@@ -2357,24 +2391,26 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @see {@link https://valkey.io/commands/zlexcount/|valkey.io} for details.
      *
      * @param key - The key of the sorted set.
-     * @param minLex - The minimum lex to count from. Can be positive/negative infinity, or a specific lex and inclusivity.
-     * @param maxLex - The maximum lex to count up to. Can be positive/negative infinity, or a specific lex and inclusivity.
+     * @param minLex - The minimum lex to count from. Can be negative infinity, or a specific lex and inclusivity.
+     * @param maxLex - The maximum lex to count up to. Can be positive infinity, or a specific lex and inclusivity.
      *
      * Command Response - The number of members in the specified lex range.
      * If 'key' does not exist, it is treated as an empty sorted set, and the command returns '0'.
      * If maxLex is less than minLex, '0' is returned.
      */
     public zlexcount(
-        key: string,
-        minLex: Boundary<string>,
-        maxLex: Boundary<string>,
+        key: GlideString,
+        minLex: Boundary<GlideString>,
+        maxLex: Boundary<GlideString>,
     ): T {
         return this.addAndReturn(createZLexCount(key, minLex, maxLex));
     }
 
-    /** Returns the rank of `member` in the sorted set stored at `key`, with scores ordered from low to high.
+    /**
+     * Returns the rank of `member` in the sorted set stored at `key`, with scores ordered from low to high.
+     * To get the rank of `member` with its score, see {@link zrankWithScore}.
+     *
      * @see {@link https://valkey.io/commands/zrank/|valkey.io} for more details.
-     * To get the rank of `member` with its score, see `zrankWithScore`.
      *
      * @param key - The key of the sorted set.
      * @param member - The member whose rank is to be retrieved.
@@ -2382,11 +2418,12 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The rank of `member` in the sorted set.
      * If `key` doesn't exist, or if `member` is not present in the set, null will be returned.
      */
-    public zrank(key: string, member: string): T {
+    public zrank(key: GlideString, member: GlideString): T {
         return this.addAndReturn(createZRank(key, member));
     }
 
-    /** Returns the rank of `member` in the sorted set stored at `key` with its score, where scores are ordered from the lowest to highest.
+    /**
+     * Returns the rank of `member` in the sorted set stored at `key` with its score, where scores are ordered from the lowest to highest.
      *
      * @see {@link https://valkey.io/commands/zrank/|valkey.io} for more details.
      * @remarks Since Valkey version 7.2.0.
@@ -2397,13 +2434,13 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A list containing the rank and score of `member` in the sorted set.
      * If `key` doesn't exist, or if `member` is not present in the set, null will be returned.
      */
-    public zrankWithScore(key: string, member: string): T {
+    public zrankWithScore(key: GlideString, member: GlideString): T {
         return this.addAndReturn(createZRank(key, member, true));
     }
 
     /**
      * Returns the rank of `member` in the sorted set stored at `key`, where
-     * scores are ordered from the highest to lowest, starting from 0.
+     * scores are ordered from the highest to lowest, starting from `0`.
      * To get the rank of `member` with its score, see {@link zrevrankWithScore}.
      *
      * @see {@link https://valkey.io/commands/zrevrank/|valkey.io} for details.
@@ -2414,13 +2451,13 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The rank of `member` in the sorted set, where ranks are ordered from high to low based on scores.
      *     If `key` doesn't exist, or if `member` is not present in the set, `null` will be returned.
      */
-    public zrevrank(key: string, member: string): T {
+    public zrevrank(key: GlideString, member: GlideString): T {
         return this.addAndReturn(createZRevRank(key, member));
     }
 
     /**
      * Returns the rank of `member` in the sorted set stored at `key` with its
-     * score, where scores are ordered from the highest to lowest, starting from 0.
+     * score, where scores are ordered from the highest to lowest, starting from `0`.
      *
      * @see {@link https://valkey.io/commands/zrevrank/|valkey.io} for details.
      * @remarks Since Valkey version 7.2.0.
@@ -2432,7 +2469,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     are ordered from high to low based on scores.
      *     If `key` doesn't exist, or if `member` is not present in the set, `null` will be returned.
      */
-    public zrevrankWithScore(key: string, member: string): T {
+    public zrevrankWithScore(key: GlideString, member: GlideString): T {
         return this.addAndReturn(createZRevRankWithScore(key, member));
     }
 
@@ -3558,7 +3595,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Pops a member-score pair from the first non-empty sorted set, with the given `keys`
+     * Pops member-score pairs from the first non-empty sorted set, with the given `keys`
      * being checked in the order they are provided.
      *
      * @see {@link https://valkey.io/commands/zmpop/|valkey.io} for details.
@@ -3573,7 +3610,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     element was popped, and a member-score `Record` of the popped element.
      *     If no member could be popped, returns `null`.
      */
-    public zmpop(keys: string[], modifier: ScoreFilter, count?: number): T {
+    public zmpop(
+        keys: GlideString[],
+        modifier: ScoreFilter,
+        count?: number,
+    ): T {
         return this.addAndReturn(createZMPop(keys, modifier, count));
     }
 
@@ -3634,7 +3675,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key - The key of the sorted set.
      * @param cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of
      *      the search.
-     * @param options - (Optional) The zscan options.
+     * @param options - (Optional) The `zscan` options - see {@link BaseScanOptions}
      *
      * Command Response - An `Array` of the `cursor` and the subset of the sorted set held by `key`.
      *      The first element is always the `cursor` for the next iteration of results. `0` will be the `cursor`
@@ -3642,7 +3683,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *      of the sorted set held in `key`. The `Array` in the second element is always a flattened series of
      *      `String` pairs, where the value is at even indices and the score is at odd indices.
      */
-    public zscan(key: string, cursor: string, options?: BaseScanOptions): T {
+    public zscan(
+        key: GlideString,
+        cursor: string,
+        options?: BaseScanOptions,
+    ): T {
         return this.addAndReturn(createZScan(key, cursor, options));
     }
 

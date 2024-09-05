@@ -1331,7 +1331,7 @@ export class GlideClusterClient extends BaseClient {
      * @remarks Since Valkey version 7.0.0.
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param options - (Optional) {@link SortClusterOptions} and {@link DecoderOption}.
+     * @param options - (Optional) See {@link SortClusterOptions} and {@link DecoderOption}.
      * @returns An `Array` of sorted elements
      *
      * @example
@@ -1364,7 +1364,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param destination - The key where the sorted result will be stored.
-     * @param options - (Optional) {@link SortClusterOptions}.
+     * @param options - (Optional) See {@link SortClusterOptions}.
      * @returns The number of elements in the sorted key stored at `destination`.
      *
      * @example
