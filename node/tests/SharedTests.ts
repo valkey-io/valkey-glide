@@ -6390,7 +6390,7 @@ export function runBaseTests(config: {
                     },
                 );
                 expect(id).not.toBeNull();
-                expect(await client.xlen(key)).toEqual(2);
+                expect(await client.xlen(Buffer.from(key))).toEqual(2);
 
                 // this will trim the 2nd entry.
                 expect(
@@ -6412,7 +6412,7 @@ export function runBaseTests(config: {
                 expect(await client.xlen(key)).toEqual(2);
 
                 expect(
-                    await client.xtrim(key, {
+                    await client.xtrim(Buffer.from(key), {
                         method: "maxlen",
                         threshold: 1,
                         exact: true,
@@ -6488,7 +6488,7 @@ export function runBaseTests(config: {
 
                 expect(
                     await client.xrevrange(
-                        key,
+                        Buffer.from(key),
                         InfBoundary.PositiveInfinity,
                         InfBoundary.NegativeInfinity,
                     ),
@@ -6522,7 +6522,7 @@ export function runBaseTests(config: {
                 if (!cluster.checkIfServerVersionLessThan("6.2.0")) {
                     expect(
                         await client.xrange(
-                            key,
+                            Buffer.from(key),
                             { isInclusive: false, value: streamId2 },
                             { value: "5" },
                             1,
@@ -6868,10 +6868,16 @@ export function runBaseTests(config: {
                 ]);
 
                 const result = await client.xread(
-                    {
-                        [key1]: timestamp_1_1 as string,
-                        [key2]: timestamp_2_1 as string,
-                    },
+                    [
+                        {
+                            key: Buffer.from(key1),
+                            value: timestamp_1_1 as string,
+                        },
+                        {
+                            key: key2,
+                            value: Buffer.from(timestamp_2_1 as string),
+                        },
+                    ],
                     {
                         block: 1,
                     },
@@ -6955,7 +6961,11 @@ export function runBaseTests(config: {
 
                 // read the entire stream for the consumer and mark messages as pending
                 expect(
-                    await client.xreadgroup(group, consumer, { [key1]: ">" }),
+                    await client.xreadgroup(
+                        Buffer.from(group),
+                        Buffer.from(consumer),
+                        [{ key: Buffer.from(key1), value: Buffer.from(">") }],
+                    ),
                 ).toEqual({
                     [key1]: {
                         [entry1]: [["a", "b"]],
@@ -7106,7 +7116,10 @@ export function runBaseTests(config: {
                         id: streamId1_1,
                     }),
                 ).toEqual(streamId1_1);
-                const fullResult = (await client.xinfoStream(key, 1)) as {
+                const fullResult = (await client.xinfoStream(
+                    Buffer.from(key),
+                    1,
+                )) as {
                     length: number;
                     "radix-tree-keys": number;
                     "radix-tree-nodes": number;
@@ -10087,9 +10100,9 @@ export function runBaseTests(config: {
                 expect(
                     await client.xgroupCreate(key2, groupName1, "0-0"),
                 ).toEqual("OK");
-                expect(await client.xinfoConsumers(key2, groupName1)).toEqual(
-                    [],
-                );
+                expect(
+                    await client.xinfoConsumers(Buffer.from(key2), groupName1),
+                ).toEqual([]);
             }, protocol);
         },
         config.timeout,
@@ -10452,7 +10465,7 @@ export function runBaseTests(config: {
                 // wait to get some minIdleTime
                 await new Promise((resolve) => setTimeout(resolve, 500));
 
-                expect(await client.xpending(key, group)).toEqual([
+                expect(await client.xpending(Buffer.from(key), group)).toEqual([
                     2,
                     "0-1",
                     "0-2",
@@ -10461,7 +10474,7 @@ export function runBaseTests(config: {
 
                 const result = await client.xpendingWithOptions(
                     key,
-                    group,
+                    Buffer.from(group),
                     cluster.checkIfServerVersionLessThan("6.2.0")
                         ? {
                               start: InfBoundary.NegativeInfinity,
@@ -10484,7 +10497,7 @@ export function runBaseTests(config: {
                         start: { value: "0-1", isInclusive: true },
                         end: { value: "0-2", isInclusive: false },
                         count: 12,
-                        consumer: "_",
+                        consumer: Buffer.from("_"),
                     }),
                 ).toEqual([]);
 
