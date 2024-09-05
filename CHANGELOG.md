@@ -101,8 +101,7 @@
 * Node: Added XACK commands ([#2112](https://github.com/valkey-io/valkey-glide/pull/2112))
 * Node: Added XGROUP SETID command ([#2135]((https://github.com/valkey-io/valkey-glide/pull/2135))
 * Node: Added binary variant to string commands ([#2183](https://github.com/valkey-io/valkey-glide/pull/2183))
-* Node: Added binary variant to stream commands (part 1) ([#2200](https://github.com/valkey-io/valkey-glide/pull/2200))
-* Node: Added binary variant to stream commands (part 2) ([#2222](https://github.com/valkey-io/valkey-glide/pull/2222))
+* Node: Added binary variant to stream commands ([#2200](https://github.com/valkey-io/valkey-glide/pull/2200), [#2222](https://github.com/valkey-io/valkey-glide/pull/2222))
 
 #### Breaking Changes
 * Node: (Refactor) Convert classes to types ([#2005](https://github.com/valkey-io/valkey-glide/pull/2005))
