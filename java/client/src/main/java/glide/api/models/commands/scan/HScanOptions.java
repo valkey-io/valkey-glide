@@ -5,8 +5,8 @@ import glide.api.commands.HashBaseCommands;
 import glide.api.models.GlideString;
 import glide.utils.ArgsBuilder;
 import java.util.Arrays;
-import java.util.Objects;
 import lombok.Builder;
+import lombok.EqualsAndHashCode;
 import lombok.experimental.SuperBuilder;
 
 /**
@@ -15,6 +15,7 @@ import lombok.experimental.SuperBuilder;
  * @see <a href="https://valkey.io/commands/hscan/">valkey.io</a>
  */
 @SuperBuilder
+@EqualsAndHashCode(callSuper = false)
 public class HScanOptions extends BaseScanOptions {
 
     /** Option string to include in the HSCAN command when values are not included. */
@@ -22,7 +23,7 @@ public class HScanOptions extends BaseScanOptions {
 
     /**
      * When set to true, the command will not include values in the results. This option is available
-     * from Redis version 8.0.0 and above.
+     * from Valkey version 8.0.0 and above.
      */
     @Builder.Default protected boolean noValues = false;
 
@@ -52,14 +53,5 @@ public class HScanOptions extends BaseScanOptions {
         }
 
         return builder.toArray();
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof HScanOptions)) return false;
-        if (!super.equals(o)) return false;
-        HScanOptions that = (HScanOptions) o;
-        return Objects.equals(noValues, that.noValues);
     }
 }

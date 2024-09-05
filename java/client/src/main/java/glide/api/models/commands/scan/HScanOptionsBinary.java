@@ -7,7 +7,6 @@ import glide.api.commands.HashBaseCommands;
 import glide.api.models.GlideString;
 import glide.utils.ArgsBuilder;
 import java.util.Arrays;
-import java.util.Objects;
 import lombok.Builder;
 import lombok.experimental.SuperBuilder;
 
@@ -24,7 +23,7 @@ public class HScanOptionsBinary extends BaseScanOptionsBinary {
 
     /**
      * When set to true, the command will not include values in the results. This option is available
-     * from Redis version 8.0.0 and above.
+     * from Valkey version 8.0.0 and above.
      */
     @Builder.Default protected boolean noValues = false;
 
@@ -49,14 +48,5 @@ public class HScanOptionsBinary extends BaseScanOptionsBinary {
         }
 
         return Arrays.stream(builder.toArray()).map(GlideString::getString).toArray(String[]::new);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof ZScanOptionsBinary)) return false;
-        if (!super.equals(o)) return false;
-        HScanOptionsBinary that = (HScanOptionsBinary) o;
-        return Objects.equals(noValues, that.noValues);
     }
 }

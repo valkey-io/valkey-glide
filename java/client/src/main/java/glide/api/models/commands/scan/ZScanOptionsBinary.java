@@ -7,8 +7,8 @@ import glide.api.commands.SortedSetBaseCommands;
 import glide.api.models.GlideString;
 import glide.utils.ArgsBuilder;
 import java.util.Arrays;
-import java.util.Objects;
 import lombok.Builder;
+import lombok.EqualsAndHashCode;
 import lombok.experimental.SuperBuilder;
 
 /**
@@ -18,6 +18,7 @@ import lombok.experimental.SuperBuilder;
  * @see <a href="https://valkey.io/commands/zscan/">valkey.io</a>
  */
 @SuperBuilder
+@EqualsAndHashCode(callSuper = false)
 public class ZScanOptionsBinary extends BaseScanOptionsBinary {
     /** Option string to include in the ZSCAN command when scores are not included. */
     public static final GlideString NO_SCORES_API = gs("NOSCORES");
@@ -49,14 +50,5 @@ public class ZScanOptionsBinary extends BaseScanOptionsBinary {
         }
 
         return Arrays.stream(builder.toArray()).map(GlideString::getString).toArray(String[]::new);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof ZScanOptionsBinary)) return false;
-        if (!super.equals(o)) return false;
-        ZScanOptionsBinary that = (ZScanOptionsBinary) o;
-        return Objects.equals(noScores, that.noScores);
     }
 }

@@ -68,6 +68,7 @@ import {
     StreamTrimOptions,
     TimeUnit,
     ZAddOptions,
+    ZScanOptions,
     convertElementsAndScores,
     createAppend,
     createBLMPop,
@@ -1002,9 +1003,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - An array of the `cursor` and the subset of the hash held by `key`.
      * The first element is always the `cursor` for the next iteration of results. `"0"` will be the `cursor`
      * returned on the last iteration of the hash. The second element is always an array of the subset of the
-     * hash held in `key`. The array in the second element is always a flattened series of string pairs,
+     * hash held in `key`. The array in the second element is a flattened series of string pairs,
      * where the value is at even indices and the value is at odd indices.
-     * If options.noValues is set to `true`, the second element will only contain the fields without the values.
+     * If `options.noValues` is set to `true`, the second element will only contain the fields without the values.
      */
     public hscan(key: string, cursor: string, options?: HScanOptions): T {
         return this.addAndReturn(createHScan(key, cursor, options));
@@ -3682,9 +3683,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - An `Array` of the `cursor` and the subset of the sorted set held by `key`.
      *      The first element is always the `cursor` for the next iteration of results. `0` will be the `cursor`
      *      returned on the last iteration of the sorted set. The second element is always an `Array` of the subset
-     *      of the sorted set held in `key`. The `Array` in the second element is always a flattened series of
+     *      of the sorted set held in `key`. The `Array` in the second element is a flattened series of
      *      `String` pairs, where the value is at even indices and the score is at odd indices.
-     *      If options.noScores is to `true`, the second element will only contain the members without scores.
+     *      If `options.noScores` is to `true`, the second element will only contain the members without scores.
      */
     public zscan(key: GlideString, cursor: string, options?: ZScanOptions): T {
         return this.addAndReturn(createZScan(key, cursor, options));

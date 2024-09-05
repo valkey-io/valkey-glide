@@ -56,6 +56,7 @@ import {
     StreamTrimOptions,
     TimeUnit,
     ZAddOptions,
+    ZScanOptions,
     convertElementsAndScores,
     createAppend,
     createBLMPop,
@@ -2054,9 +2055,9 @@ export class BaseClient {
      * @returns An array of the `cursor` and the subset of the hash held by `key`.
      * The first element is always the `cursor` for the next iteration of results. `"0"` will be the `cursor`
      * returned on the last iteration of the hash. The second element is always an array of the subset of the
-     * hash held in `key`. The array in the second element is always a flattened series of string pairs,
+     * hash held in `key`. The array in the second element is a flattened series of string pairs,
      * where the value is at even indices and the value is at odd indices.
-     * If options.noValues is set to `true`, the second element will only contain the fields without the values.
+     * If `options.noValues` is set to `true`, the second element will only contain the fields without the values.
      *
      * @example
      * ```typescript
@@ -6471,21 +6472,18 @@ export class BaseClient {
      * @returns An `Array` of the `cursor` and the subset of the sorted set held by `key`.
      *      The first element is always the `cursor` for the next iteration of results. `0` will be the `cursor`
      *      returned on the last iteration of the sorted set. The second element is always an `Array` of the subset
-     *      of the sorted set held in `key`. The `Array` in the second element is always a flattened series of
+     *      of the sorted set held in `key`. The `Array` in the second element is a flattened series of
      *      `string` pairs, where the value is at even indices and the score is at odd indices.
-     *      If options.noScores is to `true`, the second element will only contain the members without scores.
+     *      If `options.noScores` is to `true`, the second element will only contain the members without scores.
      *
      * @example
      * ```typescript
-     * // Assume "key" contains a sorted set with multiple members
-     * let newCursor = "0";
-     * let result = [];
-     *
+     * // Assume "key1" contains a sorted set with multiple members
+     * let cursor = "0";
      * do {
      *      const result = await client.zscan(key1, cursor, {
      *          match: "*",
      *          count: 5,
-     *          noScores: true,
      *      });
      *      cursor = result[0];
      *      console.log("Cursor: ", cursor);
@@ -6493,11 +6491,36 @@ export class BaseClient {
      * } while (cursor !== "0");
      * // The output of the code above is something similar to:
      * // Cursor:  123
+     * // Members:  ['value 163', '163', 'value 114', '114', 'value 25', '25', 'value 82', '82', 'value 64', '64']
+     * // Cursor:  47
+     * // Members:  ['value 39', '39', 'value 127', '127', 'value 43', '43', 'value 139', '139', 'value 211', '211']
+     * // Cursor:  0
+     * // Members:  ['value 55', '55', 'value 24', '24', 'value 90', '90', 'value 113', '113']
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Zscan with no scores
+     * let newCursor = "0";
+     * let result = [];
+     *
+     * do {
+     *      result = await client.zscan(key1, newCursor, {
+     *          match: "*",
+     *          count: 5,
+     *          noScores: true,
+     *      });
+     *      newCursor = result[0];
+     *      console.log("Cursor: ", newCursor);
+     *      console.log("Members: ", result[1]);
+     * } while (newCursor !== "0");
+     * // The output of the code above is something similar to:
+     * // Cursor:  123
      * // Members:  ['value 163', 'value 114', 'value 25', 'value 82', 'value 64']
      * // Cursor:  47
      * // Members:  ['value 39', 'value 127', 'value 43', 'value 139', 'value 211']
      * // Cursor:  0
-     * // Members:  ['value 55', '55', 'value 24', '24', 'value 90', '90', 'value 113', '113']
+     * // Members:  ['value 55', 'value 24' 'value 90', 'value 113']
      * ```
      */
     public async zscan(

@@ -6142,7 +6142,7 @@ class CoreCommands(Protocol):
             List[Union[bytes, List[bytes]]]: An `Array` of the `cursor` and the subset of the sorted set held by `key`.
             The first element is always the `cursor` for the next iteration of results. `0` will be the `cursor`
             returned on the last iteration of the sorted set. The second element is always an `Array` of the subset
-            of the sorted set held in `key`. The `Array` in the second element is always a flattened series of
+            of the sorted set held in `key`. The `Array` in the second element is a flattened series of
             `String` pairs, where the value is at even indices and the score is at odd indices.
             If `no_scores` is set to`True`, the second element will only contain the members without scores.
 
@@ -6225,7 +6225,7 @@ class CoreCommands(Protocol):
             List[Union[bytes, List[bytes]]]: An `Array` of the `cursor` and the subset of the hash held by `key`.
                 The first element is always the `cursor` for the next iteration of results. `0` will be the `cursor`
                 returned on the last iteration of the hash. The second element is always an `Array` of the subset of the
-                hash held in `key`. The `Array` in the second element is always a flattened series of `String` pairs,
+                hash held in `key`. The `Array` in the second element is a flattened series of `String` pairs,
                 where the value is at even indices and the score is at odd indices.
                 If `no_values` is set to `True`, the second element will only contain the fields without the values.
 
