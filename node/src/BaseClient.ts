@@ -479,7 +479,7 @@ export type BaseClientConfiguration = {
     defaultDecoder?: Decoder;
 };
 
-export type ScriptOption = {
+export type ScriptOptions = {
     /**
      * The keys that are used in the script.
      */
@@ -3523,7 +3523,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/script-load/|SCRIPT LOAD} and {@link https://valkey.io/commands/evalsha/|EVALSHA} on valkey.io for details.
      *
      * @param script - The Lua script to execute.
-     * @param options - (Optional) See {@link ScriptOption} and {@link DecoderOption}.
+     * @param options - (Optional) See {@link ScriptOptions} and {@link DecoderOption}.
      * @returns A value that depends on the script that was executed.
      *
      * @example
@@ -3539,7 +3539,7 @@ export class BaseClient {
      */
     public async invokeScript(
         script: Script,
-        options?: ScriptOption & DecoderOption,
+        options?: ScriptOptions & DecoderOption,
     ): Promise<ReturnType> {
         const scriptInvocation = command_request.ScriptInvocation.create({
             hash: script.getHash(),
