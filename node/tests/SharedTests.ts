@@ -169,7 +169,9 @@ export function runBaseTests(config: {
 
                     if (client instanceof GlideClient) {
                         expect(
-                            await client.clientGetName(Decoder.Bytes),
+                            await client.clientGetName({
+                                decoder: Decoder.Bytes,
+                            }),
                         ).toEqual(Buffer.from("TEST_CLIENT"));
                     } else {
                         expect(
@@ -5837,24 +5839,25 @@ export function runBaseTests(config: {
                 expect(await client.echo(message)).toEqual(message);
                 expect(
                     client instanceof GlideClient
-                        ? await client.echo(message, Decoder.String)
+                        ? await client.echo(message, {
+                              decoder: Decoder.String,
+                          })
                         : await client.echo(message, {
                               decoder: Decoder.String,
                           }),
                 ).toEqual(message);
                 expect(
                     client instanceof GlideClient
-                        ? await client.echo(message, Decoder.Bytes)
+                        ? await client.echo(message, { decoder: Decoder.Bytes })
                         : await client.echo(message, {
                               decoder: Decoder.Bytes,
                           }),
                 ).toEqual(Buffer.from(message));
                 expect(
                     client instanceof GlideClient
-                        ? await client.echo(
-                              Buffer.from(message),
-                              Decoder.String,
-                          )
+                        ? await client.echo(Buffer.from(message), {
+                              decoder: Decoder.String,
+                          })
                         : await client.echo(Buffer.from(message), {
                               decoder: Decoder.String,
                           }),
@@ -7534,10 +7537,9 @@ export function runBaseTests(config: {
                 // Transaction tests
                 let response =
                     client instanceof GlideClient
-                        ? await client.exec(
-                              new Transaction().dump(key1),
-                              Decoder.Bytes,
-                          )
+                        ? await client.exec(new Transaction().dump(key1), {
+                              decoder: Decoder.Bytes,
+                          })
                         : await client.exec(
                               new ClusterTransaction().dump(key1),
                               { decoder: Decoder.Bytes },
@@ -7552,7 +7554,7 @@ export function runBaseTests(config: {
                               new Transaction()
                                   .restore(key4, 0, data)
                                   .get(key4),
-                              Decoder.String,
+                              { decoder: Decoder.String },
                           )
                         : await client.exec(
                               new ClusterTransaction()
@@ -7570,7 +7572,7 @@ export function runBaseTests(config: {
                               new Transaction()
                                   .restore(key5, 0, data)
                                   .get(key5),
-                              Decoder.Bytes,
+                              { decoder: Decoder.Bytes },
                           )
                         : await client.exec(
                               new ClusterTransaction()
