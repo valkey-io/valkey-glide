@@ -13,6 +13,7 @@ on:
             - .github/workflows/install-valkey/action.yml
             - .github/workflows/lint-rust/action.yml
             - .github/json_matrices/build-matrix.json
+            - deny.toml
     pull_request:
         paths:
             - logger_core/**
@@ -24,6 +25,7 @@ on:
             - .github/workflows/install-valkey/action.yml
             - .github/workflows/lint-rust/action.yml
             - .github/json_matrices/build-matrix.json
+            - deny.toml
     workflow_dispatch:
 
 concurrency:
