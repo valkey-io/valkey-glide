@@ -1473,7 +1473,9 @@ export function runBaseTests(config: {
                 });
 
                 expect(result[resultCursorIndex]).toEqual(initialCursor);
-                expect(result[resultCollectionIndex]).toEqual(["a", "0"].map(Buffer.from));
+                expect(result[resultCollectionIndex]).toEqual(
+                    ["a", "0"].map(Buffer.from),
+                );
 
                 // Set up testing data with the numberMap set to be used for the next set test keys and test results.
                 expect(await client.hset(Buffer.from(key1), numberMap)).toEqual(
