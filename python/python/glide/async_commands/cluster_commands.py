@@ -1290,7 +1290,8 @@ class ClusterCommands(CoreCommands):
             TClusterResponse[List[bool]]: A list of boolean values indicating the existence of each script.
 
         Examples:
-            >>> await client.script_exists(["sha1_digest1", "sha1_digest2"])
+            >>> lua_script = Script("return { KEYS[1], ARGV[1] }")
+            >>> await client.script_exists([lua_script.get_hash(), "sha1_digest2"])
                 [True, False]
         """
         return cast(
@@ -1364,8 +1365,9 @@ class ClusterCommands(CoreCommands):
 
         Args:
             script (Script): The Lua script to execute.
-            keys (Optional[List[TEncodable]]): The keys that are used in the script.
-            args (Optional[List[TEncodable]]): The arguments for the script.
+            keys (Optional[List[TEncodable]]): The keys that are used in the script. To ensure the correct execution of
+                the script, all names of keys that a script accesses must be explicitly provided as `keys`.
+            args (Optional[List[TEncodable]]): The non-key arguments for the script.
 
         Returns:
             TResult: a value that depends on the script that was executed.
@@ -1394,8 +1396,7 @@ class ClusterCommands(CoreCommands):
 
         Args:
             script (Script): The Lua script to execute.
-            args (Optional[List[TEncodable]]): The arguments for the script.
-            route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in which
+            args (Optional[List[TEncodable]]): The non-key arguments for the script.            route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in which
                 case the client will route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:
@@ -1406,4 +1407,6 @@ class ClusterCommands(CoreCommands):
             >>> await invoke_script(lua_script, args=["bar"], route=AllPrimaries());
                 [b"foo", b"bar"]
         """
-        return await self._execute_script(script.get_hash(), keys=None, args=args, route=route)
+        return await self._execute_script(
+            script.get_hash(), keys=None, args=args, route=route
+        )
