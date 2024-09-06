@@ -1287,20 +1287,20 @@ class ClusterCommands(CoreCommands):
             case the client will route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:
-            List[bool]: A list of boolean values indicating the existence of each script.
+            TClusterResponse[List[bool]]: A list of boolean values indicating the existence of each script.
 
         Examples:
             >>> await client.script_exists(["sha1_digest1", "sha1_digest2"])
                 [True, False]
         """
         return cast(
-            List[bool],
+            TClusterResponse[List[bool]],
             await self._execute_command(RequestType.ScriptExists, sha1s, route),
         )
 
     async def script_flush(
         self, mode: Optional[FlushMode] = None, route: Optional[Route] = None
-    ) -> TClusterResponse[TOK]:
+    ) -> TOK:
         """
         Flush the Lua scripts cache.
 
@@ -1329,7 +1329,7 @@ class ClusterCommands(CoreCommands):
             ),
         )
 
-    async def script_kill(self, route: Optional[Route] = None) -> TClusterResponse[TOK]:
+    async def script_kill(self, route: Optional[Route] = None) -> TOK:
         """
         Kill the currently executing Lua script, assuming no write operation was yet performed by the script.
         The command is routed to all nodes, and aggregates the response to a single array.
@@ -1406,4 +1406,4 @@ class ClusterCommands(CoreCommands):
             >>> await invoke_script(lua_script, args=["bar"], route=AllPrimaries());
                 [b"foo", b"bar"]
         """
-        return await self._execute_script(script.get_hash(), args=args, route=route)
+        return await self._execute_script(script.get_hash(), keys=None, args=args, route=route)

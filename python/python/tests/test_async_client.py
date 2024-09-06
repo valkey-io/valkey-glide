@@ -10275,23 +10275,38 @@ class TestScripts:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_script_exists(self, glide_client: TGlideClient):
+    async def test_script_exists(self, glide_client: TGlideClient, cluster_mode: bool):
+        cluster_mode = isinstance(glide_client, GlideClusterClient)
         script1 = Script("return 'Hello'")
         script2 = Script("return 'World'")
+        script3 = Script("return 'Hello World'")
 
-        # Load the scripts
+        # Load script1 to all nodes, do not load script2 and load script3 with a SlotKeyRoute
         await glide_client.invoke_script(script1)
-        await glide_client.invoke_script(script2)
+
+        if cluster_mode:
+            await cast(GlideClusterClient, glide_client).invoke_script_route(
+                script3, route=SlotKeyRoute(SlotType.PRIMARY, "1")
+            )
+        else:
+            await glide_client.invoke_script(script3)
 
         # Get the SHA1 digests of the scripts
         sha1_1 = script1.get_hash()
         sha1_2 = script2.get_hash()
+        sha1_3 = script3.get_hash()
         non_existent_sha1 = "0" * 40  # A SHA1 that doesn't exist
-
         # Check existence of scripts
-        result = await glide_client.script_exists([sha1_1, sha1_2, non_existent_sha1])
+        result = await glide_client.script_exists(
+            [sha1_1, sha1_2, sha1_3, non_existent_sha1]
+        )
 
-        assert result == [True, True, False]
+        # script1 is loaded and returns true.
+        # script2 is only cached and not loaded, returns false.
+        # script3 is invoked with a SlotKeyRoute. Despite SCRIPT EXIST uses LogicalAggregate AND on the results,
+        #   SCRIPT LOAD during internal execution so the script still gets loaded on all nodes, returns true.
+        # non-existing sha1 returns false.
+        assert result == [True, False, True, False]
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -10317,7 +10332,7 @@ class TestScripts:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("single_route", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_script_kill1(
+    async def test_script_kill(
         self,
         request,
         cluster_mode,
