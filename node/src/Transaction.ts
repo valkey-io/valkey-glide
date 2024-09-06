@@ -4,12 +4,13 @@
 
 import {
     BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
-    GlideRecord,
+    GlideRecord, // eslint-disable-line @typescript-eslint/no-unused-vars
     GlideString,
     HashDataType,
+    convertGlideRecord,
+    convertHashDataType,
     ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
     SortedSetDataType, // eslint-disable-line @typescript-eslint/no-unused-vars
-    convertFieldsAndValuesForHset,
 } from "./BaseClient";
 
 import {
@@ -524,12 +525,14 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /** Set multiple keys to multiple values in a single atomic operation.
      * @see {@link https://valkey.io/commands/mset/|valkey.io} for details.
      *
-     * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
+     * @param keysAndValues - A list of key-value pairs to set.
      *
      * Command Response - always "OK".
      */
-    public mset(keyValueMap: Record<string, string>): T {
-        return this.addAndReturn(createMSet(keyValueMap));
+    public mset(
+        keysAndValues: Record<string, GlideString> | GlideRecord<GlideString>,
+    ): T {
+        return this.addAndReturn(createMSet(convertGlideRecord(keysAndValues)));
     }
 
     /**
@@ -538,11 +541,15 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see {@link https://valkey.io/commands/msetnx/|valkey.io} for details.
      *
-     * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
+     * @param keysAndValues - A list of key-value pairs to set.
      * Command Response - `true` if all keys were set. `false` if no key was set.
      */
-    public msetnx(keyValueMap: Record<string, string>): T {
-        return this.addAndReturn(createMSetNX(keyValueMap));
+    public msetnx(
+        keysAndValues: Record<string, GlideString> | GlideRecord<GlideString>,
+    ): T {
+        return this.addAndReturn(
+            createMSetNX(convertGlideRecord(keysAndValues)),
+        );
     }
 
     /** Increments the number stored at `key` by one. If `key` does not exist, it is set to 0 before performing the operation.
@@ -821,7 +828,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         fieldsAndValues: HashDataType | Record<string, GlideString>,
     ): T {
         return this.addAndReturn(
-            createHSet(key, convertFieldsAndValuesForHset(fieldsAndValues)),
+            createHSet(key, convertHashDataType(fieldsAndValues)),
         );
     }
 
