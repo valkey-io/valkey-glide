@@ -207,9 +207,9 @@ export class GlideClient extends BaseClient {
      *
      * @see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command|Valkey Glide Wiki} for details on the restrictions and limitations of the custom command API.
      *
-     * @param args - A list of `function` arguments and it should not represent names of keys.
+     * @param args - A list including the command name and arguments for the custom command.
      * @param options - (Optional) See {@link DecoderOption}.
-     * @returns The invoked function's return value.
+     * @returns The executed custom command return value.
      *
      * @example
      * ```typescript
@@ -664,7 +664,6 @@ export class GlideClient extends BaseClient {
      * @remarks Since Valkey version 7.0.0.
      *
      * @param options - (Optional) See {@link DecoderOption}.
-     *
      * @returns A Record where the key is the node address and the value is a Record with two keys:
      *          - `"running_script"`: Information about the running script, or `null` if no script is running.
      *          - `"engines"`: Information about available engines and their stats.

@@ -9,7 +9,8 @@ import {
     Decoder,
     DecoderOption,
     GlideString,
-    PubSubMsg, // eslint-disable-line @typescript-eslint/no-unused-vars
+    PubSubMsg,
+    ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
     ReturnType,
 } from "./BaseClient";
 import {
@@ -288,9 +289,9 @@ export class GlideClusterClient extends BaseClient {
      *
      * @see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command|Glide for Valkey Wiki} for details on the restrictions and limitations of the custom command API.
      *
-     * @param args - A list of `function` arguments and it should not represent names of keys.
-     * @param options - (Optional) See {@link RouteOption} and {@link DecoderOption}.
-     * @returns The invoked function's return value.
+     * @param args - A list including the command name and arguments for the custom command.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns The executed custom command return value.
      *
      * @example
      * ```typescript
@@ -321,7 +322,9 @@ export class GlideClusterClient extends BaseClient {
      */
     public async exec(
         transaction: ClusterTransaction,
-        options?: RouteOption & DecoderOption,
+        options?: {
+            route?: SingleNodeRoute;
+        } & DecoderOption,
     ): Promise<ReturnType[] | null> {
         return this.createWritePromise<ReturnType[] | null>(
             transaction.commands,
@@ -369,10 +372,7 @@ export class GlideClusterClient extends BaseClient {
         } & RouteOption &
             DecoderOption,
     ): Promise<GlideString> {
-        return this.createWritePromise(createPing(options?.message), {
-            route: options?.route,
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(createPing(options?.message), options);
     }
 
     /**

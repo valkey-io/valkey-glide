@@ -235,7 +235,11 @@ import {
     TimeoutError,
 } from "./Errors";
 import { GlideClientConfiguration } from "./GlideClient";
-import { GlideClusterClientConfiguration, Routes } from "./GlideClusterClient";
+import {
+    GlideClusterClientConfiguration,
+    RouteOption,
+    Routes,
+} from "./GlideClusterClient";
 import { Logger } from "./Logger";
 import {
     command_request,
@@ -592,10 +596,12 @@ export type PubSubMsg = {
     pattern?: string | null;
 };
 
-export type WritePromiseOptions = {
-    decoder?: Decoder;
-    route?: Routes;
-};
+/**
+ * @internal
+ *
+ */
+export type WritePromiseOptions = RouteOption & DecoderOption;
+
 export class BaseClient {
     private socket: net.Socket;
     private readonly promiseCallbackFunctions: [
@@ -810,9 +816,9 @@ export class BaseClient {
             | command_request.ScriptInvocation,
         options: WritePromiseOptions = {},
     ): Promise<T> {
-        const decoder = options?.decoder ?? this.defaultDecoder;
         const route = toProtobufRoute(options?.route);
-        const stringDecoder = decoder === Decoder.String ? true : false;
+        const stringDecoder: boolean =
+            (options?.decoder ?? this.defaultDecoder) === Decoder.String;
 
         if (this.isClosed) {
             throw new ClosingError(
