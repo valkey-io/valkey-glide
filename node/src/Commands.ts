@@ -7,15 +7,16 @@ import Long from "long";
 
 import {
     BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
+    convertRecordToGlideRecord,
     GlideRecord,
     HashDataType,
     SortedSetDataType,
-} from "src/BaseClient";
+    GlideString,
+} from "./BaseClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-import { GlideClient } from "src/GlideClient";
+import { GlideClient } from "./GlideClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-import { GlideClusterClient } from "src/GlideClusterClient";
-import { GlideString } from "./BaseClient";
+import { GlideClusterClient } from "./GlideClusterClient";
 import { command_request } from "./ProtobufMessage";
 
 import RequestType = command_request.RequestType;
@@ -412,7 +413,6 @@ export function createHGet(
     return createCommand(RequestType.HGet, [key, field]);
 }
 
-// TODO merge with https://github.com/valkey-io/valkey-glide/pull/2209
 /**
  * This function converts an input from HashDataType or Record types to HashDataType.
  *
@@ -2546,6 +2546,23 @@ export enum FlushMode {
     SYNC = "SYNC",
     /** Flushes asynchronously. */
     ASYNC = "ASYNC",
+}
+
+/**
+ * @internal
+ * This function converts an input from Record or GlideRecord types to GlideRecord.
+ *
+ * @param record - input record in either Record or GlideRecord types.
+ * @returns same data in GlideRecord type.
+ */
+export function convertKeysAndEntries(
+    record: Record<string, GlideString> | GlideRecord<GlideString>,
+): GlideRecord<GlideString> {
+    if (!Array.isArray(record)) {
+        return convertRecordToGlideRecord(record);
+    }
+
+    return record;
 }
 
 /** Optional arguments for {@link BaseClient.xread|xread} command. */

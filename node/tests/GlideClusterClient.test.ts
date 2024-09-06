@@ -15,27 +15,25 @@ import { v4 as uuidv4 } from "uuid";
 import {
     BitwiseOperation,
     ClusterTransaction,
+    convertRecordToGlideRecord,
     Decoder,
     FunctionListResponse,
     GlideClusterClient,
     InfoOptions,
     ListDirection,
     ProtocolVersion,
-    recordToGlideRecord,
     RequestError,
     ReturnType,
     Routes,
     ScoreFilter,
     SlotKeyTypes,
-} from "..";
-import { RedisCluster } from "../../utils/TestUtils.js";
-import {
     FlushMode,
     FunctionRestorePolicy,
     FunctionStatsSingleResponse,
     GeoUnit,
     SortOrder,
-} from "../build-ts/src/Commands";
+} from "..";
+import { RedisCluster } from "../../utils/TestUtils.js";
 import { runBaseTests } from "./SharedTests";
 import {
     checkClusterResponse,
@@ -281,7 +279,7 @@ describe("GlideClusterClient", () => {
             const result = await client.exec(transaction);
             expect(result).toEqual([
                 "OK",
-                recordToGlideRecord({ timeout: "1000" }),
+                convertRecordToGlideRecord({ timeout: "1000" }),
             ]);
         },
         TIMEOUT,

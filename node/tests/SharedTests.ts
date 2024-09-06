@@ -52,9 +52,9 @@ import {
     UpdateByScore,
     convertElementsAndScores,
     convertFieldsAndValues,
-    glideRecordToRecord,
+    convertGlideRecordToRecord,
     parseInfoResponse,
-} from "../";
+} from "..";
 import { RedisCluster } from "../../utils/TestUtils";
 import { Client, GetAndSetRandomValue, getFirstResult } from "./TestUtilities";
 
@@ -137,7 +137,7 @@ export function runBaseTests(config: {
         `Check protocol version is RESP3`,
         async () => {
             await runTest(async (client: BaseClient) => {
-                const result = glideRecordToRecord(
+                const result = convertGlideRecordToRecord(
                     (await client.customCommand([
                         "HELLO",
                     ])) as GlideRecord<number>,
@@ -152,7 +152,7 @@ export function runBaseTests(config: {
         `Check possible to opt-in to RESP2`,
         async () => {
             await runTest(async (client: BaseClient) => {
-                const result = glideRecordToRecord(
+                const result = convertGlideRecordToRecord(
                     (await client.customCommand([
                         "HELLO",
                     ])) as GlideRecord<number>,
@@ -7013,12 +7013,12 @@ export function runBaseTests(config: {
                         [timestamp_2_3]: [["bar", "bar3"]],
                     },
                 };
-                expect(glideRecordToRecord(result!)).toEqual(expected);
+                expect(convertGlideRecordToRecord(result!)).toEqual(expected);
 
                 // key does not exist
                 expect(await client.xread({ [key3]: "0-0" })).toBeNull();
                 expect(
-                    glideRecordToRecord(
+                    convertGlideRecordToRecord(
                         (await client.xread({
                             [key2]: timestamp_2_1,
                             [key3]: "0-0",
@@ -7080,7 +7080,7 @@ export function runBaseTests(config: {
 
                 // read the entire stream for the consumer and mark messages as pending
                 expect(
-                    glideRecordToRecord(
+                    convertGlideRecordToRecord(
                         (await client.xreadgroup(
                             Buffer.from(group),
                             Buffer.from(consumer),
@@ -7104,7 +7104,7 @@ export function runBaseTests(config: {
 
                 // now xreadgroup returns one empty entry and one non-empty entry
                 expect(
-                    glideRecordToRecord(
+                    convertGlideRecordToRecord(
                         (await client.xreadgroup(group, consumer, {
                             [key1]: "0",
                         }))!,
@@ -7126,7 +7126,7 @@ export function runBaseTests(config: {
                     ["e", "f"],
                 ])) as string;
                 expect(
-                    glideRecordToRecord(
+                    convertGlideRecordToRecord(
                         (await client.xreadgroup(group, consumer, {
                             [key1]: ">",
                         }))!,
@@ -7149,7 +7149,7 @@ export function runBaseTests(config: {
 
                 // read both keys
                 expect(
-                    glideRecordToRecord(
+                    convertGlideRecordToRecord(
                         (await client.xreadgroup(group, consumer, {
                             [key1]: "0",
                             [key2]: "0",
@@ -7185,7 +7185,7 @@ export function runBaseTests(config: {
                     "OK",
                 );
                 expect(
-                    glideRecordToRecord(
+                    convertGlideRecordToRecord(
                         (await client.xreadgroup(group, "_", {
                             [key3]: "0-0",
                         }))!,
@@ -10201,7 +10201,7 @@ export function runBaseTests(config: {
                     { [key]: ">" },
                     { count: 1 },
                 );
-                expect(glideRecordToRecord(xreadgroup!)).toEqual({
+                expect(convertGlideRecordToRecord(xreadgroup!)).toEqual({
                     [key]: {
                         [streamId1]: [
                             ["entry1_field1", "entry1_value1"],
@@ -10231,7 +10231,7 @@ export function runBaseTests(config: {
                 xreadgroup = await client.xreadgroup(groupName1, consumer2, {
                     [key]: ">",
                 });
-                expect(glideRecordToRecord(xreadgroup!)).toEqual({
+                expect(convertGlideRecordToRecord(xreadgroup!)).toEqual({
                     [key]: {
                         [streamId2]: [
                             ["entry2_field1", "entry2_value1"],
@@ -10378,7 +10378,7 @@ export function runBaseTests(config: {
                     consumer1,
                     { [key]: ">" },
                 );
-                expect(glideRecordToRecord(xreadgroup!)).toEqual({
+                expect(convertGlideRecordToRecord(xreadgroup!)).toEqual({
                     [key]: {
                         [streamId1]: [
                             ["entry1_field1", "entry1_value1"],
@@ -10490,7 +10490,7 @@ export function runBaseTests(config: {
                 ).toBe("OK");
 
                 expect(
-                    glideRecordToRecord(
+                    convertGlideRecordToRecord(
                         (await client.xreadgroup(groupName, consumerName, {
                             [key]: ">",
                         }))!,
@@ -10533,7 +10533,7 @@ export function runBaseTests(config: {
                     consumerName,
                     { [key]: ">" },
                 );
-                expect(glideRecordToRecord(newResult!)).toEqual({
+                expect(convertGlideRecordToRecord(newResult!)).toEqual({
                     [key]: {
                         [streamid1_2]: [["f2", "v2"]],
                     },
@@ -10608,7 +10608,7 @@ export function runBaseTests(config: {
                 ).toEqual("0-2");
 
                 expect(
-                    glideRecordToRecord(
+                    convertGlideRecordToRecord(
                         (await client.xreadgroup(group, "consumer", {
                             [key]: ">",
                         }))!,
@@ -10708,7 +10708,7 @@ export function runBaseTests(config: {
                 ).toEqual("0-2");
 
                 expect(
-                    glideRecordToRecord(
+                    convertGlideRecordToRecord(
                         (await client.xreadgroup(group, "consumer", {
                             [key]: ">",
                         }))!,
@@ -10824,7 +10824,7 @@ export function runBaseTests(config: {
                 ).toEqual("0-2");
 
                 expect(
-                    glideRecordToRecord(
+                    convertGlideRecordToRecord(
                         (await client.xreadgroup(group, "consumer", {
                             [key]: ">",
                         }))!,
@@ -10947,7 +10947,7 @@ export function runBaseTests(config: {
                     await client.xgroupCreate(key, groupName, stream_id0),
                 ).toBe("OK");
                 expect(
-                    glideRecordToRecord(
+                    convertGlideRecordToRecord(
                         (await client.xreadgroup(groupName, consumerName, {
                             [key]: ">",
                         }))!,
@@ -10993,7 +10993,7 @@ export function runBaseTests(config: {
 
                 // read the last unacknowledged entry
                 expect(
-                    glideRecordToRecord(
+                    convertGlideRecordToRecord(
                         (await client.xreadgroup(groupName, consumerName, {
                             [key]: ">",
                         }))!,
@@ -11299,7 +11299,7 @@ export function runBaseTests(config: {
 
                 // read the entire stream for the consumer and mark messages as pending
                 expect(
-                    glideRecordToRecord(
+                    convertGlideRecordToRecord(
                         (await client.xreadgroup(groupName, consumer, {
                             [key]: ">",
                         }))!,

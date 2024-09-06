@@ -33,7 +33,7 @@ import {
 
 type TGlideClient = GlideClient | GlideClusterClient;
 
-function glideRecordToRecord(
+function convertGlideRecordToRecord(
     data: { channel: GlideString; numSub: number }[],
 ): Record<string, number> {
     const res: Record<string, number> = {};
@@ -3625,7 +3625,7 @@ describe("PubSub", () => {
                     channel2,
                     channel3,
                 ]);
-                expect(glideRecordToRecord(subscribers)).toEqual({
+                expect(convertGlideRecordToRecord(subscribers)).toEqual({
                     [channel1]: 0,
                     [channel2]: 0,
                     [channel3]: 0,
@@ -3652,7 +3652,7 @@ describe("PubSub", () => {
                     channel3,
                     channel4,
                 ]);
-                expect(glideRecordToRecord(subscribers)).toEqual({
+                expect(convertGlideRecordToRecord(subscribers)).toEqual({
                     [channel1]: 1,
                     [channel2]: 2,
                     [channel3]: 3,
@@ -3868,7 +3868,7 @@ describe("PubSub", () => {
                 let subscribers = await (
                     client as GlideClusterClient
                 ).pubsubShardNumSub([channel1, channel2, channel3]);
-                expect(glideRecordToRecord(subscribers)).toEqual({
+                expect(convertGlideRecordToRecord(subscribers)).toEqual({
                     [channel1]: 0,
                     [channel2]: 0,
                     [channel3]: 0,
@@ -3892,7 +3892,7 @@ describe("PubSub", () => {
                 subscribers = await (
                     client4 as GlideClusterClient
                 ).pubsubShardNumSub([channel1, channel2, channel3, channel4]);
-                expect(glideRecordToRecord(subscribers)).toEqual({
+                expect(convertGlideRecordToRecord(subscribers)).toEqual({
                     [channel1]: 1,
                     [channel2]: 2,
                     [channel3]: 3,
@@ -4059,7 +4059,7 @@ describe("PubSub", () => {
                     regularChannel,
                     shardChannel,
                 ]);
-                expect(glideRecordToRecord(regularSubscribers)).toEqual({
+                expect(convertGlideRecordToRecord(regularSubscribers)).toEqual({
                     [regularChannel]: 2,
                     [shardChannel]: 0,
                 });
@@ -4069,7 +4069,9 @@ describe("PubSub", () => {
                     const shardSubscribers = await (
                         client2 as GlideClusterClient
                     ).pubsubShardNumSub([regularChannel, shardChannel]);
-                    expect(glideRecordToRecord(shardSubscribers)).toEqual({
+                    expect(
+                        convertGlideRecordToRecord(shardSubscribers),
+                    ).toEqual({
                         [regularChannel]: 0,
                         [shardChannel]: 2,
                     });

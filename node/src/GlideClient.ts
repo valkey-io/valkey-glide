@@ -6,10 +6,10 @@ import * as net from "net";
 import {
     BaseClient,
     BaseClientConfiguration,
+    convertGlideRecordToRecord,
     Decoder,
     DecoderOption,
     GlideRecord,
-    glideRecordToRecord,
     GlideString,
     PubSubMsg,
     ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -404,7 +404,7 @@ export class GlideClient extends BaseClient {
             {
                 decoder,
             },
-        ).then(glideRecordToRecord);
+        ).then(convertGlideRecordToRecord);
     }
 
     /**
@@ -664,7 +664,10 @@ export class GlideClient extends BaseClient {
             {
                 decoder: options?.decoder,
             },
-        ).then((res) => res.map(glideRecordToRecord) as FunctionListResponse);
+        ).then(
+            (res) =>
+                res.map(convertGlideRecordToRecord) as FunctionListResponse,
+        );
     }
 
     /**
@@ -721,7 +724,10 @@ export class GlideClient extends BaseClient {
             {
                 decoder,
             },
-        ).then((res) => glideRecordToRecord(res) as FunctionStatsFullResponse);
+        ).then(
+            (res) =>
+                convertGlideRecordToRecord(res) as FunctionStatsFullResponse,
+        );
     }
 
     /**

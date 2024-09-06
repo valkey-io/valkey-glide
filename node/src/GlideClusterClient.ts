@@ -13,7 +13,7 @@ import {
     PubSubMsg,
     ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
     ReturnType,
-    glideRecordToRecord,
+    convertGlideRecordToRecord,
 } from "./BaseClient";
 import {
     FlushMode,
@@ -192,7 +192,7 @@ function convertClusterGlideRecord<T>(
 
     return isSingleNodeResponse
         ? (res as T)
-        : glideRecordToRecord(res as GlideRecord<T>);
+        : convertGlideRecordToRecord(res as GlideRecord<T>);
 }
 
 export type SlotIdTypes = {
@@ -666,7 +666,9 @@ export class GlideClusterClient extends BaseClient {
         >(createConfigGet(parameters), {
             route: toProtobufRoute(options?.route),
             decoder: options?.decoder,
-        }).then((res) => glideRecordToRecord(res as GlideRecord<string>));
+        }).then((res) =>
+            convertGlideRecordToRecord(res as GlideRecord<string>),
+        );
     }
 
     /**
@@ -1038,10 +1040,10 @@ export class GlideClusterClient extends BaseClient {
                 : ((Array.isArray(res[0])
                       ? // single node response
                         ((res as GlideRecord<unknown>[]).map(
-                            glideRecordToRecord,
+                            convertGlideRecordToRecord,
                         ) as FunctionListResponse)
                       : // multi node response
-                        glideRecordToRecord(
+                        convertGlideRecordToRecord(
                             res as GlideRecord<unknown>,
                         )) as ClusterResponse<FunctionListResponse>),
         );
@@ -1106,7 +1108,7 @@ export class GlideClusterClient extends BaseClient {
             decoder: options?.decoder,
         }).then(
             (res) =>
-                glideRecordToRecord(
+                convertGlideRecordToRecord(
                     res,
                 ) as ClusterResponse<FunctionStatsSingleResponse>,
         );

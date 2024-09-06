@@ -22,12 +22,15 @@ import {
     BaseClientConfiguration,
     ClosingError,
     ClusterTransaction,
+    convertGlideRecordToRecord,
     Decoder,
     GlideClient,
     GlideClientConfiguration,
     GlideClusterClient,
     GlideClusterClientConfiguration,
+    GlideRecord,
     InfoOptions,
+    isGlideRecord,
     Logger,
     RequestError,
     ReturnType,
@@ -290,8 +293,8 @@ describe("SocketConnectionInternals", () => {
 
     describe("handling types", () => {
         const test_receiving_value = async (
-            received: ReturnType,
-            expected: ReturnType,
+            received: ReturnType, // value 'received' from the server
+            expected: ReturnType, // value received from rust
         ) => {
             await testWithResources(async (connection, socket) => {
                 socket.once("data", (data) => {
@@ -314,7 +317,15 @@ describe("SocketConnectionInternals", () => {
                     );
                 });
                 const result = await connection.get("foo", Decoder.String);
-                expect(result).toEqual(expected);
+                // RESP3 map are converted to `GlideRecord` in rust lib, but elements may get reordered in this test.
+                // To avoid flakyness, we downcast `GlideRecord` to `Record` which can be safely compared.
+                expect(
+                    isGlideRecord(result)
+                        ? convertGlideRecordToRecord(
+                              result as unknown as GlideRecord<unknown>,
+                          )
+                        : result,
+                ).toEqual(expected);
             });
         };
 
@@ -323,10 +334,10 @@ describe("SocketConnectionInternals", () => {
         });
 
         it("should pass maps received from socket", async () => {
-            await test_receiving_value({ foo: "bar", bar: "baz" }, [
-                { key: "bar", value: "baz" },
-                { key: "foo", value: "bar" },
-            ]);
+            await test_receiving_value(
+                { foo: "bar", bar: "baz" },
+                { foo: "bar", bar: "baz" },
+            );
         });
 
         it("should pass arrays received from socket", async () => {

@@ -13,6 +13,7 @@ import {
 import { BufferReader, BufferWriter } from "protobufjs";
 import { v4 as uuidv4 } from "uuid";
 import {
+    convertGlideRecordToRecord,
     Decoder,
     GlideClient,
     GlideRecord,
@@ -21,14 +22,11 @@ import {
     ProtocolVersion,
     RequestError,
     Transaction,
-    glideRecordToRecord,
-} from "..";
-import { RedisCluster } from "../../utils/TestUtils.js";
-import {
     FlushMode,
     FunctionRestorePolicy,
     SortOrder,
-} from "../build-ts/src/Commands";
+} from "..";
+import { RedisCluster } from "../../utils/TestUtils.js";
 import { command_request } from "../src/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import {
@@ -1591,10 +1589,10 @@ describe("GlideClient", () => {
 
             if (result != null) {
                 expect(result[0]).toEqual("0-1"); // xadd
-                const res1 = glideRecordToRecord(
+                const res1 = convertGlideRecordToRecord(
                     result[1] as GlideRecord<[GlideString, GlideString][]>,
                 );
-                const res2 = glideRecordToRecord(
+                const res2 = convertGlideRecordToRecord(
                     result[2] as GlideRecord<[GlideString, GlideString][]>,
                 );
                 expect(res1).toEqual(expectedXinfoStreamResult);

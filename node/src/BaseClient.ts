@@ -56,6 +56,7 @@ import {
     ZAddOptions,
     convertElementsAndScores,
     convertFieldsAndValues,
+    convertKeysAndEntries,
     createAppend,
     createBLMPop,
     createBLMove,
@@ -338,7 +339,7 @@ export type StreamEntryDataType = Record<string, [GlideString, GlideString][]>;
  * @internal
  * Convert `GlideRecord<number>` recevied after resolving the value pointer into `SortedSetDataType`.
  */
-function convertGlideRecordForZSet(
+function convertGlideRecordForSortedSet(
     res: GlideRecord<number>,
 ): SortedSetDataType {
     return res.map((e) => {
@@ -350,7 +351,7 @@ function convertGlideRecordForZSet(
  * @internal
  * Recursively downcast `GlideRecord` to `Record`. Use if `data` keys are always strings.
  */
-export function glideRecordToRecord<T>(
+export function convertGlideRecordToRecord<T>(
     data: GlideRecord<T>,
 ): Record<string, T> {
     const res: Record<string, T> = {};
@@ -359,12 +360,12 @@ export function glideRecordToRecord<T>(
         let newVal = pair.value;
 
         if (isGlideRecord(pair.value)) {
-            newVal = glideRecordToRecord(
+            newVal = convertGlideRecordToRecord(
                 pair.value as GlideRecord<unknown>,
             ) as T;
         } else if (isGlideRecordArray(pair.value)) {
             newVal = (pair.value as GlideRecord<unknown>[]).map(
-                glideRecordToRecord,
+                convertGlideRecordToRecord,
             ) as T;
         }
 
@@ -378,7 +379,7 @@ export function glideRecordToRecord<T>(
  * @internal
  * Check whether an object is a `GlideRecord` (see {@link GlideRecord}).
  */
-function isGlideRecord(obj?: unknown): boolean {
+export function isGlideRecord(obj?: unknown): boolean {
     return (
         Array.isArray(obj) &&
         obj.length > 0 &&
@@ -414,31 +415,14 @@ export type StreamEntries =
 
 /**
  * @internal
- * Reverse of {@link glideRecordToRecord}.
+ * Reverse of {@link convertGlideRecordToRecord}.
  */
-export function recordToGlideRecord<T>(
+export function convertRecordToGlideRecord<T>(
     data: Record<string, T>,
 ): GlideRecord<T> {
-    return Object.entries(data).map(([k, v]) => {
-        return { key: k, value: v };
+    return Object.entries(data).map(([key, value]) => {
+        return { key, value };
     });
-}
-
-/**
- * @internal
- * This function converts an input from Record or GlideRecord types to GlideRecord.
- *
- * @param record - input record in either Record or GlideRecord types.
- * @returns same data in GlideRecord type.
- */
-export function convertRecordToGlideRecord(
-    record: Record<string, GlideString> | GlideRecord<GlideString>,
-): GlideRecord<GlideString> {
-    if (!Array.isArray(record)) {
-        return recordToGlideRecord(record);
-    }
-
-    return record;
 }
 
 /**
@@ -3622,7 +3606,7 @@ export class BaseClient {
         return this.createWritePromise<GlideRecord<
             [GlideString, GlideString][]
         > | null>(createXRange(key, start, end, options?.count), options).then(
-            (res) => (res === null ? null : glideRecordToRecord(res!)),
+            (res) => (res === null ? null : convertGlideRecordToRecord(res)),
         );
     }
 
@@ -3670,7 +3654,9 @@ export class BaseClient {
         > | null>(
             createXRevRange(key, end, start, options?.count),
             options,
-        ).then((res) => (res === null ? null : glideRecordToRecord(res!)));
+        ).then((res) =>
+            res === null ? null : convertGlideRecordToRecord(res),
+        );
     }
 
     /**
@@ -3902,7 +3888,7 @@ export class BaseClient {
         return this.createWritePromise<GlideRecord<number>>(
             createZDiffWithScores(keys),
             options,
-        ).then(convertGlideRecordForZSet);
+        ).then(convertGlideRecordForSortedSet);
     }
 
     /**
@@ -4183,7 +4169,7 @@ export class BaseClient {
         return this.createWritePromise<GlideRecord<number>>(
             createZRangeWithScores(key, rangeQuery, options?.reverse),
             options,
-        ).then(convertGlideRecordForZSet);
+        ).then(convertGlideRecordForSortedSet);
     }
 
     /**
@@ -4346,7 +4332,7 @@ export class BaseClient {
         return this.createWritePromise<GlideRecord<number>>(
             createZInter(keys, options?.aggregationType, true),
             options,
-        ).then(convertGlideRecordForZSet);
+        ).then(convertGlideRecordForSortedSet);
     }
 
     /**
@@ -4416,7 +4402,7 @@ export class BaseClient {
         return this.createWritePromise<GlideRecord<number>>(
             createZUnion(keys, options?.aggregationType, true),
             options,
-        ).then(convertGlideRecordForZSet);
+        ).then(convertGlideRecordForSortedSet);
     }
 
     /**
@@ -4618,7 +4604,7 @@ export class BaseClient {
         return this.createWritePromise<GlideRecord<number>>(
             createZPopMin(key, options?.count),
             options,
-        ).then(convertGlideRecordForZSet);
+        ).then(convertGlideRecordForSortedSet);
     }
 
     /**
@@ -4694,7 +4680,7 @@ export class BaseClient {
         return this.createWritePromise<GlideRecord<number>>(
             createZPopMax(key, options?.count),
             options,
-        ).then(convertGlideRecordForZSet);
+        ).then(convertGlideRecordForSortedSet);
     }
 
     /**
@@ -5105,18 +5091,18 @@ export class BaseClient {
         return this.createWritePromise<GlideRecord<
             GlideRecord<[GlideString, GlideString][]>
         > | null>(
-            createXRead(convertRecordToGlideRecord(keys_and_ids), options),
+            createXRead(convertKeysAndEntries(keys_and_ids), options),
             options,
         ).then(
             (
-                res, // TODO glideRecordToRecord recursive
+                res, // TODO convertGlideRecordToRecord recursive
             ) =>
                 res === null
                     ? null
                     : res.map((k) => {
                           return {
                               key: k.key,
-                              value: glideRecordToRecord(k.value),
+                              value: convertGlideRecordToRecord(k.value),
                           };
                       }),
         );
@@ -5175,17 +5161,17 @@ export class BaseClient {
             createXReadGroup(
                 group,
                 consumer,
-                convertRecordToGlideRecord(keys_and_ids),
+                convertKeysAndEntries(keys_and_ids),
                 options,
             ),
             options,
         ).then(
-            // TODO glideRecordToRecord recursive
+            // TODO convertGlideRecordToRecord recursive
             (res) =>
                 res?.map((k) => {
                     return {
                         key: k.key,
-                        value: glideRecordToRecord(k.value),
+                        value: convertGlideRecordToRecord(k.value),
                     };
                 }) ?? null,
         );
@@ -5315,7 +5301,7 @@ export class BaseClient {
         return this.createWritePromise<GlideRecord<GlideString | number>[]>(
             createXInfoConsumers(key, group),
             options,
-        ).then((res) => res.map(glideRecordToRecord));
+        ).then((res) => res.map(convertGlideRecordToRecord));
     }
 
     /**
@@ -5359,7 +5345,7 @@ export class BaseClient {
         return this.createWritePromise<
             GlideRecord<GlideString | number | null>[]
         >(createXInfoGroups(key), options).then((res) =>
-            res.map(glideRecordToRecord),
+            res.map(convertGlideRecordToRecord),
         );
     }
 
@@ -5399,7 +5385,7 @@ export class BaseClient {
         >(
             createXClaim(key, group, consumer, minIdleTime, ids, options),
             options,
-        ).then(glideRecordToRecord);
+        ).then(convertGlideRecordToRecord);
     }
 
     /**
@@ -5472,8 +5458,8 @@ export class BaseClient {
             options,
         ).then((res) =>
             res.length === 3
-                ? [res[0], glideRecordToRecord(res[1]), res[2]]
-                : [res[0], glideRecordToRecord(res[1])],
+                ? [res[0], convertGlideRecordToRecord(res[1]), res[2]]
+                : [res[0], convertGlideRecordToRecord(res[1])],
         );
     }
 
@@ -5700,7 +5686,9 @@ export class BaseClient {
             >
         >(createXInfoStream(key, options?.fullOptions ?? false), options).then(
             (xinfoStream) =>
-                glideRecordToRecord(xinfoStream) as ReturnTypeXinfoStream,
+                convertGlideRecordToRecord(
+                    xinfoStream,
+                ) as ReturnTypeXinfoStream,
         );
     }
 
@@ -6567,7 +6555,9 @@ export class BaseClient {
         return this.createWritePromise<
             [GlideString, GlideRecord<number>] | null
         >(createZMPop(keys, modifier, options?.count), options).then((res) =>
-            res === null ? null : [res[0], convertGlideRecordForZSet(res[1])],
+            res === null
+                ? null
+                : [res[0], convertGlideRecordForSortedSet(res[1])],
         );
     }
 
@@ -6618,7 +6608,7 @@ export class BaseClient {
             (res) =>
                 res === null
                     ? null
-                    : [res[0], convertGlideRecordForZSet(res[1])],
+                    : [res[0], convertGlideRecordForSortedSet(res[1])],
         );
     }
 
@@ -6873,7 +6863,7 @@ export class BaseClient {
         return this.createWritePromise<
             GlideRecord<(number | [number, number])[][] | number>
         >(createLCS(key1, key2, { idx: options ?? {} })).then(
-            glideRecordToRecord,
+            convertGlideRecordToRecord,
         );
     }
 
