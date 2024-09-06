@@ -10,6 +10,7 @@ package api
 import "C"
 
 import (
+	"errors"
 	"unsafe"
 
 	"github.com/valkey-io/valkey-glide/go/glide/protobuf"
@@ -198,4 +199,17 @@ func (client *baseClient) DecrBy(key string, amount int64) (int64, error) {
 		return 0, err
 	}
 	return handleLongResponse(result), nil
+}
+
+func (client *baseClient) GetDel(key string) (string, error) {
+	if key == "" {
+		return "", errors.New("key is required")
+	}
+
+	result, err := client.executeCommand(C.GetDel, []string{key})
+	if err != nil {
+		return "", err
+	}
+
+	return handleStringOrNullResponseWithFree(result), nil
 }
