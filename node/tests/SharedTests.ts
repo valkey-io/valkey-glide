@@ -1520,8 +1520,8 @@ export function runBaseTests(config: {
                     );
 
                     for (let i = 0; i < secondResultEntry.length; i += 2) {
-                        secondResultAllKeys.push(secondResultEntry[i]);
-                        secondResultAllValues.push(secondResultEntry[i + 1]);
+                        secondResultAllKeys.push(secondResultEntry[i].toString());
+                        secondResultAllValues.push(secondResultEntry[i + 1].toString());
                     }
                 } while (resultCursor != initialCursor); // 0 is returned for the cursor of the last iteration.
 
