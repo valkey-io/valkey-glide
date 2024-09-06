@@ -479,7 +479,7 @@ export type BaseClientConfiguration = {
     defaultDecoder?: Decoder;
 };
 
-export type ScriptOptions = {
+export type ScriptOption = {
     /**
      * The keys that are used in the script.
      */
@@ -488,10 +488,6 @@ export type ScriptOptions = {
      * The arguments for the script.
      */
     args?: GlideString[];
-    /**
-     * {@link Decoder} type which defines how to handle the responses. If not set, the default decoder from the client config will be used.
-     */
-    decoder?: Decoder;
 };
 
 function getRequestErrorClass(
@@ -3527,7 +3523,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/script-load/|SCRIPT LOAD} and {@link https://valkey.io/commands/evalsha/|EVALSHA} on valkey.io for details.
      *
      * @param script - The Lua script to execute.
-     * @param options - The script option that contains keys and arguments for the script.
+     * @param options - (Optional) See {@link ScriptOption} and {@link DecoderOption}.
      * @returns A value that depends on the script that was executed.
      *
      * @example
@@ -3543,11 +3539,11 @@ export class BaseClient {
      */
     public async invokeScript(
         script: Script,
-        option?: ScriptOptions,
+        options?: ScriptOption & DecoderOption,
     ): Promise<ReturnType> {
         const scriptInvocation = command_request.ScriptInvocation.create({
             hash: script.getHash(),
-            keys: option?.keys?.map((item) => {
+            keys: options?.keys?.map((item) => {
                 if (typeof item === "string") {
                     // Convert the string to a Buffer
                     return Buffer.from(item);
@@ -3556,7 +3552,7 @@ export class BaseClient {
                     return item;
                 }
             }),
-            args: option?.args?.map((item) => {
+            args: options?.args?.map((item) => {
                 if (typeof item === "string") {
                     // Convert the string to a Buffer
                     return Buffer.from(item);
@@ -3567,7 +3563,7 @@ export class BaseClient {
             }),
         });
         return this.createWritePromise(scriptInvocation, {
-            decoder: option?.decoder,
+            decoder: options?.decoder,
         });
     }
 
