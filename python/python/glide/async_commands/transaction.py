@@ -4106,7 +4106,10 @@ class BaseTransaction:
             int: The position of the first occurrence of `bit` in the binary value of the string held at `key`.
                 If `start` was provided, the search begins at the offset indicated by `start`.
         """
-        args = [key, str(bit)] if options is not None: args.extend(options.to_args())
+        args: List[TEncodable] = [key, str(bit)]
+        if options is not None:
+            args.extend(options.to_args())
+
         return self.append_command(RequestType.BitPos, args)
 
     def bitop(

@@ -5592,52 +5592,52 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.GetBit, [key, str(offset)]),
         )
 
-    async def bitcount(
+    async def bitpos(
         self, key: TEncodable, bit: int, options: Optional[OffsetOptions] = None
     ) -> int:
-    """
-    Returns the position of the first bit matching the given `bit` value. The optional starting offset
-    `start` is a zero-based index, with `0` being the first byte of the list, `1` being the next byte and so on.
-    The offset can also be a negative number indicating an offset starting at the end of the list, with `-1` being
-    the last byte of the list, `-2` being the penultimate, and so on.
+        """
+        Returns the position of the first bit matching the given `bit` value. The optional starting offset
+        `start` is a zero-based index, with `0` being the first byte of the list, `1` being the next byte and so on.
+        The offset can also be a negative number indicating an offset starting at the end of the list, with `-1` being
+        the last byte of the list, `-2` being the penultimate, and so on.
 
-    If you are using Valkey 7.0.0 or above, the optional `index_type` can also be provided to specify whether the
-    `start` and `end` offsets specify BIT or BYTE offsets. If `index_type` is not provided, BYTE offsets
-    are assumed. If BIT is specified, `start=0` and `end=2` means to look at the first three bits. If BYTE is
-    specified, `start=0` and `end=2` means to look at the first three bytes.
+        If you are using Valkey 7.0.0 or above, the optional `index_type` can also be provided to specify whether the
+        `start` and `end` offsets specify BIT or BYTE offsets. If `index_type` is not provided, BYTE offsets
+        are assumed. If BIT is specified, `start=0` and `end=2` means to look at the first three bits. If BYTE is
+        specified, `start=0` and `end=2` means to look at the first three bytes.
 
-    See https://valkey.io/commands/bitpos for more details.
+        See https://valkey.io/commands/bitpos for more details.
 
-    Args:
-        key (TEncodable): The key of the string.
-        bit (int): The bit value to match. Must be `0` or `1`.
-        options (Optional[OffsetOptions]): The offset options.
+        Args:
+            key (TEncodable): The key of the string.
+            bit (int): The bit value to match. Must be `0` or `1`.
+            options (Optional[OffsetOptions]): The offset options.
 
-    Returns:
-        int: The position of the first occurrence of `bit` in the binary value of the string held at `key`.
-            If `start` was provided, the search begins at the offset indicated by `start`.
+        Returns:
+            int: The position of the first occurrence of `bit` in the binary value of the string held at `key`.
+                If `start` was provided, the search begins at the offset indicated by `start`.
 
-    Examples:
-        >>> await client.set("key1", "A1")  # "A1" has binary value 01000001 00110001
-        >>> await client.bitpos("key1", 1)
-            1  # The first occurrence of bit value 1 in the string stored at "key1" is at the second position.
-        >>> await client.bitpos("key1", 1, -1)
-            10  # The first occurrence of bit value 1, starting at the last byte in the string stored at "key1", is at the eleventh position.
+        Examples:
+            >>> await client.set("key1", "A1")  # "A1" has binary value 01000001 00110001
+            >>> await client.bitpos("key1", 1)
+                1  # The first occurrence of bit value 1 in the string stored at "key1" is at the second position.
+            >>> await client.bitpos("key1", 1, -1)
+                10  # The first occurrence of bit value 1, starting at the last byte in the string stored at "key1", is at the eleventh position.
 
-        >>> await client.set("key2", "A12")  # "A12" has binary value 01000001 00110001 00110010
-        >>> await client.bitpos("key2", 1, OffsetOptions(1, -1))
-            10  # The first occurrence of bit value 1 in the second byte to the last byte of the string stored at "key1" is at the eleventh position.
-        >>> await client.bitpos("key2", 1, OffsetOptions(2, 9, BitmapIndexType.BIT))
-            7  # The first occurrence of bit value 1 in the third to tenth bits of the string stored at "key1" is at the eighth position.
-    """
-    args: List[TEncodable] = [key, bit]
-    if options is not None:
-        args.extend(options.to_args())
+            >>> await client.set("key2", "A12")  # "A12" has binary value 01000001 00110001 00110010
+            >>> await client.bitpos("key2", 1, OffsetOptions(1, -1))
+                10  # The first occurrence of bit value 1 in the second byte to the last byte of the string stored at "key1" is at the eleventh position.
+            >>> await client.bitpos("key2", 1, OffsetOptions(2, 9, BitmapIndexType.BIT))
+                7  # The first occurrence of bit value 1 in the third to tenth bits of the string stored at "key1" is at the eighth position.
+        """
+        args: List[TEncodable] = [key, bit]
+        if options is not None:
+            args.extend(options.to_args())
 
-    return cast(
-        int,
-        await self._execute_command(RequestType.BitPos, args),
-    )
+        return cast(
+            int,
+            await self._execute_command(RequestType.BitPos, args),
+        )
 
     async def bitop(
         self,
