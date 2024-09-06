@@ -412,12 +412,11 @@ export function compareMaps(
  */
 export function checkFunctionListResponse(
     response: FunctionListResponse,
-    libName: string,
-    functionDescriptions: Map<string, string | null>,
-    functionFlags: Map<string, string[]>,
-    libCode?: string,
+    libName: GlideString,
+    functionDescriptions: Map<GlideString, GlideString | null>,
+    functionFlags: Map<GlideString, GlideString[]>,
+    libCode?: GlideString,
 ) {
-    // TODO rework after #1953 https://github.com/valkey-io/valkey-glide/pull/1953
     expect(response.length).toBeGreaterThan(0);
     let hasLib = false;
 
@@ -431,10 +430,10 @@ export function checkFunctionListResponse(
             for (const functionData of functions) {
                 const functionInfo = functionData as Record<
                     string,
-                    string | string[]
+                    GlideString | GlideString[]
                 >;
-                const name = functionInfo["name"] as string;
-                const flags = functionInfo["flags"] as string[];
+                const name = functionInfo["name"] as GlideString;
+                const flags = functionInfo["flags"] as GlideString[];
                 expect(functionInfo["description"]).toEqual(
                     functionDescriptions.get(name),
                 );

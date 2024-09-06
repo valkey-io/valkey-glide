@@ -1777,6 +1777,19 @@ export function runBaseTests(config: {
                 );
 
                 expect(
+                    await client.hgetall(key, { decoder: Decoder.Bytes }),
+                ).toEqual([
+                    {
+                        field: Buffer.from(field1),
+                        value: Buffer.from(value),
+                    },
+                    {
+                        field: Buffer.from(field2),
+                        value: Buffer.from(value),
+                    },
+                ]);
+
+                expect(
                     await client.hgetall(Buffer.from("nonExistingKey")),
                 ).toEqual([]);
             }, protocol);
@@ -4267,11 +4280,20 @@ export function runBaseTests(config: {
                 expect(result).toEqual(expected);
 
                 // same with byte[]
-                result = await client.zdiffWithScores([
-                    key1,
-                    Buffer.from(key2),
+                result = await client.zdiffWithScores(
+                    [key1, Buffer.from(key2)],
+                    { decoder: Decoder.Bytes },
+                );
+                expect(result).toEqual([
+                    {
+                        element: Buffer.from("one"),
+                        score: 1.0,
+                    },
+                    {
+                        element: Buffer.from("three"),
+                        score: 3.0,
+                    },
                 ]);
-                expect(result).toEqual(expected);
 
                 result = await client.zdiffWithScores([key1, key3]);
                 expect(result).toEqual([]);
@@ -5445,15 +5467,19 @@ export function runBaseTests(config: {
                 // Intersection results are aggregated by the MAX score of elements
                 const zinterWithScoresResults = await client.zinterWithScores(
                     [key1, key2],
-                    { aggregationType: "MAX" },
+                    { aggregationType: "MAX", decoder: Decoder.Bytes },
                 );
-                const expectedMapMax = {
-                    one: 1.5,
-                    two: 2.5,
-                };
-                expect(zinterWithScoresResults).toEqual(
-                    convertElementsAndScores(expectedMapMax),
-                );
+                const expected = [
+                    {
+                        element: Buffer.from("one"),
+                        score: 1.5,
+                    },
+                    {
+                        element: Buffer.from("two"),
+                        score: 2.5,
+                    },
+                ];
+                expect(zinterWithScoresResults).toEqual(expected);
             }, protocol);
         },
         config.timeout,
@@ -5666,16 +5692,23 @@ export function runBaseTests(config: {
                 // Union results are aggregated by the MAX score of elements
                 const zunionWithScoresResults = await client.zunionWithScores(
                     [key1, Buffer.from(key2)],
-                    { aggregationType: "MAX" },
+                    { aggregationType: "MAX", decoder: Decoder.Bytes },
                 );
-                const expectedMapMax = {
-                    one: 1.5,
-                    two: 2.5,
-                    three: 3.5,
-                };
-                expect(zunionWithScoresResults).toEqual(
-                    convertElementsAndScores(expectedMapMax),
-                );
+                const expected = [
+                    {
+                        element: Buffer.from("one"),
+                        score: 1.5,
+                    },
+                    {
+                        element: Buffer.from("two"),
+                        score: 2.5,
+                    },
+                    {
+                        element: Buffer.from("three"),
+                        score: 3.5,
+                    },
+                ];
+                expect(zunionWithScoresResults).toEqual(expected);
             }, protocol);
         },
         config.timeout,
@@ -6064,12 +6097,21 @@ export function runBaseTests(config: {
                     convertElementsAndScores({ a: 1.0 }),
                 );
 
-                expect(await client.zpopmin(key, { count: 3 })).toEqual(
-                    convertElementsAndScores({
-                        b: 2.0,
-                        c: 3.0,
+                expect(
+                    await client.zpopmin(key, {
+                        count: 3,
+                        decoder: Decoder.Bytes,
                     }),
-                );
+                ).toEqual([
+                    {
+                        element: Buffer.from("b"),
+                        score: 2.0,
+                    },
+                    {
+                        element: Buffer.from("c"),
+                        score: 3.0,
+                    },
+                ]);
                 expect(await client.zpopmin(key)).toEqual([]);
                 expect(await client.set(key, "value")).toEqual("OK");
                 await expect(client.zpopmin(key)).rejects.toThrow();
@@ -6090,12 +6132,21 @@ export function runBaseTests(config: {
                     convertElementsAndScores({ c: 3.0 }),
                 );
 
-                expect(await client.zpopmax(key, { count: 3 })).toEqual(
-                    convertElementsAndScores({
-                        b: 2.0,
-                        a: 1.0,
+                expect(
+                    await client.zpopmax(key, {
+                        count: 3,
+                        decoder: Decoder.Bytes,
                     }),
-                );
+                ).toEqual([
+                    {
+                        element: Buffer.from("b"),
+                        score: 2.0,
+                    },
+                    {
+                        element: Buffer.from("a"),
+                        score: 1.0,
+                    },
+                ]);
                 expect(await client.zpopmax(key)).toEqual([]);
                 expect(await client.set(key, "value")).toEqual("OK");
                 await expect(client.zpopmax(key)).rejects.toThrow();
@@ -7018,18 +7069,26 @@ export function runBaseTests(config: {
                 // key does not exist
                 expect(await client.xread({ [key3]: "0-0" })).toBeNull();
                 expect(
-                    convertGlideRecordToRecord(
-                        (await client.xread({
+                    await client.xread(
+                        {
                             [key2]: timestamp_2_1,
                             [key3]: "0-0",
-                        }))!,
+                        },
+                        { decoder: Decoder.Bytes },
                     ),
-                ).toEqual({
-                    [key2]: {
-                        [timestamp_2_2]: [["bar", "bar2"]],
-                        [timestamp_2_3]: [["bar", "bar3"]],
+                ).toEqual([
+                    {
+                        key: Buffer.from(key2),
+                        value: {
+                            [timestamp_2_2]: [
+                                [Buffer.from("bar"), Buffer.from("bar2")],
+                            ],
+                            [timestamp_2_3]: [
+                                [Buffer.from("bar"), Buffer.from("bar3")],
+                            ],
+                        },
                     },
-                });
+                ]);
 
                 // key is not a stream
                 expect(await client.set(key3, uuidv4())).toEqual("OK");
@@ -9234,11 +9293,16 @@ export function runBaseTests(config: {
                         ScoreFilter.MAX,
                         {
                             count: 10,
+                            decoder: Decoder.Bytes,
                         },
                     ),
                 ).toEqual([
-                    key2,
-                    convertElementsAndScores({ b2: 0.2, a2: 0.1 }),
+                    Buffer.from(key2),
+
+                    [
+                        { element: Buffer.from("b2"), score: 0.2 },
+                        { element: Buffer.from("a2"), score: 0.1 },
+                    ],
                 ]);
 
                 expect(
@@ -9508,11 +9572,15 @@ export function runBaseTests(config: {
                         0.1,
                         {
                             count: 10,
+                            decoder: Decoder.Bytes,
                         },
                     ),
                 ).toEqual([
-                    key2,
-                    convertElementsAndScores({ b2: 0.2, a2: 0.1 }),
+                    Buffer.from(key2),
+                    [
+                        { element: Buffer.from("b2"), score: 0.2 },
+                        { element: Buffer.from("a2"), score: 0.1 },
+                    ],
                 ]);
 
                 // ensure that command doesn't time out even if timeout > request timeout (250ms by default)
@@ -10228,18 +10296,37 @@ export function runBaseTests(config: {
                         consumer2,
                     ),
                 ).toBeTruthy();
-                xreadgroup = await client.xreadgroup(groupName1, consumer2, {
-                    [key]: ">",
-                });
-                expect(convertGlideRecordToRecord(xreadgroup!)).toEqual({
-                    [key]: {
-                        [streamId2]: [
-                            ["entry2_field1", "entry2_value1"],
-                            ["entry2_field2", "entry2_value2"],
-                        ],
-                        [streamId3]: [["entry3_field1", "entry3_value1"]],
+                xreadgroup = await client.xreadgroup(
+                    groupName1,
+                    consumer2,
+                    {
+                        [key]: ">",
                     },
-                });
+                    { decoder: Decoder.Bytes },
+                );
+                expect(xreadgroup).toEqual([
+                    {
+                        key: Buffer.from(key),
+                        value: {
+                            [streamId2]: [
+                                [
+                                    Buffer.from("entry2_field1"),
+                                    Buffer.from("entry2_value1"),
+                                ],
+                                [
+                                    Buffer.from("entry2_field2"),
+                                    Buffer.from("entry2_value2"),
+                                ],
+                            ],
+                            [streamId3]: [
+                                [
+                                    Buffer.from("entry3_field1"),
+                                    Buffer.from("entry3_value1"),
+                                ],
+                            ],
+                        },
+                    },
+                ]);
 
                 // Verify that xinfo_consumers contains info for 2 consumers now
                 result = await client.xinfoConsumers(key, groupName1);
@@ -11082,6 +11169,7 @@ export function runBaseTests(config: {
                 expect(
                     await client.lmpop(multiKeyArray, ListDirection.RIGHT, {
                         count: 2,
+                        decoder: Decoder.String,
                     }),
                 ).toEqual(expected2);
 
@@ -11117,8 +11205,8 @@ export function runBaseTests(config: {
                 // pushing to the arrays to be popped
                 expect(await client.lpush(key4, lpushArgs)).toEqual(5);
                 const expectedWithKey4 = {
-                    key: key4,
-                    elements: ["one", "two"],
+                    key: Buffer.from(key4),
+                    elements: [Buffer.from("one"), Buffer.from("two")],
                 };
 
                 // checking correct result from popping
@@ -11126,7 +11214,7 @@ export function runBaseTests(config: {
                     await client.lmpop(
                         multiKeyArrayWithKey3AndKey4,
                         ListDirection.RIGHT,
-                        { count: 2 },
+                        { count: 2, decoder: Decoder.Bytes },
                     ),
                 ).toEqual(expectedWithKey4);
             }, protocol);
@@ -11181,7 +11269,7 @@ export function runBaseTests(config: {
                         multiKeyArray,
                         ListDirection.RIGHT,
                         0.1,
-                        { count: 2 },
+                        { count: 2, decoder: Decoder.String },
                     ),
                 ).toEqual(expected2);
 
@@ -11220,8 +11308,8 @@ export function runBaseTests(config: {
                 // pushing to the arrays to be popped
                 expect(await client.lpush(key4, lpushArgs)).toEqual(5);
                 const expectedWithKey4 = {
-                    key: key4,
-                    elements: ["one", "two"],
+                    key: Buffer.from(key4),
+                    elements: [Buffer.from("one"), Buffer.from("two")],
                 };
 
                 // checking correct result from popping
@@ -11230,7 +11318,7 @@ export function runBaseTests(config: {
                         multiKeyArrayWithKey3AndKey4,
                         ListDirection.RIGHT,
                         0.1,
-                        { count: 2 },
+                        { count: 2, decoder: Decoder.Bytes },
                     ),
                 ).toEqual(expectedWithKey4);
             }, protocol);

@@ -1,4 +1,5 @@
 #### Changes
+* Node: Added binary variant for commands which have `Record` as input or output ([#2207](https://github.com/valkey-io/valkey-glide/pull/2207))
 * Node: Added binary variant to sorted set commands ([#2190](https://github.com/valkey-io/valkey-glide/pull/2190), [#2210](https://github.com/valkey-io/valkey-glide/pull/2210))
 * Node: Added binary variant to HASH commands ([#2194](https://github.com/valkey-io/valkey-glide/pull/2194))
 * Node: Added binary variant to server management commands ([#2179](https://github.com/valkey-io/valkey-glide/pull/2179))

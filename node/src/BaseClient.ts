@@ -1955,8 +1955,8 @@ export class BaseClient {
      * const result = await client.hgetall("my_hash");
      * console.log(result); // Output:
      * // [
-     * //     {"field": "field1", "value": "value1"},
-     * //     {"field", "field2", "value": "value2"}
+     * //     { field: "field1", value: "value1"},
+     * //     { field, "field2", value: "value2"}
      * // ]
      * ```
      */

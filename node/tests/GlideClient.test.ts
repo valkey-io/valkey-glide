@@ -15,16 +15,16 @@ import { v4 as uuidv4 } from "uuid";
 import {
     convertGlideRecordToRecord,
     Decoder,
+    FlushMode,
+    FunctionRestorePolicy,
     GlideClient,
     GlideRecord,
     GlideString,
     HashDataType,
     ProtocolVersion,
     RequestError,
-    Transaction,
-    FlushMode,
-    FunctionRestorePolicy,
     SortOrder,
+    Transaction,
 } from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
 import { command_request } from "../src/ProtobufMessage";
@@ -692,17 +692,19 @@ describe("GlideClient", () => {
 
                 let functionList = await client.functionList({
                     libNamePattern: Buffer.from(libName),
+                    decoder: Decoder.Bytes,
                 });
-                let expectedDescription = new Map<string, string | null>([
-                    [funcName, null],
-                ]);
-                let expectedFlags = new Map<string, string[]>([
-                    [funcName, ["no-writes"]],
+                let expectedDescription = new Map<
+                    GlideString,
+                    GlideString | null
+                >([[Buffer.from(funcName), null]]);
+                let expectedFlags = new Map<GlideString, GlideString[]>([
+                    [Buffer.from(funcName), [Buffer.from("no-writes")]],
                 ]);
 
                 checkFunctionListResponse(
                     functionList,
-                    libName,
+                    Buffer.from(libName),
                     expectedDescription,
                     expectedFlags,
                 );
@@ -752,7 +754,7 @@ describe("GlideClient", () => {
                     newCode,
                 );
 
-                functionStats = await client.functionStats();
+                functionStats = await client.functionStats(Decoder.Bytes);
 
                 for (const response of Object.values(functionStats)) {
                     checkFunctionStatsResponse(response, [], 1, 2);
