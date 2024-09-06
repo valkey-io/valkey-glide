@@ -2525,6 +2525,7 @@ export function createBitCount(
 export enum BitmapIndexType {
     /** Specifies that provided indexes are byte indexes. */
     BYTE = "BYTE",
+
     /** Specifies that provided indexes are bit indexes. */
     BIT = "BIT",
 }
