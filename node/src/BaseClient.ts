@@ -2106,11 +2106,14 @@ export class BaseClient {
      * ```
      */
     public async hscan(
-        key: string,
+        key: GlideString,
         cursor: string,
-        options?: HScanOptions,
-    ): Promise<[string, string[]]> {
-        return this.createWritePromise(createHScan(key, cursor, options));
+        options?: HScanOptions & DecoderOption,
+    ): Promise<[string, GlideString[]]> {
+        return this.createWritePromise<[GlideString, GlideString[]]>(
+            createHScan(key, cursor, options),
+            options,
+        ).then((res) => [res[0].toString(), res[1]]); // convert cursor back to string
     }
 
     /**
