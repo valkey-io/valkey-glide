@@ -1765,7 +1765,7 @@ export class BaseClient {
      * @param bit - The bit value to match. Must be `0` or `1`.
      * @param options - (Optional) The {@link BitOffsetOptions}.
      *
-     * @returns  The position of the first occurrence of `bit` in the binary value of the string held at `key`.
+     * @returns The position of the first occurrence of `bit` in the binary value of the string held at `key`.
      *      If `start` was provided, the search begins at the offset indicated by `start`.
      *
      * @example
