@@ -300,7 +300,6 @@ export type DecoderOption = {
     decoder?: Decoder;
 };
 
-
 /** A replacement for `Record<GlideString, T>` - array of key-value pairs. */
 export type GlideRecord<T> = {
     /** The value name. */
