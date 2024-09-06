@@ -179,8 +179,7 @@ export class GlideClient extends BaseClient {
      * @see {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#transaction|Valkey Glide Wiki} for details on Valkey Transactions.
      *
      * @param transaction - A {@link Transaction} object containing a list of commands to be executed.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A list of results corresponding to the execution of each command in the transaction.
      *     If a command returns a value, it will be included in the list. If a command doesn't return a value,
      *     the list entry will be `null`.
@@ -188,11 +187,11 @@ export class GlideClient extends BaseClient {
      */
     public async exec(
         transaction: Transaction,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<ReturnType[] | null> {
         return this.createWritePromise<ReturnType[] | null>(
             transaction.commands,
-            { decoder: decoder },
+            options,
         ).then((result) =>
             this.processResultWithSetCommands(
                 result,
@@ -217,11 +216,9 @@ export class GlideClient extends BaseClient {
      */
     public async customCommand(
         args: GlideString[],
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<ReturnType> {
-        return this.createWritePromise(createCustomCommand(args), {
-            decoder: decoder,
-        });
+        return this.createWritePromise(createCustomCommand(args), options);
     }
 
     /**
@@ -301,8 +298,7 @@ export class GlideClient extends BaseClient {
      *
      * @see {@link https://valkey.io/commands/client-getname/|valkey.io} for more details.
      *
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns The name of the client connection as a string if a name is set, or `null` if no name is assigned.
      *
      * @example
@@ -312,10 +308,10 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 'Client Name'
      * ```
      */
-    public async clientGetName(decoder?: Decoder): Promise<GlideString | null> {
-        return this.createWritePromise(createClientGetName(), {
-            decoder: decoder,
-        });
+    public async clientGetName(
+        options?: DecoderOption,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createClientGetName(), options);
     }
 
     /**
@@ -381,8 +377,7 @@ export class GlideClient extends BaseClient {
      * @see {@link https://valkey.io/commands/config-get/|valkey.io} for details.
      *
      * @param parameters - A list of configuration parameter names to retrieve values for.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      *
      * @returns A map of values corresponding to the configuration parameters.
      *
@@ -395,11 +390,9 @@ export class GlideClient extends BaseClient {
      */
     public async configGet(
         parameters: string[],
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<Record<string, GlideString>> {
-        return this.createWritePromise(createConfigGet(parameters), {
-            decoder: decoder,
-        });
+        return this.createWritePromise(createConfigGet(parameters), options);
     }
 
     /**
@@ -430,8 +423,7 @@ export class GlideClient extends BaseClient {
      * @see {@link https://valkey.io/commands/echo|valkey.io} for more details.
      *
      * @param message - The message to be echoed back.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns The provided `message`.
      *
      * @example
@@ -443,11 +435,9 @@ export class GlideClient extends BaseClient {
      */
     public async echo(
         message: GlideString,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString> {
-        return this.createWritePromise(createEcho(message), {
-            decoder,
-        });
+        return this.createWritePromise(createEcho(message), options);
     }
 
     /**
@@ -669,8 +659,8 @@ export class GlideClient extends BaseClient {
      * @see {@link https://valkey.io/commands/function-stats/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
      *
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
+     *
      * @returns A Record where the key is the node address and the value is a Record with two keys:
      *          - `"running_script"`: Information about the running script, or `null` if no script is running.
      *          - `"engines"`: Information about available engines and their stats.
@@ -706,11 +696,9 @@ export class GlideClient extends BaseClient {
      * ```
      */
     public async functionStats(
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<FunctionStatsFullResponse> {
-        return this.createWritePromise(createFunctionStats(), {
-            decoder,
-        });
+        return this.createWritePromise(createFunctionStats(), options);
     }
 
     /**

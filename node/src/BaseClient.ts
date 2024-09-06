@@ -235,7 +235,7 @@ import {
     TimeoutError,
 } from "./Errors";
 import { GlideClientConfiguration } from "./GlideClient";
-import { GlideClusterClientConfiguration } from "./GlideClusterClient";
+import { GlideClusterClientConfiguration, Routes } from "./GlideClusterClient";
 import { Logger } from "./Logger";
 import {
     command_request,
@@ -516,6 +516,77 @@ function getRequestErrorClass(
     return RequestError;
 }
 
+function toProtobufRoute(
+    route: Routes | undefined,
+): command_request.Routes | undefined {
+    if (route === undefined) {
+        return undefined;
+    }
+
+    if (route === "allPrimaries") {
+        return command_request.Routes.create({
+            simpleRoutes: command_request.SimpleRoutes.AllPrimaries,
+        });
+    } else if (route === "allNodes") {
+        return command_request.Routes.create({
+            simpleRoutes: command_request.SimpleRoutes.AllNodes,
+        });
+    } else if (route === "randomNode") {
+        return command_request.Routes.create({
+            simpleRoutes: command_request.SimpleRoutes.Random,
+        });
+    } else if (route.type === "primarySlotKey") {
+        return command_request.Routes.create({
+            slotKeyRoute: command_request.SlotKeyRoute.create({
+                slotType: command_request.SlotTypes.Primary,
+                slotKey: route.key,
+            }),
+        });
+    } else if (route.type === "replicaSlotKey") {
+        return command_request.Routes.create({
+            slotKeyRoute: command_request.SlotKeyRoute.create({
+                slotType: command_request.SlotTypes.Replica,
+                slotKey: route.key,
+            }),
+        });
+    } else if (route.type === "primarySlotId") {
+        return command_request.Routes.create({
+            slotKeyRoute: command_request.SlotIdRoute.create({
+                slotType: command_request.SlotTypes.Primary,
+                slotId: route.id,
+            }),
+        });
+    } else if (route.type === "replicaSlotId") {
+        return command_request.Routes.create({
+            slotKeyRoute: command_request.SlotIdRoute.create({
+                slotType: command_request.SlotTypes.Replica,
+                slotId: route.id,
+            }),
+        });
+    } else if (route.type === "routeByAddress") {
+        let port = route.port;
+        let host = route.host;
+
+        if (port === undefined) {
+            const split = host.split(":");
+
+            if (split.length !== 2) {
+                throw new RequestError(
+                    "No port provided, expected host to be formatted as `{hostname}:{port}`. Received " +
+                        host,
+                );
+            }
+
+            host = split[0];
+            port = Number(split[1]);
+        }
+
+        return command_request.Routes.create({
+            byAddressRoute: { host, port },
+        });
+    }
+}
+
 export type PubSubMsg = {
     message: string;
     channel: string;
@@ -524,7 +595,7 @@ export type PubSubMsg = {
 
 export type WritePromiseOptions = {
     decoder?: Decoder;
-    route?: command_request.Routes;
+    route?: Routes;
 };
 export class BaseClient {
     private socket: net.Socket;
@@ -740,7 +811,8 @@ export class BaseClient {
             | command_request.ScriptInvocation,
         options: WritePromiseOptions = {},
     ): Promise<T> {
-        const { decoder = this.defaultDecoder, route } = options;
+        const decoder = options?.decoder ?? this.defaultDecoder;
+        const route = toProtobufRoute(options?.route);
         const stringDecoder = decoder === Decoder.String ? true : false;
 
         if (this.isClosed) {
@@ -1049,9 +1121,7 @@ export class BaseClient {
         key: GlideString,
         options?: DecoderOption,
     ): Promise<GlideString | null> {
-        return this.createWritePromise(createGet(key), {
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(createGet(key), options);
     }
 
     /**
@@ -1106,9 +1176,7 @@ export class BaseClient {
         key: GlideString,
         options?: DecoderOption,
     ): Promise<GlideString | null> {
-        return this.createWritePromise(createGetDel(key), {
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(createGetDel(key), options);
     }
 
     /**
@@ -1145,9 +1213,10 @@ export class BaseClient {
         end: number,
         options?: DecoderOption,
     ): Promise<GlideString | null> {
-        return this.createWritePromise(createGetRange(key, start, end), {
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(
+            createGetRange(key, start, end),
+            options,
+        );
     }
 
     /** Set the given key with the given value. Return value is dependent on the passed options.
@@ -1315,9 +1384,7 @@ export class BaseClient {
         keys: GlideString[],
         options?: DecoderOption,
     ): Promise<(GlideString | null)[]> {
-        return this.createWritePromise(createMGet(keys), {
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(createMGet(keys), options);
     }
 
     /** Set multiple keys to multiple values in a single operation.
@@ -2256,9 +2323,7 @@ export class BaseClient {
         key: GlideString,
         options?: DecoderOption,
     ): Promise<GlideString | null> {
-        return this.createWritePromise(createLPop(key), {
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(createLPop(key), options);
     }
 
     /** Removes and returns up to `count` elements of the list stored at `key`, depending on the list's length.
@@ -2290,9 +2355,7 @@ export class BaseClient {
         count: number,
         options?: DecoderOption,
     ): Promise<GlideString[] | null> {
-        return this.createWritePromise(createLPop(key, count), {
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(createLPop(key, count), options);
     }
 
     /** Returns the specified elements of the list stored at `key`.
@@ -2338,9 +2401,7 @@ export class BaseClient {
         end: number,
         options?: DecoderOption,
     ): Promise<GlideString[]> {
-        return this.createWritePromise(createLRange(key, start, end), {
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(createLRange(key, start, end), options);
     }
 
     /** Returns the length of the list stored at `key`.
@@ -2401,7 +2462,7 @@ export class BaseClient {
     ): Promise<GlideString | null> {
         return this.createWritePromise(
             createLMove(source, destination, whereFrom, whereTo),
-            { decoder: options?.decoder },
+            options,
         );
     }
 
@@ -2448,7 +2509,7 @@ export class BaseClient {
     ): Promise<GlideString | null> {
         return this.createWritePromise(
             createBLMove(source, destination, whereFrom, whereTo, timeout),
-            { decoder: options?.decoder },
+            options,
         );
     }
 
@@ -2621,9 +2682,7 @@ export class BaseClient {
         key: GlideString,
         options?: DecoderOption,
     ): Promise<GlideString | null> {
-        return this.createWritePromise(createRPop(key), {
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(createRPop(key), options);
     }
 
     /** Removes and returns up to `count` elements from the list stored at `key`, depending on the list's length.
@@ -2655,9 +2714,7 @@ export class BaseClient {
         count: number,
         options?: DecoderOption,
     ): Promise<GlideString[] | null> {
-        return this.createWritePromise(createRPop(key, count), {
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(createRPop(key, count), options);
     }
 
     /** Adds the specified members to the set stored at `key`. Specified members that are already a member of this set are ignored.
@@ -2990,9 +3047,10 @@ export class BaseClient {
         keys: GlideString[],
         options?: DecoderOption,
     ): Promise<Set<GlideString>> {
-        return this.createWritePromise<GlideString[]>(createSUnion(keys), {
-            decoder: options?.decoder,
-        }).then((sunion) => new Set<GlideString>(sunion));
+        return this.createWritePromise<GlideString[]>(
+            createSUnion(keys),
+            options,
+        ).then((sunion) => new Set<GlideString>(sunion));
     }
 
     /**
@@ -5675,9 +5733,7 @@ export class BaseClient {
         index: number,
         options?: DecoderOption,
     ): Promise<GlideString | null> {
-        return this.createWritePromise(createLIndex(key, index), {
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(createLIndex(key, index), options);
     }
 
     /**
@@ -5809,9 +5865,7 @@ export class BaseClient {
         timeout: number,
         options?: DecoderOption,
     ): Promise<[GlideString, GlideString] | null> {
-        return this.createWritePromise(createBRPop(keys, timeout), {
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(createBRPop(keys, timeout), options);
     }
 
     /** Blocking list pop primitive.
@@ -5840,9 +5894,7 @@ export class BaseClient {
         timeout: number,
         options?: DecoderOption,
     ): Promise<[GlideString, GlideString] | null> {
-        return this.createWritePromise(createBLPop(keys, timeout), {
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(createBLPop(keys, timeout), options);
     }
 
     /** Adds all elements to the HyperLogLog data structure stored at the specified `key`.
@@ -6022,9 +6074,7 @@ export class BaseClient {
         args: GlideString[],
         options?: DecoderOption,
     ): Promise<ReturnType> {
-        return this.createWritePromise(createFCall(func, keys, args), {
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(createFCall(func, keys, args), options);
     }
 
     /**
@@ -6054,9 +6104,10 @@ export class BaseClient {
         args: GlideString[],
         options?: DecoderOption,
     ): Promise<ReturnType> {
-        return this.createWritePromise(createFCallReadOnly(func, keys, args), {
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(
+            createFCallReadOnly(func, keys, args),
+            options,
+        );
     }
 
     /**

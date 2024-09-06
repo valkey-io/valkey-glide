@@ -244,7 +244,9 @@ describe("GlideClient", () => {
             const transaction = new Transaction();
             const expectedRes = await encodedTransactionTest(transaction);
             transaction.select(0);
-            const result = await client.exec(transaction, Decoder.Bytes);
+            const result = await client.exec(transaction, {
+                decoder: Decoder.Bytes,
+            });
             expectedRes.push(["select(0)", "OK"]);
 
             validateTransactionResponse(result, expectedRes);
@@ -264,7 +266,9 @@ describe("GlideClient", () => {
                 Buffer.from("value"),
             );
             bytesTransaction.select(0);
-            const result = await client.exec(bytesTransaction, Decoder.Bytes);
+            const result = await client.exec(bytesTransaction, {
+                decoder: Decoder.Bytes,
+            });
             expectedBytesRes.push(["select(0)", "OK"]);
 
             validateTransactionResponse(result, expectedBytesRes);
@@ -275,7 +279,7 @@ describe("GlideClient", () => {
 
             // Since DUMP gets binary results, we cannot use the string decoder here, so we expected to get an error.
             await expect(
-                client.exec(stringTransaction, Decoder.String),
+                client.exec(stringTransaction, { decoder: Decoder.String }),
             ).rejects.toThrowError(
                 "invalid utf-8 sequence of 1 bytes from index 9",
             );
@@ -1145,7 +1149,9 @@ describe("GlideClient", () => {
 
                 // Verify functionDump
                 let transaction = new Transaction().functionDump();
-                const result = await client.exec(transaction, Decoder.Bytes);
+                const result = await client.exec(transaction, {
+                    decoder: Decoder.Bytes,
+                });
                 const data = result?.[0] as Buffer;
 
                 // Verify functionRestore
