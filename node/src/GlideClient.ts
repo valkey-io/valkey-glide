@@ -207,6 +207,10 @@ export class GlideClient extends BaseClient {
      *
      * @see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command|Valkey Glide Wiki} for details on the restrictions and limitations of the custom command API.
      *
+     * @param args - A list of `function` arguments and it should not represent names of keys.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns The invoked function's return value.
+     *
      * @example
      * ```typescript
      * // Example usage of customCommand method to retrieve pub/sub clients
