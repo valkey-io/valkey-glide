@@ -459,8 +459,8 @@ export class GlideClusterClient extends BaseClient {
      */
     public async configRewrite(options?: RouteOption): Promise<"OK"> {
         return this.createWritePromise(createConfigRewrite(), {
-            route: options?.route,
             decoder: Decoder.String,
+            ...options,
         });
     }
 
@@ -483,8 +483,8 @@ export class GlideClusterClient extends BaseClient {
      */
     public async configResetStat(options?: RouteOption): Promise<"OK"> {
         return this.createWritePromise(createConfigResetStat(), {
-            route: options?.route,
             decoder: Decoder.String,
+            ...options,
         });
     }
 
@@ -571,8 +571,8 @@ export class GlideClusterClient extends BaseClient {
         options?: RouteOption,
     ): Promise<"OK"> {
         return this.createWritePromise(createConfigSet(parameters), {
-            route: options?.route,
             decoder: Decoder.String,
+            ...options,
         });
     }
 
@@ -642,8 +642,8 @@ export class GlideClusterClient extends BaseClient {
         options?: RouteOption,
     ): Promise<ClusterResponse<[string, string]>> {
         return this.createWritePromise(createTime(), {
-            route: options?.route,
             decoder: Decoder.String,
+            ...options,
         });
     }
 
@@ -697,8 +697,8 @@ export class GlideClusterClient extends BaseClient {
         options?: LolwutOptions & RouteOption,
     ): Promise<ClusterResponse<string>> {
         return this.createWritePromise(createLolwut(options), {
-            route: options?.route,
             decoder: Decoder.String,
+            ...options,
         });
     }
 
@@ -778,8 +778,8 @@ export class GlideClusterClient extends BaseClient {
         options?: RouteOption,
     ): Promise<"OK"> {
         return this.createWritePromise(createFunctionDelete(libraryCode), {
-            route: options?.route,
             decoder: Decoder.String,
+            ...options,
         });
     }
 
@@ -813,10 +813,7 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<GlideString> {
         return this.createWritePromise(
             createFunctionLoad(libraryCode, options?.replace),
-            {
-                route: options?.route,
-                decoder: options?.decoder,
-            },
+            options,
         );
     }
 
@@ -843,8 +840,8 @@ export class GlideClusterClient extends BaseClient {
         } & RouteOption,
     ): Promise<"OK"> {
         return this.createWritePromise(createFunctionFlush(options?.mode), {
-            route: options?.route,
             decoder: Decoder.String,
+            ...options,
         });
     }
 
@@ -880,8 +877,8 @@ export class GlideClusterClient extends BaseClient {
         options?: FunctionListOptions & DecoderOption & RouteOption,
     ): Promise<ClusterResponse<FunctionListResponse>> {
         return this.createWritePromise(createFunctionList(options), {
-            route: options?.route,
             decoder: options?.decoder,
+            ...options,
         });
     }
 
@@ -955,8 +952,8 @@ export class GlideClusterClient extends BaseClient {
      */
     public async functionKill(options?: RouteOption): Promise<"OK"> {
         return this.createWritePromise(createFunctionKill(), {
-            route: options?.route,
             decoder: Decoder.String,
+            ...options,
         });
     }
 
@@ -979,8 +976,8 @@ export class GlideClusterClient extends BaseClient {
         options?: RouteOption,
     ): Promise<ClusterResponse<Buffer>> {
         return this.createWritePromise(createFunctionDump(), {
-            route: options?.route,
             decoder: Decoder.Bytes,
+            ...options,
         });
     }
 
@@ -1008,10 +1005,7 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<"OK"> {
         return this.createWritePromise(
             createFunctionRestore(payload, options?.policy),
-            {
-                route: options?.route,
-                decoder: Decoder.String,
-            },
+            { decoder: Decoder.String, ...options },
         );
     }
 
@@ -1039,8 +1033,8 @@ export class GlideClusterClient extends BaseClient {
         } & RouteOption,
     ): Promise<"OK"> {
         return this.createWritePromise(createFlushAll(options?.mode), {
-            route: options?.route,
             decoder: Decoder.String,
+            ...options,
         });
     }
 
@@ -1068,8 +1062,8 @@ export class GlideClusterClient extends BaseClient {
         } & RouteOption,
     ): Promise<"OK"> {
         return this.createWritePromise(createFlushDB(options?.mode), {
-            route: options?.route,
             decoder: Decoder.String,
+            ...options,
         });
     }
 
@@ -1161,7 +1155,7 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<GlideString[]> {
         return this.createWritePromise(
             createPubsubShardChannels(options?.pattern),
-            { decoder: options?.decoder },
+            options,
         );
     }
 
@@ -1217,9 +1211,7 @@ export class GlideClusterClient extends BaseClient {
         key: GlideString,
         options?: SortClusterOptions & DecoderOption,
     ): Promise<GlideString[]> {
-        return this.createWritePromise(createSort(key, options), {
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(createSort(key, options), options);
     }
 
     /**
@@ -1247,9 +1239,10 @@ export class GlideClusterClient extends BaseClient {
         key: GlideString,
         options?: SortClusterOptions & DecoderOption,
     ): Promise<GlideString[]> {
-        return this.createWritePromise(createSortReadOnly(key, options), {
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(
+            createSortReadOnly(key, options),
+            options,
+        );
     }
 
     /**
@@ -1351,8 +1344,8 @@ export class GlideClusterClient extends BaseClient {
      */
     public async unwatch(options?: RouteOption): Promise<"OK"> {
         return this.createWritePromise(createUnWatch(), {
-            route: options?.route,
             decoder: Decoder.String,
+            ...options,
         });
     }
 }
