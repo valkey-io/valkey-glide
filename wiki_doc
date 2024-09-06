@@ -4,48 +4,83 @@ For information on the supported commands and their corresponding parameters, we
 
 ### Command String Arguments
 
-Valkey strings store sequences of bytes, that may include text, serialized objects, or binary arrays. As such, to pass Valkey strings as arguments to commands, or receive Valkey strings in responses, Glide offers two APIs:
+Valkey stores strings as sequences of bytes, so that may include text, serialized objects, or binary arrays. As such, to pass Valkey strings as arguments to commands, or receive Valkey strings in responses, GLIDE offers `GlideString`, which represents two APIs:
 
-1. string: a valid UTF-8 string.
-2. GlideString: a union type of either a valid UTF-8 string or array of bytes.
+1. `string`: an UTF-8 string.
+2. `Buffer`: an array of bytes.
+
+```typescript
+/**
+ * Union type that can store either a valid UTF-8 string or array of bytes.
+ */
+export type GlideString = string | Buffer;
+```
 
 The return types of command API:
 
--   Command uses `string` as the return type if it constains a specific string value. e.g. `public async type(key: GlideString): Promise<string>`
--   Command uses `Buffer` as the return type if it contains binary data . e.g. `public async dump(key: GlideString): Promise<Buffer | null>`
+-   Command uses `string` as the return type if it constains a specific string value, which could never be binary data. For example, `type` command returns one of pre-defined strings, or `set` command which returns `OK`.
+-   Command uses `Buffer` as the return type, because it always contains binary data. For example, `dump` and `functionDump` commands.
 -   Most commands use `GlideString` as the common return type.
 
 ### Decoder
 
 In Node.js, most users expect the responses to be in string format unless specified otherwise. Users can select which data type they expect to receive as a response. The user has the option of converting the response into either a string or bytes for each command. In addition, as part of the client creation process, the user has the option of setting a default for all commands if no decoder argument is passed to the command.
 
-There are two optional `Decoder` enum:
+`Decoder` is an optional parameter for all commands and it has two options
 
 1. `Bytes`: decodes the response into a buffer array.
 2. `String`: decodes the response into a string.
 
+```typescript
+/**
+ * Enum representing the different types of decoders.
+ */
+export enum Decoder {
+    /**
+     * Decodes the response into a buffer array.
+     */
+    Bytes,
+    /**
+     * Decodes the response into a string.
+     */
+    String,
+}
+
+/** An extension to command option types with {@link Decoder}. */
+export type DecoderOption = {
+    /**
+     * {@link Decoder} type which defines how to handle the response.
+     * If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     */
+    decoder?: Decoder;
+};
+```
+
+If `Decoder` is not configured, `Decoder.String` will be used as the default decoder. There is a known [issue](https://github.com/valkey-io/valkey-glide/discussions/2221) with GLIDE clients is that pop commands may remove elements that cannot be represented as `strings` without returning them, leading to unrecoverable data lost.
+
 #### Example Usage
 
-Here is the command implementation to outline arguments and response type:
+Here is an example of command implementation to outline arguments using `DecoderOption` and response type:
 
 ```typescript
 public getdel(
         key: GlideString,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString | null>
 ```
 
-Here's a simple example demonstrating how to use `Decoder` in command API:
+Here's a simple example demonstrating how to use `Decoder` in command API and `Buffer.from()` to encode binary data:
 
 ```typescript
-expect(await client.set(key1, value1)).toEqual("OK");
-expect(await client.getdel(key1)).toEqual(value1);
+expect(await client.set(key, value)).toEqual("OK");
+expect(await client.getdel(key)).toEqual(value);
 
-expect(await client.set(key2, value2)).toEqual("OK");
-expect(await client.getdel(key2, Decoder.Bytes)).toEqual(value2Encoded);
+const valueEncoded = Buffer.from(value);
+expect(await client.set(key, value)).toEqual("OK");
+expect(await client.getdel(key, { decoder: Decoder.Bytes })).toEqual(
+    valueEncoded,
+);
 ```
-
-Transactions use the same decoder for all commands in the transaction. For example, if a user runs `client.exec(transaction, Decoder.Bytes)`, then all the commands in the transaction will be encoded into Bytes. The default decoder is String.
 
 ### Transaction
 
@@ -82,6 +117,21 @@ const results = await client.exec(transaction);
 expect(results).toEqual(["OK", "OK", "value"]);
 ```
 
+#### Decoder
+
+Transactions use the same decoder for all commands in the transaction. For example, if a user runs `client.exec(transaction, Decoder.Bytes)`, then all the commands in the transaction will be encoded into Bytes. The default decoder is String. There is an [issue](https://github.com/valkey-io/valkey-glide/issues/2147) to track the support of adding option to set a decoder per each command in transaction.
+
+Here's an example demonstrating how to use `Decoder` and `route` with transaction:
+
+```typescript
+let transaction = new ClusterTransaction().functionDump();
+const result = await client.exec(transaction, {
+    decoder: Decoder.Bytes,
+    route: route,
+});
+const data = result?.[0] as Buffer;
+```
+
 #### Command Chaining
 
 Valkey Glide supports command chaining within a transaction, allowing for a more concise and readable code. Here's how you can use chaining in transactions:
@@ -91,12 +141,14 @@ Valkey Glide supports command chaining within a transaction, allowing for a more
 const transaction = new ClusterTransaction();
 
 // Chain commands
-transaction.set("key", "value");
+transaction.set(key, value);
+transaction.get(key);
+transaction.get(key, Decoder.Bytes);
 
 // Execute the transaction
 const results = await client.exec(transaction);
 
-expect(results).toEqual(["OK"]);
+expect(results).toEqual(["OK", value, Buffer.from(value)]);
 ```
 
 **Cluster Mode Considerations:** When using `ClusterTransaction`, all keys in the transaction must be mapped to the same slot.
