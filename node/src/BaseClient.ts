@@ -33,6 +33,7 @@ import {
     GeoSearchStoreResultOptions,
     GeoUnit,
     GeospatialData,
+    HScanOptions,
     InsertPosition,
     KeyWeight,
     LPosOptions,
@@ -54,6 +55,7 @@ import {
     StreamTrimOptions,
     TimeUnit,
     ZAddOptions,
+    ZScanOptions,
     convertElementsAndScores,
     convertFieldsAndValues,
     convertKeysAndEntries,
@@ -2126,12 +2128,13 @@ export class BaseClient {
      *
      * @param key - The key of the set.
      * @param cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of the search.
-     * @param options - (Optional) The {@link BaseScanOptions}.
+     * @param options - (Optional) The {@link HScanOptions}.
      * @returns An array of the `cursor` and the subset of the hash held by `key`.
      * The first element is always the `cursor` for the next iteration of results. `"0"` will be the `cursor`
      * returned on the last iteration of the hash. The second element is always an array of the subset of the
-     * hash held in `key`. The array in the second element is always a flattened series of string pairs,
+     * hash held in `key`. The array in the second element is a flattened series of string pairs,
      * where the value is at even indices and the value is at odd indices.
+     * If `options.noValues` is set to `true`, the second element will only contain the fields without the values.
      *
      * @example
      * ```typescript
@@ -2153,13 +2156,36 @@ export class BaseClient {
      * // Cursor:  39
      * // Members:  ['field 63', 'value 63', 'field 293', 'value 293', 'field 162', 'value 162']
      * // Cursor:  0
-     * // Members:  ['value 55', '55', 'value 24', '24', 'value 90', '90', 'value 113', '113']
+     * // Members:  ['field 55', 'value 55', 'field 24', 'value 24', 'field 90', 'value 90', 'field 113', 'value 113']
+     * ```
+     * @example
+     * ```typescript
+     * // Hscan with noValues
+     * let newCursor = "0";
+     * let result = [];
+     * do {
+     *      result = await client.hscan(key1, newCursor, {
+     *          match: "*",
+     *          count: 3,
+     *          noValues: true,
+     *      });
+     *      newCursor = result[0];
+     *      console.log("Cursor: ", newCursor);
+     *      console.log("Members: ", result[1]);
+     * } while (newCursor !== "0");
+     * // The output of the code above is something similar to:
+     * // Cursor:  31
+     * // Members:  ['field 79', 'field 20', 'field 115']
+     * // Cursor:  39
+     * // Members:  ['field 63', 'field 293', 'field 162']
+     * // Cursor:  0
+     * // Members:  ['field 55', 'field 24', 'field 90', 'field 113']
      * ```
      */
     public async hscan(
         key: string,
         cursor: string,
-        options?: BaseScanOptions,
+        options?: HScanOptions,
     ): Promise<[string, string[]]> {
         return this.createWritePromise(createHScan(key, cursor, options));
     }
@@ -6653,12 +6679,13 @@ export class BaseClient {
      * @param key - The key of the sorted set.
      * @param cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of
      *      the search.
-     * @param options - (Optional) The `zscan` options - see {@link BaseScanOptions} and {@link DecoderOption}.
+     * @param options - (Optional) The `zscan` options - see {@link ZScanOptions} and {@link DecoderOption}.
      * @returns An `Array` of the `cursor` and the subset of the sorted set held by `key`.
      *      The first element is always the `cursor` for the next iteration of results. `0` will be the `cursor`
      *      returned on the last iteration of the sorted set. The second element is always an `Array` of the subset
-     *      of the sorted set held in `key`. The `Array` in the second element is always a flattened series of
+     *      of the sorted set held in `key`. The `Array` in the second element is a flattened series of
      *      `string` pairs, where the value is at even indices and the score is at odd indices.
+     *      If `options.noScores` is to `true`, the second element will only contain the members without scores.
      *
      * @example
      * ```typescript
@@ -6681,11 +6708,36 @@ export class BaseClient {
      * // Cursor:  0
      * // Members:  ['value 55', '55', 'value 24', '24', 'value 90', '90', 'value 113', '113']
      * ```
+     *
+     * @example
+     * ```typescript
+     * // Zscan with no scores
+     * let newCursor = "0";
+     * let result = [];
+     *
+     * do {
+     *      result = await client.zscan(key1, newCursor, {
+     *          match: "*",
+     *          count: 5,
+     *          noScores: true,
+     *      });
+     *      newCursor = result[0];
+     *      console.log("Cursor: ", newCursor);
+     *      console.log("Members: ", result[1]);
+     * } while (newCursor !== "0");
+     * // The output of the code above is something similar to:
+     * // Cursor:  123
+     * // Members:  ['value 163', 'value 114', 'value 25', 'value 82', 'value 64']
+     * // Cursor:  47
+     * // Members:  ['value 39', 'value 127', 'value 43', 'value 139', 'value 211']
+     * // Cursor:  0
+     * // Members:  ['value 55', 'value 24' 'value 90', 'value 113']
+     * ```
      */
     public async zscan(
         key: GlideString,
         cursor: string,
-        options?: BaseScanOptions & DecoderOption,
+        options?: ZScanOptions & DecoderOption,
     ): Promise<[string, GlideString[]]> {
         return this.createWritePromise<[GlideString, GlideString[]]>(
             createZScan(key, cursor, options),
