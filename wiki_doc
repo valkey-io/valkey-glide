@@ -4,22 +4,22 @@ For information on the supported commands and their corresponding parameters, we
 
 ### Command String Arguments
 
-Valkey strings are stored in its simplest form: as a sequence of bytes. GLIDE offers [GlideString](https://github.com/valkey-io/valkey-glide/blob/main/node/src/BaseClient.ts#L278) which maps to Valkey strings. Use it to pass Valkey strings as arguments to commands, or receive Valkey strings in response to commands. GlideString represents either:
+Valkey strings are stored in its simplest form: as a sequence of bytes. GLIDE offers [GlideString](https://github.com/valkey-io/valkey-glide/blob/79fdec50bbef4310cb12e46a69f14c18378afb44/node/src/BaseClient.ts#L278) which maps to Valkey strings. Use it to pass Valkey strings as arguments to commands, or receive Valkey strings in response to commands. GlideString represents either:
 
 1. `string`: as a UTF-8 encoded string.
 2. `Buffer`: as a `byte[]`.
 
 The return types of command API:
 
--   Command uses `string` instead of `GlideString` as the return type if it contains a simple string value (simple strings in Valkey are always UTF-8 encoded strings). For example, [`type`](https://github.com/valkey-io/valkey-glide/blob/main/node/src/BaseClient.ts#L4488) command returns one of pre-defined strings, or [`set`](https://github.com/valkey-io/valkey-glide/blob/main/node/src/BaseClient.ts#L1182) command which returns `"OK"`.
+-   Command uses `string` instead of `GlideString` as the return type if it contains a simple string value (simple strings in Valkey are always UTF-8 encoded strings). For example, [`type`](https://github.com/valkey-io/valkey-glide/blob/79fdec50bbef4310cb12e46a69f14c18378afb44/node/src/BaseClient.ts#L4488) command returns one of pre-defined strings, or [`set`](https://github.com/valkey-io/valkey-glide/blob/79fdec50bbef4310cb12e46a69f14c18378afb44/node/src/BaseClient.ts#L1182) command which returns `"OK"`.
 -   Command uses `Buffer` as the return type, because it always contains binary data. For example, `dump` and `functionDump` commands.
 -   Most commands use `GlideString` as the common return type.
 
 ### Decoder
 
-In Node.js, most users expect the responses to be in string format unless specified otherwise. Users can select which data type they expect to receive as a response. The user has the option, using [`DecoderOption`](https://github.com/valkey-io/valkey-glide/blob/main/node/src/BaseClient.ts#L295), of converting the response into either a string or bytes for each command. In addition, as part of the client creation process, the user has the option of setting a default for all commands if no decoder argument is passed to the command.
+In Node.js, most users expect the responses to be in string format unless specified otherwise. Users can select which data type they expect to receive as a response. The user has the option, using [`DecoderOption`](https://github.com/valkey-io/valkey-glide/blob/79fdec50bbef4310cb12e46a69f14c18378afb44/node/src/BaseClient.ts#L295), of converting the response into either a string or bytes for each command. In addition, as part of the client creation process, the user has the option of setting a default for all commands if no decoder argument is passed to the command.
 
-[`Decoder`](https://github.com/valkey-io/valkey-glide/blob/main/node/src/BaseClient.ts#L283) is an optional parameter for all commands and it has two options
+[`Decoder`](https://github.com/valkey-io/valkey-glide/blob/79fdec50bbef4310cb12e46a69f14c18378afb44/node/src/BaseClient.ts#L283) is an optional parameter for all commands and it has two options
 
 1. `Bytes`: decodes the response into a `Buffer` (byte array).
 2. `String`: decodes the response into a string.
@@ -29,7 +29,7 @@ Note: Using the `Decoder.String` to convert Non-UTF-8 encoded Valkey strings can
 
 #### Example Usage
 
-Here is an example of command implementation to outline arguments using [`DecoderOption`](https://github.com/valkey-io/valkey-glide/blob/main/node/src/BaseClient.ts#L295) and response type:
+Here is an example of command implementation to outline arguments using [`DecoderOption`](https://github.com/valkey-io/valkey-glide/blob/79fdec50bbef4310cb12e46a69f14c18378afb44/node/src/BaseClient.ts#L295) and response type:
 
 ```typescript
 public getdel(
@@ -90,7 +90,7 @@ expect(results).toEqual(["OK", "OK", "value"]);
 
 Transactions use the same decoder for all commands in the transaction. For example, if a user runs `client.exec(transaction, { decoder: Decoder.Bytes })`, then all the command responses in the transaction will be encoded into `Buffer`s. There is an [issue](https://github.com/valkey-io/valkey-glide/issues/2147) to track the support of adding option to set a decoder per each command in transaction.
 
-Here's an example demonstrating how to use `Decoder` and `route` with transaction:
+Here's an example demonstrating how to use `Decoder` and [`route`](https://github.com/valkey-io/valkey-glide/blob/main/node/src/GlideClusterClient.ts#L202) with transaction:
 
 ```typescript
 let transaction = new ClusterTransaction().functionDump();
