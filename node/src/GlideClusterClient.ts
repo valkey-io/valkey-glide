@@ -290,7 +290,7 @@ export class GlideClusterClient extends BaseClient {
      * @see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command|Glide for Valkey Wiki} for details on the restrictions and limitations of the custom command API.
      *
      * @param args - A list including the command name and arguments for the custom command.
-     * @param options - (Optional) See {@link DecoderOption}.
+     * @param options - (Optional) See {@link RouteOption} and {@link DecoderOption}
      * @returns The executed custom command return value.
      *
      * @example
