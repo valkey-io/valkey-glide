@@ -3667,7 +3667,7 @@ export function createHRandField(
  * @internal
  */
 export function createHScan(
-    key: string,
+    key: GlideString,
     cursor: string,
     options?: HScanOptions,
 ): command_request.Command {
