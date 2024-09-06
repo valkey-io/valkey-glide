@@ -1494,7 +1494,9 @@ export function runBaseTests(config: {
 
                     for (let i = 0; i < resultEntry.length; i += 2) {
                         secondResultAllKeys.push(resultEntry[i].toString());
-                        secondResultAllValues.push(resultEntry[i + 1].toString());
+                        secondResultAllValues.push(
+                            resultEntry[i + 1].toString(),
+                        );
                     }
 
                     if (isFirstLoop) {
