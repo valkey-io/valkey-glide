@@ -8,7 +8,7 @@
 // represents a running server instance. See first 2 test cases as examples.
 
 import { expect, it } from "@jest/globals";
-import { HashDataType } from "src/BaseClient";
+import { GlideRecord, HashDataType } from "src/BaseClient";
 import { v4 as uuidv4 } from "uuid";
 import {
     BaseClientConfiguration,
@@ -371,23 +371,31 @@ export function runBaseTests(config: {
                 const key2 = uuidv4();
                 const key3 = uuidv4();
                 const value = uuidv4();
-                const keyValueList = {
-                    [key1]: value,
-                    [key2]: value,
-                    [key3]: value,
-                };
-                const valueEncoded = Buffer.from(value);
+                const keyValueList = [
+                    { key: key1, value },
+                    { key: key2, value },
+                    { key: key3, value },
+                ];
 
                 expect(await client.mset(keyValueList)).toEqual("OK");
                 expect(
                     await client.mget([key1, key2, "nonExistingKey", key3]),
                 ).toEqual([value, value, null, value]);
 
-                //mget with binary buffers
-                expect(await client.mset(keyValueList)).toEqual("OK");
+                //mget & mset with binary buffers
+                const key1Encoded = Buffer.from(key1);
+                const key3Encoded = Buffer.from(key3);
+                const valueEncoded = Buffer.from(value);
+                const keyValueListEncoded: GlideRecord<GlideString> = [
+                    { key: key1Encoded, value: valueEncoded },
+                    { key: key2, value },
+                    { key: key3Encoded, value: valueEncoded },
+                ];
+
+                expect(await client.mset(keyValueListEncoded)).toEqual("OK");
                 expect(
                     await client.mget(
-                        [key1, key2, "nonExistingKey", key3],
+                        [key1Encoded, key2, "nonExistingKey", key3Encoded],
                         Decoder.Bytes,
                     ),
                 ).toEqual([valueEncoded, valueEncoded, null, valueEncoded]);
@@ -409,10 +417,12 @@ export function runBaseTests(config: {
                     [key1]: value,
                     [key2]: value,
                 };
-                const keyValueMap2 = {
-                    [key2]: value,
-                    [key3]: value,
-                };
+                const key2Encoded = Buffer.from(key2);
+                const valueEncoded = Buffer.from(value);
+                const keyValueMap2 = [
+                    { key: key2Encoded, value: valueEncoded },
+                    { key: key3, value: valueEncoded },
+                ];
 
                 expect(await client.msetnx(keyValueMap1)).toEqual(true);
 
