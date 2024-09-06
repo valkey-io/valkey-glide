@@ -1155,9 +1155,10 @@ export class BaseClient {
             expiry: "persist" | { type: TimeUnit; duration: number };
         } & DecoderOption,
     ): Promise<GlideString | null> {
-        return this.createWritePromise(createGetEx(key, options?.expiry), {
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(
+            createGetEx(key, options?.expiry),
+            options,
+        );
     }
 
     /**
@@ -1259,9 +1260,7 @@ export class BaseClient {
         value: GlideString,
         options?: SetOptions & DecoderOption,
     ): Promise<"OK" | GlideString | null> {
-        return this.createWritePromise(createSet(key, value, options), {
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(createSet(key, value, options), options);
     }
 
     /**
@@ -3571,9 +3570,7 @@ export class BaseClient {
                 }
             }),
         });
-        return this.createWritePromise(scriptInvocation, {
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(scriptInvocation, options);
     }
 
     /**
@@ -6280,7 +6277,7 @@ export class BaseClient {
     ): Promise<[GlideString, [number?, number?, [number, number]?]?][]> {
         return this.createWritePromise(
             createGeoSearch(key, searchFrom, searchBy, options),
-            { decoder: options?.decoder },
+            options,
         );
     }
 
@@ -6975,9 +6972,10 @@ export class BaseClient {
     public async pubsubChannels(
         options?: { pattern?: GlideString } & DecoderOption,
     ): Promise<GlideString[]> {
-        return this.createWritePromise(createPubSubChannels(options?.pattern), {
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(
+            createPubSubChannels(options?.pattern),
+            options,
+        );
     }
 
     /**

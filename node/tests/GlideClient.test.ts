@@ -1438,7 +1438,7 @@ describe("GlideClient", () => {
             // `key` should be the only key in the database
             expect(await client.randomKey()).toEqual(key);
             // test binary decoder
-            expect(await client.randomKey(Decoder.Bytes)).toEqual(
+            expect(await client.randomKey({ decoder: Decoder.Bytes })).toEqual(
                 Buffer.from(key),
             );
 

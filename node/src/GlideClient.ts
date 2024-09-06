@@ -256,9 +256,7 @@ export class GlideClient extends BaseClient {
             message?: GlideString;
         } & DecoderOption,
     ): Promise<GlideString> {
-        return this.createWritePromise(createPing(options?.message), {
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(createPing(options?.message), options);
     }
 
     /**
@@ -592,7 +590,7 @@ export class GlideClient extends BaseClient {
     ): Promise<GlideString> {
         return this.createWritePromise(
             createFunctionLoad(libraryCode, options?.replace),
-            { decoder: options?.decoder },
+            options,
         );
     }
 
@@ -648,9 +646,7 @@ export class GlideClient extends BaseClient {
     public async functionList(
         options?: FunctionListOptions & DecoderOption,
     ): Promise<FunctionListResponse> {
-        return this.createWritePromise(createFunctionList(options), {
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(createFunctionList(options), options);
     }
 
     /**
@@ -877,9 +873,7 @@ export class GlideClient extends BaseClient {
         key: GlideString,
         options?: SortOptions & DecoderOption,
     ): Promise<(GlideString | null)[]> {
-        return this.createWritePromise(createSort(key, options), {
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(createSort(key, options), options);
     }
 
     /**
@@ -910,9 +904,10 @@ export class GlideClient extends BaseClient {
         key: GlideString,
         options?: SortOptions & DecoderOption,
     ): Promise<(GlideString | null)[]> {
-        return this.createWritePromise(createSortReadOnly(key, options), {
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(
+            createSortReadOnly(key, options),
+            options,
+        );
     }
 
     /**
@@ -972,9 +967,7 @@ export class GlideClient extends BaseClient {
      * Returns a random existing key name from the currently selected database.
      *
      * @see {@link https://valkey.io/commands/randomkey/|valkey.io} for more details.
-     *
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A random existing key name from the currently selected database.
      *
      * @example
@@ -983,8 +976,10 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: "key12" - "key12" is a random existing key name from the currently selected database.
      * ```
      */
-    public async randomKey(decoder?: Decoder): Promise<GlideString | null> {
-        return this.createWritePromise(createRandomKey(), { decoder: decoder });
+    public async randomKey(
+        options?: DecoderOption,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createRandomKey(), options);
     }
 
     /**

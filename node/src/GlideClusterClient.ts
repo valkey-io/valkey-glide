@@ -314,7 +314,12 @@ export class GlideClusterClient extends BaseClient {
      * @see {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#transaction|Valkey Glide Wiki} for details on Valkey Transactions.
      *
      * @param transaction - A {@link ClusterTransaction} object containing a list of commands to be executed.
-     * @param options - (Optional) See {@link RouteOption} and {@link DecoderOption}.
+     *
+     * @param options - (Optional) See {@link DecoderOption} and (Optional) Additional parameters:
+     * - (Optional) `route`: If `route` is not provided, the transaction will be routed to the slot owner of the first key found in the transaction.
+     *     If no key is found, the command will be sent to a random node.
+     *     If `route` is provided, the client will route the command to the nodes defined by `route`.
+     *
      * @returns A list of results corresponding to the execution of each command in the transaction.
      *     If a command returns a value, it will be included in the list. If a command doesn't return a value,
      *     the list entry will be `null`.
