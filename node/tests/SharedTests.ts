@@ -1448,11 +1448,11 @@ export function runBaseTests(config: {
 
                 const resultArray = result[resultCollectionIndex];
                 const resultKeys = [];
-                const resultValues: GlideString[] = [];
+                const resultValues: string[] = [];
 
                 for (let i = 0; i < resultArray.length; i += 2) {
-                    resultKeys.push(resultArray[i]);
-                    resultValues.push(resultArray[i + 1]);
+                    resultKeys.push(resultArray[i].toString());
+                    resultValues.push(resultArray[i + 1].toString());
                 }
 
                 // Verify if all keys from charMap are in resultKeys
@@ -1493,8 +1493,8 @@ export function runBaseTests(config: {
                     const resultEntry = result[resultCollectionIndex];
 
                     for (let i = 0; i < resultEntry.length; i += 2) {
-                        secondResultAllKeys.push(resultEntry[i]);
-                        secondResultAllValues.push(resultEntry[i + 1]);
+                        secondResultAllKeys.push(resultEntry[i].toString());
+                        secondResultAllValues.push(resultEntry[i + 1].toString());
                     }
 
                     if (isFirstLoop) {
