@@ -1448,7 +1448,7 @@ export function runBaseTests(config: {
 
                 const resultArray = result[resultCollectionIndex];
                 const resultKeys = [];
-                const resultValues: string[] = [];
+                const resultValues: GlideString[] = [];
 
                 for (let i = 0; i < resultArray.length; i += 2) {
                     resultKeys.push(resultArray[i]);
