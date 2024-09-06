@@ -1007,7 +1007,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * where the value is at even indices and the value is at odd indices.
      * If `options.noValues` is set to `true`, the second element will only contain the fields without the values.
      */
-    public hscan(key: string, cursor: string, options?: HScanOptions): T {
+    public hscan(key: GlideString, cursor: string, options?: HScanOptions): T {
         return this.addAndReturn(createHScan(key, cursor, options));
     }
 
