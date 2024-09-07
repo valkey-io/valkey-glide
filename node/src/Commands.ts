@@ -332,20 +332,23 @@ export function createMGet(keys: GlideString[]): command_request.Command {
  * @internal
  */
 export function createMSet(
-    keyValueMap: Record<string, string>,
+    keysAndValues: GlideRecord<GlideString>,
 ): command_request.Command {
-    return createCommand(RequestType.MSet, Object.entries(keyValueMap).flat());
+    return createCommand(
+        RequestType.MSet,
+        keysAndValues.flatMap((e) => [e.key, e.value]),
+    );
 }
 
 /**
  * @internal
  */
 export function createMSetNX(
-    keyValueMap: Record<string, string>,
+    keysAndValues: GlideRecord<GlideString>,
 ): command_request.Command {
     return createCommand(
         RequestType.MSetNX,
-        Object.entries(keyValueMap).flat(),
+        keysAndValues.flatMap((e) => [e.key, e.value]),
     );
 }
 
@@ -3667,7 +3670,7 @@ export function createHRandField(
  * @internal
  */
 export function createHScan(
-    key: string,
+    key: GlideString,
     cursor: string,
     options?: HScanOptions,
 ): command_request.Command {

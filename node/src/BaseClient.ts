@@ -324,25 +324,50 @@ export type SortedSetDataType = {
 }[];
 
 /**
+ * This function converts an input from GlideRecord or Record types to GlideRecord.
+ *
+ * @param keysAndValues - key names and their values.
+ * @returns GlideRecord array containing keys and their values.
+ */
+export function convertGlideRecord(
+    keysAndValues: GlideRecord<GlideString> | Record<string, GlideString>,
+): GlideRecord<GlideString> {
+    if (!Array.isArray(keysAndValues)) {
+        return Object.entries(keysAndValues).map((e) => {
+            return { key: e[0], value: e[1] };
+        });
+    }
+
+    return keysAndValues;
+}
+
+/**
+ * Data type which represents how data are returned from hashes or insterted there.
+ * Similar to `Record<GlideString, GlideString>` - see {@link GlideRecord}.
+ */
+export type HashDataType = {
+    /** The hash element name. */
+    field: GlideString;
+    /** The hash element value. */
+    value: GlideString;
+}[];
+
+/**
  * This function converts an input from HashDataType or Record types to HashDataType.
  *
  * @param fieldsAndValues - field names and their values.
  * @returns HashDataType array containing field names and their values.
  */
-export function convertFieldsAndValuesForHset(
+export function convertHashDataType(
     fieldsAndValues: HashDataType | Record<string, GlideString>,
 ): HashDataType {
-    let finalFieldAndValues = [];
-
     if (!Array.isArray(fieldsAndValues)) {
-        finalFieldAndValues = Object.entries(fieldsAndValues).map((e) => {
+        return Object.entries(fieldsAndValues).map((e) => {
             return { field: e[0], value: e[1] };
         });
-    } else {
-        finalFieldAndValues = fieldsAndValues;
     }
 
-    return finalFieldAndValues;
+    return fieldsAndValues;
 }
 
 /**
@@ -384,17 +409,6 @@ class PointerResponse {
         this.low = low;
     }
 }
-
-/**
- * Data type which represents how data are returned from hashes or insterted there.
- * Similar to `Record<GlideString, GlideString>` - see {@link GlideRecord}.
- */
-export type HashDataType = {
-    /** The hash element name. */
-    field: GlideString;
-    /** The hash element value. */
-    value: GlideString;
-}[];
 
 /** Represents the credentials for connecting to a server. */
 export type RedisCredentials = {
@@ -1396,7 +1410,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/mset/|valkey.io} for details.
      * @remarks When in cluster mode, the command may route to multiple nodes when keys in `keyValueMap` map to different hash slots.
      *
-     * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
+     * @param keysAndValues - A list of key-value pairs to set.
      * @returns always "OK".
      *
      * @example
@@ -1405,9 +1419,20 @@ export class BaseClient {
      * const result = await client.mset({"key1": "value1", "key2": "value2"});
      * console.log(result); // Output: 'OK'
      * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of mset method to set values for multiple keys (GlideRecords allow binary data in the key)
+     * const result = await client.mset([{key: "key1", value: "value1"}, {key: "key2", value: "value2"}]);
+     * console.log(result); // Output: 'OK'
+     * ```
      */
-    public async mset(keyValueMap: Record<string, string>): Promise<"OK"> {
-        return this.createWritePromise(createMSet(keyValueMap));
+    public async mset(
+        keysAndValues: Record<string, GlideString> | GlideRecord<GlideString>,
+    ): Promise<"OK"> {
+        return this.createWritePromise(
+            createMSet(convertGlideRecord(keysAndValues)),
+        );
     }
 
     /**
@@ -1417,7 +1442,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/msetnx/|valkey.io} for more details.
      * @remarks When in cluster mode, all keys in `keyValueMap` must map to the same hash slot.
      *
-     * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
+     * @param keysAndValues  - A list of key-value pairs to set.
      * @returns `true` if all keys were set. `false` if no key was set.
      *
      * @example
@@ -1429,8 +1454,12 @@ export class BaseClient {
      * console.log(result2); // Output: `false`
      * ```
      */
-    public async msetnx(keyValueMap: Record<string, string>): Promise<boolean> {
-        return this.createWritePromise(createMSetNX(keyValueMap));
+    public async msetnx(
+        keysAndValues: Record<string, GlideString> | GlideRecord<GlideString>,
+    ): Promise<boolean> {
+        return this.createWritePromise(
+            createMSetNX(convertGlideRecord(keysAndValues)),
+        );
     }
 
     /** Increments the number stored at `key` by one. If `key` does not exist, it is set to 0 before performing the operation.
@@ -1812,7 +1841,7 @@ export class BaseClient {
         fieldsAndValues: HashDataType | Record<string, GlideString>,
     ): Promise<number> {
         return this.createWritePromise(
-            createHSet(key, convertFieldsAndValuesForHset(fieldsAndValues)),
+            createHSet(key, convertHashDataType(fieldsAndValues)),
         );
     }
 
@@ -2179,11 +2208,14 @@ export class BaseClient {
      * ```
      */
     public async hscan(
-        key: string,
+        key: GlideString,
         cursor: string,
-        options?: HScanOptions,
-    ): Promise<[string, string[]]> {
-        return this.createWritePromise(createHScan(key, cursor, options));
+        options?: HScanOptions & DecoderOption,
+    ): Promise<[string, GlideString[]]> {
+        return this.createWritePromise<[GlideString, GlideString[]]>(
+            createHScan(key, cursor, options),
+            options,
+        ).then((res) => [res[0].toString(), res[1]]); // convert cursor back to string
     }
 
     /**

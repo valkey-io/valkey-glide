@@ -8,7 +8,7 @@
 // represents a running server instance. See first 2 test cases as examples.
 
 import { expect, it } from "@jest/globals";
-import { HashDataType } from "src/BaseClient";
+import { GlideRecord, HashDataType } from "src/BaseClient";
 import { v4 as uuidv4 } from "uuid";
 import {
     BaseClientConfiguration,
@@ -373,22 +373,30 @@ export function runBaseTests(config: {
                 const key2 = uuidv4();
                 const key3 = uuidv4();
                 const value = uuidv4();
-                const keyValueList = {
-                    [key1]: value,
-                    [key2]: value,
-                    [key3]: value,
-                };
-                const valueEncoded = Buffer.from(value);
+                const keyValueList = [
+                    { key: key1, value },
+                    { key: key2, value },
+                    { key: key3, value },
+                ];
 
                 expect(await client.mset(keyValueList)).toEqual("OK");
                 expect(
                     await client.mget([key1, key2, "nonExistingKey", key3]),
                 ).toEqual([value, value, null, value]);
 
-                //mget with binary buffers
-                expect(await client.mset(keyValueList)).toEqual("OK");
+                //mget & mset with binary buffers
+                const key1Encoded = Buffer.from(key1);
+                const key3Encoded = Buffer.from(key3);
+                const valueEncoded = Buffer.from(value);
+                const keyValueListEncoded: GlideRecord<GlideString> = [
+                    { key: key1Encoded, value: valueEncoded },
+                    { key: key2, value },
+                    { key: key3Encoded, value: valueEncoded },
+                ];
+
+                expect(await client.mset(keyValueListEncoded)).toEqual("OK");
                 expect(
-                    await client.mget([key1, key2, "nonExistingKey", key3], {
+                    await client.mget([key1Encoded, key2, "nonExistingKey", key3Encoded], {
                         decoder: Decoder.Bytes,
                     }),
                 ).toEqual([valueEncoded, valueEncoded, null, valueEncoded]);
@@ -410,10 +418,12 @@ export function runBaseTests(config: {
                     [key1]: value,
                     [key2]: value,
                 };
-                const keyValueMap2 = {
-                    [key2]: value,
-                    [key3]: value,
-                };
+                const key2Encoded = Buffer.from(key2);
+                const valueEncoded = Buffer.from(value);
+                const keyValueMap2 = [
+                    { key: key2Encoded, value: valueEncoded },
+                    { key: key3, value: valueEncoded },
+                ];
 
                 expect(await client.msetnx(keyValueMap1)).toEqual(true);
 
@@ -1460,8 +1470,8 @@ export function runBaseTests(config: {
                 const resultValues: string[] = [];
 
                 for (let i = 0; i < resultArray.length; i += 2) {
-                    resultKeys.push(resultArray[i]);
-                    resultValues.push(resultArray[i + 1]);
+                    resultKeys.push(resultArray[i].toString());
+                    resultValues.push(resultArray[i + 1].toString());
                 }
 
                 // Verify if all keys from charMap are in resultKeys
@@ -1478,13 +1488,16 @@ export function runBaseTests(config: {
                 // Test hscan with match
                 result = await client.hscan(key1, initialCursor, {
                     match: "a",
+                    decoder: Decoder.Bytes,
                 });
 
                 expect(result[resultCursorIndex]).toEqual(initialCursor);
-                expect(result[resultCollectionIndex]).toEqual(["a", "0"]);
+                expect(result[resultCollectionIndex]).toEqual(
+                    ["a", "0"].map(Buffer.from),
+                );
 
                 // Set up testing data with the numberMap set to be used for the next set test keys and test results.
-                expect(await client.hset(key1, numberMap)).toEqual(
+                expect(await client.hset(Buffer.from(key1), numberMap)).toEqual(
                     Object.keys(numberMap).length,
                 );
 
@@ -1499,8 +1512,10 @@ export function runBaseTests(config: {
                     const resultEntry = result[resultCollectionIndex];
 
                     for (let i = 0; i < resultEntry.length; i += 2) {
-                        secondResultAllKeys.push(resultEntry[i]);
-                        secondResultAllValues.push(resultEntry[i + 1]);
+                        secondResultAllKeys.push(resultEntry[i].toString());
+                        secondResultAllValues.push(
+                            resultEntry[i + 1].toString(),
+                        );
                     }
 
                     if (isFirstLoop) {
@@ -1524,8 +1539,12 @@ export function runBaseTests(config: {
                     );
 
                     for (let i = 0; i < secondResultEntry.length; i += 2) {
-                        secondResultAllKeys.push(secondResultEntry[i]);
-                        secondResultAllValues.push(secondResultEntry[i + 1]);
+                        secondResultAllKeys.push(
+                            secondResultEntry[i].toString(),
+                        );
+                        secondResultAllValues.push(
+                            secondResultEntry[i + 1].toString(),
+                        );
                     }
                 } while (resultCursor != initialCursor); // 0 is returned for the cursor of the last iteration.
 
