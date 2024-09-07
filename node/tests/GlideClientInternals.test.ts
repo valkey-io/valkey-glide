@@ -316,7 +316,9 @@ describe("SocketConnectionInternals", () => {
                         },
                     );
                 });
-                const result = await connection.get("foo", Decoder.String);
+                const result = await connection.get("foo", {
+                    decoder: Decoder.String,
+                });
                 // RESP3 map are converted to `GlideRecord` in rust lib, but elements may get reordered in this test.
                 // To avoid flakyness, we downcast `GlideRecord` to `Record` which can be safely compared.
                 expect(

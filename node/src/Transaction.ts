@@ -9,7 +9,7 @@ import {
     HashDataType,
     ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
     SortedSetDataType,
-    convertGlideRecord
+    convertGlideRecord,
 } from "./BaseClient";
 
 import {
