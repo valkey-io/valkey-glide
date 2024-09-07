@@ -32,5 +32,7 @@ run.dependsOn ':client:buildRustRelease'
 application {
     // Define the main class for the application.
     mainClass = 'glide.benchmarks.BenchmarkingApp'
-    applicationDefaultJvmArgs = ['-Djava.library.path=../target/release']
+    if (!System.getenv("ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderName")) {
+        applicationDefaultJvmArgs = ['-Djava.library.path=../target/release']
+    }
 }

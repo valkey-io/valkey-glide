@@ -49,16 +49,13 @@ jobs:
               shell: bash
               run: |
                   if ${{ github.event_name == 'workflow_dispatch' }}; then
-                      R_VERSION="${{ env.INPUT_VERSION }}"
+                      R_VERSION="${{ github.event.inputs.version }}"
                   else
                       R_VERSION=${GITHUB_REF:11}
                   fi
-                      echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
-                      echo "Release version detected: $R_VERSION"
+                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
+                  echo "Release version detected: $R_VERSION"
                   echo "RELEASE_VERSION=$R_VERSION" >> $GITHUB_OUTPUT
-              env:
-                  EVENT_NAME: ${{ github.event_name }}
-                  INPUT_VERSION: ${{ github.event.inputs.version }}
 
     create-binaries-to-publish:
         needs: [set-release-version, load-platform-matrix]
@@ -175,7 +172,7 @@ jobs:
                   cd build
                   zip -r ../build io
 
-            - name: Upload artifacts to publish
+            - name: Upload bundle to CI artifacts
               uses: actions/upload-artifact@v4
               with:
                   name: valkey-${{ env.RELEASE_VERSION }}
@@ -234,7 +231,7 @@ jobs:
                   export ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderName="Authorization"
                   export ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderValue="Bearer $(echo "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" | base64)"
                   export GLIDE_RELEASE_VERSION=${{ env.RELEASE_VERSION }}
-                  ./gradlew run
+                  ./gradlew :benchmarks:run
 
             - name: Drop deployment if validation fails
               if: ${{ failure() }}
