@@ -1055,7 +1055,8 @@ class StandaloneCommands(CoreCommands):
         See https://valkey.io/commands/script-flush for more details.
 
         Args:
-            mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
+            mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`. If not specified,
+                the cache will be synchronously flushed.
 
         Returns:
             TOK: A simple `OK` response.
