@@ -169,7 +169,9 @@ export function runBaseTests(config: {
 
                     if (client instanceof GlideClient) {
                         expect(
-                            await client.clientGetName(Decoder.Bytes),
+                            await client.clientGetName({
+                                decoder: Decoder.Bytes,
+                            }),
                         ).toEqual(Buffer.from("TEST_CLIENT"));
                     } else {
                         expect(
@@ -396,7 +398,9 @@ export function runBaseTests(config: {
                 expect(
                     await client.mget(
                         [key1Encoded, key2, "nonExistingKey", key3Encoded],
-                        Decoder.Bytes,
+                        {
+                            decoder: Decoder.Bytes,
+                        },
                     ),
                 ).toEqual([valueEncoded, valueEncoded, null, valueEncoded]);
             }, protocol);
@@ -1266,10 +1270,12 @@ export function runBaseTests(config: {
                 expect(await client.getdel(key1)).toEqual(null);
 
                 expect(await client.set(key1, value1)).toEqual("OK");
-                expect(await client.getdel(key1, Decoder.Bytes)).toEqual(
-                    value1Encoded,
-                );
-                expect(await client.getdel(key1, Decoder.Bytes)).toEqual(null);
+                expect(
+                    await client.getdel(key1, { decoder: Decoder.Bytes }),
+                ).toEqual(value1Encoded);
+                expect(
+                    await client.getdel(key1, { decoder: Decoder.Bytes }),
+                ).toEqual(null);
 
                 // key isn't a string
                 expect(await client.sadd(key2, ["a"])).toEqual(1);
@@ -1296,14 +1302,20 @@ export function runBaseTests(config: {
 
                 // range of binary buffer
                 expect(await client.set(key, "This is a string")).toEqual("OK");
-                expect(await client.getrange(key, 0, 3, Decoder.Bytes)).toEqual(
-                    valueEncoded.subarray(0, 4),
-                );
                 expect(
-                    await client.getrange(key, -3, -1, Decoder.Bytes),
+                    await client.getrange(key, 0, 3, {
+                        decoder: Decoder.Bytes,
+                    }),
+                ).toEqual(valueEncoded.subarray(0, 4));
+                expect(
+                    await client.getrange(key, -3, -1, {
+                        decoder: Decoder.Bytes,
+                    }),
                 ).toEqual(valueEncoded.subarray(-3, valueEncoded.length));
                 expect(
-                    await client.getrange(key, 0, -1, Decoder.Bytes),
+                    await client.getrange(key, 0, -1, {
+                        decoder: Decoder.Bytes,
+                    }),
                 ).toEqual(valueEncoded.subarray(0, valueEncoded.length));
 
                 // out of range
@@ -1684,18 +1696,22 @@ export function runBaseTests(config: {
 
                 expect(await client.set(key, value)).toEqual("OK");
                 expect(await client.get(key)).toEqual(value);
-                expect(await client.get(key, Decoder.Bytes)).toEqual(
-                    valueEncoded,
-                );
-                expect(await client.get(key, Decoder.String)).toEqual(value);
+                expect(
+                    await client.get(key, { decoder: Decoder.Bytes }),
+                ).toEqual(valueEncoded);
+                expect(
+                    await client.get(key, { decoder: Decoder.String }),
+                ).toEqual(value);
 
                 // Setting the encoded value. Should behave as the previous test since the default is String decoding.
                 expect(await client.set(key, valueEncoded)).toEqual("OK");
                 expect(await client.get(key)).toEqual(value);
-                expect(await client.get(key, Decoder.Bytes)).toEqual(
-                    valueEncoded,
-                );
-                expect(await client.get(key, Decoder.String)).toEqual(value);
+                expect(
+                    await client.get(key, { decoder: Decoder.Bytes }),
+                ).toEqual(valueEncoded);
+                expect(
+                    await client.get(key, { decoder: Decoder.String }),
+                ).toEqual(value);
             }, protocol);
         },
         config.timeout,
@@ -2121,21 +2137,23 @@ export function runBaseTests(config: {
                 );
                 expect(await client.lpop("nonExistingKey")).toEqual(null);
                 expect(await client.lpush(key2, valueList2)).toEqual(3);
-                expect(await client.lpop(key2, Decoder.Bytes)).toEqual(
-                    Buffer.from("value5"),
-                );
-                expect(await client.lrange(key2, 0, -1, Decoder.Bytes)).toEqual(
-                    encodedValues,
-                );
-                expect(await client.lpopCount(key2, 2, Decoder.Bytes)).toEqual(
-                    encodedValues,
-                );
+                expect(
+                    await client.lpop(key2, { decoder: Decoder.Bytes }),
+                ).toEqual(Buffer.from("value5"));
+                expect(
+                    await client.lrange(key2, 0, -1, {
+                        decoder: Decoder.Bytes,
+                    }),
+                ).toEqual(encodedValues);
+                expect(
+                    await client.lpopCount(key2, 2, { decoder: Decoder.Bytes }),
+                ).toEqual(encodedValues);
                 expect(
                     await client.lpush(key2, [Buffer.from("value8")]),
                 ).toEqual(1);
-                expect(await client.lpop(key2, Decoder.Bytes)).toEqual(
-                    Buffer.from("value8"),
-                );
+                expect(
+                    await client.lpop(key2, { decoder: Decoder.Bytes }),
+                ).toEqual(Buffer.from("value8"));
             }, protocol);
         },
         config.timeout,
@@ -2333,7 +2351,7 @@ export function runBaseTests(config: {
                         key2,
                         ListDirection.RIGHT,
                         ListDirection.LEFT,
-                        Decoder.Bytes,
+                        { decoder: Decoder.Bytes },
                     ),
                 ).toEqual(Buffer.from("4"));
 
@@ -2474,7 +2492,7 @@ export function runBaseTests(config: {
                         ListDirection.RIGHT,
                         ListDirection.LEFT,
                         0.1,
-                        Decoder.Bytes,
+                        { decoder: Decoder.Bytes },
                     ),
                 ).toEqual(Buffer.from("4"));
 
@@ -2700,19 +2718,18 @@ export function runBaseTests(config: {
                 expect(await client.rpop("nonExistingKey")).toEqual(null);
 
                 expect(await client.rpush(key2, valueList2)).toEqual(3);
-                expect(await client.rpop(key2, Decoder.Bytes)).toEqual(
-                    Buffer.from("value7"),
-                );
-                expect(await client.rpopCount(key2, 2, Decoder.Bytes)).toEqual([
-                    Buffer.from("value6"),
-                    Buffer.from("value5"),
-                ]);
+                expect(
+                    await client.rpop(key2, { decoder: Decoder.Bytes }),
+                ).toEqual(Buffer.from("value7"));
+                expect(
+                    await client.rpopCount(key2, 2, { decoder: Decoder.Bytes }),
+                ).toEqual([Buffer.from("value6"), Buffer.from("value5")]);
                 expect(
                     await client.rpush(key2, [Buffer.from("value8")]),
                 ).toEqual(1);
-                expect(await client.rpop(key2, Decoder.Bytes)).toEqual(
-                    Buffer.from("value8"),
-                );
+                expect(
+                    await client.rpop(key2, { decoder: Decoder.Bytes }),
+                ).toEqual(Buffer.from("value8"));
             }, protocol);
         },
         config.timeout,
@@ -5844,24 +5861,25 @@ export function runBaseTests(config: {
                 expect(await client.echo(message)).toEqual(message);
                 expect(
                     client instanceof GlideClient
-                        ? await client.echo(message, Decoder.String)
+                        ? await client.echo(message, {
+                              decoder: Decoder.String,
+                          })
                         : await client.echo(message, {
                               decoder: Decoder.String,
                           }),
                 ).toEqual(message);
                 expect(
                     client instanceof GlideClient
-                        ? await client.echo(message, Decoder.Bytes)
+                        ? await client.echo(message, { decoder: Decoder.Bytes })
                         : await client.echo(message, {
                               decoder: Decoder.Bytes,
                           }),
                 ).toEqual(Buffer.from(message));
                 expect(
                     client instanceof GlideClient
-                        ? await client.echo(
-                              Buffer.from(message),
-                              Decoder.String,
-                          )
+                        ? await client.echo(Buffer.from(message), {
+                              decoder: Decoder.String,
+                          })
                         : await client.echo(Buffer.from(message), {
                               decoder: Decoder.String,
                           }),
@@ -5929,12 +5947,16 @@ export function runBaseTests(config: {
                 expect(await client.lindex(listName, 1)).toEqual(listKey1Value);
                 expect(await client.lindex("notExsitingList", 1)).toEqual(null);
                 expect(await client.lindex(listName, 3)).toEqual(null);
-                expect(await client.lindex(listName, 0, Decoder.Bytes)).toEqual(
-                    Buffer.from(listKey2Value),
-                );
-                expect(await client.lindex(listName, 1, Decoder.Bytes)).toEqual(
-                    Buffer.from(listKey1Value),
-                );
+                expect(
+                    await client.lindex(listName, 0, {
+                        decoder: Decoder.Bytes,
+                    }),
+                ).toEqual(Buffer.from(listKey2Value));
+                expect(
+                    await client.lindex(listName, 1, {
+                        decoder: Decoder.Bytes,
+                    }),
+                ).toEqual(Buffer.from(listKey1Value));
                 expect(await client.lindex(encodedListName, 0)).toEqual(
                     listKey2Value,
                 );
@@ -6353,7 +6375,9 @@ export function runBaseTests(config: {
                 ]);
                 // Test encoded value
                 expect(
-                    await client.brpop(["brpop-test"], 0.1, Decoder.Bytes),
+                    await client.brpop(["brpop-test"], 0.1, {
+                        decoder: Decoder.Bytes,
+                    }),
                 ).toEqual([Buffer.from("brpop-test"), Buffer.from("bar")]);
                 // Delete all values from list
                 expect(await client.del(["brpop-test"])).toEqual(1);
@@ -6394,7 +6418,9 @@ export function runBaseTests(config: {
                 ]);
                 // Test decoded value
                 expect(
-                    await client.blpop(["blpop-test"], 0.1, Decoder.Bytes),
+                    await client.blpop(["blpop-test"], 0.1, {
+                        decoder: Decoder.Bytes,
+                    }),
                 ).toEqual([Buffer.from("blpop-test"), Buffer.from("bar")]);
                 // Delete all values from list
                 expect(await client.del(["blpop-test"])).toEqual(1);
@@ -7444,10 +7470,12 @@ export function runBaseTests(config: {
 
                 // Restore to a new key without option
                 expect(await client.restore(key2, 0, data)).toEqual("OK");
-                expect(await client.get(key2, Decoder.String)).toEqual(value);
-                expect(await client.get(key2, Decoder.Bytes)).toEqual(
-                    valueEncode,
-                );
+                expect(
+                    await client.get(key2, { decoder: Decoder.String }),
+                ).toEqual(value);
+                expect(
+                    await client.get(key2, { decoder: Decoder.Bytes }),
+                ).toEqual(valueEncode);
 
                 // Restore to an existing key
                 await expect(client.restore(key2, 0, data)).rejects.toThrow(
@@ -7531,10 +7559,9 @@ export function runBaseTests(config: {
                 // Transaction tests
                 let response =
                     client instanceof GlideClient
-                        ? await client.exec(
-                              new Transaction().dump(key1),
-                              Decoder.Bytes,
-                          )
+                        ? await client.exec(new Transaction().dump(key1), {
+                              decoder: Decoder.Bytes,
+                          })
                         : await client.exec(
                               new ClusterTransaction().dump(key1),
                               { decoder: Decoder.Bytes },
@@ -7549,7 +7576,7 @@ export function runBaseTests(config: {
                               new Transaction()
                                   .restore(key4, 0, data)
                                   .get(key4),
-                              Decoder.String,
+                              { decoder: Decoder.String },
                           )
                         : await client.exec(
                               new ClusterTransaction()
@@ -7567,7 +7594,7 @@ export function runBaseTests(config: {
                               new Transaction()
                                   .restore(key5, 0, data)
                                   .get(key5),
-                              Decoder.Bytes,
+                              { decoder: Decoder.Bytes },
                           )
                         : await client.exec(
                               new ClusterTransaction()
@@ -7750,9 +7777,9 @@ export function runBaseTests(config: {
                 expect(await client.append(key3, valueEncoded)).toBe(
                     valueEncoded.length * 2,
                 );
-                expect(await client.get(key3, Decoder.Bytes)).toEqual(
-                    Buffer.concat([valueEncoded, valueEncoded]),
-                );
+                expect(
+                    await client.get(key3, { decoder: Decoder.Bytes }),
+                ).toEqual(Buffer.concat([valueEncoded, valueEncoded]));
             }, protocol);
         },
         config.timeout,
