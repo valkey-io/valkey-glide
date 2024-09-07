@@ -612,7 +612,8 @@ export type PubSubMsg = {
 
 /**
  * @internal
- *
+ * A type to combine RouterOption and DecoderOption to be used for creating write promises for the command.
+ * See - {@link DecoderOption} and {@link RouteOption}
  */
 export type WritePromiseOptions = RouteOption & DecoderOption;
 
