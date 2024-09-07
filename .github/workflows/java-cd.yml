@@ -49,13 +49,15 @@ jobs:
               shell: bash
               run: |
                   if ${{ github.event_name == 'workflow_dispatch' }}; then
-                      R_VERSION="${{ github.event.inputs.version }}"
+                      R_VERSION="${{ env.INPUT_VERSION }}"
                   else
                       R_VERSION=${GITHUB_REF:11}
                   fi
                   echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
                   echo "Release version detected: $R_VERSION"
                   echo "RELEASE_VERSION=$R_VERSION" >> $GITHUB_OUTPUT
+              env:
+                  INPUT_VERSION: ${{ github.event.inputs.version }}
 
     create-binaries-to-publish:
         needs: [set-release-version, load-platform-matrix]
