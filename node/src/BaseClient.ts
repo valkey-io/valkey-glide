@@ -351,6 +351,25 @@ function convertGlideRecordForSortedSet(
 
 /**
  * @internal
+ * This function converts an input from GlideRecord or Record types to GlideRecord.
+ *
+ * @param keysAndValues - key names and their values.
+ * @returns GlideRecord array containing keys and their values.
+ */
+export function convertGlideRecord(
+    keysAndValues: GlideRecord<GlideString> | Record<string, GlideString>,
+): GlideRecord<GlideString> {
+    if (!Array.isArray(keysAndValues)) {
+        return Object.entries(keysAndValues).map(([key, value]) => {
+            return { key, value };
+        });
+    }
+
+    return keysAndValues;
+}
+
+/**
+ * @internal
  * Recursively downcast `GlideRecord` to `Record`. Use if `data` keys are always strings.
  */
 export function convertGlideRecordToRecord<T>(
@@ -1384,7 +1403,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/mset/|valkey.io} for details.
      * @remarks When in cluster mode, the command may route to multiple nodes when keys in `keyValueMap` map to different hash slots.
      *
-     * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
+     * @param keysAndValues - A list of key-value pairs to set.
      * @returns always "OK".
      *
      * @example
@@ -1393,9 +1412,20 @@ export class BaseClient {
      * const result = await client.mset({"key1": "value1", "key2": "value2"});
      * console.log(result); // Output: 'OK'
      * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of mset method to set values for multiple keys (GlideRecords allow binary data in the key)
+     * const result = await client.mset([{key: "key1", value: "value1"}, {key: "key2", value: "value2"}]);
+     * console.log(result); // Output: 'OK'
+     * ```
      */
-    public async mset(keyValueMap: Record<string, string>): Promise<"OK"> {
-        return this.createWritePromise(createMSet(keyValueMap));
+    public async mset(
+        keysAndValues: Record<string, GlideString> | GlideRecord<GlideString>,
+    ): Promise<"OK"> {
+        return this.createWritePromise(
+            createMSet(convertGlideRecord(keysAndValues)),
+        );
     }
 
     /**
@@ -1405,7 +1435,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/msetnx/|valkey.io} for more details.
      * @remarks When in cluster mode, all keys in `keyValueMap` must map to the same hash slot.
      *
-     * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
+     * @param keysAndValues  - A list of key-value pairs to set.
      * @returns `true` if all keys were set. `false` if no key was set.
      *
      * @example
@@ -1417,8 +1447,12 @@ export class BaseClient {
      * console.log(result2); // Output: `false`
      * ```
      */
-    public async msetnx(keyValueMap: Record<string, string>): Promise<boolean> {
-        return this.createWritePromise(createMSetNX(keyValueMap));
+    public async msetnx(
+        keysAndValues: Record<string, GlideString> | GlideRecord<GlideString>,
+    ): Promise<boolean> {
+        return this.createWritePromise(
+            createMSetNX(convertGlideRecord(keysAndValues)),
+        );
     }
 
     /** Increments the number stored at `key` by one. If `key` does not exist, it is set to 0 before performing the operation.
@@ -2183,11 +2217,14 @@ export class BaseClient {
      * ```
      */
     public async hscan(
-        key: string,
+        key: GlideString,
         cursor: string,
-        options?: HScanOptions,
-    ): Promise<[string, string[]]> {
-        return this.createWritePromise(createHScan(key, cursor, options));
+        options?: HScanOptions & DecoderOption,
+    ): Promise<[string, GlideString[]]> {
+        return this.createWritePromise<[GlideString, GlideString[]]>(
+            createHScan(key, cursor, options),
+            options,
+        ).then((res) => [res[0].toString(), res[1]]); // convert cursor back to string
     }
 
     /**
@@ -5120,17 +5157,12 @@ export class BaseClient {
             createXRead(convertKeysAndEntries(keys_and_ids), options),
             options,
         ).then(
-            (
-                res, // TODO convertGlideRecordToRecord recursive
-            ) =>
-                res === null
-                    ? null
-                    : res.map((k) => {
+            (res) => res?.map((k) => {
                           return {
                               key: k.key,
                               value: convertGlideRecordToRecord(k.value),
                           };
-                      }),
+                      }) ?? null,
         );
     }
 
@@ -5192,7 +5224,6 @@ export class BaseClient {
             ),
             options,
         ).then(
-            // TODO convertGlideRecordToRecord recursive
             (res) =>
                 res?.map((k) => {
                     return {

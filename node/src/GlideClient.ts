@@ -661,9 +661,7 @@ export class GlideClient extends BaseClient {
     ): Promise<FunctionListResponse> {
         return this.createWritePromise<GlideRecord<unknown>[]>(
             createFunctionList(options),
-            {
-                decoder: options?.decoder,
-            },
+            options,
         ).then(
             (res) =>
                 res.map(convertGlideRecordToRecord) as FunctionListResponse,
@@ -680,8 +678,7 @@ export class GlideClient extends BaseClient {
      * @see {@link https://valkey.io/commands/function-stats/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
      *
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A Record where the key is the node address and the value is a Record with two keys:
      *          - `"running_script"`: Information about the running script, or `null` if no script is running.
      *          - `"engines"`: Information about available engines and their stats.
@@ -717,13 +714,11 @@ export class GlideClient extends BaseClient {
      * ```
      */
     public async functionStats(
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<FunctionStatsFullResponse> {
         return this.createWritePromise<GlideRecord<unknown>>(
             createFunctionStats(),
-            {
-                decoder,
-            },
+            options
         ).then(
             (res) =>
                 convertGlideRecordToRecord(res) as FunctionStatsFullResponse,
