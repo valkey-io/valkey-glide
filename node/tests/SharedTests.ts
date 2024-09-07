@@ -31,6 +31,7 @@ import {
     GeospatialData,
     GlideClient,
     GlideClusterClient,
+    GlideReturnType,
     GlideString,
     InfBoundary,
     InfoOptions,
@@ -38,7 +39,6 @@ import {
     ListDirection,
     ProtocolVersion,
     RequestError,
-    ReturnType,
     ScoreFilter,
     Script,
     SignedEncoding,
@@ -11409,7 +11409,7 @@ export function runBaseTests(config: {
                     mkStream: true,
                 });
 
-                const promiseList: [string, Promise<ReturnType>][] = [
+                const promiseList: [string, Promise<GlideReturnType>][] = [
                     ["bzpopmax", client.bzpopmax(keyz, 0)],
                     ["bzpopmin", client.bzpopmin(keyz, 0)],
                     ["blpop", client.blpop(keyz, 0)],

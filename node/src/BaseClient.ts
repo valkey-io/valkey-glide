@@ -246,10 +246,10 @@ import {
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
 type ErrorFunction = (error: RedisError) => void;
-export type ReturnTypeRecord = { [key: string]: ReturnType };
-export type ReturnTypeMap = Map<string, ReturnType>;
+export type ReturnTypeRecord = { [key: string]: GlideReturnType };
+export type ReturnTypeMap = Map<string, GlideReturnType>;
 export type ReturnTypeAttribute = {
-    value: ReturnType;
+    value: GlideReturnType;
     attributes: ReturnTypeRecord;
 };
 export enum ProtocolVersion {
@@ -258,7 +258,7 @@ export enum ProtocolVersion {
     /** Use RESP3 to communicate with the server nodes. */
     RESP3 = connection_request.ProtocolVersion.RESP3,
 }
-export type ReturnType =
+export type GlideReturnType =
     | "OK"
     | string
     | number
@@ -266,11 +266,11 @@ export type ReturnType =
     | boolean
     | bigint
     | Buffer
-    | Set<ReturnType>
+    | Set<GlideReturnType>
     | ReturnTypeRecord
     | ReturnTypeMap
     | ReturnTypeAttribute
-    | ReturnType[];
+    | GlideReturnType[];
 
 /**
  * Union type that can store either a valid UTF-8 string or array of bytes.
@@ -852,15 +852,17 @@ export class BaseClient {
      * @internal
      */
     protected processResultWithSetCommands(
-        result: ReturnType[] | null,
+        result: GlideReturnType[] | null,
         setCommandsIndexes: number[],
-    ): ReturnType[] | null {
+    ): GlideReturnType[] | null {
         if (result === null) {
             return null;
         }
 
         for (const index of setCommandsIndexes) {
-            result[index] = new Set<ReturnType>(result[index] as ReturnType[]);
+            result[index] = new Set<GlideReturnType>(
+                result[index] as GlideReturnType[],
+            );
         }
 
         return result;
@@ -3519,7 +3521,7 @@ export class BaseClient {
     public async invokeScript(
         script: Script,
         option?: ScriptOptions,
-    ): Promise<ReturnType> {
+    ): Promise<GlideReturnType> {
         const scriptInvocation = command_request.ScriptInvocation.create({
             hash: script.getHash(),
             keys: option?.keys?.map((item) => {
@@ -6058,7 +6060,7 @@ export class BaseClient {
         keys: GlideString[],
         args: GlideString[],
         decoder?: Decoder,
-    ): Promise<ReturnType> {
+    ): Promise<GlideReturnType> {
         return this.createWritePromise(createFCall(func, keys, args), {
             decoder,
         });
@@ -6091,7 +6093,7 @@ export class BaseClient {
         keys: GlideString[],
         args: GlideString[],
         decoder?: Decoder,
-    ): Promise<ReturnType> {
+    ): Promise<GlideReturnType> {
         return this.createWritePromise(createFCallReadOnly(func, keys, args), {
             decoder,
         });

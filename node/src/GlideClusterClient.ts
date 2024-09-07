@@ -7,11 +7,11 @@ import {
     BaseClient,
     BaseClientConfiguration,
     Decoder,
-    DecoderOption,
+    DecoderOption, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GlideReturnType,
     GlideString,
     PubSubMsg,
     ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
-    ReturnType,
 } from "./BaseClient";
 import {
     FlushMode,
@@ -371,7 +371,7 @@ export class GlideClusterClient extends BaseClient {
     public async customCommand(
         args: GlideString[],
         options?: { route?: Routes; decoder?: Decoder },
-    ): Promise<ClusterResponse<ReturnType>> {
+    ): Promise<ClusterResponse<GlideReturnType>> {
         const command = createCustomCommand(args);
         return super.createWritePromise(command, {
             route: toProtobufRoute(options?.route),
@@ -401,8 +401,8 @@ export class GlideClusterClient extends BaseClient {
             route?: SingleNodeRoute;
             decoder?: Decoder;
         },
-    ): Promise<ReturnType[] | null> {
-        return this.createWritePromise<ReturnType[] | null>(
+    ): Promise<GlideReturnType[] | null> {
+        return this.createWritePromise<GlideReturnType[] | null>(
             transaction.commands,
             {
                 route: toProtobufRoute(options?.route),
@@ -811,7 +811,7 @@ export class GlideClusterClient extends BaseClient {
         func: GlideString,
         args: GlideString[],
         options?: RouteOption & DecoderOption,
-    ): Promise<ClusterResponse<ReturnType>> {
+    ): Promise<ClusterResponse<GlideReturnType>> {
         return this.createWritePromise(createFCall(func, [], args), {
             route: toProtobufRoute(options?.route),
             decoder: options?.decoder,
@@ -840,7 +840,7 @@ export class GlideClusterClient extends BaseClient {
         func: GlideString,
         args: GlideString[],
         options?: RouteOption & DecoderOption,
-    ): Promise<ClusterResponse<ReturnType>> {
+    ): Promise<ClusterResponse<GlideReturnType>> {
         return this.createWritePromise(createFCallReadOnly(func, [], args), {
             route: toProtobufRoute(options?.route),
             decoder: options?.decoder,

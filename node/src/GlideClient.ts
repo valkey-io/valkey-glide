@@ -7,11 +7,11 @@ import {
     BaseClient,
     BaseClientConfiguration,
     Decoder,
-    DecoderOption,
+    DecoderOption, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GlideReturnType,
     GlideString,
     PubSubMsg,
     ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
-    ReturnType,
 } from "./BaseClient";
 import {
     FlushMode,
@@ -189,8 +189,8 @@ export class GlideClient extends BaseClient {
     public async exec(
         transaction: Transaction,
         decoder?: Decoder,
-    ): Promise<ReturnType[] | null> {
-        return this.createWritePromise<ReturnType[] | null>(
+    ): Promise<GlideReturnType[] | null> {
+        return this.createWritePromise<GlideReturnType[] | null>(
             transaction.commands,
             { decoder: decoder },
         ).then((result) =>
@@ -218,7 +218,7 @@ export class GlideClient extends BaseClient {
     public async customCommand(
         args: GlideString[],
         decoder?: Decoder,
-    ): Promise<ReturnType> {
+    ): Promise<GlideReturnType> {
         return this.createWritePromise(createCustomCommand(args), {
             decoder: decoder,
         });

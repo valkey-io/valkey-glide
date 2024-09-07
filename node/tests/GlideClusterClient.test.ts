@@ -18,11 +18,11 @@ import {
     Decoder,
     FunctionListResponse,
     GlideClusterClient,
+    GlideReturnType,
     InfoOptions,
     ListDirection,
     ProtocolVersion,
     RequestError,
-    ReturnType,
     Routes,
     ScoreFilter,
     SlotKeyTypes,
@@ -1459,7 +1459,7 @@ describe("GlideClusterClient", () => {
                                 expect(res).toEqual("meow");
                             } else {
                                 Object.values(
-                                    res as Record<string, ReturnType>,
+                                    res as Record<string, GlideReturnType>,
                                 ).forEach((r) => expect(r).toEqual("meow"));
                             }
 
@@ -1473,7 +1473,7 @@ describe("GlideClusterClient", () => {
                                 expect(res).toEqual(2);
                             } else {
                                 Object.values(
-                                    res as Record<string, ReturnType>,
+                                    res as Record<string, GlideReturnType>,
                                 ).forEach((r) => expect(r).toEqual(2));
                             }
                         } finally {
