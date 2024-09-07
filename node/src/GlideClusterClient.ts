@@ -876,10 +876,7 @@ export class GlideClusterClient extends BaseClient {
     public async functionList(
         options?: FunctionListOptions & DecoderOption & RouteOption,
     ): Promise<ClusterResponse<FunctionListResponse>> {
-        return this.createWritePromise(createFunctionList(options), {
-            decoder: options?.decoder,
-            ...options,
-        });
+        return this.createWritePromise(createFunctionList(options), options);
     }
 
     /**
