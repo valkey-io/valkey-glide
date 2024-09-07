@@ -319,7 +319,7 @@ export class GlideClusterClient extends BaseClient {
      * - (Optional) `route`: If `route` is not provided, the transaction will be routed to the slot owner of the first key found in the transaction.
      *     If no key is found, the command will be sent to a random node.
      *     If `route` is provided, the client will route the command to the nodes defined by `route`.
-     * - (Optional) `decoder`: See {@link DecoderOption}.  dddd
+     * - (Optional) `decoder`: See {@link DecoderOption}.
      * @returns A list of results corresponding to the execution of each command in the transaction.
      *     If a command returns a value, it will be included in the list. If a command doesn't return a value,
      *     the list entry will be `null`.

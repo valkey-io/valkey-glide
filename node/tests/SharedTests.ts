@@ -396,9 +396,12 @@ export function runBaseTests(config: {
 
                 expect(await client.mset(keyValueListEncoded)).toEqual("OK");
                 expect(
-                    await client.mget([key1Encoded, key2, "nonExistingKey", key3Encoded], {
-                        decoder: Decoder.Bytes,
-                    }),
+                    await client.mget(
+                        [key1Encoded, key2, "nonExistingKey", key3Encoded],
+                        {
+                            decoder: Decoder.Bytes,
+                        },
+                    ),
                 ).toEqual([valueEncoded, valueEncoded, null, valueEncoded]);
             }, protocol);
         },
