@@ -1,5 +1,6 @@
 #### Changes
 * Node: Added binary variant to HSCAN command ([#2240](https://github.com/valkey-io/valkey-glide/pull/2240))
+* Node: replace decoder by DecoderOption and route by RouteOption in API([#2234](https://github.com/valkey-io/valkey-glide/pull/2234/))
 * Node: Added binary variant to sorted set commands ([#2190](https://github.com/valkey-io/valkey-glide/pull/2190), [#2210](https://github.com/valkey-io/valkey-glide/pull/2210))
 * Node: Added binary variant for MSET, MSETNX commands ([#2229](https://github.com/valkey-io/valkey-glide/pull/2229))
 * Node: Added binary variant to HASH commands ([#2194](https://github.com/valkey-io/valkey-glide/pull/2194))
