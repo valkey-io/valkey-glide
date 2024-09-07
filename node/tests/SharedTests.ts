@@ -51,7 +51,7 @@ import {
     UnsignedEncoding,
     UpdateByScore,
     convertElementsAndScores,
-    convertFieldsAndValues,
+    convertFieldsAndValuesToHashDataType,
     convertGlideRecordToRecord,
     parseInfoResponse,
 } from "..";
@@ -1821,7 +1821,7 @@ export function runBaseTests(config: {
                 expect(await client.hset(key, fieldValueMap)).toEqual(2);
 
                 expect(await client.hgetall(key)).toEqual(
-                    convertFieldsAndValues({
+                    convertFieldsAndValuesToHashDataType({
                         [field1]: value,
                         [field2]: value,
                     }),

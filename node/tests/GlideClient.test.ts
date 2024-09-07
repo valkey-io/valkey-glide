@@ -766,7 +766,9 @@ describe("GlideClient", () => {
                     newCode,
                 );
 
-                functionStats = await client.functionStats(Decoder.Bytes);
+                functionStats = await client.functionStats({
+                    decoder: Decoder.Bytes,
+                });
 
                 for (const response of Object.values(functionStats)) {
                     checkFunctionStatsResponse(response, [], 1, 2);

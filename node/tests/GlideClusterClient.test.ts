@@ -1315,7 +1315,7 @@ describe("GlideClusterClient", () => {
                         TIMEOUT,
                     );
 
-                    it("function dump function restore %p", async () => {
+                    it("function dump function restore", async () => {
                         if (cluster.checkIfServerVersionLessThan("7.0.0"))
                             return;
 

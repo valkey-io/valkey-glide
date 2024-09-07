@@ -57,7 +57,7 @@ import {
     ZAddOptions,
     ZScanOptions,
     convertElementsAndScores,
-    convertFieldsAndValues,
+    convertFieldsAndValuesToHashDataType,
     convertKeysAndEntries,
     createAppend,
     createBLMPop,
@@ -1908,7 +1908,10 @@ export class BaseClient {
         fieldsAndValues: HashDataType | Record<string, GlideString>,
     ): Promise<number> {
         return this.createWritePromise(
-            createHSet(key, convertFieldsAndValues(fieldsAndValues)),
+            createHSet(
+                key,
+                convertFieldsAndValuesToHashDataType(fieldsAndValues),
+            ),
         );
     }
 
@@ -2066,7 +2069,7 @@ export class BaseClient {
      * console.log(result); // Output:
      * // [
      * //     { field: "field1", value: "value1"},
-     * //     { field, "field2", value: "value2"}
+     * //     { field: "field2", value: "value2"}
      * // ]
      * ```
      */
@@ -4225,8 +4228,8 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zrange method to retrieve members within a score range in descending order
      * const result = await client.zrange("my_sorted_set", {
-     *              start: InfBoundary.NegativeInfinity,
-     *              stop: { value: 3, isInclusive: false },
+     *              start: { value: 3, isInclusive: false },
+     *              stop: InfBoundary.NegativeInfinity,
      *              type: "byScore",
      *           }, { reverse: true });
      * console.log(result); // Output: members with scores within the range of negative infinity to 3, in descending order
@@ -4276,12 +4279,12 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zrangeWithScores method to retrieve members within a score range with their scores
      * const result = await client.zrangeWithScores("my_sorted_set", {
-     *              start: InfBoundary.NegativeInfinity,
-     *              stop: { value: 3, isInclusive: false },
+     *              start: { value: 3, isInclusive: false },
+     *              stop: InfBoundary.NegativeInfinity,
      *              type: "byScore",
-     *           });
+     *           }, { reverse: true });
      * console.log(result); // Output: members with scores within the range of negative infinity to 3, with their scores
-     * // [{ element: 'member4', score: -2.0 }, { element: 'member7', score: 1.5 }]
+     * // [{ element: 'member7', score: 1.5 }, { element: 'member4', score: -2.0 }]
      * ```
      */
     public async zrangeWithScores(
@@ -5765,27 +5768,27 @@ export class BaseClient {
      * const infoResult = await client.xinfoStream("my_stream", 15); // limit of 15 entries
      * console.log(infoResult);
      * // Output: {
-     * //   length: 2,
+     * //   'length': 2,
      * //   'radix-tree-keys': 1,
      * //   'radix-tree-nodes': 2,
      * //   'last-generated-id': '1719877599564-1',
      * //   'max-deleted-entry-id': '0-0',
      * //   'entries-added': 2,
      * //   'recorded-first-entry-id': '1719877599564-0',
-     * //   entries: [ [ '1719877599564-0', ['some_field", "some_value', ...] ] ],
-     * //   groups: [ {
-     * //     name: 'group',
+     * //   'entries': [ [ '1719877599564-0', ['some_field", "some_value', ...] ] ],
+     * //   'groups': [ {
+     * //     'name': 'group',
      * //     'last-delivered-id': '1719877599564-0',
      * //     'entries-read': 1,
-     * //     lag: 1,
+     * //     'lag': 1,
      * //     'pel-count': 1,
-     * //     pending: [ [ '1719877599564-0', 'consumer', 1722624726802, 1 ] ],
-     * //     consumers: [ {
-     * //         name: 'consumer',
+     * //     'pending': [ [ '1719877599564-0', 'consumer', 1722624726802, 1 ] ],
+     * //     'consumers': [ {
+     * //         'name': 'consumer',
      * //         'seen-time': 1722624726802,
      * //         'active-time': 1722624726802,
      * //         'pel-count': 1,
-     * //         pending: [ [ '1719877599564-0', 'consumer', 1722624726802, 1 ] ],
+     * //         'pending': [ [ '1719877599564-0', 'consumer', 1722624726802, 1 ] ],
      * //         }
      * //       ]
      * //     }

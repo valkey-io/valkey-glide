@@ -1047,7 +1047,7 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<ClusterResponse<Buffer>> {
         return this.createWritePromise<ClusterGlideRecord<Buffer>>(
             createFunctionDump(),
-            options,
+            { decoder: Decoder.Bytes, ...options },
         ).then((res) => convertClusterGlideRecord(res, true, options?.route));
     }
 

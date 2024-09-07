@@ -9,9 +9,9 @@ import {
     BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
     convertRecordToGlideRecord,
     GlideRecord,
+    GlideString,
     HashDataType,
     SortedSetDataType,
-    GlideString,
 } from "./BaseClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 import { GlideClient } from "./GlideClient";
@@ -417,12 +417,12 @@ export function createHGet(
 }
 
 /**
- * This function converts an input from HashDataType or Record types to HashDataType.
+ * This function converts an input from {@link HashDataType} or `Record` types to `HashDataType`.
  *
  * @param fieldsAndValues - field names and their values.
  * @returns HashDataType array containing field names and their values.
  */
-export function convertFieldsAndValues(
+export function convertFieldsAndValuesToHashDataType(
     fieldsAndValues: HashDataType | Record<string, GlideString>,
 ): HashDataType {
     if (!Array.isArray(fieldsAndValues)) {

@@ -69,7 +69,7 @@ import {
     ZAddOptions,
     ZScanOptions,
     convertElementsAndScores,
-    convertFieldsAndValues,
+    convertFieldsAndValuesToHashDataType,
     createAppend,
     createBLMPop,
     createBLMove,
@@ -827,7 +827,10 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         fieldsAndValues: HashDataType | Record<string, GlideString>,
     ): T {
         return this.addAndReturn(
-            createHSet(key, convertFieldsAndValues(fieldsAndValues)),
+            createHSet(
+                key,
+                convertFieldsAndValuesToHashDataType(fieldsAndValues),
+            ),
         );
     }
 
