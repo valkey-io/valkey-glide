@@ -400,7 +400,7 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<ClusterResponse<string>> {
         return this.createWritePromise<ClusterResponse<string>>(
             createInfo(options?.sections),
-            { route: options?.route, decoder: Decoder.String },
+            { decoder: Decoder.String, ...options },
         );
     }
 
