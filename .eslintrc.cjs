@@ -1,4 +1,13 @@
 module.exports = {
+    ignores: [
+        "benchmarks/node/node_benchmark.js",
+        "benchmarks/node/*.js",
+        "/node/build-ts/index.js",
+        "node/build-ts/src/*.js",
+        "/redis-rs/target/*",
+        "node/rust-client/index.js",
+        "logger_core/target/*",
+    ],
     extends: [
         "eslint:recommended",
         "plugin:@typescript-eslint/recommended",
