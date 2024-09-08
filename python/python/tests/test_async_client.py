@@ -7149,7 +7149,7 @@ class TestCommands:
                 )
 
         if await check_if_server_version_lt(glide_client, "7.9.0"):
-            # exception thrown because BIT and BYTE options were implemented after 8.0.0
+            # exception thrown optional end was implemented after 8.0.0
             with pytest.raises(RequestError):
                 await glide_client.bitcount(
                     key1,
@@ -7158,7 +7158,7 @@ class TestCommands:
                     ),
                 )
         else:
-            assert await glide_client.bitcount(key1, OffsetOptions(1)) == 26
+            assert await glide_client.bitcount(key1, OffsetOptions(0)) == 26
             assert await glide_client.bitcount(key1, OffsetOptions(5)) == 4
             assert await glide_client.bitcount(key1, OffsetOptions(80)) == 0
             assert await glide_client.bitcount(non_existing_key, OffsetOptions(5)) == 0

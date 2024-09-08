@@ -562,7 +562,7 @@ async def transaction_test(
     if not await check_if_server_version_lt(glide_client, "7.9.0"):
         transaction.set(key20, "foobar")
         args.append(OK)
-        transaction.bitcount(key20, OffsetOptions(5, 1))
+        transaction.bitcount(key20, OffsetOptions(0))
         args.append(26)
 
     transaction.geoadd(

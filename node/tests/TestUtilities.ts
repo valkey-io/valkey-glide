@@ -1374,9 +1374,9 @@ export async function transactionTest(
         baseTransaction.set(key17, "foobar");
         responseData.push(['set(key17, "foobar")', "OK"]);
         baseTransaction.bitcount(key17, {
-            start: 1,
+            start: 0,
         });
-        responseData.push(["bitcount(key17, {start:1 }", 26]);
+        responseData.push(["bitcount(key17, {start:0 }", 26]);
     }
 
     baseTransaction.bitfield(key17, [

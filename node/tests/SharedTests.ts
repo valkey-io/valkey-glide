@@ -8526,7 +8526,7 @@ export function runBaseTests(config: {
                 } else {
                     expect(
                         await client.bitcount(key1, {
-                            start: 1,
+                            start: 0,
                         }),
                     ).toEqual(26);
                     expect(

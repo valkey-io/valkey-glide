@@ -1289,7 +1289,7 @@ public class TransactionTestUtilities {
         }
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
-            transaction.set(key3, "foobar").bitcount(key3, 1);
+            transaction.set(key3, "foobar").bitcount(key3, 0);
         }
 
         var expectedResults =
@@ -1325,7 +1325,7 @@ public class TransactionTestUtilities {
                     expectedResults,
                     new Object[] {
                         OK, // set(key1, "foobar")
-                        26L, // bitcount(key, 1)
+                        26L, // bitcount(key, 0)
                     });
         }
         return expectedResults;
