@@ -230,8 +230,16 @@ jobs:
               working-directory: ./node/npm/glide
               run: |
                   export pkg_name=valkey-glide
-                  echo "${GITHUB_REF:11}"
-                  export package_version=${GITHUB_REF:11}
+
+                  echo "The workflow is: ${{env.EVENT_NAME}}"
+                  if ${{ env.EVENT_NAME == 'workflow_dispatch' }}; then
+                    R_VERSION="${{ env.INPUT_VERSION }}"
+                  else
+                    R_VERSION=${GITHUB_REF:11}
+                  fi
+                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
+
+                  export package_version=${R_VERSION}
                   export scope=`if [ "$NPM_SCOPE" != ''  ]; then echo "$NPM_SCOPE/"; fi`
                   mv package.json package.json.tmpl
                   envsubst < package.json.tmpl > "package.json"
@@ -240,6 +248,8 @@ jobs:
                   sed -i "s|@scope/|${scope}|g" index.ts
               env:
                   NPM_SCOPE: ${{ vars.NPM_SCOPE }}
+                  EVENT_NAME: ${{ github.event_name }}
+                  INPUT_VERSION: ${{ github.event.inputs.version }}
 
             - name: Build Node wrapper
               uses: ./.github/workflows/build-node-wrapper
@@ -252,7 +262,7 @@ jobs:
             - name: Check if RC and set a distribution tag for the package
               shell: bash
               run: |
-                  if [[ "${GITHUB_REF:11}" == *"rc"* ]]
+                  if [[ ${{ env.RELEASE_VERSION }} == *"rc"* ]]
                   then
                     echo "This is a release candidate"
                     export npm_tag="next"
