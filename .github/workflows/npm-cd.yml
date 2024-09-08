@@ -108,6 +108,7 @@ jobs:
                   if ${{ env.EVENT_NAME == 'pull_request' }}; then
                     R_VERSION="255.255.255"
                   elif ${{ env.EVENT_NAME == 'workflow_dispatch' }}; then
+                    echo "${{env.EVENT_NAME}}"
                     R_VERSION="${{ env.INPUT_VERSION }}"
                   else
                     R_VERSION=${GITHUB_REF:11}
