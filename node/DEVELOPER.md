@@ -164,7 +164,7 @@ Development on the Node wrapper may involve changes in either the TypeScript or 
 
     ```bash
     # Run from the root folder of the GLIDE repository
-    npm install eslint-plugin-import@latest  @typescript-eslint/parser @typescript-eslint/eslint-plugin eslint-plugin-tsdoc eslint typescript eslint-plugin-import@latest eslint-config-prettier prettier
+    npm install  @typescript-eslint/parser @typescript-eslint/eslint-plugin eslint-plugin-tsdoc eslint typescript eslint-config-prettier prettier
     npm i
     cd node
     npx eslint . --max-warnings=0
