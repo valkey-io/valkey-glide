@@ -1320,7 +1320,7 @@ public class TransactionTestUtilities {
                     });
         }
 
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
             return concatenateArrays(
                     expectedResults,
                     new Object[] {
