@@ -1289,7 +1289,7 @@ public class TransactionTestUtilities {
         }
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
-            transaction.set(key3, "foobar").bitcount(key3, 0);
+            transaction.set(key4, "foobar").bitcount(key4, 0);
         }
 
         var expectedResults =
@@ -1311,22 +1311,24 @@ public class TransactionTestUtilities {
                 };
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            return concatenateArrays(
-                    expectedResults,
-                    new Object[] {
-                        OK, // set(key1, "foobar")
-                        17L, // bitcount(key, 5, 30, BitmapIndexType.BIT)
-                        46L, // bitpos(key, 1, 44, 50, BitmapIndexType.BIT)
-                    });
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                OK, // set(key1, "foobar")
+                                17L, // bitcount(key, 5, 30, BitmapIndexType.BIT)
+                                46L, // bitpos(key, 1, 44, 50, BitmapIndexType.BIT)
+                            });
         }
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
-            return concatenateArrays(
-                    expectedResults,
-                    new Object[] {
-                        OK, // set(key1, "foobar")
-                        26L, // bitcount(key, 0)
-                    });
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                OK, // set(key1, "foobar")
+                                26L, // bitcount(key, 0)
+                            });
         }
         return expectedResults;
     }

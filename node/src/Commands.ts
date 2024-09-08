@@ -2465,7 +2465,7 @@ export function createBitCount(
 
     if (options) {
         args.push(options.start.toString());
-        if (options.end) options.end.toString();
+        if (options.end) args.push(options.end.toString());
         if (options.indexType) args.push(options.indexType);
     }
 
