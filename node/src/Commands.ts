@@ -2442,8 +2442,10 @@ export function createFunctionRestore(
 export type BitOffsetOptions = {
     /** The starting offset index. */
     start: number;
-    /** The ending offset index. */
-    end: number;
+    /** The ending offset index. Optional since Valkey version 8.0 and above.
+     * If not provided, it will default to the end of the string
+     */
+    end?: number;
     /**
      * The index offset type. This option can only be specified if you are using server version 7.0.0 or above.
      * Could be either {@link BitmapIndexType.BYTE} or {@link BitmapIndexType.BIT}.
@@ -2463,7 +2465,7 @@ export function createBitCount(
 
     if (options) {
         args.push(options.start.toString());
-        args.push(options.end.toString());
+        if (options.end) options.end.toString();
         if (options.indexType) args.push(options.indexType);
     }
 

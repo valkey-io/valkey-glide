@@ -559,6 +559,12 @@ async def transaction_test(
         transaction.bitpos_interval(key20, 1, 44, 50, BitmapIndexType.BIT)
         args.append(46)
 
+    if not await check_if_server_version_lt(glide_client, "7.9.0"):
+        transaction.set(key20, "foobar")
+        args.append(OK)
+        transaction.bitcount(key20, OffsetOptions(5, 1))
+        args.append(26)
+
     transaction.geoadd(
         key12,
         {

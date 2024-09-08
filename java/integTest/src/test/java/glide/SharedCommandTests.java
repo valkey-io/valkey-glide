@@ -10309,6 +10309,24 @@ public class SharedCommandTests {
                             () -> client.bitcount(key1, 5, 30, BitmapIndexType.BIT).get());
             assertTrue(executionException.getCause() instanceof RequestException);
         }
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+            assertEquals(26L, client.bitcount(key1, 0).get());
+            assertEquals(4L, client.bitcount(key1, 5).get());
+            assertEquals(0L, client.bitcount(key1, 80).get());
+            assertEquals(7L, client.bitcount(key1, -2).get());
+            assertEquals(0, client.bitcount(missingKey, 5).get());
+
+            // Exception thrown due to the key holding a value with the wrong type
+            executionException =
+                    assertThrows(ExecutionException.class, () -> client.bitcount(key2, 1).get());
+            assertTrue(executionException.getCause() instanceof RequestException);
+
+        } else {
+            // Exception thrown because optional end was implemented after 8.0.0
+            executionException =
+                    assertThrows(ExecutionException.class, () -> client.bitcount(key1, 5).get());
+            assertTrue(executionException.getCause() instanceof RequestException);
+        }
     }
 
     @SneakyThrows

@@ -1288,6 +1288,10 @@ public class TransactionTestUtilities {
                     .bitpos(key3, 1, 44, 50, BitmapIndexType.BIT);
         }
 
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+            transaction.set(key3, "foobar").bitcount(key3, 1);
+        }
+
         var expectedResults =
                 new Object[] {
                     OK, // set(key1, "foobar")
@@ -1313,6 +1317,15 @@ public class TransactionTestUtilities {
                         OK, // set(key1, "foobar")
                         17L, // bitcount(key, 5, 30, BitmapIndexType.BIT)
                         46L, // bitpos(key, 1, 44, 50, BitmapIndexType.BIT)
+                    });
+        }
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            return concatenateArrays(
+                    expectedResults,
+                    new Object[] {
+                        OK, // set(key1, "foobar")
+                        26L, // bitcount(key, 1)
                     });
         }
         return expectedResults;
