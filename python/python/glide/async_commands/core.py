@@ -4377,7 +4377,7 @@ class CoreCommands(Protocol):
         Examples:
             >>> await client.zrange("my_sorted_set", RangeByIndex(0, -1))
                 [b'member1', b'member2', b'member3']  # Returns all members in ascending order.
-            >>> await client.zrange("my_sorted_set", RangeByScore(start=InfBound.NEG_INF, stop=ScoreBoundary(3)))
+            >>> await client.zrange("my_sorted_set", RangeByScore(InfBound.NEG_INF, ScoreBoundary(3)))
                 [b'member2', b'member3'] # Returns members with scores within the range of negative infinity to 3, in ascending order.
         """
         args = _create_zrange_args(key, range_query, reverse, with_scores=False)
@@ -4410,7 +4410,7 @@ class CoreCommands(Protocol):
         Examples:
             >>> await client.zrange_withscores("my_sorted_set", RangeByScore(ScoreBoundary(10), ScoreBoundary(20)))
                 {b'member1': 10.5, b'member2': 15.2}  # Returns members with scores between 10 and 20 with their scores.
-           >>> await client.zrange_withscores("my_sorted_set", RangeByScore(start=InfBound.NEG_INF, stop=ScoreBoundary(3)))
+           >>> await client.zrange_withscores("my_sorted_set", RangeByScore(InfBound.NEG_INF, ScoreBoundary(3)))
                 {b'member4': -2.0, b'member7': 1.5} # Returns members with with scores within the range of negative infinity to 3, with their scores.
         """
         args = _create_zrange_args(key, range_query, reverse, with_scores=True)

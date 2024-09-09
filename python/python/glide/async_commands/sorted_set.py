@@ -95,40 +95,40 @@ class RangeByIndex:
     """
     Represents a range by index (rank) in a sorted set.
 
-    The `start` and `stop` arguments represent zero-based indexes.
+    The `start` and `end` arguments represent zero-based indexes.
 
     Args:
         start (int): The start index of the range.
-        stop (int): The stop index of the range.
+        end (int): The end index of the range.
     """
 
-    def __init__(self, start: int, stop: int):
+    def __init__(self, start: int, end: int):
         self.start = start
-        self.stop = stop
+        self.end = end
 
 
 class RangeByScore:
     """
     Represents a range by score in a sorted set.
 
-    The `start` and `stop` arguments represent score boundaries.
+    The `start` and `end` arguments represent score boundaries.
 
     Args:
         start (Union[InfBound, ScoreBoundary]): The start score boundary.
-        stop (Union[InfBound, ScoreBoundary]): The stop score boundary.
+        end (Union[InfBound, ScoreBoundary]): The end score boundary.
         limit (Optional[Limit]): The limit argument for a range query. Defaults to None. See `Limit` class for more information.
     """
 
     def __init__(
         self,
         start: Union[InfBound, ScoreBoundary],
-        stop: Union[InfBound, ScoreBoundary],
+        end: Union[InfBound, ScoreBoundary],
         limit: Optional[Limit] = None,
     ):
         self.start = (
             start.value["score_arg"] if type(start) == InfBound else start.value
         )
-        self.stop = stop.value["score_arg"] if type(stop) == InfBound else stop.value
+        self.end = end.value["score_arg"] if type(end) == InfBound else end.value
         self.limit = limit
 
 
@@ -136,22 +136,22 @@ class RangeByLex:
     """
     Represents a range by lexicographical order in a sorted set.
 
-    The `start` and `stop` arguments represent lexicographical boundaries.
+    The `start` and `end` arguments represent lexicographical boundaries.
 
     Args:
         start (Union[InfBound, LexBoundary]): The start lexicographic boundary.
-        stop (Union[InfBound, LexBoundary]): The stop lexicographic boundary.
+        end (Union[InfBound, LexBoundary]): The end lexicographic boundary.
         limit (Optional[Limit]): The limit argument for a range query. Defaults to None. See `Limit` class for more information.
     """
 
     def __init__(
         self,
         start: Union[InfBound, LexBoundary],
-        stop: Union[InfBound, LexBoundary],
+        end: Union[InfBound, LexBoundary],
         limit: Optional[Limit] = None,
     ):
         self.start = start.value["lex_arg"] if type(start) == InfBound else start.value
-        self.stop = stop.value["lex_arg"] if type(stop) == InfBound else stop.value
+        self.end = end.value["lex_arg"] if type(end) == InfBound else end.value
         self.limit = limit
 
 
@@ -286,7 +286,7 @@ def _create_zrange_args(
     destination: Optional[TEncodable] = None,
 ) -> List[TEncodable]:
     args = [destination] if destination else []
-    args += [key, str(range_query.start), str(range_query.stop)]
+    args += [key, str(range_query.start), str(range_query.end)]
 
     if isinstance(range_query, RangeByScore):
         args.append("BYSCORE")

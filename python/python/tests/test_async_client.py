@@ -3825,29 +3825,22 @@ class TestCommands:
         members_scores: Mapping[TEncodable, float] = {"one": 1, "two": 2, "three": 3}
         assert await glide_client.zadd(key, members_scores=members_scores) == 3
 
-        assert await glide_client.zrange(key, RangeByIndex(start=0, stop=1)) == [
+        assert await glide_client.zrange(key, RangeByIndex(0, 1)) == [
             b"one",
             b"two",
         ]
 
-        zrange_map = await glide_client.zrange_withscores(
-            key, RangeByIndex(start=0, stop=-1)
-        )
+        zrange_map = await glide_client.zrange_withscores(key, RangeByIndex(0, -1))
         expected_map = {b"one": 1.0, b"two": 2.0, b"three": 3.0}
         assert compare_maps(zrange_map, expected_map) is True
 
-        assert await glide_client.zrange(
-            key, RangeByIndex(start=0, stop=1), reverse=True
-        ) == [
+        assert await glide_client.zrange(key, RangeByIndex(0, 1), reverse=True) == [
             b"three",
             b"two",
         ]
 
-        assert await glide_client.zrange(key, RangeByIndex(start=3, stop=1)) == []
-        assert (
-            await glide_client.zrange_withscores(key, RangeByIndex(start=3, stop=1))
-            == {}
-        )
+        assert await glide_client.zrange(key, RangeByIndex(3, 1)) == []
+        assert await glide_client.zrange_withscores(key, RangeByIndex(3, 1)) == {}
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -3858,23 +3851,19 @@ class TestCommands:
 
         assert await glide_client.zrange(
             key,
-            RangeByScore(
-                start=InfBound.NEG_INF, stop=ScoreBoundary(3, is_inclusive=False)
-            ),
+            RangeByScore(InfBound.NEG_INF, ScoreBoundary(3, is_inclusive=False)),
         ) == [b"one", b"two"]
 
         zrange_map = await glide_client.zrange_withscores(
             key,
-            RangeByScore(start=InfBound.NEG_INF, stop=InfBound.POS_INF),
+            RangeByScore(InfBound.NEG_INF, InfBound.POS_INF),
         )
         expected_map = {b"one": 1.0, b"two": 2.0, b"three": 3.0}
         assert compare_maps(zrange_map, expected_map) is True
 
         assert await glide_client.zrange(
             key,
-            RangeByScore(
-                start=ScoreBoundary(3, is_inclusive=False), stop=InfBound.NEG_INF
-            ),
+            RangeByScore(ScoreBoundary(3, is_inclusive=False), InfBound.NEG_INF),
             reverse=True,
         ) == [b"two", b"one"]
 
@@ -3882,9 +3871,9 @@ class TestCommands:
             await glide_client.zrange(
                 key,
                 RangeByScore(
-                    start=InfBound.NEG_INF,
-                    stop=InfBound.POS_INF,
-                    limit=Limit(offset=1, count=2),
+                    InfBound.NEG_INF,
+                    InfBound.POS_INF,
+                    Limit(offset=1, count=2),
                 ),
             )
         ) == [b"two", b"three"]
@@ -3892,44 +3881,36 @@ class TestCommands:
         assert (
             await glide_client.zrange(
                 key,
-                RangeByScore(
-                    start=InfBound.NEG_INF, stop=ScoreBoundary(3, is_inclusive=False)
-                ),
+                RangeByScore(InfBound.NEG_INF, ScoreBoundary(3, is_inclusive=False)),
                 reverse=True,
             )
             == []
-        )  # stop is greater than start with reverse set to True
+        )  # end is greater than start with reverse set to True
 
         assert (
             await glide_client.zrange(
                 key,
-                RangeByScore(
-                    start=InfBound.POS_INF, stop=ScoreBoundary(3, is_inclusive=False)
-                ),
+                RangeByScore(InfBound.POS_INF, ScoreBoundary(3, is_inclusive=False)),
             )
             == []
-        )  # start is greater than stop
+        )  # start is greater than end
 
         assert (
             await glide_client.zrange_withscores(
                 key,
-                RangeByScore(
-                    start=InfBound.POS_INF, stop=ScoreBoundary(3, is_inclusive=False)
-                ),
+                RangeByScore(InfBound.POS_INF, ScoreBoundary(3, is_inclusive=False)),
             )
             == {}
-        )  # start is greater than stop
+        )  # start is greater than end
 
         assert (
             await glide_client.zrange_withscores(
                 key,
-                RangeByScore(
-                    start=InfBound.NEG_INF, stop=ScoreBoundary(3, is_inclusive=False)
-                ),
+                RangeByScore(InfBound.NEG_INF, ScoreBoundary(3, is_inclusive=False)),
                 reverse=True,
             )
             == {}
-        )  # stop is greater than start with reverse set to True
+        )  # end is greater than start with reverse set to True
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -3941,7 +3922,7 @@ class TestCommands:
         assert await glide_client.zrange(
             key,
             RangeByLex(
-                start=InfBound.NEG_INF, stop=LexBoundary("c", is_inclusive=False)
+                start=InfBound.NEG_INF, end=LexBoundary("c", is_inclusive=False)
             ),
         ) == [b"a", b"b"]
 
@@ -3950,7 +3931,7 @@ class TestCommands:
                 key,
                 RangeByLex(
                     start=InfBound.NEG_INF,
-                    stop=InfBound.POS_INF,
+                    end=InfBound.POS_INF,
                     limit=Limit(offset=1, count=2),
                 ),
             )
@@ -3959,7 +3940,7 @@ class TestCommands:
         assert await glide_client.zrange(
             key,
             RangeByLex(
-                start=LexBoundary("c", is_inclusive=False), stop=InfBound.NEG_INF
+                start=LexBoundary("c", is_inclusive=False), end=InfBound.NEG_INF
             ),
             reverse=True,
         ) == [b"b", b"a"]
@@ -3968,45 +3949,42 @@ class TestCommands:
             await glide_client.zrange(
                 key,
                 RangeByLex(
-                    start=InfBound.NEG_INF, stop=LexBoundary("c", is_inclusive=False)
+                    start=InfBound.NEG_INF, end=LexBoundary("c", is_inclusive=False)
                 ),
                 reverse=True,
             )
             == []
-        )  # stop is greater than start with reverse set to True
+        )  # end is greater than start with reverse set to True
 
         assert (
             await glide_client.zrange(
                 key,
                 RangeByLex(
-                    start=InfBound.POS_INF, stop=LexBoundary("c", is_inclusive=False)
+                    start=InfBound.POS_INF, end=LexBoundary("c", is_inclusive=False)
                 ),
             )
             == []
-        )  # start is greater than stop
+        )  # start is greater than end
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zrange_different_types_of_keys(self, glide_client: TGlideClient):
         key = get_random_string(10)
 
-        assert (
-            await glide_client.zrange("non_existing_key", RangeByIndex(start=0, stop=1))
-            == []
-        )
+        assert await glide_client.zrange("non_existing_key", RangeByIndex(0, 1)) == []
 
         assert (
             await glide_client.zrange_withscores(
-                "non_existing_key", RangeByIndex(start=0, stop=-1)
+                "non_existing_key", RangeByIndex(0, -1)
             )
         ) == {}
 
         assert await glide_client.set(key, "value") == OK
         with pytest.raises(RequestError):
-            await glide_client.zrange(key, RangeByIndex(start=0, stop=1))
+            await glide_client.zrange(key, RangeByIndex(0, 1))
 
         with pytest.raises(RequestError):
-            await glide_client.zrange_withscores(key, RangeByIndex(start=0, stop=1))
+            await glide_client.zrange_withscores(key, RangeByIndex(0, 1))
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -4046,7 +4024,7 @@ class TestCommands:
         )
         assert compare_maps(zrange_res, {"two": 2.0, "three": 3.0}) is True
 
-        # incorrect range, as start > stop
+        # incorrect range, as start > end
         assert (
             await glide_client.zrangestore(destination, source, RangeByIndex(3, 1)) == 0
         )
@@ -4142,7 +4120,7 @@ class TestCommands:
         )
         assert compare_maps(zrange_res, {"one": 1.0, "two": 2.0}) is True
 
-        # incorrect range as start > stop
+        # incorrect range as start > end
         assert (
             await glide_client.zrangestore(
                 destination,
@@ -4247,7 +4225,7 @@ class TestCommands:
         )
         assert compare_maps(zrange_res, {"a": 1.0, "b": 2.0}) is True
 
-        # incorrect range as start > stop
+        # incorrect range as start > end
         assert (
             await glide_client.zrangestore(
                 destination,
