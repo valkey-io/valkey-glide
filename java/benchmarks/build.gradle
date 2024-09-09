@@ -12,7 +12,7 @@ dependencies {
     def releaseVersion = System.getenv("GLIDE_RELEASE_VERSION");
 
 //    if (releaseVersion) {
-        implementation "io.valkey:valkey-glide:" + releaseVersion
+        implementation "io.valkey:valkey-glide:1.0.1"
 //    } else {
 //        implementation project(':client')
 //    }
