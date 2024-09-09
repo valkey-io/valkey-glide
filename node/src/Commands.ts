@@ -3544,19 +3544,29 @@ export function createZIncrBy(
 }
 
 /**
- * Optional arguments to {@link GlideClient.sort|sort}, {@link GlideClient.sortStore|sortStore} and {@link GlideClient.sortReadOnly|sortReadOnly} commands.
+ * Optional arguments to {@link BaseClient.sort|sort}, {@link BaseClient.sortStore|sortStore} and {@link BaseClient.sortReadOnly|sortReadOnly} commands.
  *
  * See https://valkey.io/commands/sort/ for more details.
+ *
+ * @remarks When in cluster mode, {@link SortOptions.byPattern|byPattern} and {@link SortOptions.getPatterns|getPattern} must map to the same hash
+ *     slot as the key, and this is supported only since Valkey version 8.0.
  */
-export type SortOptions = SortBaseOptions & {
+export interface SortOptions {
     /**
      * A pattern to sort by external keys instead of by the elements stored at the key themselves. The
      * pattern should contain an asterisk (*) as a placeholder for the element values, where the value
      * from the key replaces the asterisk to create the key name. For example, if `key`
      * contains IDs of objects, `byPattern` can be used to sort these IDs based on an
      * attribute of the objects, like their weights or timestamps.
+     * Supported in cluster mode since Valkey version 8.0 and above.
      */
     byPattern?: GlideString;
+
+    /**
+     * Limiting the range of the query by setting offset and result count. See {@link Limit} class for
+     * more information.
+     */
+    limit?: Limit;
 
     /**
      * A pattern used to retrieve external keys' values, instead of the elements at `key`.
@@ -3570,16 +3580,9 @@ export type SortOptions = SortBaseOptions & {
      * arguments can be provided to retrieve multiple attributes. The special value `#` can
      * be used to include the actual element from `key` being sorted. If not provided, only
      * the sorted elements themselves are returned.
+     * Supported in cluster mode since Valkey version 8.0 and above.
      */
     getPatterns?: GlideString[];
-};
-
-interface SortBaseOptions {
-    /**
-     * Limiting the range of the query by setting offset and result count. See {@link Limit} class for
-     * more information.
-     */
-    limit?: Limit;
 
     /** Options for sorting order of elements. */
     orderBy?: SortOrder;
@@ -3591,13 +3594,6 @@ interface SortBaseOptions {
      */
     isAlpha?: boolean;
 }
-
-/**
- * Optional arguments to {@link GlideClusterClient.sort|sort}, {@link GlideClusterClient.sortStore|sortStore} and {@link GlideClusterClient.sortReadOnly|sortReadOnly} commands.
- *
- * See https://valkey.io/commands/sort/ for more details.
- */
-export type SortClusterOptions = SortBaseOptions;
 
 /**
  * The `LIMIT` argument is commonly used to specify a subset of results from the
