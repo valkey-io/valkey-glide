@@ -7237,7 +7237,7 @@ class TestCommands:
         assert await glide_client.set(key, value) == OK
         assert await glide_client.bitpos(key, 0) == 0
         assert await glide_client.bitpos(key, 1) == 2
-        assert await glide_client.bitpos(key, 1, 1) == 9
+        assert await glide_client.bitpos(key, 1,  OffsetOptions(1)) == 9
         assert await glide_client.bitpos(key, 0, OffsetOptions(3, 5)) == 24
 
         # `BITPOS` returns -1 for non-existing strings
