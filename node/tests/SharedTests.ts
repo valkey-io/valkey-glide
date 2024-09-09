@@ -1343,6 +1343,13 @@ export function runBaseTests(config: {
                 await expect(
                     client.getrange(nonStringKey, 0, -1),
                 ).rejects.toThrow(RequestError);
+
+                // unique chars key
+                expect(await client.set(key, "爱和美力")).toEqual("OK");
+                expect(await client.getrange(key, 0, 5)).toEqual("爱和");
+
+                expect(await client.set(key, "😊🌸")).toEqual("OK");
+                expect(await client.getrange(key, 4, 7)).toEqual("🌸");
             }, protocol);
         },
         config.timeout,
@@ -7724,6 +7731,8 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
+                const key_2 = uuidv4();
+                const key_3 = uuidv4();
                 const nonStringKey = uuidv4();
 
                 // new key
@@ -7732,6 +7741,18 @@ export function runBaseTests(config: {
                 // existing key
                 expect(await client.setrange(key, 6, "GLIDE")).toBe(11);
                 expect(await client.get(key)).toEqual("Hello GLIDE");
+
+                // unique chars keys, size of 3 bytes each
+                expect(await client.setrange(key_2, 0, "爱和美力")).toBe(12);
+
+                expect(await client.setrange(key_2, 3, "abc")).toBe(12);
+                expect(await client.get(key_2)).toEqual("爱abc美力");
+
+                // unique char key, size of 4 bytes
+                expect(await client.setrange(key_3, 0, "😊")).toBe(4);
+
+                expect(await client.setrange(key_3, 4, "GLIDE")).toBe(9);
+                expect(await client.get(key_3)).toEqual("😊GLIDE");
 
                 // offset > len
                 expect(await client.setrange(key, 15, "GLIDE")).toBe(20);
