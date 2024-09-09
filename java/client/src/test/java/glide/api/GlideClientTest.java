@@ -1559,7 +1559,7 @@ public class GlideClientTest {
         testResponse.complete(scriptSource);
 
         when(commandManager.<String>submitNewCommand(eq(ScriptShow), eq(new String[] {hash}), any()))
-            .thenReturn(testResponse);
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<String> response = service.scriptShow(hash);
@@ -1582,8 +1582,8 @@ public class GlideClientTest {
         testResponse.complete(scriptSource);
 
         when(commandManager.<GlideString>submitNewCommand(
-            eq(ScriptShow), eq(new GlideString[] {hash}), any()))
-            .thenReturn(testResponse);
+                        eq(ScriptShow), eq(new GlideString[] {hash}), any()))
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<GlideString> response = service.scriptShow(hash);
@@ -1592,7 +1592,6 @@ public class GlideClientTest {
         assertEquals(testResponse, response);
         assertEquals(scriptSource, response.get());
     }
-
 
     @SneakyThrows
     @Test

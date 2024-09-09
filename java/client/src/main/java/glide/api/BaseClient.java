@@ -1875,13 +1875,13 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<String> scriptShow(@NonNull String sha1) {
         return commandManager.submitNewCommand(
-            ScriptShow, new String[] {sha1}, this::handleStringResponse);
+                ScriptShow, new String[] {sha1}, this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<GlideString> scriptShow(@NonNull GlideString sha1) {
         return commandManager.submitNewCommand(
-            ScriptShow, new GlideString[] {sha1}, this::handleGlideStringResponse);
+                ScriptShow, new GlideString[] {sha1}, this::handleGlideStringResponse);
     }
 
     @Override
