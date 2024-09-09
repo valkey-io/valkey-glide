@@ -2501,7 +2501,7 @@ export interface BitOffsetOptions {
  * @internal
  */
 function joinBitOptions(options: BitOffsetOptions): GlideString[] {
-    let args: GlideString[] = [];
+    const args: GlideString[] = [];
     if (options.start != undefined) args.push(options.start.toString());
     if (options.end != undefined) args.push(options.end.toString());
     if (options.indexType) args.push(options.indexType);
@@ -2519,7 +2519,7 @@ export function createBitCount(
     let args: GlideString[] = [key];
 
     if (options) {
-        let optionResults: GlideString[] = joinBitOptions(options);
+        const optionResults: GlideString[] = joinBitOptions(options);
         args = args.concat(optionResults);
     }
 
@@ -2552,7 +2552,7 @@ export function createBitPos(
     const args: GlideString[] = [key, bit.toString()];
 
     if (options) {
-        let optionResults: GlideString[] = joinBitOptions(options);
+        const optionResults: GlideString[] = joinBitOptions(options);
         args = args.concat(optionResults);
     }
 
