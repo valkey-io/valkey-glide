@@ -66,7 +66,7 @@ async function clusterTests() {
     try {
         console.log("Testing cluster");
         console.log("Creating cluster");
-        let glideCluster = await GlideClient.createCluster(true,
+        let glideCluster = await glideCluster.createCluster(true,
             3,
             1,
         );
