@@ -136,6 +136,7 @@ import static command_request.CommandRequestOuterClass.RequestType.SScan;
 import static command_request.CommandRequestOuterClass.RequestType.SUnion;
 import static command_request.CommandRequestOuterClass.RequestType.SUnionStore;
 import static command_request.CommandRequestOuterClass.RequestType.Scan;
+import static command_request.CommandRequestOuterClass.RequestType.ScriptShow;
 import static command_request.CommandRequestOuterClass.RequestType.Select;
 import static command_request.CommandRequestOuterClass.RequestType.SetBit;
 import static command_request.CommandRequestOuterClass.RequestType.SetRange;
@@ -1544,6 +1545,54 @@ public class GlideClientTest {
         assertEquals(testResponse, response);
         assertEquals(payload, response.get());
     }
+
+    @SneakyThrows
+    @Test
+    public void scriptShow_returns_script_source() {
+        // setup
+        String scriptSource = "return { KEYS[1], ARGV[1] }";
+        Script script = mock(Script.class);
+        String hash = UUID.randomUUID().toString();
+        when(script.getHash()).thenReturn(hash);
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(scriptSource);
+
+        when(commandManager.<String>submitNewCommand(eq(ScriptShow), eq(new String[] {hash}), any()))
+            .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.scriptShow(hash);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(scriptSource, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void scriptShow_returns_script_source_glidestring() {
+        // setup
+        GlideString scriptSource = gs("return { KEYS[1], ARGV[1] }");
+        Script script = mock(Script.class);
+        GlideString hash = gs(UUID.randomUUID().toString());
+        when(script.getHash()).thenReturn(hash.toString());
+
+        CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
+        testResponse.complete(scriptSource);
+
+        when(commandManager.<GlideString>submitNewCommand(
+            eq(ScriptShow), eq(new GlideString[] {hash}), any()))
+            .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString> response = service.scriptShow(hash);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(scriptSource, response.get());
+    }
+
 
     @SneakyThrows
     @Test

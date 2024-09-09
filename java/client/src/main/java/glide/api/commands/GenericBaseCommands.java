@@ -1344,4 +1344,8 @@ public interface GenericBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> wait(long numreplicas, long timeout);
+
+    CompletableFuture<String> scriptShow(String sha1);
+    CompletableFuture<GlideString> scriptShow(GlideString sha1);
+
 }
