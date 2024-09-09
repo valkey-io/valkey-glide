@@ -1283,7 +1283,7 @@ class ClusterCommands(CoreCommands):
 
         Args:
             sha1s (List[TEncodable]): List of SHA1 digests of the scripts to check.
-            route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided, in which
+            route (Optional[Route]): The command will be routed to all primary nodes, unless `route` is provided, in which
             case the client will route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:
@@ -1406,9 +1406,9 @@ class ClusterCommands(CoreCommands):
             TResult: a value that depends on the script that was executed.
 
         Examples:
-            >>> lua_script = Script("return { KEYS[1], ARGV[1] }")
+            >>> lua_script = Script("return { ARGV[1] }")
             >>> await invoke_script(lua_script, args=["bar"], route=AllPrimaries());
-                [b"foo", b"bar"]
+                [b"bar"]
         """
         return await self._execute_script(
             script.get_hash(), keys=None, args=args, route=route

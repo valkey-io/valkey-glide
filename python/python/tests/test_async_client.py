@@ -10171,6 +10171,10 @@ class TestClusterRoutes:
 async def script_kill_tests(
     glide_client: TGlideClient, test_client: TGlideClient, route: Optional[Route] = None
 ):
+    """
+    shared tests for SCRIPT KILL used in routed and non-routed variants, clients are created in
+    respective tests with different test matrices.
+    """
     # Verify that script_kill raises an error when no script is running
     with pytest.raises(RequestError) as e:
         await glide_client.script_kill()
