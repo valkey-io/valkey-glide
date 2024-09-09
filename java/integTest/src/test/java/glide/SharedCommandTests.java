@@ -117,6 +117,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import lombok.Getter;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.ArrayUtils;
@@ -14055,7 +14056,7 @@ public class SharedCommandTests {
         // Setup test data - use a large number of entries to force an iterative cursor.
         Map<String, Double> numberMap = new HashMap<>();
         for (Double i = 0.0; i < 50000; i++) {
-            numberMap.put(String.valueOf(i), i);
+            numberMap.put("member" + String.valueOf(i), i);
         }
         String[] charMembers = new String[] {"a", "b", "c", "d", "e"};
         Map<String, Double> charMap = new HashMap<>();
@@ -14186,10 +14187,26 @@ public class SharedCommandTests {
         result =
                 client
                         .zscan(
-                                key1, initialCursor, ZScanOptions.builder().matchPattern("1*").count(20L).build())
+                                key1,
+                                initialCursor,
+                                ZScanOptions.builder().matchPattern("member1*").count(20L).build())
                         .get();
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 0);
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+            result =
+                    client.zscan(key1, initialCursor, ZScanOptions.builder().noScores(true).build()).get();
+            assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
+            // Cast the result collection to a String array
+            Object[] fieldsArray = (Object[]) result[resultCollectionIndex];
+            System.out.println(Arrays.toString(fieldsArray));
+            // Convert Object array to Stream for processing
+            Stream<Object> stream = Arrays.stream(fieldsArray);
+
+            // Check if all fields start with "member"
+            assertTrue(stream.allMatch(field -> ((String) field).startsWith("member")));
+        }
 
         // Exceptions
         // Non-set key
@@ -14232,11 +14249,11 @@ public class SharedCommandTests {
         // Setup test data - use a large number of entries to force an iterative cursor.
         Map<GlideString, Double> numberMap = new HashMap<>();
         for (Double i = 0.0; i < 50000; i++) {
-            numberMap.put(gs(String.valueOf(i)), i);
+            numberMap.put(gs("member" + String.valueOf(i)), i);
         }
         Map<String, Double> numberMap_strings = new HashMap<>();
         for (Double i = 0.0; i < 50000; i++) {
-            numberMap_strings.put(String.valueOf(i), i);
+            numberMap_strings.put("member" + String.valueOf(i), i);
         }
 
         GlideString[] charMembers = new GlideString[] {gs("a"), gs("b"), gs("c"), gs("d"), gs("e")};
@@ -14379,10 +14396,25 @@ public class SharedCommandTests {
                         .zscan(
                                 key1,
                                 initialCursor,
-                                ZScanOptionsBinary.builder().matchPattern(gs("1*")).count(20L).build())
+                                ZScanOptionsBinary.builder().matchPattern(gs("member1*")).count(20L).build())
                         .get();
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 0);
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+            result =
+                    client
+                            .zscan(key1, initialCursor, ZScanOptionsBinary.builder().noScores(true).build())
+                            .get();
+            assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
+            // Cast the result collection to a String array
+            Object[] fieldsArray = (Object[]) result[resultCollectionIndex];
+            // Convert Object array to Stream for processing
+            Stream<Object> stream = Arrays.stream(fieldsArray);
+
+            // Check if all fields start with "member"
+            assertTrue(stream.allMatch(field -> ((GlideString) field).toString().startsWith("member")));
+        }
 
         // Exceptions
         // Non-set key
@@ -14555,6 +14587,19 @@ public class SharedCommandTests {
                         .get();
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 0);
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+            result =
+                    client.hscan(key1, initialCursor, HScanOptions.builder().noValues(true).build()).get();
+            assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
+            // Cast the result collection to a String array
+            Object[] fieldsArray = (Object[]) result[resultCollectionIndex];
+            // Convert Object array to Stream for processing
+            Stream<Object> stream = Arrays.stream(fieldsArray);
+
+            // Check if all fields dont start with "num"
+            assertTrue(stream.allMatch(field -> !((String) field).startsWith("num")));
+        }
 
         // Exceptions
         // Non-hash key
@@ -14731,6 +14776,21 @@ public class SharedCommandTests {
                         .get();
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 0);
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+            result =
+                    client
+                            .hscan(key1, initialCursor, HScanOptionsBinary.builder().noValues(true).build())
+                            .get();
+            assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
+            // Cast the result collection to a String array
+            Object[] fieldsArray = (Object[]) result[resultCollectionIndex];
+            // Convert Object array to Stream for processing
+            Stream<Object> stream = Arrays.stream(fieldsArray);
+
+            // Check if all fields dont start with "num"
+            assertTrue(stream.allMatch(field -> !((GlideString) field).toString().startsWith("num")));
+        }
 
         // Exceptions
         // Non-hash key

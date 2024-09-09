@@ -10,6 +10,7 @@ package api
 import "C"
 
 import (
+	"errors"
 	"strconv"
 	"unsafe"
 
@@ -271,4 +272,17 @@ func (client *baseClient) LCS(key1 string, key2 string) (string, error) {
 		return "", err
 	}
 	return handleStringResponse(result), nil
+}
+
+func (client *baseClient) GetDel(key string) (string, error) {
+	if key == "" {
+		return "", errors.New("key is required")
+	}
+
+	result, err := client.executeCommand(C.GetDel, []string{key})
+	if err != nil {
+		return "", err
+	}
+
+	return handleStringOrNullResponse(result), nil
 }

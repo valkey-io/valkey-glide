@@ -57,8 +57,7 @@ import {
     createTime,
     createUnWatch,
 } from "./Commands";
-import { RequestError } from "./Errors";
-import { command_request, connection_request } from "./ProtobufMessage";
+import { connection_request } from "./ProtobufMessage";
 import { ClusterTransaction } from "./Transaction";
 
 /** An extension to command option types with {@link Routes}. */
@@ -225,77 +224,6 @@ export type SingleNodeRoute =
     | SlotKeyTypes
     | RouteByAddress;
 
-function toProtobufRoute(
-    route: Routes | undefined,
-): command_request.Routes | undefined {
-    if (route === undefined) {
-        return undefined;
-    }
-
-    if (route === "allPrimaries") {
-        return command_request.Routes.create({
-            simpleRoutes: command_request.SimpleRoutes.AllPrimaries,
-        });
-    } else if (route === "allNodes") {
-        return command_request.Routes.create({
-            simpleRoutes: command_request.SimpleRoutes.AllNodes,
-        });
-    } else if (route === "randomNode") {
-        return command_request.Routes.create({
-            simpleRoutes: command_request.SimpleRoutes.Random,
-        });
-    } else if (route.type === "primarySlotKey") {
-        return command_request.Routes.create({
-            slotKeyRoute: command_request.SlotKeyRoute.create({
-                slotType: command_request.SlotTypes.Primary,
-                slotKey: route.key,
-            }),
-        });
-    } else if (route.type === "replicaSlotKey") {
-        return command_request.Routes.create({
-            slotKeyRoute: command_request.SlotKeyRoute.create({
-                slotType: command_request.SlotTypes.Replica,
-                slotKey: route.key,
-            }),
-        });
-    } else if (route.type === "primarySlotId") {
-        return command_request.Routes.create({
-            slotKeyRoute: command_request.SlotIdRoute.create({
-                slotType: command_request.SlotTypes.Primary,
-                slotId: route.id,
-            }),
-        });
-    } else if (route.type === "replicaSlotId") {
-        return command_request.Routes.create({
-            slotKeyRoute: command_request.SlotIdRoute.create({
-                slotType: command_request.SlotTypes.Replica,
-                slotId: route.id,
-            }),
-        });
-    } else if (route.type === "routeByAddress") {
-        let port = route.port;
-        let host = route.host;
-
-        if (port === undefined) {
-            const split = host.split(":");
-
-            if (split.length !== 2) {
-                throw new RequestError(
-                    "No port provided, expected host to be formatted as `{hostname}:{port}`. Received " +
-                        host,
-                );
-            }
-
-            host = split[0];
-            port = Number(split[1]);
-        }
-
-        return command_request.Routes.create({
-            byAddressRoute: { host, port },
-        });
-    }
-}
-
 /**
  * Client used for connection to cluster Redis servers.
  *
@@ -361,6 +289,10 @@ export class GlideClusterClient extends BaseClient {
      *
      * @see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command|Glide for Valkey Wiki} for details on the restrictions and limitations of the custom command API.
      *
+     * @param args - A list including the command name and arguments for the custom command.
+     * @param options - (Optional) See {@link RouteOption} and {@link DecoderOption}
+     * @returns The executed custom command return value.
+     *
      * @example
      * ```typescript
      * // Example usage of customCommand method to retrieve pub/sub clients with routing to all primary nodes
@@ -370,13 +302,10 @@ export class GlideClusterClient extends BaseClient {
      */
     public async customCommand(
         args: GlideString[],
-        options?: { route?: Routes; decoder?: Decoder },
+        options?: RouteOption & DecoderOption,
     ): Promise<ClusterResponse<ReturnType>> {
         const command = createCustomCommand(args);
-        return super.createWritePromise(command, {
-            route: toProtobufRoute(options?.route),
-            decoder: options?.decoder,
-        });
+        return super.createWritePromise(command, options);
     }
 
     /**
@@ -385,11 +314,12 @@ export class GlideClusterClient extends BaseClient {
      * @see {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#transaction|Valkey Glide Wiki} for details on Valkey Transactions.
      *
      * @param transaction - A {@link ClusterTransaction} object containing a list of commands to be executed.
-     * @param route - (Optional) If `route` is not provided, the transaction will be routed to the slot owner of the first key found in the transaction.
+     *
+     *  @param options - (Optional) Additional parameters:
+     * - (Optional) `route`: If `route` is not provided, the transaction will be routed to the slot owner of the first key found in the transaction.
      *     If no key is found, the command will be sent to a random node.
      *     If `route` is provided, the client will route the command to the nodes defined by `route`.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * - (Optional) `decoder`: See {@link DecoderOption}.
      * @returns A list of results corresponding to the execution of each command in the transaction.
      *     If a command returns a value, it will be included in the list. If a command doesn't return a value,
      *     the list entry will be `null`.
@@ -399,15 +329,11 @@ export class GlideClusterClient extends BaseClient {
         transaction: ClusterTransaction,
         options?: {
             route?: SingleNodeRoute;
-            decoder?: Decoder;
-        },
+        } & DecoderOption,
     ): Promise<ReturnType[] | null> {
         return this.createWritePromise<ReturnType[] | null>(
             transaction.commands,
-            {
-                route: toProtobufRoute(options?.route),
-                decoder: options?.decoder,
-            },
+            options,
         ).then((result) =>
             this.processResultWithSetCommands(
                 result,
@@ -451,10 +377,7 @@ export class GlideClusterClient extends BaseClient {
         } & RouteOption &
             DecoderOption,
     ): Promise<GlideString> {
-        return this.createWritePromise(createPing(options?.message), {
-            route: toProtobufRoute(options?.route),
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(createPing(options?.message), options);
     }
 
     /**
@@ -477,7 +400,7 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<ClusterResponse<string>> {
         return this.createWritePromise<ClusterResponse<string>>(
             createInfo(options?.sections),
-            { route: toProtobufRoute(options?.route), decoder: Decoder.String },
+            { decoder: Decoder.String, ...options },
         );
     }
 
@@ -513,10 +436,7 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<ClusterResponse<GlideString | null>> {
         return this.createWritePromise<ClusterResponse<GlideString | null>>(
             createClientGetName(),
-            {
-                route: toProtobufRoute(options?.route),
-                decoder: options?.decoder,
-            },
+            options,
         );
     }
 
@@ -527,8 +447,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * @see {@link https://valkey.io/commands/config-rewrite/|valkey.io} for details.
      *
-     * @param route - (Optional) Specifies the routing configuration for the command.
-     *     The client will route the command to the nodes defined by `route`.
+     * @param options - (Optional) See {@link RouteOption}.
      * @returns `"OK"` when the configuration was rewritten properly. Otherwise, an error is thrown.
      *
      * @example
@@ -538,10 +457,10 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public async configRewrite(route?: Routes): Promise<"OK"> {
+    public async configRewrite(options?: RouteOption): Promise<"OK"> {
         return this.createWritePromise(createConfigRewrite(), {
-            route: toProtobufRoute(route),
             decoder: Decoder.String,
+            ...options,
         });
     }
 
@@ -552,8 +471,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * @see {@link https://valkey.io/commands/config-resetstat/|valkey.io} for details.
      *
-     * @param route - (Optional) Specifies the routing configuration for the command.
-     *     The client will route the command to the nodes defined by `route`.
+     * @param options - (Optional) See {@link RouteOption}.
      * @returns always `"OK"`.
      *
      * @example
@@ -563,10 +481,10 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public async configResetStat(route?: Routes): Promise<"OK"> {
+    public async configResetStat(options?: RouteOption): Promise<"OK"> {
         return this.createWritePromise(createConfigResetStat(), {
-            route: toProtobufRoute(route),
             decoder: Decoder.String,
+            ...options,
         });
     }
 
@@ -592,7 +510,7 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<ClusterResponse<number>> {
         return this.createWritePromise<ClusterResponse<number>>(
             createClientId(),
-            { route: toProtobufRoute(options?.route) },
+            options,
         );
     }
 
@@ -627,10 +545,7 @@ export class GlideClusterClient extends BaseClient {
         parameters: string[],
         options?: RouteOption & DecoderOption,
     ): Promise<ClusterResponse<Record<string, GlideString>>> {
-        return this.createWritePromise(createConfigGet(parameters), {
-            route: toProtobufRoute(options?.route),
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(createConfigGet(parameters), options);
     }
 
     /**
@@ -656,8 +571,8 @@ export class GlideClusterClient extends BaseClient {
         options?: RouteOption,
     ): Promise<"OK"> {
         return this.createWritePromise(createConfigSet(parameters), {
-            route: toProtobufRoute(options?.route),
             decoder: Decoder.String,
+            ...options,
         });
     }
 
@@ -690,10 +605,7 @@ export class GlideClusterClient extends BaseClient {
         message: GlideString,
         options?: RouteOption & DecoderOption,
     ): Promise<ClusterResponse<GlideString>> {
-        return this.createWritePromise(createEcho(message), {
-            route: toProtobufRoute(options?.route),
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(createEcho(message), options);
     }
 
     /**
@@ -730,8 +642,8 @@ export class GlideClusterClient extends BaseClient {
         options?: RouteOption,
     ): Promise<ClusterResponse<[string, string]>> {
         return this.createWritePromise(createTime(), {
-            route: toProtobufRoute(options?.route),
             decoder: Decoder.String,
+            ...options,
         });
     }
 
@@ -785,8 +697,8 @@ export class GlideClusterClient extends BaseClient {
         options?: LolwutOptions & RouteOption,
     ): Promise<ClusterResponse<string>> {
         return this.createWritePromise(createLolwut(options), {
-            route: toProtobufRoute(options?.route),
             decoder: Decoder.String,
+            ...options,
         });
     }
 
@@ -812,10 +724,7 @@ export class GlideClusterClient extends BaseClient {
         args: GlideString[],
         options?: RouteOption & DecoderOption,
     ): Promise<ClusterResponse<ReturnType>> {
-        return this.createWritePromise(createFCall(func, [], args), {
-            route: toProtobufRoute(options?.route),
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(createFCall(func, [], args), options);
     }
 
     /**
@@ -841,10 +750,10 @@ export class GlideClusterClient extends BaseClient {
         args: GlideString[],
         options?: RouteOption & DecoderOption,
     ): Promise<ClusterResponse<ReturnType>> {
-        return this.createWritePromise(createFCallReadOnly(func, [], args), {
-            route: toProtobufRoute(options?.route),
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(
+            createFCallReadOnly(func, [], args),
+            options,
+        );
     }
 
     /**
@@ -866,11 +775,11 @@ export class GlideClusterClient extends BaseClient {
      */
     public async functionDelete(
         libraryCode: GlideString,
-        route?: Routes,
+        options?: RouteOption,
     ): Promise<"OK"> {
         return this.createWritePromise(createFunctionDelete(libraryCode), {
-            route: toProtobufRoute(route),
             decoder: Decoder.String,
+            ...options,
         });
     }
 
@@ -904,10 +813,7 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<GlideString> {
         return this.createWritePromise(
             createFunctionLoad(libraryCode, options?.replace),
-            {
-                route: toProtobufRoute(options?.route),
-                decoder: options?.decoder,
-            },
+            options,
         );
     }
 
@@ -934,8 +840,8 @@ export class GlideClusterClient extends BaseClient {
         } & RouteOption,
     ): Promise<"OK"> {
         return this.createWritePromise(createFunctionFlush(options?.mode), {
-            route: toProtobufRoute(options?.route),
             decoder: Decoder.String,
+            ...options,
         });
     }
 
@@ -970,10 +876,7 @@ export class GlideClusterClient extends BaseClient {
     public async functionList(
         options?: FunctionListOptions & DecoderOption & RouteOption,
     ): Promise<ClusterResponse<FunctionListResponse>> {
-        return this.createWritePromise(createFunctionList(options), {
-            route: toProtobufRoute(options?.route),
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(createFunctionList(options), options);
     }
 
     /**
@@ -1026,10 +929,7 @@ export class GlideClusterClient extends BaseClient {
     public async functionStats(
         options?: RouteOption & DecoderOption,
     ): Promise<ClusterResponse<FunctionStatsSingleResponse>> {
-        return this.createWritePromise(createFunctionStats(), {
-            route: toProtobufRoute(options?.route),
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(createFunctionStats(), options);
     }
 
     /**
@@ -1039,8 +939,7 @@ export class GlideClusterClient extends BaseClient {
      * @see {@link https://valkey.io/commands/function-kill/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
      *
-     * @param route - (Optional) The client will route the command to the nodes defined by `route`.
-     *     If not defined, the command will be routed to all nodes.
+     * @param options - (Optional) See {@link RouteOption}.
      * @returns `"OK"` if function is terminated. Otherwise, throws an error.
      *
      * @example
@@ -1048,10 +947,10 @@ export class GlideClusterClient extends BaseClient {
      * await client.functionKill();
      * ```
      */
-    public async functionKill(route?: Routes): Promise<"OK"> {
+    public async functionKill(options?: RouteOption): Promise<"OK"> {
         return this.createWritePromise(createFunctionKill(), {
-            route: toProtobufRoute(route),
             decoder: Decoder.String,
+            ...options,
         });
     }
 
@@ -1061,8 +960,7 @@ export class GlideClusterClient extends BaseClient {
      * @see {@link https://valkey.io/commands/function-dump/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
      *
-     * @param route - (Optional) The client will route the command to the nodes defined by `route`.
-     *     If not defined, the command will be routed a random node.
+     * @param options - (Optional) See {@link RouteOption}.
      * @returns The serialized payload of all loaded libraries.
      *
      * @example
@@ -1072,11 +970,11 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public async functionDump(
-        route?: Routes,
+        options?: RouteOption,
     ): Promise<ClusterResponse<Buffer>> {
         return this.createWritePromise(createFunctionDump(), {
-            route: toProtobufRoute(route),
             decoder: Decoder.Bytes,
+            ...options,
         });
     }
 
@@ -1104,10 +1002,7 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<"OK"> {
         return this.createWritePromise(
             createFunctionRestore(payload, options?.policy),
-            {
-                route: toProtobufRoute(options?.route),
-                decoder: Decoder.String,
-            },
+            { decoder: Decoder.String, ...options },
         );
     }
 
@@ -1135,8 +1030,8 @@ export class GlideClusterClient extends BaseClient {
         } & RouteOption,
     ): Promise<"OK"> {
         return this.createWritePromise(createFlushAll(options?.mode), {
-            route: toProtobufRoute(options?.route),
             decoder: Decoder.String,
+            ...options,
         });
     }
 
@@ -1164,8 +1059,8 @@ export class GlideClusterClient extends BaseClient {
         } & RouteOption,
     ): Promise<"OK"> {
         return this.createWritePromise(createFlushDB(options?.mode), {
-            route: toProtobufRoute(options?.route),
             decoder: Decoder.String,
+            ...options,
         });
     }
 
@@ -1189,9 +1084,7 @@ export class GlideClusterClient extends BaseClient {
     public async dbsize(
         options?: RouteOption,
     ): Promise<ClusterResponse<number>> {
-        return this.createWritePromise(createDBSize(), {
-            route: toProtobufRoute(options?.route),
-        });
+        return this.createWritePromise(createDBSize(), options);
     }
 
     /** Publish a message on pubsub channel.
@@ -1259,7 +1152,7 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<GlideString[]> {
         return this.createWritePromise(
             createPubsubShardChannels(options?.pattern),
-            { decoder: options?.decoder },
+            options,
         );
     }
 
@@ -1315,9 +1208,7 @@ export class GlideClusterClient extends BaseClient {
         key: GlideString,
         options?: SortClusterOptions & DecoderOption,
     ): Promise<GlideString[]> {
-        return this.createWritePromise(createSort(key, options), {
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(createSort(key, options), options);
     }
 
     /**
@@ -1345,9 +1236,10 @@ export class GlideClusterClient extends BaseClient {
         key: GlideString,
         options?: SortClusterOptions & DecoderOption,
     ): Promise<GlideString[]> {
-        return this.createWritePromise(createSortReadOnly(key, options), {
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(
+            createSortReadOnly(key, options),
+            options,
+        );
     }
 
     /**
@@ -1403,9 +1295,7 @@ export class GlideClusterClient extends BaseClient {
     public async lastsave(
         options?: RouteOption,
     ): Promise<ClusterResponse<number>> {
-        return this.createWritePromise(createLastSave(), {
-            route: toProtobufRoute(options?.route),
-        });
+        return this.createWritePromise(createLastSave(), options);
     }
 
     /**
@@ -1427,10 +1317,7 @@ export class GlideClusterClient extends BaseClient {
     public async randomKey(
         options?: DecoderOption & RouteOption,
     ): Promise<GlideString | null> {
-        return this.createWritePromise(createRandomKey(), {
-            route: toProtobufRoute(options?.route),
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(createRandomKey(), options);
     }
 
     /**
@@ -1454,8 +1341,8 @@ export class GlideClusterClient extends BaseClient {
      */
     public async unwatch(options?: RouteOption): Promise<"OK"> {
         return this.createWritePromise(createUnWatch(), {
-            route: toProtobufRoute(options?.route),
             decoder: Decoder.String,
+            ...options,
         });
     }
 }
