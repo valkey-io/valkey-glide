@@ -1399,7 +1399,7 @@ class ClusterCommands(CoreCommands):
         Args:
             script (Script): The Lua script to execute.
             args (Optional[List[TEncodable]]): The non-key arguments for the script.
-            route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in which
+            route (Optional[Route]): The command will be routed automatically to a random node, unless `route` is provided, in which
                 case the client will route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:

@@ -7,7 +7,7 @@ import copy
 import math
 import time
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Mapping, Tuple, Union, cast
+from typing import Any, Dict, List, Mapping, Optional, Tuple, Union, cast
 
 import pytest
 from glide import ClosingError, RequestError, Script
@@ -10168,6 +10168,63 @@ class TestClusterRoutes:
             await glide_client.hscan(key2, initial_cursor, count=-1)
 
 
+async def script_kill_tests(
+    glide_client: TGlideClient, test_client: TGlideClient, route: Optional[Route] = None
+):
+    # Verify that script_kill raises an error when no script is running
+    with pytest.raises(RequestError) as e:
+        await glide_client.script_kill()
+    assert "No scripts in execution right now" in str(e)
+
+    # Create a long-running script
+    long_script = Script(create_long_running_lua_script(10))
+
+    async def run_long_script():
+        with pytest.raises(RequestError) as e:
+            if route is not None:
+                await test_client.invoke_script_route(long_script, route=route)
+            else:
+                await test_client.invoke_script(long_script)
+        assert "Script killed by user" in str(e)
+
+    async def wait_and_kill_script():
+        await asyncio.sleep(3)  # Give some time for the script to start
+        timeout = 0
+        while timeout <= 5:
+            # keep trying to kill until we get an "OK"
+            try:
+                if route is not None:
+                    result = await cast(GlideClusterClient, glide_client).script_kill(
+                        route=route
+                    )
+                else:
+                    result = await glide_client.script_kill()
+                #  we expect to get success
+                assert result == "OK"
+                break
+            except RequestError:
+                # a RequestError may occur if the script is not yet running
+                # sleep and try again
+                timeout += 0.5
+                await asyncio.sleep(0.5)
+
+    # Run the long script and kill it
+    await asyncio.gather(
+        run_long_script(),
+        wait_and_kill_script(),
+    )
+
+    # Verify that script_kill raises an error when no script is running
+    with pytest.raises(RequestError) as e:
+        if route is not None:
+            await cast(GlideClusterClient, glide_client).script_kill(route=route)
+        else:
+            await glide_client.script_kill()
+    assert "No scripts in execution right now" in str(e)
+
+    await test_client.close()
+
+
 @pytest.mark.asyncio
 class TestScripts:
     @pytest.mark.smoke_test
@@ -10329,10 +10386,10 @@ class TestScripts:
         assert await glide_client.script_flush(FlushMode.ASYNC) == OK
         assert await glide_client.script_exists([script.get_hash()]) == [False]
 
-    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("single_route", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_script_kill(
+    async def test_script_kill_route(
         self,
         request,
         cluster_mode,
@@ -10340,68 +10397,30 @@ class TestScripts:
         glide_client: TGlideClient,
         single_route: bool,
     ):
-        is_cluster = isinstance(glide_client, GlideClusterClient)
         route = SlotKeyRoute(SlotType.PRIMARY, "1") if single_route else AllPrimaries()
-
-        # Verify that script_kill raises an error when no script is running
-        with pytest.raises(RequestError) as e:
-            await glide_client.script_kill()
-        assert "No scripts in execution right now" in str(e)
-
-        # Create a long-running script
-        long_script = Script(create_long_running_lua_script(10))
 
         # Create a second client to run the script
         test_client = await create_client(
             request, cluster_mode=cluster_mode, protocol=protocol, timeout=30000
         )
 
-        async def run_long_script():
-            with pytest.raises(RequestError) as e:
-                if is_cluster:
-                    await cast(GlideClusterClient, test_client).invoke_script_route(
-                        long_script, route=route
-                    )
-                else:
-                    await test_client.invoke_script(long_script)
-            assert "Script killed by user" in str(e)
+        await script_kill_tests(glide_client, test_client, route)
 
-        async def wait_and_kill_script():
-            await asyncio.sleep(3)  # Give some time for the script to start
-            timeout = 0
-            while timeout <= 5:
-                # keep trying to kill until we get an "OK"
-                try:
-                    if is_cluster:
-                        result = await cast(
-                            GlideClusterClient, glide_client
-                        ).script_kill(route=route)
-                    else:
-                        result = await glide_client.script_kill()
-                    #  we expect to get success
-                    assert result == "OK"
-                    break
-                except RequestError:
-                    # a RequestError may occur if the script is not yet running
-                    # sleep and try again
-                    timeout += 0.5
-                    await asyncio.sleep(0.5)
-
-        # Run the long script and kill it
-        await asyncio.gather(
-            run_long_script(),
-            wait_and_kill_script(),
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_script_kill_no_route(
+        self,
+        request,
+        cluster_mode,
+        protocol,
+        glide_client: TGlideClient,
+    ):
+        # Create a second client to run the script
+        test_client = await create_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, timeout=30000
         )
 
-        # Verify that script_kill raises an error when no script is running
-        with pytest.raises(RequestError) as e:
-            if is_cluster:
-                await cast(GlideClusterClient, glide_client).script_kill(route=route)
-            else:
-                await glide_client.script_kill()
-        assert "No scripts in execution right now" in str(e)
-
-        await test_client.close()
+        await script_kill_tests(glide_client, test_client)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
