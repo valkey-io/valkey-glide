@@ -25,7 +25,7 @@ from glide.constants import (
 from glide.protobuf.command_request_pb2 import RequestType
 from glide.routes import Route
 
-from ..glide import ClusterScanCursor
+from ..glide import ClusterScanCursor, Script
 
 
 class ClusterCommands(CoreCommands):
@@ -1271,4 +1271,145 @@ class ClusterCommands(CoreCommands):
         return cast(
             List[Union[ClusterScanCursor, List[bytes]]],
             await self._cluster_scan(cursor, match, count, type),
+        )
+
+    async def script_exists(
+        self, sha1s: List[TEncodable], route: Optional[Route] = None
+    ) -> TClusterResponse[List[bool]]:
+        """
+        Check existence of scripts in the script cache by their SHA1 digest.
+
+        See https://valkey.io/commands/script-exists for more details.
+
+        Args:
+            sha1s (List[TEncodable]): List of SHA1 digests of the scripts to check.
+            route (Optional[Route]): The command will be routed to all primary nodes, unless `route` is provided, in which
+            case the client will route the command to the nodes defined by `route`. Defaults to None.
+
+        Returns:
+            TClusterResponse[List[bool]]: A list of boolean values indicating the existence of each script.
+
+        Examples:
+            >>> lua_script = Script("return { KEYS[1], ARGV[1] }")
+            >>> await client.script_exists([lua_script.get_hash(), "sha1_digest2"])
+                [True, False]
+        """
+        return cast(
+            TClusterResponse[List[bool]],
+            await self._execute_command(RequestType.ScriptExists, sha1s, route),
+        )
+
+    async def script_flush(
+        self, mode: Optional[FlushMode] = None, route: Optional[Route] = None
+    ) -> TOK:
+        """
+        Flush the Lua scripts cache.
+
+        See https://valkey.io/commands/script-flush for more details.
+
+        Args:
+            mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
+            route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in which
+                case the client will route the command to the nodes defined by `route`. Defaults to None.
+
+        Returns:
+            TOK: A simple `OK` response.
+
+        Examples:
+            >>> await client.script_flush()
+                "OK"
+
+            >>> await client.script_flush(FlushMode.ASYNC)
+                "OK"
+        """
+
+        return cast(
+            TOK,
+            await self._execute_command(
+                RequestType.ScriptFlush, [mode.value] if mode else [], route
+            ),
+        )
+
+    async def script_kill(self, route: Optional[Route] = None) -> TOK:
+        """
+        Kill the currently executing Lua script, assuming no write operation was yet performed by the script.
+        The command is routed to all nodes, and aggregates the response to a single array.
+
+        See https://valkey.io/commands/script-kill for more details.
+
+        Returns:
+            TOK: A simple `OK` response.
+            route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in which
+                case the client will route the command to the nodes defined by `route`. Defaults to None.
+
+        Examples:
+            >>> await client.script_kill()
+                "OK"
+        """
+        return cast(TOK, await self._execute_command(RequestType.ScriptKill, [], route))
+
+    async def invoke_script(
+        self,
+        script: Script,
+        keys: Optional[List[TEncodable]] = None,
+        args: Optional[List[TEncodable]] = None,
+    ) -> TClusterResponse[TResult]:
+        """
+        Invokes a Lua script with its keys and arguments.
+        This method simplifies the process of invoking scripts on a server by using an object that represents a Lua script.
+        The script loading, argument preparation, and execution will all be handled internally.
+        If the script has not already been loaded, it will be loaded automatically using the `SCRIPT LOAD` command.
+        After that, it will be invoked using the `EVALSHA` command.
+
+        When in cluster mode, `key`s must map to the same hash slot.
+
+        See https://valkey.io/commands/script-load/ and https://valkey.io/commands/evalsha/ for more details.
+
+        Args:
+            script (Script): The Lua script to execute.
+            keys (Optional[List[TEncodable]]): The keys that are used in the script. To ensure the correct execution of
+                the script, all names of keys that a script accesses must be explicitly provided as `keys`.
+            args (Optional[List[TEncodable]]): The non-key arguments for the script.
+
+        Returns:
+            TResult: a value that depends on the script that was executed.
+
+        Examples:
+            >>> lua_script = Script("return { KEYS[1], ARGV[1] }")
+            >>> await invoke_script(lua_script, keys=["foo"], args=["bar"] );
+                [b"foo", b"bar"]
+        """
+        return await self._execute_script(script.get_hash(), keys, args)
+
+    async def invoke_script_route(
+        self,
+        script: Script,
+        args: Optional[List[TEncodable]] = None,
+        route: Optional[Route] = None,
+    ) -> TClusterResponse[TResult]:
+        """
+        Invokes a Lua script with its arguments and route.
+        This method simplifies the process of invoking scripts on a server by using an object that represents a Lua script.
+        The script loading, argument preparation, and execution will all be handled internally.
+        If the script has not already been loaded, it will be loaded automatically using the `SCRIPT LOAD` command.
+        After that, it will be invoked using the `EVALSHA` command.
+
+        See https://valkey.io/commands/script-load/ and https://valkey.io/commands/evalsha/ for more details.
+
+        Args:
+            script (Script): The Lua script to execute.
+            args (Optional[List[TEncodable]]): The non-key arguments for the script.
+            route (Optional[Route]): The command will be routed automatically to a random node, unless `route` is provided, in which
+                case the client will route the command to the nodes defined by `route`. Defaults to None.
+
+        Returns:
+            TResult: a value that depends on the script that was executed.
+
+        Examples:
+            >>> lua_script = Script("return { ARGV[1] }")
+            >>> await invoke_script(lua_script, args=["bar"], route=AllPrimaries());
+                [b"bar"]
+        """
+        return await self._execute_script(
+            script.get_hash(), keys=None, args=args, route=route
         )
