@@ -282,8 +282,10 @@ import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.scan.HScanOptions;
+import glide.api.models.commands.scan.HScanOptions.HScanOptionsBuilder;
 import glide.api.models.commands.scan.SScanOptions;
 import glide.api.models.commands.scan.ZScanOptions;
+import glide.api.models.commands.scan.ZScanOptions.ZScanOptionsBuilder;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamAddOptions.StreamAddOptionsBuilder;
 import glide.api.models.commands.stream.StreamClaimOptions;
@@ -7054,8 +7056,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     always the <code>cursor</code> for the next iteration of results. <code>"0"</code> will be
      *     the <code>cursor</code> returned on the last iteration of the sorted set. The second
      *     element is always an <code>Array</code> of the subset of the sorted set held in <code>key
-     *     </code>. The array in the second element is always a flattened series of <code>String
-     *     </code> pairs, where the value is at even indices and the score is at odd indices.
+     *     </code>. The array in the second element is a flattened series of <code>String
+     *     </code> pairs, where the value is at even indices and the score is at odd indices. If
+     *     {@link ZScanOptionsBuilder#noScores} is to <code>true</code>, the second element will only
+     *     contain the members without scores.
      */
     public <ArgType> T zscan(
             @NonNull ArgType key, @NonNull ArgType cursor, @NonNull ZScanOptions zScanOptions) {
@@ -7101,8 +7105,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     always the <code>cursor</code> for the next iteration of results. <code>"0"</code> will be
      *     the <code>cursor</code> returned on the last iteration of the result. The second element is
      *     always an <code>Array</code> of the subset of the hash held in <code>key</code>. The array
-     *     in the second element is always a flattened series of <code>String</code> pairs, where the
-     *     key is at even indices and the value is at odd indices.
+     *     in the second element is a flattened series of <code>String</code> pairs, where the key is
+     *     at even indices and the value is at odd indices. If {@link HScanOptionsBuilder#noValues} is
+     *     set to <code>true</code>, the second element will only contain the fields without the
+     *     values.
      */
     public <ArgType> T hscan(
             @NonNull ArgType key, @NonNull ArgType cursor, @NonNull HScanOptions hScanOptions) {

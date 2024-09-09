@@ -15,6 +15,7 @@ import { v4 as uuidv4 } from "uuid";
 import {
     Decoder,
     GlideClient,
+    HashDataType,
     ProtocolVersion,
     RequestError,
     Transaction,
@@ -176,8 +177,12 @@ describe("GlideClient", () => {
             expect(result).toEqual("OK");
 
             expect(await client.get(key)).toEqual(valueEncoded);
-            expect(await client.get(key, Decoder.String)).toEqual(value);
-            expect(await client.get(key, Decoder.Bytes)).toEqual(valueEncoded);
+            expect(await client.get(key, { decoder: Decoder.String })).toEqual(
+                value,
+            );
+            expect(await client.get(key, { decoder: Decoder.Bytes })).toEqual(
+                valueEncoded,
+            );
             client.close();
         },
     );
@@ -200,8 +205,12 @@ describe("GlideClient", () => {
             expect(result).toEqual("OK");
 
             expect(await client.get(key)).toEqual(value);
-            expect(await client.get(key, Decoder.String)).toEqual(value);
-            expect(await client.get(key, Decoder.Bytes)).toEqual(valueEncoded);
+            expect(await client.get(key, { decoder: Decoder.String })).toEqual(
+                value,
+            );
+            expect(await client.get(key, { decoder: Decoder.Bytes })).toEqual(
+                valueEncoded,
+            );
             client.close();
         },
     );
@@ -235,7 +244,9 @@ describe("GlideClient", () => {
             const transaction = new Transaction();
             const expectedRes = await encodedTransactionTest(transaction);
             transaction.select(0);
-            const result = await client.exec(transaction, Decoder.Bytes);
+            const result = await client.exec(transaction, {
+                decoder: Decoder.Bytes,
+            });
             expectedRes.push(["select(0)", "OK"]);
 
             validateTransactionResponse(result, expectedRes);
@@ -255,7 +266,9 @@ describe("GlideClient", () => {
                 Buffer.from("value"),
             );
             bytesTransaction.select(0);
-            const result = await client.exec(bytesTransaction, Decoder.Bytes);
+            const result = await client.exec(bytesTransaction, {
+                decoder: Decoder.Bytes,
+            });
             expectedBytesRes.push(["select(0)", "OK"]);
 
             validateTransactionResponse(result, expectedBytesRes);
@@ -266,7 +279,7 @@ describe("GlideClient", () => {
 
             // Since DUMP gets binary results, we cannot use the string decoder here, so we expected to get an error.
             await expect(
-                client.exec(stringTransaction, Decoder.String),
+                client.exec(stringTransaction, { decoder: Decoder.String }),
             ).rejects.toThrowError(
                 "invalid utf-8 sequence of 1 bytes from index 9",
             );
@@ -670,7 +683,7 @@ describe("GlideClient", () => {
                         Buffer.from(funcName),
                         [],
                         [Buffer.from("one"), "two"],
-                        Decoder.Bytes,
+                        { decoder: Decoder.Bytes },
                     ),
                 ).toEqual(Buffer.from("one"));
                 expect(
@@ -678,7 +691,7 @@ describe("GlideClient", () => {
                         Buffer.from(funcName),
                         [],
                         ["one", Buffer.from("two")],
-                        Decoder.Bytes,
+                        { decoder: Decoder.Bytes },
                     ),
                 ).toEqual(Buffer.from("one"));
 
@@ -1136,7 +1149,9 @@ describe("GlideClient", () => {
 
                 // Verify functionDump
                 let transaction = new Transaction().functionDump();
-                const result = await client.exec(transaction, Decoder.Bytes);
+                const result = await client.exec(transaction, {
+                    decoder: Decoder.Bytes,
+                });
                 const data = result?.[0] as Buffer;
 
                 // Verify functionRestore
@@ -1166,11 +1181,12 @@ describe("GlideClient", () => {
             const ages = ["30", "25", "35", "20", "40"];
 
             for (let i = 0; i < ages.length; i++) {
+                const fieldValueList: HashDataType = [
+                    { field: "name", value: names[i] },
+                    { field: "age", value: ages[i] },
+                ];
                 expect(
-                    await client.hset(setPrefix + (i + 1), {
-                        name: names[i],
-                        age: ages[i],
-                    }),
+                    await client.hset(setPrefix + (i + 1), fieldValueList),
                 ).toEqual(2);
             }
 
@@ -1331,8 +1347,14 @@ describe("GlideClient", () => {
 
             // transaction test
             const transaction = new Transaction()
-                .hset(hashPrefix + 1, { name: "Alice", age: "30" })
-                .hset(hashPrefix + 2, { name: "Bob", age: "25" })
+                .hset(hashPrefix + 1, [
+                    { field: "name", value: "Alice" },
+                    { field: "age", value: "30" },
+                ])
+                .hset(hashPrefix + 2, {
+                    name: "Bob",
+                    age: "25",
+                })
                 .del([list])
                 .lpush(list, ["2", "1"])
                 .sort(list, {
@@ -1416,7 +1438,7 @@ describe("GlideClient", () => {
             // `key` should be the only key in the database
             expect(await client.randomKey()).toEqual(key);
             // test binary decoder
-            expect(await client.randomKey(Decoder.Bytes)).toEqual(
+            expect(await client.randomKey({ decoder: Decoder.Bytes })).toEqual(
                 Buffer.from(key),
             );
 

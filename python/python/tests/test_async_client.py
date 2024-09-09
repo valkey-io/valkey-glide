@@ -9998,6 +9998,16 @@ class TestClusterRoutes:
         assert result[result_cursor_index] != b"0"
         assert len(result[result_collection_index]) >= 0
 
+        # Test no_scores option
+        if not await check_if_server_version_lt(glide_client, "7.9.0"):
+            result = await glide_client.zscan(key1, initial_cursor, no_scores=True)
+            assert result[result_cursor_index] != b"0"
+            values_array = cast(List[bytes], result[result_collection_index])
+            # Verify that scores are not included
+            assert all(
+                item.startswith(b"value") and item.isascii() for item in values_array
+            )
+
         # Exceptions
         # Non-set key
         assert await glide_client.set(key2, "test") == OK
@@ -10114,6 +10124,16 @@ class TestClusterRoutes:
         result = await glide_client.hscan(key1, initial_cursor, match="1*", count=20)
         assert result[result_cursor_index] != b"0"
         assert len(result[result_collection_index]) >= 0
+
+        # Test no_values option
+        if not await check_if_server_version_lt(glide_client, "7.9.0"):
+            result = await glide_client.hscan(key1, initial_cursor, no_values=True)
+            assert result[result_cursor_index] != b"0"
+            values_array = cast(List[bytes], result[result_collection_index])
+            # Verify that values are not included
+            assert all(
+                item.startswith(b"field") and item.isascii() for item in values_array
+            )
 
         # Exceptions
         # Non-hash key

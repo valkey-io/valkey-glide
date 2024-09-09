@@ -260,9 +260,9 @@ describe("GlideClusterClient", () => {
                 ).toEqual("OK");
                 // check the restore
                 expect(await client.get(key)).toEqual(value);
-                expect(await client.get(key, Decoder.Bytes)).toEqual(
-                    valueEncoded,
-                );
+                expect(
+                    await client.get(key, { decoder: Decoder.Bytes }),
+                ).toEqual(valueEncoded);
             }
         },
         TIMEOUT,
@@ -1182,7 +1182,9 @@ describe("GlideClusterClient", () => {
 
                                 // Delete the function
                                 expect(
-                                    await client.functionDelete(libName, route),
+                                    await client.functionDelete(libName, {
+                                        route,
+                                    }),
                                 ).toEqual("OK");
 
                                 functionList = await client.functionList({
@@ -1198,7 +1200,7 @@ describe("GlideClusterClient", () => {
 
                                 // Delete a non-existing library
                                 await expect(
-                                    client.functionDelete(libName, route),
+                                    client.functionDelete(libName, { route }),
                                 ).rejects.toThrow(`Library not found`);
                             } finally {
                                 expect(await client.functionFlush()).toEqual(
@@ -1247,7 +1249,7 @@ describe("GlideClusterClient", () => {
 
                                 // nothing to kill
                                 await expect(
-                                    client.functionKill(route),
+                                    client.functionKill({ route }),
                                 ).rejects.toThrow(/notbusy/i);
 
                                 // load the lib
@@ -1279,9 +1281,9 @@ describe("GlideClusterClient", () => {
                                     while (timeout >= 0) {
                                         try {
                                             expect(
-                                                await client.functionKill(
+                                                await client.functionKill({
                                                     route,
-                                                ),
+                                                }),
                                             ).toEqual("OK");
                                             killed = true;
                                             break;
@@ -1333,7 +1335,7 @@ describe("GlideClusterClient", () => {
 
                         try {
                             // dumping an empty lib
-                            let response = await client.functionDump(route);
+                            let response = await client.functionDump({ route });
 
                             if (singleNodeRoute) {
                                 expect(response.byteLength).toBeGreaterThan(0);
@@ -1365,7 +1367,7 @@ describe("GlideClusterClient", () => {
                                 withCode: true,
                                 route: route,
                             });
-                            response = await client.functionDump(route);
+                            response = await client.functionDump({ route });
                             const dump = (
                                 singleNodeRoute
                                     ? response
@@ -1519,7 +1521,7 @@ describe("GlideClusterClient", () => {
 
                         // nothing to kill
                         await expect(
-                            client.functionKill(route),
+                            client.functionKill({ route }),
                         ).rejects.toThrow(/notbusy/i);
 
                         // load the lib
@@ -1546,7 +1548,7 @@ describe("GlideClusterClient", () => {
                                 try {
                                     // valkey kills a function with 5 sec delay
                                     // but this will always throw an error in the test
-                                    await client.functionKill(route);
+                                    await client.functionKill({ route });
                                 } catch (err) {
                                     // looking for an error with "unkillable" in the message
                                     // at that point we can break the loop
