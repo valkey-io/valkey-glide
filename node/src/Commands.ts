@@ -2495,6 +2495,18 @@ export interface BitOffsetOptions {
      * If no index type is provided, the indexes will be assumed to be byte indexes.
      */
     indexType?: BitmapIndexType;
+};
+
+/**
+ * @internal
+ */
+function joinBitOptions(options: BitOffsetOptions): GlideString[] {
+    let args: GlideString[] = [];
+    if (options.start != undefined) args.push(options.start.toString());
+    if (options.end != undefined) args.push(options.end.toString());
+    if (options.indexType) args.push(options.indexType);
+
+    return args;
 }
 
 /**
@@ -2504,12 +2516,11 @@ export function createBitCount(
     key: GlideString,
     options?: BitOffsetOptions,
 ): command_request.Command {
-    const args = [key];
+    let args: GlideString[] = [key];
 
     if (options) {
-        args.push(options.start.toString());
-        if (options.end !== undefined) args.push(options.end.toString());
-        if (options.indexType) args.push(options.indexType);
+        let optionResults: GlideString[] = joinBitOptions(options);
+        args = args.concat(optionResults);
     }
 
     return createCommand(RequestType.BitCount, args);
@@ -2541,9 +2552,8 @@ export function createBitPos(
     const args: GlideString[] = [key, bit.toString()];
 
     if (options) {
-        if (options.start != undefined) args.push(options.start.toString());
-        if (options.end != undefined) args.push(options.end.toString());
-        if (options.indexType) args.push(options.indexType);
+        let optionResults: GlideString[] = joinBitOptions(options);
+        args = args.concat(optionResults);
     }
 
     return createCommand(RequestType.BitPos, args);
