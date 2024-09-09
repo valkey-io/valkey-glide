@@ -34,7 +34,7 @@ application {
     mainClass = 'glide.benchmarks.BenchmarkingApp'
     // Runs for GITHUB_ACTIONS for testing release Maven deployment. Force benchmarks to use glide-rs from Maven Central
     // deployments.
-    if (!System.getenv("ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderName")) {
-        applicationDefaultJvmArgs = ['-Djava.library.path=../target/release']
-    }
+//    if (!System.getenv("ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderName")) {
+//        applicationDefaultJvmArgs = ['-Djava.library.path=../target/release']
+//    }
 }
