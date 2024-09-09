@@ -235,7 +235,11 @@ import {
     TimeoutError,
 } from "./Errors";
 import { GlideClientConfiguration } from "./GlideClient";
-import { GlideClusterClientConfiguration } from "./GlideClusterClient";
+import {
+    GlideClusterClientConfiguration,
+    RouteOption,
+    Routes,
+} from "./GlideClusterClient";
 import { Logger } from "./Logger";
 import {
     command_request,
@@ -320,25 +324,50 @@ export type SortedSetDataType = {
 }[];
 
 /**
+ * This function converts an input from GlideRecord or Record types to GlideRecord.
+ *
+ * @param keysAndValues - key names and their values.
+ * @returns GlideRecord array containing keys and their values.
+ */
+export function convertGlideRecord(
+    keysAndValues: GlideRecord<GlideString> | Record<string, GlideString>,
+): GlideRecord<GlideString> {
+    if (!Array.isArray(keysAndValues)) {
+        return Object.entries(keysAndValues).map((e) => {
+            return { key: e[0], value: e[1] };
+        });
+    }
+
+    return keysAndValues;
+}
+
+/**
+ * Data type which represents how data are returned from hashes or insterted there.
+ * Similar to `Record<GlideString, GlideString>` - see {@link GlideRecord}.
+ */
+export type HashDataType = {
+    /** The hash element name. */
+    field: GlideString;
+    /** The hash element value. */
+    value: GlideString;
+}[];
+
+/**
  * This function converts an input from HashDataType or Record types to HashDataType.
  *
  * @param fieldsAndValues - field names and their values.
  * @returns HashDataType array containing field names and their values.
  */
-export function convertFieldsAndValuesForHset(
+export function convertHashDataType(
     fieldsAndValues: HashDataType | Record<string, GlideString>,
 ): HashDataType {
-    let finalFieldAndValues = [];
-
     if (!Array.isArray(fieldsAndValues)) {
-        finalFieldAndValues = Object.entries(fieldsAndValues).map((e) => {
+        return Object.entries(fieldsAndValues).map((e) => {
             return { field: e[0], value: e[1] };
         });
-    } else {
-        finalFieldAndValues = fieldsAndValues;
     }
 
-    return finalFieldAndValues;
+    return fieldsAndValues;
 }
 
 /**
@@ -380,17 +409,6 @@ class PointerResponse {
         this.low = low;
     }
 }
-
-/**
- * Data type which represents how data are returned from hashes or insterted there.
- * Similar to `Record<GlideString, GlideString>` - see {@link GlideRecord}.
- */
-export type HashDataType = {
-    /** The hash element name. */
-    field: GlideString;
-    /** The hash element value. */
-    value: GlideString;
-}[];
 
 /** Represents the credentials for connecting to a server. */
 export type RedisCredentials = {
@@ -488,10 +506,6 @@ export type ScriptOptions = {
      * The arguments for the script.
      */
     args?: GlideString[];
-    /**
-     * {@link Decoder} type which defines how to handle the responses. If not set, the default decoder from the client config will be used.
-     */
-    decoder?: Decoder;
 };
 
 function getRequestErrorClass(
@@ -516,16 +530,93 @@ function getRequestErrorClass(
     return RequestError;
 }
 
+/**
+ * @internal
+ */
+function toProtobufRoute(
+    route: Routes | undefined,
+): command_request.Routes | undefined {
+    if (!route) {
+        return undefined;
+    }
+
+    if (route === "allPrimaries") {
+        return command_request.Routes.create({
+            simpleRoutes: command_request.SimpleRoutes.AllPrimaries,
+        });
+    } else if (route === "allNodes") {
+        return command_request.Routes.create({
+            simpleRoutes: command_request.SimpleRoutes.AllNodes,
+        });
+    } else if (route === "randomNode") {
+        return command_request.Routes.create({
+            simpleRoutes: command_request.SimpleRoutes.Random,
+        });
+    } else if (route.type === "primarySlotKey") {
+        return command_request.Routes.create({
+            slotKeyRoute: command_request.SlotKeyRoute.create({
+                slotType: command_request.SlotTypes.Primary,
+                slotKey: route.key,
+            }),
+        });
+    } else if (route.type === "replicaSlotKey") {
+        return command_request.Routes.create({
+            slotKeyRoute: command_request.SlotKeyRoute.create({
+                slotType: command_request.SlotTypes.Replica,
+                slotKey: route.key,
+            }),
+        });
+    } else if (route.type === "primarySlotId") {
+        return command_request.Routes.create({
+            slotKeyRoute: command_request.SlotIdRoute.create({
+                slotType: command_request.SlotTypes.Primary,
+                slotId: route.id,
+            }),
+        });
+    } else if (route.type === "replicaSlotId") {
+        return command_request.Routes.create({
+            slotKeyRoute: command_request.SlotIdRoute.create({
+                slotType: command_request.SlotTypes.Replica,
+                slotId: route.id,
+            }),
+        });
+    } else if (route.type === "routeByAddress") {
+        let port = route.port;
+        let host = route.host;
+
+        if (port === undefined) {
+            const split = host.split(":");
+
+            if (split.length !== 2) {
+                throw new RequestError(
+                    "No port provided, expected host to be formatted as `{hostname}:{port}`. Received " +
+                        host,
+                );
+            }
+
+            host = split[0];
+            port = Number(split[1]);
+        }
+
+        return command_request.Routes.create({
+            byAddressRoute: { host, port },
+        });
+    }
+}
+
 export type PubSubMsg = {
     message: string;
     channel: string;
     pattern?: string | null;
 };
 
-export type WritePromiseOptions = {
-    decoder?: Decoder;
-    route?: command_request.Routes;
-};
+/**
+ * @internal
+ * A type to combine RouterOption and DecoderOption to be used for creating write promises for the command.
+ * See - {@link DecoderOption} and {@link RouteOption}
+ */
+export type WritePromiseOptions = RouteOption & DecoderOption;
+
 export class BaseClient {
     private socket: net.Socket;
     private readonly promiseCallbackFunctions: [
@@ -740,8 +831,9 @@ export class BaseClient {
             | command_request.ScriptInvocation,
         options: WritePromiseOptions = {},
     ): Promise<T> {
-        const { decoder = this.defaultDecoder, route } = options;
-        const stringDecoder = decoder === Decoder.String ? true : false;
+        const route = toProtobufRoute(options?.route);
+        const stringDecoder: boolean =
+            (options?.decoder ?? this.defaultDecoder) === Decoder.String;
 
         if (this.isClosed) {
             throw new ClosingError(
@@ -1032,8 +1124,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/get/|valkey.io} for details.
      *
      * @param key - The key to retrieve from the database.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns If `key` exists, returns the value of `key`. Otherwise, return null.
      *
      * @example
@@ -1048,9 +1139,9 @@ export class BaseClient {
      */
     public async get(
         key: GlideString,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString | null> {
-        return this.createWritePromise(createGet(key), { decoder: decoder });
+        return this.createWritePromise(createGet(key), options);
     }
 
     /**
@@ -1079,9 +1170,10 @@ export class BaseClient {
             expiry: "persist" | { type: TimeUnit; duration: number };
         } & DecoderOption,
     ): Promise<GlideString | null> {
-        return this.createWritePromise(createGetEx(key, options?.expiry), {
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(
+            createGetEx(key, options?.expiry),
+            options,
+        );
     }
 
     /**
@@ -1090,8 +1182,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/getdel/|valkey.io} for details.
      *
      * @param key - The key to retrieve from the database.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns If `key` exists, returns the `value` of `key`. Otherwise, return `null`.
      *
      * @example
@@ -1104,13 +1195,13 @@ export class BaseClient {
      */
     public async getdel(
         key: GlideString,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString | null> {
-        return this.createWritePromise(createGetDel(key), { decoder: decoder });
+        return this.createWritePromise(createGetDel(key), options);
     }
 
     /**
-     * Returns the substring of the string value stored at `key`, determined by the offsets
+     * Returns the substring of the string value stored at `key`, determined by the byte offsets
      * `start` and `end` (both are inclusive). Negative offsets can be used in order to provide
      * an offset starting from the end of the string. So `-1` means the last character, `-2` the
      * penultimate and so forth. If `key` does not exist, an empty string is returned. If `start`
@@ -1119,10 +1210,9 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/getrange/|valkey.io} for details.
      *
      * @param key - The key of the string.
-     * @param start - The starting offset.
-     * @param end - The ending offset.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param start - The starting byte offset.
+     * @param end - The ending byte offset.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A substring extracted from the value stored at `key`.
      *
      * @example
@@ -1142,11 +1232,12 @@ export class BaseClient {
         key: GlideString,
         start: number,
         end: number,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString | null> {
-        return this.createWritePromise(createGetRange(key, start, end), {
-            decoder: decoder,
-        });
+        return this.createWritePromise(
+            createGetRange(key, start, end),
+            options,
+        );
     }
 
     /** Set the given key with the given value. Return value is dependent on the passed options.
@@ -1184,9 +1275,7 @@ export class BaseClient {
         value: GlideString,
         options?: SetOptions & DecoderOption,
     ): Promise<"OK" | GlideString | null> {
-        return this.createWritePromise(createSet(key, value, options), {
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(createSet(key, value, options), options);
     }
 
     /**
@@ -1297,8 +1386,7 @@ export class BaseClient {
      * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
      *
      * @param keys - A list of keys to retrieve values for.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A list of values corresponding to the provided keys. If a key is not found,
      * its corresponding value in the list will be null.
      *
@@ -1313,9 +1401,9 @@ export class BaseClient {
      */
     public async mget(
         keys: GlideString[],
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<(GlideString | null)[]> {
-        return this.createWritePromise(createMGet(keys), { decoder: decoder });
+        return this.createWritePromise(createMGet(keys), options);
     }
 
     /** Set multiple keys to multiple values in a single operation.
@@ -1323,7 +1411,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/mset/|valkey.io} for details.
      * @remarks When in cluster mode, the command may route to multiple nodes when keys in `keyValueMap` map to different hash slots.
      *
-     * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
+     * @param keysAndValues - A list of key-value pairs to set.
      * @returns always "OK".
      *
      * @example
@@ -1332,9 +1420,20 @@ export class BaseClient {
      * const result = await client.mset({"key1": "value1", "key2": "value2"});
      * console.log(result); // Output: 'OK'
      * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of mset method to set values for multiple keys (GlideRecords allow binary data in the key)
+     * const result = await client.mset([{key: "key1", value: "value1"}, {key: "key2", value: "value2"}]);
+     * console.log(result); // Output: 'OK'
+     * ```
      */
-    public async mset(keyValueMap: Record<string, string>): Promise<"OK"> {
-        return this.createWritePromise(createMSet(keyValueMap));
+    public async mset(
+        keysAndValues: Record<string, GlideString> | GlideRecord<GlideString>,
+    ): Promise<"OK"> {
+        return this.createWritePromise(
+            createMSet(convertGlideRecord(keysAndValues)),
+        );
     }
 
     /**
@@ -1344,7 +1443,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/msetnx/|valkey.io} for more details.
      * @remarks When in cluster mode, all keys in `keyValueMap` must map to the same hash slot.
      *
-     * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
+     * @param keysAndValues  - A list of key-value pairs to set.
      * @returns `true` if all keys were set. `false` if no key was set.
      *
      * @example
@@ -1356,8 +1455,12 @@ export class BaseClient {
      * console.log(result2); // Output: `false`
      * ```
      */
-    public async msetnx(keyValueMap: Record<string, string>): Promise<boolean> {
-        return this.createWritePromise(createMSetNX(keyValueMap));
+    public async msetnx(
+        keysAndValues: Record<string, GlideString> | GlideRecord<GlideString>,
+    ): Promise<boolean> {
+        return this.createWritePromise(
+            createMSetNX(convertGlideRecord(keysAndValues)),
+        );
     }
 
     /** Increments the number stored at `key` by one. If `key` does not exist, it is set to 0 before performing the operation.
@@ -1739,7 +1842,7 @@ export class BaseClient {
         fieldsAndValues: HashDataType | Record<string, GlideString>,
     ): Promise<number> {
         return this.createWritePromise(
-            createHSet(key, convertFieldsAndValuesForHset(fieldsAndValues)),
+            createHSet(key, convertHashDataType(fieldsAndValues)),
         );
     }
 
@@ -2106,11 +2209,14 @@ export class BaseClient {
      * ```
      */
     public async hscan(
-        key: string,
+        key: GlideString,
         cursor: string,
-        options?: HScanOptions,
-    ): Promise<[string, string[]]> {
-        return this.createWritePromise(createHScan(key, cursor, options));
+        options?: HScanOptions & DecoderOption,
+    ): Promise<[string, GlideString[]]> {
+        return this.createWritePromise<[GlideString, GlideString[]]>(
+            createHScan(key, cursor, options),
+            options,
+        ).then((res) => [res[0].toString(), res[1]]); // convert cursor back to string
     }
 
     /**
@@ -2232,8 +2338,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/lpop/|valkey.io} for details.
      *
      * @param key - The key of the list.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns The value of the first element.
      * If `key` does not exist null will be returned.
      *
@@ -2253,9 +2358,9 @@ export class BaseClient {
      */
     public async lpop(
         key: GlideString,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString | null> {
-        return this.createWritePromise(createLPop(key), { decoder: decoder });
+        return this.createWritePromise(createLPop(key), options);
     }
 
     /** Removes and returns up to `count` elements of the list stored at `key`, depending on the list's length.
@@ -2264,8 +2369,7 @@ export class BaseClient {
      *
      * @param key - The key of the list.
      * @param count - The count of the elements to pop from the list.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A list of the popped elements will be returned depending on the list's length.
      * If `key` does not exist null will be returned.
      *
@@ -2286,11 +2390,9 @@ export class BaseClient {
     public async lpopCount(
         key: GlideString,
         count: number,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString[] | null> {
-        return this.createWritePromise(createLPop(key, count), {
-            decoder: decoder,
-        });
+        return this.createWritePromise(createLPop(key, count), options);
     }
 
     /** Returns the specified elements of the list stored at `key`.
@@ -2303,8 +2405,7 @@ export class BaseClient {
      * @param key - The key of the list.
      * @param start - The starting point of the range.
      * @param end - The end of the range.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns list of elements in the specified range.
      * If `start` exceeds the end of the list, or if `start` is greater than `end`, an empty list will be returned.
      * If `end` exceeds the actual end of the list, the range will stop at the actual end of the list.
@@ -2335,11 +2436,9 @@ export class BaseClient {
         key: GlideString,
         start: number,
         end: number,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString[]> {
-        return this.createWritePromise(createLRange(key, start, end), {
-            decoder: decoder,
-        });
+        return this.createWritePromise(createLRange(key, start, end), options);
     }
 
     /** Returns the length of the list stored at `key`.
@@ -2373,8 +2472,7 @@ export class BaseClient {
      * @param destination - The key to the destination list.
      * @param whereFrom - The {@link ListDirection} to remove the element from.
      * @param whereTo - The {@link ListDirection} to add the element to.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns The popped element, or `null` if `source` does not exist.
      *
      * @example
@@ -2397,11 +2495,11 @@ export class BaseClient {
         destination: GlideString,
         whereFrom: ListDirection,
         whereTo: ListDirection,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString | null> {
         return this.createWritePromise(
             createLMove(source, destination, whereFrom, whereTo),
-            { decoder: decoder },
+            options,
         );
     }
 
@@ -2421,8 +2519,7 @@ export class BaseClient {
      * @param whereFrom - The {@link ListDirection} to remove the element from.
      * @param whereTo - The {@link ListDirection} to add the element to.
      * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns The popped element, or `null` if `source` does not exist or if the operation timed-out.
      *
      * @example
@@ -2445,11 +2542,11 @@ export class BaseClient {
         whereFrom: ListDirection,
         whereTo: ListDirection,
         timeout: number,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString | null> {
         return this.createWritePromise(
             createBLMove(source, destination, whereFrom, whereTo, timeout),
-            { decoder: decoder },
+            options,
         );
     }
 
@@ -2600,8 +2697,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/rpop/|valkey.io} for details.
      *
      * @param key - The key of the list.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns The value of the last element.
      * If `key` does not exist null will be returned.
      *
@@ -2621,9 +2717,9 @@ export class BaseClient {
      */
     public async rpop(
         key: GlideString,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString | null> {
-        return this.createWritePromise(createRPop(key), { decoder: decoder });
+        return this.createWritePromise(createRPop(key), options);
     }
 
     /** Removes and returns up to `count` elements from the list stored at `key`, depending on the list's length.
@@ -2632,8 +2728,7 @@ export class BaseClient {
      *
      * @param key - The key of the list.
      * @param count - The count of the elements to pop from the list.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A list of popped elements will be returned depending on the list's length.
      * If `key` does not exist null will be returned.
      *
@@ -2654,11 +2749,9 @@ export class BaseClient {
     public async rpopCount(
         key: GlideString,
         count: number,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString[] | null> {
-        return this.createWritePromise(createRPop(key, count), {
-            decoder: decoder,
-        });
+        return this.createWritePromise(createRPop(key, count), options);
     }
 
     /** Adds the specified members to the set stored at `key`. Specified members that are already a member of this set are ignored.
@@ -2991,9 +3084,10 @@ export class BaseClient {
         keys: GlideString[],
         options?: DecoderOption,
     ): Promise<Set<GlideString>> {
-        return this.createWritePromise<GlideString[]>(createSUnion(keys), {
-            decoder: options?.decoder,
-        }).then((sunion) => new Set<GlideString>(sunion));
+        return this.createWritePromise<GlideString[]>(
+            createSUnion(keys),
+            options,
+        ).then((sunion) => new Set<GlideString>(sunion));
     }
 
     /**
@@ -3470,7 +3564,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/script-load/|SCRIPT LOAD} and {@link https://valkey.io/commands/evalsha/|EVALSHA} on valkey.io for details.
      *
      * @param script - The Lua script to execute.
-     * @param options - The script option that contains keys and arguments for the script.
+     * @param options - (Optional) See {@link ScriptOptions} and {@link DecoderOption}.
      * @returns A value that depends on the script that was executed.
      *
      * @example
@@ -3486,11 +3580,11 @@ export class BaseClient {
      */
     public async invokeScript(
         script: Script,
-        option?: ScriptOptions,
+        options?: ScriptOptions & DecoderOption,
     ): Promise<ReturnType> {
         const scriptInvocation = command_request.ScriptInvocation.create({
             hash: script.getHash(),
-            keys: option?.keys?.map((item) => {
+            keys: options?.keys?.map((item) => {
                 if (typeof item === "string") {
                     // Convert the string to a Buffer
                     return Buffer.from(item);
@@ -3499,7 +3593,7 @@ export class BaseClient {
                     return item;
                 }
             }),
-            args: option?.args?.map((item) => {
+            args: options?.args?.map((item) => {
                 if (typeof item === "string") {
                     // Convert the string to a Buffer
                     return Buffer.from(item);
@@ -3509,9 +3603,7 @@ export class BaseClient {
                 }
             }),
         });
-        return this.createWritePromise(scriptInvocation, {
-            decoder: option?.decoder,
-        });
+        return this.createWritePromise(scriptInvocation, options);
     }
 
     /**
@@ -3842,7 +3934,7 @@ export class BaseClient {
      * const result1 = await client.zdiffstore("zset3", ["zset1", "zset2"]);
      * console.log(result1); // Output: 1 - One member exists in "key1" but not "key2", and this member was stored in "zset3".
      *
-     * const result2 = await client.zrange("zset3", {start: 0, stop: -1});
+     * const result2 = await client.zrange("zset3", {start: 0, end: -1});
      * console.log(result2); // Output: ["member2"] - "member2" is now stored in "my_sorted_set".
      * ```
      */
@@ -4025,7 +4117,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of zrange method to retrieve all members of a sorted set in ascending order
-     * const result = await client.zrange("my_sorted_set", { start: 0, stop: -1 });
+     * const result = await client.zrange("my_sorted_set", { start: 0, end: -1 });
      * console.log(result1); // Output: all members in ascending order
      * // ['member1', 'member2', 'member3']
      * ```
@@ -4034,7 +4126,7 @@ export class BaseClient {
      * // Example usage of zrange method to retrieve members within a score range in descending order
      * const result = await client.zrange("my_sorted_set", {
      *              start: InfBoundary.NegativeInfinity,
-     *              stop: { value: 3, isInclusive: false },
+     *              end: { value: 3, isInclusive: false },
      *              type: "byScore",
      *           }, { reverse: true });
      * console.log(result); // Output: members with scores within the range of negative infinity to 3, in descending order
@@ -4074,7 +4166,7 @@ export class BaseClient {
      * // Example usage of zrangeWithScores method to retrieve members within a score range with their scores
      * const result = await client.zrangeWithScores("my_sorted_set", {
      *              start: { value: 10, isInclusive: false },
-     *              stop: { value: 20, isInclusive: false },
+     *              end: { value: 20, isInclusive: false },
      *              type: "byScore",
      *           });
      * console.log(result); // Output: members with scores between 10 and 20 with their scores
@@ -4085,7 +4177,7 @@ export class BaseClient {
      * // Example usage of zrangeWithScores method to retrieve members within a score range with their scores
      * const result = await client.zrangeWithScores("my_sorted_set", {
      *              start: InfBoundary.NegativeInfinity,
-     *              stop: { value: 3, isInclusive: false },
+     *              end: { value: 3, isInclusive: false },
      *              type: "byScore",
      *           }, { reverse: true });
      * console.log(result); // Output: members with scores within the range of negative infinity to 3, with their scores in descending order
@@ -4124,7 +4216,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of zrangeStore to retrieve and store all members of a sorted set in ascending order.
-     * const result = await client.zrangeStore("destination_key", "my_sorted_set", { start: 0, stop: -1 });
+     * const result = await client.zrangeStore("destination_key", "my_sorted_set", { start: 0, end: -1 });
      * console.log(result); // Output: 7 - "destination_key" contains a sorted set with the 7 members from "my_sorted_set".
      * ```
      * @example
@@ -4132,7 +4224,7 @@ export class BaseClient {
      * // Example usage of zrangeStore method to retrieve members within a score range in ascending order and store in "destination_key"
      * const result = await client.zrangeStore("destination_key", "my_sorted_set", {
      *              start: InfBoundary.NegativeInfinity,
-     *              stop: { value: 3, isInclusive: false },
+     *              end: { value: 3, isInclusive: false },
      *              type: "byScore",
      *           });
      * console.log(result); // Output: 5 - Stores 5 members with scores within the range of negative infinity to 3, in ascending order, in "destination_key".
@@ -4173,13 +4265,13 @@ export class BaseClient {
      * // use `zinterstore` with default aggregation and weights
      * console.log(await client.zinterstore("my_sorted_set", ["key1", "key2"]))
      * // Output: 1 - Indicates that the sorted set "my_sorted_set" contains one element.
-     * console.log(await client.zrangeWithScores("my_sorted_set", {start: 0, stop: -1}))
+     * console.log(await client.zrangeWithScores("my_sorted_set", {start: 0, end: -1}))
      * // Output: {'member1': 20} - "member1" is now stored in "my_sorted_set" with score of 20.
      *
      * // use `zinterstore` with default weights
      * console.log(await client.zinterstore("my_sorted_set", ["key1", "key2"] , AggregationType.MAX))
      * // Output: 1 - Indicates that the sorted set "my_sorted_set" contains one element, and it's score is the maximum score between the sets.
-     * console.log(await client.zrangeWithScores("my_sorted_set", {start: 0, stop: -1}))
+     * console.log(await client.zrangeWithScores("my_sorted_set", {start: 0, end: -1}))
      * // Output: {'member1': 10.5} - "member1" is now stored in "my_sorted_set" with score of 10.5.
      * ```
      */
@@ -5653,8 +5745,7 @@ export class BaseClient {
      *
      * @param key - The `key` of the list.
      * @param index - The `index` of the element in the list to retrieve.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns - The element at `index` in the list stored at `key`.
      * If `index` is out of range or if `key` does not exist, null is returned.
      *
@@ -5675,11 +5766,9 @@ export class BaseClient {
     public async lindex(
         key: GlideString,
         index: number,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString | null> {
-        return this.createWritePromise(createLIndex(key, index), {
-            decoder: decoder,
-        });
+        return this.createWritePromise(createLIndex(key, index), options);
     }
 
     /**
@@ -5795,8 +5884,7 @@ export class BaseClient {
      *
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns - An `array` containing the `key` from which the element was popped and the value of the popped element,
      * formatted as [key, value]. If no element could be popped and the timeout expired, returns `null`.
      *
@@ -5810,11 +5898,9 @@ export class BaseClient {
     public async brpop(
         keys: GlideString[],
         timeout: number,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<[GlideString, GlideString] | null> {
-        return this.createWritePromise(createBRPop(keys, timeout), {
-            decoder: decoder,
-        });
+        return this.createWritePromise(createBRPop(keys, timeout), options);
     }
 
     /** Blocking list pop primitive.
@@ -5828,8 +5914,7 @@ export class BaseClient {
      *
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns - An `array` containing the `key` from which the element was popped and the value of the popped element,
      * formatted as [key, value]. If no element could be popped and the timeout expired, returns `null`.
      *
@@ -5842,11 +5927,9 @@ export class BaseClient {
     public async blpop(
         keys: GlideString[],
         timeout: number,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<[GlideString, GlideString] | null> {
-        return this.createWritePromise(createBLPop(keys, timeout), {
-            decoder: decoder,
-        });
+        return this.createWritePromise(createBLPop(keys, timeout), options);
     }
 
     /** Adds all elements to the HyperLogLog data structure stored at the specified `key`.
@@ -6011,8 +6094,7 @@ export class BaseClient {
      * @param keys - A list of `keys` accessed by the function. To ensure the correct execution of functions,
      *     all names of keys that a function accesses must be explicitly provided as `keys`.
      * @param args - A list of `function` arguments and it should not represent names of keys.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns The invoked function's return value.
      *
      * @example
@@ -6025,11 +6107,9 @@ export class BaseClient {
         func: GlideString,
         keys: GlideString[],
         args: GlideString[],
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<ReturnType> {
-        return this.createWritePromise(createFCall(func, keys, args), {
-            decoder,
-        });
+        return this.createWritePromise(createFCall(func, keys, args), options);
     }
 
     /**
@@ -6043,8 +6123,7 @@ export class BaseClient {
      * @param keys - A list of `keys` accessed by the function. To ensure the correct execution of functions,
      *     all names of keys that a function accesses must be explicitly provided as `keys`.
      * @param args - A list of `function` arguments and it should not represent names of keys.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns The invoked function's return value.
      *
      * @example
@@ -6058,11 +6137,12 @@ export class BaseClient {
         func: GlideString,
         keys: GlideString[],
         args: GlideString[],
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<ReturnType> {
-        return this.createWritePromise(createFCallReadOnly(func, keys, args), {
-            decoder,
-        });
+        return this.createWritePromise(
+            createFCallReadOnly(func, keys, args),
+            options,
+        );
     }
 
     /**
@@ -6231,7 +6311,7 @@ export class BaseClient {
     ): Promise<[GlideString, [number?, number?, [number, number]?]?][]> {
         return this.createWritePromise(
             createGeoSearch(key, searchFrom, searchBy, options),
-            { decoder: options?.decoder },
+            options,
         );
     }
 
@@ -6266,7 +6346,7 @@ export class BaseClient {
      * // search for locations within 200 km circle around stored member named 'Palermo' and store in `destination`:
      * await client.geosearchstore("destination", "mySortedSet", { member: "Palermo" }, { radius: 200, unit: GeoUnit.KILOMETERS });
      * // query the stored results
-     * const result1 = await client.zrangeWithScores("destination", { start: 0, stop: -1 });
+     * const result1 = await client.zrangeWithScores("destination", { start: 0, end: -1 });
      * console.log(result1); // Output:
      * // {
      * //     Palermo: 3479099956230698,   // geohash of the location is stored as element's score
@@ -6287,7 +6367,7 @@ export class BaseClient {
      *     },
      * );
      * // query the stored results
-     * const result2 = await client.zrangeWithScores("destination", { start: 0, stop: -1 });
+     * const result2 = await client.zrangeWithScores("destination", { start: 0, end: -1 });
      * console.log(result2); // Output:
      * // {
      * //     Palermo: 190.4424,   // distance from the search area center is stored as element's score
@@ -6786,14 +6866,14 @@ export class BaseClient {
     }
 
     /**
-     * Overwrites part of the string stored at `key`, starting at the specified `offset`,
+     * Overwrites part of the string stored at `key`, starting at the specified byte `offset`,
      * for the entire length of `value`. If the `offset` is larger than the current length of the string at `key`,
      * the string is padded with zero bytes to make `offset` fit. Creates the `key` if it doesn't exist.
      *
      * @see {@link https://valkey.io/commands/setrange/|valkey.io} for more details.
      *
      * @param key - The key of the string to update.
-     * @param offset - The position in the string where `value` should be written.
+     * @param offset - The byte position in the string where `value` should be written.
      * @param value - The string written with `offset`.
      * @returns The length of the string stored at `key` after it was modified.
      *
@@ -6926,9 +7006,10 @@ export class BaseClient {
     public async pubsubChannels(
         options?: { pattern?: GlideString } & DecoderOption,
     ): Promise<GlideString[]> {
-        return this.createWritePromise(createPubSubChannels(options?.pattern), {
-            decoder: options?.decoder,
-        });
+        return this.createWritePromise(
+            createPubSubChannels(options?.pattern),
+            options,
+        );
     }
 
     /**

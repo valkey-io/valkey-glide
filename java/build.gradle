@@ -12,6 +12,17 @@ repositories {
 
 subprojects {
     repositories {
+        // Runs for GITHUB_ACTIONS for testing release Maven deployment.
+        if(System.getenv("ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderName")) {
+            maven {
+                name = "centralManualTesting"
+                url "https://central.sonatype.com/api/v1/publisher/deployments/download/"
+                credentials(HttpHeaderCredentials)
+                authentication {
+                    header(HttpHeaderAuthentication)
+                }
+            }
+        }
         mavenCentral()
     }
     // minimal java compatibility level

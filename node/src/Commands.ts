@@ -332,20 +332,23 @@ export function createMGet(keys: GlideString[]): command_request.Command {
  * @internal
  */
 export function createMSet(
-    keyValueMap: Record<string, string>,
+    keysAndValues: GlideRecord<GlideString>,
 ): command_request.Command {
-    return createCommand(RequestType.MSet, Object.entries(keyValueMap).flat());
+    return createCommand(
+        RequestType.MSet,
+        keysAndValues.flatMap((e) => [e.key, e.value]),
+    );
 }
 
 /**
  * @internal
  */
 export function createMSetNX(
-    keyValueMap: Record<string, string>,
+    keysAndValues: GlideRecord<GlideString>,
 ): command_request.Command {
     return createCommand(
         RequestType.MSetNX,
-        Object.entries(keyValueMap).flat(),
+        keysAndValues.flatMap((e) => [e.key, e.value]),
     );
 }
 
@@ -1668,7 +1671,7 @@ export type Boundary<T> =
 
 /**
  * Represents a range by index (rank) in a sorted set.
- * The `start` and `stop` arguments represent zero-based indexes.
+ * The `start` and `end` arguments represent zero-based indexes.
  */
 export type RangeByIndex = {
     /**
@@ -1676,14 +1679,14 @@ export type RangeByIndex = {
      */
     start: number;
     /**
-     * The stop index of the range.
+     * The end index of the range.
      */
-    stop: number;
+    end: number;
 };
 
 /**
  * Represents a range by score or a range by lex in a sorted set.
- * The `start` and `stop` arguments represent score boundaries.
+ * The `start` and `end` arguments represent score boundaries.
  */
 type SortedSetRange<T> = {
     /**
@@ -1691,9 +1694,9 @@ type SortedSetRange<T> = {
      */
     start: Boundary<T>;
     /**
-     * The stop boundary.
+     * The end boundary.
      */
-    stop: Boundary<T>;
+    end: Boundary<T>;
     /**
      * The limit argument for a range query.
      * Represents a limit argument for a range query in a sorted set to
@@ -1778,19 +1781,19 @@ function createZRangeArgs(
         if (rangeQuery.type == "byLex") {
             args.push(
                 getLexBoundaryArg(rangeQuery.start),
-                getLexBoundaryArg(rangeQuery.stop),
+                getLexBoundaryArg(rangeQuery.end),
                 "BYLEX",
             );
         } else {
             args.push(
                 getScoreBoundaryArg(rangeQuery.start),
-                getScoreBoundaryArg(rangeQuery.stop),
+                getScoreBoundaryArg(rangeQuery.end),
                 "BYSCORE",
             );
         }
     } else {
         args.push(rangeQuery.start.toString());
-        args.push(rangeQuery.stop.toString());
+        args.push(rangeQuery.end.toString());
     }
 
     if (reverse) {
@@ -1960,12 +1963,12 @@ export function createPTTL(key: GlideString): command_request.Command {
 export function createZRemRangeByRank(
     key: GlideString,
     start: number,
-    stop: number,
+    end: number,
 ): command_request.Command {
     return createCommand(RequestType.ZRemRangeByRank, [
         key,
         start.toString(),
-        stop.toString(),
+        end.toString(),
     ]);
 }
 
@@ -3669,7 +3672,7 @@ export function createHRandField(
  * @internal
  */
 export function createHScan(
-    key: string,
+    key: GlideString,
     cursor: string,
     options?: HScanOptions,
 ): command_request.Command {
