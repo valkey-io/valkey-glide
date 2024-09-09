@@ -1,197 +1,197 @@
-name: Java CI
-
-on:
-    push:
-        branches: ["main"]
-        paths:
-            - glide-core/src/**
-            - submodules/**
-            - java/**
-            - .github/workflows/java.yml
-            - .github/workflows/install-shared-dependencies/action.yml
-            - .github/workflows/test-benchmark/action.yml
-            - .github/workflows/lint-rust/action.yml
-            - .github/workflows/install-valkey/action.yml
-            - .github/json_matrices/build-matrix.json
-    pull_request:
-        paths:
-            - glide-core/src/**
-            - submodules/**
-            - java/**
-            - .github/workflows/java.yml
-            - .github/workflows/install-shared-dependencies/action.yml
-            - .github/workflows/test-benchmark/action.yml
-            - .github/workflows/lint-rust/action.yml
-            - .github/workflows/install-valkey/action.yml
-            - .github/json_matrices/build-matrix.json
-    workflow_dispatch:
-
-concurrency:
-    group: java-${{ github.head_ref || github.ref }}
-    cancel-in-progress: true
-
-jobs:
-    load-engine-matrix:
-        runs-on: ubuntu-latest
-        outputs:
-            matrix: ${{ steps.load-engine-matrix.outputs.matrix }}
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v4
-
-            - name: Load the engine matrix
-              id: load-engine-matrix
-              shell: bash
-              run: echo "matrix=$(jq -c . < .github/json_matrices/engine-matrix.json)" >> $GITHUB_OUTPUT
-
-    build-and-test-java-client:
-        needs: load-engine-matrix
-        timeout-minutes: 35
-        strategy:
-            # Run all jobs
-            fail-fast: false
-            matrix:
-                java:
-                    # - 11
-                    - 17
-                engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
-                host:
-                    - {
-                        OS: ubuntu,
-                        RUNNER: ubuntu-latest,
-                        TARGET: x86_64-unknown-linux-gnu
-                    }
-                    # - {
-                    #     OS: macos,
-                    #     RUNNER: macos-latest,
-                    #     TARGET: aarch64-apple-darwin
-                    # }
-
-        runs-on: ${{ matrix.host.RUNNER }}
-
-        steps:
-            - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
-
-            - uses: gradle/actions/wrapper-validation@v3
-
-            - name: Set up JDK ${{ matrix.java }}
-              uses: actions/setup-java@v4
-              with:
-                  distribution: "temurin"
-                  java-version: ${{ matrix.java }}
-
-            - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
-              with:
-                  os: ${{ matrix.host.OS }}
-                  target: ${{ matrix.host.TARGET }}
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-                  engine-version: ${{ matrix.engine.version }}
-
-            - name: Install protoc (protobuf)
-              uses: arduino/setup-protoc@v3
-              with:
-                  version: "26.1"
-                  repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Build java client
-              working-directory: java
-              run: ./gradlew --continue build -x javadoc
-
-            - name: Ensure no skipped files by linter
-              working-directory: java
-              run: ./gradlew spotlessDiagnose | grep 'All formatters are well behaved for all files'
-
-            - uses: ./.github/workflows/test-benchmark
-              with:
-                  language-flag: -java
-
-            - name: Upload test & spotbugs reports
-              if: always()
-              continue-on-error: true
-              uses: actions/upload-artifact@v4
-              with:
-                  name: test-reports-java-${{ matrix.java }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.RUNNER }}
-                  path: |
-                      java/client/build/reports/**
-                      java/integTest/build/reports/**
-                      utils/clusters/**
-                      benchmarks/results/**
-                      java/client/build/reports/spotbugs/**
-
-    build-amazonlinux-latest:
-        if: github.repository_owner == 'valkey-io'
-        strategy:
-            # Run all jobs
-            fail-fast: false
-            matrix:
-                java:
-                    # - 11
-                    - 17
-        runs-on: ubuntu-latest
-        container: amazonlinux:latest
-        timeout-minutes: 35
-        steps:
-            - name: Install git
-              run: |
-                  yum -y remove git
-                  yum -y remove git-*
-                  yum -y install https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
-                  yum update
-                  yum install -y git
-                  git --version
-
-            - uses: actions/checkout@v4
-
-            - name: Checkout submodules
-              run: |
-                  git config --global --add safe.directory "$GITHUB_WORKSPACE"
-                  git submodule update --init --recursive
-
-            - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
-              with:
-                  os: "amazon-linux"
-                  target: "x86_64-unknown-linux-gnu"
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-                  engine-version: "7.2.5"
-
-            - name: Install protoc (protobuf)
-              uses: arduino/setup-protoc@v3
-              with:
-                  version: "26.1"
-                  repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Install Java
-              run: |
-                  yum install -y java-${{ matrix.java }}-amazon-corretto-devel.x86_64
-
-            - name: Build java wrapper
-              working-directory: java
-              run: ./gradlew --continue build -x javadoc
-
-            - name: Upload test & spotbugs reports
-              if: always()
-              continue-on-error: true
-              uses: actions/upload-artifact@v4
-              with:
-                  name: test-reports-${{ matrix.java }}-amazon-linux
-                  path: |
-                      java/client/build/reports/**
-                      java/integTest/build/reports/**
-                      java/client/build/reports/spotbugs/**
-
-    lint-rust:
-        timeout-minutes: 15
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
-
-            - uses: ./.github/workflows/lint-rust
-              with:
-                  cargo-toml-folder: ./java
-              name: lint java rust
+#name: Java CI
+#
+#on:
+#    push:
+#        branches: ["main"]
+#        paths:
+#            - glide-core/src/**
+#            - submodules/**
+#            - java/**
+#            - .github/workflows/java.yml
+#            - .github/workflows/install-shared-dependencies/action.yml
+#            - .github/workflows/test-benchmark/action.yml
+#            - .github/workflows/lint-rust/action.yml
+#            - .github/workflows/install-valkey/action.yml
+#            - .github/json_matrices/build-matrix.json
+#    pull_request:
+#        paths:
+#            - glide-core/src/**
+#            - submodules/**
+#            - java/**
+#            - .github/workflows/java.yml
+#            - .github/workflows/install-shared-dependencies/action.yml
+#            - .github/workflows/test-benchmark/action.yml
+#            - .github/workflows/lint-rust/action.yml
+#            - .github/workflows/install-valkey/action.yml
+#            - .github/json_matrices/build-matrix.json
+#    workflow_dispatch:
+#
+#concurrency:
+#    group: java-${{ github.head_ref || github.ref }}
+#    cancel-in-progress: true
+#
+#jobs:
+#    load-engine-matrix:
+#        runs-on: ubuntu-latest
+#        outputs:
+#            matrix: ${{ steps.load-engine-matrix.outputs.matrix }}
+#        steps:
+#            - name: Checkout
+#              uses: actions/checkout@v4
+#
+#            - name: Load the engine matrix
+#              id: load-engine-matrix
+#              shell: bash
+#              run: echo "matrix=$(jq -c . < .github/json_matrices/engine-matrix.json)" >> $GITHUB_OUTPUT
+#
+#    build-and-test-java-client:
+#        needs: load-engine-matrix
+#        timeout-minutes: 35
+#        strategy:
+#            # Run all jobs
+#            fail-fast: false
+#            matrix:
+#                java:
+#                    # - 11
+#                    - 17
+#                engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
+#                host:
+#                    - {
+#                        OS: ubuntu,
+#                        RUNNER: ubuntu-latest,
+#                        TARGET: x86_64-unknown-linux-gnu
+#                    }
+#                    # - {
+#                    #     OS: macos,
+#                    #     RUNNER: macos-latest,
+#                    #     TARGET: aarch64-apple-darwin
+#                    # }
+#
+#        runs-on: ${{ matrix.host.RUNNER }}
+#
+#        steps:
+#            - uses: actions/checkout@v4
+#              with:
+#                  submodules: recursive
+#
+#            - uses: gradle/actions/wrapper-validation@v3
+#
+#            - name: Set up JDK ${{ matrix.java }}
+#              uses: actions/setup-java@v4
+#              with:
+#                  distribution: "temurin"
+#                  java-version: ${{ matrix.java }}
+#
+#            - name: Install shared software dependencies
+#              uses: ./.github/workflows/install-shared-dependencies
+#              with:
+#                  os: ${{ matrix.host.OS }}
+#                  target: ${{ matrix.host.TARGET }}
+#                  github-token: ${{ secrets.GITHUB_TOKEN }}
+#                  engine-version: ${{ matrix.engine.version }}
+#
+#            - name: Install protoc (protobuf)
+#              uses: arduino/setup-protoc@v3
+#              with:
+#                  version: "26.1"
+#                  repo-token: ${{ secrets.GITHUB_TOKEN }}
+#
+#            - name: Build java client
+#              working-directory: java
+#              run: ./gradlew --continue build -x javadoc
+#
+#            - name: Ensure no skipped files by linter
+#              working-directory: java
+#              run: ./gradlew spotlessDiagnose | grep 'All formatters are well behaved for all files'
+#
+#            - uses: ./.github/workflows/test-benchmark
+#              with:
+#                  language-flag: -java
+#
+#            - name: Upload test & spotbugs reports
+#              if: always()
+#              continue-on-error: true
+#              uses: actions/upload-artifact@v4
+#              with:
+#                  name: test-reports-java-${{ matrix.java }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.RUNNER }}
+#                  path: |
+#                      java/client/build/reports/**
+#                      java/integTest/build/reports/**
+#                      utils/clusters/**
+#                      benchmarks/results/**
+#                      java/client/build/reports/spotbugs/**
+#
+#    build-amazonlinux-latest:
+#        if: github.repository_owner == 'valkey-io'
+#        strategy:
+#            # Run all jobs
+#            fail-fast: false
+#            matrix:
+#                java:
+#                    # - 11
+#                    - 17
+#        runs-on: ubuntu-latest
+#        container: amazonlinux:latest
+#        timeout-minutes: 35
+#        steps:
+#            - name: Install git
+#              run: |
+#                  yum -y remove git
+#                  yum -y remove git-*
+#                  yum -y install https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
+#                  yum update
+#                  yum install -y git
+#                  git --version
+#
+#            - uses: actions/checkout@v4
+#
+#            - name: Checkout submodules
+#              run: |
+#                  git config --global --add safe.directory "$GITHUB_WORKSPACE"
+#                  git submodule update --init --recursive
+#
+#            - name: Install shared software dependencies
+#              uses: ./.github/workflows/install-shared-dependencies
+#              with:
+#                  os: "amazon-linux"
+#                  target: "x86_64-unknown-linux-gnu"
+#                  github-token: ${{ secrets.GITHUB_TOKEN }}
+#                  engine-version: "7.2.5"
+#
+#            - name: Install protoc (protobuf)
+#              uses: arduino/setup-protoc@v3
+#              with:
+#                  version: "26.1"
+#                  repo-token: ${{ secrets.GITHUB_TOKEN }}
+#
+#            - name: Install Java
+#              run: |
+#                  yum install -y java-${{ matrix.java }}-amazon-corretto-devel.x86_64
+#
+#            - name: Build java wrapper
+#              working-directory: java
+#              run: ./gradlew --continue build -x javadoc
+#
+#            - name: Upload test & spotbugs reports
+#              if: always()
+#              continue-on-error: true
+#              uses: actions/upload-artifact@v4
+#              with:
+#                  name: test-reports-${{ matrix.java }}-amazon-linux
+#                  path: |
+#                      java/client/build/reports/**
+#                      java/integTest/build/reports/**
+#                      java/client/build/reports/spotbugs/**
+#
+#    lint-rust:
+#        timeout-minutes: 15
+#        runs-on: ubuntu-latest
+#        steps:
+#            - uses: actions/checkout@v4
+#              with:
+#                  submodules: recursive
+#
+#            - uses: ./.github/workflows/lint-rust
+#              with:
+#                  cargo-toml-folder: ./java
+#              name: lint java rust

@@ -1,374 +1,374 @@
-# The cross platform build was created based on the [Packaging Rust Applications for the NPM Registry blog](https://blog.orhun.dev/packaging-rust-for-npm/).
-
-name: NPM - Continuous Deployment
-
-on:
-    pull_request:
-      paths:
-        - .github/workflows/npm-cd.yml
-        - .github/workflows/build-node-wrapper/action.yml
-        - .github/workflows/start-self-hosted-runner/action.yml
-        - .github/workflows/install-rust-and-protoc/action.yml
-        - .github/workflows/install-shared-dependencies/action.yml
-        - .github/workflows/install-valkey/action.yml
-        - .github/json_matrices/build-matrix.json
-    push:
-        tags:
-            - "v*.*"
-    workflow_dispatch:
-      inputs:
-        version:
-          description: 'The release version of GLIDE, formatted as *.*.* or *.*.*-rc*'
-          required: true
-
-concurrency:
-    group: npm-${{ github.head_ref || github.ref }}
-    cancel-in-progress: true
-
-permissions:
-      id-token: write
-
-jobs:
-    start-self-hosted-runner:
-        if: github.repository_owner == 'valkey-io'
-        runs-on: ubuntu-latest
-        environment: AWS_ACTIONS
-        steps:
-          - name: Checkout
-            uses: actions/checkout@v4
-            with:
-                fetch-depth: 0
-
-          - name: Start self hosted EC2 runner
-            uses: ./.github/workflows/start-self-hosted-runner
-            with:
-                role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
-                aws-region: ${{ secrets.AWS_REGION }}
-                ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
-
-    load-platform-matrix:
-        runs-on: ubuntu-latest
-        outputs:
-            PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.PLATFORM_MATRIX }}
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v4
-
-            - name: load-platform-matrix
-              id: load-platform-matrix
-              shell: bash
-              run: |
-                # Get the matrix from the matrix.json file, without the object that has the IMAGE key
-                export "PLATFORM_MATRIX=$(jq 'map(select(.PACKAGE_MANAGERS | contains(["npm"])))' < .github/json_matrices/build-matrix.json | jq -c .)"
-                echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
-
-    publish-binaries:
-        needs: [start-self-hosted-runner, load-platform-matrix]
-        if: github.repository_owner == 'valkey-io'
-        name: Publish packages to NPM
-        runs-on: ${{ matrix.build.RUNNER }}
-        container:
-            image: ${{ matrix.build.IMAGE || '' }}
-            options: ${{ matrix.build.CONTAINER_OPTIONS || 'none'}}
-        strategy:
-            fail-fast: false
-            matrix:
-                build: ${{fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX)}}                   
-        steps:
-            - name: Setup self-hosted runner access
-              if: ${{ contains(matrix.build.RUNNER, 'self-hosted') && matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
-              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
-
-            # For MUSL on X64 we need to install git since we use the checkout action
-            - name: Install git for musl
-              if: ${{ contains(matrix.build.TARGET, 'x86_64-unknown-linux-musl')}}
-              run: |
-                  apk update
-                  apk add git
-              
-            - name: Checkout
-              if: ${{ matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
-              uses: actions/checkout@v4
-              with:
-                  submodules: "true"
-                  fetch-depth: 0
-
-            - name: Setup for musl
-              if: ${{ contains(matrix.build.TARGET, 'musl')}}
-              uses: ./.github/workflows/setup-musl-on-linux
-              with:
-                  workspace: $GITHUB_WORKSPACE
-                  npm-scope: ${{ vars.NPM_SCOPE }}
-                  npm-auth-token: ${{ secrets.NPM_AUTH_TOKEN }}
-                  arch: ${{ matrix.build.ARCH }}       
-
-            - name: Set the release version
-              shell: bash
-              run: |
-                  if ${{ env.EVENT_NAME == 'pull_request' }}; then
-                    R_VERSION="255.255.255"
-                  elif ${{ env.EVENT_NAME == 'workflow_dispatch' }}; then
-                    R_VERSION="${{ env.INPUT_VERSION }}"
-                  else
-                    R_VERSION=${GITHUB_REF:11}
-                  fi
-                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
-              env:
-                EVENT_NAME: ${{ github.event_name }}
-                INPUT_VERSION: ${{ github.event.inputs.version }}
-
-            - name: Setup node
-              if: ${{ matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
-              uses: actions/setup-node@v3
-              with:
-                  node-version: "20"
-                  registry-url: "https://registry.npmjs.org"
-                  architecture: ${{ matrix.build.ARCH }}
-                  scope: "${{ vars.NPM_SCOPE }}"
-                  always-auth: true
-                  token: ${{ secrets.NPM_AUTH_TOKEN }}
-            
-            - name: Setup node for publishing
-              if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-musl' }}
-              working-directory: ./node
-              run: |
-                npm config set registry https://registry.npmjs.org/
-                npm config set '//registry.npmjs.org/:_authToken' ${{ secrets.NPM_AUTH_TOKEN }}
-                npm config set scope ${{ vars.NPM_SCOPE }}
-            
-            - name: Update package version in config.toml
-              uses: ./.github/workflows/update-glide-version
-              with:
-                  folder_path: "${{ github.workspace }}/node/rust-client/.cargo"
-                  named_os: ${{ matrix.build.NAMED_OS }}
-
-            - name: Build Node wrapper
-              uses: ./.github/workflows/build-node-wrapper
-              with:
-                  os: ${{ matrix.build.OS }}
-                  named_os: ${{ matrix.build.NAMED_OS }}
-                  arch: ${{ matrix.build.ARCH }}
-                  target: ${{ matrix.build.TARGET }}
-                  npm_scope: ${{ vars.NPM_SCOPE }}
-                  publish: "true"
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-                  engine-version: "7.2.5"
-            
-            - name: Check if RC and set a distribution tag for the package
-              shell: bash
-              run: |
-                  if [[ "${GITHUB_REF:11}" == *"rc"* ]]
-                  then
-                    echo "This is a release candidate: ${GITHUB_REF:11}"
-                    export npm_tag="next"
-                  else
-                    echo "This is a stable release: ${GITHUB_REF:11}"
-                    export npm_tag="latest"
-                  fi
-                  echo "NPM_TAG=${npm_tag}" >> $GITHUB_ENV
-
-            - name: Check that the release version dont have typo init
-              if: ${{ github.event_name != 'pull_request' && contains(env.RELEASE_VERSION, '-') && !contains(env.RELEASE_VERSION, 'rc') }}
-              run: |
-                echo "The release version "${GITHUB_REF:11}" contains a typo, please fix it"
-                echo "The release version should be in the format v{major-version}.{minor-version}.{patch-version}-rc{release-candidate-number} when it a release candidate or v{major-version}.{minor-version}.{patch-version} in a stable release."
-                exit 1
-
-            - name: Publish to NPM
-              if: github.event_name != 'pull_request'
-              shell: bash
-              working-directory: ./node
-              run: |
-                  npm pkg fix
-                  set +e
-                  # 2>&1 1>&3- redirects stderr to stdout and then redirects the original stdout to another file descriptor,
-                  # effectively separating stderr and stdout. The 3>&1 at the end redirects the original stdout back to the console.
-                  # https://github.com/npm/npm/issues/118#issuecomment-325440 - ignoring notice messages since currentlly they are directed to stderr 
-                    { npm_publish_err=$(npm publish --tag ${{ env.NPM_TAG }} --access public 2>&1 1>&3- | grep -v "notice") ;} 3>&1
-                  if [[ "$npm_publish_err" == *"You cannot publish over the previously published versions"* ]]
-                  then
-                    echo "Skipping publishing, package already published"
-                  elif [[ ! -z "$npm_publish_err" ]]
-                  then
-                    echo "Failed to publish with error: ${npm_publish_err}"
-                    exit 1
-                  fi
-              env:
-                  NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
-
-            # Reset the repository to make sure we get the clean checkout of the action later in other actions.
-            # It is not required since in other actions we are cleaning before the action, but it is a good practice to do it here as well.
-            - name: Reset repository
-              if: ${{ matrix.build.ARCH == 'arm64' }}
-              shell: bash
-              run: |
-                git reset --hard
-                git clean -xdf
-
-    publish-base-to-npm:
-        if: github.event_name != 'pull_request'
-        name: Publish the base NPM package
-        needs: publish-binaries
-        runs-on: ubuntu-latest
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v4
-              with:
-                  submodules: "true"
-
-            - name: Install node
-              uses: actions/setup-node@v3
-              with:
-                  node-version: "20"
-                  registry-url: "https://registry.npmjs.org"
-                  scope: "${{ vars.NPM_SCOPE }}"
-                  always-auth: true
-
-            - name: Create package.json file
-              shell: bash
-              working-directory: ./node/npm/glide
-              run: |
-                  export pkg_name=valkey-glide
-                  echo "${GITHUB_REF:11}"
-                  export package_version=${GITHUB_REF:11}
-                  export scope=`if [ "$NPM_SCOPE" != ''  ]; then echo "$NPM_SCOPE/"; fi`
-                  mv package.json package.json.tmpl
-                  envsubst < package.json.tmpl > "package.json"
-                  cat package.json
-                  # Fix index.ts based on the scope variable
-                  sed -i "s|@scope/|${scope}|g" index.ts
-              env:
-                  NPM_SCOPE: ${{ vars.NPM_SCOPE }}
-
-            - name: Build Node wrapper
-              uses: ./.github/workflows/build-node-wrapper
-              with:
-                  os: ubuntu
-                  target: "x86_64-unknown-linux-gnu"
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-                  engine-version: "7.2.5"
-            
-            - name: Check if RC and set a distribution tag for the package
-              shell: bash
-              run: |
-                  if [[ "${GITHUB_REF:11}" == *"rc"* ]]
-                  then
-                    echo "This is a release candidate"
-                    export npm_tag="next"
-                  else
-                    echo "This is a stable release"
-                    export npm_tag="latest"
-                  fi
-                  echo "NPM_TAG=${npm_tag}" >> $GITHUB_ENV
-                  
-            - name: Publish the base package
-              if: github.event_name != 'pull_request'
-              shell: bash
-              working-directory: ./node/npm/glide
-              run: |
-                  # Copy the main README file
-                  cp ../../README.md .
-                  npm install
-                  npm run build
-                  npm publish --access public --tag ${{ env.NPM_TAG }}
-              env:
-                  NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
-
-    test-release:
-        if: github.event_name != 'pull_request'
-        name: Test the release
-        needs: [publish-base-to-npm, load-platform-matrix]
-        runs-on: ${{ matrix.build.RUNNER }}
-        container:
-            image: ${{ matrix.build.IMAGE || '' }}
-            options: ${{ matrix.build.CONTAINER_OPTIONS || 'none'}}
-        strategy:
-            fail-fast: false
-            matrix:
-                build: ${{fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX)}}                   
-        steps:
-            - name: Setup self-hosted runner access
-              if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-gnu' }}
-              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
-
-            - name: install Redis and git for alpine
-              if: ${{ contains(matrix.build.TARGET, 'musl') }}
-              run: |
-                apk update
-                apk add redis git
-                node -v
-            
-            - name: install Redis and Python for ubuntu
-              if: ${{ contains(matrix.build.TARGET, 'linux-gnu') }}
-              run: |
-                sudo apt-get update
-                sudo apt-get install redis-server python3 
-
-            - name: install Redis, Python for macos
-              if: ${{ contains(matrix.build.RUNNER, 'mac') }}
-              run: |
-                brew install redis python3
-
-            - name: Checkout
-              if: ${{  matrix.build.TARGET != 'aarch64-unknown-linux-musl'}}
-              uses: actions/checkout@v4
-              with:
-                  submodules: "true"
-
-            - name: Setup for musl
-              if: ${{ contains(matrix.build.TARGET, 'musl') }}
-              uses: ./.github/workflows/setup-musl-on-linux
-              with:
-                  workspace: $GITHUB_WORKSPACE
-                  npm-scope: ${{ vars.NPM_SCOPE }}
-                  npm-auth-token: ${{ secrets.NPM_AUTH_TOKEN }}
-                  arch: ${{ matrix.build.ARCH }}
-
-            - name: Setup node
-              if: ${{ matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
-              uses: actions/setup-node@v3
-              with:
-                  node-version: "16"
-                  registry-url: "https://registry.npmjs.org"
-                  architecture: ${{ matrix.build.ARCH }}
-                  scope: "${{ vars.NPM_SCOPE }}"
-                  always-auth: true
-                  token: ${{ secrets.NPM_AUTH_TOKEN }}
-
-            - name: Install tsc and compile utils
-              shell: bash
-              working-directory: ./utils
-              run: |
-                  npm install
-                  npm install -g typescript
-                  npx tsc -p ./tsconfig.json
-
-            - name: Check if RC and set a distribution tag for the package
-              shell: bash
-              run: |
-                  if [[ "${GITHUB_REF:11}" == *"rc"* ]]
-                  then
-                    echo "This is a release candidate"
-                    export npm_tag="next"
-                  else
-                    echo "This is a stable release"
-                    export npm_tag="latest"
-                  fi
-                  echo "NPM_TAG=${npm_tag}" >> $GITHUB_ENV
-
-            - name: Run the tests
-              shell: bash
-              working-directory: ./utils/release-candidate-testing/node
-              run: |
-                  npm install
-                  npm install --no-save @valkey/valkey-glide@${{ env.NPM_TAG }}
-                  npm run test
-
-            # Reset the repository to make sure we get the clean checkout of the action later in other actions.
-            # It is not required since in other actions we are cleaning before the action, but it is a good practice to do it here as well.
-            - name: Reset repository
-              if: ${{ contains(matrix.build.RUNNER, 'self-hosted') }}
-              shell: bash
-              run: |
-                git reset --hard
-                git clean -xdf
+## The cross platform build was created based on the [Packaging Rust Applications for the NPM Registry blog](https://blog.orhun.dev/packaging-rust-for-npm/).
+#
+#name: NPM - Continuous Deployment
+#
+#on:
+#    pull_request:
+#      paths:
+#        - .github/workflows/npm-cd.yml
+#        - .github/workflows/build-node-wrapper/action.yml
+#        - .github/workflows/start-self-hosted-runner/action.yml
+#        - .github/workflows/install-rust-and-protoc/action.yml
+#        - .github/workflows/install-shared-dependencies/action.yml
+#        - .github/workflows/install-valkey/action.yml
+#        - .github/json_matrices/build-matrix.json
+#    push:
+#        tags:
+#            - "v*.*"
+#    workflow_dispatch:
+#      inputs:
+#        version:
+#          description: 'The release version of GLIDE, formatted as *.*.* or *.*.*-rc*'
+#          required: true
+#
+#concurrency:
+#    group: npm-${{ github.head_ref || github.ref }}
+#    cancel-in-progress: true
+#
+#permissions:
+#      id-token: write
+#
+#jobs:
+#    start-self-hosted-runner:
+#        if: github.repository_owner == 'valkey-io'
+#        runs-on: ubuntu-latest
+#        environment: AWS_ACTIONS
+#        steps:
+#          - name: Checkout
+#            uses: actions/checkout@v4
+#            with:
+#                fetch-depth: 0
+#
+#          - name: Start self hosted EC2 runner
+#            uses: ./.github/workflows/start-self-hosted-runner
+#            with:
+#                role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
+#                aws-region: ${{ secrets.AWS_REGION }}
+#                ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
+#
+#    load-platform-matrix:
+#        runs-on: ubuntu-latest
+#        outputs:
+#            PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.PLATFORM_MATRIX }}
+#        steps:
+#            - name: Checkout
+#              uses: actions/checkout@v4
+#
+#            - name: load-platform-matrix
+#              id: load-platform-matrix
+#              shell: bash
+#              run: |
+#                # Get the matrix from the matrix.json file, without the object that has the IMAGE key
+#                export "PLATFORM_MATRIX=$(jq 'map(select(.PACKAGE_MANAGERS | contains(["npm"])))' < .github/json_matrices/build-matrix.json | jq -c .)"
+#                echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
+#
+#    publish-binaries:
+#        needs: [start-self-hosted-runner, load-platform-matrix]
+#        if: github.repository_owner == 'valkey-io'
+#        name: Publish packages to NPM
+#        runs-on: ${{ matrix.build.RUNNER }}
+#        container:
+#            image: ${{ matrix.build.IMAGE || '' }}
+#            options: ${{ matrix.build.CONTAINER_OPTIONS || 'none'}}
+#        strategy:
+#            fail-fast: false
+#            matrix:
+#                build: ${{fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX)}}
+#        steps:
+#            - name: Setup self-hosted runner access
+#              if: ${{ contains(matrix.build.RUNNER, 'self-hosted') && matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
+#              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
+#
+#            # For MUSL on X64 we need to install git since we use the checkout action
+#            - name: Install git for musl
+#              if: ${{ contains(matrix.build.TARGET, 'x86_64-unknown-linux-musl')}}
+#              run: |
+#                  apk update
+#                  apk add git
+#
+#            - name: Checkout
+#              if: ${{ matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
+#              uses: actions/checkout@v4
+#              with:
+#                  submodules: "true"
+#                  fetch-depth: 0
+#
+#            - name: Setup for musl
+#              if: ${{ contains(matrix.build.TARGET, 'musl')}}
+#              uses: ./.github/workflows/setup-musl-on-linux
+#              with:
+#                  workspace: $GITHUB_WORKSPACE
+#                  npm-scope: ${{ vars.NPM_SCOPE }}
+#                  npm-auth-token: ${{ secrets.NPM_AUTH_TOKEN }}
+#                  arch: ${{ matrix.build.ARCH }}
+#
+#            - name: Set the release version
+#              shell: bash
+#              run: |
+#                  if ${{ env.EVENT_NAME == 'pull_request' }}; then
+#                    R_VERSION="255.255.255"
+#                  elif ${{ env.EVENT_NAME == 'workflow_dispatch' }}; then
+#                    R_VERSION="${{ env.INPUT_VERSION }}"
+#                  else
+#                    R_VERSION=${GITHUB_REF:11}
+#                  fi
+#                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
+#              env:
+#                EVENT_NAME: ${{ github.event_name }}
+#                INPUT_VERSION: ${{ github.event.inputs.version }}
+#
+#            - name: Setup node
+#              if: ${{ matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
+#              uses: actions/setup-node@v3
+#              with:
+#                  node-version: "20"
+#                  registry-url: "https://registry.npmjs.org"
+#                  architecture: ${{ matrix.build.ARCH }}
+#                  scope: "${{ vars.NPM_SCOPE }}"
+#                  always-auth: true
+#                  token: ${{ secrets.NPM_AUTH_TOKEN }}
+#
+#            - name: Setup node for publishing
+#              if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-musl' }}
+#              working-directory: ./node
+#              run: |
+#                npm config set registry https://registry.npmjs.org/
+#                npm config set '//registry.npmjs.org/:_authToken' ${{ secrets.NPM_AUTH_TOKEN }}
+#                npm config set scope ${{ vars.NPM_SCOPE }}
+#
+#            - name: Update package version in config.toml
+#              uses: ./.github/workflows/update-glide-version
+#              with:
+#                  folder_path: "${{ github.workspace }}/node/rust-client/.cargo"
+#                  named_os: ${{ matrix.build.NAMED_OS }}
+#
+#            - name: Build Node wrapper
+#              uses: ./.github/workflows/build-node-wrapper
+#              with:
+#                  os: ${{ matrix.build.OS }}
+#                  named_os: ${{ matrix.build.NAMED_OS }}
+#                  arch: ${{ matrix.build.ARCH }}
+#                  target: ${{ matrix.build.TARGET }}
+#                  npm_scope: ${{ vars.NPM_SCOPE }}
+#                  publish: "true"
+#                  github-token: ${{ secrets.GITHUB_TOKEN }}
+#                  engine-version: "7.2.5"
+#
+#            - name: Check if RC and set a distribution tag for the package
+#              shell: bash
+#              run: |
+#                  if [[ "${GITHUB_REF:11}" == *"rc"* ]]
+#                  then
+#                    echo "This is a release candidate: ${GITHUB_REF:11}"
+#                    export npm_tag="next"
+#                  else
+#                    echo "This is a stable release: ${GITHUB_REF:11}"
+#                    export npm_tag="latest"
+#                  fi
+#                  echo "NPM_TAG=${npm_tag}" >> $GITHUB_ENV
+#
+#            - name: Check that the release version dont have typo init
+#              if: ${{ github.event_name != 'pull_request' && contains(env.RELEASE_VERSION, '-') && !contains(env.RELEASE_VERSION, 'rc') }}
+#              run: |
+#                echo "The release version "${GITHUB_REF:11}" contains a typo, please fix it"
+#                echo "The release version should be in the format v{major-version}.{minor-version}.{patch-version}-rc{release-candidate-number} when it a release candidate or v{major-version}.{minor-version}.{patch-version} in a stable release."
+#                exit 1
+#
+#            - name: Publish to NPM
+#              if: github.event_name != 'pull_request'
+#              shell: bash
+#              working-directory: ./node
+#              run: |
+#                  npm pkg fix
+#                  set +e
+#                  # 2>&1 1>&3- redirects stderr to stdout and then redirects the original stdout to another file descriptor,
+#                  # effectively separating stderr and stdout. The 3>&1 at the end redirects the original stdout back to the console.
+#                  # https://github.com/npm/npm/issues/118#issuecomment-325440 - ignoring notice messages since currentlly they are directed to stderr
+#                    { npm_publish_err=$(npm publish --tag ${{ env.NPM_TAG }} --access public 2>&1 1>&3- | grep -v "notice") ;} 3>&1
+#                  if [[ "$npm_publish_err" == *"You cannot publish over the previously published versions"* ]]
+#                  then
+#                    echo "Skipping publishing, package already published"
+#                  elif [[ ! -z "$npm_publish_err" ]]
+#                  then
+#                    echo "Failed to publish with error: ${npm_publish_err}"
+#                    exit 1
+#                  fi
+#              env:
+#                  NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
+#
+#            # Reset the repository to make sure we get the clean checkout of the action later in other actions.
+#            # It is not required since in other actions we are cleaning before the action, but it is a good practice to do it here as well.
+#            - name: Reset repository
+#              if: ${{ matrix.build.ARCH == 'arm64' }}
+#              shell: bash
+#              run: |
+#                git reset --hard
+#                git clean -xdf
+#
+#    publish-base-to-npm:
+#        if: github.event_name != 'pull_request'
+#        name: Publish the base NPM package
+#        needs: publish-binaries
+#        runs-on: ubuntu-latest
+#        steps:
+#            - name: Checkout
+#              uses: actions/checkout@v4
+#              with:
+#                  submodules: "true"
+#
+#            - name: Install node
+#              uses: actions/setup-node@v3
+#              with:
+#                  node-version: "20"
+#                  registry-url: "https://registry.npmjs.org"
+#                  scope: "${{ vars.NPM_SCOPE }}"
+#                  always-auth: true
+#
+#            - name: Create package.json file
+#              shell: bash
+#              working-directory: ./node/npm/glide
+#              run: |
+#                  export pkg_name=valkey-glide
+#                  echo "${GITHUB_REF:11}"
+#                  export package_version=${GITHUB_REF:11}
+#                  export scope=`if [ "$NPM_SCOPE" != ''  ]; then echo "$NPM_SCOPE/"; fi`
+#                  mv package.json package.json.tmpl
+#                  envsubst < package.json.tmpl > "package.json"
+#                  cat package.json
+#                  # Fix index.ts based on the scope variable
+#                  sed -i "s|@scope/|${scope}|g" index.ts
+#              env:
+#                  NPM_SCOPE: ${{ vars.NPM_SCOPE }}
+#
+#            - name: Build Node wrapper
+#              uses: ./.github/workflows/build-node-wrapper
+#              with:
+#                  os: ubuntu
+#                  target: "x86_64-unknown-linux-gnu"
+#                  github-token: ${{ secrets.GITHUB_TOKEN }}
+#                  engine-version: "7.2.5"
+#
+#            - name: Check if RC and set a distribution tag for the package
+#              shell: bash
+#              run: |
+#                  if [[ "${GITHUB_REF:11}" == *"rc"* ]]
+#                  then
+#                    echo "This is a release candidate"
+#                    export npm_tag="next"
+#                  else
+#                    echo "This is a stable release"
+#                    export npm_tag="latest"
+#                  fi
+#                  echo "NPM_TAG=${npm_tag}" >> $GITHUB_ENV
+#
+#            - name: Publish the base package
+#              if: github.event_name != 'pull_request'
+#              shell: bash
+#              working-directory: ./node/npm/glide
+#              run: |
+#                  # Copy the main README file
+#                  cp ../../README.md .
+#                  npm install
+#                  npm run build
+#                  npm publish --access public --tag ${{ env.NPM_TAG }}
+#              env:
+#                  NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
+#
+#    test-release:
+#        if: github.event_name != 'pull_request'
+#        name: Test the release
+#        needs: [publish-base-to-npm, load-platform-matrix]
+#        runs-on: ${{ matrix.build.RUNNER }}
+#        container:
+#            image: ${{ matrix.build.IMAGE || '' }}
+#            options: ${{ matrix.build.CONTAINER_OPTIONS || 'none'}}
+#        strategy:
+#            fail-fast: false
+#            matrix:
+#                build: ${{fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX)}}
+#        steps:
+#            - name: Setup self-hosted runner access
+#              if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-gnu' }}
+#              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
+#
+#            - name: install Redis and git for alpine
+#              if: ${{ contains(matrix.build.TARGET, 'musl') }}
+#              run: |
+#                apk update
+#                apk add redis git
+#                node -v
+#
+#            - name: install Redis and Python for ubuntu
+#              if: ${{ contains(matrix.build.TARGET, 'linux-gnu') }}
+#              run: |
+#                sudo apt-get update
+#                sudo apt-get install redis-server python3
+#
+#            - name: install Redis, Python for macos
+#              if: ${{ contains(matrix.build.RUNNER, 'mac') }}
+#              run: |
+#                brew install redis python3
+#
+#            - name: Checkout
+#              if: ${{  matrix.build.TARGET != 'aarch64-unknown-linux-musl'}}
+#              uses: actions/checkout@v4
+#              with:
+#                  submodules: "true"
+#
+#            - name: Setup for musl
+#              if: ${{ contains(matrix.build.TARGET, 'musl') }}
+#              uses: ./.github/workflows/setup-musl-on-linux
+#              with:
+#                  workspace: $GITHUB_WORKSPACE
+#                  npm-scope: ${{ vars.NPM_SCOPE }}
+#                  npm-auth-token: ${{ secrets.NPM_AUTH_TOKEN }}
+#                  arch: ${{ matrix.build.ARCH }}
+#
+#            - name: Setup node
+#              if: ${{ matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
+#              uses: actions/setup-node@v3
+#              with:
+#                  node-version: "16"
+#                  registry-url: "https://registry.npmjs.org"
+#                  architecture: ${{ matrix.build.ARCH }}
+#                  scope: "${{ vars.NPM_SCOPE }}"
+#                  always-auth: true
+#                  token: ${{ secrets.NPM_AUTH_TOKEN }}
+#
+#            - name: Install tsc and compile utils
+#              shell: bash
+#              working-directory: ./utils
+#              run: |
+#                  npm install
+#                  npm install -g typescript
+#                  npx tsc -p ./tsconfig.json
+#
+#            - name: Check if RC and set a distribution tag for the package
+#              shell: bash
+#              run: |
+#                  if [[ "${GITHUB_REF:11}" == *"rc"* ]]
+#                  then
+#                    echo "This is a release candidate"
+#                    export npm_tag="next"
+#                  else
+#                    echo "This is a stable release"
+#                    export npm_tag="latest"
+#                  fi
+#                  echo "NPM_TAG=${npm_tag}" >> $GITHUB_ENV
+#
+#            - name: Run the tests
+#              shell: bash
+#              working-directory: ./utils/release-candidate-testing/node
+#              run: |
+#                  npm install
+#                  npm install --no-save @valkey/valkey-glide@${{ env.NPM_TAG }}
+#                  npm run test
+#
+#            # Reset the repository to make sure we get the clean checkout of the action later in other actions.
+#            # It is not required since in other actions we are cleaning before the action, but it is a good practice to do it here as well.
+#            - name: Reset repository
+#              if: ${{ contains(matrix.build.RUNNER, 'self-hosted') }}
+#              shell: bash
+#              run: |
+#                git reset --hard
+#                git clean -xdf

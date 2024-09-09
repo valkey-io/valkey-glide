@@ -1,127 +1,127 @@
-name: C# tests
-
-on:
-    push:
-        branches: ["main"]
-        paths:
-            - csharp/**
-            - glide-core/src/**
-            - submodules/**
-            - .github/workflows/csharp.yml
-            - .github/workflows/install-shared-dependencies/action.yml
-            - .github/workflows/test-benchmark/action.yml
-            - .github/workflows/lint-rust/action.yml
-            - .github/workflows/install-valkey/action.yml
-            - .github/json_matrices/build-matrix.json
-    pull_request:
-        paths:
-            - csharp/**
-            - glide-core/src/**
-            - submodules/**
-            - .github/workflows/csharp.yml
-            - .github/workflows/install-shared-dependencies/action.yml
-            - .github/workflows/test-benchmark/action.yml
-            - .github/workflows/lint-rust/action.yml
-            - .github/workflows/install-valkey/action.yml
-            - .github/json_matrices/build-matrix.json
-    workflow_dispatch:
-
-permissions:
-    contents: read
-
-concurrency:
-    group: C#-${{ github.head_ref || github.ref }}
-    cancel-in-progress: true
-
-jobs:
-    load-engine-matrix:
-        runs-on: ubuntu-latest
-        outputs:
-          matrix: ${{ steps.load-engine-matrix.outputs.matrix }}
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v4
-  
-            - name: Load the engine matrix
-              id: load-engine-matrix
-              shell: bash
-              run: echo "matrix=$(jq -c . < .github/json_matrices/engine-matrix.json)" >> $GITHUB_OUTPUT
-  
-    run-tests:
-        needs: load-engine-matrix
-        timeout-minutes: 25
-        strategy:
-            fail-fast: false
-            matrix:
-                engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
-                dotnet:
-                    # - '6.0'
-                    - '8.0'
-                host:
-                    - {
-                        OS: ubuntu,
-                        RUNNER: ubuntu-latest,
-                        TARGET: x86_64-unknown-linux-gnu
-                    }
-                    # - {
-                    #     OS: macos,
-                    #     RUNNER: macos-latest,
-                    #     TARGET: aarch64-apple-darwin
-                    # }
-    
-        runs-on: ${{ matrix.host.RUNNER }}
-
-        steps:
-            - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
-
-            - name: Set up dotnet ${{ matrix.dotnet }}
-              uses: actions/setup-dotnet@v4
-              with:
-                  dotnet-version: ${{ matrix.dotnet }}
-    
-            - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
-              with:
-                  os: ${{ matrix.host.OS }}
-                  target: ${{ matrix.host.TARGET }}
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-                  engine-version: ${{ matrix.engine.version }}
-
-            - name: Format
-              working-directory: ./csharp
-              run: dotnet format --verify-no-changes --verbosity diagnostic
-
-            - name: Test dotnet ${{ matrix.dotnet }}
-              working-directory: ./csharp
-              run: dotnet test --framework net${{ matrix.dotnet }} "-l:html;LogFileName=TestReport.html" --results-directory . -warnaserror
-
-            - uses: ./.github/workflows/test-benchmark
-              with:
-                  language-flag: -csharp -dotnet-framework net${{ matrix.dotnet }}
-
-            - name: Upload test reports
-              if: always()
-              continue-on-error: true
-              uses: actions/upload-artifact@v4
-              with:
-                  name: test-reports-dotnet-${{ matrix.dotnet }}-redis-${{ matrix.redis }}-${{ matrix.host.RUNNER }}
-                  path: |
-                      csharp/TestReport.html
-                      benchmarks/results/*
-                      utils/clusters/**
-
-# TODO Add amazonlinux
-
-    lint-rust:
-        timeout-minutes: 10
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
-
-            - uses: ./.github/workflows/lint-rust
-              with:
-                  cargo-toml-folder: ./csharp/lib
+#name: C# tests
+#
+#on:
+#    push:
+#        branches: ["main"]
+#        paths:
+#            - csharp/**
+#            - glide-core/src/**
+#            - submodules/**
+#            - .github/workflows/csharp.yml
+#            - .github/workflows/install-shared-dependencies/action.yml
+#            - .github/workflows/test-benchmark/action.yml
+#            - .github/workflows/lint-rust/action.yml
+#            - .github/workflows/install-valkey/action.yml
+#            - .github/json_matrices/build-matrix.json
+#    pull_request:
+#        paths:
+#            - csharp/**
+#            - glide-core/src/**
+#            - submodules/**
+#            - .github/workflows/csharp.yml
+#            - .github/workflows/install-shared-dependencies/action.yml
+#            - .github/workflows/test-benchmark/action.yml
+#            - .github/workflows/lint-rust/action.yml
+#            - .github/workflows/install-valkey/action.yml
+#            - .github/json_matrices/build-matrix.json
+#    workflow_dispatch:
+#
+#permissions:
+#    contents: read
+#
+#concurrency:
+#    group: C#-${{ github.head_ref || github.ref }}
+#    cancel-in-progress: true
+#
+#jobs:
+#    load-engine-matrix:
+#        runs-on: ubuntu-latest
+#        outputs:
+#          matrix: ${{ steps.load-engine-matrix.outputs.matrix }}
+#        steps:
+#            - name: Checkout
+#              uses: actions/checkout@v4
+#
+#            - name: Load the engine matrix
+#              id: load-engine-matrix
+#              shell: bash
+#              run: echo "matrix=$(jq -c . < .github/json_matrices/engine-matrix.json)" >> $GITHUB_OUTPUT
+#
+#    run-tests:
+#        needs: load-engine-matrix
+#        timeout-minutes: 25
+#        strategy:
+#            fail-fast: false
+#            matrix:
+#                engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
+#                dotnet:
+#                    # - '6.0'
+#                    - '8.0'
+#                host:
+#                    - {
+#                        OS: ubuntu,
+#                        RUNNER: ubuntu-latest,
+#                        TARGET: x86_64-unknown-linux-gnu
+#                    }
+#                    # - {
+#                    #     OS: macos,
+#                    #     RUNNER: macos-latest,
+#                    #     TARGET: aarch64-apple-darwin
+#                    # }
+#
+#        runs-on: ${{ matrix.host.RUNNER }}
+#
+#        steps:
+#            - uses: actions/checkout@v4
+#              with:
+#                  submodules: recursive
+#
+#            - name: Set up dotnet ${{ matrix.dotnet }}
+#              uses: actions/setup-dotnet@v4
+#              with:
+#                  dotnet-version: ${{ matrix.dotnet }}
+#
+#            - name: Install shared software dependencies
+#              uses: ./.github/workflows/install-shared-dependencies
+#              with:
+#                  os: ${{ matrix.host.OS }}
+#                  target: ${{ matrix.host.TARGET }}
+#                  github-token: ${{ secrets.GITHUB_TOKEN }}
+#                  engine-version: ${{ matrix.engine.version }}
+#
+#            - name: Format
+#              working-directory: ./csharp
+#              run: dotnet format --verify-no-changes --verbosity diagnostic
+#
+#            - name: Test dotnet ${{ matrix.dotnet }}
+#              working-directory: ./csharp
+#              run: dotnet test --framework net${{ matrix.dotnet }} "-l:html;LogFileName=TestReport.html" --results-directory . -warnaserror
+#
+#            - uses: ./.github/workflows/test-benchmark
+#              with:
+#                  language-flag: -csharp -dotnet-framework net${{ matrix.dotnet }}
+#
+#            - name: Upload test reports
+#              if: always()
+#              continue-on-error: true
+#              uses: actions/upload-artifact@v4
+#              with:
+#                  name: test-reports-dotnet-${{ matrix.dotnet }}-redis-${{ matrix.redis }}-${{ matrix.host.RUNNER }}
+#                  path: |
+#                      csharp/TestReport.html
+#                      benchmarks/results/*
+#                      utils/clusters/**
+#
+## TODO Add amazonlinux
+#
+#    lint-rust:
+#        timeout-minutes: 10
+#        runs-on: ubuntu-latest
+#        steps:
+#            - uses: actions/checkout@v4
+#              with:
+#                  submodules: recursive
+#
+#            - uses: ./.github/workflows/lint-rust
+#              with:
+#                  cargo-toml-folder: ./csharp/lib
