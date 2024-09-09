@@ -10,8 +10,7 @@ repositories {
 }
 
 dependencies {
-    implementation "io.valkey:valkey-glide:1.+:${osdetector.classifier}"
-}
+    implementation "io.valkey:valkey-glide:1.0.1"}
 
 task runStandalone(type: JavaExec) {
     group = 'application'
