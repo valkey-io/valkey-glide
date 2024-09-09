@@ -11645,6 +11645,51 @@ public class GlideClientTest {
 
     @SneakyThrows
     @Test
+    public void bitcount_start_returns_success() {
+        // setup
+        String key = "testKey";
+        Long bitcount = 1L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(bitcount);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(BitCount), eq(new String[] {key, "1"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.bitcount(key, 1);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(bitcount, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void bitcount_start_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        Long bitcount = 1L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(bitcount);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(
+                        eq(BitCount), eq(new GlideString[] {key, gs("1")}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.bitcount(key, 1);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(bitcount, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void bitcount_indices_returns_success() {
         // setup
         String key = "testKey";

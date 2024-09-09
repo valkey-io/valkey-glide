@@ -7126,6 +7126,25 @@ class TestCommands:
                     set_key, OffsetOptions(1, 1, BitmapIndexType.BIT)
                 )
 
+        if await check_if_server_version_lt(glide_client, "7.9.0"):
+            # exception thrown optional end was implemented after 8.0.0
+            with pytest.raises(RequestError):
+                await glide_client.bitcount(
+                    key1,
+                    OffsetOptions(
+                        2,
+                    ),
+                )
+        else:
+            assert await glide_client.bitcount(key1, OffsetOptions(0)) == 26
+            assert await glide_client.bitcount(key1, OffsetOptions(5)) == 4
+            assert await glide_client.bitcount(key1, OffsetOptions(80)) == 0
+            assert await glide_client.bitcount(non_existing_key, OffsetOptions(5)) == 0
+
+            # key exists but it is not a string
+            with pytest.raises(RequestError):
+                await glide_client.bitcount(set_key, OffsetOptions(1))
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_setbit(self, glide_client: TGlideClient):
