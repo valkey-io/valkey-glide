@@ -1315,9 +1315,9 @@ public class TransactionTestUtilities {
                     concatenateArrays(
                             expectedResults,
                             new Object[] {
-                                OK, // set(key1, "foobar")
-                                17L, // bitcount(key, 5, 30, BitmapIndexType.BIT)
-                                46L, // bitpos(key, 1, 44, 50, BitmapIndexType.BIT)
+                                OK, // set(key3, "foobar")
+                                17L, // bitcount(key3, 5, 30, BitmapIndexType.BIT)
+                                46L, // bitpos(key3, 1, 44, 50, BitmapIndexType.BIT)
                             });
         }
 
@@ -1326,8 +1326,8 @@ public class TransactionTestUtilities {
                     concatenateArrays(
                             expectedResults,
                             new Object[] {
-                                OK, // set(key1, "foobar")
-                                26L, // bitcount(key, 0)
+                                OK, // set(key4, "foobar")
+                                26L, // bitcount(key4, 0)
                             });
         }
         return expectedResults;
