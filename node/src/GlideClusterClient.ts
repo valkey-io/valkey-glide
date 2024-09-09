@@ -167,7 +167,7 @@ export type SlotIdTypes = {
      */
     type: "primarySlotId" | "replicaSlotId";
     /**
-     * Slot number. There are 16384 slots in a redis cluster, and each shard manages a slot range.
+     * Slot number. There are 16384 slots in a Valkey cluster, and each shard manages a slot range.
      * Unless the slot is known, it's better to route using `SlotKeyTypes`
      */
     id: number;
@@ -225,7 +225,7 @@ export type SingleNodeRoute =
     | RouteByAddress;
 
 /**
- * Client used for connection to cluster Redis servers.
+ * Client used for connection to cluster Valkey servers.
  *
  * @see For full documentation refer to {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#cluster|Valkey Glide Wiki}.
  */
@@ -690,7 +690,7 @@ export class GlideClusterClient extends BaseClient {
      * @example
      * ```typescript
      * const response = await client.lolwut({ version: 6, parameters: [40, 20] }, "allNodes");
-     * console.log(response); // Output: "Redis ver. 7.2.3" - Indicates the current server version.
+     * console.log(response); // Output: "Valkey ver. 7.2.3" - Indicates the current server version.
      * ```
      */
     public async lolwut(

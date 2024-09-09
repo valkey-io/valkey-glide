@@ -27,7 +27,7 @@ import {
     ScoreFilter,
     SlotKeyTypes,
 } from "..";
-import { RedisCluster } from "../../utils/TestUtils.js";
+import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
     FlushMode,
     FunctionRestorePolicy,
@@ -58,17 +58,17 @@ const TIMEOUT = 50000;
 
 describe("GlideClusterClient", () => {
     let testsFailed = 0;
-    let cluster: RedisCluster;
+    let cluster: ValkeyCluster;
     let client: GlideClusterClient;
     beforeAll(async () => {
         const clusterAddresses = parseCommandLineArgs()["cluster-endpoints"];
         // Connect to cluster or create a new one based on the parsed addresses
         cluster = clusterAddresses
-            ? await RedisCluster.initFromExistingCluster(
+            ? await ValkeyCluster.initFromExistingCluster(
                   parseEndpoints(clusterAddresses),
               )
             : // setting replicaCount to 1 to facilitate tests routed to replicas
-              await RedisCluster.createCluster(true, 3, 1);
+              await ValkeyCluster.createCluster(true, 3, 1);
     }, 20000);
 
     afterEach(async () => {
@@ -578,7 +578,7 @@ describe("GlideClusterClient", () => {
             // test with multi-node route
             const result1 = await client.lolwut({ route: "allNodes" });
             expect(intoString(result1)).toEqual(
-                expect.stringContaining("Redis ver. "),
+                expect.stringContaining("Valkey ver. "),
             );
 
             const result2 = await client.lolwut({
@@ -587,13 +587,13 @@ describe("GlideClusterClient", () => {
                 route: "allNodes",
             });
             expect(intoString(result2)).toEqual(
-                expect.stringContaining("Redis ver. "),
+                expect.stringContaining("Valkey ver. "),
             );
 
             // test with single-node route
             const result3 = await client.lolwut({ route: "randomNode" });
             expect(intoString(result3)).toEqual(
-                expect.stringContaining("Redis ver. "),
+                expect.stringContaining("Valkey ver. "),
             );
 
             const result4 = await client.lolwut({
@@ -602,7 +602,7 @@ describe("GlideClusterClient", () => {
                 route: "randomNode",
             });
             expect(intoString(result4)).toEqual(
-                expect.stringContaining("Redis ver. "),
+                expect.stringContaining("Valkey ver. "),
             );
 
             // transaction tests
@@ -616,7 +616,7 @@ describe("GlideClusterClient", () => {
             if (results) {
                 for (const element of results) {
                     expect(intoString(element)).toEqual(
-                        expect.stringContaining("Redis ver. "),
+                        expect.stringContaining("Valkey ver. "),
                     );
                 }
             } else {

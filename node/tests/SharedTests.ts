@@ -51,7 +51,7 @@ import {
     UpdateByScore,
     parseInfoResponse,
 } from "../";
-import { RedisCluster } from "../../utils/TestUtils";
+import { ValkeyCluster } from "../../utils/TestUtils";
 import {
     Client,
     GetAndSetRandomValue,
@@ -70,7 +70,7 @@ export function runBaseTests(config: {
         configOverrides?: ClientConfig,
     ) => Promise<{
         client: BaseClient;
-        cluster: RedisCluster;
+        cluster: ValkeyCluster;
     }>;
     close: (testSucceeded: boolean) => void;
     timeout?: number;
@@ -82,7 +82,7 @@ export function runBaseTests(config: {
     });
 
     const runTest = async (
-        test: (client: BaseClient, cluster: RedisCluster) => Promise<void>,
+        test: (client: BaseClient, cluster: ValkeyCluster) => Promise<void>,
         protocol: ProtocolVersion,
         configOverrides?: ClientConfig,
     ) => {
@@ -103,7 +103,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `should register client library name and version_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
                 if (cluster.checkIfServerVersionLessThan("7.2.0")) {
                     return;
                 }
@@ -292,7 +292,7 @@ export function runBaseTests(config: {
                     expect(await client.configRewrite()).toEqual("OK");
                 } else {
                     try {
-                        /// We expect Redis to return an error since the test cluster doesn't use redis.conf file
+                        /// We expect Valkey to return an error since the test cluster doesn't use valkey.conf file
                         expect(await client.configRewrite()).toThrow();
                     } catch (e) {
                         expect((e as Error).message).toMatch(
@@ -1618,7 +1618,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hscan and sscan empty set, negative cursor, negative count, and non-hash key exception tests`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
                 const key1 = "{key}-1" + uuidv4();
                 const key2 = "{key}-2" + uuidv4();
                 const initialCursor = "0";
@@ -4979,7 +4979,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zrangeStore by index test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
                 if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
 
                 const key = "{testKey}:1-" + uuidv4();
@@ -5033,7 +5033,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zrangeStore by score test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
                 if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
                 const key = "{testKey}:1-" + uuidv4();
                 const destkey = "{testKey}:2-" + uuidv4();
@@ -5120,7 +5120,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zrangeStore by lex test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
                 if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
                 const key = "{testKey}:1-" + uuidv4();
                 const destkey = "{testKey}:2-" + uuidv4();
@@ -5207,7 +5207,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zrange and zrangeStore different types of keys test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
                 const key = "{testKey}:1-" + uuidv4();
                 const nonExistingKey = "{testKey}:2-" + uuidv4();
                 const destkey = "{testKey}:3-" + uuidv4();
@@ -5400,7 +5400,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zinter basic test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
                 if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
                 const key1 = "{testKey}:1-" + uuidv4();
                 const key2 = "{testKey}:2-" + uuidv4();
@@ -5432,7 +5432,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zinter with scores basic test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
                 if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
                 const key1 = "{testKey}:1-" + uuidv4();
                 const key2 = "{testKey}:2-" + uuidv4();
@@ -5462,7 +5462,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zinter with scores with max aggregation test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
                 if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
                 const key1 = "{testKey}:1-" + uuidv4();
                 const key2 = "{testKey}:2-" + uuidv4();
@@ -5491,7 +5491,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zinter with scores with min aggregation test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
                 if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
                 const key1 = "{testKey}:1-" + uuidv4();
                 const key2 = "{testKey}:2-" + uuidv4();
@@ -5520,7 +5520,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zinter with scores with sum aggregation test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
                 if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
                 const key1 = "{testKey}:1-" + uuidv4();
                 const key2 = "{testKey}:2-" + uuidv4();
@@ -5549,7 +5549,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zinter with scores with weights and aggregation test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
                 if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
                 const key1 = "{testKey}:1-" + uuidv4();
                 const key2 = "{testKey}:2-" + uuidv4();
@@ -5581,7 +5581,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zinter empty test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
                 if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
                 const key1 = "{testKey}:1-" + uuidv4();
 
@@ -5611,7 +5611,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zunion basic test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
                 if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
                 const key1 = "{testKey}:1-" + uuidv4();
                 const key2 = "{testKey}:2-" + uuidv4();
@@ -5642,7 +5642,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zunion with scores basic test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
                 if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
                 const key1 = "{testKey}:1-" + uuidv4();
                 const key2 = "{testKey}:2-" + uuidv4();
@@ -5673,7 +5673,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zunion with scores with max aggregation test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
                 if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
                 const key1 = "{testKey}:1-" + uuidv4();
                 const key2 = "{testKey}:2-" + uuidv4();
@@ -5703,7 +5703,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zunion with scores with min aggregation test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
                 if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
                 const key1 = "{testKey}:1-" + uuidv4();
                 const key2 = "{testKey}:2-" + uuidv4();
@@ -5733,7 +5733,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zunion with scores with sum aggregation test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
                 if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
                 const key1 = "{testKey}:1-" + uuidv4();
                 const key2 = "{testKey}:2-" + uuidv4();
@@ -5763,7 +5763,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zunion with scores with weights and aggregation test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
                 if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
                 const key1 = "{testKey}:1-" + uuidv4();
                 const key2 = "{testKey}:2-" + uuidv4();
@@ -5796,7 +5796,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zunion empty test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
                 if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
                 const key1 = "{testKey}:1-" + uuidv4();
 
@@ -6122,7 +6122,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `bzpopmax test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
                 const key1 = "{key}-1" + uuidv4();
                 const key2 = "{key}-2" + uuidv4();
                 const key3 = "{key}-3" + uuidv4();
@@ -6169,7 +6169,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `bzpopmin test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
                 const key1 = "{key}-1" + uuidv4();
                 const key2 = "{key}-2" + uuidv4();
                 const key3 = "{key}-3" + uuidv4();
@@ -6562,7 +6562,7 @@ export function runBaseTests(config: {
                         exact: true,
                     }),
                 ).toEqual(1);
-                // Unlike other Redis collection types, stream keys still exist even after removing all entries
+                // Unlike other Valkey collection types, stream keys still exist even after removing all entries
                 expect(await client.exists([key])).toEqual(1);
                 expect(await client.xlen(key)).toEqual(0);
 
@@ -9254,7 +9254,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zmpop test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
                 if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
                 const key1 = "{key}-1" + uuidv4();
                 const key2 = "{key}-2" + uuidv4();
@@ -9364,7 +9364,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zscan test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
                 const key1 = "{key}-1" + uuidv4();
                 const key2 = "{key}-2" + uuidv4();
                 const initialCursor = "0";
@@ -9538,7 +9538,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `bzmpop test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
                 if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
                 const key1 = "{key}-1" + uuidv4();
                 const key2 = "{key}-2" + uuidv4();
@@ -10522,7 +10522,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `xgroupSetId test %p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
                 const key = "testKey" + uuidv4();
                 const nonExistingKey = "group" + uuidv4();
                 const stringKey = "testKey" + uuidv4();
@@ -11094,7 +11094,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `lmpop test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
                 if (cluster.checkIfServerVersionLessThan("7.0.0")) {
                     return;
                 }
@@ -11181,7 +11181,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `blmpop test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
                 if (cluster.checkIfServerVersionLessThan("7.0.0")) {
                     return;
                 }
@@ -11559,7 +11559,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `getex test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+            await runTest(async (client: BaseClient, cluster: ValkeyCluster) => {
                 if (cluster.checkIfServerVersionLessThan("6.2.0")) {
                     return;
                 }

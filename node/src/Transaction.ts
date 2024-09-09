@@ -278,7 +278,7 @@ import { command_request } from "./ProtobufMessage";
  * Command Response:
  *  An array of command responses is returned by the client exec command, in the order they were given.
  *  Each element in the array represents a command given to the transaction.
- *  The response for each command depends on the executed Redis command.
+ *  The response for each command depends on the executed Valkey command.
  *  Specific response types are documented alongside each method.
  *
  * @example
@@ -500,7 +500,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Resets the statistics reported by Redis using the `INFO` and `LATENCY HISTOGRAM` commands.
+     * Resets the statistics reported by Valkey using the `INFO` and `LATENCY HISTOGRAM` commands.
      *
      * @see {@link https://valkey.io/commands/config-resetstat/|valkey.io} for details.
      *
@@ -2502,7 +2502,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command|Valkey Glide Wiki} for details on the restrictions and limitations of the custom command API.
      *
-     * Command Response - A response from Redis with an `Object`.
+     * Command Response - A response from Valkey with an `Object`.
      */
     public customCommand(args: GlideString[]): T {
         return this.addAndReturn(createCustomCommand(args));
@@ -3175,7 +3175,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns the internal encoding for the Redis object stored at `key`.
+     * Returns the internal encoding for the Valkey object stored at `key`.
      *
      * @see {@link https://valkey.io/commands/object-encoding/|valkey.io} for more details.
      *
@@ -3189,7 +3189,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns the logarithmic access frequency counter of a Redis object stored at `key`.
+     * Returns the logarithmic access frequency counter of a Valkey object stored at `key`.
      *
      * @see {@link https://valkey.io/commands/object-freq/|valkey.io} for more details.
      *
@@ -3959,13 +3959,13 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
 }
 
 /**
- * Extends BaseTransaction class for Redis standalone commands.
+ * Extends BaseTransaction class for Valkey standalone commands.
  * Transactions allow the execution of a group of commands in a single step.
  *
  * Command Response:
  *  An array of command responses is returned by the GlideClient.exec command, in the order they were given.
  *  Each element in the array represents a command given to the transaction.
- *  The response for each command depends on the executed Redis command.
+ *  The response for each command depends on the executed Valkey command.
  *  Specific response types are documented alongside each method.
  *
  * @example
@@ -4120,7 +4120,7 @@ export class Transaction extends BaseTransaction<Transaction> {
  * Command Response:
  *  An array of command responses is returned by the GlideClusterClient.exec command, in the order they were given.
  *  Each element in the array represents a command given to the transaction.
- *  The response for each command depends on the executed Redis command.
+ *  The response for each command depends on the executed Valkey command.
  *  Specific response types are documented alongside each method.
  *
  */

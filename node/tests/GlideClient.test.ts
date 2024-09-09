@@ -20,7 +20,7 @@ import {
     RequestError,
     Transaction,
 } from "..";
-import { RedisCluster } from "../../utils/TestUtils.js";
+import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
     FlushMode,
     FunctionRestorePolicy,
@@ -50,17 +50,17 @@ const TIMEOUT = 50000;
 
 describe("GlideClient", () => {
     let testsFailed = 0;
-    let cluster: RedisCluster;
+    let cluster: ValkeyCluster;
     let client: GlideClient;
     beforeAll(async () => {
         const standaloneAddresses =
             parseCommandLineArgs()["standalone-endpoints"];
         // Connect to cluster or create a new one based on the parsed addresses
         cluster = standaloneAddresses
-            ? await RedisCluster.initFromExistingCluster(
+            ? await ValkeyCluster.initFromExistingCluster(
                   parseEndpoints(standaloneAddresses),
               )
-            : await RedisCluster.createCluster(false, 1, 1);
+            : await ValkeyCluster.createCluster(false, 1, 1);
     }, 20000);
 
     afterEach(async () => {
@@ -481,22 +481,22 @@ describe("GlideClient", () => {
             );
 
             const result = await client.lolwut();
-            expect(result).toEqual(expect.stringContaining("Redis ver. "));
+            expect(result).toEqual(expect.stringContaining("Valkey ver. "));
 
             const result2 = await client.lolwut({ parameters: [] });
-            expect(result2).toEqual(expect.stringContaining("Redis ver. "));
+            expect(result2).toEqual(expect.stringContaining("Valkey ver. "));
 
             const result3 = await client.lolwut({ parameters: [50, 20] });
-            expect(result3).toEqual(expect.stringContaining("Redis ver. "));
+            expect(result3).toEqual(expect.stringContaining("Valkey ver. "));
 
             const result4 = await client.lolwut({ version: 6 });
-            expect(result4).toEqual(expect.stringContaining("Redis ver. "));
+            expect(result4).toEqual(expect.stringContaining("Valkey ver. "));
 
             const result5 = await client.lolwut({
                 version: 5,
                 parameters: [30, 4, 4],
             });
-            expect(result5).toEqual(expect.stringContaining("Redis ver. "));
+            expect(result5).toEqual(expect.stringContaining("Valkey ver. "));
 
             // transaction tests
             const transaction = new Transaction();
@@ -509,7 +509,7 @@ describe("GlideClient", () => {
             if (results) {
                 for (const element of results) {
                     expect(element).toEqual(
-                        expect.stringContaining("Redis ver. "),
+                        expect.stringContaining("Valkey ver. "),
                     );
                 }
             } else {

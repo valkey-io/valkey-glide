@@ -134,7 +134,7 @@ export type GlideClientConfiguration = BaseClientConfiguration & {
 };
 
 /**
- * Client used for connection to standalone Redis servers.
+ * Client used for connection to standalone Valkey servers.
  *
  * @see For full documentation refer to {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#standalone|Valkey Glide Wiki}.
  */
@@ -534,7 +534,7 @@ export class GlideClient extends BaseClient {
      * @example
      * ```typescript
      * const response = await client.lolwut({ version: 6, parameters: [40, 20] });
-     * console.log(response); // Output: "Redis ver. 7.2.3" - Indicates the current server version.
+     * console.log(response); // Output: "Valkey ver. 7.2.3" - Indicates the current server version.
      * ```
      */
     public async lolwut(options?: LolwutOptions): Promise<string> {

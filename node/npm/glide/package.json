@@ -2,7 +2,7 @@
     "name": "${scope}${pkg_name}",
     "types": "build-ts/index.d.ts",
     "version": "${package_version}",
-    "description": "An AWS-sponsored, open-source Redis client.",
+    "description": "An AWS-sponsored, open-source Valkey client.",
     "main": "build-ts/index.js",
     "module": "build-ts/index.js",
     "type": "commonjs",
@@ -21,8 +21,8 @@
         "url": "git+https://github.com/valkey-io/valkey-glide.git"
     },
     "keywords": [
-        "redis",
-        "redisClient",
+        "valkey",
+        "valkeyClient",
         "client",
         "AWS"
     ],

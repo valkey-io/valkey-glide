@@ -230,7 +230,7 @@ import {
     ConfigurationError,
     ConnectionError,
     ExecAbortError,
-    RedisError,
+    ValkeyError,
     RequestError,
     TimeoutError,
 } from "./Errors";
@@ -249,7 +249,7 @@ import {
 
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
-type ErrorFunction = (error: RedisError) => void;
+type ErrorFunction = (error: ValkeyError) => void;
 export type ReturnTypeRecord = { [key: string]: ReturnType };
 export type ReturnTypeMap = Map<string, ReturnType>;
 export type ReturnTypeAttribute = {
@@ -411,7 +411,7 @@ class PointerResponse {
 }
 
 /** Represents the credentials for connecting to a server. */
-export type RedisCredentials = {
+export type ValkeyCredentials = {
     /**
      * The username that will be used for authenticating connections to the Valkey servers.
      * If not supplied, "default" will be used.
@@ -467,7 +467,7 @@ export type BaseClientConfiguration = {
      * Credentials for authentication process.
      * If none are set, the client will not authenticate itself with the server.
      */
-    credentials?: RedisCredentials;
+    credentials?: ValkeyCredentials;
     /**
      * The duration in milliseconds that the client should wait for a request to complete.
      * This duration encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries.
@@ -482,7 +482,7 @@ export type BaseClientConfiguration = {
      */
     readFrom?: ReadFrom;
     /**
-     * Choose the Redis protocol to be used with the server.
+     * Choose the Valkey protocol to be used with the server.
      * If not set, `RESP3` will be used.
      */
     protocol?: ProtocolVersion;
