@@ -23,8 +23,6 @@ permissions:
 
 jobs:
     load-platform-matrix:
-        env:
-            JAVA_VERSION: "11"
         runs-on: ubuntu-latest
 #        environment: AWS_ACTIONS
         outputs:
@@ -42,6 +40,8 @@ jobs:
                   echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
 
     deployment-all-platforms:
+        env:
+            JAVA_VERSION: "11"
         needs: load-platform-matrix
         strategy:
             # Run all jobs
