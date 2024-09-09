@@ -316,10 +316,10 @@ export function runBaseTests(config: {
                     client instanceof GlideClient
                         ? await client.info([InfoOptions.Commandstats])
                         : Object.values(
-                            await client.info({
-                                sections: [InfoOptions.Commandstats],
-                            }),
-                        ).join();
+                              await client.info({
+                                  sections: [InfoOptions.Commandstats],
+                              }),
+                          ).join();
                 expect(oldResult).toContain("cmdstat_set");
                 expect(await client.configResetStat()).toEqual("OK");
 
@@ -327,10 +327,10 @@ export function runBaseTests(config: {
                     client instanceof GlideClient
                         ? await client.info([InfoOptions.Commandstats])
                         : Object.values(
-                            await client.info({
-                                sections: [InfoOptions.Commandstats],
-                            }),
-                        ).join();
+                              await client.info({
+                                  sections: [InfoOptions.Commandstats],
+                              }),
+                          ).join();
                 expect(result).not.toContain("cmdstat_set");
             }, protocol);
         },
@@ -357,8 +357,8 @@ export function runBaseTests(config: {
                     client instanceof GlideClient
                         ? await client.exec(new Transaction().lastsave())
                         : await client.exec(
-                            new ClusterTransaction().lastsave(),
-                        );
+                              new ClusterTransaction().lastsave(),
+                          );
                 expect(response?.[0]).toBeGreaterThan(yesterday);
             }, protocol);
         },
@@ -1349,9 +1349,7 @@ export function runBaseTests(config: {
                 expect(await client.getrange(key, 0, 5)).toEqual("爱和");
 
                 expect(await client.set(key, "😊🌸")).toEqual("OK");
-                expect(await client.getrange(key, 4, 8)).toEqual("🌸");
-
-
+                expect(await client.getrange(key, 4, 7)).toEqual("🌸");
             }, protocol);
         },
         config.timeout,
@@ -5871,27 +5869,27 @@ export function runBaseTests(config: {
                 expect(
                     client instanceof GlideClient
                         ? await client.echo(message, {
-                            decoder: Decoder.String,
-                        })
+                              decoder: Decoder.String,
+                          })
                         : await client.echo(message, {
-                            decoder: Decoder.String,
-                        }),
+                              decoder: Decoder.String,
+                          }),
                 ).toEqual(message);
                 expect(
                     client instanceof GlideClient
                         ? await client.echo(message, { decoder: Decoder.Bytes })
                         : await client.echo(message, {
-                            decoder: Decoder.Bytes,
-                        }),
+                              decoder: Decoder.Bytes,
+                          }),
                 ).toEqual(Buffer.from(message));
                 expect(
                     client instanceof GlideClient
                         ? await client.echo(Buffer.from(message), {
-                            decoder: Decoder.String,
-                        })
+                              decoder: Decoder.String,
+                          })
                         : await client.echo(Buffer.from(message), {
-                            decoder: Decoder.String,
-                        }),
+                              decoder: Decoder.String,
+                          }),
                 ).toEqual(message);
                 expect(await client.echo(Buffer.from(message))).toEqual(
                     message,
@@ -7569,12 +7567,12 @@ export function runBaseTests(config: {
                 let response =
                     client instanceof GlideClient
                         ? await client.exec(new Transaction().dump(key1), {
-                            decoder: Decoder.Bytes,
-                        })
+                              decoder: Decoder.Bytes,
+                          })
                         : await client.exec(
-                            new ClusterTransaction().dump(key1),
-                            { decoder: Decoder.Bytes },
-                        );
+                              new ClusterTransaction().dump(key1),
+                              { decoder: Decoder.Bytes },
+                          );
                 expect(response?.[0]).not.toBeNull();
                 data = response?.[0] as Buffer;
 
@@ -7582,17 +7580,17 @@ export function runBaseTests(config: {
                 response =
                     client instanceof GlideClient
                         ? await client.exec(
-                            new Transaction()
-                                .restore(key4, 0, data)
-                                .get(key4),
-                            { decoder: Decoder.String },
-                        )
+                              new Transaction()
+                                  .restore(key4, 0, data)
+                                  .get(key4),
+                              { decoder: Decoder.String },
+                          )
                         : await client.exec(
-                            new ClusterTransaction()
-                                .restore(key4, 0, data)
-                                .get(key4),
-                            { decoder: Decoder.String },
-                        );
+                              new ClusterTransaction()
+                                  .restore(key4, 0, data)
+                                  .get(key4),
+                              { decoder: Decoder.String },
+                          );
                 expect(response?.[0]).toEqual("OK");
                 expect(response?.[1]).toEqual(value);
 
@@ -7600,17 +7598,17 @@ export function runBaseTests(config: {
                 response =
                     client instanceof GlideClient
                         ? await client.exec(
-                            new Transaction()
-                                .restore(key5, 0, data)
-                                .get(key5),
-                            { decoder: Decoder.Bytes },
-                        )
+                              new Transaction()
+                                  .restore(key5, 0, data)
+                                  .get(key5),
+                              { decoder: Decoder.Bytes },
+                          )
                         : await client.exec(
-                            new ClusterTransaction()
-                                .restore(key5, 0, data)
-                                .get(key5),
-                            { decoder: Decoder.Bytes },
-                        );
+                              new ClusterTransaction()
+                                  .restore(key5, 0, data)
+                                  .get(key5),
+                              { decoder: Decoder.Bytes },
+                          );
                 expect(response?.[0]).toEqual("OK");
                 expect(response?.[1]).toEqual(valueEncode);
             }, protocol);
@@ -7740,11 +7738,9 @@ export function runBaseTests(config: {
                 // new key
                 expect(await client.setrange(key, 0, "Hello World")).toBe(11);
 
-
                 // existing key
                 expect(await client.setrange(key, 6, "GLIDE")).toBe(11);
                 expect(await client.get(key)).toEqual("Hello GLIDE");
-
 
                 // unique chars keys, size of 3 bytes each
                 expect(await client.setrange(key_2, 0, "爱和美力")).toBe(12);
@@ -7752,13 +7748,11 @@ export function runBaseTests(config: {
                 expect(await client.setrange(key_2, 3, "abc")).toBe(12);
                 expect(await client.get(key_2)).toEqual("爱abc美力");
 
-
                 // unique char key, size of 4 bytes
                 expect(await client.setrange(key_3, 0, "😊")).toBe(4);
 
                 expect(await client.setrange(key_3, 4, "GLIDE")).toBe(9);
                 expect(await client.get(key_3)).toEqual("😊GLIDE");
-
 
                 // offset > len
                 expect(await client.setrange(key, 15, "GLIDE")).toBe(20);
@@ -7772,7 +7766,6 @@ export function runBaseTests(config: {
                     client.setrange(nonStringKey, 0, "_"),
                 ).rejects.toThrow(RequestError);
             }, protocol);
-
         },
         config.timeout,
     );
@@ -8016,13 +8009,13 @@ export function runBaseTests(config: {
                 expiry: expiryVal as
                     | "keepExisting"
                     | {
-                        type:
-                        | TimeUnit.Seconds
-                        | TimeUnit.Milliseconds
-                        | TimeUnit.UnixSeconds
-                        | TimeUnit.UnixMilliseconds;
-                        count: number;
-                    },
+                          type:
+                              | TimeUnit.Seconds
+                              | TimeUnit.Milliseconds
+                              | TimeUnit.UnixSeconds
+                              | TimeUnit.UnixMilliseconds;
+                          count: number;
+                      },
                 conditionalSet: "onlyIfDoesNotExist",
             });
 
@@ -8042,13 +8035,13 @@ export function runBaseTests(config: {
                 expiry: expiryVal as
                     | "keepExisting"
                     | {
-                        type:
-                        | TimeUnit.Seconds
-                        | TimeUnit.Milliseconds
-                        | TimeUnit.UnixSeconds
-                        | TimeUnit.UnixMilliseconds;
-                        count: number;
-                    },
+                          type:
+                              | TimeUnit.Seconds
+                              | TimeUnit.Milliseconds
+                              | TimeUnit.UnixSeconds
+                              | TimeUnit.UnixMilliseconds;
+                          count: number;
+                      },
 
                 conditionalSet: "onlyIfExists",
                 returnOldValue: true,
@@ -10320,23 +10313,23 @@ export function runBaseTests(config: {
                 expect(await client.xinfoGroups(key)).toEqual(
                     cluster.checkIfServerVersionLessThan("7.0.0")
                         ? [
-                            {
-                                name: groupName1,
-                                consumers: 0,
-                                pending: 0,
-                                "last-delivered-id": "0-0",
-                            },
-                        ]
+                              {
+                                  name: groupName1,
+                                  consumers: 0,
+                                  pending: 0,
+                                  "last-delivered-id": "0-0",
+                              },
+                          ]
                         : [
-                            {
-                                name: groupName1,
-                                consumers: 0,
-                                pending: 0,
-                                "last-delivered-id": "0-0",
-                                "entries-read": null,
-                                lag: 0,
-                            },
-                        ],
+                              {
+                                  name: groupName1,
+                                  consumers: 0,
+                                  pending: 0,
+                                  "last-delivered-id": "0-0",
+                                  "entries-read": null,
+                                  lag: 0,
+                              },
+                          ],
                 );
 
                 expect(
@@ -10373,23 +10366,23 @@ export function runBaseTests(config: {
                 expect(await client.xinfoGroups(key)).toEqual(
                     cluster.checkIfServerVersionLessThan("7.0.0")
                         ? [
-                            {
-                                name: groupName1,
-                                consumers: 0,
-                                pending: 0,
-                                "last-delivered-id": "0-0",
-                            },
-                        ]
+                              {
+                                  name: groupName1,
+                                  consumers: 0,
+                                  pending: 0,
+                                  "last-delivered-id": "0-0",
+                              },
+                          ]
                         : [
-                            {
-                                name: groupName1,
-                                consumers: 0,
-                                pending: 0,
-                                "last-delivered-id": "0-0",
-                                "entries-read": null,
-                                lag: 3,
-                            },
-                        ],
+                              {
+                                  name: groupName1,
+                                  consumers: 0,
+                                  pending: 0,
+                                  "last-delivered-id": "0-0",
+                                  "entries-read": null,
+                                  lag: 3,
+                              },
+                          ],
                 );
 
                 expect(
@@ -10419,23 +10412,23 @@ export function runBaseTests(config: {
                 expect(await client.xinfoGroups(key)).toEqual(
                     cluster.checkIfServerVersionLessThan("7.0.0")
                         ? [
-                            {
-                                name: groupName1,
-                                consumers: 1,
-                                pending: 3,
-                                "last-delivered-id": streamId3,
-                            },
-                        ]
+                              {
+                                  name: groupName1,
+                                  consumers: 1,
+                                  pending: 3,
+                                  "last-delivered-id": streamId3,
+                              },
+                          ]
                         : [
-                            {
-                                name: groupName1,
-                                consumers: 1,
-                                pending: 3,
-                                "last-delivered-id": streamId3,
-                                "entries-read": 3,
-                                lag: 0,
-                            },
-                        ],
+                              {
+                                  name: groupName1,
+                                  consumers: 1,
+                                  pending: 3,
+                                  "last-delivered-id": streamId3,
+                                  "entries-read": 3,
+                                  lag: 0,
+                              },
+                          ],
                 );
 
                 expect(
@@ -10450,23 +10443,23 @@ export function runBaseTests(config: {
                 expect(await client.xinfoGroups(key)).toEqual(
                     cluster.checkIfServerVersionLessThan("7.0.0")
                         ? [
-                            {
-                                name: groupName1,
-                                consumers: 1,
-                                pending: 2,
-                                "last-delivered-id": streamId3,
-                            },
-                        ]
+                              {
+                                  name: groupName1,
+                                  consumers: 1,
+                                  pending: 2,
+                                  "last-delivered-id": streamId3,
+                              },
+                          ]
                         : [
-                            {
-                                name: groupName1,
-                                consumers: 1,
-                                pending: 2,
-                                "last-delivered-id": streamId3,
-                                "entries-read": 3,
-                                lag: 0,
-                            },
-                        ],
+                              {
+                                  name: groupName1,
+                                  consumers: 1,
+                                  pending: 2,
+                                  "last-delivered-id": streamId3,
+                                  "entries-read": 3,
+                                  lag: 0,
+                              },
+                          ],
                 );
 
                 // key exists, but it is not a stream
@@ -10667,16 +10660,16 @@ export function runBaseTests(config: {
                     Buffer.from(group),
                     cluster.checkIfServerVersionLessThan("6.2.0")
                         ? {
-                            start: InfBoundary.NegativeInfinity,
-                            end: InfBoundary.PositiveInfinity,
-                            count: 1,
-                        }
+                              start: InfBoundary.NegativeInfinity,
+                              end: InfBoundary.PositiveInfinity,
+                              count: 1,
+                          }
                         : {
-                            start: InfBoundary.NegativeInfinity,
-                            end: InfBoundary.PositiveInfinity,
-                            count: 1,
-                            minIdleTime: 42,
-                        },
+                              start: InfBoundary.NegativeInfinity,
+                              end: InfBoundary.PositiveInfinity,
+                              count: 1,
+                              minIdleTime: 42,
+                          },
                 );
                 result[0][2] = 0; // overwrite msec counter to avoid test flakyness
                 expect(result).toEqual([["0-1", "consumer", 0, 1]]);
