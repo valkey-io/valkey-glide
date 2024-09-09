@@ -4,12 +4,13 @@
 
 import {
     BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
-    GlideRecord,
+    GlideRecord, // eslint-disable-line @typescript-eslint/no-unused-vars
     GlideString,
     HashDataType,
+    convertGlideRecord,
+    convertHashDataType,
     ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
     SortedSetDataType, // eslint-disable-line @typescript-eslint/no-unused-vars
-    convertFieldsAndValuesForHset,
 } from "./BaseClient";
 
 import {
@@ -41,6 +42,7 @@ import {
     GeoSearchStoreResultOptions,
     GeoUnit,
     GeospatialData,
+    HScanOptions,
     InfoOptions,
     InsertPosition,
     KeyWeight,
@@ -67,6 +69,7 @@ import {
     StreamTrimOptions,
     TimeUnit,
     ZAddOptions,
+    ZScanOptions,
     convertElementsAndScores,
     createAppend,
     createBLMPop,
@@ -522,12 +525,14 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /** Set multiple keys to multiple values in a single atomic operation.
      * @see {@link https://valkey.io/commands/mset/|valkey.io} for details.
      *
-     * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
+     * @param keysAndValues - A list of key-value pairs to set.
      *
      * Command Response - always "OK".
      */
-    public mset(keyValueMap: Record<string, string>): T {
-        return this.addAndReturn(createMSet(keyValueMap));
+    public mset(
+        keysAndValues: Record<string, GlideString> | GlideRecord<GlideString>,
+    ): T {
+        return this.addAndReturn(createMSet(convertGlideRecord(keysAndValues)));
     }
 
     /**
@@ -536,11 +541,15 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see {@link https://valkey.io/commands/msetnx/|valkey.io} for details.
      *
-     * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
+     * @param keysAndValues - A list of key-value pairs to set.
      * Command Response - `true` if all keys were set. `false` if no key was set.
      */
-    public msetnx(keyValueMap: Record<string, string>): T {
-        return this.addAndReturn(createMSetNX(keyValueMap));
+    public msetnx(
+        keysAndValues: Record<string, GlideString> | GlideRecord<GlideString>,
+    ): T {
+        return this.addAndReturn(
+            createMSetNX(convertGlideRecord(keysAndValues)),
+        );
     }
 
     /** Increments the number stored at `key` by one. If `key` does not exist, it is set to 0 before performing the operation.
@@ -819,7 +828,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         fieldsAndValues: HashDataType | Record<string, GlideString>,
     ): T {
         return this.addAndReturn(
-            createHSet(key, convertFieldsAndValuesForHset(fieldsAndValues)),
+            createHSet(key, convertHashDataType(fieldsAndValues)),
         );
     }
 
@@ -996,15 +1005,16 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key - The key of the set.
      * @param cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of the search.
-     * @param options - (Optional) The {@link BaseScanOptions}.
+     * @param options - (Optional) The {@link HScanOptions}.
      *
-     * Command Response -  An array of the `cursor` and the subset of the hash held by `key`.
+     * Command Response - An array of the `cursor` and the subset of the hash held by `key`.
      * The first element is always the `cursor` for the next iteration of results. `"0"` will be the `cursor`
      * returned on the last iteration of the hash. The second element is always an array of the subset of the
-     * hash held in `key`. The array in the second element is always a flattened series of string pairs,
+     * hash held in `key`. The array in the second element is a flattened series of string pairs,
      * where the value is at even indices and the value is at odd indices.
+     * If `options.noValues` is set to `true`, the second element will only contain the fields without the values.
      */
-    public hscan(key: string, cursor: string, options?: BaseScanOptions): T {
+    public hscan(key: GlideString, cursor: string, options?: HScanOptions): T {
         return this.addAndReturn(createHScan(key, cursor, options));
     }
 
@@ -3675,19 +3685,16 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key - The key of the sorted set.
      * @param cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of
      *      the search.
-     * @param options - (Optional) The `zscan` options - see {@link BaseScanOptions}
+     * @param options - (Optional) The `zscan` options - see {@link ZScanOptions}
      *
      * Command Response - An `Array` of the `cursor` and the subset of the sorted set held by `key`.
      *      The first element is always the `cursor` for the next iteration of results. `0` will be the `cursor`
      *      returned on the last iteration of the sorted set. The second element is always an `Array` of the subset
-     *      of the sorted set held in `key`. The `Array` in the second element is always a flattened series of
+     *      of the sorted set held in `key`. The `Array` in the second element is a flattened series of
      *      `String` pairs, where the value is at even indices and the score is at odd indices.
+     *      If `options.noScores` is to `true`, the second element will only contain the members without scores.
      */
-    public zscan(
-        key: GlideString,
-        cursor: string,
-        options?: BaseScanOptions,
-    ): T {
+    public zscan(key: GlideString, cursor: string, options?: ZScanOptions): T {
         return this.addAndReturn(createZScan(key, cursor, options));
     }
 

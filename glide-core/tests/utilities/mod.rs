@@ -358,7 +358,7 @@ pub fn build_keys_and_certs_for_tls(tempdir: &TempDir) -> TlsFilePaths {
             .arg("genrsa")
             .arg("-out")
             .arg(name)
-            .arg(&format!("{size}"))
+            .arg(format!("{size}"))
             .stdout(process::Stdio::null())
             .stderr(process::Stdio::null())
             .spawn()

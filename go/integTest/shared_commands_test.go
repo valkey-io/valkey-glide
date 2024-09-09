@@ -484,3 +484,40 @@ func (suite *GlideTestSuite) TestLCS_existingAndNonExistingKeys() {
 		assert.Equal(suite.T(), "Dummy ", res)
 	})
 }
+
+func (suite *GlideTestSuite) TestGetDel_ExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		value := "testValue"
+
+		suite.verifyOK(client.Set(key, value))
+		result, err := client.GetDel(key)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), value, result)
+
+		result, err = client.Get(key)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "", result)
+	})
+}
+
+func (suite *GlideTestSuite) TestGetDel_NonExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+
+		result, err := client.GetDel(key)
+
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "", result)
+	})
+}
+
+func (suite *GlideTestSuite) TestGetDel_EmptyKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		result, err := client.GetDel("")
+
+		assert.NotNil(suite.T(), err)
+		assert.Equal(suite.T(), "", result)
+		assert.Equal(suite.T(), "key is required", err.Error())
+	})
+}

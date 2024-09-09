@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-var-requires */
+/* eslint-disable @typescript-eslint/no-require-imports */
 const { AsyncClient } = require("glide-rs");
 const RedisServer = require("redis-server");
 const FreePort = require("find-free-port");

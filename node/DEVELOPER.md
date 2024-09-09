@@ -118,7 +118,7 @@ Before starting this step, make sure you've installed all software requirments.
 
 ### Troubleshooting
 
--   If the build fails after running `npx tsc` because `redis-rs` isn't found, check if your npm version is in the range 9.0.0-9.4.1, and if so, upgrade it. 9.4.2 contains a fix to a change introduced in 9.0.0 that is required in order to build the library.
+-   If the build fails after running `npx tsc` because `glide-rs` isn't found, check if your npm version is in the range 9.0.0-9.4.1, and if so, upgrade it. 9.4.2 contains a fix to a change introduced in 9.0.0 that is required in order to build the library.
 
 ### Test
 
@@ -164,7 +164,7 @@ Development on the Node wrapper may involve changes in either the TypeScript or 
 
     ```bash
     # Run from the root folder of the GLIDE repository
-    npm install eslint-plugin-import@latest  @typescript-eslint/parser @typescript-eslint/eslint-plugin eslint-plugin-tsdoc eslint typescript eslint-plugin-import@latest eslint-config-prettier prettier
+    npm install  @typescript-eslint/parser @typescript-eslint/eslint-plugin eslint-plugin-tsdoc eslint typescript eslint-config-prettier prettier
     npm i
     cd node
     npx eslint . --max-warnings=0

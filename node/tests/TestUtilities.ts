@@ -766,6 +766,24 @@ export async function transactionTest(
     responseData.push(["hset(key4, { [field]: value })", 1]);
     baseTransaction.hscan(key4, "0");
     responseData.push(['hscan(key4, "0")', ["0", [field, value]]]);
+
+    if (gte(version, "7.9.0")) {
+        baseTransaction.hscan(key4, "0", { noValues: false });
+        responseData.push([
+            'hscan(key4, "0", {noValues: false})',
+            ["0", [field, value]],
+        ]);
+        baseTransaction.hscan(key4, "0", {
+            match: "*",
+            count: 20,
+            noValues: true,
+        });
+        responseData.push([
+            'hscan(key4, "0", {match: "*", count: 20, noValues:true})',
+            ["0", [field]],
+        ]);
+    }
+
     baseTransaction.hscan(key4, "0", { match: "*", count: 20 });
     responseData.push([
         'hscan(key4, "0", {match: "*", count: 20})',
@@ -1009,6 +1027,25 @@ export async function transactionTest(
     responseData.push(["zadd(key12, { one: 1, two: 2 })", 2]);
     baseTransaction.zscan(key12, "0");
     responseData.push(['zscan(key12, "0")', ["0", ["one", "1", "two", "2"]]]);
+
+    if (gte(version, "7.9.0")) {
+        baseTransaction.zscan(key12, "0", { noScores: false });
+        responseData.push([
+            'zscan(key12, "0", {noScores: false})',
+            ["0", ["one", "1", "two", "2"]],
+        ]);
+
+        baseTransaction.zscan(key12, "0", {
+            match: "*",
+            count: 20,
+            noScores: true,
+        });
+        responseData.push([
+            'zscan(key12, "0", {match: "*", count: 20, noScores:true})',
+            ["0", ["one", "two"]],
+        ]);
+    }
+
     baseTransaction.zscan(key12, "0", { match: "*", count: 20 });
     responseData.push([
         'zscan(key12, "0", {match: "*", count: 20})',
