@@ -23,6 +23,8 @@ permissions:
 
 jobs:
     load-platform-matrix:
+        env:
+            JAVA_VERSION: "11"
         runs-on: ubuntu-latest
 #        environment: AWS_ACTIONS
         outputs:
