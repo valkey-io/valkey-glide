@@ -1172,6 +1172,9 @@ public class TransactionTests {
         transaction.bitcount("key");
         results.add(Pair.of(BitCount, buildArgs("key")));
 
+        transaction.bitcount("key", 1);
+        results.add(Pair.of(BitCount, buildArgs("key", "1")));
+
         transaction.bitcount("key", 1, 1);
         results.add(Pair.of(BitCount, buildArgs("key", "1", "1")));
 

@@ -5531,6 +5531,8 @@ class CoreCommands(Protocol):
         Examples:
             >>> await client.bitcount("my_key1")
                 2  # The string stored at "my_key1" contains 2 set bits.
+            >>> await client.bitcount("my_key2", OffsetOptions(1))
+                8  # From the second to last bytes of the string stored at "my_key2" there are 8 set bits.
             >>> await client.bitcount("my_key2", OffsetOptions(1, 3))
                 2  # The second to fourth bytes of the string stored at "my_key2" contain 2 set bits.
             >>> await client.bitcount("my_key3", OffsetOptions(1, 1, BitmapIndexType.BIT))

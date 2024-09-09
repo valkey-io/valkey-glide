@@ -5303,6 +5303,26 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Counts the number of set bits (population counting) in a string stored at <code>key</code>. The
+     * offset <code>start</code> is a zero-based index, with <code>0</code> being the first byte of
+     * the list, <code>1</code> being the next byte and so on. This offset can also be a negative
+     * number indicating offsets starting at the end of the list, with <code>-1</code> being the last
+     * byte of the list, <code>-2</code> being the penultimate, and so on.
+     *
+     * @see <a href="https://valkey.io/commands/bitcount/">valkey.io</a> for details.
+     * @param key The key for the string to count the set bits of.
+     * @param start The starting offset byte index.
+     * @return Command Response - The number of set bits in the string byte interval specified by
+     *     <code>start</code> to the last byte. Returns zero if the key is missing as it is treated as
+     *     an empty string.
+     */
+    public <ArgType> T bitcount(@NonNull ArgType key, long start) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(buildCommand(BitCount, newArgsBuilder().add(key).add(start)));
+        return getThis();
+    }
+
+    /**
+     * Counts the number of set bits (population counting) in a string stored at <code>key</code>. The
      * offsets <code>start</code> and <code>end</code> are zero-based indexes, with <code>0</code>
      * being the first element of the list, <code>1</code> being the next element and so on. These
      * offsets can also be negative numbers indicating offsets starting at the end of the list, with
