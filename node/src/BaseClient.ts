@@ -590,7 +590,7 @@ function toProtobufRoute(
             if (split.length !== 2) {
                 throw new RequestError(
                     "No port provided, expected host to be formatted as `{hostname}:{port}`. Received " +
-                        host,
+                    host,
                 );
             }
 
@@ -888,17 +888,17 @@ export class BaseClient {
     ) {
         const message = Array.isArray(command)
             ? command_request.CommandRequest.create({
-                  callbackIdx,
-                  transaction: command_request.Transaction.create({
-                      commands: command,
-                  }),
-              })
+                callbackIdx,
+                transaction: command_request.Transaction.create({
+                    commands: command,
+                }),
+            })
             : command instanceof command_request.Command
-              ? command_request.CommandRequest.create({
+                ? command_request.CommandRequest.create({
                     callbackIdx,
                     singleCommand: command,
                 })
-              : command_request.CommandRequest.create({
+                : command_request.CommandRequest.create({
                     callbackIdx,
                     scriptInvocation: command,
                 });
@@ -1201,7 +1201,7 @@ export class BaseClient {
     }
 
     /**
-     * Returns the substring of the string value stored at `key`, determined by the offsets
+     * Returns the substring of the string value stored at `key`, determined by the byte offsets
      * `start` and `end` (both are inclusive). Negative offsets can be used in order to provide
      * an offset starting from the end of the string. So `-1` means the last character, `-2` the
      * penultimate and so forth. If `key` does not exist, an empty string is returned. If `start`
@@ -1210,8 +1210,8 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/getrange/|valkey.io} for details.
      *
      * @param key - The key of the string.
-     * @param start - The starting offset.
-     * @param end - The ending offset.
+     * @param start - The starting byte offset.
+     * @param end - The ending byte offset.
      * @param options - (Optional) See {@link DecoderOption}.
      * @returns A substring extracted from the value stored at `key`.
      *
@@ -5670,9 +5670,9 @@ export class BaseClient {
         ReadFrom,
         connection_request.ReadFrom
     > = {
-        primary: connection_request.ReadFrom.Primary,
-        preferReplica: connection_request.ReadFrom.PreferReplica,
-    };
+            primary: connection_request.ReadFrom.Primary,
+            preferReplica: connection_request.ReadFrom.PreferReplica,
+        };
 
     /**
      * Returns the number of messages that were successfully acknowledged by the consumer group member of a stream.
@@ -6865,14 +6865,14 @@ export class BaseClient {
     }
 
     /**
-     * Overwrites part of the string stored at `key`, starting at the specified `offset`,
+     * Overwrites part of the string stored at `key`, starting at the specified byte `offset`,
      * for the entire length of `value`. If the `offset` is larger than the current length of the string at `key`,
      * the string is padded with zero bytes to make `offset` fit. Creates the `key` if it doesn't exist.
      *
      * @see {@link https://valkey.io/commands/setrange/|valkey.io} for more details.
      *
      * @param key - The key of the string to update.
-     * @param offset - The position in the string where `value` should be written.
+     * @param offset - The byte position in the string where `value` should be written.
      * @param value - The string written with `offset`.
      * @returns The length of the string stored at `key` after it was modified.
      *
@@ -7070,11 +7070,11 @@ export class BaseClient {
             : connection_request.ReadFrom.Primary;
         const authenticationInfo =
             options.credentials !== undefined &&
-            "password" in options.credentials
+                "password" in options.credentials
                 ? {
-                      password: options.credentials.password,
-                      username: options.credentials.username,
-                  }
+                    password: options.credentials.password,
+                    username: options.credentials.username,
+                }
                 : undefined;
         const protocol = options.protocol as
             | connection_request.ProtocolVersion
