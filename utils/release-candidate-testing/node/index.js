@@ -1,4 +1,4 @@
-import { RedisClient, RedisClusterClient } from "@valkey/valkey-glide";
+import { GlideClient, GlideClusterClient } from "@valkey/valkey-glide";
 import { RedisCluster } from "../../TestUtils.js";
 
 
@@ -66,20 +66,20 @@ async function clusterTests() {
     try {
         console.log("Testing cluster");
         console.log("Creating cluster");
-        let redisCluster = await RedisCluster.createCluster(true,
+        let glideCluster = await GlideClient.createCluster(true,
             3,
             1,
         );
         console.log("Cluster created");
 
         console.log("Connecting to cluster");
-        let addresses = redisCluster.getAddresses().map((address) => { return { host: address[0], port: address[1] } });
-        const client = await RedisClusterClient.createClient({ addresses: addresses });
+        let addresses = glideCluster.getAddresses().map((address) => { return { host: address[0], port: address[1] } });
+        const client = await GlideClusterClient.createClient({ addresses: addresses });
         console.log("Connected to cluster");
 
         await runCommands(client);
 
-        await closeClientAndCluster(client, redisCluster);
+        await closeClientAndCluster(client, glideCluster);
         console.log("Done");
     } catch (error) {
         // Need this part just when running in our self-hosted runner, so if the test fails before closing Clusters we still kill them and clean up
@@ -104,7 +104,7 @@ async function standaloneTests() {
 
         console.log("Connecting to Cluster");
         let addresses = redisCluster.getAddresses().map((address) => { return { host: address[0], port: address[1] } });
-        const client = await RedisClient.createClient({ addresses: addresses });
+        const client = await GlideClient.createClient({ addresses: addresses });
         console.log("Connected to Cluster");
 
         await closeClientAndCluster(client, redisCluster);
