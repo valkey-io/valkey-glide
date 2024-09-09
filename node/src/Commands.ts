@@ -2549,7 +2549,7 @@ export function createBitPos(
     bit: number,
     options?: BitOffsetOptions,
 ): command_request.Command {
-    const args: GlideString[] = [key, bit.toString()];
+    let args: GlideString[] = [key, bit.toString()];
 
     if (options) {
         const optionResults: GlideString[] = joinBitOptions(options);
