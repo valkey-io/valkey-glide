@@ -3845,6 +3845,18 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> bitcount(@NonNull String key, long start) {
+        return commandManager.submitNewCommand(
+                BitCount, new String[] {key, Long.toString(start)}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> bitcount(@NonNull GlideString key, long start) {
+        return commandManager.submitNewCommand(
+                BitCount, new GlideString[] {key, gs(Long.toString(start))}, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> bitcount(@NonNull String key, long start, long end) {
         return commandManager.submitNewCommand(
                 BitCount,
