@@ -357,4 +357,18 @@ type StringCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/lcs/
 	LCS(key1 string, key2 string) (string, error)
+	// GetDel gets the value associated with the given key and deletes the key.
+	//
+	// Parameters:
+	//  key - The key to get and delete.
+	//
+	// Return value:
+	//  If key exists, returns the value of the key as a String and deletes the key.
+	//  If key does not exist, returns an empty string ("").
+	//
+	// For example:
+	//	result, err := client.GetDel("key")
+	//
+	//[valkey.io]: https://valkey.io/commands/getdel/
+	GetDel(key string) (string, error)
 }
