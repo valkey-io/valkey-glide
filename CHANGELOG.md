@@ -1,5 +1,7 @@
 #### Changes
 * Node: Added binary variant for commands which have `Record` as input or output ([#2207](https://github.com/valkey-io/valkey-glide/pull/2207))
+* Node, Python: Rename `stop` to `end` in sorted set queries ([#2214](https://github.com/valkey-io/valkey-glide/pull/2214))
+* Node: Added binary variant to sorted set commands - part 1 ([#2190](https://github.com/valkey-io/valkey-glide/pull/2190))
 * Node: Added binary variant to HSCAN command ([#2240](https://github.com/valkey-io/valkey-glide/pull/2240))
 * Node: replace decoder by DecoderOption and route by RouteOption in API([#2234](https://github.com/valkey-io/valkey-glide/pull/2234/))
 * Node: Added binary variant to sorted set commands ([#2190](https://github.com/valkey-io/valkey-glide/pull/2190), [#2210](https://github.com/valkey-io/valkey-glide/pull/2210))
@@ -20,7 +22,7 @@
 * Java: Added PUBSUB CHANNELS, NUMPAT and NUMSUB commands ([#2105](https://github.com/valkey-io/valkey-glide/pull/2105))
 * Java: Added binary support for custom command ([#2109](https://github.com/valkey-io/valkey-glide/pull/2109))
 * Node: Added SSCAN command ([#2132](https://github.com/valkey-io/valkey-glide/pull/2132))
-* Node: Added HKEYS command ([#2136](https://github.com/aws/glide-for-redis/pull/2136))
+* Node: Added HKEYS command ([#2136](https://github.com/valkey-io/valkey-glide/pull/2136))
 * Node: Added FUNCTION KILL command ([#2114](https://github.com/valkey-io/valkey-glide/pull/2114))
 * Node: Update all commands to use `async` ([#2110](https://github.com/valkey-io/valkey-glide/pull/2110))
 * Node: Added XAUTOCLAIM command ([#2108](https://github.com/valkey-io/valkey-glide/pull/2108))
@@ -101,7 +103,7 @@
 * Node: Added BZPOPMAX & BZPOPMIN command ([#2077](https://github.com/valkey-io/valkey-glide/pull/2077))
 * Node: Added XGROUP CREATECONSUMER & XGROUP DELCONSUMER commands ([#2088](https://github.com/valkey-io/valkey-glide/pull/2088))
 * Node: Added GETEX command ([#2107]((https://github.com/valkey-io/valkey-glide/pull/2107))
-* Node: Added ZINTER and ZUNION commands ([#2146](https://github.com/aws/glide-for-redis/pull/2146))
+* Node: Added ZINTER and ZUNION commands ([#2146](https://github.com/valkey-io/valkey-glide/pull/2146))
 * Node: Added XACK commands ([#2112](https://github.com/valkey-io/valkey-glide/pull/2112))
 * Node: Added XGROUP SETID command ([#2135]((https://github.com/valkey-io/valkey-glide/pull/2135))
 * Node: Added binary variant to string commands ([#2183](https://github.com/valkey-io/valkey-glide/pull/2183))
@@ -116,6 +118,9 @@
 * Node: Fix ZADD bug where command could not be called with only the `changed` optional parameter ([#1995](https://github.com/valkey-io/valkey-glide/pull/1995))
 * Java: `XRange`/`XRevRange` should return `null` instead of `GlideException` when given a negative count ([#1920](https://github.com/valkey-io/valkey-glide/pull/1920))
 * Python: Fix `XClaim` return type to `List[bytes]` instead of `List[TEncodable]` ([#2075](https://github.com/valkey-io/valkey-glide/pull/2075))
+
+### Operational Enhancements
+* CI/CD: Add workflow for automating Maven release ([#2128](https://github.com/valkey-io/valkey-glide/pull/2128))
 
 ## 1.0.0 (2024-07-09)
 

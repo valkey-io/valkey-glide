@@ -706,12 +706,11 @@ describe("GlideClient", () => {
                     libNamePattern: Buffer.from(libName),
                     decoder: Decoder.Bytes,
                 });
-                let expectedDescription = new Map<
-                    GlideString,
-                    GlideString | null
-                >([[Buffer.from(funcName), null]]);
-                let expectedFlags = new Map<GlideString, GlideString[]>([
-                    [Buffer.from(funcName), [Buffer.from("no-writes")]],
+                let expectedDescription = new Map<String, GlideString | null>([
+                    [funcName, null],
+                ]);
+                let expectedFlags = new Map<String, GlideString[]>([
+                    [funcName, [Buffer.from("no-writes")]],
                 ]);
 
                 checkFunctionListResponse(
