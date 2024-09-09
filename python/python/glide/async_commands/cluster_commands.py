@@ -1308,8 +1308,7 @@ class ClusterCommands(CoreCommands):
         See https://valkey.io/commands/script-flush for more details.
 
         Args:
-            mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`. If not specified,
-                the cache will be synchronously flushed.
+            mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
             route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in which
                 case the client will route the command to the nodes defined by `route`. Defaults to None.
 
@@ -1361,6 +1360,8 @@ class ClusterCommands(CoreCommands):
         The script loading, argument preparation, and execution will all be handled internally.
         If the script has not already been loaded, it will be loaded automatically using the `SCRIPT LOAD` command.
         After that, it will be invoked using the `EVALSHA` command.
+
+        When in cluster mode, `key`s must map to the same hash slot.
 
         See https://valkey.io/commands/script-load/ and https://valkey.io/commands/evalsha/ for more details.
 
