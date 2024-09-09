@@ -1,26 +1,26 @@
-#name: Java Prepare Deployment
-#
-#on:
-#    push:
-#        tags:
-#            - "v*.*"
-#    workflow_dispatch:
-#        inputs:
-#            version:
-#                description: "The release version of GLIDE, formatted as *.*.* or *.*.*-rc*"
-#                required: true
-#            maven_publish:
-#                description: "Publish to Maven Central"
-#                required: true
-#                type: boolean
-#
-#concurrency:
-#    group: java-cd-${{ github.head_ref || github.ref }}
-#    cancel-in-progress: true
-#
-#permissions:
-#    id-token: write
-#
+name: Java Prepare Deployment
+
+on:
+    push:
+        tags:
+            - "v*.*"
+    workflow_dispatch:
+        inputs:
+            version:
+                description: "The release version of GLIDE, formatted as *.*.* or *.*.*-rc*"
+                required: true
+            maven_publish:
+                description: "Publish to Maven Central"
+                required: true
+                type: boolean
+
+concurrency:
+    group: java-cd-${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
+
+permissions:
+    id-token: write
+
 jobs:
     load-platform-matrix:
         runs-on: ubuntu-latest
