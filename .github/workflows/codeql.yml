@@ -2,9 +2,19 @@ name: "CodeQL"
 
 on:
     push:
-        branches: ["main"]
+        branches: 
+          - "main"
+          - "v.?[0-9]+.[0-9]+.[0-9]+"
+          - "v.?[0-9]+.[0-9]+"
+          - "v?[0-9]+.[0-9]+.[0-9]+"
+          - "v?[0-9]+.[0-9]+"
     pull_request:
-        branches: ["main"]
+        branches: 
+          - "main"
+          - "v.?[0-9]+.[0-9]+.[0-9]+"
+          - "v.?[0-9]+.[0-9]+"
+          - "v?[0-9]+.[0-9]+.[0-9]+"
+          - "v?[0-9]+.[0-9]+"
     schedule:
         - cron: "37 18 * * 6"
 
@@ -15,13 +25,6 @@ jobs:
         permissions:
             # required for all workflows
             security-events: write
-
-            # required to fetch internal or private CodeQL packs
-            packages: read
-
-            # only required for workflows in private repositories
-            actions: read
-            contents: read
 
         strategy:
             fail-fast: false
