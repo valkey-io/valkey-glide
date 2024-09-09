@@ -1,0 +1,63 @@
+name: "CodeQL"
+
+on:
+    push:
+        branches: 
+          - "main"
+          - "v.?[0-9]+.[0-9]+.[0-9]+"
+          - "v.?[0-9]+.[0-9]+"
+          - "v?[0-9]+.[0-9]+.[0-9]+"
+          - "v?[0-9]+.[0-9]+"
+    pull_request:
+        branches: 
+          - "main"
+          - "v.?[0-9]+.[0-9]+.[0-9]+"
+          - "v.?[0-9]+.[0-9]+"
+          - "v?[0-9]+.[0-9]+.[0-9]+"
+          - "v?[0-9]+.[0-9]+"
+    schedule:
+        - cron: "37 18 * * 6"
+
+jobs:
+    analyze:
+        name: Analyze (${{ matrix.language }})
+        runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'ubuntu-latest' }}
+        permissions:
+            # required for all workflows
+            security-events: write
+
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - language: csharp
+                      build-mode: none
+                    - language: go
+                      build-mode: autobuild
+                    - language: java-kotlin
+                      build-mode: none # This mode only analyzes Java. Set this to 'autobuild' or 'manual' to analyze Kotlin too.
+                    - language: javascript-typescript
+                      build-mode: none
+                    - language: python
+                      build-mode: none
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            # Initializes the CodeQL tools for scanning.
+            - name: Initialize CodeQL
+              uses: github/codeql-action/init@v3
+              with:
+                  languages: ${{ matrix.language }}
+                  build-mode: ${{ matrix.build-mode }}
+                  config-file: .github/codeql/codeql-config.yml
+
+            - if: matrix.build-mode == 'manual'
+              shell: bash
+              run: |
+                  echo 'TODO: build commands for all java and kotlin codes.'
+
+            - name: Perform CodeQL Analysis
+              uses: github/codeql-action/analyze@v3
+              with:
+                  category: "/language:${{matrix.language}}"
