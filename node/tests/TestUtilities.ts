@@ -413,8 +413,8 @@ export function compareMaps(
 export function checkFunctionListResponse(
     response: FunctionListResponse,
     libName: GlideString,
-    functionDescriptions: Map<String, GlideString | null>,
-    functionFlags: Map<String, GlideString[]>,
+    functionDescriptions: Map<string, GlideString | null>,
+    functionFlags: Map<string, GlideString[]>,
     libCode?: GlideString,
 ) {
     expect(response.length).toBeGreaterThan(0);

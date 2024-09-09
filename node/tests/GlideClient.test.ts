@@ -706,10 +706,10 @@ describe("GlideClient", () => {
                     libNamePattern: Buffer.from(libName),
                     decoder: Decoder.Bytes,
                 });
-                let expectedDescription = new Map<String, GlideString | null>([
+                let expectedDescription = new Map<string, GlideString | null>([
                     [funcName, null],
                 ]);
-                let expectedFlags = new Map<String, GlideString[]>([
+                let expectedFlags = new Map<string, GlideString[]>([
                     [funcName, [Buffer.from("no-writes")]],
                 ]);
 
