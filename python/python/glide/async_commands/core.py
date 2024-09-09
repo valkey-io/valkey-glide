@@ -5621,7 +5621,7 @@ class CoreCommands(Protocol):
             >>> await client.set("key1", "A1")  # "A1" has binary value 01000001 00110001
             >>> await client.bitpos("key1", 1)
                 1  # The first occurrence of bit value 1 in the string stored at "key1" is at the second position.
-            >>> await client.bitpos("key1", 1, -1)
+            >>> await client.bitpos("key1", 1, OffsetOptions(-1))
                 10  # The first occurrence of bit value 1, starting at the last byte in the string stored at "key1", is at the eleventh position.
 
             >>> await client.set("key2", "A12")  # "A12" has binary value 01000001 00110001 00110010
@@ -5630,7 +5630,7 @@ class CoreCommands(Protocol):
             >>> await client.bitpos("key2", 1, OffsetOptions(2, 9, BitmapIndexType.BIT))
                 7  # The first occurrence of bit value 1 in the third to tenth bits of the string stored at "key1" is at the eighth position.
         """
-        args: List[TEncodable] = [key, bit]
+        args: List[TEncodable] = [key, str(bit)]
         if options is not None:
             args.extend(options.to_args())
 

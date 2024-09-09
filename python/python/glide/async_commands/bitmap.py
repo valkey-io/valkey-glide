@@ -260,8 +260,8 @@ class BitOverflowControl(Enum):
 
     WRAP = "WRAP"
     """
-    Performs modulo when overflows occur with unsigned encoding. When overflows occur with signed encoding, the value 
-    restarts at the most negative value. When underflows occur with signed encoding, the value restarts at the most 
+    Performs modulo when overflows occur with unsigned encoding. When overflows occur with signed encoding, the value
+    restarts at the most negative value. When underflows occur with signed encoding, the value restarts at the most
     positive value.
     """
     SAT = "SAT"
