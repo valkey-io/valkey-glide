@@ -10,10 +10,13 @@ import {
     DecoderOption,
     GlideRecord,
     GlideReturnType,
-    GlideString,
+    GlideString, // eslint-disable-line @typescript-eslint/no-unused-vars
+    ObjectType,
     PubSubMsg,
     convertGlideRecordToRecord,
 } from "./BaseClient";
+
+import { ClusterScanCursor } from "glide-rs";
 import {
     FlushMode,
     FunctionListOptions,
@@ -56,9 +59,11 @@ import {
     createScriptFlush,
     createScriptKill,
     createTime,
-    createUnWatch,
+    createUnWatch
 } from "./Commands";
-import { connection_request } from "./ProtobufMessage";
+import { ClosingError } from "./Errors";
+import { Logger } from "./Logger";
+import { command_request, connection_request } from "./ProtobufMessage";
 import { ClusterTransaction } from "./Transaction";
 
 /** An extension to command option types with {@link Routes}. */
@@ -257,6 +262,22 @@ export type SingleNodeRoute =
     | SlotKeyTypes
     | RouteByAddress;
 
+
+export type ClusterScanOptions = {
+    /**
+     * A pattern to match keys against.
+    */
+    match?: GlideString;
+    /**
+     * The number of keys to return in a single iteration.
+    */
+    count?: number;
+    /**
+     * The type of object to scan for.
+     */
+    type?: ObjectType;
+};
+
 /**
  * Client used for connection to cluster servers.
  *
@@ -311,6 +332,122 @@ export class GlideClusterClient extends BaseClient {
             connectedSocket,
             (socket, options) => new GlideClusterClient(socket, options),
         );
+    }
+
+    /**
+       * @internal
+       */
+    protected createClusterScanPromise(
+        cursor: ClusterScanCursor,
+        options?: ClusterScanOptions & DecoderOption
+    ): Promise<[ClusterScanCursor, GlideString[]]> {
+        // separate decoder option from scan options
+        const { decoder, ...scanOptions } = options || {};
+        const stringDecoder: boolean =
+            (decoder ?? this.defaultDecoder) === Decoder.String;
+        if (this.isClosed) {
+            throw new ClosingError(
+                "Unable to execute requests; the client is closed. Please create a new client."
+            );
+        }
+        const cursorId = cursor.getCursor();
+        // convert string to buffer, if it is buffer or null nothing will happen
+        typeof options?.match == "string" ? options.match = Buffer.from(options.match) : null;
+        const command = command_request.ClusterScan.create({ cursor: cursorId, ...options });
+
+        return new Promise((resolve, reject) => {
+            const callbackIndex = this.getCallbackIndex();
+            this.promiseCallbackFunctions[callbackIndex] = [
+                (resolveAns) => {
+                    try {
+                        resolveAns = this.getValueToResolve(resolveAns, stringDecoder);
+                        resolveAns[0] = new ClusterScanCursor(resolveAns[0]);
+                        resolve(resolveAns);
+                    } catch (err) {
+                        Logger.log(
+                            "error",
+                            "Decoder",
+                            `Decoding error: '${err}'`,
+                        );
+                        reject(err);
+                    }
+                },
+                reject,
+            ];
+            this.writeOrBufferCommandRequest(callbackIndex, command);
+        });
+    }
+
+    /**
+     * Incrementally iterates over the keys in the Cluster.
+     * 
+     * This command is similar to the `SCAN` command but designed for Cluster environments.
+     * It uses a {@link ClusterScanCursor} object to manage iterations.
+     * 
+     * For each iteration, use the new cursor object to continue the scan.
+     * Using the same cursor object for multiple iterations may result in unexpected behavior.
+     * 
+     * For more information about the Cluster Scan implementation, see
+     * {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan | Cluster Scan}.
+     * 
+     * This method can iterate over all keys in the database from the start of the scan until it ends.
+     * The same key may be returned in multiple scan iterations.
+     * 
+     * @see {@link https://valkey.io/commands/scan/ | valkey.io} for more details.
+     * 
+     * @param cursor - The cursor object that wraps the scan state.
+     *   To start a new scan, create a new empty `ClusterScanCursor` using {@link ClusterScanCursor}.
+     * @param options - The scan options.
+     * @param options.match - A pattern to match keys against.
+     * @param options.count - The number of keys to return in a single iteration.
+     *   The actual number returned can vary. This parameter serves as a hint to the server.
+     *   Default is 10.
+     * @param options.type - The type of object to scan for.
+     * @param options.decoder - (Optional) The decoder to use for the response, see {@link DecoderOption}.
+     * 
+     * @returns A Promise resolving to an array containing the next cursor and an array of keys,
+     *   formatted as [`ClusterScanCursor`, `string[]`].
+     * 
+     * @example
+     * ```typescript
+     * // Iterate over all keys in the cluster
+     * await client.mset([{key: "key1", value: "value1"}, {key: "key2", value: "value2"}, {key: "key3", value: "value3"}]);
+     * let cursor = new ClusterScanCursor();
+     * const allKeys: GlideString[] = [];
+     * let keys: GlideString[] = [];
+     * while (!cursor.isFinished()) {
+     *   [cursor, keys] = await client.scan(cursor, { count: 10 });
+     *   allKeys.push(...keys);
+     * }
+     * console.log(allKeys); // ["key1", "key2", "key3"]
+     * 
+     * // Iterate over keys matching a pattern
+     * await client.mset([{key: "key1", value: "value1"}, {key: "key2", value: "value2"}, {key: "notMyKey", value: "value3"}, {key: "somethingElse", value: "value4"}]);
+     * let cursor = new ClusterScanCursor();
+     * const matchedKeys: string[] = [];
+     * while (!cursor.isFinished()) {
+     *   const [cursor, keys] = await client.scan(cursor, { match: "*key*", count: 10 });
+     *   matchedKeys.push(...keys);
+     * }
+     * console.log(matchedKeys); // ["key1", "key2", "notMyKey"]
+     * 
+     * // Iterate over keys of a specific type
+     * await client.mset([{key: "key1", value: "value1"}, {key: "key2", value: "value2"}, {key: "key3", value: "value3"}]);
+     * await client.sadd("thisIsASet", ["value4"]);
+     * let cursor = new ClusterScanCursor();
+     * const stringKeys: string[] = [];
+     * while (!cursor.isFinished()) {
+     *   const [cursor, keys] = await client.scan(cursor, { type: ObjectType.STRING });
+     *   stringKeys.push(...keys);
+     * }
+     * console.log(stringKeys); // ["key1", "key2", "key3"]
+     * ```
+     */
+    public async scan(
+        cursor: ClusterScanCursor,
+        options?: ClusterScanOptions & DecoderOption
+    ): Promise<[ClusterScanCursor, GlideString[]]> {
+        return this.createClusterScanPromise(cursor, options);
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
@@ -931,14 +1068,14 @@ export class GlideClusterClient extends BaseClient {
             res.length == 0
                 ? (res as FunctionListResponse) // no libs
                 : ((Array.isArray(res[0])
-                      ? // single node response
-                        ((res as GlideRecord<unknown>[]).map(
-                            convertGlideRecordToRecord,
-                        ) as FunctionListResponse)
-                      : // multi node response
-                        convertGlideRecordToRecord(
-                            res as GlideRecord<unknown>,
-                        )) as ClusterResponse<FunctionListResponse>),
+                    ? // single node response
+                    ((res as GlideRecord<unknown>[]).map(
+                        convertGlideRecordToRecord,
+                    ) as FunctionListResponse)
+                    : // multi node response
+                    convertGlideRecordToRecord(
+                        res as GlideRecord<unknown>,
+                    )) as ClusterResponse<FunctionListResponse>),
         );
     }
 

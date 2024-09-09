@@ -459,7 +459,7 @@ export function convertRecordToGlideRecord<T>(
  * Our purpose in creating PointerResponse type is to mark when response is of number/long pointer response type.
  * Consequently, when the response is returned, we can check whether it is instanceof the PointerResponse type and pass it to the Rust core function with the proper parameters.
  */
-class PointerResponse {
+export class PointerResponse {
     pointer: number | Long | null;
     // As Javascript does not support 64-bit integers,
     // we split the Rust u64 pointer into two u32 integers (high and low) and build it again when we call value_from_split_pointer, the Rust function.
@@ -575,6 +575,16 @@ export interface ScriptOptions {
     args?: GlideString[];
 }
 
+// Enums of Valkey data types
+export enum ObjectType {
+    STRING = "String",
+    LIST = "List",
+    SET = "Set",
+    ZSET = "ZSet",
+    HASH = "Hash",
+    STREAM = "Stream",
+}
+
 function getRequestErrorClass(
     type: response.RequestErrorType | null | undefined,
 ): typeof RequestError {
@@ -657,7 +667,7 @@ function toProtobufRoute(
             if (split.length !== 2) {
                 throw new RequestError(
                     "No port provided, expected host to be formatted as `{hostname}:{port}`. Received " +
-                        host,
+                    host,
                 );
             }
 
@@ -686,7 +696,7 @@ export type WritePromiseOptions = RouteOption & DecoderOption;
 
 export class BaseClient {
     private socket: net.Socket;
-    private readonly promiseCallbackFunctions: [
+    protected readonly promiseCallbackFunctions: [
         PromiseFunction,
         ErrorFunction,
     ][] = [];
@@ -695,7 +705,7 @@ export class BaseClient {
     private writeInProgress = false;
     private remainingReadData: Uint8Array | undefined;
     private readonly requestTimeout: number; // Timeout in milliseconds
-    private isClosed = false;
+    protected isClosed = false;
     protected defaultDecoder = Decoder.String;
     private readonly pubsubFutures: [PromiseFunction, ErrorFunction][] = [];
     private pendingPushNotification: response.Response[] = [];
@@ -867,7 +877,7 @@ export class BaseClient {
         this.defaultDecoder = options?.defaultDecoder ?? Decoder.String;
     }
 
-    private getCallbackIndex(): number {
+    protected getCallbackIndex(): number {
         return (
             this.availableCallbackSlots.pop() ??
             this.promiseCallbackFunctions.length
@@ -907,28 +917,12 @@ export class BaseClient {
                 "Unable to execute requests; the client is closed. Please create a new client.",
             );
         }
-
         return new Promise((resolve, reject) => {
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [
                 (resolveAns: T) => {
                     try {
-                        if (resolveAns instanceof PointerResponse) {
-                            if (typeof resolveAns === "number") {
-                                resolveAns = valueFromSplitPointer(
-                                    0,
-                                    resolveAns,
-                                    stringDecoder,
-                                ) as T;
-                            } else {
-                                resolveAns = valueFromSplitPointer(
-                                    resolveAns.high!,
-                                    resolveAns.low!,
-                                    stringDecoder,
-                                ) as T;
-                            }
-                        }
-
+                        resolveAns = this.getValueToResolve(resolveAns, stringDecoder);
                         resolve(resolveAns);
                     } catch (err) {
                         Logger.log(
@@ -944,31 +938,53 @@ export class BaseClient {
             this.writeOrBufferCommandRequest(callbackIndex, command, route);
         });
     }
+    protected getValueToResolve<T>(resolveAns: T, decoder: boolean): T {
+        if (resolveAns instanceof PointerResponse) {
+            if (typeof resolveAns === "number") {
+                resolveAns = valueFromSplitPointer(
+                    0,
+                    resolveAns,
+                    decoder,
+                ) as T;
+            } else {
+                resolveAns = valueFromSplitPointer(
+                    resolveAns.high!,
+                    resolveAns.low!,
+                    decoder,
+                ) as T;
+            }
 
-    private writeOrBufferCommandRequest(
+        }
+        return resolveAns;
+    }
+    protected writeOrBufferCommandRequest(
         callbackIdx: number,
         command:
             | command_request.Command
             | command_request.Command[]
-            | command_request.ScriptInvocation,
+            | command_request.ScriptInvocation | command_request.ClusterScan,
         route?: command_request.Routes,
     ) {
         const message = Array.isArray(command)
             ? command_request.CommandRequest.create({
-                  callbackIdx,
-                  transaction: command_request.Transaction.create({
-                      commands: command,
-                  }),
-              })
+                callbackIdx,
+                transaction: command_request.Transaction.create({
+                    commands: command,
+                }),
+            })
             : command instanceof command_request.Command
-              ? command_request.CommandRequest.create({
+                ? command_request.CommandRequest.create({
                     callbackIdx,
                     singleCommand: command,
-                })
-              : command_request.CommandRequest.create({
-                    callbackIdx,
-                    scriptInvocation: command,
-                });
+                }) : command instanceof command_request.ClusterScan ?
+                    command_request.CommandRequest.create({
+                        callbackIdx,
+                        clusterScan: command,
+                    })
+                    : command_request.CommandRequest.create({
+                        callbackIdx,
+                        scriptInvocation: command,
+                    });
         message.route = route;
 
         this.writeOrBufferRequest(
@@ -5902,9 +5918,9 @@ export class BaseClient {
         ReadFrom,
         connection_request.ReadFrom
     > = {
-        primary: connection_request.ReadFrom.Primary,
-        preferReplica: connection_request.ReadFrom.PreferReplica,
-    };
+            primary: connection_request.ReadFrom.Primary,
+            preferReplica: connection_request.ReadFrom.PreferReplica,
+        };
 
     /**
      * Returns the number of messages that were successfully acknowledged by the consumer group member of a stream.
@@ -7452,11 +7468,11 @@ export class BaseClient {
             : connection_request.ReadFrom.Primary;
         const authenticationInfo =
             options.credentials !== undefined &&
-            "password" in options.credentials
+                "password" in options.credentials
                 ? {
-                      password: options.credentials.password,
-                      username: options.credentials.username,
-                  }
+                    password: options.credentials.password,
+                    username: options.credentials.username,
+                }
                 : undefined;
         const protocol = options.protocol as
             | connection_request.ProtocolVersion
