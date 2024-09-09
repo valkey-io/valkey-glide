@@ -8584,6 +8584,42 @@ export function runBaseTests(config: {
                         }),
                     ).rejects.toThrow(RequestError);
                 }
+
+                if (cluster.checkIfServerVersionLessThan("7.9.0")) {
+                    await expect(
+                        client.bitcount(key1, {
+                            start: 2,
+                        }),
+                    ).rejects.toThrow();
+                } else {
+                    expect(
+                        await client.bitcount(key1, {
+                            start: 0,
+                        }),
+                    ).toEqual(26);
+                    expect(
+                        await client.bitcount(key1, {
+                            start: 5,
+                        }),
+                    ).toEqual(4);
+                    expect(
+                        await client.bitcount(key1, {
+                            start: 80,
+                        }),
+                    ).toEqual(0);
+                    expect(
+                        await client.bitcount(uuidv4(), {
+                            start: 80,
+                        }),
+                    ).toEqual(0);
+
+                    // key exists, but it is not a string
+                    await expect(
+                        client.bitcount(key2, {
+                            start: 1,
+                        }),
+                    ).rejects.toThrow(RequestError);
+                }
             }, protocol);
         },
         config.timeout,

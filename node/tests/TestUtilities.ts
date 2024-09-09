@@ -1370,6 +1370,15 @@ export async function transactionTest(
         ]);
     }
 
+    if (gte(version, "7.9.0")) {
+        baseTransaction.set(key17, "foobar");
+        responseData.push(['set(key17, "foobar")', "OK"]);
+        baseTransaction.bitcount(key17, {
+            start: 0,
+        });
+        responseData.push(["bitcount(key17, {start:0 }", 26]);
+    }
+
     baseTransaction.bitfield(key17, [
         new BitFieldSet(
             new UnsignedEncoding(10),
