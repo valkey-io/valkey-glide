@@ -250,12 +250,13 @@ import {
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
 type ErrorFunction = (error: RedisError) => void;
+/* eslint @typescript-eslint/consistent-indexed-object-style: off,  @typescript-eslint/consistent-type-definitions: off */
 export type ReturnTypeRecord = { [key: string]: ReturnType };
 export type ReturnTypeMap = Map<string, ReturnType>;
-export type ReturnTypeAttribute = {
+export interface ReturnTypeAttribute {
     value: ReturnType;
     attributes: ReturnTypeRecord;
-};
+}
 export enum ProtocolVersion {
     /** Use RESP2 to communicate with the server nodes. */
     RESP2 = connection_request.ProtocolVersion.RESP2,
@@ -296,13 +297,13 @@ export enum Decoder {
 }
 
 /** An extension to command option types with {@link Decoder}. */
-export type DecoderOption = {
+export interface DecoderOption {
     /**
      * {@link Decoder} type which defines how to handle the response.
      * If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      */
     decoder?: Decoder;
-};
+}
 
 /** A replacement for `Record<GlideString, T>` - array of key-value pairs. */
 export type GlideRecord<T> = {
@@ -411,7 +412,7 @@ class PointerResponse {
 }
 
 /** Represents the credentials for connecting to a server. */
-export type RedisCredentials = {
+export interface RedisCredentials {
     /**
      * The username that will be used for authenticating connections to the Valkey servers.
      * If not supplied, "default" will be used.
@@ -421,7 +422,7 @@ export type RedisCredentials = {
      * The password that will be used for authenticating connections to the Valkey servers.
      */
     password: string;
-};
+}
 
 /** Represents the client's read from strategy. */
 export type ReadFrom =
@@ -434,7 +435,7 @@ export type ReadFrom =
 /**
  * Configuration settings for creating a client. Shared settings for standalone and cluster clients.
  */
-export type BaseClientConfiguration = {
+export interface BaseClientConfiguration {
     /**
      * DNS Addresses and ports of known nodes in the cluster.
      * If the server is in cluster mode the list can be partial, as the client will attempt to map out the cluster and find all nodes.
@@ -495,9 +496,9 @@ export type BaseClientConfiguration = {
      * If not set, 'Decoder.String' will be used.
      */
     defaultDecoder?: Decoder;
-};
+}
 
-export type ScriptOptions = {
+export interface ScriptOptions {
     /**
      * The keys that are used in the script.
      */
@@ -506,7 +507,7 @@ export type ScriptOptions = {
      * The arguments for the script.
      */
     args?: GlideString[];
-};
+}
 
 function getRequestErrorClass(
     type: response.RequestErrorType | null | undefined,
@@ -604,11 +605,11 @@ function toProtobufRoute(
     }
 }
 
-export type PubSubMsg = {
+export interface PubSubMsg {
     message: string;
     channel: string;
     pattern?: string | null;
-};
+}
 
 /**
  * @internal
@@ -4234,7 +4235,7 @@ export class BaseClient {
         destination: GlideString,
         source: GlideString,
         rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
-        reverse: boolean = false,
+        reverse = false,
     ): Promise<number> {
         return this.createWritePromise(
             createZRangeStore(destination, source, rangeQuery, reverse),
