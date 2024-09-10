@@ -3213,6 +3213,33 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void scriptShow_test(BaseClient client) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0"));
+
+        String code = "return '" + UUID.randomUUID().toString().substring(0, 5) + "'";
+        Script script = new Script(code, false);
+
+        // Load the script
+        client.invokeScript(script).get();
+
+        // Get the SHA1 digest of the script
+        String sha1 = script.getHash();
+
+        // Test with String
+        assertEquals(code, client.scriptShow(sha1).get());
+
+        // Test with GlideString
+        assertEquals(gs(code), client.scriptShow(gs(sha1)).get());
+
+        // Test with non-existing SHA1
+        String nonExistingSha1 = UUID.randomUUID().toString();
+        assertThrows(ExecutionException.class, () -> client.scriptShow(nonExistingSha1).get());
+        assertThrows(ExecutionException.class, () -> client.scriptShow(gs(nonExistingSha1)).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void zadd_and_zaddIncr(BaseClient client) {
         String key = UUID.randomUUID().toString();
         Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
