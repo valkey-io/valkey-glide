@@ -324,8 +324,8 @@ describe("SocketConnectionInternals", () => {
                 expect(
                     isGlideRecord(result)
                         ? convertGlideRecordToRecord(
-                            result as unknown as GlideRecord<unknown>,
-                        )
+                              result as unknown as GlideRecord<unknown>,
+                          )
                         : result,
                 ).toEqual(expected);
             });
@@ -727,8 +727,8 @@ describe("SocketConnectionInternals", () => {
                 } else {
                     throw new Error(
                         "unexpected command: [" +
-                        request.singleCommand!.argsArray!.args!.at(0) +
-                        "]",
+                            request.singleCommand!.argsArray!.args!.at(0) +
+                            "]",
                     );
                 }
 
