@@ -3,7 +3,7 @@ package glide.benchmarks.clients;
 
 import glide.benchmarks.utils.ConnectionSettings;
 
-/** A Redis client interface */
+/** A Valkey client interface */
 public interface Client {
     void connectToValkey(ConnectionSettings connectionSettings);
 
