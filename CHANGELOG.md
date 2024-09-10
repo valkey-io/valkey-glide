@@ -25,7 +25,7 @@
 * Node: Added XREADGROUP command ([#2124](https://github.com/valkey-io/valkey-glide/pull/2124))
 * Node: Added XINFO GROUPS command ([#2122](https://github.com/valkey-io/valkey-glide/pull/2122))
 * Java: Added PUBSUB CHANNELS, NUMPAT and NUMSUB commands ([#2105](https://github.com/valkey-io/valkey-glide/pull/2105))
-* Java: Added PUBSUB SHARDCHANNELS command ([#2261](https://github.com/valkey-io/valkey-glide/pull/2261))
+* Java: Added PUBSUB SHARDCHANNELS command ([#2265](https://github.com/valkey-io/valkey-glide/pull/2265))
 * Java: Added binary support for custom command ([#2109](https://github.com/valkey-io/valkey-glide/pull/2109))
 * Node: Added SSCAN command ([#2132](https://github.com/valkey-io/valkey-glide/pull/2132))
 * Node: Added HKEYS command ([#2136](https://github.com/valkey-io/valkey-glide/pull/2136))

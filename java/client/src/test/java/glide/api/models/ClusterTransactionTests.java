@@ -35,6 +35,9 @@ public class ClusterTransactionTests {
         transaction.pubsubShardChannels();
         results.add(Pair.of(PubSubSChannels, buildArgs()));
 
+        transaction.pubsubShardChannels("test*");
+        results.add(Pair.of(PubSubSChannels, buildArgs("test*")));
+
         transaction.sortReadOnly(
                 "key1",
                 SortClusterOptions.builder()

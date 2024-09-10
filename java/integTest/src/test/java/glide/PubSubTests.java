@@ -1470,13 +1470,12 @@ public class PubSubTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest(name = "standalone = {0}")
-    @ValueSource(booleans = {false})
-    public void pubsub_shard_channels(boolean standalone) {
+    @Test
+    public void pubsub_shard_channels() {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         // no channels exists yet
-        GlideClusterClient client = (GlideClusterClient) createClient(standalone);
+        GlideClusterClient client = (GlideClusterClient) createClient(false);
         assertEquals(0, client.pubsubChannels().get().length);
         assertEquals(0, client.pubsubChannelsBinary().get().length);
         assertEquals(0, client.pubsubChannels("**").get().length);
@@ -1491,7 +1490,7 @@ public class PubSubTests {
                         channels.stream().map(GlideString::gs).collect(Collectors.toSet()));
 
         GlideClusterClient listener =
-                (GlideClusterClient) createClientWithSubscriptions(standalone, subscriptions);
+                (GlideClusterClient) createClientWithSubscriptions(false, subscriptions);
         clients.addAll(List.of(client, listener));
 
         // test without pattern
