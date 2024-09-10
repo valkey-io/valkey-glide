@@ -141,8 +141,6 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
     /**
      * Lists the currently active shard channels.
      *
-     * @apiNote When in cluster mode, the command is routed to all nodes, and aggregates the response
-     *     into a single array.
      * @see <a href="https://valkey.io/commands/pubsub-shardchannels/">valkey.io</a> for details.
      * @return Command response - An <code>Array</code> of all active shard channels.
      */
@@ -156,8 +154,6 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type *
      *     will throw {@link IllegalArgumentException}.
-     * @apiNote When in cluster mode, the command is routed to all nodes, and aggregates the response
-     *     into a single array.
      * @see <a href="https://valkey.io/commands/pubsub-shardchannels/">valkey.io</a> for details.
      * @param pattern A glob-style pattern to match active shard channels.
      * @return Command response - An <code>Array</code> of all active shard channels.
