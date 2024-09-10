@@ -308,6 +308,45 @@ export async function waitForNotBusy(client: GlideClusterClient | GlideClient) {
 }
 
 /**
+ * Create a lua script which runs an endless loop up to timeout sec.
+ * Execution takes at least 5 sec regardless of the timeout
+ */
+export function createLongRunningLuaScript(
+    timeout: number,
+    set: boolean,
+): string {
+    const script =
+        (set ? "redis.call('SET', KEYS[1], 'value')\n" : "") +
+        " local started = tonumber(redis.pcall('time')[1])\n" +
+        " while (true) do\n" +
+        "  local now = tonumber(redis.pcall('time')[1])\n" +
+        "   if now > started + $timeout then\n" +
+        "     return 'Timed out $timeout sec'\n" +
+        "   end\n" +
+        " end\n";
+
+    return script.replaceAll("$timeout", timeout.toString());
+}
+
+export async function waitForScriptNotBusy(
+    client: GlideClusterClient | GlideClient,
+) {
+    // If function wasn't killed, and it didn't time out - it blocks the server and cause rest test to fail.
+    let isBusy = true;
+
+    do {
+        try {
+            await client.scriptKill();
+        } catch (err) {
+            // should throw `notbusy` error, because the function should be killed before
+            if ((err as Error).message.toLowerCase().includes("notbusy")) {
+                isBusy = false;
+            }
+        }
+    } while (isBusy);
+}
+
+/**
  * Parses the command-line arguments passed to the Node.js process.
  *
  * @returns Parsed command-line arguments.

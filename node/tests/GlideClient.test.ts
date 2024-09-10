@@ -18,6 +18,7 @@ import {
     HashDataType,
     ProtocolVersion,
     RequestError,
+    Script,
     Transaction,
 } from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
@@ -32,6 +33,7 @@ import {
     checkFunctionListResponse,
     checkFunctionStatsResponse,
     convertStringArrayToBuffer,
+    createLongRunningLuaScript,
     createLuaLibWithLongRunningFunction,
     DumpAndRestureTest,
     encodableTransactionTest,
@@ -44,6 +46,7 @@ import {
     transactionTest,
     validateTransactionResponse,
     waitForNotBusy,
+    waitForScriptNotBusy,
 } from "./TestUtilities";
 
 const TIMEOUT = 50000;
@@ -1609,6 +1612,133 @@ describe("GlideClient", () => {
             client.close();
         },
         TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "script kill unkillable test_%p",
+        async (protocol) => {
+            const config = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+                { requestTimeout: 10000 },
+            );
+            const client1 = await GlideClient.createClient(config);
+            const client2 = await GlideClient.createClient(config);
+
+            // Verify that script kill raises an error when no script is running
+            await expect(client1.scriptKill()).rejects.toThrow(
+                "No scripts in execution right now",
+            );
+
+            // Create a long-running script
+            let longScript = new Script(createLongRunningLuaScript(5, true));
+            let promise = null;
+
+            try {
+                // call the script without await
+                promise = client2.invokeScript(longScript, {
+                    keys: ["{key}-" + uuidv4()],
+                });
+
+                let foundUnkillable = false;
+                let timeout = 4000;
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                while (timeout >= 0) {
+                    try {
+                        // keep trying to kill until we get an "OK"
+                        await client1.scriptKill();
+                    } catch (err) {
+                        // a RequestError may occur if the script is not yet running
+                        // sleep and try again
+                        if (
+                            (err as Error).message
+                                .toLowerCase()
+                                .includes("unkillable")
+                        ) {
+                            foundUnkillable = true;
+                            break;
+                        }
+                    }
+
+                    await new Promise((resolve) => setTimeout(resolve, 500));
+                    timeout -= 500;
+                }
+
+                expect(foundUnkillable).toBeTruthy();
+            } finally {
+                // If script wasn't killed, and it didn't time out - it blocks the server and cause the
+                // test to fail. Wait for the script to complete (we cannot kill it)
+                expect(await promise).toContain("Timed out");
+            }
+            client1.close();
+            client2.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "script kill killable test_%p",
+        async (protocol) => {
+            const config = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+                { requestTimeout: 10000 },
+            );
+            const client1 = await GlideClient.createClient(config);
+            const client2 = await GlideClient.createClient(config);
+
+            try {
+                // Verify that script kill raises an error when no script is running
+                await expect(client1.scriptKill()).rejects.toThrow(
+                    "No scripts in execution right now",
+                );
+
+                // Create a long-running script
+                let longScript = new Script(
+                    createLongRunningLuaScript(5, false),
+                );
+
+                try {
+                    // call the script without await
+                    const promise = client2
+                        .invokeScript(longScript)
+                        .catch((e) =>
+                            expect((e as Error).message).toContain(
+                                "Script killed",
+                            ),
+                        );
+
+                    let killed = false;
+                    let timeout = 4000;
+                    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                    while (timeout >= 0) {
+                        try {
+                            expect(await client1.scriptKill()).toEqual("OK");
+                            killed = true;
+                            break;
+                        } catch {
+                            // do nothing
+                        }
+
+                        await new Promise((resolve) =>
+                            setTimeout(resolve, 500),
+                        );
+                        timeout -= 500;
+                    }
+
+                    expect(killed).toBeTruthy();
+                    await promise;
+                } finally {
+                    await waitForScriptNotBusy(client1);
+                }
+            } finally {
+                expect(await client1.scriptFlush()).toEqual("OK");
+                client1.close();
+                client2.close();
+            }
+        },
     );
 
     runBaseTests({

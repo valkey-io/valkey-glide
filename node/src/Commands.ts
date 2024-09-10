@@ -4060,3 +4060,28 @@ export function createXGroupSetid(
 
     return createCommand(RequestType.XGroupSetId, args);
 }
+
+/**
+ * @internal
+ */
+export function createScriptExists(
+    sha1s: GlideString[],
+): command_request.Command {
+    return createCommand(RequestType.ScriptExists, sha1s);
+}
+
+/**
+ * @internal
+ */
+export function createScriptFlush(mode?: FlushMode): command_request.Command {
+    if (mode) {
+        return createCommand(RequestType.ScriptFlush, [mode.toString()]);
+    } else {
+        return createCommand(RequestType.ScriptFlush, []);
+    }
+}
+
+/** @internal */
+export function createScriptKill(): command_request.Command {
+    return createCommand(RequestType.ScriptKill, []);
+}

@@ -52,6 +52,9 @@ import {
     createPublish,
     createPubsubShardChannels,
     createRandomKey,
+    createScriptExists,
+    createScriptFlush,
+    createScriptKill,
     createSort,
     createSortReadOnly,
     createTime,
@@ -1341,6 +1344,77 @@ export class GlideClusterClient extends BaseClient {
      */
     public async unwatch(options?: RouteOption): Promise<"OK"> {
         return this.createWritePromise(createUnWatch(), {
+            decoder: Decoder.String,
+            ...options,
+        });
+    }
+
+    /**
+     * Check existence of scripts in the script cache by their SHA1 digest.
+     *
+     * @see {@link https://valkey.io/commands/script-exists/|valkey.io} for more details.
+     *
+     * @param sha1s - List of SHA1 digests of the scripts to check.
+     * @param options - (Optional) See {@link RouteOption}.
+     * @returns A list of boolean values indicating the existence of each script.
+     *
+     * @example
+     * ```typescript
+     * console result = await client.scriptExists(["sha1_digest1", "sha1_digest2"]);
+     * console.log(result); // Output: [True, False]
+     * ```
+     */
+    public async scriptExists(
+        sha1s: GlideString[],
+        options?: RouteOption,
+    ): Promise<ClusterResponse<boolean[]>> {
+        return this.createWritePromise(createScriptExists(sha1s), options);
+    }
+
+    /**
+     * Flush the Lua scripts cache.
+     *
+     * @see {@link https://valkey.io/commands/script-flush/|valkey.io} for more details.
+     *
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `mode`: the flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * - (Optional) `route`: see {@link RouteOption}.
+     * @returns A simple `"OK"` response.
+     *
+     * @example
+     * ```typescript
+     * console result = await client.scriptFlush(FlushMode.SYNC);
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public async scriptFlush(
+        options?: {
+            mode?: FlushMode;
+        } & RouteOption,
+    ): Promise<"OK"> {
+        return this.createWritePromise(createScriptFlush(options?.mode), {
+            decoder: Decoder.String,
+            ...options,
+        });
+    }
+
+    /**
+     * Kill the currently executing Lua script, assuming no write operation was yet performed by the script.
+     *
+     * @see {@link https://valkey.io/commands/script-kill/|valkey.io} for more details.
+     * @remarks The command is routed to all nodes, and aggregates the response to a single array.
+     *
+     * @param options - (Optional) See {@link RouteOption}.
+     * @returns A simple `"OK"` response.
+     *
+     * @example
+     * ```typescript
+     * console result = await client.scriptKill();
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public async scriptKill(options?: RouteOption): Promise<"OK"> {
+        return this.createWritePromise(createScriptKill(), {
             decoder: Decoder.String,
             ...options,
         });

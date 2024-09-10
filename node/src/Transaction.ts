@@ -4267,7 +4267,7 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      *
      * @param channels - The list of shard channels to query for the number of subscribers.
      *                   If not provided, returns an empty map.
-     * @returns A map where keys are the shard channel names and values are the number of subscribers.
+     * Command Response - A map where keys are the shard channel names and values are the number of subscribers.
      */
     public pubsubShardNumSub(channels?: string[]): ClusterTransaction {
         return this.addAndReturn(createPubSubShardNumSub(channels));
