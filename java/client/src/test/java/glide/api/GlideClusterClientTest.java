@@ -25,6 +25,7 @@ import static command_request.CommandRequestOuterClass.RequestType.Info;
 import static command_request.CommandRequestOuterClass.RequestType.LastSave;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
+import static command_request.CommandRequestOuterClass.RequestType.PubSubSChannels;
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
 import static command_request.CommandRequestOuterClass.RequestType.SPublish;
 import static command_request.CommandRequestOuterClass.RequestType.Sort;
@@ -2715,6 +2716,100 @@ public class GlideClusterClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void pubsubShardChannels_returns_success() {
+        // setup
+        String[] arguments = new String[0];
+        String[] value = new String[] {"ch1", "ch2"};
+
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String[]>submitNewCommand(eq(PubSubSChannels), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String[]> response = service.pubsubShardChannels();
+        String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void pubsubShardChannelsBinary_returns_success() {
+        // setup
+        GlideString[] arguments = new GlideString[0];
+        GlideString[] value = new GlideString[] {gs("ch1"), gs("ch2")};
+
+        CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<GlideString[]>submitNewCommand(eq(PubSubSChannels), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString[]> response = service.pubsubShardChannelsBinary();
+        GlideString[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void pubsubShardChannels_with_pattern_returns_success() {
+        // setup
+        String pattern = "ch*";
+        String[] arguments = new String[] {pattern};
+        String[] value = new String[] {"ch1", "ch2"};
+
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String[]>submitNewCommand(eq(PubSubSChannels), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String[]> response = service.pubsubShardChannels(pattern);
+        String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void pubsubShardChannelsBinary_with_pattern_returns_success() {
+        // setup
+        GlideString pattern = gs("ch*");
+        GlideString[] arguments = new GlideString[] {pattern};
+        GlideString[] value = new GlideString[] {gs("ch1"), gs("ch2")};
+
+        CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<GlideString[]>submitNewCommand(eq(PubSubSChannels), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString[]> response = service.pubsubShardChannels(pattern);
+        GlideString[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
     }
 
     @SneakyThrows

@@ -3,6 +3,7 @@ package glide.api.commands;
 
 import glide.api.models.GlideString;
 import java.util.concurrent.CompletableFuture;
+import lombok.NonNull;
 
 /**
  * Supports commands for the "Pub/Sub" group for a cluster client.
@@ -46,4 +47,70 @@ public interface PubSubClusterCommands {
      * }</pre>
      */
     CompletableFuture<String> publish(GlideString message, GlideString channel, boolean sharded);
+
+    /**
+     * Lists the currently active shard channels.
+     *
+     * @apiNote When in cluster mode, the command is routed to all nodes, and aggregates the response
+     *     into a single array.
+     * @see <a href="https://valkey.io/commands/pubsub-shardchannels/">valkey.io</a> for details.
+     * @return An <code>array</code> of currently active shard channels matching the given pattern. If
+     *     no pattern is specified, all active shard channels are returned.
+     * @example
+     *     <pre>{@code
+     * String[] result = client.pubsubShardChannels().get();
+     * assert Arrays.equals(result, new String[] { "channel1", "channel2" });
+     * }</pre>
+     */
+    CompletableFuture<String[]> pubsubShardChannels();
+
+    /**
+     * Lists the currently active shard channels.
+     *
+     * @apiNote When in cluster mode, the command is routed to all nodes, and aggregates the response
+     *     into a single array.
+     * @see <a href="https://valkey.io/commands/pubsub-shardchannels/">valkey.io</a> for details.
+     * @return An <code>array</code> of currently active shard channels matching the given pattern. If
+     *     no pattern is specified, all active shard channels are returned.
+     * @example
+     *     <pre>{@code
+     * GlideString[] result = client.pubsubShardChannelsBinary().get();
+     * assert Arrays.equals(result, new GlideString[] { gs("channel1"), gs("channel2") });
+     * }</pre>
+     */
+    CompletableFuture<GlideString[]> pubsubShardChannelsBinary();
+
+    /**
+     * Lists the currently active shard channels.
+     *
+     * @apiNote When in cluster mode, the command is routed to all nodes, and aggregates the response
+     *     into a single array.
+     * @see <a href="https://valkey.io/commands/pubsub-shardchannels/">valkey.io</a> for details.
+     * @param pattern A glob-style pattern to match active shard channels.
+     * @return An <code>array</code> of currently active shard channels matching the given pattern. If
+     *     no pattern is specified, all active shard channels are returned.
+     * @example
+     *     <pre>{@code
+     * String[] result = client.pubsubShardChannels("channel*").get();
+     * assert Arrays.equals(result, new String[] { "channel1", "channel2" });
+     * }</pre>
+     */
+    CompletableFuture<String[]> pubsubShardChannels(@NonNull String pattern);
+
+    /**
+     * Lists the currently active shard channels.
+     *
+     * @apiNote When in cluster mode, the command is routed to all nodes, and aggregates the response
+     *     into a single array.
+     * @see <a href="https://valkey.io/commands/pubsub-shardchannels/">valkey.io</a> for details.
+     * @param pattern A glob-style pattern to match active shard channels.
+     * @return An <code>array</code> of currently active shard channels matching the given pattern. If
+     *     no pattern is specified, all active shard channels are returned.
+     * @example
+     *     <pre>{@code
+     * GlideString[] result = client.pubsubShardChannels(gs.("channel*")).get();
+     * assert Arrays.equals(result, new GlideString[] { gs("channel1"), gs("channel2") });
+     * }</pre>
+     */
+    CompletableFuture<GlideString[]> pubsubShardChannels(@NonNull GlideString pattern);
 }

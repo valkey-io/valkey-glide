@@ -1468,4 +1468,60 @@ public class PubSubTests {
                 },
                 result);
     }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "standalone = {0}")
+    @ValueSource(booleans = {false})
+    public void pubsub_shard_channels(boolean standalone) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
+
+        // no channels exists yet
+        GlideClusterClient client = (GlideClusterClient) createClient(standalone);
+        assertEquals(0, client.pubsubChannels().get().length);
+        assertEquals(0, client.pubsubChannelsBinary().get().length);
+        assertEquals(0, client.pubsubChannels("**").get().length);
+        assertEquals(0, client.pubsubChannels(gs("**")).get().length);
+
+        var channels = Set.of("test_shardchannel1", "test_shardchannel2", "some_shardchannel3");
+        String pattern = "test_*";
+
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions =
+                Map.of(
+                        PubSubClusterChannelMode.SHARDED,
+                        channels.stream().map(GlideString::gs).collect(Collectors.toSet()));
+
+        GlideClusterClient listener =
+                (GlideClusterClient) createClientWithSubscriptions(standalone, subscriptions);
+        clients.addAll(List.of(client, listener));
+
+        // test without pattern
+        assertEquals(channels, Set.of(client.pubsubShardChannels().get()));
+        assertEquals(channels, Set.of(listener.pubsubShardChannels().get()));
+        assertEquals(
+                channels.stream().map(GlideString::gs).collect(Collectors.toSet()),
+                Set.of(client.pubsubShardChannelsBinary().get()));
+        assertEquals(
+                channels.stream().map(GlideString::gs).collect(Collectors.toSet()),
+                Set.of(listener.pubsubShardChannelsBinary().get()));
+
+        // test with pattern
+        assertEquals(
+                Set.of("test_shardchannel1", "test_shardchannel2"),
+                Set.of(client.pubsubShardChannels(pattern).get()));
+        assertEquals(
+                Set.of(gs("test_shardchannel1"), gs("test_shardchannel2")),
+                Set.of(client.pubsubShardChannels(gs(pattern)).get()));
+        assertEquals(
+                Set.of("test_shardchannel1", "test_shardchannel2"),
+                Set.of(listener.pubsubShardChannels(pattern).get()));
+        assertEquals(
+                Set.of(gs("test_shardchannel1"), gs("test_shardchannel2")),
+                Set.of(listener.pubsubShardChannels(gs(pattern)).get()));
+
+        // test with non-matching pattern
+        assertEquals(0, client.pubsubShardChannels("non_matching_*").get().length);
+        assertEquals(0, client.pubsubShardChannels(gs("non_matching_*")).get().length);
+        assertEquals(0, listener.pubsubShardChannels("non_matching_*").get().length);
+        assertEquals(0, listener.pubsubShardChannels(gs("non_matching_*")).get().length);
+    }
 }
