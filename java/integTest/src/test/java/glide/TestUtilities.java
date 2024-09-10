@@ -380,6 +380,12 @@ public class TestUtilities {
         } while (isBusy);
     }
 
+    /**
+     * This method returns the server version using a glide client.
+     *
+     * @param glideClient Glide client to be used for running the info command.
+     * @return String The server version number.
+     */
     @SneakyThrows
     public static String getServerVersion(@NonNull final GlideClient glideClient) {
         String infoResponse =
