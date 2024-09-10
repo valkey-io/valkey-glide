@@ -8,11 +8,11 @@ import {
     BaseClientConfiguration,
     Decoder,
     DecoderOption,
-    GlideRecord,
+    GlideRecord, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GlideReturnType,
     GlideString,
     PubSubMsg,
-    ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
-    GlideReturnType,
+    ReadFrom,
     convertGlideRecordToRecord,
 } from "./BaseClient";
 import {
@@ -1442,7 +1442,7 @@ export class GlideClusterClient extends BaseClient {
      * @example
      * ```typescript
      * console result = await client.scriptExists(["sha1_digest1", "sha1_digest2"]);
-     * console.log(result); // Output: [True, False]
+     * console.log(result); // Output: [true, false]
      * ```
      */
     public async scriptExists(
@@ -1465,7 +1465,7 @@ export class GlideClusterClient extends BaseClient {
      * @example
      * ```typescript
      * console result = await client.scriptFlush(FlushMode.SYNC);
-     * console.log(result); // Output: 'OK'
+     * console.log(result); // Output: "OK"
      * ```
      */
     public async scriptFlush(
@@ -1491,7 +1491,7 @@ export class GlideClusterClient extends BaseClient {
      * @example
      * ```typescript
      * console result = await client.scriptKill();
-     * console.log(result); // Output: 'OK'
+     * console.log(result); // Output: "OK"
      * ```
      */
     public async scriptKill(options?: RouteOption): Promise<"OK"> {

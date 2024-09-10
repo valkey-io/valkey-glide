@@ -17,7 +17,11 @@ import {
     ClusterTransaction,
     convertRecordToGlideRecord,
     Decoder,
+    FlushMode,
     FunctionListResponse,
+    FunctionRestorePolicy,
+    FunctionStatsSingleResponse,
+    GeoUnit,
     GlideClusterClient,
     GlideReturnType,
     InfoOptions,
@@ -28,10 +32,6 @@ import {
     ScoreFilter,
     Script,
     SlotKeyTypes,
-    FlushMode,
-    FunctionRestorePolicy,
-    FunctionStatsSingleResponse,
-    GeoUnit,
     SortOrder,
 } from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
@@ -1794,7 +1794,7 @@ describe("GlideClusterClient", () => {
             );
 
             // Create a long-running script
-            let longScript = new Script(createLongRunningLuaScript(5, true));
+            const longScript = new Script(createLongRunningLuaScript(5, true));
             let promise = null;
 
             try {
@@ -1833,9 +1833,9 @@ describe("GlideClusterClient", () => {
                 // If script wasn't killed, and it didn't time out - it blocks the server and cause the
                 // test to fail. Wait for the script to complete (we cannot kill it)
                 expect(await promise).toContain("Timed out");
+                client1.close();
+                client2.close();
             }
-            client1.close();
-            client2.close();
         },
         TIMEOUT,
     );
@@ -1858,7 +1858,7 @@ describe("GlideClusterClient", () => {
                 );
 
                 // Create a long-running script
-                let longScript = new Script(
+                const longScript = new Script(
                     createLongRunningLuaScript(5, false),
                 );
 

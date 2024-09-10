@@ -1641,7 +1641,7 @@ describe("GlideClient", () => {
             );
 
             // Create a long-running script
-            let longScript = new Script(createLongRunningLuaScript(5, true));
+            const longScript = new Script(createLongRunningLuaScript(5, true));
             let promise = null;
 
             try {
@@ -1680,9 +1680,9 @@ describe("GlideClient", () => {
                 // If script wasn't killed, and it didn't time out - it blocks the server and cause the
                 // test to fail. Wait for the script to complete (we cannot kill it)
                 expect(await promise).toContain("Timed out");
+                client1.close();
+                client2.close();
             }
-            client1.close();
-            client2.close();
         },
         TIMEOUT,
     );
@@ -1705,7 +1705,7 @@ describe("GlideClient", () => {
                 );
 
                 // Create a long-running script
-                let longScript = new Script(
+                const longScript = new Script(
                     createLongRunningLuaScript(5, false),
                 );
 

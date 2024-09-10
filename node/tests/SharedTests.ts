@@ -4112,18 +4112,18 @@ export function runBaseTests(config: {
         "script exists test_%p",
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                let script1 = new Script("return 'Hello'");
-                let script2 = new Script("return 'World'");
-                let script3 = new Script("return 'Hello World'");
+                const script1 = new Script("return 'Hello'");
+                const script2 = new Script("return 'World'");
+                const script3 = new Script("return 'Hello World'");
 
                 // Load script1 to all nodes, do not load script2 and load script3 with a SlotKeyRoute
                 await client.invokeScript(script1);
                 await client.invokeScript(script3);
 
                 // Get the SHA1 digests of the scripts
-                let sha1 = script1.getHash();
-                let sha2 = script2.getHash();
-                let sha3 = script3.getHash();
+                const sha1 = script1.getHash();
+                const sha2 = script2.getHash();
+                const sha3 = script3.getHash();
                 const nonExistentSha = `0`.repeat(40);
 
                 // Check existence of scripts
@@ -4152,7 +4152,7 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 // Load a script
-                let script = new Script("return 'Hello'");
+                const script = new Script("return 'Hello'");
                 expect(await client.invokeScript(script)).toEqual("Hello");
 
                 // Check existence of script

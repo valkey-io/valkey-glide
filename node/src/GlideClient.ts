@@ -1035,7 +1035,7 @@ export class GlideClient extends BaseClient {
      * @example
      * ```typescript
      * console result = await client.scriptExists(["sha1_digest1", "sha1_digest2"]);
-     * console.log(result); // Output: [True, False]
+     * console.log(result); // Output: [true, false]
      * ```
      */
     public async scriptExists(sha1s: GlideString[]): Promise<boolean[]> {
@@ -1053,7 +1053,7 @@ export class GlideClient extends BaseClient {
      * @example
      * ```typescript
      * console result = await client.scriptFlush(FlushMode.SYNC);
-     * console.log(result); // Output: 'OK'
+     * console.log(result); // Output: "OK"
      * ```
      */
     public async scriptFlush(mode?: FlushMode): Promise<"OK"> {
@@ -1072,7 +1072,7 @@ export class GlideClient extends BaseClient {
      * @example
      * ```typescript
      * console result = await client.scriptKill();
-     * console.log(result); // Output: 'OK'
+     * console.log(result); // Output: "OK"
      * ```
      */
     public async scriptKill(): Promise<"OK"> {
