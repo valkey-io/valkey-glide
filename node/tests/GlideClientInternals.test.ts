@@ -29,11 +29,11 @@ import {
     GlideClusterClient,
     GlideClusterClientConfiguration,
     GlideRecord,
+    GlideReturnType,
     InfoOptions,
     isGlideRecord,
     Logger,
     RequestError,
-    ReturnType,
     SlotKeyTypes,
     TimeUnit,
 } from "..";
@@ -62,7 +62,7 @@ enum ResponseType {
     OK,
 }
 
-function createLeakedValue(value: ReturnType): Long {
+function createLeakedValue(value: GlideReturnType): Long {
     if (value == null) {
         return new Long(0, 0);
     }
@@ -97,7 +97,7 @@ function sendResponse(
     callbackIndex: number,
     response_data?: {
         message?: string;
-        value?: ReturnType;
+        value?: GlideReturnType;
         requestErrorType?: response.RequestErrorType;
     },
 ) {
@@ -293,8 +293,8 @@ describe("SocketConnectionInternals", () => {
 
     describe("handling types", () => {
         const test_receiving_value = async (
-            received: ReturnType, // value 'received' from the server
-            expected: ReturnType, // value received from rust
+            received: GlideReturnType, // value 'received' from the server
+            expected: GlideReturnType, // value received from rust
         ) => {
             await testWithResources(async (connection, socket) => {
                 socket.once("data", (data) => {
@@ -324,8 +324,8 @@ describe("SocketConnectionInternals", () => {
                 expect(
                     isGlideRecord(result)
                         ? convertGlideRecordToRecord(
-                              result as unknown as GlideRecord<unknown>,
-                          )
+                            result as unknown as GlideRecord<unknown>,
+                        )
                         : result,
                 ).toEqual(expected);
             });
@@ -727,8 +727,8 @@ describe("SocketConnectionInternals", () => {
                 } else {
                     throw new Error(
                         "unexpected command: [" +
-                            request.singleCommand!.argsArray!.args!.at(0) +
-                            "]",
+                        request.singleCommand!.argsArray!.args!.at(0) +
+                        "]",
                     );
                 }
 

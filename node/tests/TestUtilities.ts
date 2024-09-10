@@ -29,7 +29,7 @@ import {
     InsertPosition,
     ListDirection,
     ProtocolVersion,
-    ReturnType,
+    GlideReturnType,
     ReturnTypeMap,
     ScoreFilter,
     SignedEncoding,
@@ -223,7 +223,7 @@ export function getFirstResult(
 /** Check a multi-node response from a cluster. */
 export function checkClusterMultiNodeResponse(
     res: object,
-    predicate: (value: ReturnType) => void,
+    predicate: (value: GlideReturnType) => void,
 ) {
     for (const nodeResponse of Object.values(res)) {
         predicate(nodeResponse);
@@ -234,9 +234,9 @@ export function checkClusterMultiNodeResponse(
 export function checkClusterResponse(
     res: object,
     singleNodeRoute: boolean,
-    predicate: (value: ReturnType) => void,
+    predicate: (value: GlideReturnType) => void,
 ) {
-    if (singleNodeRoute) predicate(res as ReturnType);
+    if (singleNodeRoute) predicate(res as GlideReturnType);
     else checkClusterMultiNodeResponse(res, predicate);
 }
 
@@ -500,8 +500,8 @@ export function checkFunctionStatsResponse(
  * @param expectedResponseData - Expected result data from {@link transactionTest}.
  */
 export function validateTransactionResponse(
-    response: ReturnType[] | null,
-    expectedResponseData: [string, ReturnType][],
+    response: GlideReturnType[] | null,
+    expectedResponseData: [string, GlideReturnType][],
 ) {
     const failedChecks: string[] = [];
 
@@ -545,12 +545,12 @@ export function validateTransactionResponse(
  */
 export async function encodableTransactionTest(
     baseTransaction: Transaction | ClusterTransaction,
-    valueEncodedResponse: ReturnType,
-): Promise<[string, ReturnType][]> {
+    valueEncodedResponse: GlideReturnType,
+): Promise<[string, GlideReturnType][]> {
     const key = "{key}" + uuidv4(); // string
     const value = "value";
     // array of tuples - first element is test name/description, second - expected return value
-    const responseData: [string, ReturnType][] = [];
+    const responseData: [string, GlideReturnType][] = [];
 
     baseTransaction.set(key, value);
     responseData.push(["set(key, value)", "OK"]);
@@ -567,7 +567,7 @@ export async function encodableTransactionTest(
  */
 export async function encodedTransactionTest(
     baseTransaction: Transaction | ClusterTransaction,
-): Promise<[string, ReturnType][]> {
+): Promise<[string, GlideReturnType][]> {
     const key1 = "{key}" + uuidv4(); // string
     const key2 = "{key}" + uuidv4(); // string
     const key = "dumpKey";
@@ -577,7 +577,7 @@ export async function encodedTransactionTest(
     const value = "value";
     const valueEncoded = Buffer.from(value);
     // array of tuples - first element is test name/description, second - expected return value
-    const responseData: [string, ReturnType][] = [];
+    const responseData: [string, GlideReturnType][] = [];
 
     baseTransaction.set(key1, value);
     responseData.push(["set(key1, value)", "OK"]);
@@ -616,14 +616,14 @@ export async function encodedTransactionTest(
 export async function DumpAndRestureTest(
     baseTransaction: Transaction,
     valueResponse: GlideString,
-): Promise<[string, ReturnType][]> {
+): Promise<[string, GlideReturnType][]> {
     const key = "dumpKey";
     const dumpResult = Buffer.from([
         0, 5, 118, 97, 108, 117, 101, 11, 0, 232, 41, 124, 75, 60, 53, 114, 231,
     ]);
     const value = "value";
     // array of tuples - first element is test name/description, second - expected return value
-    const responseData: [string, ReturnType][] = [];
+    const responseData: [string, GlideReturnType][] = [];
 
     baseTransaction.set(key, value);
     responseData.push(["set(key, value)", "OK"]);
@@ -652,7 +652,7 @@ export async function DumpAndRestureTest(
 export async function transactionTest(
     baseTransaction: Transaction | ClusterTransaction,
     version: string,
-): Promise<[string, ReturnType][]> {
+): Promise<[string, GlideReturnType][]> {
     const key1 = "{key}" + uuidv4(); // string
     const key2 = "{key}" + uuidv4(); // string
     const key3 = "{key}" + uuidv4(); // string
@@ -686,7 +686,7 @@ export async function transactionTest(
     const groupName2 = uuidv4();
     const consumer = uuidv4();
     // array of tuples - first element is test name/description, second - expected return value
-    const responseData: [string, ReturnType][] = [];
+    const responseData: [string, GlideReturnType][] = [];
 
     baseTransaction.publish("test_message", key1);
     responseData.push(['publish("test_message", key1)', 0]);

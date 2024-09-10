@@ -10,10 +10,10 @@ import {
     Decoder,
     DecoderOption,
     GlideRecord,
+    GlideReturnType,
     GlideString,
     PubSubMsg,
     ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
-    ReturnType,
 } from "./BaseClient";
 import {
     createClientGetName,
@@ -190,8 +190,8 @@ export class GlideClient extends BaseClient {
     public async exec(
         transaction: Transaction,
         options?: DecoderOption,
-    ): Promise<ReturnType[] | null> {
-        return this.createWritePromise<ReturnType[] | null>(
+    ): Promise<GlideReturnType[] | null> {
+        return this.createWritePromise<GlideReturnType[] | null>(
             transaction.commands,
             options,
         ).then((result) =>
@@ -223,7 +223,7 @@ export class GlideClient extends BaseClient {
     public async customCommand(
         args: GlideString[],
         options?: DecoderOption,
-    ): Promise<ReturnType> {
+    ): Promise<GlideReturnType> {
         return this.createWritePromise(createCustomCommand(args), options);
     }
 

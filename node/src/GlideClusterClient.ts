@@ -12,7 +12,7 @@ import {
     GlideString,
     PubSubMsg,
     ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
-    ReturnType,
+    GlideReturnType,
     convertGlideRecordToRecord,
 } from "./BaseClient";
 import {
@@ -337,7 +337,7 @@ export class GlideClusterClient extends BaseClient {
     public async customCommand(
         args: GlideString[],
         options?: RouteOption & DecoderOption,
-    ): Promise<ClusterResponse<ReturnType>> {
+    ): Promise<ClusterResponse<GlideReturnType>> {
         const command = createCustomCommand(args);
         return super.createWritePromise(command, options);
     }
@@ -364,8 +364,8 @@ export class GlideClusterClient extends BaseClient {
         options?: {
             route?: SingleNodeRoute;
         } & DecoderOption,
-    ): Promise<ReturnType[] | null> {
-        return this.createWritePromise<ReturnType[] | null>(
+    ): Promise<GlideReturnType[] | null> {
+        return this.createWritePromise<GlideReturnType[] | null>(
             transaction.commands,
             options,
         ).then((result) =>
@@ -766,8 +766,8 @@ export class GlideClusterClient extends BaseClient {
         func: GlideString,
         args: GlideString[],
         options?: RouteOption & DecoderOption,
-    ): Promise<ClusterResponse<ReturnType>> {
-        return this.createWritePromise<ClusterGlideRecord<ReturnType>>(
+    ): Promise<ClusterResponse<GlideReturnType>> {
+        return this.createWritePromise<ClusterGlideRecord<GlideReturnType>>(
             createFCall(func, [], args),
             options,
         ).then((res) => convertClusterGlideRecord(res, true, options?.route));
@@ -797,8 +797,8 @@ export class GlideClusterClient extends BaseClient {
         func: GlideString,
         args: GlideString[],
         options?: RouteOption & DecoderOption,
-    ): Promise<ClusterResponse<ReturnType>> {
-        return this.createWritePromise<ClusterGlideRecord<ReturnType>>(
+    ): Promise<ClusterResponse<GlideReturnType>> {
+        return this.createWritePromise<ClusterGlideRecord<GlideReturnType>>(
             createFCallReadOnly(func, [], args),
             options,
         ).then((res) => convertClusterGlideRecord(res, true, options?.route));
