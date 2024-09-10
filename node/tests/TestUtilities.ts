@@ -40,7 +40,7 @@ import {
 } from "..";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-function intoArrayInternal(obj: any, builder: Array<string>) {
+function intoArrayInternal(obj: any, builder: string[]) {
     if (obj == null) {
         builder.push("null");
     } else if (typeof obj === "string") {
@@ -86,7 +86,7 @@ function intoArrayInternal(obj: any, builder: Array<string>) {
  * accept any variable `v` and convert it into String, recursively
  */
 export function intoString(v: any): string {
-    const builder: Array<string> = [];
+    const builder: string[] = [];
     intoArrayInternal(v, builder);
     return builder.join("");
 }
@@ -94,8 +94,8 @@ export function intoString(v: any): string {
 /**
  * accept any variable `v` and convert it into array of string
  */
-export function intoArray(v: any): Array<string> {
-    const result: Array<string> = [];
+export function intoArray(v: any): string[] {
+    const result: string[] = [];
     intoArrayInternal(v, result);
     return result;
 }
@@ -130,10 +130,10 @@ export function checkSimple(left: any): Checker {
     return new Checker(left);
 }
 
-export type Client = {
+export interface Client {
     set: (key: string, value: string) => Promise<GlideString | "OK" | null>;
     get: (key: string) => Promise<GlideString | null>;
-};
+}
 
 export async function GetAndSetRandomValue(client: Client) {
     const key = uuidv4();
