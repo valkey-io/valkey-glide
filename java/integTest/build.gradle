@@ -32,7 +32,6 @@ dependencies {
 
 def standalonePorts = []
 def clusterPorts = []
-def serverVersion = ""
 
 ext {
     extractPortsFromClusterManagerOutput = { String output ->
@@ -46,13 +45,6 @@ ext {
                 res << address.split(":")[1]
         }
         return res
-    }
-    extractServerVersion = { String output ->
-        // Redis response:
-        // Redis server v=7.2.3 sha=00000000:0 malloc=jemalloc-5.3.0 bits=64 build=7504b1fedf883f2
-        // Valkey response:
-        // Server v=7.2.5 sha=26388270:0 malloc=jemalloc-5.3.0 bits=64 build=ea40bb1576e402d6
-        return output.split("v=")[1].split(" ")[0]
     }
 }
 
@@ -101,61 +93,8 @@ tasks.register('startStandalone') {
     }
 }
 
-tasks.register('getServerVersion') {
-    doLast {
-        def detectedVersion
-        def output = new ByteArrayOutputStream()
-
-        // Helper method to find the full path of a command
-        def findFullPath = { command ->
-            def pathOutput = new ByteArrayOutputStream()
-            try {
-                exec {
-                    commandLine 'which', command  // Use 'where' for Windows
-                    standardOutput = pathOutput
-                }
-                return pathOutput.toString().trim()
-            } catch (Exception e) {
-                println "Failed to find path for ${command}: ${e.message}"
-                return ""
-            }
-        }
-
-        // Get full paths
-        def valkeyPath = findFullPath('valkey-server')
-        def redisPath = findFullPath('redis-server')
-
-        def tryGetVersion = { serverPath ->
-            try {
-                exec {
-                    commandLine serverPath, '-v'
-                    standardOutput = output
-                }
-                return output.toString()
-            } catch (Exception e) {
-                println "Failed to execute ${serverPath}: ${e.message}"
-                return ""
-            }
-        }
-
-        // Try valkey-server first, then redis-server if it fails
-        def versionOutput = tryGetVersion(valkeyPath)
-        if (versionOutput.isEmpty() && !redisPath.isEmpty()) {
-            versionOutput = tryGetVersion(redisPath)
-        }
-
-        if (!versionOutput.isEmpty()) {
-            detectedVersion = extractServerVersion(versionOutput)
-            println "Detected server version: ${detectedVersion}"
-            serverVersion = detectedVersion
-        } else {
-            throw new GradleException("Failed to retrieve the server version.")
-        }
-    }
-}
 
 test.dependsOn 'stopAllBeforeTests'
-test.dependsOn 'getServerVersion'
 stopAllBeforeTests.finalizedBy 'clearDirs'
 clearDirs.finalizedBy 'startStandalone'
 clearDirs.finalizedBy 'startCluster'
@@ -166,10 +105,8 @@ tasks.withType(Test) {
     doFirst {
         println "Cluster ports = ${clusterPorts}"
         println "Standalone ports = ${standalonePorts}"
-        println "Server version = ${serverVersion}"
         systemProperty 'test.server.standalone.ports', standalonePorts.join(',')
         systemProperty 'test.server.cluster.ports', clusterPorts.join(',')
-        systemProperty 'test.server.version', serverVersion
     }
 
     testLogging {
