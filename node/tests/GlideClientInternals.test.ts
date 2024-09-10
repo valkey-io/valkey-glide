@@ -30,7 +30,7 @@ import {
     InfoOptions,
     Logger,
     RequestError,
-    ReturnType,
+    GlideReturnType,
     SlotKeyTypes,
     TimeUnit,
 } from "..";
@@ -59,7 +59,7 @@ enum ResponseType {
     OK,
 }
 
-function createLeakedValue(value: ReturnType): Long {
+function createLeakedValue(value: GlideReturnType): Long {
     if (value == null) {
         return new Long(0, 0);
     }
@@ -94,7 +94,7 @@ function sendResponse(
     callbackIndex: number,
     response_data?: {
         message?: string;
-        value?: ReturnType;
+        value?: GlideReturnType;
         requestErrorType?: response.RequestErrorType;
     },
 ) {
@@ -289,7 +289,7 @@ describe("SocketConnectionInternals", () => {
     });
 
     describe("handling types", () => {
-        const test_receiving_value = async (expected: ReturnType) => {
+        const test_receiving_value = async (expected: GlideReturnType) => {
             await testWithResources(async (connection, socket) => {
                 socket.once("data", (data) => {
                     const reader = Reader.create(data);
