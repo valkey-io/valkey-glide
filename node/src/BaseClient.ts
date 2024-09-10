@@ -411,7 +411,7 @@ class PointerResponse {
 }
 
 /** Represents the credentials for connecting to a server. */
-export type ValkeyCredentials = {
+export type ServerCredentials = {
     /**
      * The username that will be used for authenticating connections to the Valkey servers.
      * If not supplied, "default" will be used.
@@ -467,7 +467,7 @@ export type BaseClientConfiguration = {
      * Credentials for authentication process.
      * If none are set, the client will not authenticate itself with the server.
      */
-    credentials?: ValkeyCredentials;
+    credentials?: ServerCredentials;
     /**
      * The duration in milliseconds that the client should wait for a request to complete.
      * This duration encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries.

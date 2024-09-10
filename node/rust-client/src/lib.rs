@@ -160,7 +160,7 @@ pub fn init(level: Option<Level>, file_name: Option<&str>) -> Level {
     logger_level.into()
 }
 
-fn valkey_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<JsUnknown> {
+fn resp_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<JsUnknown> {
     match val {
         Value::Nil => js_env.get_null().map(|val| val.into_unknown()),
         Value::SimpleString(str) => {
@@ -189,7 +189,7 @@ fn valkey_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<J
             for (index, item) in array.into_iter().enumerate() {
                 js_array_view.set_element(
                     index as u32,
-                    valkey_value_to_js(item, js_env, string_decoder)?,
+                    resp_value_to_js(item, js_env, string_decoder)?,
                 )?;
             }
             Ok(js_array_view.into_unknown())
@@ -198,7 +198,7 @@ fn valkey_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<J
             let mut obj = js_env.create_object()?;
             for (key, value) in map {
                 let field_name = String::from_owned_redis_value(key).map_err(to_js_error)?;
-                let value = valkey_value_to_js(value, js_env, string_decoder)?;
+                let value = resp_value_to_js(value, js_env, string_decoder)?;
                 obj.set_named_property(&field_name, value)?;
             }
             Ok(obj.into_unknown())
@@ -234,17 +234,17 @@ fn valkey_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<J
             for (index, item) in array.into_iter().enumerate() {
                 js_array_view.set_element(
                     index as u32,
-                    valkey_value_to_js(item, js_env, string_decoder)?,
+                    resp_value_to_js(item, js_env, string_decoder)?,
                 )?;
             }
             Ok(js_array_view.into_unknown())
         }
         Value::Attribute { data, attributes } => {
             let mut obj = js_env.create_object()?;
-            let value = valkey_value_to_js(*data, js_env, string_decoder)?;
+            let value = resp_value_to_js(*data, js_env, string_decoder)?;
             obj.set_named_property("value", value)?;
 
-            let value = valkey_value_to_js(Value::Map(attributes), js_env, string_decoder)?;
+            let value = resp_value_to_js(Value::Map(attributes), js_env, string_decoder)?;
             obj.set_named_property("attributes", value)?;
 
             Ok(obj.into_unknown())
@@ -254,7 +254,7 @@ fn valkey_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<J
             obj.set_named_property("kind", format!("{kind:?}"))?;
             let js_array_view = data
                 .into_iter()
-                .map(|item| valkey_value_to_js(item, js_env, string_decoder))
+                .map(|item| resp_value_to_js(item, js_env, string_decoder))
                 .collect::<Result<Vec<_>, _>>()?;
             obj.set_named_property("values", js_array_view)?;
             Ok(obj.into_unknown())
@@ -280,7 +280,7 @@ pub fn value_from_split_pointer(
         .unwrap();
     let pointer = u64::from_le_bytes(bytes);
     let value = unsafe { Box::from_raw(pointer as *mut Value) };
-    valkey_value_to_js(*value, js_env, string_decoder)
+    resp_value_to_js(*value, js_env, string_decoder)
 }
 
 // Pointers are split because JS cannot represent a full usize using its `number` object.
