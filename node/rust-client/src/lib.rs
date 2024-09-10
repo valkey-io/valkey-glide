@@ -20,7 +20,7 @@ use napi::bindgen_prelude::Uint8Array;
 use napi::{Env, Error, JsObject, JsUnknown, Result, Status};
 use napi_derive::napi;
 use num_traits::sign::Signed;
-use redis::{aio::MultiplexedConnection, AsyncCommands, FromRedisValue, Value};
+use redis::{aio::MultiplexedConnection, AsyncCommands, Value};
 #[cfg(feature = "testing_utilities")]
 use std::collections::HashMap;
 use std::str;
@@ -195,13 +195,17 @@ fn redis_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<Js
             Ok(js_array_view.into_unknown())
         }
         Value::Map(map) => {
-            let mut obj = js_env.create_object()?;
-            for (key, value) in map {
-                let field_name = String::from_owned_redis_value(key).map_err(to_js_error)?;
-                let value = redis_value_to_js(value, js_env, string_decoder)?;
-                obj.set_named_property(&field_name, value)?;
+            // Convert map to array of key-value pairs instead of a `Record` (object),
+            // because `Record` does not support `GlideString` as a key.
+            // The result is in format `GlideRecord<T>`.
+            let mut js_array = js_env.create_array_with_length(map.len())?;
+            for (idx, (key, value)) in (0_u32..).zip(map.into_iter()) {
+                let mut obj = js_env.create_object()?;
+                obj.set_named_property("key", redis_value_to_js(key, js_env, string_decoder)?)?;
+                obj.set_named_property("value", redis_value_to_js(value, js_env, string_decoder)?)?;
+                js_array.set_element(idx, obj)?;
             }
-            Ok(obj.into_unknown())
+            Ok(js_array.into_unknown())
         }
         Value::Double(float) => js_env.create_double(float).map(|val| val.into_unknown()),
         Value::Boolean(bool) => js_env.get_boolean(bool).map(|val| val.into_unknown()),

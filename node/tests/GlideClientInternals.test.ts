@@ -5,13 +5,13 @@
 import { beforeAll, describe, expect, it } from "@jest/globals";
 import fs from "fs";
 import {
-    MAX_REQUEST_ARGS_LEN,
     createLeakedArray,
     createLeakedAttribute,
     createLeakedBigint,
     createLeakedDouble,
     createLeakedMap,
     createLeakedString,
+    MAX_REQUEST_ARGS_LEN,
 } from "glide-rs";
 import Long from "long";
 import net from "net";
@@ -22,15 +22,18 @@ import {
     BaseClientConfiguration,
     ClosingError,
     ClusterTransaction,
+    convertGlideRecordToRecord,
     Decoder,
     GlideClient,
     GlideClientConfiguration,
     GlideClusterClient,
     GlideClusterClientConfiguration,
+    GlideRecord,
+    GlideReturnType,
     InfoOptions,
+    isGlideRecord,
     Logger,
     RequestError,
-    GlideReturnType,
     SlotKeyTypes,
     TimeUnit,
 } from "..";
@@ -289,7 +292,10 @@ describe("SocketConnectionInternals", () => {
     });
 
     describe("handling types", () => {
-        const test_receiving_value = async (expected: GlideReturnType) => {
+        const test_receiving_value = async (
+            received: GlideReturnType, // value 'received' from the server
+            expected: GlideReturnType, // value received from rust
+        ) => {
             await testWithResources(async (connection, socket) => {
                 socket.once("data", (data) => {
                     const reader = Reader.create(data);
@@ -306,42 +312,65 @@ describe("SocketConnectionInternals", () => {
                         ResponseType.Value,
                         request.callbackIdx,
                         {
-                            value: expected,
+                            value: received,
                         },
                     );
                 });
                 const result = await connection.get("foo", {
                     decoder: Decoder.String,
                 });
-                expect(result).toEqual(expected);
+                // RESP3 map are converted to `GlideRecord` in rust lib, but elements may get reordered in this test.
+                // To avoid flakyness, we downcast `GlideRecord` to `Record` which can be safely compared.
+                expect(
+                    isGlideRecord(result)
+                        ? convertGlideRecordToRecord(
+                              result as unknown as GlideRecord<unknown>,
+                          )
+                        : result,
+                ).toEqual(expected);
             });
         };
 
         it("should pass strings received from socket", async () => {
-            await test_receiving_value("bar");
+            await test_receiving_value("bar", "bar");
         });
 
         it("should pass maps received from socket", async () => {
-            await test_receiving_value({ foo: "bar", bar: "baz" });
+            await test_receiving_value(
+                { foo: "bar", bar: "baz" },
+                { foo: "bar", bar: "baz" },
+            );
         });
 
         it("should pass arrays received from socket", async () => {
-            await test_receiving_value(["foo", "bar", "baz"]);
+            await test_receiving_value(
+                ["foo", "bar", "baz"],
+                ["foo", "bar", "baz"],
+            );
         });
 
         it("should pass attributes received from socket", async () => {
-            await test_receiving_value({
-                value: "bar",
-                attributes: { foo: "baz" },
-            });
+            await test_receiving_value(
+                {
+                    value: "bar",
+                    attributes: { foo: "baz" },
+                },
+                {
+                    value: "bar",
+                    attributes: [{ key: "foo", value: "baz" }],
+                },
+            );
         });
 
         it("should pass bigints received from socket", async () => {
-            await test_receiving_value(BigInt("9007199254740991"));
+            await test_receiving_value(
+                BigInt("9007199254740991"),
+                BigInt("9007199254740991"),
+            );
         });
 
         it("should pass floats received from socket", async () => {
-            await test_receiving_value(0.75);
+            await test_receiving_value(0.75, 0.75);
         });
     });
 
