@@ -7,7 +7,7 @@ import copy
 import math
 import time
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Mapping, Tuple, Union, cast
+from typing import Any, Dict, List, Mapping, Optional, Tuple, Union, cast
 
 import pytest
 from glide import ClosingError, RequestError, Script
@@ -97,6 +97,7 @@ from tests.utils.utils import (
     compare_maps,
     convert_bytes_to_string_object,
     convert_string_to_bytes_object,
+    create_long_running_lua_script,
     create_lua_lib_with_long_running_function,
     generate_lua_lib_code,
     get_first_result,
@@ -3825,29 +3826,22 @@ class TestCommands:
         members_scores: Mapping[TEncodable, float] = {"one": 1, "two": 2, "three": 3}
         assert await glide_client.zadd(key, members_scores=members_scores) == 3
 
-        assert await glide_client.zrange(key, RangeByIndex(start=0, stop=1)) == [
+        assert await glide_client.zrange(key, RangeByIndex(0, 1)) == [
             b"one",
             b"two",
         ]
 
-        zrange_map = await glide_client.zrange_withscores(
-            key, RangeByIndex(start=0, stop=-1)
-        )
+        zrange_map = await glide_client.zrange_withscores(key, RangeByIndex(0, -1))
         expected_map = {b"one": 1.0, b"two": 2.0, b"three": 3.0}
         assert compare_maps(zrange_map, expected_map) is True
 
-        assert await glide_client.zrange(
-            key, RangeByIndex(start=0, stop=1), reverse=True
-        ) == [
+        assert await glide_client.zrange(key, RangeByIndex(0, 1), reverse=True) == [
             b"three",
             b"two",
         ]
 
-        assert await glide_client.zrange(key, RangeByIndex(start=3, stop=1)) == []
-        assert (
-            await glide_client.zrange_withscores(key, RangeByIndex(start=3, stop=1))
-            == {}
-        )
+        assert await glide_client.zrange(key, RangeByIndex(3, 1)) == []
+        assert await glide_client.zrange_withscores(key, RangeByIndex(3, 1)) == {}
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -3858,23 +3852,19 @@ class TestCommands:
 
         assert await glide_client.zrange(
             key,
-            RangeByScore(
-                start=InfBound.NEG_INF, stop=ScoreBoundary(3, is_inclusive=False)
-            ),
+            RangeByScore(InfBound.NEG_INF, ScoreBoundary(3, is_inclusive=False)),
         ) == [b"one", b"two"]
 
         zrange_map = await glide_client.zrange_withscores(
             key,
-            RangeByScore(start=InfBound.NEG_INF, stop=InfBound.POS_INF),
+            RangeByScore(InfBound.NEG_INF, InfBound.POS_INF),
         )
         expected_map = {b"one": 1.0, b"two": 2.0, b"three": 3.0}
         assert compare_maps(zrange_map, expected_map) is True
 
         assert await glide_client.zrange(
             key,
-            RangeByScore(
-                start=ScoreBoundary(3, is_inclusive=False), stop=InfBound.NEG_INF
-            ),
+            RangeByScore(ScoreBoundary(3, is_inclusive=False), InfBound.NEG_INF),
             reverse=True,
         ) == [b"two", b"one"]
 
@@ -3882,9 +3872,9 @@ class TestCommands:
             await glide_client.zrange(
                 key,
                 RangeByScore(
-                    start=InfBound.NEG_INF,
-                    stop=InfBound.POS_INF,
-                    limit=Limit(offset=1, count=2),
+                    InfBound.NEG_INF,
+                    InfBound.POS_INF,
+                    Limit(offset=1, count=2),
                 ),
             )
         ) == [b"two", b"three"]
@@ -3892,44 +3882,36 @@ class TestCommands:
         assert (
             await glide_client.zrange(
                 key,
-                RangeByScore(
-                    start=InfBound.NEG_INF, stop=ScoreBoundary(3, is_inclusive=False)
-                ),
+                RangeByScore(InfBound.NEG_INF, ScoreBoundary(3, is_inclusive=False)),
                 reverse=True,
             )
             == []
-        )  # stop is greater than start with reverse set to True
+        )  # end is greater than start with reverse set to True
 
         assert (
             await glide_client.zrange(
                 key,
-                RangeByScore(
-                    start=InfBound.POS_INF, stop=ScoreBoundary(3, is_inclusive=False)
-                ),
+                RangeByScore(InfBound.POS_INF, ScoreBoundary(3, is_inclusive=False)),
             )
             == []
-        )  # start is greater than stop
+        )  # start is greater than end
 
         assert (
             await glide_client.zrange_withscores(
                 key,
-                RangeByScore(
-                    start=InfBound.POS_INF, stop=ScoreBoundary(3, is_inclusive=False)
-                ),
+                RangeByScore(InfBound.POS_INF, ScoreBoundary(3, is_inclusive=False)),
             )
             == {}
-        )  # start is greater than stop
+        )  # start is greater than end
 
         assert (
             await glide_client.zrange_withscores(
                 key,
-                RangeByScore(
-                    start=InfBound.NEG_INF, stop=ScoreBoundary(3, is_inclusive=False)
-                ),
+                RangeByScore(InfBound.NEG_INF, ScoreBoundary(3, is_inclusive=False)),
                 reverse=True,
             )
             == {}
-        )  # stop is greater than start with reverse set to True
+        )  # end is greater than start with reverse set to True
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -3941,7 +3923,7 @@ class TestCommands:
         assert await glide_client.zrange(
             key,
             RangeByLex(
-                start=InfBound.NEG_INF, stop=LexBoundary("c", is_inclusive=False)
+                start=InfBound.NEG_INF, end=LexBoundary("c", is_inclusive=False)
             ),
         ) == [b"a", b"b"]
 
@@ -3950,7 +3932,7 @@ class TestCommands:
                 key,
                 RangeByLex(
                     start=InfBound.NEG_INF,
-                    stop=InfBound.POS_INF,
+                    end=InfBound.POS_INF,
                     limit=Limit(offset=1, count=2),
                 ),
             )
@@ -3959,7 +3941,7 @@ class TestCommands:
         assert await glide_client.zrange(
             key,
             RangeByLex(
-                start=LexBoundary("c", is_inclusive=False), stop=InfBound.NEG_INF
+                start=LexBoundary("c", is_inclusive=False), end=InfBound.NEG_INF
             ),
             reverse=True,
         ) == [b"b", b"a"]
@@ -3968,45 +3950,42 @@ class TestCommands:
             await glide_client.zrange(
                 key,
                 RangeByLex(
-                    start=InfBound.NEG_INF, stop=LexBoundary("c", is_inclusive=False)
+                    start=InfBound.NEG_INF, end=LexBoundary("c", is_inclusive=False)
                 ),
                 reverse=True,
             )
             == []
-        )  # stop is greater than start with reverse set to True
+        )  # end is greater than start with reverse set to True
 
         assert (
             await glide_client.zrange(
                 key,
                 RangeByLex(
-                    start=InfBound.POS_INF, stop=LexBoundary("c", is_inclusive=False)
+                    start=InfBound.POS_INF, end=LexBoundary("c", is_inclusive=False)
                 ),
             )
             == []
-        )  # start is greater than stop
+        )  # start is greater than end
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zrange_different_types_of_keys(self, glide_client: TGlideClient):
         key = get_random_string(10)
 
-        assert (
-            await glide_client.zrange("non_existing_key", RangeByIndex(start=0, stop=1))
-            == []
-        )
+        assert await glide_client.zrange("non_existing_key", RangeByIndex(0, 1)) == []
 
         assert (
             await glide_client.zrange_withscores(
-                "non_existing_key", RangeByIndex(start=0, stop=-1)
+                "non_existing_key", RangeByIndex(0, -1)
             )
         ) == {}
 
         assert await glide_client.set(key, "value") == OK
         with pytest.raises(RequestError):
-            await glide_client.zrange(key, RangeByIndex(start=0, stop=1))
+            await glide_client.zrange(key, RangeByIndex(0, 1))
 
         with pytest.raises(RequestError):
-            await glide_client.zrange_withscores(key, RangeByIndex(start=0, stop=1))
+            await glide_client.zrange_withscores(key, RangeByIndex(0, 1))
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -4046,7 +4025,7 @@ class TestCommands:
         )
         assert compare_maps(zrange_res, {"two": 2.0, "three": 3.0}) is True
 
-        # incorrect range, as start > stop
+        # incorrect range, as start > end
         assert (
             await glide_client.zrangestore(destination, source, RangeByIndex(3, 1)) == 0
         )
@@ -4142,7 +4121,7 @@ class TestCommands:
         )
         assert compare_maps(zrange_res, {"one": 1.0, "two": 2.0}) is True
 
-        # incorrect range as start > stop
+        # incorrect range as start > end
         assert (
             await glide_client.zrangestore(
                 destination,
@@ -4247,7 +4226,7 @@ class TestCommands:
         )
         assert compare_maps(zrange_res, {"a": 1.0, "b": 2.0}) is True
 
-        # incorrect range as start > stop
+        # incorrect range as start > end
         assert (
             await glide_client.zrangestore(
                 destination,
@@ -7147,6 +7126,25 @@ class TestCommands:
                 await glide_client.bitcount(
                     set_key, OffsetOptions(1, 1, BitmapIndexType.BIT)
                 )
+
+        if await check_if_server_version_lt(glide_client, "7.9.0"):
+            # exception thrown optional end was implemented after 8.0.0
+            with pytest.raises(RequestError):
+                await glide_client.bitcount(
+                    key1,
+                    OffsetOptions(
+                        2,
+                    ),
+                )
+        else:
+            assert await glide_client.bitcount(key1, OffsetOptions(0)) == 26
+            assert await glide_client.bitcount(key1, OffsetOptions(5)) == 4
+            assert await glide_client.bitcount(key1, OffsetOptions(80)) == 0
+            assert await glide_client.bitcount(non_existing_key, OffsetOptions(5)) == 0
+
+            # key exists but it is not a string
+            with pytest.raises(RequestError):
+                await glide_client.bitcount(set_key, OffsetOptions(1))
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -10170,6 +10168,67 @@ class TestClusterRoutes:
             await glide_client.hscan(key2, initial_cursor, count=-1)
 
 
+async def script_kill_tests(
+    glide_client: TGlideClient, test_client: TGlideClient, route: Optional[Route] = None
+):
+    """
+    shared tests for SCRIPT KILL used in routed and non-routed variants, clients are created in
+    respective tests with different test matrices.
+    """
+    # Verify that script_kill raises an error when no script is running
+    with pytest.raises(RequestError) as e:
+        await glide_client.script_kill()
+    assert "No scripts in execution right now" in str(e)
+
+    # Create a long-running script
+    long_script = Script(create_long_running_lua_script(10))
+
+    async def run_long_script():
+        with pytest.raises(RequestError) as e:
+            if route is not None:
+                await test_client.invoke_script_route(long_script, route=route)
+            else:
+                await test_client.invoke_script(long_script)
+        assert "Script killed by user" in str(e)
+
+    async def wait_and_kill_script():
+        await asyncio.sleep(3)  # Give some time for the script to start
+        timeout = 0
+        while timeout <= 5:
+            # keep trying to kill until we get an "OK"
+            try:
+                if route is not None:
+                    result = await cast(GlideClusterClient, glide_client).script_kill(
+                        route=route
+                    )
+                else:
+                    result = await glide_client.script_kill()
+                #  we expect to get success
+                assert result == "OK"
+                break
+            except RequestError:
+                # a RequestError may occur if the script is not yet running
+                # sleep and try again
+                timeout += 0.5
+                await asyncio.sleep(0.5)
+
+    # Run the long script and kill it
+    await asyncio.gather(
+        run_long_script(),
+        wait_and_kill_script(),
+    )
+
+    # Verify that script_kill raises an error when no script is running
+    with pytest.raises(RequestError) as e:
+        if route is not None:
+            await cast(GlideClusterClient, glide_client).script_kill(route=route)
+        else:
+            await glide_client.script_kill()
+    assert "No scripts in execution right now" in str(e)
+
+    await test_client.close()
+
+
 @pytest.mark.asyncio
 class TestScripts:
     @pytest.mark.smoke_test
@@ -10274,3 +10333,147 @@ class TestScripts:
             == key.encode()
         )
         await glide_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_script_exists(self, glide_client: TGlideClient, cluster_mode: bool):
+        cluster_mode = isinstance(glide_client, GlideClusterClient)
+        script1 = Script("return 'Hello'")
+        script2 = Script("return 'World'")
+        script3 = Script("return 'Hello World'")
+
+        # Load script1 to all nodes, do not load script2 and load script3 with a SlotKeyRoute
+        await glide_client.invoke_script(script1)
+
+        if cluster_mode:
+            await cast(GlideClusterClient, glide_client).invoke_script_route(
+                script3, route=SlotKeyRoute(SlotType.PRIMARY, "1")
+            )
+        else:
+            await glide_client.invoke_script(script3)
+
+        # Get the SHA1 digests of the scripts
+        sha1_1 = script1.get_hash()
+        sha1_2 = script2.get_hash()
+        sha1_3 = script3.get_hash()
+        non_existent_sha1 = "0" * 40  # A SHA1 that doesn't exist
+        # Check existence of scripts
+        result = await glide_client.script_exists(
+            [sha1_1, sha1_2, sha1_3, non_existent_sha1]
+        )
+
+        # script1 is loaded and returns true.
+        # script2 is only cached and not loaded, returns false.
+        # script3 is invoked with a SlotKeyRoute. Despite SCRIPT EXIST uses LogicalAggregate AND on the results,
+        #   SCRIPT LOAD during internal execution so the script still gets loaded on all nodes, returns true.
+        # non-existing sha1 returns false.
+        assert result == [True, False, True, False]
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_script_flush(self, glide_client: TGlideClient):
+        # Load a script
+        script = Script("return 'Hello'")
+        await glide_client.invoke_script(script)
+
+        # Check that the script exists
+        assert await glide_client.script_exists([script.get_hash()]) == [True]
+
+        # Flush the script cache
+        assert await glide_client.script_flush() == OK
+
+        # Check that the script no longer exists
+        assert await glide_client.script_exists([script.get_hash()]) == [False]
+
+        # Test with ASYNC mode
+        await glide_client.invoke_script(script)
+        assert await glide_client.script_flush(FlushMode.ASYNC) == OK
+        assert await glide_client.script_exists([script.get_hash()]) == [False]
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("single_route", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_script_kill_route(
+        self,
+        request,
+        cluster_mode,
+        protocol,
+        glide_client: TGlideClient,
+        single_route: bool,
+    ):
+        route = SlotKeyRoute(SlotType.PRIMARY, "1") if single_route else AllPrimaries()
+
+        # Create a second client to run the script
+        test_client = await create_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, timeout=30000
+        )
+
+        await script_kill_tests(glide_client, test_client, route)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_script_kill_no_route(
+        self,
+        request,
+        cluster_mode,
+        protocol,
+        glide_client: TGlideClient,
+    ):
+        # Create a second client to run the script
+        test_client = await create_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, timeout=30000
+        )
+
+        await script_kill_tests(glide_client, test_client)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_script_kill_unkillable(
+        self, request, cluster_mode, protocol, glide_client: TGlideClient
+    ):
+        # Create a second client to run the script
+        test_client = await create_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, timeout=30000
+        )
+
+        # Create a second client to kill the script
+        test_client2 = await create_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, timeout=15000
+        )
+
+        # Add test for script_kill with writing script
+        writing_script = Script(
+            """
+            redis.call('SET', KEYS[1], 'value')
+            local start = redis.call('TIME')[1]
+            while redis.call('TIME')[1] - start < 15 do
+                redis.call('SET', KEYS[1], 'value')
+            end
+        """
+        )
+
+        async def run_writing_script():
+            await test_client.invoke_script(writing_script, keys=[get_random_string(5)])
+
+        async def attempt_kill_writing_script():
+            await asyncio.sleep(3)  # Give some time for the script to start
+            foundUnkillable = False
+            while True:
+                try:
+                    await test_client2.script_kill()
+                except RequestError as e:
+                    if "UNKILLABLE" in str(e):
+                        foundUnkillable = True
+                        break
+                    await asyncio.sleep(0.5)
+
+            assert foundUnkillable
+
+        # Run the writing script and attempt to kill it
+        await asyncio.gather(
+            run_writing_script(),
+            attempt_kill_writing_script(),
+        )
+
+        await test_client.close()
+        await test_client2.close()

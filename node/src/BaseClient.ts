@@ -250,12 +250,13 @@ import {
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
 type ErrorFunction = (error: RedisError) => void;
+/* eslint @typescript-eslint/consistent-indexed-object-style: off,  @typescript-eslint/consistent-type-definitions: off */
 export type ReturnTypeRecord = { [key: string]: GlideReturnType };
 export type ReturnTypeMap = Map<string, GlideReturnType>;
-export type ReturnTypeAttribute = {
+export interface ReturnTypeAttribute {
     value: GlideReturnType;
     attributes: ReturnTypeRecord;
-};
+}
 export enum ProtocolVersion {
     /** Use RESP2 to communicate with the server nodes. */
     RESP2 = connection_request.ProtocolVersion.RESP2,
@@ -296,13 +297,13 @@ export enum Decoder {
 }
 
 /** An extension to command option types with {@link Decoder}. */
-export type DecoderOption = {
+export interface DecoderOption {
     /**
      * {@link Decoder} type which defines how to handle the response.
      * If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      */
     decoder?: Decoder;
-};
+}
 
 /** A replacement for `Record<GlideString, T>` - array of key-value pairs. */
 export type GlideRecord<T> = {
@@ -411,7 +412,7 @@ class PointerResponse {
 }
 
 /** Represents the credentials for connecting to a server. */
-export type RedisCredentials = {
+export interface RedisCredentials {
     /**
      * The username that will be used for authenticating connections to the Valkey servers.
      * If not supplied, "default" will be used.
@@ -421,7 +422,7 @@ export type RedisCredentials = {
      * The password that will be used for authenticating connections to the Valkey servers.
      */
     password: string;
-};
+}
 
 /** Represents the client's read from strategy. */
 export type ReadFrom =
@@ -434,7 +435,7 @@ export type ReadFrom =
 /**
  * Configuration settings for creating a client. Shared settings for standalone and cluster clients.
  */
-export type BaseClientConfiguration = {
+export interface BaseClientConfiguration {
     /**
      * DNS Addresses and ports of known nodes in the cluster.
      * If the server is in cluster mode the list can be partial, as the client will attempt to map out the cluster and find all nodes.
@@ -495,9 +496,9 @@ export type BaseClientConfiguration = {
      * If not set, 'Decoder.String' will be used.
      */
     defaultDecoder?: Decoder;
-};
+}
 
-export type ScriptOptions = {
+export interface ScriptOptions {
     /**
      * The keys that are used in the script.
      */
@@ -506,7 +507,7 @@ export type ScriptOptions = {
      * The arguments for the script.
      */
     args?: GlideString[];
-};
+}
 
 function getRequestErrorClass(
     type: response.RequestErrorType | null | undefined,
@@ -604,11 +605,11 @@ function toProtobufRoute(
     }
 }
 
-export type PubSubMsg = {
+export interface PubSubMsg {
     message: string;
     channel: string;
     pattern?: string | null;
-};
+}
 
 /**
  * @internal
@@ -1203,7 +1204,7 @@ export class BaseClient {
     }
 
     /**
-     * Returns the substring of the string value stored at `key`, determined by the offsets
+     * Returns the substring of the string value stored at `key`, determined by the byte offsets
      * `start` and `end` (both are inclusive). Negative offsets can be used in order to provide
      * an offset starting from the end of the string. So `-1` means the last character, `-2` the
      * penultimate and so forth. If `key` does not exist, an empty string is returned. If `start`
@@ -1212,8 +1213,8 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/getrange/|valkey.io} for details.
      *
      * @param key - The key of the string.
-     * @param start - The starting offset.
-     * @param end - The ending offset.
+     * @param start - The starting byte offset.
+     * @param end - The ending byte offset.
      * @param options - (Optional) See {@link DecoderOption}.
      * @returns A substring extracted from the value stored at `key`.
      *
@@ -3936,7 +3937,7 @@ export class BaseClient {
      * const result1 = await client.zdiffstore("zset3", ["zset1", "zset2"]);
      * console.log(result1); // Output: 1 - One member exists in "key1" but not "key2", and this member was stored in "zset3".
      *
-     * const result2 = await client.zrange("zset3", {start: 0, stop: -1});
+     * const result2 = await client.zrange("zset3", {start: 0, end: -1});
      * console.log(result2); // Output: ["member2"] - "member2" is now stored in "my_sorted_set".
      * ```
      */
@@ -4119,7 +4120,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of zrange method to retrieve all members of a sorted set in ascending order
-     * const result = await client.zrange("my_sorted_set", { start: 0, stop: -1 });
+     * const result = await client.zrange("my_sorted_set", { start: 0, end: -1 });
      * console.log(result1); // Output: all members in ascending order
      * // ['member1', 'member2', 'member3']
      * ```
@@ -4128,7 +4129,7 @@ export class BaseClient {
      * // Example usage of zrange method to retrieve members within a score range in descending order
      * const result = await client.zrange("my_sorted_set", {
      *              start: InfBoundary.NegativeInfinity,
-     *              stop: { value: 3, isInclusive: false },
+     *              end: { value: 3, isInclusive: false },
      *              type: "byScore",
      *           }, { reverse: true });
      * console.log(result); // Output: members with scores within the range of negative infinity to 3, in descending order
@@ -4168,7 +4169,7 @@ export class BaseClient {
      * // Example usage of zrangeWithScores method to retrieve members within a score range with their scores
      * const result = await client.zrangeWithScores("my_sorted_set", {
      *              start: { value: 10, isInclusive: false },
-     *              stop: { value: 20, isInclusive: false },
+     *              end: { value: 20, isInclusive: false },
      *              type: "byScore",
      *           });
      * console.log(result); // Output: members with scores between 10 and 20 with their scores
@@ -4179,7 +4180,7 @@ export class BaseClient {
      * // Example usage of zrangeWithScores method to retrieve members within a score range with their scores
      * const result = await client.zrangeWithScores("my_sorted_set", {
      *              start: InfBoundary.NegativeInfinity,
-     *              stop: { value: 3, isInclusive: false },
+     *              end: { value: 3, isInclusive: false },
      *              type: "byScore",
      *           }, { reverse: true });
      * console.log(result); // Output: members with scores within the range of negative infinity to 3, with their scores in descending order
@@ -4218,7 +4219,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of zrangeStore to retrieve and store all members of a sorted set in ascending order.
-     * const result = await client.zrangeStore("destination_key", "my_sorted_set", { start: 0, stop: -1 });
+     * const result = await client.zrangeStore("destination_key", "my_sorted_set", { start: 0, end: -1 });
      * console.log(result); // Output: 7 - "destination_key" contains a sorted set with the 7 members from "my_sorted_set".
      * ```
      * @example
@@ -4226,7 +4227,7 @@ export class BaseClient {
      * // Example usage of zrangeStore method to retrieve members within a score range in ascending order and store in "destination_key"
      * const result = await client.zrangeStore("destination_key", "my_sorted_set", {
      *              start: InfBoundary.NegativeInfinity,
-     *              stop: { value: 3, isInclusive: false },
+     *              end: { value: 3, isInclusive: false },
      *              type: "byScore",
      *           });
      * console.log(result); // Output: 5 - Stores 5 members with scores within the range of negative infinity to 3, in ascending order, in "destination_key".
@@ -4236,7 +4237,7 @@ export class BaseClient {
         destination: GlideString,
         source: GlideString,
         rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
-        reverse: boolean = false,
+        reverse = false,
     ): Promise<number> {
         return this.createWritePromise(
             createZRangeStore(destination, source, rangeQuery, reverse),
@@ -4267,13 +4268,13 @@ export class BaseClient {
      * // use `zinterstore` with default aggregation and weights
      * console.log(await client.zinterstore("my_sorted_set", ["key1", "key2"]))
      * // Output: 1 - Indicates that the sorted set "my_sorted_set" contains one element.
-     * console.log(await client.zrangeWithScores("my_sorted_set", {start: 0, stop: -1}))
+     * console.log(await client.zrangeWithScores("my_sorted_set", {start: 0, end: -1}))
      * // Output: {'member1': 20} - "member1" is now stored in "my_sorted_set" with score of 20.
      *
      * // use `zinterstore` with default weights
      * console.log(await client.zinterstore("my_sorted_set", ["key1", "key2"] , AggregationType.MAX))
      * // Output: 1 - Indicates that the sorted set "my_sorted_set" contains one element, and it's score is the maximum score between the sets.
-     * console.log(await client.zrangeWithScores("my_sorted_set", {start: 0, stop: -1}))
+     * console.log(await client.zrangeWithScores("my_sorted_set", {start: 0, end: -1}))
      * // Output: {'member1': 10.5} - "member1" is now stored in "my_sorted_set" with score of 10.5.
      * ```
      */
@@ -6191,6 +6192,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * console.log(await client.bitcount("my_key1")); // Output: 2 - The string stored at "my_key1" contains 2 set bits.
+     * console.log(await client.bitcount("my_key2", { start: 1 })); // Output: 8 - From the second to to the last bytes of the string stored at "my_key2" are contain 8 set bits.
      * console.log(await client.bitcount("my_key2", { start: 1, end: 3 })); // Output: 2 - The second to fourth bytes of the string stored at "my_key2" contain 2 set bits.
      * console.log(await client.bitcount("my_key3", { start: 1, end: 1, indexType: BitmapIndexType.BIT })); // Output: 1 - Indicates that the second bit of the string stored at "my_key3" is set.
      * console.log(await client.bitcount("my_key3", { start: -1, end: -1, indexType: BitmapIndexType.BIT })); // Output: 1 - Indicates that the last bit of the string stored at "my_key3" is set.
@@ -6347,7 +6349,7 @@ export class BaseClient {
      * // search for locations within 200 km circle around stored member named 'Palermo' and store in `destination`:
      * await client.geosearchstore("destination", "mySortedSet", { member: "Palermo" }, { radius: 200, unit: GeoUnit.KILOMETERS });
      * // query the stored results
-     * const result1 = await client.zrangeWithScores("destination", { start: 0, stop: -1 });
+     * const result1 = await client.zrangeWithScores("destination", { start: 0, end: -1 });
      * console.log(result1); // Output:
      * // {
      * //     Palermo: 3479099956230698,   // geohash of the location is stored as element's score
@@ -6368,7 +6370,7 @@ export class BaseClient {
      *     },
      * );
      * // query the stored results
-     * const result2 = await client.zrangeWithScores("destination", { start: 0, stop: -1 });
+     * const result2 = await client.zrangeWithScores("destination", { start: 0, end: -1 });
      * console.log(result2); // Output:
      * // {
      * //     Palermo: 190.4424,   // distance from the search area center is stored as element's score
@@ -6867,14 +6869,14 @@ export class BaseClient {
     }
 
     /**
-     * Overwrites part of the string stored at `key`, starting at the specified `offset`,
+     * Overwrites part of the string stored at `key`, starting at the specified byte `offset`,
      * for the entire length of `value`. If the `offset` is larger than the current length of the string at `key`,
      * the string is padded with zero bytes to make `offset` fit. Creates the `key` if it doesn't exist.
      *
      * @see {@link https://valkey.io/commands/setrange/|valkey.io} for more details.
      *
      * @param key - The key of the string to update.
-     * @param offset - The position in the string where `value` should be written.
+     * @param offset - The byte position in the string where `value` should be written.
      * @param value - The string written with `offset`.
      * @returns The length of the string stored at `key` after it was modified.
      *

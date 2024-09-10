@@ -40,7 +40,7 @@ import {
 } from "..";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-function intoArrayInternal(obj: any, builder: Array<string>) {
+function intoArrayInternal(obj: any, builder: string[]) {
     if (obj == null) {
         builder.push("null");
     } else if (typeof obj === "string") {
@@ -86,7 +86,7 @@ function intoArrayInternal(obj: any, builder: Array<string>) {
  * accept any variable `v` and convert it into String, recursively
  */
 export function intoString(v: any): string {
-    const builder: Array<string> = [];
+    const builder: string[] = [];
     intoArrayInternal(v, builder);
     return builder.join("");
 }
@@ -94,8 +94,8 @@ export function intoString(v: any): string {
 /**
  * accept any variable `v` and convert it into array of string
  */
-export function intoArray(v: any): Array<string> {
-    const result: Array<string> = [];
+export function intoArray(v: any): string[] {
+    const result: string[] = [];
     intoArrayInternal(v, result);
     return result;
 }
@@ -130,10 +130,10 @@ export function checkSimple(left: any): Checker {
     return new Checker(left);
 }
 
-export type Client = {
+export interface Client {
     set: (key: string, value: string) => Promise<GlideString | "OK" | null>;
     get: (key: string) => Promise<GlideString | null>;
-};
+}
 
 export async function GetAndSetRandomValue(client: Client) {
     const key = uuidv4();
@@ -1013,14 +1013,14 @@ export async function transactionTest(
 
     baseTransaction.zscore(key8, "member2");
     responseData.push(['zscore(key8, "member2")', 3.0]);
-    baseTransaction.zrange(key8, { start: 0, stop: -1 });
+    baseTransaction.zrange(key8, { start: 0, end: -1 });
     responseData.push([
-        "zrange(key8, { start: 0, stop: -1 })",
+        "zrange(key8, { start: 0, end: -1 })",
         ["member2", "member3", "member4", "member5"],
     ]);
-    baseTransaction.zrangeWithScores(key8, { start: 0, stop: -1 });
+    baseTransaction.zrangeWithScores(key8, { start: 0, end: -1 });
     responseData.push([
-        "zrangeWithScores(key8, { start: 0, stop: -1 })",
+        "zrangeWithScores(key8, { start: 0, end: -1 })",
         { member2: 3, member3: 3.5, member4: 4, member5: 5 },
     ]);
     baseTransaction.zadd(key12, { one: 1, two: 2 });
@@ -1055,9 +1055,9 @@ export async function transactionTest(
     responseData.push(["zadd(key13, { one: 1, two: 2, three: 3.5 })", 3]);
 
     if (gte(version, "6.2.0")) {
-        baseTransaction.zrangeStore(key8, key8, { start: 0, stop: -1 });
+        baseTransaction.zrangeStore(key8, key8, { start: 0, end: -1 });
         responseData.push([
-            "zrangeStore(key8, key8, { start: 0, stop: -1 })",
+            "zrangeStore(key8, key8, { start: 0, end: -1 })",
             4,
         ]);
         baseTransaction.zdiff([key13, key12]);
@@ -1368,6 +1368,15 @@ export async function transactionTest(
             "bitposInterval(key17, 1, 44, 50, BitmapIndexType.BIT)",
             46,
         ]);
+    }
+
+    if (gte(version, "7.9.0")) {
+        baseTransaction.set(key17, "foobar");
+        responseData.push(['set(key17, "foobar")', "OK"]);
+        baseTransaction.bitcount(key17, {
+            start: 0,
+        });
+        responseData.push(["bitcount(key17, {start:0 }", 26]);
     }
 
     baseTransaction.bitfield(key17, [

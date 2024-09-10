@@ -4,13 +4,13 @@
 
 import {
     BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
-    GlideRecord, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GlideRecord,
     GlideString,
     HashDataType,
+    ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
+    SortedSetDataType,
     convertGlideRecord,
     convertHashDataType,
-    ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
-    SortedSetDataType, // eslint-disable-line @typescript-eslint/no-unused-vars
 } from "./BaseClient";
 
 import {
@@ -309,7 +309,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     protected addAndReturn(
         command: command_request.Command,
-        shouldConvertToSet: boolean = false,
+        shouldConvertToSet = false,
     ): T {
         if (shouldConvertToSet) {
             // The command's index within the transaction is saved for later conversion of its response to a Set type.
@@ -365,7 +365,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns the substring of the string value stored at `key`, determined by the offsets
+     * Returns the substring of the string value stored at `key`, determined by the byte offsets
      * `start` and `end` (both are inclusive). Negative offsets can be used in order to provide
      * an offset starting from the end of the string. So `-1` means the last character, `-2` the
      * penultimate and so forth. If `key` does not exist, an empty string is returned. If `start`
@@ -374,8 +374,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @see {@link https://valkey.io/commands/getrange/|valkey.io} for details.
      *
      * @param key - The key of the string.
-     * @param start - The starting offset.
-     * @param end - The ending offset.
+     * @param start - The starting byte offset.
+     * @param end - The ending byte offset.
      *
      * Command Response - substring extracted from the value stored at `key`.
      */
@@ -1988,7 +1988,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     public zrange(
         key: GlideString,
         rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
-        reverse: boolean = false,
+        reverse = false,
     ): T {
         return this.addAndReturn(createZRange(key, rangeQuery, reverse));
     }
@@ -2012,7 +2012,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     public zrangeWithScores(
         key: GlideString,
         rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
-        reverse: boolean = false,
+        reverse = false,
     ): T {
         return this.addAndReturn(
             createZRangeWithScores(key, rangeQuery, reverse),
@@ -2041,7 +2041,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         destination: GlideString,
         source: GlideString,
         rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
-        reverse: boolean = false,
+        reverse = false,
     ): T {
         return this.addAndReturn(
             createZRangeStore(destination, source, rangeQuery, reverse),
@@ -3835,14 +3835,14 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Overwrites part of the string stored at `key`, starting at the specified `offset`,
+     * Overwrites part of the string stored at `key`, starting at the specified byte `offset`,
      * for the entire length of `value`. If the `offset` is larger than the current length of the string at `key`,
      * the string is padded with zero bytes to make `offset` fit. Creates the `key` if it doesn't exist.
      *
      * @see {@link https://valkey.io/commands/setrange/|valkey.io} for details.
      *
      * @param key - The key of the string to update.
-     * @param offset - The position in the string where `value` should be written.
+     * @param offset - The byte position in the string where `value` should be written.
      * @param value - The string written with `offset`.
      *
      * Command Response - The length of the string stored at `key` after it was modified.
@@ -4237,7 +4237,7 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
     public publish(
         message: GlideString,
         channel: GlideString,
-        sharded: boolean = false,
+        sharded = false,
     ): ClusterTransaction {
         return this.addAndReturn(createPublish(message, channel, sharded));
     }

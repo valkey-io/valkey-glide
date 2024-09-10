@@ -65,7 +65,7 @@ from glide.constants import (
 from glide.protobuf.command_request_pb2 import RequestType
 from glide.routes import Route
 
-from ..glide import ClusterScanCursor, Script
+from ..glide import ClusterScanCursor
 
 
 class ConditionalChange(Enum):
@@ -4377,7 +4377,7 @@ class CoreCommands(Protocol):
         Examples:
             >>> await client.zrange("my_sorted_set", RangeByIndex(0, -1))
                 [b'member1', b'member2', b'member3']  # Returns all members in ascending order.
-            >>> await client.zrange("my_sorted_set", RangeByScore(start=InfBound.NEG_INF, stop=ScoreBoundary(3)))
+            >>> await client.zrange("my_sorted_set", RangeByScore(InfBound.NEG_INF, ScoreBoundary(3)))
                 [b'member2', b'member3'] # Returns members with scores within the range of negative infinity to 3, in ascending order.
         """
         args = _create_zrange_args(key, range_query, reverse, with_scores=False)
@@ -4410,7 +4410,7 @@ class CoreCommands(Protocol):
         Examples:
             >>> await client.zrange_withscores("my_sorted_set", RangeByScore(ScoreBoundary(10), ScoreBoundary(20)))
                 {b'member1': 10.5, b'member2': 15.2}  # Returns members with scores between 10 and 20 with their scores.
-           >>> await client.zrange_withscores("my_sorted_set", RangeByScore(start=InfBound.NEG_INF, stop=ScoreBoundary(3)))
+           >>> await client.zrange_withscores("my_sorted_set", RangeByScore(InfBound.NEG_INF, ScoreBoundary(3)))
                 {b'member4': -2.0, b'member7': 1.5} # Returns members with with scores within the range of negative infinity to 3, with their scores.
         """
         args = _create_zrange_args(key, range_query, reverse, with_scores=True)
@@ -5393,36 +5393,6 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.ZInterCard, args),
         )
 
-    async def invoke_script(
-        self,
-        script: Script,
-        keys: Optional[List[TEncodable]] = None,
-        args: Optional[List[TEncodable]] = None,
-    ) -> TResult:
-        """
-        Invokes a Lua script with its keys and arguments.
-        This method simplifies the process of invoking scripts on a the server by using an object that represents a Lua script.
-        The script loading, argument preparation, and execution will all be handled internally.
-        If the script has not already been loaded, it will be loaded automatically using the `SCRIPT LOAD` command.
-        After that, it will be invoked using the `EVALSHA` command.
-
-        See https://valkey.io/commands/script-load/ and https://valkey.io/commands/evalsha/ for more details.
-
-        Args:
-            script (Script): The Lua script to execute.
-            keys (Optional[List[TEncodable]]): The keys that are used in the script.
-            args (Optional[List[TEncodable]]): The arguments for the script.
-
-        Returns:
-            TResult: a value that depends on the script that was executed.
-
-        Examples:
-            >>> lua_script = Script("return { KEYS[1], ARGV[1] }")
-            >>> await invoke_script(lua_script, keys=["foo"], args=["bar"] );
-                [b"foo", b"bar"]
-        """
-        return await self._execute_script(script.get_hash(), keys, args)
-
     async def pfadd(self, key: TEncodable, elements: List[TEncodable]) -> int:
         """
         Adds all elements to the HyperLogLog data structure stored at the specified `key`.
@@ -5531,6 +5501,8 @@ class CoreCommands(Protocol):
         Examples:
             >>> await client.bitcount("my_key1")
                 2  # The string stored at "my_key1" contains 2 set bits.
+            >>> await client.bitcount("my_key2", OffsetOptions(1))
+                8  # From the second to last bytes of the string stored at "my_key2" there are 8 set bits.
             >>> await client.bitcount("my_key2", OffsetOptions(1, 3))
                 2  # The second to fourth bytes of the string stored at "my_key2" contain 2 set bits.
             >>> await client.bitcount("my_key3", OffsetOptions(1, 1, BitmapIndexType.BIT))

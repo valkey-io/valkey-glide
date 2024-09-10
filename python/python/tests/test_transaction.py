@@ -438,9 +438,9 @@ async def transaction_test(
     args.append(3)
     transaction.zscore(key8, "two")
     args.append(2.0)
-    transaction.zrange(key8, RangeByIndex(start=0, stop=-1))
+    transaction.zrange(key8, RangeByIndex(0, -1))
     args.append([b"two", b"three", b"four"])
-    transaction.zrange_withscores(key8, RangeByIndex(start=0, stop=-1))
+    transaction.zrange_withscores(key8, RangeByIndex(0, -1))
     args.append({b"two": 2.0, b"three": 3.0, b"four": 4.0})
     transaction.zmscore(key8, ["two", "three"])
     args.append([2.0, 3.0])
@@ -558,6 +558,12 @@ async def transaction_test(
         args.append(17)
         transaction.bitpos_interval(key20, 1, 44, 50, BitmapIndexType.BIT)
         args.append(46)
+
+    if not await check_if_server_version_lt(glide_client, "7.9.0"):
+        transaction.set(key20, "foobar")
+        args.append(OK)
+        transaction.bitcount(key20, OffsetOptions(0))
+        args.append(26)
 
     transaction.geoadd(
         key12,

@@ -24,7 +24,10 @@ class BitmapIndexType(Enum):
 
 class OffsetOptions:
     def __init__(
-        self, start: int, end: int, index_type: Optional[BitmapIndexType] = None
+        self,
+        start: int,
+        end: Optional[int] = None,
+        index_type: Optional[BitmapIndexType] = None,
     ):
         """
         Represents offsets specifying a string interval to analyze in the `BITCOUNT` command. The offsets are
@@ -34,7 +37,7 @@ class OffsetOptions:
 
         Args:
             start (int): The starting offset index.
-            end (int): The ending offset index.
+            end (int): The ending offset index. Optional since Valkey version 8.0.0 and above. If not provided, it will default to the end of the string.
             index_type (Optional[BitmapIndexType]): The index offset type. This option can only be specified if you are
                 using Valkey version 7.0.0 or above. Could be either `BitmapIndexType.BYTE` or `BitmapIndexType.BIT`.
                 If no index type is provided, the indexes will be assumed to be byte indexes.
@@ -44,7 +47,9 @@ class OffsetOptions:
         self.index_type = index_type
 
     def to_args(self) -> List[str]:
-        args = [str(self.start), str(self.end)]
+        args = [str(self.start)]
+        if self.end:
+            args.append(str(self.end))
         if self.index_type is not None:
             args.append(self.index_type.value)
 

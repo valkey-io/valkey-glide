@@ -164,29 +164,17 @@ Development on the Node wrapper may involve changes in either the TypeScript or 
 
     ```bash
     # Run from the root folder of the GLIDE repository
-    npm install eslint-plugin-import@latest  @typescript-eslint/parser @typescript-eslint/eslint-plugin eslint-plugin-tsdoc eslint typescript eslint-plugin-import@latest eslint-config-prettier prettier
-    npm i
+    npm install --save-dev prettier
     cd node
-    npx eslint . --max-warnings=0
     npx prettier --check .
-    ```
-
-    To automatically apply prettier recommendations, run the following command:
-
-    ```bash
+    npm run lint
+    # To automatically apply ESLint and/or prettier recommendations
+    npx run lint:fix
     npx prettier -w .
     ```
 
-    To avoid getting ESLint warnings from protobuf generated files, run the following command:
-
     ```bash
-    npx eslint --ignore-pattern ProtobufMessage.* .
-    ```
 
-    To automatically apply ESLint recommendations, run the following command:
-
-    ```bash
-    npx eslint --ignore-pattern ProtobufMessage.* --ignore-pattern 'build-ts/**' --fix .
     ```
 
 2. Rust
