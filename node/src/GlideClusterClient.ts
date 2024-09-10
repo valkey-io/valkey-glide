@@ -12,7 +12,7 @@ import {
     GlideReturnType,
     GlideString,
     PubSubMsg,
-    ReadFrom,
+    ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
     convertGlideRecordToRecord,
 } from "./BaseClient";
 import {
