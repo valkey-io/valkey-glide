@@ -1,3 +1,4 @@
+/* eslint no-undef: off */
 import { execFile } from "child_process";
 import findFreePorts from "find-free-ports";
 import { AsyncClient } from "glide-rs";

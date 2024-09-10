@@ -3311,7 +3311,7 @@ export function runBaseTests(config: {
 
                 const numberMembersSet: string[] = numberMembers;
                 const charMembers: string[] = ["a", "b", "c", "d", "e"];
-                const charMembersSet: Set<string> = new Set(charMembers);
+                const charMembersSet = new Set<string>(charMembers);
                 const resultCursorIndex = 0;
                 const resultCollectionIndex = 1;
 
@@ -8763,7 +8763,7 @@ export function runBaseTests(config: {
                     "edge2",
                     "edge1",
                 ];
-                const membersSet: Set<string> = new Set(members);
+                const membersSet = new Set<string>(members);
                 const membersCoordinates: [number, number][] = [
                     [15.087269, 37.502669],
                     [13.361389, 38.115556],

@@ -76,7 +76,7 @@ export namespace GlideClientConfiguration {
         Pattern = 1,
     }
 
-    export type PubSubSubscriptions = {
+    export interface PubSubSubscriptions {
         /**
          * Channels and patterns by modes.
          */
@@ -93,7 +93,7 @@ export namespace GlideClientConfiguration {
          */
         /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
         context?: any;
-    };
+    }
 }
 
 export type GlideClientConfiguration = BaseClientConfiguration & {
