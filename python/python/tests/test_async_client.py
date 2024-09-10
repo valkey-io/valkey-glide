@@ -578,7 +578,7 @@ class TestCommands:
         if len(info_server["config_file"]) > 0:
             assert await glide_client.config_rewrite() == OK
         else:
-            # We expect Redis to return an error since the test cluster doesn't use redis.conf file
+            # We expect Valkey to return an error since the test cluster doesn't use valkey.conf file
             with pytest.raises(RequestError) as e:
                 await glide_client.config_rewrite()
             assert "The server is running without a config file" in str(e)
@@ -6951,7 +6951,7 @@ class TestCommands:
         )
 
         # reset the last delivered ID for the consumer group to "1-1"
-        # ENTRIESREAD is only supported in Redis version 7.0.0 and above
+        # ENTRIESREAD is only supported in Valkey version 7.0.0 and above
         if await check_if_server_version_lt(glide_client, "7.0.0"):
             assert await glide_client.xgroup_set_id(key, group_name, stream_id1_1) == OK
         else:
@@ -8206,7 +8206,7 @@ class TestCommands:
     async def test_function_stats(self, glide_client: TGlideClient):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         lib_name = "functionStats_without_route"
         func_name = lib_name
@@ -8252,7 +8252,7 @@ class TestCommands:
     ):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
@@ -8309,7 +8309,7 @@ class TestCommands:
     ):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         route = (
             SlotKeyRoute(SlotType.PRIMARY, get_random_string(10))
@@ -8376,7 +8376,7 @@ class TestCommands:
     ):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
@@ -8435,7 +8435,7 @@ class TestCommands:
     ):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"

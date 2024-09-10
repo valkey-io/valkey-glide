@@ -14,7 +14,7 @@ from glide.config import (
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.logger import Level as logLevel
 from glide.logger import Logger
-from tests.utils.cluster import RedisCluster
+from tests.utils.cluster import ValkeyCluster
 
 DEFAULT_HOST = "localhost"
 DEFAULT_PORT = 6379
@@ -55,7 +55,7 @@ def pytest_addoption(parser):
     parser.addoption(
         "--load-module",
         action="append",
-        help="""Load additional Redis modules (provide full path for the module's shared library).
+        help="""Load additional Valkey modules (provide full path for the module's shared library).
             Use multiple times for multiple modules.
             Example:
             pytest --load-module=/path/to/module1.so --load-module=/path/to/module2.so""",
@@ -110,27 +110,27 @@ def parse_endpoints(endpoints_str: str) -> List[List[str]]:
 
 def create_clusters(tls, load_module, cluster_endpoints, standalone_endpoints):
     """
-    Create Redis clusters based on the provided options.
+    Create Valkey clusters based on the provided options.
     """
     if cluster_endpoints or standalone_endpoints:
         # Endpoints were passed by the caller, not creating clusters internally
         if cluster_endpoints:
             cluster_endpoints = parse_endpoints(cluster_endpoints)
-            pytest.redis_cluster = RedisCluster(tls=tls, addresses=cluster_endpoints)
+            pytest.valkey_cluster = ValkeyCluster(tls=tls, addresses=cluster_endpoints)
         if standalone_endpoints:
             standalone_endpoints = parse_endpoints(standalone_endpoints)
-            pytest.standalone_cluster = RedisCluster(
+            pytest.standalone_cluster = ValkeyCluster(
                 tls=tls, addresses=standalone_endpoints
             )
     else:
         # No endpoints were provided, create new clusters
-        pytest.redis_cluster = RedisCluster(
+        pytest.valkey_cluster = ValkeyCluster(
             tls=tls,
             cluster_mode=True,
             load_module=load_module,
             addresses=cluster_endpoints,
         )
-        pytest.standalone_cluster = RedisCluster(
+        pytest.standalone_cluster = ValkeyCluster(
             tls=tls,
             cluster_mode=False,
             shard_count=1,
@@ -160,9 +160,9 @@ def pytest_sessionfinish(session, exitstatus):
     returning the exit status to the system.
     """
     try:
-        del pytest.redis_cluster
+        del pytest.valkey_cluster
     except AttributeError:
-        # redis_cluster was not set, skip deletion
+        # valkey_cluster was not set, skip deletion
         pass
 
     try:
@@ -233,10 +233,10 @@ async def create_client(
     # Create async socket client
     use_tls = request.config.getoption("--tls")
     if cluster_mode:
-        assert type(pytest.redis_cluster) is RedisCluster
+        assert type(pytest.valkey_cluster) is ValkeyCluster
         assert database_id == 0
-        k = min(3, len(pytest.redis_cluster.nodes_addr))
-        seed_nodes = random.sample(pytest.redis_cluster.nodes_addr, k=k)
+        k = min(3, len(pytest.valkey_cluster.nodes_addr))
+        seed_nodes = random.sample(pytest.valkey_cluster.nodes_addr, k=k)
         cluster_config = GlideClusterClientConfiguration(
             addresses=seed_nodes if addresses is None else addresses,
             use_tls=use_tls,
@@ -248,7 +248,7 @@ async def create_client(
         )
         return await GlideClusterClient.create(cluster_config)
     else:
-        assert type(pytest.standalone_cluster) is RedisCluster
+        assert type(pytest.standalone_cluster) is ValkeyCluster
         config = GlideClientConfiguration(
             addresses=(
                 pytest.standalone_cluster.nodes_addr if addresses is None else addresses

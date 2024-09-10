@@ -570,7 +570,7 @@ class GlideClient(BaseClient, StandaloneCommands):
     """
     Client used for connection to standalone servers.
     For full documentation, see
-    https://github.com/valkey-io/valkey-glide/wiki/Python-wrapper#redis-standalone
+    https://github.com/valkey-io/valkey-glide/wiki/Python-wrapper#standalone
     """
 
 

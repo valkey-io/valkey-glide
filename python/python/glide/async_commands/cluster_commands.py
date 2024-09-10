@@ -1113,7 +1113,7 @@ class ClusterCommands(CoreCommands):
 
         Examples:
             >>> await client.lolwut(6, [40, 20], RandomNode());
-                b"Redis ver. 7.2.3" # Indicates the current Valkey version
+                b"Valkey ver. 7.2.3" # Indicates the current Valkey version
         """
         args: List[TEncodable] = []
         if version is not None:
