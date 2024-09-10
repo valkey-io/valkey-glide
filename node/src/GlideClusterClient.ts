@@ -225,7 +225,7 @@ export type SingleNodeRoute =
     | RouteByAddress;
 
 /**
- * Client used for connection to cluster Valkey servers.
+ * Client used for connection to cluster servers.
  *
  * @see For full documentation refer to {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#cluster|Valkey Glide Wiki}.
  */

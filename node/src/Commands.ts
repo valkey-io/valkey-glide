@@ -201,7 +201,7 @@ export function createSet(
  */
 export enum InfoOptions {
     /**
-     * SERVER: General information about the Valkey server
+     * SERVER: General information about the server
      */
     Server = "server",
     /**

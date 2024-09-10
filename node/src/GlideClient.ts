@@ -134,7 +134,7 @@ export type GlideClientConfiguration = BaseClientConfiguration & {
 };
 
 /**
- * Client used for connection to standalone Valkey servers.
+ * Client used for connection to standalone servers.
  *
  * @see For full documentation refer to {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#standalone|Valkey Glide Wiki}.
  */

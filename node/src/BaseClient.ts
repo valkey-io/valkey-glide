@@ -482,7 +482,7 @@ export type BaseClientConfiguration = {
      */
     readFrom?: ReadFrom;
     /**
-     * Choose the Valkey protocol to be used with the server.
+     * Choose the protocol to be used with the server.
      * If not set, `RESP3` will be used.
      */
     protocol?: ProtocolVersion;
