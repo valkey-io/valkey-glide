@@ -308,7 +308,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     protected addAndReturn(
         command: command_request.Command,
-        shouldConvertToSet: boolean = false,
+        shouldConvertToSet = false,
     ): T {
         if (shouldConvertToSet) {
             // The command's index within the transaction is saved for later conversion of its response to a Set type.
@@ -1993,7 +1993,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     public zrange(
         key: GlideString,
         rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
-        reverse: boolean = false,
+        reverse = false,
     ): T {
         return this.addAndReturn(createZRange(key, rangeQuery, reverse));
     }
@@ -2018,7 +2018,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     public zrangeWithScores(
         key: GlideString,
         rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
-        reverse: boolean = false,
+        reverse = false,
     ): T {
         return this.addAndReturn(
             createZRangeWithScores(key, rangeQuery, reverse),
@@ -2047,7 +2047,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         destination: GlideString,
         source: GlideString,
         rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
-        reverse: boolean = false,
+        reverse = false,
     ): T {
         return this.addAndReturn(
             createZRangeStore(destination, source, rangeQuery, reverse),
@@ -4251,7 +4251,7 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
     public publish(
         message: GlideString,
         channel: GlideString,
-        sharded: boolean = false,
+        sharded = false,
     ): ClusterTransaction {
         return this.addAndReturn(createPublish(message, channel, sharded));
     }

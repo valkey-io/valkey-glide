@@ -63,23 +63,23 @@ import { connection_request } from "./ProtobufMessage";
 import { ClusterTransaction } from "./Transaction";
 
 /** An extension to command option types with {@link Routes}. */
-export type RouteOption = {
+export interface RouteOption {
     /**
      * Specifies the routing configuration for the command.
      * The client will route the command to the nodes defined by `route`.
      */
     route?: Routes;
-};
+}
 
 /**
  * Represents a manually configured interval for periodic checks.
  */
-export type PeriodicChecksManualInterval = {
+export interface PeriodicChecksManualInterval {
     /**
      * The duration in seconds for the interval between periodic checks.
      */
     duration_in_sec: number;
-};
+}
 
 /**
  * Periodic checks configuration.
@@ -121,7 +121,7 @@ export namespace GlideClusterClientConfiguration {
         Sharded = 2,
     }
 
-    export type PubSubSubscriptions = {
+    export interface PubSubSubscriptions {
         /**
          * Channels and patterns by modes.
          */
@@ -138,7 +138,7 @@ export namespace GlideClusterClientConfiguration {
          */
         /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
         context?: any;
-    };
+    }
 }
 export type GlideClusterClientConfiguration = BaseClientConfiguration & {
     /**
@@ -194,7 +194,7 @@ function convertClusterGlideRecord<T>(
         : convertGlideRecordToRecord(res as GlideRecord<T>);
 }
 
-export type SlotIdTypes = {
+export interface SlotIdTypes {
     /**
      * `replicaSlotId` overrides the `readFrom` configuration. If it's used the request
      * will be routed to a replica, even if the strategy is `alwaysFromPrimary`.
@@ -205,9 +205,9 @@ export type SlotIdTypes = {
      * Unless the slot is known, it's better to route using `SlotKeyTypes`
      */
     id: number;
-};
+}
 
-export type SlotKeyTypes = {
+export interface SlotKeyTypes {
     /**
      * `replicaSlotKey` overrides the `readFrom` configuration. If it's used the request
      * will be routed to a replica, even if the strategy is `alwaysFromPrimary`.
@@ -217,10 +217,10 @@ export type SlotKeyTypes = {
      * The request will be sent to nodes managing this key.
      */
     key: string;
-};
+}
 
 /// Route command to specific node.
-export type RouteByAddress = {
+export interface RouteByAddress {
     type: "routeByAddress";
     /**
      *The endpoint of the node. If `port` is not provided, should be in the `${address}:${port}` format, where `address` is the preferred endpoint as shown in the output of the `CLUSTER SLOTS` command.
@@ -230,7 +230,7 @@ export type RouteByAddress = {
      * The port to access on the node. If port is not provided, `host` is assumed to be in the format `${address}:${port}`.
      */
     port?: number;
-};
+}
 
 export type Routes =
     | SingleNodeRoute
@@ -1187,7 +1187,7 @@ export class GlideClusterClient extends BaseClient {
     public async publish(
         message: GlideString,
         channel: GlideString,
-        sharded: boolean = false,
+        sharded = false,
     ): Promise<number> {
         return this.createWritePromise(
             createPublish(message, channel, sharded),

@@ -23,6 +23,8 @@ from glide.constants import (
 )
 from glide.protobuf.command_request_pb2 import RequestType
 
+from ..glide import ClusterScanCursor, Script
+
 
 class StandaloneCommands(CoreCommands):
     async def custom_command(self, command_args: List[TEncodable]) -> TResult:
@@ -1027,3 +1029,95 @@ class StandaloneCommands(CoreCommands):
             List[Union[bytes, List[bytes]]],
             await self._execute_command(RequestType.Scan, args),
         )
+
+    async def script_exists(self, sha1s: List[TEncodable]) -> List[bool]:
+        """
+        Check existence of scripts in the script cache by their SHA1 digest.
+
+        See https://valkey.io/commands/script-exists for more details.
+
+        Args:
+            sha1s (List[TEncodable]): List of SHA1 digests of the scripts to check.
+
+        Returns:
+            List[bool]: A list of boolean values indicating the existence of each script.
+
+        Examples:
+            >>> await client.script_exists(["sha1_digest1", "sha1_digest2"])
+                [True, False]
+        """
+        return cast(
+            List[bool], await self._execute_command(RequestType.ScriptExists, sha1s)
+        )
+
+    async def script_flush(self, mode: Optional[FlushMode] = None) -> TOK:
+        """
+        Flush the Lua scripts cache.
+
+        See https://valkey.io/commands/script-flush for more details.
+
+        Args:
+            mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
+
+        Returns:
+            TOK: A simple `OK` response.
+
+        Examples:
+            >>> await client.script_flush()
+                "OK"
+
+            >>> await client.script_flush(FlushMode.ASYNC)
+                "OK"
+        """
+
+        return cast(
+            TOK,
+            await self._execute_command(
+                RequestType.ScriptFlush, [mode.value] if mode else []
+            ),
+        )
+
+    async def script_kill(self) -> TOK:
+        """
+        Kill the currently executing Lua script, assuming no write operation was yet performed by the script.
+
+        See https://valkey.io/commands/script-kill for more details.
+
+        Returns:
+            TOK: A simple `OK` response.
+
+        Examples:
+            >>> await client.script_kill()
+                "OK"
+        """
+        return cast(TOK, await self._execute_command(RequestType.ScriptKill, []))
+
+    async def invoke_script(
+        self,
+        script: Script,
+        keys: Optional[List[TEncodable]] = None,
+        args: Optional[List[TEncodable]] = None,
+    ) -> TResult:
+        """
+        Invokes a Lua script with its keys and arguments.
+        This method simplifies the process of invoking scripts on a the server by using an object that represents a Lua script.
+        The script loading, argument preparation, and execution will all be handled internally.
+        If the script has not already been loaded, it will be loaded automatically using the `SCRIPT LOAD` command.
+        After that, it will be invoked using the `EVALSHA` command.
+
+        See https://valkey.io/commands/script-load/ and https://valkey.io/commands/evalsha/ for more details.
+
+        Args:
+            script (Script): The Lua script to execute.
+            keys (Optional[List[TEncodable]]): The keys that are used in the script.
+            args (Optional[List[TEncodable]]): The arguments for the script.
+
+        Returns:
+            TResult: a value that depends on the script that was executed.
+
+        Examples:
+            >>> lua_script = Script("return { KEYS[1], ARGV[1] }")
+            >>> await invoke_script(lua_script, keys=["foo"], args=["bar"] );
+                [b"foo", b"bar"]
+        """
+        return await self._execute_script(script.get_hash(), keys, args)

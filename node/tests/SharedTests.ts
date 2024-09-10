@@ -3329,7 +3329,7 @@ export function runBaseTests(config: {
 
                 const numberMembersSet: string[] = numberMembers;
                 const charMembers: string[] = ["a", "b", "c", "d", "e"];
-                const charMembersSet: Set<string> = new Set(charMembers);
+                const charMembersSet = new Set<string>(charMembers);
                 const resultCursorIndex = 0;
                 const resultCollectionIndex = 1;
 
@@ -8718,6 +8718,42 @@ export function runBaseTests(config: {
                         }),
                     ).rejects.toThrow(RequestError);
                 }
+
+                if (cluster.checkIfServerVersionLessThan("7.9.0")) {
+                    await expect(
+                        client.bitcount(key1, {
+                            start: 2,
+                        }),
+                    ).rejects.toThrow();
+                } else {
+                    expect(
+                        await client.bitcount(key1, {
+                            start: 0,
+                        }),
+                    ).toEqual(26);
+                    expect(
+                        await client.bitcount(key1, {
+                            start: 5,
+                        }),
+                    ).toEqual(4);
+                    expect(
+                        await client.bitcount(key1, {
+                            start: 80,
+                        }),
+                    ).toEqual(0);
+                    expect(
+                        await client.bitcount(uuidv4(), {
+                            start: 80,
+                        }),
+                    ).toEqual(0);
+
+                    // key exists, but it is not a string
+                    await expect(
+                        client.bitcount(key2, {
+                            start: 1,
+                        }),
+                    ).rejects.toThrow(RequestError);
+                }
             }, protocol);
         },
         config.timeout,
@@ -8861,7 +8897,7 @@ export function runBaseTests(config: {
                     "edge2",
                     "edge1",
                 ];
-                const membersSet: Set<string> = new Set(members);
+                const membersSet = new Set<string>(members);
                 const membersCoordinates: [number, number][] = [
                     [15.087269, 37.502669],
                     [13.361389, 38.115556],

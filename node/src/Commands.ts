@@ -123,7 +123,7 @@ export function createGetRange(
     ]);
 }
 
-export type SetOptions = {
+export interface SetOptions {
     /**
      *  `onlyIfDoesNotExist` - Only set the key if it does not already exist.
      * Equivalent to `NX` in the Redis API. `onlyIfExists` - Only set the key if
@@ -150,7 +150,7 @@ export type SetOptions = {
               type: TimeUnit;
               count: number;
           };
-};
+}
 
 /**
  * @internal
@@ -816,7 +816,7 @@ export class BitFieldOverflow implements BitFieldSubCommands {
 export function createBitField(
     key: GlideString,
     subcommands: BitFieldSubCommands[],
-    readOnly: boolean = false,
+    readOnly = false,
 ): command_request.Command {
     const requestType = readOnly
         ? RequestType.BitFieldReadOnly
@@ -1388,7 +1388,7 @@ export enum UpdateByScore {
     GREATER_THAN = "GT",
 }
 
-export type ZAddOptions = {
+export interface ZAddOptions {
     /**
      * Options for handling existing members.
      */
@@ -1401,7 +1401,7 @@ export type ZAddOptions = {
      * Modify the return value from the number of new elements added, to the total number of elements changed.
      */
     changed?: boolean;
-};
+}
 
 /**
  * @internal
@@ -1427,7 +1427,7 @@ export function createZAdd(
     key: GlideString,
     membersAndScores: SortedSetDataType,
     options?: ZAddOptions,
-    incr: boolean = false,
+    incr = false,
 ): command_request.Command {
     const args = [key];
 
@@ -1692,7 +1692,7 @@ export type Boundary<T> =
  * Represents a range by index (rank) in a sorted set.
  * The `start` and `end` arguments represent zero-based indexes.
  */
-export type RangeByIndex = {
+export interface RangeByIndex {
     /**
      * The start index of the range.
      */
@@ -1701,13 +1701,13 @@ export type RangeByIndex = {
      * The end index of the range.
      */
     end: number;
-};
+}
 
 /**
  * Represents a range by score or a range by lex in a sorted set.
  * The `start` and `end` arguments represent score boundaries.
  */
-type SortedSetRange<T> = {
+interface SortedSetRange<T> {
     /**
      * The start boundary.
      */
@@ -1735,7 +1735,7 @@ type SortedSetRange<T> = {
          */
         count: number;
     };
-};
+}
 
 export type RangeByScore = SortedSetRange<number> & { type: "byScore" };
 export type RangeByLex = SortedSetRange<GlideString> & { type: "byLex" };
@@ -1856,7 +1856,7 @@ export function createZCount(
 export function createZRange(
     key: GlideString,
     rangeQuery: RangeByIndex | RangeByScore | RangeByLex,
-    reverse: boolean = false,
+    reverse = false,
 ): command_request.Command {
     const args = createZRangeArgs(key, rangeQuery, reverse, false);
     return createCommand(RequestType.ZRange, args);
@@ -1868,7 +1868,7 @@ export function createZRange(
 export function createZRangeWithScores(
     key: GlideString,
     rangeQuery: RangeByIndex | RangeByScore | RangeByLex,
-    reverse: boolean = false,
+    reverse = false,
 ): command_request.Command {
     const args = createZRangeArgs(key, rangeQuery, reverse, true);
     return createCommand(RequestType.ZRange, args);
@@ -1881,7 +1881,7 @@ export function createZRangeStore(
     destination: GlideString,
     source: GlideString,
     rangeQuery: RangeByIndex | RangeByScore | RangeByLex,
-    reverse: boolean = false,
+    reverse = false,
 ): command_request.Command {
     const args = [
         destination,
@@ -2081,7 +2081,7 @@ export type StreamTrimOptions = (
     limit?: number;
 };
 
-export type StreamAddOptions = {
+export interface StreamAddOptions {
     /**
      * If set, the new entry will be added with this ID.
      */
@@ -2095,7 +2095,7 @@ export type StreamAddOptions = {
      * If set, the add operation will also trim the older entries in the stream.
      */
     trim?: StreamTrimOptions;
-};
+}
 
 function addTrimOptions(options: StreamTrimOptions, args: GlideString[]) {
     if (options.method === "maxlen") {
@@ -2257,7 +2257,7 @@ export function createTime(): command_request.Command {
 export function createPublish(
     message: GlideString,
     channel: GlideString,
-    sharded: boolean = false,
+    sharded = false,
 ): command_request.Command {
     const request = sharded ? RequestType.SPublish : RequestType.Publish;
     return createCommand(request, [channel, message]);
@@ -2351,12 +2351,12 @@ export function createFunctionLoad(
 }
 
 /** Optional arguments for `FUNCTION LIST` command. */
-export type FunctionListOptions = {
+export interface FunctionListOptions {
     /** A wildcard pattern for matching library names. */
     libNamePattern?: GlideString;
     /** Specifies whether to request the library code from the server or not. */
     withCode?: boolean;
-};
+}
 
 /** Type of the response of `FUNCTION LIST` command. */
 export type FunctionListResponse = Record<
@@ -2461,18 +2461,20 @@ export function createFunctionRestore(
  *
  * See https://valkey.io/commands/bitcount/ for more details.
  */
-export type BitOffsetOptions = {
+export interface BitOffsetOptions {
     /** The starting offset index. */
     start: number;
-    /** The ending offset index. */
-    end: number;
+    /** The ending offset index. Optional since Valkey version 8.0 and above.
+     * If not provided, it will default to the end of the string
+     */
+    end?: number;
     /**
      * The index offset type. This option can only be specified if you are using server version 7.0.0 or above.
      * Could be either {@link BitmapIndexType.BYTE} or {@link BitmapIndexType.BIT}.
      * If no index type is provided, the indexes will be assumed to be byte indexes.
      */
     indexType?: BitmapIndexType;
-};
+}
 
 /**
  * @internal
@@ -2485,7 +2487,7 @@ export function createBitCount(
 
     if (options) {
         args.push(options.start.toString());
-        args.push(options.end.toString());
+        if (options.end !== undefined) args.push(options.end.toString());
         if (options.indexType) args.push(options.indexType);
     }
 
@@ -2569,7 +2571,7 @@ export function convertKeysAndEntries(
 }
 
 /** Optional arguments for {@link BaseClient.xread|xread} command. */
-export type StreamReadOptions = {
+export interface StreamReadOptions {
     /**
      * If set, the read request will block for the set amount of milliseconds or
      * until the server has the required number of entries. A value of `0` will block indefinitely.
@@ -2581,7 +2583,7 @@ export type StreamReadOptions = {
      * Equivalent to `COUNT` in the Redis API.
      */
     count?: number;
-};
+}
 
 /** Optional arguments for {@link BaseClient.xreadgroup|xreadgroup} command. */
 export type StreamReadGroupOptions = StreamReadOptions & {
@@ -2683,7 +2685,7 @@ export function createXLen(key: GlideString): command_request.Command {
 }
 
 /** Optional arguments for {@link BaseClient.xpendingWithOptions|xpending}. */
-export type StreamPendingOptions = {
+export interface StreamPendingOptions {
     /** Filter pending entries by their idle time - in milliseconds. Available since Valkey 6.2.0. */
     minIdleTime?: number;
     /** Starting stream ID bound for range. Exclusive range is available since Valkey 6.2.0. */
@@ -2694,7 +2696,7 @@ export type StreamPendingOptions = {
     count: number;
     /** Filter pending entries by consumer. */
     consumer?: GlideString;
-};
+}
 
 /** @internal */
 export function createXPending(
@@ -2727,7 +2729,7 @@ export function createXInfoConsumers(
 }
 
 /** Optional parameters for {@link BaseClient.xclaim|xclaim} command. */
-export type StreamClaimOptions = {
+export interface StreamClaimOptions {
     /**
      * Set the idle time (last time it was delivered) of the message in milliseconds. If `idle`
      * is not specified, an `idle` of `0` is assumed, that is, the time count is reset
@@ -2757,7 +2759,7 @@ export type StreamClaimOptions = {
      * otherwise the IDs of non-existing messages are ignored.
      */
     isForce?: boolean;
-};
+}
 
 /** @internal */
 export function createXClaim(
@@ -2812,7 +2814,7 @@ export function createXAutoClaim(
  *
  * See https://valkey.io/commands/xgroup-create/ for more details.
  */
-export type StreamGroupOptions = {
+export interface StreamGroupOptions {
     /**
      * If `true`and the stream doesn't exist, creates a new stream with a length of `0`.
      */
@@ -2825,7 +2827,7 @@ export type StreamGroupOptions = {
      * since Valkey version 7.0.0.
      */
     entriesRead?: string;
-};
+}
 
 /**
  * @internal
@@ -2945,7 +2947,7 @@ export function createObjectRefcount(
 }
 
 /** Additional parameters for `LOLWUT` command. */
-export type LolwutOptions = {
+export interface LolwutOptions {
     /**
      * An optional argument that can be used to specify the version of computer art to generate.
      */
@@ -2956,7 +2958,7 @@ export type LolwutOptions = {
      * - For version `6`, those are number of columns and number of lines.
      */
     parameters?: number[];
-};
+}
 
 /**
  * @internal
@@ -3045,7 +3047,7 @@ export function createDump(key: GlideString): command_request.Command {
  * @See {@link https://valkey.io/commands/restore/|valkey.io} for details.
  * @remarks `IDLETIME` and `FREQ` modifiers cannot be set at the same time.
  */
-export type RestoreOptions = {
+export interface RestoreOptions {
     /**
      * Set to `true` to replace the key if it exists.
      */
@@ -3063,7 +3065,7 @@ export type RestoreOptions = {
      * Set the `FREQ` option with object frequency to the given key.
      */
     frequency?: number;
-};
+}
 
 /**
  * @internal
@@ -3108,14 +3110,14 @@ export function createRestore(
  *
  * See https://valkey.io/commands/lpos/ for more details.
  */
-export type LPosOptions = {
+export interface LPosOptions {
     /** The rank of the match to return. */
     rank?: number;
     /** The specific number of matching indices from a list. */
     count?: number;
     /** The maximum number of comparisons to make between the element and the items in the list. */
     maxLength?: number;
-};
+}
 
 /**
  * @internal
@@ -3178,24 +3180,24 @@ export enum ConditionalChange {
  *   Valid longitudes are from `-180` to `180` degrees.
  *   Valid latitudes are from `-85.05112878` to `85.05112878` degrees.
  */
-export type GeospatialData = {
+export interface GeospatialData {
     /** The longitude coordinate. */
     longitude: number;
     /** The latitude coordinate. */
     latitude: number;
-};
+}
 
 /**
  * Optional arguments for the GeoAdd command.
  *
  * See https://valkey.io/commands/geoadd/ for more details.
  */
-export type GeoAddOptions = {
+export interface GeoAddOptions {
     /** Options for handling existing members. See {@link ConditionalChange}. */
     updateMode?: ConditionalChange;
     /** If `true`, returns the count of changed elements instead of new elements added. */
     changed?: boolean;
-};
+}
 
 /**
  * @internal
@@ -3307,14 +3309,14 @@ export type GeoSearchStoreResultOptions = GeoSearchCommonResultOptions & {
     storeDist?: boolean;
 };
 
-type GeoSearchCommonResultOptions = {
+interface GeoSearchCommonResultOptions {
     /** Indicates the order the result should be sorted in. */
     sortOrder?: SortOrder;
     /** Indicates the number of matches the result should be limited to. */
     count?: number;
     /** Whether to allow returning as enough matches are found. This requires `count` parameter to be set. */
     isAny?: boolean;
-};
+}
 
 /** Defines the sort order for nested results. */
 export enum SortOrder {
@@ -3327,36 +3329,36 @@ export enum SortOrder {
 export type GeoSearchShape = GeoCircleShape | GeoBoxShape;
 
 /** Circle search shape defined by the radius value and measurement unit. */
-export type GeoCircleShape = {
+export interface GeoCircleShape {
     /** The radius to search by. */
     radius: number;
     /** The measurement unit of the radius. */
     unit: GeoUnit;
-};
+}
 
 /** Rectangle search shape defined by the width and height and measurement unit. */
-export type GeoBoxShape = {
+export interface GeoBoxShape {
     /** The width of the rectangle to search by. */
     width: number;
     /** The height of the rectangle to search by. */
     height: number;
     /** The measurement unit of the width and height. */
     unit: GeoUnit;
-};
+}
 
 export type SearchOrigin = CoordOrigin | MemberOrigin;
 
 /** The search origin represented by a {@link GeospatialData} position. */
-export type CoordOrigin = {
+export interface CoordOrigin {
     /** The pivot location to search from. */
     position: GeospatialData;
-};
+}
 
 /** The search origin represented by an existing member. */
-export type MemberOrigin = {
+export interface MemberOrigin {
     /** Member (location) name stored in the sorted set to use as a search pivot. */
     member: GlideString;
-};
+}
 
 /** @internal */
 export function createGeoSearch(
@@ -3572,7 +3574,7 @@ export type SortOptions = SortBaseOptions & {
     getPatterns?: GlideString[];
 };
 
-type SortBaseOptions = {
+interface SortBaseOptions {
     /**
      * Limiting the range of the query by setting offset and result count. See {@link Limit} class for
      * more information.
@@ -3588,7 +3590,7 @@ type SortBaseOptions = {
      * that cannot be converted into double precision floating point numbers.
      */
     isAlpha?: boolean;
-};
+}
 
 /**
  * Optional arguments to {@link GlideClusterClient.sort|sort}, {@link GlideClusterClient.sortStore|sortStore} and {@link GlideClusterClient.sortReadOnly|sortReadOnly} commands.
@@ -3601,12 +3603,12 @@ export type SortClusterOptions = SortBaseOptions;
  * The `LIMIT` argument is commonly used to specify a subset of results from the
  * matching elements, similar to the `LIMIT` clause in SQL (e.g., `SELECT LIMIT offset, count`).
  */
-export type Limit = {
+export interface Limit {
     /** The starting position of the range, zero based. */
     offset: number;
     /** The maximum number of elements to include in the range. A negative count returns all elements from the offset. */
     count: number;
-};
+}
 
 /** @internal */
 export function createSort(
@@ -3795,7 +3797,7 @@ export function createWait(
  * This base class represents the common set of optional arguments for the SCAN family of commands.
  * Concrete implementations of this class are tied to specific SCAN commands (`SCAN`, `SSCAN`).
  */
-export type BaseScanOptions = {
+export interface BaseScanOptions {
     /**
      * The match filter is applied to the result of the command and will only include
      * strings that match the pattern specified. If the sorted set is large enough for scan commands to return
@@ -3810,7 +3812,7 @@ export type BaseScanOptions = {
      * represent the results as compact single-allocation packed encoding.
      */
     readonly count?: number;
-};
+}
 
 /**
  * Options specific to the ZSCAN command, extending from the base scan options.
