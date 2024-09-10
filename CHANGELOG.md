@@ -1,4 +1,6 @@
 #### Changes
+* Node: Added binary variant for commands which have `Record` as input or output ([#2207](https://github.com/valkey-io/valkey-glide/pull/2207))
+* Node: Renamed `ReturnType` to `GlideReturnType` ([#2241](https://github.com/valkey-io/valkey-glide/pull/2241))
 * Node, Python: Rename `stop` to `end` in sorted set queries ([#2214](https://github.com/valkey-io/valkey-glide/pull/2214))
 * Node: Added binary variant to sorted set commands - part 1 ([#2190](https://github.com/valkey-io/valkey-glide/pull/2190))
 * Node: Added binary variant to HSCAN command ([#2240](https://github.com/valkey-io/valkey-glide/pull/2240))

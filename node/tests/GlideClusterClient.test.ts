@@ -15,27 +15,26 @@ import { v4 as uuidv4 } from "uuid";
 import {
     BitwiseOperation,
     ClusterTransaction,
+    convertRecordToGlideRecord,
     Decoder,
     FunctionListResponse,
     GlideClusterClient,
+    GlideReturnType,
     InfoOptions,
     ListDirection,
     ProtocolVersion,
     RequestError,
-    ReturnType,
     Routes,
     ScoreFilter,
     Script,
     SlotKeyTypes,
-} from "..";
-import { RedisCluster } from "../../utils/TestUtils.js";
-import {
     FlushMode,
     FunctionRestorePolicy,
     FunctionStatsSingleResponse,
     GeoUnit,
     SortOrder,
-} from "../build-ts/src/Commands";
+} from "..";
+import { RedisCluster } from "../../utils/TestUtils.js";
 import { runBaseTests } from "./SharedTests";
 import {
     checkClusterResponse,
@@ -277,13 +276,14 @@ describe("GlideClusterClient", () => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            const transaction = new ClusterTransaction();
-            transaction.configSet({ timeout: "1000" });
-            transaction.configGet(["timeout"]);
+            const transaction = new ClusterTransaction()
+                .configSet({ timeout: "1000" })
+                .configGet(["timeout"]);
             const result = await client.exec(transaction);
-            expect(intoString(result)).toEqual(
-                intoString(["OK", { timeout: "1000" }]),
-            );
+            expect(result).toEqual([
+                "OK",
+                convertRecordToGlideRecord({ timeout: "1000" }),
+            ]);
         },
         TIMEOUT,
     );
@@ -307,8 +307,8 @@ describe("GlideClusterClient", () => {
 
                 transaction.pubsubShardChannels();
                 expectedRes.push(["pubsubShardChannels()", []]);
-                transaction.pubsubShardNumSub();
-                expectedRes.push(["pubsubShardNumSub()", {}]);
+                transaction.pubsubShardNumSub([]);
+                expectedRes.push(["pubsubShardNumSub()", []]);
             }
 
             const result = await client.exec(transaction);
@@ -387,8 +387,10 @@ describe("GlideClusterClient", () => {
                 client.sdiffstore("abc", ["zxy", "lkn"]),
                 client.sortStore("abc", "zyx"),
                 client.sortStore("abc", "zyx", { isAlpha: true }),
-                client.lmpop(["abc", "def"], ListDirection.LEFT, 1),
-                client.blmpop(["abc", "def"], ListDirection.RIGHT, 0.1, 1),
+                client.lmpop(["abc", "def"], ListDirection.LEFT, { count: 1 }),
+                client.blmpop(["abc", "def"], ListDirection.RIGHT, 0.1, {
+                    count: 1,
+                }),
                 client.bzpopmax(["abc", "def"], 0.5),
                 client.bzpopmin(["abc", "def"], 0.5),
                 client.xread({ abc: "0-0", zxy: "0-0", lkn: "0-0" }),
@@ -470,7 +472,7 @@ describe("GlideClusterClient", () => {
             const key = uuidv4();
             const maxmemoryPolicyKey = "maxmemory-policy";
             const config = await client.configGet([maxmemoryPolicyKey]);
-            const maxmemoryPolicy = String(config[maxmemoryPolicyKey]);
+            const maxmemoryPolicy = config[maxmemoryPolicyKey] as string;
 
             try {
                 const transaction = new ClusterTransaction();
@@ -511,7 +513,7 @@ describe("GlideClusterClient", () => {
             const key = uuidv4();
             const maxmemoryPolicyKey = "maxmemory-policy";
             const config = await client.configGet([maxmemoryPolicyKey]);
-            const maxmemoryPolicy = String(config[maxmemoryPolicyKey]);
+            const maxmemoryPolicy = config[maxmemoryPolicyKey] as string;
 
             try {
                 const transaction = new ClusterTransaction();
@@ -1316,7 +1318,7 @@ describe("GlideClusterClient", () => {
                         TIMEOUT,
                     );
 
-                    it("function dump function restore %p", async () => {
+                    it("function dump function restore", async () => {
                         if (cluster.checkIfServerVersionLessThan("7.0.0"))
                             return;
 
@@ -1464,7 +1466,7 @@ describe("GlideClusterClient", () => {
                                 expect(res).toEqual("meow");
                             } else {
                                 Object.values(
-                                    res as Record<string, ReturnType>,
+                                    res as Record<string, GlideReturnType>,
                                 ).forEach((r) => expect(r).toEqual("meow"));
                             }
 
@@ -1478,7 +1480,7 @@ describe("GlideClusterClient", () => {
                                 expect(res).toEqual(2);
                             } else {
                                 Object.values(
-                                    res as Record<string, ReturnType>,
+                                    res as Record<string, GlideReturnType>,
                                 ).forEach((r) => expect(r).toEqual(2));
                             }
                         } finally {

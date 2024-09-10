@@ -4,7 +4,7 @@
 
 import { InitInternalLogger, Level, log } from "glide-rs";
 
-const LEVEL: Map<LevelOptions | undefined, Level | undefined> = new Map([
+const LEVEL = new Map<LevelOptions | undefined, Level | undefined>([
     ["error", Level.Error],
     ["warn", Level.Warn],
     ["info", Level.Info],
