@@ -667,7 +667,7 @@ function toProtobufRoute(
             if (split.length !== 2) {
                 throw new RequestError(
                     "No port provided, expected host to be formatted as `{hostname}:{port}`. Received " +
-                    host,
+                        host,
                 );
             }
 
@@ -917,12 +917,16 @@ export class BaseClient {
                 "Unable to execute requests; the client is closed. Please create a new client.",
             );
         }
+
         return new Promise((resolve, reject) => {
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [
                 (resolveAns: T) => {
                     try {
-                        resolveAns = this.getValueToResolve(resolveAns, stringDecoder);
+                        resolveAns = this.getValueToResolve(
+                            resolveAns,
+                            stringDecoder,
+                        );
                         resolve(resolveAns);
                     } catch (err) {
                         Logger.log(
@@ -941,11 +945,7 @@ export class BaseClient {
     protected getValueToResolve<T>(resolveAns: T, decoder: boolean): T {
         if (resolveAns instanceof PointerResponse) {
             if (typeof resolveAns === "number") {
-                resolveAns = valueFromSplitPointer(
-                    0,
-                    resolveAns,
-                    decoder,
-                ) as T;
+                resolveAns = valueFromSplitPointer(0, resolveAns, decoder) as T;
             } else {
                 resolveAns = valueFromSplitPointer(
                     resolveAns.high!,
@@ -953,8 +953,8 @@ export class BaseClient {
                     decoder,
                 ) as T;
             }
-
         }
+
         return resolveAns;
     }
     protected writeOrBufferCommandRequest(
@@ -962,29 +962,31 @@ export class BaseClient {
         command:
             | command_request.Command
             | command_request.Command[]
-            | command_request.ScriptInvocation | command_request.ClusterScan,
+            | command_request.ScriptInvocation
+            | command_request.ClusterScan,
         route?: command_request.Routes,
     ) {
         const message = Array.isArray(command)
             ? command_request.CommandRequest.create({
-                callbackIdx,
-                transaction: command_request.Transaction.create({
-                    commands: command,
-                }),
-            })
+                  callbackIdx,
+                  transaction: command_request.Transaction.create({
+                      commands: command,
+                  }),
+              })
             : command instanceof command_request.Command
-                ? command_request.CommandRequest.create({
+              ? command_request.CommandRequest.create({
                     callbackIdx,
                     singleCommand: command,
-                }) : command instanceof command_request.ClusterScan ?
-                    command_request.CommandRequest.create({
-                        callbackIdx,
-                        clusterScan: command,
-                    })
-                    : command_request.CommandRequest.create({
-                        callbackIdx,
-                        scriptInvocation: command,
-                    });
+                })
+              : command instanceof command_request.ClusterScan
+                ? command_request.CommandRequest.create({
+                      callbackIdx,
+                      clusterScan: command,
+                  })
+                : command_request.CommandRequest.create({
+                      callbackIdx,
+                      scriptInvocation: command,
+                  });
         message.route = route;
 
         this.writeOrBufferRequest(
@@ -5918,9 +5920,9 @@ export class BaseClient {
         ReadFrom,
         connection_request.ReadFrom
     > = {
-            primary: connection_request.ReadFrom.Primary,
-            preferReplica: connection_request.ReadFrom.PreferReplica,
-        };
+        primary: connection_request.ReadFrom.Primary,
+        preferReplica: connection_request.ReadFrom.PreferReplica,
+    };
 
     /**
      * Returns the number of messages that were successfully acknowledged by the consumer group member of a stream.
@@ -7468,11 +7470,11 @@ export class BaseClient {
             : connection_request.ReadFrom.Primary;
         const authenticationInfo =
             options.credentials !== undefined &&
-                "password" in options.credentials
+            "password" in options.credentials
                 ? {
-                    password: options.credentials.password,
-                    username: options.credentials.username,
-                }
+                      password: options.credentials.password,
+                      username: options.credentials.username,
+                  }
                 : undefined;
         const protocol = options.protocol as
             | connection_request.ProtocolVersion

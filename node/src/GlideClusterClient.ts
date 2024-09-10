@@ -59,7 +59,7 @@ import {
     createScriptFlush,
     createScriptKill,
     createTime,
-    createUnWatch
+    createUnWatch,
 } from "./Commands";
 import { ClosingError } from "./Errors";
 import { Logger } from "./Logger";
@@ -262,21 +262,20 @@ export type SingleNodeRoute =
     | SlotKeyTypes
     | RouteByAddress;
 
-
-export type ClusterScanOptions = {
+export interface ClusterScanOptions {
     /**
      * A pattern to match keys against.
-    */
+     */
     match?: GlideString;
     /**
      * The number of keys to return in a single iteration.
-    */
+     */
     count?: number;
     /**
      * The type of object to scan for.
      */
-    type?: ObjectType;
-};
+    object?: ObjectType;
+}
 
 /**
  * Client used for connection to cluster servers.
@@ -335,32 +334,57 @@ export class GlideClusterClient extends BaseClient {
     }
 
     /**
-       * @internal
-       */
+     * @internal
+     */
+    protected scanOptionsToProto(
+        command: command_request.ClusterScan,
+        options?: ClusterScanOptions,
+    ): command_request.ClusterScan {
+        if (options?.match) {
+            command.matchPattern = Buffer.from(options.match);
+        }
+
+        if (options?.count) {
+            command.count = options.count;
+        }
+
+        if (options?.object) {
+            command.objectType = options.object;
+        }
+
+        return command;
+    }
+
+    /**
+     * @internal
+     */
     protected createClusterScanPromise(
         cursor: ClusterScanCursor,
-        options?: ClusterScanOptions & DecoderOption
+        options?: ClusterScanOptions & DecoderOption,
     ): Promise<[ClusterScanCursor, GlideString[]]> {
         // separate decoder option from scan options
         const { decoder, ...scanOptions } = options || {};
         const stringDecoder: boolean =
             (decoder ?? this.defaultDecoder) === Decoder.String;
+
         if (this.isClosed) {
             throw new ClosingError(
-                "Unable to execute requests; the client is closed. Please create a new client."
+                "Unable to execute requests; the client is closed. Please create a new client.",
             );
         }
-        const cursorId = cursor.getCursor();
-        // convert string to buffer, if it is buffer or null nothing will happen
-        typeof options?.match == "string" ? options.match = Buffer.from(options.match) : null;
-        const command = command_request.ClusterScan.create({ cursor: cursorId, ...options });
 
+        const cursorId = cursor.getCursor();
+        let command = command_request.ClusterScan.create({ cursor: cursorId });
+        command = this.scanOptionsToProto(command, scanOptions);
         return new Promise((resolve, reject) => {
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [
                 (resolveAns) => {
                     try {
-                        resolveAns = this.getValueToResolve(resolveAns, stringDecoder);
+                        resolveAns = this.getValueToResolve(
+                            resolveAns,
+                            stringDecoder,
+                        );
                         resolveAns[0] = new ClusterScanCursor(resolveAns[0]);
                         resolve(resolveAns);
                     } catch (err) {
@@ -380,34 +404,34 @@ export class GlideClusterClient extends BaseClient {
 
     /**
      * Incrementally iterates over the keys in the Cluster.
-     * 
+     *
      * This command is similar to the `SCAN` command but designed for Cluster environments.
      * It uses a {@link ClusterScanCursor} object to manage iterations.
-     * 
+     *
      * For each iteration, use the new cursor object to continue the scan.
      * Using the same cursor object for multiple iterations may result in unexpected behavior.
-     * 
+     *
      * For more information about the Cluster Scan implementation, see
      * {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan | Cluster Scan}.
-     * 
+     *
      * This method can iterate over all keys in the database from the start of the scan until it ends.
      * The same key may be returned in multiple scan iterations.
-     * 
+     *
      * @see {@link https://valkey.io/commands/scan/ | valkey.io} for more details.
-     * 
+     *
      * @param cursor - The cursor object that wraps the scan state.
      *   To start a new scan, create a new empty `ClusterScanCursor` using {@link ClusterScanCursor}.
-     * @param options - The scan options.
-     * @param options.match - A pattern to match keys against.
-     * @param options.count - The number of keys to return in a single iteration.
+     * @param options - (Optional) The scan options.
+     * @param options.match - (Optional) A pattern to match keys against.
+     * @param options.count - (Optional) The number of keys to return in a single iteration.
      *   The actual number returned can vary. This parameter serves as a hint to the server.
      *   Default is 10.
-     * @param options.type - The type of object to scan for.
+     * @param options.type - (Optional) The type of object to scan for, see {@link ObjectType}.
      * @param options.decoder - (Optional) The decoder to use for the response, see {@link DecoderOption}.
-     * 
+     *
      * @returns A Promise resolving to an array containing the next cursor and an array of keys,
      *   formatted as [`ClusterScanCursor`, `string[]`].
-     * 
+     *
      * @example
      * ```typescript
      * // Iterate over all keys in the cluster
@@ -420,7 +444,7 @@ export class GlideClusterClient extends BaseClient {
      *   allKeys.push(...keys);
      * }
      * console.log(allKeys); // ["key1", "key2", "key3"]
-     * 
+     *
      * // Iterate over keys matching a pattern
      * await client.mset([{key: "key1", value: "value1"}, {key: "key2", value: "value2"}, {key: "notMyKey", value: "value3"}, {key: "somethingElse", value: "value4"}]);
      * let cursor = new ClusterScanCursor();
@@ -430,14 +454,14 @@ export class GlideClusterClient extends BaseClient {
      *   matchedKeys.push(...keys);
      * }
      * console.log(matchedKeys); // ["key1", "key2", "notMyKey"]
-     * 
+     *
      * // Iterate over keys of a specific type
      * await client.mset([{key: "key1", value: "value1"}, {key: "key2", value: "value2"}, {key: "key3", value: "value3"}]);
      * await client.sadd("thisIsASet", ["value4"]);
      * let cursor = new ClusterScanCursor();
      * const stringKeys: string[] = [];
      * while (!cursor.isFinished()) {
-     *   const [cursor, keys] = await client.scan(cursor, { type: ObjectType.STRING });
+     *   const [cursor, keys] = await client.scan(cursor, { type: object.STRING });
      *   stringKeys.push(...keys);
      * }
      * console.log(stringKeys); // ["key1", "key2", "key3"]
@@ -445,7 +469,7 @@ export class GlideClusterClient extends BaseClient {
      */
     public async scan(
         cursor: ClusterScanCursor,
-        options?: ClusterScanOptions & DecoderOption
+        options?: ClusterScanOptions & DecoderOption,
     ): Promise<[ClusterScanCursor, GlideString[]]> {
         return this.createClusterScanPromise(cursor, options);
     }
