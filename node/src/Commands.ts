@@ -7,15 +7,16 @@ import Long from "long";
 
 import {
     BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
+    convertRecordToGlideRecord,
     GlideRecord,
+    GlideString,
     HashDataType,
     SortedSetDataType,
-} from "src/BaseClient";
+} from "./BaseClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-import { GlideClient } from "src/GlideClient";
+import { GlideClient } from "./GlideClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-import { GlideClusterClient } from "src/GlideClusterClient";
-import { GlideString } from "./BaseClient";
+import { GlideClusterClient } from "./GlideClusterClient";
 import { command_request } from "./ProtobufMessage";
 
 import RequestType = command_request.RequestType;
@@ -413,6 +414,24 @@ export function createHGet(
     field: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.HGet, [key, field]);
+}
+
+/**
+ * This function converts an input from {@link HashDataType} or `Record` types to `HashDataType`.
+ *
+ * @param fieldsAndValues - field names and their values.
+ * @returns HashDataType array containing field names and their values.
+ */
+export function convertFieldsAndValuesToHashDataType(
+    fieldsAndValues: HashDataType | Record<string, GlideString>,
+): HashDataType {
+    if (!Array.isArray(fieldsAndValues)) {
+        return Object.entries(fieldsAndValues).map(([field, value]) => {
+            return { field, value };
+        });
+    }
+
+    return fieldsAndValues;
 }
 
 /**
@@ -2342,7 +2361,7 @@ export interface FunctionListOptions {
 /** Type of the response of `FUNCTION LIST` command. */
 export type FunctionListResponse = Record<
     string,
-    GlideString | Record<string, GlideString | GlideString[]>[]
+    GlideString | Record<string, GlideString | null | GlideString[]>[]
 >[];
 
 /**
@@ -2534,6 +2553,23 @@ export enum FlushMode {
     ASYNC = "ASYNC",
 }
 
+/**
+ * @internal
+ * This function converts an input from Record or GlideRecord types to GlideRecord.
+ *
+ * @param record - input record in either Record or GlideRecord types.
+ * @returns same data in GlideRecord type.
+ */
+export function convertKeysAndEntries(
+    record: Record<string, GlideString> | GlideRecord<GlideString>,
+): GlideRecord<GlideString> {
+    if (!Array.isArray(record)) {
+        return convertRecordToGlideRecord(record);
+    }
+
+    return record;
+}
+
 /** Optional arguments for {@link BaseClient.xread|xread} command. */
 export interface StreamReadOptions {
     /**
@@ -2614,21 +2650,6 @@ export function createXReadGroup(
 
     return createCommand(RequestType.XReadGroup, args);
 }
-
-/**
- * Represents a the return type for XInfo Stream in the response
- */
-// TODO: change return type to be compatible with GlideString
-export type ReturnTypeXinfoStream = Record<
-    string,
-    | StreamEntries
-    | Record<string, StreamEntries | Record<string, StreamEntries>[]>[]
->;
-
-/**
- * Represents an array of Stream Entires in the response
- */
-export type StreamEntries = string | number | (string | number | string[])[][];
 
 /**
  * @internal
@@ -3934,7 +3955,7 @@ export function createPubSubNumPat(): command_request.Command {
  * @internal
  */
 export function createPubSubNumSub(
-    channels?: string[],
+    channels?: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.PubSubNumSub, channels ? channels : []);
 }
@@ -3952,7 +3973,7 @@ export function createPubsubShardChannels(
  * @internal
  */
 export function createPubSubShardNumSub(
-    channels?: string[],
+    channels?: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.PubSubSNumSub, channels ? channels : []);
 }
