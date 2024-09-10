@@ -14,6 +14,7 @@ import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
+import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
@@ -25,10 +26,17 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import lombok.NonNull;
+import lombok.SneakyThrows;
 import lombok.experimental.UtilityClass;
 
 @UtilityClass
 public class TestUtilities {
+    /** Key names for versions returned in info command. */
+    private static final String VALKEY_VERSION_KEY = "valkey_version";
+
+    private static final String REDIS_VERSION_KEY = "redis_version";
+
     /** Extract integer parameter value from INFO command output */
     public static long getValueFromInfo(String data, String value) {
         for (var line : data.split("\r\n")) {
@@ -370,5 +378,24 @@ public class TestUtilities {
                 }
             }
         } while (isBusy);
+    }
+
+    /**
+     * This method returns the server version using a glide client.
+     *
+     * @param glideClient Glide client to be used for running the info command.
+     * @return String The server version number.
+     */
+    @SneakyThrows
+    public static String getServerVersion(@NonNull final GlideClient glideClient) {
+        String infoResponse =
+                glideClient.info(InfoOptions.builder().section(InfoOptions.Section.SERVER).build()).get();
+        Map<String, String> infoResponseMap = parseInfoResponseToMap(infoResponse);
+        if (infoResponseMap.containsKey(VALKEY_VERSION_KEY)) {
+            return infoResponseMap.get(VALKEY_VERSION_KEY);
+        } else if (infoResponseMap.containsKey(REDIS_VERSION_KEY)) {
+            return infoResponseMap.get(REDIS_VERSION_KEY);
+        }
+        return null;
     }
 }
