@@ -8,6 +8,7 @@ import static glide.TestUtilities.checkFunctionListResponseBinary;
 import static glide.TestUtilities.checkFunctionStatsBinaryResponse;
 import static glide.TestUtilities.checkFunctionStatsResponse;
 import static glide.TestUtilities.commonClusterClientConfig;
+import static glide.TestUtilities.createLongRunningLuaScript;
 import static glide.TestUtilities.createLuaLibWithLongRunningFunction;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.generateLuaLibCodeBinary;
@@ -54,9 +55,13 @@ import glide.api.GlideClusterClient;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
+import glide.api.models.Script;
+import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
+import glide.api.models.commands.ScriptOptions;
+import glide.api.models.commands.ScriptOptionsGlideString;
 import glide.api.models.commands.SortBaseOptions;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.SortOptionsBinary;
@@ -69,6 +74,7 @@ import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.scan.ClusterScanCursor;
 import glide.api.models.commands.scan.ScanOptions;
+import glide.api.models.configuration.RequestRoutingConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
@@ -3009,5 +3015,339 @@ public class CommandTests {
         }
         cursor.releaseCursorHandle();
         assertEquals(streamData.keySet(), results);
+    }
+
+    @SneakyThrows
+    @Test
+    public void invokeScript_test() {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        try (Script script = new Script("return 'Hello'", false)) {
+            Object response = clusterClient.invokeScript(script).get();
+            assertEquals("Hello", response);
+        }
+
+        try (Script script = new Script("return redis.call('SET', KEYS[1], ARGV[1])", false)) {
+            Object setResponse1 =
+                    clusterClient
+                            .invokeScript(script, ScriptOptions.builder().key(key1).arg("value1").build())
+                            .get();
+            assertEquals(OK, setResponse1);
+
+            Object setResponse2 =
+                    clusterClient
+                            .invokeScript(script, ScriptOptions.builder().key(key2).arg("value2").build())
+                            .get();
+            assertEquals(OK, setResponse2);
+        }
+
+        try (Script script = new Script("return redis.call('GET', KEYS[1])", false)) {
+            Object getResponse1 =
+                    clusterClient.invokeScript(script, ScriptOptions.builder().key(key1).build()).get();
+            assertEquals("value1", getResponse1);
+
+            // Use GlideString in option but we still expect nonbinary output
+            Object getResponse2 =
+                    clusterClient
+                            .invokeScript(script, ScriptOptionsGlideString.builder().key(gs(key2)).build())
+                            .get();
+            assertEquals("value2", getResponse2);
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void script_large_keys_and_or_args() {
+        String str1 = "0".repeat(1 << 12); // 4k
+        String str2 = "0".repeat(1 << 12); // 4k
+
+        try (Script script = new Script("return KEYS[1]", false)) {
+            // 1 very big key
+            Object response =
+                    clusterClient
+                            .invokeScript(script, ScriptOptions.builder().key(str1 + str2).build())
+                            .get();
+            assertEquals(str1 + str2, response);
+        }
+
+        try (Script script = new Script("return KEYS[1]", false)) {
+            // 2 big keys
+            Object response =
+                    clusterClient
+                            .invokeScript(script, ScriptOptions.builder().key(str1).key(str2).build())
+                            .get();
+            assertEquals(str1, response);
+        }
+
+        try (Script script = new Script("return ARGV[1]", false)) {
+            // 1 very big arg
+            Object response =
+                    clusterClient
+                            .invokeScript(script, ScriptOptions.builder().arg(str1 + str2).build())
+                            .get();
+            assertEquals(str1 + str2, response);
+        }
+
+        try (Script script = new Script("return ARGV[1]", false)) {
+            // 1 big arg + 1 big key
+            Object response =
+                    clusterClient
+                            .invokeScript(script, ScriptOptions.builder().arg(str1).key(str2).build())
+                            .get();
+            assertEquals(str2, response);
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void invokeScript_gs_test() {
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+
+        try (Script script = new Script(gs("return 'Hello'"), true)) {
+            Object response = clusterClient.invokeScript(script).get();
+            assertEquals(gs("Hello"), response);
+        }
+
+        try (Script script = new Script(gs("return redis.call('SET', KEYS[1], ARGV[1])"), true)) {
+            Object setResponse1 =
+                    clusterClient
+                            .invokeScript(
+                                    script, ScriptOptionsGlideString.builder().key(key1).arg(gs("value1")).build())
+                            .get();
+            assertEquals(OK, setResponse1);
+
+            Object setResponse2 =
+                    clusterClient
+                            .invokeScript(
+                                    script, ScriptOptionsGlideString.builder().key(key2).arg(gs("value2")).build())
+                            .get();
+            assertEquals(OK, setResponse2);
+        }
+
+        try (Script script = new Script(gs("return redis.call('GET', KEYS[1])"), true)) {
+            Object getResponse1 =
+                    clusterClient
+                            .invokeScript(script, ScriptOptionsGlideString.builder().key(key1).build())
+                            .get();
+            assertEquals(gs("value1"), getResponse1);
+
+            // Use String in option but we still expect binary output (GlideString)
+            Object getResponse2 =
+                    clusterClient
+                            .invokeScript(script, ScriptOptions.builder().key(key2.toString()).build())
+                            .get();
+            assertEquals(gs("value2"), getResponse2);
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    public void scriptExists() {
+        Script script1 = new Script("return 'Hello'", true);
+        Script script2 = new Script("return 'World'", true);
+        Script script3 = new Script("return 'Hello World'", true);
+        String key = UUID.randomUUID().toString();
+        SingleNodeRoute route = new SlotKeyRoute(key, PRIMARY);
+        Boolean[] expected = new Boolean[] {true, false, true, false};
+
+        // Load script1 to all nodes, do not load script2 and load script3 with route
+        clusterClient.invokeScript(script1).get();
+        clusterClient.invokeScript(script3, route).get();
+
+        // Get the SHA1 digests of the scripts
+        String sha1_1 = script1.getHash();
+        String sha1_2 = script2.getHash();
+        String sha1_3 = script3.getHash();
+        String nonExistentSha1 = "0".repeat(40); // A SHA1 that doesn't exist
+
+        // Check existence of scripts
+        Boolean[] result =
+                clusterClient.scriptExists(new String[] {sha1_1, sha1_2, sha1_3, nonExistentSha1}).get();
+        Boolean[] result2 =
+                clusterClient
+                        .scriptExists(new String[] {sha1_1, sha1_2, sha1_3, nonExistentSha1}, route)
+                        .get();
+        assertArrayEquals(expected, result);
+        assertArrayEquals(expected, result2);
+    }
+
+    @Test
+    @SneakyThrows
+    public void scriptExistsBinary() {
+        Script script1 = new Script(gs("return 'Hello'"), true);
+        Script script2 = new Script(gs("return 'World'"), true);
+        Script script3 = new Script(gs("return 'Hello World'"), true);
+        String key = UUID.randomUUID().toString();
+        SingleNodeRoute route = new SlotKeyRoute(key, PRIMARY);
+        Boolean[] expected = new Boolean[] {true, false, true, false};
+
+        // Load script1 to all nodes, do not load script2 and load script3 with route
+        clusterClient.invokeScript(script1).get();
+        clusterClient.invokeScript(script3, route).get();
+
+        // Get the SHA1 digests of the scripts
+        GlideString sha1_1 = gs(script1.getHash());
+        GlideString sha1_2 = gs(script2.getHash());
+        GlideString sha1_3 = gs(script3.getHash());
+        GlideString nonExistentSha1 = gs("0".repeat(40)); // A SHA1 that doesn't exist
+
+        // Check existence of scripts
+        Boolean[] result =
+                clusterClient
+                        .scriptExists(new GlideString[] {sha1_1, sha1_2, sha1_3, nonExistentSha1})
+                        .get();
+        Boolean[] result2 =
+                clusterClient
+                        .scriptExists(new GlideString[] {sha1_1, sha1_2, sha1_3, nonExistentSha1}, route)
+                        .get();
+        assertArrayEquals(expected, result);
+        assertArrayEquals(expected, result2);
+    }
+
+    @Test
+    @SneakyThrows
+    public void scriptFlush() {
+        Script script = new Script("return 'Hello'", true);
+
+        // Load script
+        clusterClient.invokeScript(script, ALL_PRIMARIES).get();
+
+        // Check existence of scripts
+        Boolean[] result =
+                clusterClient.scriptExists(new String[] {script.getHash()}, ALL_PRIMARIES).get();
+        assertArrayEquals(new Boolean[] {true}, result);
+
+        // flush the script cache
+        assertEquals(OK, clusterClient.scriptFlush(ALL_PRIMARIES).get());
+
+        // check that the script no longer exists
+        result = clusterClient.scriptExists(new String[] {script.getHash()}, ALL_PRIMARIES).get();
+        assertArrayEquals(new Boolean[] {false}, result);
+
+        // Test with ASYNC mode
+        clusterClient.invokeScript(script, ALL_PRIMARIES).get();
+        assertEquals(OK, clusterClient.scriptFlush(FlushMode.ASYNC, ALL_PRIMARIES).get());
+        result = clusterClient.scriptExists(new String[] {script.getHash()}, ALL_PRIMARIES).get();
+        assertArrayEquals(new Boolean[] {false}, result);
+    }
+
+    @Test
+    @SneakyThrows
+    public void scriptKill_with_route() {
+        // create and load a long-running script and a primary node route
+        Script script = new Script(createLongRunningLuaScript(10, true), true);
+        RequestRoutingConfiguration.Route route =
+                new RequestRoutingConfiguration.SlotKeyRoute(UUID.randomUUID().toString(), PRIMARY);
+
+        // Verify that script_kill raises an error when no script is running
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> clusterClient.scriptKill(route).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(
+                executionException
+                        .getMessage()
+                        .toLowerCase()
+                        .contains("no scripts in execution right now"));
+
+        CompletableFuture<Object> promise = new CompletableFuture<>();
+        promise.complete(null);
+
+        try (var testClient =
+                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(30000).build())
+                        .get()) {
+            try {
+                testClient.invokeScript(script, route);
+
+                Thread.sleep(1000);
+
+                // Run script kill until it returns OK
+                boolean scriptKilled = false;
+                int timeout = 4000; // ms
+                while (timeout >= 0) {
+                    try {
+                        assertEquals(OK, clusterClient.scriptKill(route).get());
+                        scriptKilled = true;
+                        break;
+                    } catch (RequestException ignored) {
+                    }
+                    Thread.sleep(500);
+                    timeout -= 500;
+                }
+
+                assertTrue(scriptKilled);
+            } finally {
+                waitForNotBusy(clusterClient);
+            }
+        }
+
+        // Verify that script_kill raises an error when no script is running
+        executionException =
+                assertThrows(ExecutionException.class, () -> clusterClient.scriptKill(route).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(
+                executionException
+                        .getMessage()
+                        .toLowerCase()
+                        .contains("no scripts in execution right now"));
+    }
+
+    @SneakyThrows
+    @Test
+    public void scriptKill_unkillable() {
+        String key = UUID.randomUUID().toString();
+        RequestRoutingConfiguration.Route route =
+                new RequestRoutingConfiguration.SlotKeyRoute(key, PRIMARY);
+        String code =
+                "redis.call('SET', KEYS[1], 'value')\n"
+                        + "  local start = redis.call('time')[1]\n"
+                        + "  while redis.call('time')[1] - start < 5 do\n"
+                        + "      redis.call('SET', KEYS[1], 'value')\n"
+                        + "   end\n";
+        Script script = new Script(code, false);
+
+        CompletableFuture<Object> promise = new CompletableFuture<>();
+        promise.complete(null);
+
+        try (var testClient =
+                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(30000).build())
+                        .get()) {
+            try {
+                // run the script without await
+                promise = testClient.invokeScript(script, ScriptOptions.builder().key(key).build());
+
+                Thread.sleep(1000);
+
+                boolean foundUnkillable = false;
+                int timeout = 4000; // ms
+                while (timeout >= 0) {
+                    try {
+                        // valkey kills a script with 5 sec delay
+                        // but this will always throw an error in the test
+                        clusterClient.scriptKill(route).get();
+                    } catch (ExecutionException execException) {
+                        // looking for an error with "unkillable" in the message
+                        // at that point we can break the loop
+                        if (execException.getCause() instanceof RequestException
+                                && execException.getMessage().toLowerCase().contains("unkillable")) {
+                            foundUnkillable = true;
+                            break;
+                        }
+                    }
+                    Thread.sleep(500);
+                    timeout -= 500;
+                }
+                assertTrue(foundUnkillable);
+            } finally {
+                // If script wasn't killed, and it didn't time out - it blocks the server and cause rest
+                // test to fail.
+                // wait for the script to complete (we cannot kill it)
+                try {
+                    promise.get();
+                } catch (Exception ignored) {
+                }
+            }
+        }
     }
 }

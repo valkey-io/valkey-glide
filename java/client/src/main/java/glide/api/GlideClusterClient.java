@@ -30,6 +30,11 @@ import static command_request.CommandRequestOuterClass.RequestType.PubSubSChanne
 import static command_request.CommandRequestOuterClass.RequestType.PubSubSNumSub;
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
 import static command_request.CommandRequestOuterClass.RequestType.SPublish;
+import static command_request.CommandRequestOuterClass.RequestType.ScriptExists;
+import static command_request.CommandRequestOuterClass.RequestType.ScriptFlush;
+import static command_request.CommandRequestOuterClass.RequestType.ScriptKill;
+import static command_request.CommandRequestOuterClass.RequestType.Sort;
+import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
 import static command_request.CommandRequestOuterClass.RequestType.Time;
 import static command_request.CommandRequestOuterClass.RequestType.UnWatch;
 import static glide.api.commands.ServerManagementCommands.VERSION_VALKEY_API;
@@ -52,8 +57,12 @@ import glide.api.logging.Logger;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
+import glide.api.models.Script;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.ScriptOptions;
+import glide.api.models.commands.ScriptOptionsGlideString;
+import glide.api.models.commands.SortClusterOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.scan.ClusterScanCursor;
 import glide.api.models.commands.scan.ScanOptions;
@@ -65,9 +74,11 @@ import glide.managers.CommandManager;
 import glide.utils.ArgsBuilder;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.NonNull;
 import response.ResponseOuterClass.Response;
@@ -944,6 +955,152 @@ public class GlideClusterClient extends BaseClient
     public CompletableFuture<String> functionKill(@NonNull Route route) {
         return commandManager.submitNewCommand(
                 FunctionKill, new String[0], route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object> invokeScript(@NonNull Script script) {
+        if (script.getBinaryOutput()) {
+            return commandManager.submitScript(
+                    script, List.of(), List.of(), this::handleBinaryObjectOrNullResponse);
+        } else {
+            return commandManager.submitScript(
+                    script, List.of(), List.of(), this::handleObjectOrNullResponse);
+        }
+    }
+
+    @Override
+    public CompletableFuture<Object> invokeScript(
+            @NonNull Script script, @NonNull ScriptOptions options) {
+        if (script.getBinaryOutput()) {
+            return commandManager.submitScript(
+                    script,
+                    options.getKeys().stream().map(GlideString::gs).collect(Collectors.toList()),
+                    options.getArgs().stream().map(GlideString::gs).collect(Collectors.toList()),
+                    this::handleBinaryObjectOrNullResponse);
+        } else {
+            return commandManager.submitScript(
+                    script,
+                    options.getKeys().stream().map(GlideString::gs).collect(Collectors.toList()),
+                    options.getArgs().stream().map(GlideString::gs).collect(Collectors.toList()),
+                    this::handleObjectOrNullResponse);
+        }
+    }
+
+    @Override
+    public CompletableFuture<Object> invokeScript(
+            @NonNull Script script, @NonNull ScriptOptionsGlideString options) {
+        if (script.getBinaryOutput()) {
+            return commandManager.submitScript(
+                    script, options.getKeys(), options.getArgs(), this::handleBinaryObjectOrNullResponse);
+        } else {
+            return commandManager.submitScript(
+                    script, options.getKeys(), options.getArgs(), this::handleObjectOrNullResponse);
+        }
+    }
+
+    @Override
+    public CompletableFuture<Object> invokeScript(@NonNull Script script, @NonNull Route route) {
+        if (script.getBinaryOutput()) {
+            return commandManager.submitScript(
+                    script, List.of(), route, this::handleBinaryObjectOrNullResponse);
+        } else {
+            return commandManager.submitScript(
+                    script, List.of(), route, this::handleObjectOrNullResponse);
+        }
+    }
+
+    @Override
+    public CompletableFuture<Object> invokeScript(
+            @NonNull Script script, @NonNull List<String> args, @NonNull Route route) {
+        if (script.getBinaryOutput()) {
+            return commandManager.submitScript(
+                    script,
+                    args.stream().map(GlideString::gs).collect(Collectors.toList()),
+                    route,
+                    this::handleBinaryObjectOrNullResponse);
+        } else {
+            return commandManager.submitScript(
+                    script,
+                    args.stream().map(GlideString::gs).collect(Collectors.toList()),
+                    route,
+                    this::handleObjectOrNullResponse);
+        }
+    }
+
+    @Override
+    public CompletableFuture<Object> invokeScriptBinary(
+            @NonNull Script script, @NonNull List<GlideString> args, @NonNull Route route) {
+        if (script.getBinaryOutput()) {
+            return commandManager.submitScript(
+                    script, args, route, this::handleBinaryObjectOrNullResponse);
+        } else {
+            return commandManager.submitScript(script, args, route, this::handleObjectOrNullResponse);
+        }
+    }
+
+    @Override
+    public CompletableFuture<Boolean[]> scriptExists(@NonNull String[] sha1s) {
+        return commandManager.submitNewCommand(
+                ScriptExists, sha1s, response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    @Override
+    public CompletableFuture<Boolean[]> scriptExists(@NonNull GlideString[] sha1s) {
+        return commandManager.submitNewCommand(
+                ScriptExists, sha1s, response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    @Override
+    public CompletableFuture<Boolean[]> scriptExists(@NonNull String[] sha1s, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ScriptExists,
+                sha1s,
+                route,
+                response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    @Override
+    public CompletableFuture<Boolean[]> scriptExists(
+            @NonNull GlideString[] sha1s, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ScriptExists,
+                sha1s,
+                route,
+                response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    @Override
+    public CompletableFuture<String> scriptFlush() {
+        return commandManager.submitNewCommand(ScriptFlush, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> scriptFlush(@NonNull FlushMode flushMode) {
+        return commandManager.submitNewCommand(
+                ScriptFlush, new String[] {flushMode.toString()}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> scriptFlush(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ScriptFlush, new String[0], route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> scriptFlush(@NonNull FlushMode flushMode, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ScriptFlush, new String[] {flushMode.toString()}, route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> scriptKill() {
+        return commandManager.submitNewCommand(ScriptKill, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> scriptKill(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ScriptKill, new String[0], route, this::handleStringResponse);
     }
 
     @Override

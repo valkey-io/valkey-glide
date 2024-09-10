@@ -122,6 +122,7 @@
 * Java, Node, Python: Change BITCOUNT end param to optional (Valkey-8) ([#2248](https://github.com/valkey-io/valkey-glide/pull/2248))
 * Java, Node, Python: Add NOSCORES option to ZSCAN & NOVALUES option to HSCAN (Valkey-8) ([#2174](https://github.com/valkey-io/valkey-glide/pull/2174))
 * Node: Add SCAN command ([#2257](https://github.com/valkey-io/valkey-glide/pull/2257))
+* Java: Add Script commands ([#2261](https://github.com/valkey-io/valkey-glide/pull/2261))
 
 #### Breaking Changes
 * Java: Update INFO command ([#2274](https://github.com/valkey-io/valkey-glide/pull/2274))

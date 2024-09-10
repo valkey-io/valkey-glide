@@ -3,10 +3,14 @@ package glide.api.commands;
 
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
+import glide.api.models.Script;
 import glide.api.models.commands.FlushMode;
+import glide.api.models.commands.ScriptOptions;
+import glide.api.models.commands.ScriptOptionsGlideString;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.configuration.ReadFrom;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -1029,4 +1033,343 @@ public interface ScriptingAndFunctionsClusterCommands {
      */
     CompletableFuture<ClusterValue<Map<GlideString, Map<GlideString, Object>>>> functionStatsBinary(
             Route route);
+
+    /**
+     * Invokes a Lua script.<br>
+     * This method simplifies the process of invoking scripts on the server by using an object that
+     * represents a Lua script. The script loading and execution will all be handled internally. If
+     * the script has not already been loaded, it will be loaded automatically using the <code>
+     * SCRIPT LOAD</code> command. After that, it will be invoked using the <code>EVALSHA </code>
+     * command.
+     *
+     * @see <a href="https://valkey.io/commands/script-load/">SCRIPT LOAD</a> and <a
+     *     href="https://valkey.io/commands/evalsha/">EVALSHA</a> for details.
+     * @param script The Lua script to execute.
+     * @return A value that depends on the script that was executed.
+     * @example
+     *     <pre>{@code
+     * try(Script luaScript = new Script("return 'Hello'", false)) {
+     *     String result = (String) client.invokeScript(luaScript).get();
+     *     assert result.equals("Hello");
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Object> invokeScript(Script script);
+
+    /**
+     * Invokes a Lua script with its keys and arguments.<br>
+     * This method simplifies the process of invoking scripts on the server by using an object that
+     * represents a Lua script. The script loading, argument preparation, and execution will all be
+     * handled internally. If the script has not already been loaded, it will be loaded automatically
+     * using the <code>SCRIPT LOAD</code> command. After that, it will be invoked using the <code>
+     * EVALSHA</code> command.
+     *
+     * @apiNote When in cluster mode
+     *     <ul>
+     *       <li>all <code>keys</code> must map to the same hash slot.
+     *       <li>if no <code>keys</code> are given, command will be routed to a random primary node.
+     *     </ul>
+     *
+     * @see <a href="https://valkey.io/commands/script-load/">SCRIPT LOAD</a> and <a
+     *     href="https://valkey.io/commands/evalsha/">EVALSHA</a> for details.
+     * @param script The Lua script to execute.
+     * @param options The script option that contains keys and arguments for the script.
+     * @return A value that depends on the script that was executed.
+     * @example
+     *     <pre>{@code
+     * try(Script luaScript = new Script("return { KEYS[1], ARGV[1] }", false)) {
+     *     ScriptOptions scriptOptions = ScriptOptions.builder().key("foo").arg("bar").build();
+     *     Object[] result = (Object[]) client.invokeScript(luaScript, scriptOptions).get();
+     *     assert result[0].equals("foo");
+     *     assert result[1].equals("bar");
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Object> invokeScript(Script script, ScriptOptions options);
+
+    /**
+     * Invokes a Lua script with its keys and arguments.<br>
+     * This method simplifies the process of invoking scripts on the server by using an object that
+     * represents a Lua script. The script loading, argument preparation, and execution will all be
+     * handled internally. If the script has not already been loaded, it will be loaded automatically
+     * using the <code>SCRIPT LOAD</code> command. After that, it will be invoked using the <code>
+     * EVALSHA</code> command.
+     *
+     * @apiNote When in cluster mode
+     *     <ul>
+     *       <li>all <code>keys</code> must map to the same hash slot.
+     *       <li>if no <code>keys</code> are given, command will be routed to a random primary node.
+     *     </ul>
+     *
+     * @see <a href="https://valkey.io/commands/script-load/">SCRIPT LOAD</a> and <a
+     *     href="https://valkey.io/commands/evalsha/">EVALSHA</a> for details.
+     * @param script The Lua script to execute.
+     * @param options The script option that contains keys and arguments for the script.
+     * @return A value that depends on the script that was executed.
+     * @example
+     *     <pre>{@code
+     * try(Script luaScript = new Script(gs("return { KEYS[1], ARGV[1] }", true))) {
+     *     ScriptOptionsGlideString scriptOptions = ScriptOptionsGlideString.builder().key(gs("foo")).arg(gs("bar")).build();
+     *     Object[] result = (Object[]) client.invokeScript(luaScript, scriptOptions).get();
+     *     assert result[0].equals(gs("foo"));
+     *     assert result[1].equals(gs("bar"));
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Object> invokeScript(Script script, ScriptOptionsGlideString options);
+
+    /**
+     * Invokes a Lua script.<br>
+     * This method simplifies the process of invoking scripts on the server by using an object that
+     * represents a Lua script. The script loading and execution will all be handled internally. If
+     * the script has not already been loaded, it will be loaded automatically using the <code>
+     * SCRIPT LOAD</code> command. After that, it will be invoked using the <code>EVALSHA </code>
+     * command.
+     *
+     * @see <a href="https://valkey.io/commands/script-load/">SCRIPT LOAD</a> and <a
+     *     href="https://valkey.io/commands/evalsha/">EVALSHA</a> for details.
+     * @param script The Lua script to execute.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A value that depends on the script that was executed.
+     * @example
+     *     <pre>{@code
+     * try(Script luaScript = new Script("return 'Hello'", false)) {
+     *     String result = (String) client.invokeScript(luaScript).get();
+     *     assert result.equals("Hello");
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Object> invokeScript(Script script, Route route);
+
+    /**
+     * Invokes a Lua script with its keys and arguments.<br>
+     * This method simplifies the process of invoking scripts on the server by using an object that
+     * represents a Lua script. The script loading, argument preparation, and execution will all be
+     * handled internally. If the script has not already been loaded, it will be loaded automatically
+     * using the <code>SCRIPT LOAD</code> command. After that, it will be invoked using the <code>
+     * EVALSHA</code> command.
+     *
+     * @apiNote When in cluster mode
+     *     <ul>
+     *       <li>all <code>keys</code> must map to the same hash slot.
+     *       <li>if no <code>keys</code> are given, command will be routed to a random primary node.
+     *     </ul>
+     *
+     * @see <a href="https://valkey.io/commands/script-load/">SCRIPT LOAD</a> and <a
+     *     href="https://valkey.io/commands/evalsha/">EVALSHA</a> for details.
+     * @param script The Lua script to execute.
+     * @param args The non-key arguments for the script.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A value that depends on the script that was executed.
+     * @example
+     *     <pre>{@code
+     * try(Script luaScript = new Script("return { ARGV[1] }", false)) {
+     *     Object[] result = (Object[]) client.invokeScript(luaScript, {"foo"}, ALL_PRIMARIES).get();
+     *     assert result[0].equals("foo");
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Object> invokeScript(Script script, List<String> args, Route route);
+
+    /**
+     * Invokes a Lua script with its keys and arguments.<br>
+     * This method simplifies the process of invoking scripts on the server by using an object that
+     * represents a Lua script. The script loading, argument preparation, and execution will all be
+     * handled internally. If the script has not already been loaded, it will be loaded automatically
+     * using the <code>SCRIPT LOAD</code> command. After that, it will be invoked using the <code>
+     * EVALSHA</code> command.
+     *
+     * @apiNote When in cluster mode
+     *     <ul>
+     *       <li>all <code>keys</code> must map to the same hash slot.
+     *       <li>if no <code>keys</code> are given, command will be routed to a random primary node.
+     *     </ul>
+     *
+     * @see <a href="https://valkey.io/commands/script-load/">SCRIPT LOAD</a> and <a
+     *     href="https://valkey.io/commands/evalsha/">EVALSHA</a> for details.
+     * @param script The Lua script to execute.
+     * @param args The non-key arguments for the script.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A value that depends on the script that was executed.
+     * @example
+     *     <pre>{@code
+     * try(Script luaScript = new Script(gs("return { ARGV[1] }", true))) {
+     *     Object[] result = (Object[]) client.invokeScript(luaScript, {"foo"}, ALL_PRIMARIES).get();
+     *     assert result[0].equals(gs("foo"));
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Object> invokeScriptBinary(Script script, List<GlideString> args, Route route);
+
+    /**
+     * Checks existence of scripts in the script cache by their SHA1 digest.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/script-exists">SCRIPT EXISTS</a> for details.
+     * @param sha1s The Lua script to execute.
+     * @return An array of <code>boolean</code> values indicating the existence of each script.
+     * @example
+     *     <pre>{@code
+     * try(Script luaScript = new Script("return { KEYS[1], ARGV[1] }", true)) {
+     *     client.invokeScript(luaScript).get();
+     *     Boolean[] result = client.scriptExists(new String[]{luaScript.getHash()});
+     *     assert result[0].equals(true);
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Boolean[]> scriptExists(String[] sha1s);
+
+    /**
+     * Checks existence of scripts in the script cache by their SHA1 digest.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/script-exists">SCRIPT EXISTS</a> for details.
+     * @param sha1s The Lua script to execute.
+     * @return An array of <code>boolean</code> values indicating the existence of each script.
+     * @example
+     *     <pre>{@code
+     * try(Script luaScript = new Script(gs("return { KEYS[1], ARGV[1] }", true))) {
+     *     client.invokeScript(luaScript).get();
+     *     Boolean[] result = client.scriptExists(new String[]{luaScript.getHash()});
+     *     assert result[0].equals(true);
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Boolean[]> scriptExists(GlideString[] sha1s);
+
+    /**
+     * Checks existence of scripts in the script cache by their SHA1 digest.
+     *
+     * @see <a href="https://valkey.io/commands/script-exists">SCRIPT EXISTS</a> for details.
+     * @param sha1s The Lua script to execute.
+     * @param route The command will be routed to all primary nodes, unless <code>route</code> is
+     *     provided, in which case the client will route the command to the nodes defined by <code>
+     *     route</code>. Defaults to None.
+     * @return An array of <code>boolean</code> values indicating the existence of each script.
+     * @example
+     *     <pre>{@code
+     * try(Script luaScript = new Script("return { KEYS[1], ARGV[1] }", true)) {
+     *     client.invokeScript(luaScript).get();
+     *     Boolean[] result = client.scriptExists(new String[]{luaScript.getHash()});
+     *     assert result[0].equals(true);
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Boolean[]> scriptExists(String[] sha1s, Route route);
+
+    /**
+     * Checks existence of scripts in the script cache by their SHA1 digest.
+     *
+     * @see <a href="https://valkey.io/commands/script-exists">SCRIPT EXISTS</a> for details.
+     * @param sha1s The Lua script to execute.
+     * @param route The command will be routed to all primary nodes, unless <code>route</code> is
+     *     provided, in which case the client will route the command to the nodes defined by <code>
+     *     route</code>. Defaults to None.
+     * @return An array of <code>boolean</code> values indicating the existence of each script.
+     * @example
+     *     <pre>{@code
+     * try(Script luaScript = new Script(gs("return { KEYS[1], ARGV[1] }", true))) {
+     *     client.invokeScript(luaScript).get();
+     *     Boolean[] result = client.scriptExists(new String[]{luaScript.getHash()});
+     *     assert result[0].equals(true);
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Boolean[]> scriptExists(GlideString[] sha1s, Route route);
+
+    /**
+     * Flushes the Lua scripts cache.<br>
+     * The command will be routed to all nodes.
+     *
+     * @see <a href="https://valkey.io/commands/script-flush">SCRIPT FLUSH</a> for details.
+     * @return A simple "OK" response.
+     * @example
+     *     <pre>{@code
+     * String result = client.scriptFlush();
+     * assert "OK".equals(result);
+     * }</pre>
+     */
+    CompletableFuture<String> scriptFlush();
+
+    /**
+     * Flushes the Lua scripts cache.<br>
+     * The command will be routed to all nodes.
+     *
+     * @see <a href="https://valkey.io/commands/script-flush">SCRIPT FLUSH</a> for details.
+     * @param flushMode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
+     *     FlushMode#ASYNC}.
+     * @return A simple "OK" response.
+     * @example
+     *     <pre>{@code
+     * String result = client.scriptFlush(ASYNC);
+     * assert "OK".equals(result);
+     * }</pre>
+     */
+    CompletableFuture<String> scriptFlush(FlushMode flushMode);
+
+    /**
+     * Flushes the Lua scripts cache.
+     *
+     * @see <a href="https://valkey.io/commands/script-flush">SCRIPT flush</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A simple "OK" response.
+     * @example
+     *     <pre>{@code
+     * String result = client.scriptFlush(ALL_PRIMARIES);
+     * assert "OK".equals(result);
+     * }</pre>
+     */
+    CompletableFuture<String> scriptFlush(Route route);
+
+    /**
+     * Flushes the Lua scripts cache.
+     *
+     * @see <a href="https://valkey.io/commands/script-flush">SCRIPT flush</a> for details.
+     * @param flushMode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
+     *     FlushMode#ASYNC}.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A simple "OK" response.
+     * @example
+     *     <pre>{@code
+     * String result = client.scriptFlush(ASYNC, ALL_PRIMARIES);
+     * assert "OK".equals(result);
+     * }</pre>
+     */
+    CompletableFuture<String> scriptFlush(FlushMode flushMode, Route route);
+
+    /**
+     * Kill the currently executing Lua script, assuming no write operation was yet performed by the
+     * script.<br>
+     * The command will be routed to all nodes.
+     *
+     * @see <a href="https://valkey.io/commands/script-kill">SCRIPT KILL</a> for details.
+     * @return A simple "OK" response.
+     * @example
+     *     <pre>{@code
+     * String result = client.scriptKill();
+     * assert "OK".equals(result);
+     * }</pre>
+     */
+    CompletableFuture<String> scriptKill();
+
+    /**
+     * Kills the currently executing Lua script, assuming no write operation was yet performed by the
+     * script.
+     *
+     * @see <a href="https://valkey.io/commands/script-kill">SCRIPT KILL</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A simple "OK" response.
+     * @example
+     *     <pre>{@code
+     * String result = client.scriptKill(RANDOM);
+     * assert "OK".equals(result);
+     * }</pre>
+     */
+    CompletableFuture<String> scriptKill(Route route);
 }
