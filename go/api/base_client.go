@@ -24,7 +24,7 @@ type BaseClient interface {
 	StringCommands
 	HashCommands
 	ListCommands
-
+	ConnectionManagementCommands
 	// Close terminates the client by closing all associated resources.
 	Close()
 }
@@ -511,4 +511,32 @@ func (client *baseClient) RPush(key string, elements []string) (Result[int64], e
 	}
 
 	return handleLongResponse(result)
+}
+
+func (client *baseClient) Ping() (string, error) {
+	result, err := client.executeCommand(C.Ping, []string{})
+	if err != nil {
+		return "", err
+	}
+
+	response, err := handleStringResponse(result)
+	if err != nil {
+		return "", err
+	}
+	return response.Value(), nil
+}
+
+func (client *baseClient) PingWithMessage(message string) (string, error) {
+	args := []string{message}
+
+	result, err := client.executeCommand(C.Ping, args)
+	if err != nil {
+		return "", err
+	}
+
+	response, err := handleStringResponse(result)
+	if err != nil {
+		return "", err
+	}
+	return response.Value(), nil
 }

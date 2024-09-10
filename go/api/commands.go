@@ -692,3 +692,37 @@ type HashCommands interface {
 	// [valkey.io]: https://valkey.io/commands/hstrlen/
 	HStrLen(key string, field string) (Result[int64], error)
 }
+
+// ConnectionManagementCommands defines an interface for connection management-related commands.
+//
+// See [valkey.io] for details.
+type ConnectionManagementCommands interface {
+	// Pings the server.
+	//
+	// If no argument is provided, returns "PONG". If a message is provided, returns the message.
+	//
+	// Return value:
+	//  If no argument is provided, returns "PONG".
+	//  If an argument is provided, returns the argument.
+	//
+	// For example:
+	//  result, err := client.Ping("Hello")
+	//
+	// [valkey.io]: https://valkey.io/commands/ping/
+	Ping() (string, error)
+
+	// Pings the server with a custom message.
+	//
+	// If a message is provided, returns the message.
+	// If no argument is provided, returns "PONG".
+	//
+	// Return value:
+	//  If no argument is provided, returns "PONG".
+	//  If an argument is provided, returns the argument.
+	//
+	// For example:
+	//  result, err := client.PingWithMessage("Hello")
+	//
+	// [valkey.io]: https://valkey.io/commands/ping/
+	PingWithMessage(message string) (string, error)
+}
