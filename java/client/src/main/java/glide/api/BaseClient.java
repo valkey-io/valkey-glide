@@ -110,6 +110,7 @@ import static command_request.CommandRequestOuterClass.RequestType.SRem;
 import static command_request.CommandRequestOuterClass.RequestType.SScan;
 import static command_request.CommandRequestOuterClass.RequestType.SUnion;
 import static command_request.CommandRequestOuterClass.RequestType.SUnionStore;
+import static command_request.CommandRequestOuterClass.RequestType.ScriptShow;
 import static command_request.CommandRequestOuterClass.RequestType.Set;
 import static command_request.CommandRequestOuterClass.RequestType.SetBit;
 import static command_request.CommandRequestOuterClass.RequestType.SetRange;
@@ -1869,6 +1870,18 @@ public abstract class BaseClient
             return commandManager.submitScript(
                     script, options.getKeys(), options.getArgs(), this::handleObjectOrNullResponse);
         }
+    }
+
+    @Override
+    public CompletableFuture<String> scriptShow(@NonNull String sha1) {
+        return commandManager.submitNewCommand(
+                ScriptShow, new String[] {sha1}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<GlideString> scriptShow(@NonNull GlideString sha1) {
+        return commandManager.submitNewCommand(
+                ScriptShow, new GlideString[] {sha1}, this::handleGlideStringResponse);
     }
 
     @Override
