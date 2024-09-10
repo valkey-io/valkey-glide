@@ -13,19 +13,20 @@ import {
 import { BufferReader, BufferWriter } from "protobufjs";
 import { v4 as uuidv4 } from "uuid";
 import {
+    convertGlideRecordToRecord,
     Decoder,
+    FlushMode,
+    FunctionRestorePolicy,
     GlideClient,
+    GlideRecord,
+    GlideString,
     HashDataType,
     ProtocolVersion,
     RequestError,
+    SortOrder,
     Transaction,
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
-import {
-    FlushMode,
-    FunctionRestorePolicy,
-    SortOrder,
-} from "../build-ts/src/Commands";
 import { command_request } from "../src/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import {
@@ -372,7 +373,7 @@ describe("GlideClient", () => {
             const key = uuidv4();
             const maxmemoryPolicyKey = "maxmemory-policy";
             const config = await client.configGet([maxmemoryPolicyKey]);
-            const maxmemoryPolicy = String(config[maxmemoryPolicyKey]);
+            const maxmemoryPolicy = config[maxmemoryPolicyKey];
 
             try {
                 const transaction = new Transaction();
@@ -413,7 +414,7 @@ describe("GlideClient", () => {
             const key = uuidv4();
             const maxmemoryPolicyKey = "maxmemory-policy";
             const config = await client.configGet([maxmemoryPolicyKey]);
-            const maxmemoryPolicy = String(config[maxmemoryPolicyKey]);
+            const maxmemoryPolicy = config[maxmemoryPolicyKey];
 
             try {
                 const transaction = new Transaction();
@@ -703,17 +704,18 @@ describe("GlideClient", () => {
 
                 let functionList = await client.functionList({
                     libNamePattern: Buffer.from(libName),
+                    decoder: Decoder.Bytes,
                 });
-                let expectedDescription = new Map<string, string | null>([
+                let expectedDescription = new Map<string, GlideString | null>([
                     [funcName, null],
                 ]);
-                let expectedFlags = new Map<string, string[]>([
-                    [funcName, ["no-writes"]],
+                let expectedFlags = new Map<string, GlideString[]>([
+                    [funcName, [Buffer.from("no-writes")]],
                 ]);
 
                 checkFunctionListResponse(
                     functionList,
-                    libName,
+                    Buffer.from(libName),
                     expectedDescription,
                     expectedFlags,
                 );
@@ -763,7 +765,9 @@ describe("GlideClient", () => {
                     newCode,
                 );
 
-                functionStats = await client.functionStats();
+                functionStats = await client.functionStats({
+                    decoder: Decoder.Bytes,
+                });
 
                 for (const response of Object.values(functionStats)) {
                     checkFunctionStatsResponse(response, [], 1, 2);
@@ -1602,8 +1606,14 @@ describe("GlideClient", () => {
 
             if (result != null) {
                 expect(result[0]).toEqual("0-1"); // xadd
-                expect(result[1]).toEqual(expectedXinfoStreamResult);
-                expect(result[2]).toEqual(expectedXinfoStreamFullResult);
+                const res1 = convertGlideRecordToRecord(
+                    result[1] as GlideRecord<[GlideString, GlideString][]>,
+                );
+                const res2 = convertGlideRecordToRecord(
+                    result[2] as GlideRecord<[GlideString, GlideString][]>,
+                );
+                expect(res1).toEqual(expectedXinfoStreamResult);
+                expect(res2).toEqual(expectedXinfoStreamFullResult);
             }
 
             client.close();

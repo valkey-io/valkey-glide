@@ -1,3 +1,4 @@
+/* eslint no-undef: off */
 module.exports = {
     preset: "ts-jest",
     transform: { "^.+\\.ts?$": "ts-jest" },
