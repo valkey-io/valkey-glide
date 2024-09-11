@@ -163,18 +163,10 @@ Development on the Node wrapper may involve changes in either the TypeScript or 
 1. TypeScript
 
     ```bash
-    # Run from the root folder of the GLIDE repository
-    npm install --save-dev prettier
-    cd node
-    npx prettier --check .
+    # Run from the node folder
     npm run lint
     # To automatically apply ESLint and/or prettier recommendations
     npx run lint:fix
-    npx prettier -w .
-    ```
-
-    ```bash
-
     ```
 
 2. Rust

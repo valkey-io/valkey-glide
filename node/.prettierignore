@@ -3,3 +3,5 @@ rust-client/*
 # unignore specific files
 !rust-client/package.json
 !rust-client/tsconfig.json
+# ignore docs dir
+docs/*

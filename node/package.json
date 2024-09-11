@@ -36,12 +36,12 @@
         "fix-protobuf-file": "replace 'this\\.encode\\(message, writer\\)\\.ldelim' 'this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim' src/ProtobufMessage.js",
         "test": "npm run build-test-utils && jest --verbose --runInBand --testPathIgnorePatterns='RedisModules'",
         "build-test-utils": "cd ../utils && npm i && npm run build",
-        "lint:fix": "npm run install-linting && npx eslint -c ../eslint.config.mjs --fix",
-        "lint": "npm run install-linting && npx eslint -c ../eslint.config.mjs",
+        "lint:fix": "npm run install-linting && npx eslint -c ../eslint.config.mjs --fix && npm run prettier:format",
+        "lint": "npm run install-linting && npx eslint -c ../eslint.config.mjs && npm run prettier:check:ci",
         "install-linting": "cd ../ & npm install",
         "prepack": "npmignore --auto",
-        "prettier:check:ci": "./node_modules/.bin/prettier --check . --ignore-unknown '!**/*.{js,d.ts}'",
-        "prettier:format": "./node_modules/.bin/prettier --write . --ignore-unknown '!**/*.{js,d.ts}'"
+        "prettier:check:ci": "npx prettier --check . --ignore-unknown '!**/*.{js,d.ts}'",
+        "prettier:format": "npx prettier --write . --ignore-unknown '!**/*.{js,d.ts}'"
     },
     "devDependencies": {
         "@babel/preset-env": "^7.25.4",
@@ -63,7 +63,7 @@
         "typescript": "^5.5.4",
         "uuid": "^10.0.0"
     },
-    "author": "Amazon Web Services",
+    "author": "Valkey contributors",
     "license": "Apache-2.0",
     "publishConfig": {
         "${registry_scope}registry": "https://registry.npmjs.org/",
@@ -74,7 +74,8 @@
             "!build-ts/**",
             "babel.config.js",
             "jest.config.js",
-            "hybrid-node-tests/**"
+            "hybrid-node-tests/**",
+            "docs/"
         ]
     },
     "//": [
