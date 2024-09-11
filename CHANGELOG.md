@@ -114,6 +114,7 @@
 * Python: Add Script commands ([#2208](https://github.com/valkey-io/valkey-glide/pull/2208))
 
 #### Breaking Changes
+* Node: (Refactor) Convert types to interfaces ([#2263](https://github.com/valkey-io/valkey-glide/pull/2263))
 * Node: (Refactor) Convert classes to types ([#2005](https://github.com/valkey-io/valkey-glide/pull/2005))
 * Core: Change FUNCTION STATS command to return multi node response for standalone mode ([#2117](https://github.com/valkey-io/valkey-glide/pull/2117))
 
