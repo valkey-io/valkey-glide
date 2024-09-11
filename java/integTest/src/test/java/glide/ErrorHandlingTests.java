@@ -1,7 +1,6 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
-import static glide.TestUtilities.commonClientConfig;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -40,7 +39,13 @@ public class ErrorHandlingTests {
     @Test
     @SneakyThrows
     public void basic_client_tries_wrong_command() {
-        try (var regularClient = GlideClient.createClient(commonClientConfig().build()).get()) {
+        try (var regularClient =
+                GlideClient.createClient(
+                                GlideClientConfiguration.builder()
+                                        .address(
+                                                NodeAddress.builder().port(TestConfiguration.STANDALONE_PORTS[0]).build())
+                                        .build())
+                        .get()) {
             var exception =
                     assertThrows(
                             ExecutionException.class,
@@ -54,7 +59,13 @@ public class ErrorHandlingTests {
     @Test
     @SneakyThrows
     public void basic_client_tries_wrong_command_arguments() {
-        try (var regularClient = GlideClient.createClient(commonClientConfig().build()).get()) {
+        try (var regularClient =
+                GlideClient.createClient(
+                                GlideClientConfiguration.builder()
+                                        .address(
+                                                NodeAddress.builder().port(TestConfiguration.STANDALONE_PORTS[0]).build())
+                                        .build())
+                        .get()) {
             var exception =
                     assertThrows(
                             ExecutionException.class,

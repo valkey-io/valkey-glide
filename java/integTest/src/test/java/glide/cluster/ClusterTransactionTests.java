@@ -3,7 +3,6 @@ package glide.cluster;
 
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
-import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
@@ -17,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import glide.TestConfiguration;
 import glide.TransactionTestUtilities.TransactionBuilder;
 import glide.api.GlideClusterClient;
 import glide.api.models.ClusterTransaction;
@@ -24,6 +24,8 @@ import glide.api.models.GlideString;
 import glide.api.models.commands.SortClusterOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.stream.StreamAddOptions;
+import glide.api.models.configuration.GlideClusterClientConfiguration;
+import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotIdRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotType;
@@ -49,7 +51,11 @@ public class ClusterTransactionTests {
     @SneakyThrows
     public static void init() {
         clusterClient =
-                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(5000).build())
+                GlideClusterClient.createClient(
+                                GlideClusterClientConfiguration.builder()
+                                        .address(NodeAddress.builder().port(TestConfiguration.CLUSTER_PORTS[0]).build())
+                                        .requestTimeout(5000)
+                                        .build())
                         .get();
     }
 

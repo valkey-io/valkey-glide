@@ -99,7 +99,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-// @Timeout(10) // seconds
+@Timeout(10) // seconds
 public class CommandTests {
 
     private static GlideClusterClient clusterClient = null;
