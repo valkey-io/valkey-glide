@@ -42,6 +42,7 @@ import {
     createPing,
     createPublish,
     createRandomKey,
+    createScan,
     createScriptExists,
     createScriptFlush,
     createScriptKill,
@@ -55,6 +56,7 @@ import {
     FunctionStatsFullResponse,
     InfoOptions,
     LolwutOptions,
+    ScanOptions
 } from "./Commands";
 import { connection_request } from "./ProtobufMessage";
 import { Transaction } from "./Transaction";
@@ -975,5 +977,60 @@ export class GlideClient extends BaseClient {
         return this.createWritePromise(createScriptKill(), {
             decoder: Decoder.String,
         });
+    }
+
+    /**
+     * Incrementally iterate over a collection of keys.
+     * `SCAN` is a cursor based iterator. This means that at every call of the method,
+     * the server returns an updated cursor that the user needs to use as the cursor argument in the next call.
+     * An iteration starts when the cursor is set to "0", and terminates when the cursor returned by the server is "0".
+     *
+     * A full iteration always retrieves all the elements that were present
+     * in the collection from the start to the end of a full iteration.
+     * Elements that were not constantly present in the collection during a full iteration, may be returned or not.
+     *
+     * @see {@link https://valkey.io/commands/scan|valkey.io} for more details.
+     *
+     * @param cursor - The `cursor` used for iteration. For the first iteration, the cursor should be set to "0".
+     * Using a non-zero cursor in the first iteration,
+     * or an invalid cursor at any iteration, will lead to undefined results.
+     * Using the same cursor in multiple iterations will, in case nothing changed between the iterations,
+     * return the same elements multiple times.
+     * If the the db has changed, it may result an undefined behavior.
+     * @param options - (Optional) The options to use for the scan operation.
+     * @param options.match - (Optional) A pattern to match keys against.
+     * @param options.count - (Optional) The number of keys to return per iteration.
+     * The number of keys returned per iteration is not guaranteed to be the same as the count argument.
+     * the argument is used as a hint for the server to know how many "steps" it can use to retrieve the keys.
+     * The default value is 10.
+     * @param options.type - The type of object to scan for see {@link ScanOptions.type} for possible values.
+     * @param options.decoder - (Optional) The decoder to use for the response, see {@link DecoderOption}.
+     * @returns A List containing the next cursor value and a list of keys,
+     * formatted as [cursor, [key1, key2, ...]]
+     *
+     * @example
+     * ```typescript
+     * // Example usage of scan method
+     * let result = await client.scan('0');
+     * console.log(result); // Output: ['17', ['key1', 'key2', 'key3', 'key4', 'key5', 'set1', 'set2', 'set3']]
+     * let firstCursorResult = result[0];
+     * result = await client.scan(firstCursorResult);
+     * console.log(result); // Output: ['349', ['key4', 'key5', 'set1', 'hash1', 'zset1', 'list1', 'list2',
+     * // 'list3', 'zset2', 'zset3', 'zset4', 'zset5', 'zset6']]
+     * result = await client.scan(result[0]);
+     * console.log(result); // Output: ['0', ['key6', 'key7']]
+     *
+     * result = await client.scan(firstCursorResult, {match: 'key*', count: 2});
+     * console.log(result); // Output: ['6', ['key4', 'key5']]
+     *
+     * result = await client.scan("0", {type: ObjectType.Set});
+     * console.log(result); // Output: ['362', ['set1', 'set2', 'set3']]
+     * ```
+     */
+    public async scan(
+        cursor: GlideString,
+        options?: ScanOptions & DecoderOption,
+    ): Promise<[GlideString, GlideString[]]> {
+        return this.createWritePromise(createScan(cursor, options), options);
     }
 }

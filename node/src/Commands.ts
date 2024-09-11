@@ -11,6 +11,7 @@ import {
     GlideRecord,
     GlideString,
     HashDataType,
+    ObjectType,
     SortedSetDataType,
 } from "./BaseClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
@@ -269,6 +270,20 @@ export enum InfoOptions {
      * EVERYTHING: Includes all and modules
      */
     Everything = "everything",
+}
+
+/**
+ * Scan options for the SCAN command.
+ * `match` - A pattern to match keys against. If not set, all keys are scanned.
+ * `count` - The number of keys to return in a single iteration. If not set, the default value is 10.
+ * `type` - The type of object to scan for. If not set, all objects are scanned.
+ * @see {@link ObjectType} for possible values.
+ */
+export interface ScanOptions {
+    match?: GlideString;
+    count?: number;
+    /// Enum of Valkey data types `STRING` `LIST` `SET` `ZSET` `HASH` `STREAM`
+    type?: ObjectType;
 }
 
 /**
@@ -1653,6 +1668,22 @@ export function createZMScore(
     members: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.ZMScore, [key, ...members]);
+}
+
+/**
+ * @internal
+ */
+export function createScan(
+    cursor: GlideString,
+    options?: ScanOptions,
+): command_request.Command {
+    let args: GlideString[] = [cursor];
+
+    if (options) {
+        args = args.concat(convertBaseScanOptionsToArgsArray(options));
+    }
+
+    return createCommand(RequestType.Scan, args);
 }
 
 export enum InfBoundary {
@@ -3808,6 +3839,11 @@ export interface BaseScanOptions {
      * represent the results as compact single-allocation packed encoding.
      */
     readonly count?: number;
+    /**
+     * The type of the object to scan.
+     * Types are the data types of Valkey.
+     */
+    type?: ObjectType;
 }
 
 /**
@@ -3846,6 +3882,10 @@ function convertBaseScanOptionsToArgsArray(
 
     if (options.count !== undefined) {
         args.push("COUNT", options.count.toString());
+    }
+
+    if (options.type) {
+        args.push("TYPE", options.type);
     }
 
     return args;

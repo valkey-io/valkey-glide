@@ -575,7 +575,15 @@ export interface ScriptOptions {
     args?: GlideString[];
 }
 
-// Enums of Valkey data types
+/**
+ * Enum of Valkey data types
+ * `STRING`
+ * `LIST`
+ * `SET`
+ * `ZSET`
+ * `HASH`
+ * `STREAM`
+ */
 export enum ObjectType {
     STRING = "String",
     LIST = "List",

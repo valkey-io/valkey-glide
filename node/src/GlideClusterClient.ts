@@ -11,7 +11,6 @@ import {
     GlideRecord,
     GlideReturnType,
     GlideString, // eslint-disable-line @typescript-eslint/no-unused-vars
-    ObjectType,
     PubSubMsg,
     convertGlideRecordToRecord,
 } from "./BaseClient";
@@ -25,6 +24,7 @@ import {
     FunctionStatsSingleResponse,
     InfoOptions,
     LolwutOptions,
+    ScanOptions,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -59,7 +59,7 @@ import {
     createScriptFlush,
     createScriptKill,
     createTime,
-    createUnWatch,
+    createUnWatch
 } from "./Commands";
 import { ClosingError } from "./Errors";
 import { Logger } from "./Logger";
@@ -262,21 +262,6 @@ export type SingleNodeRoute =
     | SlotKeyTypes
     | RouteByAddress;
 
-export interface ClusterScanOptions {
-    /**
-     * A pattern to match keys against.
-     */
-    match?: GlideString;
-    /**
-     * The number of keys to return in a single iteration.
-     */
-    count?: number;
-    /**
-     * The type of object to scan for.
-     */
-    object?: ObjectType;
-}
-
 /**
  * Client used for connection to cluster servers.
  *
@@ -338,7 +323,7 @@ export class GlideClusterClient extends BaseClient {
      */
     protected scanOptionsToProto(
         command: command_request.ClusterScan,
-        options?: ClusterScanOptions,
+        options?: ScanOptions,
     ): command_request.ClusterScan {
         if (options?.match) {
             command.matchPattern = Buffer.from(options.match);
@@ -348,8 +333,8 @@ export class GlideClusterClient extends BaseClient {
             command.count = options.count;
         }
 
-        if (options?.object) {
-            command.objectType = options.object;
+        if (options?.type) {
+            command.objectType = options.type;
         }
 
         return command;
@@ -360,7 +345,7 @@ export class GlideClusterClient extends BaseClient {
      */
     protected createClusterScanPromise(
         cursor: ClusterScanCursor,
-        options?: ClusterScanOptions & DecoderOption,
+        options?: ScanOptions & DecoderOption,
     ): Promise<[ClusterScanCursor, GlideString[]]> {
         // separate decoder option from scan options
         const { decoder, ...scanOptions } = options || {};
@@ -426,7 +411,7 @@ export class GlideClusterClient extends BaseClient {
      * @param options.count - (Optional) The number of keys to return in a single iteration.
      *   The actual number returned can vary. This parameter serves as a hint to the server.
      *   Default is 10.
-     * @param options.type - (Optional) The type of object to scan for, see {@link ObjectType}.
+     * @param options.type - (Optional) The type of object to scan for, see {@link ScanOptions.type}.
      * @param options.decoder - (Optional) The decoder to use for the response, see {@link DecoderOption}.
      *
      * @returns A Promise resolving to an array containing the next cursor and an array of keys,
@@ -469,7 +454,7 @@ export class GlideClusterClient extends BaseClient {
      */
     public async scan(
         cursor: ClusterScanCursor,
-        options?: ClusterScanOptions & DecoderOption,
+        options?: ScanOptions & DecoderOption,
     ): Promise<[ClusterScanCursor, GlideString[]]> {
         return this.createClusterScanPromise(cursor, options);
     }
