@@ -58,7 +58,7 @@ jobs:
               uses: actions/setup-java@v4
               with:
                   distribution: "temurin"
-                  java-version: "11"
+                  java-version: ${{ env.JAVA_VERSION }}
 
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
@@ -76,6 +76,9 @@ jobs:
             -   name: Test deployment
                 working-directory: java
                 run: |
+                    export ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderName="Authorization"
+                    export ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderValue="Bearer $(echo "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" | base64)"
+                    export GLIDE_RELEASE_VERSION=${{ env.RELEASE_VERSION }}
                     ./gradlew :benchmarks:run --args="--minimal --clients glide"
 
 #
