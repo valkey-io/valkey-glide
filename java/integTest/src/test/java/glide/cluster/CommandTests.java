@@ -1645,15 +1645,22 @@ public class CommandTests {
     @Test
     public void fcall_readonly_function() {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
-        assumeTrue(
-                !SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0"),
-                "Temporary disabeling this test on valkey 8");
+//        assumeTrue(
+//                !SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0"),
+//                "Temporary disabeling this test on valkey 8");
 
+        assertEquals("OK", clusterClient.functionFlush().get());
         String libName = "fcall_readonly_function";
         // intentionally using a REPLICA route
         Route replicaRoute = new SlotKeyRoute(libName, REPLICA);
         Route primaryRoute = new SlotKeyRoute(libName, PRIMARY);
         String funcName = "fcall_readonly_function";
+
+        // dbg:
+        System.err.println("============================");
+        System.err.println(clusterClient.info(InfoOptions.builder().section(REPLICATION).build(), primaryRoute).get());
+        System.err.println("============================");
+        System.err.println(clusterClient.info(InfoOptions.builder().section(REPLICATION).build(), replicaRoute).get());
 
         // function $funcName returns a magic number
         String code = generateLuaLibCode(libName, Map.of(funcName, "return 42"), false);
@@ -1703,9 +1710,9 @@ public class CommandTests {
     @Test
     public void fcall_readonly_binary_function() {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
-        assumeTrue(
-                !SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0"),
-                "Temporary disabeling this test on valkey 8");
+//        assumeTrue(
+//                !SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0"),
+//                "Temporary disabeling this test on valkey 8");
 
         assertEquals("OK", clusterClient.functionFlush().get());
         String libName = "fcall_readonly_function";
@@ -1713,6 +1720,12 @@ public class CommandTests {
         Route replicaRoute = new SlotKeyRoute(libName, REPLICA);
         Route primaryRoute = new SlotKeyRoute(libName, PRIMARY);
         GlideString funcName = gs("fcall_readonly_function");
+
+        // dbg:
+        System.err.println("============================");
+        System.err.println(clusterClient.info(InfoOptions.builder().section(REPLICATION).build(), primaryRoute).get());
+        System.err.println("============================");
+        System.err.println(clusterClient.info(InfoOptions.builder().section(REPLICATION).build(), replicaRoute).get());
 
         // function $funcName returns a magic number
         String code = generateLuaLibCode(libName, Map.of(funcName.toString(), "return 42"), false);
