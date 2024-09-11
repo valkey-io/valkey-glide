@@ -54,7 +54,7 @@ import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.commands.FlushMode;
-import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.SortClusterOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.scan.ClusterScanCursor;
@@ -70,6 +70,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Stream;
 import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
 import response.ResponseOuterClass.Response;
@@ -224,17 +225,19 @@ public class GlideClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<ClusterValue<String>> info(@NonNull InfoOptions options) {
+    public CompletableFuture<ClusterValue<String>> info(@NonNull Section[] sections) {
         return commandManager.submitNewCommand(
-                Info, options.toArgs(), response -> ClusterValue.of(handleMapResponse(response)));
+                Info,
+                Stream.of(sections).map(Enum::toString).toArray(String[]::new),
+                response -> ClusterValue.of(handleMapResponse(response)));
     }
 
     @Override
     public CompletableFuture<ClusterValue<String>> info(
-            @NonNull InfoOptions options, @NonNull Route route) {
+            @NonNull Section[] sections, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 Info,
-                options.toArgs(),
+                Stream.of(sections).map(Enum::toString).toArray(String[]::new),
                 route,
                 response ->
                         route instanceof SingleNodeRoute

@@ -50,7 +50,7 @@ import glide.api.commands.TransactionsCommands;
 import glide.api.models.GlideString;
 import glide.api.models.Transaction;
 import glide.api.models.commands.FlushMode;
-import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.SortOptionsBinary;
 import glide.api.models.commands.function.FunctionRestorePolicy;
@@ -60,6 +60,7 @@ import glide.utils.ArgsBuilder;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Stream;
 import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
 
@@ -135,8 +136,11 @@ public class GlideClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<String> info(@NonNull InfoOptions options) {
-        return commandManager.submitNewCommand(Info, options.toArgs(), this::handleStringResponse);
+    public CompletableFuture<String> info(@NonNull Section[] sections) {
+        return commandManager.submitNewCommand(
+                Info,
+                Stream.of(sections).map(Enum::toString).toArray(String[]::new),
+                this::handleStringResponse);
     }
 
     @Override

@@ -7,6 +7,7 @@ import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
+import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
 import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
 import static glide.api.models.commands.scan.ScanOptions.ObjectType.HASH;
 import static glide.api.models.commands.scan.ScanOptions.ObjectType.LIST;
@@ -28,7 +29,7 @@ import glide.TransactionTestUtilities.TransactionBuilder;
 import glide.api.GlideClient;
 import glide.api.models.GlideString;
 import glide.api.models.Transaction;
-import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.scan.ScanOptions;
@@ -77,10 +78,7 @@ public class TransactionTests {
     @Test
     @SneakyThrows
     public void info_test() {
-        Transaction transaction =
-                new Transaction()
-                        .info()
-                        .info(InfoOptions.builder().section(InfoOptions.Section.CLUSTER).build());
+        Transaction transaction = new Transaction().info().info(new Section[] {CLUSTER});
         Object[] result = client.exec(transaction).get();
 
         // sanity check

@@ -35,6 +35,7 @@ import static glide.api.models.commands.scan.ScanOptions.ObjectType.SET;
 import static glide.api.models.commands.scan.ScanOptions.ObjectType.STRING;
 import static glide.cluster.CommandTests.DEFAULT_INFO_SECTIONS;
 import static glide.cluster.CommandTests.EVERYTHING_INFO_SECTIONS;
+import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -48,7 +49,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.GlideClient;
 import glide.api.models.GlideString;
-import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.SortOptionsBinary;
 import glide.api.models.commands.scan.ScanOptions;
@@ -157,15 +158,14 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void info_with_multiple_options() {
-        InfoOptions.InfoOptionsBuilder builder = InfoOptions.builder().section(CLUSTER);
+        Section[] sections = {CLUSTER};
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            builder.section(CPU).section(MEMORY);
+            sections = concatenateArrays(sections, new Section[] {CPU, MEMORY});
         }
-        InfoOptions options = builder.build();
-        String data = regularClient.info(options).get();
-        for (String section : options.toArgs()) {
+        String data = regularClient.info(sections).get();
+        for (Section section : sections) {
             assertTrue(
-                    data.toLowerCase().contains("# " + section.toLowerCase()),
+                    data.toLowerCase().contains("# " + section.toString().toLowerCase()),
                     "Section " + section + " is missing");
         }
     }
@@ -173,8 +173,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void info_with_everything_option() {
-        InfoOptions options = InfoOptions.builder().section(EVERYTHING).build();
-        String data = regularClient.info(options).get();
+        String data = regularClient.info(new Section[] {EVERYTHING}).get();
         for (String section : EVERYTHING_INFO_SECTIONS) {
             assertTrue(data.contains("# " + section), "Section " + section + " is missing");
         }
@@ -285,13 +284,13 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void config_reset_stat() {
-        String data = regularClient.info(InfoOptions.builder().section(STATS).build()).get();
+        String data = regularClient.info(new Section[] {STATS}).get();
         long value_before = getValueFromInfo(data, "total_net_input_bytes");
 
         var result = regularClient.configResetStat().get();
         assertEquals(OK, result);
 
-        data = regularClient.info(InfoOptions.builder().section(STATS).build()).get();
+        data = regularClient.info(new Section[] {STATS}).get();
         long value_after = getValueFromInfo(data, "total_net_input_bytes");
         assertTrue(value_after < value_before);
     }
@@ -299,7 +298,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void config_rewrite_non_existent_config_file() {
-        var info = regularClient.info(InfoOptions.builder().section(SERVER).build()).get();
+        var info = regularClient.info(new Section[] {SERVER}).get();
         var configFile = parseInfoResponseToMap(info).get("config_file");
 
         if (configFile.isEmpty()) {

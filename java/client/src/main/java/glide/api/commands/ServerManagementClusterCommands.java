@@ -58,31 +58,33 @@ public interface ServerManagementClusterCommands {
     CompletableFuture<ClusterValue<String>> info(Route route);
 
     /**
-     * Gets information and statistics about the server. The command will be routed to all primary
-     * nodes.
+     * Gets information and statistics about the server.<br>
+     * Starting from server version 7, command supports multiple section arguments.<br>
+     * The command will be routed to all primary nodes.
      *
      * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
-     * @param options A list of {@link InfoOptions.Section} values specifying which sections of
+     * @param sections A list of {@link InfoOptions.Section} values specifying which sections of
      *     information to retrieve. When no parameter is provided, the {@link
      *     InfoOptions.Section#DEFAULT} option is assumed.
      * @return A <code>Map{@literal <String, String>}</code> with each address as the key and its
      *     corresponding value is the information of the sections requested for the node.
      * @example
      *     <pre>{@code
-     * ClusterValue<String> payload = clusterClient.info(InfoOptions.builder().section(STATS).build()).get();
+     * ClusterValue<String> payload = clusterClient.info(new Section[] { Section.STATS }).get();
      * // By default, the command is sent to multiple nodes, expecting a MultiValue result.
      * for (Map.Entry<String, String> entry : payload.getMultiValue().entrySet()) {
      *     System.out.println("Node [" + entry.getKey() + "]: " + entry.getValue());
      * }
      * }</pre>
      */
-    CompletableFuture<ClusterValue<String>> info(InfoOptions options);
+    CompletableFuture<ClusterValue<String>> info(Section[] sections);
 
     /**
-     * Gets information and statistics about the server.
+     * Gets information and statistics about the server.<br>
+     * Starting from server version 7, command supports multiple section arguments.
      *
      * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
-     * @param options A list of {@link InfoOptions.Section} values specifying which sections of
+     * @param sections A list of {@link InfoOptions.Section} values specifying which sections of
      *     information to retrieve. When no parameter is provided, the {@link
      *     InfoOptions.Section#DEFAULT} option is assumed.
      * @param route Specifies the routing configuration for the command. The client will route the
@@ -93,12 +95,12 @@ public interface ServerManagementClusterCommands {
      *     value is the information of the sections requested for the node.
      * @example
      *     <pre>{@code
-     * ClusterValue<String> payload = clusterClient.info(InfoOptions.builder().section(STATS).build(), RANDOM).get();
+     * ClusterValue<String> payload = clusterClient.info(new Section[] { Section.STATS }, RANDOM).get();
      * // Command sent to a single random node via RANDOM route, expecting SingleValue result.
      * assert data.getSingleValue().contains("total_net_input_bytes");
      * }</pre>
      */
-    CompletableFuture<ClusterValue<String>> info(InfoOptions options, Route route);
+    CompletableFuture<ClusterValue<String>> info(Section[] sections, Route route);
 
     /**
      * Rewrites the configuration file with the current configuration.<br>
