@@ -231,7 +231,7 @@ import {
     ConfigurationError,
     ConnectionError,
     ExecAbortError,
-    RedisError,
+    ValkeyError,
     RequestError,
     TimeoutError,
 } from "./Errors";
@@ -250,7 +250,7 @@ import {
 
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
-type ErrorFunction = (error: RedisError) => void;
+type ErrorFunction = (error: ValkeyError) => void;
 /* eslint @typescript-eslint/consistent-indexed-object-style: off,  @typescript-eslint/consistent-type-definitions: off */
 export type ReturnTypeRecord = { [key: string]: GlideReturnType };
 export type ReturnTypeMap = Map<string, GlideReturnType>;
@@ -474,7 +474,7 @@ class PointerResponse {
 }
 
 /** Represents the credentials for connecting to a server. */
-export interface RedisCredentials {
+export interface ServerCredentials {
     /**
      * The username that will be used for authenticating connections to the Valkey servers.
      * If not supplied, "default" will be used.
@@ -530,7 +530,7 @@ export interface BaseClientConfiguration {
      * Credentials for authentication process.
      * If none are set, the client will not authenticate itself with the server.
      */
-    credentials?: RedisCredentials;
+    credentials?: ServerCredentials;
     /**
      * The duration in milliseconds that the client should wait for a request to complete.
      * This duration encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries.
@@ -545,7 +545,7 @@ export interface BaseClientConfiguration {
      */
     readFrom?: ReadFrom;
     /**
-     * Choose the Redis protocol to be used with the server.
+     * Choose the serialization protocol to be used with the server.
      * If not set, `RESP3` will be used.
      */
     protocol?: ProtocolVersion;

@@ -35,7 +35,7 @@ function parseOutput(input: string): {
     };
 }
 
-export class RedisCluster {
+export class ValkeyCluster {
     private addresses: [string, number][];
     private clusterFolder: string | undefined;
     private version: string;
@@ -78,8 +78,8 @@ export class RedisCluster {
         shardCount: number,
         replicaCount: number,
         loadModule?: string[]
-    ): Promise<RedisCluster> {
-        return new Promise<RedisCluster>((resolve, reject) => {
+    ): Promise<ValkeyCluster> {
+        return new Promise<ValkeyCluster>((resolve, reject) => {
             let command = `start -r ${replicaCount} -n ${shardCount}`;
 
             if (cluster_mode) {
@@ -111,9 +111,9 @@ export class RedisCluster {
                             parseOutput(stdout);
 
                         resolve(
-                            RedisCluster.detectVersion().then(
+                            ValkeyCluster.detectVersion().then(
                                 (ver) =>
-                                    new RedisCluster(ver, ports, clusterFolder)
+                                    new ValkeyCluster(ver, ports, clusterFolder)
                             )
                         );
                     }
@@ -124,9 +124,9 @@ export class RedisCluster {
 
     public static async initFromExistingCluster(
         addresses: [string, number][]
-    ): Promise<RedisCluster> {
-        return RedisCluster.detectVersion().then(
-            (ver) => new RedisCluster(ver, addresses, "")
+    ): Promise<ValkeyCluster> {
+        return ValkeyCluster.detectVersion().then(
+            (ver) => new ValkeyCluster(ver, addresses, "")
         );
     }
 
@@ -171,4 +171,4 @@ export class RedisCluster {
     }
 }
 
-export default RedisCluster;
+export default ValkeyCluster;
