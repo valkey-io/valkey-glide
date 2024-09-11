@@ -27,6 +27,7 @@ once_cell = "1.18.0"
 arcstr = "1.1.5"
 sha1_smol = "1.0.0"
 nanoid = "0.4.0"
+async-trait = { version = "0.1.24" }
 
 [features]
 socket-layer = ["directories", "integer-encoding", "num_cpus", "protobuf", "tokio-util"]
