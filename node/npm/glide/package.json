@@ -21,10 +21,10 @@
         "url": "git+https://github.com/valkey-io/valkey-glide.git"
     },
     "keywords": [
-        "redis",
-        "redisClient",
+        "valkey",
+        "valkeyClient",
         "client",
-        "AWS"
+        "valkey-glide"
     ],
     "author": "Amazon Web Services",
     "license": "Apache-2.0",

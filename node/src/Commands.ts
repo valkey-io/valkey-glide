@@ -126,8 +126,8 @@ export function createGetRange(
 export interface SetOptions {
     /**
      *  `onlyIfDoesNotExist` - Only set the key if it does not already exist.
-     * Equivalent to `NX` in the Redis API. `onlyIfExists` - Only set the key if
-     * it already exist. Equivalent to `EX` in the Redis API. if `conditional` is
+     * Equivalent to `NX` in the Valkey API. `onlyIfExists` - Only set the key if
+     * it already exist. Equivalent to `EX` in the Valkey API. if `conditional` is
      * not set the value will be set regardless of prior value existence. If value
      * isn't set because of the condition, return null.
      */
@@ -135,7 +135,7 @@ export interface SetOptions {
     /**
      * Return the old string stored at key, or nil if key did not exist. An error
      * is returned and SET aborted if the value stored at key is not a string.
-     * Equivalent to `GET` in the Redis API.
+     * Equivalent to `GET` in the Valkey API.
      */
     returnOldValue?: boolean;
     /**
@@ -143,7 +143,7 @@ export interface SetOptions {
      */
     expiry?: /**
      * Retain the time to live associated with the key. Equivalent to
-     * `KEEPTTL` in the Redis API.
+     * `KEEPTTL` in the Valkey API.
      */
     | "keepExisting"
         | {
@@ -202,7 +202,7 @@ export function createSet(
  */
 export enum InfoOptions {
     /**
-     * SERVER: General information about the Redis server
+     * SERVER: General information about the server
      */
     Server = "server",
     /**
@@ -230,19 +230,19 @@ export enum InfoOptions {
      */
     Cpu = "cpu",
     /**
-     * COMMANDSTATS: Redis command statistics
+     * COMMANDSTATS: Valkey command statistics
      */
     Commandstats = "commandstats",
     /**
-     * LATENCYSTATS: Redis command latency percentile distribution statistics
+     * LATENCYSTATS: Valkey command latency percentile distribution statistics
      */
     Latencystats = "latencystats",
     /**
-     * SENTINEL: Redis Sentinel section (only applicable to Sentinel instances)
+     * SENTINEL: Valkey Sentinel section (only applicable to Sentinel instances)
      */
     Sentinel = "sentinel",
     /**
-     * CLUSTER: Redis Cluster section
+     * CLUSTER: Valkey Cluster section
      */
     Cluster = "cluster",
     /**
@@ -254,7 +254,7 @@ export enum InfoOptions {
      */
     Keyspace = "keyspace",
     /**
-     * ERRORSTATS: Redis error statistics
+     * ERRORSTATS: Valkey error statistics
      */
     Errorstats = "errorstats",
     /**
@@ -2055,7 +2055,7 @@ export type StreamTrimOptions = (
     | {
           /**
            * Trim the stream according to entry ID.
-           * Equivalent to `MINID` in the Redis API.
+           * Equivalent to `MINID` in the Valkey API.
            */
           method: "minid";
           threshold: GlideString;
@@ -2063,7 +2063,7 @@ export type StreamTrimOptions = (
     | {
           /**
            * Trim the stream according to length.
-           * Equivalent to `MAXLEN` in the Redis API.
+           * Equivalent to `MAXLEN` in the Valkey API.
            */
           method: "maxlen";
           threshold: number;
@@ -2071,8 +2071,8 @@ export type StreamTrimOptions = (
 ) & {
     /**
      * If `true`, the stream will be trimmed exactly. Equivalent to `=` in the
-     * Redis API. Otherwise the stream will be trimmed in a near-exact manner,
-     * which is more efficient, equivalent to `~` in the Redis API.
+     * Valkey API. Otherwise the stream will be trimmed in a near-exact manner,
+     * which is more efficient, equivalent to `~` in the Valkey API.
      */
     exact: boolean;
     /**
@@ -2088,7 +2088,7 @@ export interface StreamAddOptions {
     id?: string;
     /**
      * If set to `false`, a new stream won't be created if no stream matches the
-     * given key. Equivalent to `NOMKSTREAM` in the Redis API.
+     * given key. Equivalent to `NOMKSTREAM` in the Valkey API.
      */
     makeStream?: boolean;
     /**
@@ -2575,12 +2575,12 @@ export interface StreamReadOptions {
     /**
      * If set, the read request will block for the set amount of milliseconds or
      * until the server has the required number of entries. A value of `0` will block indefinitely.
-     * Equivalent to `BLOCK` in the Redis API.
+     * Equivalent to `BLOCK` in the Valkey API.
      */
     block?: number;
     /**
      * The maximal number of elements requested.
-     * Equivalent to `COUNT` in the Redis API.
+     * Equivalent to `COUNT` in the Valkey API.
      */
     count?: number;
 }

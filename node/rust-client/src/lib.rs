@@ -160,7 +160,7 @@ pub fn init(level: Option<Level>, file_name: Option<&str>) -> Level {
     logger_level.into()
 }
 
-fn redis_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<JsUnknown> {
+fn resp_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<JsUnknown> {
     match val {
         Value::Nil => js_env.get_null().map(|val| val.into_unknown()),
         Value::SimpleString(str) => {
@@ -189,7 +189,7 @@ fn redis_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<Js
             for (index, item) in array.into_iter().enumerate() {
                 js_array_view.set_element(
                     index as u32,
-                    redis_value_to_js(item, js_env, string_decoder)?,
+                    resp_value_to_js(item, js_env, string_decoder)?,
                 )?;
             }
             Ok(js_array_view.into_unknown())
@@ -201,8 +201,8 @@ fn redis_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<Js
             let mut js_array = js_env.create_array_with_length(map.len())?;
             for (idx, (key, value)) in (0_u32..).zip(map.into_iter()) {
                 let mut obj = js_env.create_object()?;
-                obj.set_named_property("key", redis_value_to_js(key, js_env, string_decoder)?)?;
-                obj.set_named_property("value", redis_value_to_js(value, js_env, string_decoder)?)?;
+                obj.set_named_property("key", resp_value_to_js(key, js_env, string_decoder)?)?;
+                obj.set_named_property("value", resp_value_to_js(value, js_env, string_decoder)?)?;
                 js_array.set_element(idx, obj)?;
             }
             Ok(js_array.into_unknown())
@@ -238,17 +238,17 @@ fn redis_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<Js
             for (index, item) in array.into_iter().enumerate() {
                 js_array_view.set_element(
                     index as u32,
-                    redis_value_to_js(item, js_env, string_decoder)?,
+                    resp_value_to_js(item, js_env, string_decoder)?,
                 )?;
             }
             Ok(js_array_view.into_unknown())
         }
         Value::Attribute { data, attributes } => {
             let mut obj = js_env.create_object()?;
-            let value = redis_value_to_js(*data, js_env, string_decoder)?;
+            let value = resp_value_to_js(*data, js_env, string_decoder)?;
             obj.set_named_property("value", value)?;
 
-            let value = redis_value_to_js(Value::Map(attributes), js_env, string_decoder)?;
+            let value = resp_value_to_js(Value::Map(attributes), js_env, string_decoder)?;
             obj.set_named_property("attributes", value)?;
 
             Ok(obj.into_unknown())
@@ -258,7 +258,7 @@ fn redis_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<Js
             obj.set_named_property("kind", format!("{kind:?}"))?;
             let js_array_view = data
                 .into_iter()
-                .map(|item| redis_value_to_js(item, js_env, string_decoder))
+                .map(|item| resp_value_to_js(item, js_env, string_decoder))
                 .collect::<Result<Vec<_>, _>>()?;
             obj.set_named_property("values", js_array_view)?;
             Ok(obj.into_unknown())
@@ -284,7 +284,7 @@ pub fn value_from_split_pointer(
         .unwrap();
     let pointer = u64::from_le_bytes(bytes);
     let value = unsafe { Box::from_raw(pointer as *mut Value) };
-    redis_value_to_js(*value, js_env, string_decoder)
+    resp_value_to_js(*value, js_env, string_decoder)
 }
 
 // Pointers are split because JS cannot represent a full usize using its `number` object.

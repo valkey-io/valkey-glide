@@ -26,7 +26,7 @@ import {
     SortOrder,
     Transaction,
 } from "..";
-import { RedisCluster } from "../../utils/TestUtils.js";
+import { ValkeyCluster } from "../../utils/TestUtils.js";
 import { command_request } from "../src/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import {
@@ -51,17 +51,17 @@ const TIMEOUT = 50000;
 
 describe("GlideClient", () => {
     let testsFailed = 0;
-    let cluster: RedisCluster;
+    let cluster: ValkeyCluster;
     let client: GlideClient;
     beforeAll(async () => {
         const standaloneAddresses =
             parseCommandLineArgs()["standalone-endpoints"];
         // Connect to cluster or create a new one based on the parsed addresses
         cluster = standaloneAddresses
-            ? await RedisCluster.initFromExistingCluster(
+            ? await ValkeyCluster.initFromExistingCluster(
                   parseEndpoints(standaloneAddresses),
               )
-            : await RedisCluster.createCluster(false, 1, 1);
+            : await ValkeyCluster.createCluster(false, 1, 1);
     }, 20000);
 
     afterEach(async () => {

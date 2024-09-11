@@ -1,7 +1,7 @@
 {
     "name": "glide-rs",
     "version": "0.1.0",
-    "description": "Redis client",
+    "description": "Valkey client",
     "main": "index.js",
     "license": "Apache-2.0",
     "files": [
