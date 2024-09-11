@@ -60,6 +60,10 @@ jobs:
 
     check-redis:
         runs-on: ${{ matrix.host.RUNNER }}
+        strategy:
+            matrix:
+                host:
+                    - { RUNNER: ubuntu-latest }
         steps:
             - name: Check redis status
               id: redis-check
