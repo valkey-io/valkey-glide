@@ -150,12 +150,12 @@ fn glide(_py: Python, m: &PyModule) -> PyResult<()> {
         let len = iterator.len();
 
         iterator.try_fold(Vec::with_capacity(len), |mut acc, val| {
-            acc.push(redis_value_to_py(py, val)?);
+            acc.push(resp_value_to_py(py, val)?);
             Ok(acc)
         })
     }
 
-    fn redis_value_to_py(py: Python, val: Value) -> PyResult<PyObject> {
+    fn resp_value_to_py(py: Python, val: Value) -> PyResult<PyObject> {
         match val {
             Value::Nil => Ok(py.None()),
             Value::SimpleString(str) => {
@@ -175,14 +175,14 @@ fn glide(_py: Python, m: &PyModule) -> PyResult<()> {
             Value::Map(map) => {
                 let dict = PyDict::new(py);
                 for (key, value) in map {
-                    dict.set_item(redis_value_to_py(py, key)?, redis_value_to_py(py, value)?)?;
+                    dict.set_item(resp_value_to_py(py, key)?, resp_value_to_py(py, value)?)?;
                 }
                 Ok(dict.into_py(py))
             }
             Value::Attribute { data, attributes } => {
                 let dict = PyDict::new(py);
-                let value = redis_value_to_py(py, *data)?;
-                let attributes = redis_value_to_py(py, Value::Map(attributes))?;
+                let value = resp_value_to_py(py, *data)?;
+                let attributes = resp_value_to_py(py, Value::Map(attributes))?;
                 dict.set_item("value", value)?;
                 dict.set_item("attributes", attributes)?;
                 Ok(dict.into_py(py))
@@ -213,7 +213,7 @@ fn glide(_py: Python, m: &PyModule) -> PyResult<()> {
     #[pyfn(m)]
     pub fn value_from_pointer(py: Python, pointer: u64) -> PyResult<PyObject> {
         let value = unsafe { Box::from_raw(pointer as *mut Value) };
-        redis_value_to_py(py, *value)
+        resp_value_to_py(py, *value)
     }
 
     #[pyfn(m)]

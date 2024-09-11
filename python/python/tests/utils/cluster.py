@@ -10,7 +10,7 @@ from glide.config import NodeAddress
 SCRIPT_FILE = os.path.abspath(f"{__file__}/../../../../../utils/cluster_manager.py")
 
 
-class RedisCluster:
+class ValkeyCluster:
     def __init__(
         self,
         tls,
