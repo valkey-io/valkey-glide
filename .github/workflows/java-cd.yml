@@ -60,8 +60,6 @@ jobs:
 
     check-redis:
         runs-on: ${{ matrix.host.RUNNER }}
-        strategy:
-            PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.PLATFORM_MATRIX }}
         steps:
             - name: Check redis status
               id: redis-check
