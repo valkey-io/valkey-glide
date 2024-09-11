@@ -55,7 +55,7 @@ public class BenchmarkingApp {
                     testClientSetGet(LettuceAsyncClient::new, runConfiguration, true);
                     break;
                 case GLIDE:
-                    System.out.println("GLIDE for Valkey async client");
+                    System.out.println("Valkey-GLIDE async client");
                     testClientSetGet(GlideAsyncClient::new, runConfiguration, true);
                     break;
             }
