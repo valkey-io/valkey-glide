@@ -107,7 +107,7 @@ describe("Scan GlideClusterClient", () => {
 
             while (!cursor.isFinished()) {
                 [cursor, keys] = await client.scan(cursor, {
-                    object: ObjectType.STRING,
+                    type: ObjectType.STRING,
                 });
                 stringKeys.push(...keys);
             }
@@ -187,7 +187,7 @@ describe("Scan GlideClusterClient", () => {
             while (!cursor.isFinished()) {
                 [cursor, keys] = await client.scan(cursor, {
                     match: "key*",
-                    object: ObjectType.STRING,
+                    type: ObjectType.STRING,
                 });
                 allKeys.push(...keys);
             }
@@ -333,7 +333,7 @@ describe("Scan GlideClusterClient", () => {
 
             while (!cursor.isFinished()) {
                 [cursor, keys] = await client.scan(cursor, {
-                    object: ObjectType.SET,
+                    type: ObjectType.SET,
                 });
                 allKeys.push(...keys);
             }

@@ -322,9 +322,12 @@ export class GlideClusterClient extends BaseClient {
      * @internal
      */
     protected scanOptionsToProto(
-        command: command_request.ClusterScan,
+        cursor: string,
         options?: ScanOptions,
     ): command_request.ClusterScan {
+        const command = command_request.ClusterScan.create();
+        command.cursor = cursor;
+
         if (options?.match) {
             command.matchPattern = Buffer.from(options.match);
         }
@@ -359,8 +362,7 @@ export class GlideClusterClient extends BaseClient {
         }
 
         const cursorId = cursor.getCursor();
-        let command = command_request.ClusterScan.create({ cursor: cursorId });
-        command = this.scanOptionsToProto(command, scanOptions);
+        const command = this.scanOptionsToProto(cursorId, scanOptions);
         return new Promise((resolve, reject) => {
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [
@@ -370,7 +372,9 @@ export class GlideClusterClient extends BaseClient {
                             resolveAns,
                             stringDecoder,
                         );
-                        resolveAns[0] = new ClusterScanCursor(resolveAns[0]);
+                        resolveAns[0] = new ClusterScanCursor(
+                            resolveAns[0].toString(),
+                        );
                         resolve(resolveAns);
                     } catch (err) {
                         Logger.log(
