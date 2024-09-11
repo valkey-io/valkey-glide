@@ -1672,19 +1672,19 @@ public class CommandTests {
 
         assertEquals(libName, clusterClient.functionLoad(code, false).get());
 
+        clusterClient
+                .functionLoad(
+                        "#!lua name=mylib \\n"
+                                + " redis.register_function{ function_name = 'myfunc', callback = function(keys,"
+                                + " args) return redis.call('info', 'replication') end, flags = { 'no-writes' } }",
+                        false)
+                .get();
+
         // dbg:
         System.err.println("=====================================");
-        System.err.println(
-                clusterClient
-                        .info(InfoOptions.builder().section(REPLICATION).section(SERVER).build(), primaryRoute)
-                        .get()
-                        .getSingleValue());
+        System.err.println(clusterClient.fcall("myfunc", primaryRoute).get().getSingleValue());
         System.err.println("=====================================");
-        System.err.println(
-                clusterClient
-                        .info(InfoOptions.builder().section(REPLICATION).section(SERVER).build(), replicaRoute)
-                        .get()
-                        .getSingleValue());
+        System.err.println(clusterClient.fcall("myfunc", replicaRoute).get().getSingleValue());
 
         // fcall on a replica node should fail, because a function isn't guaranteed to be RO
         var executionException =
