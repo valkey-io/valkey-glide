@@ -1,4 +1,5 @@
 #### Changes
+* Java: Replace instances of Redis with Valkey ([#2268](https://github.com/valkey-io/valkey-glide/pull/2268))
 * Node: Replace instances of Redis with Valkey ([#2260](https://github.com/valkey-io/valkey-glide/pull/2260))
 * Java: Fetch server version using info command ([#2258](https://github.com/valkey-io/valkey-glide/pull/2258))
 * Node: Added binary variant for commands which have `Record` as input or output ([#2207](https://github.com/valkey-io/valkey-glide/pull/2207))

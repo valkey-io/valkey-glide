@@ -58,7 +58,7 @@ public class FfiTest {
             boolean throwTwice, boolean isRuntimeException, String message);
 
     @Test
-    public void redisValueToJavaValue_Nil() {
+    public void respValueToJavaValue_Nil() {
         long ptr = FfiTest.createLeakedNil();
         Object nilValue = GlideValueResolver.valueFromPointer(ptr);
         assertNull(nilValue);
@@ -66,14 +66,14 @@ public class FfiTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"hello", "cat", "dog"})
-    public void redisValueToJavaValue_SimpleString(String input) {
+    public void respValueToJavaValue_SimpleString(String input) {
         long ptr = FfiTest.createLeakedSimpleString(input);
         Object simpleStringValue = GlideValueResolver.valueFromPointer(ptr);
         assertEquals(input, simpleStringValue);
     }
 
     @Test
-    public void redisValueToJavaValue_Okay() {
+    public void respValueToJavaValue_Okay() {
         long ptr = FfiTest.createLeakedOkay();
         Object okayValue = GlideValueResolver.valueFromPointer(ptr);
         assertEquals("OK", okayValue);
@@ -81,7 +81,7 @@ public class FfiTest {
 
     @ParameterizedTest
     @ValueSource(longs = {0L, 100L, 774L, Integer.MAX_VALUE + 1L, Integer.MIN_VALUE - 1L})
-    public void redisValueToJavaValue_Int(Long input) {
+    public void respValueToJavaValue_Int(Long input) {
         long ptr = FfiTest.createLeakedInt(input);
         Object longValue = GlideValueResolver.valueFromPointer(ptr);
         assertTrue(longValue instanceof Long);
@@ -90,7 +90,7 @@ public class FfiTest {
 
     @Test
     @SneakyThrows
-    public void redisValueToJavaValue_BulkString() {
+    public void respValueToJavaValue_BulkString() {
         // This is explicitly for testing non-ASCII UTF-8 byte sequences.
         // Note that these can't be encoded as String literals without introducing compiler
         // warnings and errors.
@@ -105,7 +105,7 @@ public class FfiTest {
     }
 
     @Test
-    public void redisValueToJavaValue_Array() {
+    public void respValueToJavaValue_Array() {
         long[] array = {1L, 2L, 3L};
         long ptr = FfiTest.createLeakedLongArray(array);
         Object longArrayValue = GlideValueResolver.valueFromPointer(ptr);
@@ -115,7 +115,7 @@ public class FfiTest {
     }
 
     @Test
-    public void redisValueToJavaValue_Map() {
+    public void respValueToJavaValue_Map() {
         long[] keys = {12L, 14L, 23L};
         long[] values = {1L, 2L, 3L};
         long ptr = FfiTest.createLeakedMap(keys, values);
@@ -130,14 +130,14 @@ public class FfiTest {
 
     @ParameterizedTest
     @ValueSource(doubles = {1.0d, 25.2d, 103.5d})
-    public void redisValueToJavaValue_Double(Double input) {
+    public void respValueToJavaValue_Double(Double input) {
         long ptr = FfiTest.createLeakedDouble(input);
         Object doubleValue = GlideValueResolver.valueFromPointer(ptr);
         assertEquals(input, doubleValue);
     }
 
     @Test
-    public void redisValueToJavaValue_Boolean() {
+    public void respValueToJavaValue_Boolean() {
         long ptr = FfiTest.createLeakedBoolean(true);
         Object booleanValue = GlideValueResolver.valueFromPointer(ptr);
         assertTrue((Boolean) booleanValue);
@@ -145,14 +145,14 @@ public class FfiTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"hello", "cat", "dog"})
-    public void redisValueToJavaValue_VerbatimString(String input) {
+    public void respValueToJavaValue_VerbatimString(String input) {
         long ptr = FfiTest.createLeakedVerbatimString(input);
         Object verbatimStringValue = GlideValueResolver.valueFromPointer(ptr);
         assertEquals(input, verbatimStringValue);
     }
 
     @Test
-    public void redisValueToJavaValue_Set() {
+    public void respValueToJavaValue_Set() {
         long[] array = {1L, 2L, 2L};
         long ptr = FfiTest.createLeakedLongSet(array);
         Object longSetValue = GlideValueResolver.valueFromPointer(ptr);

@@ -1,7 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.benchmarks.utils;
 
-/** Redis-client settings */
+/** Valkey-client settings */
 public class ConnectionSettings {
     public final String host;
     public final int port;

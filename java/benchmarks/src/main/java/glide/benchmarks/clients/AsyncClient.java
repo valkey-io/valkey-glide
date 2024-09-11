@@ -6,7 +6,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-/** A Redis client with async capabilities */
+/** A Valkey client with async capabilities */
 public interface AsyncClient<T> extends Client {
 
     long DEFAULT_TIMEOUT_MILLISECOND = 1000;
