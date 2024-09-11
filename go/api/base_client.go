@@ -11,6 +11,7 @@ import "C"
 
 import (
 	"errors"
+	"strconv"
 	"unsafe"
 
 	"github.com/valkey-io/valkey-glide/go/glide/protobuf"
@@ -158,6 +159,38 @@ func (client *baseClient) Get(key string) (string, error) {
 	return handleStringOrNullResponse(result), nil
 }
 
+func (client *baseClient) MSet(keyValueMap map[string]string) (string, error) {
+	flat := []string{}
+	for key, value := range keyValueMap {
+		flat = append(flat, key, value)
+	}
+	result, err := client.executeCommand(C.MSet, flat)
+	if err != nil {
+		return "", err
+	}
+	return handleStringResponse(result), nil
+}
+
+func (client *baseClient) MSetNX(keyValueMap map[string]string) (bool, error) {
+	flat := []string{}
+	for key, value := range keyValueMap {
+		flat = append(flat, key, value)
+	}
+	result, err := client.executeCommand(C.MSetNX, flat)
+	if err != nil {
+		return false, err
+	}
+	return handleBooleanResponse(result), nil
+}
+
+func (client *baseClient) MGet(keys []string) ([]string, error) {
+	result, err := client.executeCommand(C.MGet, keys)
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result), nil
+}
+
 func (client *baseClient) Incr(key string) (int64, error) {
 	result, err := client.executeCommand(C.Incr, []string{key})
 	if err != nil {
@@ -201,6 +234,46 @@ func (client *baseClient) DecrBy(key string, amount int64) (int64, error) {
 	return handleLongResponse(result), nil
 }
 
+func (client *baseClient) Strlen(key string) (int64, error) {
+	result, err := client.executeCommand(C.Strlen, []string{key})
+	if err != nil {
+		return 0, err
+	}
+	return handleLongResponse(result), nil
+}
+
+func (client *baseClient) SetRange(key string, offset int, value string) (int64, error) {
+	result, err := client.executeCommand(C.SetRange, []string{key, strconv.Itoa(offset), value})
+	if err != nil {
+		return 0, err
+	}
+	return handleLongResponse(result), nil
+}
+
+func (client *baseClient) GetRange(key string, start int, end int) (string, error) {
+	result, err := client.executeCommand(C.GetRange, []string{key, strconv.Itoa(start), strconv.Itoa(end)})
+	if err != nil {
+		return "", err
+	}
+	return handleStringResponse(result), nil
+}
+
+func (client *baseClient) Append(key string, value string) (int64, error) {
+	result, err := client.executeCommand(C.Append, []string{key, value})
+	if err != nil {
+		return 0, err
+	}
+	return handleLongResponse(result), nil
+}
+
+func (client *baseClient) LCS(key1 string, key2 string) (string, error) {
+	result, err := client.executeCommand(C.LCS, []string{key1, key2})
+	if err != nil {
+		return "", err
+	}
+	return handleStringResponse(result), nil
+}
+
 func (client *baseClient) GetDel(key string) (string, error) {
 	if key == "" {
 		return "", errors.New("key is required")
@@ -211,5 +284,5 @@ func (client *baseClient) GetDel(key string) (string, error) {
 		return "", err
 	}
 
-	return handleStringOrNullResponseWithFree(result), nil
+	return handleStringOrNullResponse(result), nil
 }
