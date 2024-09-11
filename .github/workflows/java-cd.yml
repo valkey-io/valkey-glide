@@ -38,8 +38,28 @@ jobs:
                   export "PLATFORM_MATRIX=$(jq 'map(select(.PACKAGE_MANAGERS | contains(["maven"])))' < .github/json_matrices/build-matrix.json | jq -c .)"
                   echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
 
+    set-release-version:
+        runs-on: ubuntu-latest
+        outputs:
+            RELEASE_VERSION: ${{ steps.release-version.outputs.RELEASE_VERSION }}
+        steps:
+            - name: Set the release version
+              id: release-version
+              shell: bash
+              run: |
+                  if ${{ github.event_name == 'workflow_dispatch' }}; then
+                      R_VERSION="${{ env.INPUT_VERSION }}"
+                  else
+                      R_VERSION=${GITHUB_REF:11}
+                  fi
+                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
+                  echo "Release version detected: $R_VERSION"
+                  echo "RELEASE_VERSION=$R_VERSION" >> $GITHUB_OUTPUT
+              env:
+                  INPUT_VERSION: ${{ github.event.inputs.version }}
+
     deployment-all-platforms:
-        needs: load-platform-matrix
+        needs: [set-release-version, load-platform-matrix]
         env:
             JAVA_VERSION: "11"
             RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
@@ -81,27 +101,6 @@ jobs:
                     export ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderValue="Bearer $(echo "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" | base64)"
                     export GLIDE_RELEASE_VERSION=${{ env.RELEASE_VERSION }}
                     ./gradlew :benchmarks:run --args="--minimal --clients glide"
-
-#
-#    set-release-version:
-#        runs-on: ubuntu-latest
-#        outputs:
-#            RELEASE_VERSION: ${{ steps.release-version.outputs.RELEASE_VERSION }}
-#        steps:
-#            - name: Set the release version
-#              id: release-version
-#              shell: bash
-#              run: |
-#                  if ${{ github.event_name == 'workflow_dispatch' }}; then
-#                      R_VERSION="${{ env.INPUT_VERSION }}"
-#                  else
-#                      R_VERSION=${GITHUB_REF:11}
-#                  fi
-#                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
-#                  echo "Release version detected: $R_VERSION"
-#                  echo "RELEASE_VERSION=$R_VERSION" >> $GITHUB_OUTPUT
-#              env:
-#                  INPUT_VERSION: ${{ github.event.inputs.version }}
 #
 #    create-binaries-to-publish:
 #        needs: [set-release-version, load-platform-matrix]
@@ -276,18 +275,3 @@ jobs:
 #              run: |
 #                  curl --request DELETE \
 #                  -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
-#                  "https://central.sonatype.com/api/v1/publisher/deployment/${{ env.DEPLOYMENT_ID }}"
-#
-#    publish-release-to-maven:
-#        if: ${{ inputs.maven_publish == true || github.event_name == 'push' }}
-#        needs: [publish-to-maven-central-deployment]
-#        runs-on: ubuntu-latest
-#        environment: AWS_ACTIONS
-#        env:
-#            DEPLOYMENT_ID: ${{ needs.publish-to-maven-central-deployment.outputs.DEPLOYMENT_ID }}
-#        steps:
-#            - name: Publish to Maven
-#              run: |
-#                  curl --request POST \
-#                  -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
-#                  "https://central.sonatype.com/api/v1/publisher/deployment/${{ env.DEPLOYMENT_ID }}"
