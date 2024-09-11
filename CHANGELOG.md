@@ -1,5 +1,6 @@
 #### Changes
 * Python: Replace instances of Redis with Valkey ([#2266](https://github.com/valkey-io/valkey-glide/pull/2266))
+* Java: Replace instances of Redis with Valkey ([#2268](https://github.com/valkey-io/valkey-glide/pull/2268))
 * Node: Replace instances of Redis with Valkey ([#2260](https://github.com/valkey-io/valkey-glide/pull/2260))
 * Java: Fetch server version using info command ([#2258](https://github.com/valkey-io/valkey-glide/pull/2258))
 * Node: Added binary variant for commands which have `Record` as input or output ([#2207](https://github.com/valkey-io/valkey-glide/pull/2207))
@@ -114,6 +115,7 @@
 * Node: Added binary variant to stream commands ([#2200](https://github.com/valkey-io/valkey-glide/pull/2200), [#2222](https://github.com/valkey-io/valkey-glide/pull/2222))
 * Python, Node, Java: change BITCOUNT end param to optional ([#2248](https://github.com/valkey-io/valkey-glide/pull/2248))
 * Python: Add Script commands ([#2208](https://github.com/valkey-io/valkey-glide/pull/2208))
+* Node: Added Script commands ([#2267](https://github.com/valkey-io/valkey-glide/pull/2267))
 
 #### Breaking Changes
 * Java: Update INFO command ([#2274](https://github.com/valkey-io/valkey-glide/pull/2274))

@@ -33,7 +33,7 @@ pub use ffi_test::*;
 struct Level(i32);
 
 // TODO: Consider caching method IDs here in a static variable (might need RwLock to mutate)
-fn redis_value_to_java<'local>(
+fn resp_value_to_java<'local>(
     env: &mut JNIEnv<'local>,
     val: Value,
     encoding_utf8: bool,
@@ -62,8 +62,8 @@ fn redis_value_to_java<'local>(
             let linked_hash_map = env.new_object("java/util/LinkedHashMap", "()V", &[])?;
 
             for (key, value) in map {
-                let java_key = redis_value_to_java(env, key, encoding_utf8)?;
-                let java_value = redis_value_to_java(env, value, encoding_utf8)?;
+                let java_key = resp_value_to_java(env, key, encoding_utf8)?;
+                let java_value = resp_value_to_java(env, value, encoding_utf8)?;
                 env.call_method(
                     &linked_hash_map,
                     "put",
@@ -88,7 +88,7 @@ fn redis_value_to_java<'local>(
             let set = env.new_object("java/util/HashSet", "()V", &[])?;
 
             for elem in array {
-                let java_value = redis_value_to_java(env, elem, encoding_utf8)?;
+                let java_value = resp_value_to_java(env, elem, encoding_utf8)?;
                 env.call_method(
                     &set,
                     "add",
@@ -106,7 +106,7 @@ fn redis_value_to_java<'local>(
         // Create a java `Map<String, Object>` with two keys:
         //   - "kind" which corresponds to the push type, stored as a `String`
         //   - "values" which corresponds to the array of values received, stored as `Object[]`
-        // Only string messages are supported now by Redis and `redis-rs`.
+        // Only string messages are supported now by Valkey and `redis-rs`.
         Value::Push { kind, data } => {
             let hash_map = env.new_object("java/util/HashMap", "()V", &[])?;
 
@@ -137,7 +137,7 @@ fn redis_value_to_java<'local>(
 
 /// Convert an array of values into java array of corresponding values.
 ///
-/// Recursively calls to [`redis_value_to_java`] for every element.
+/// Recursively calls to [`resp_value_to_java`] for every element.
 ///
 /// Returns an arbitrary java `Object[]`.
 fn array_to_java_array<'local>(
@@ -149,7 +149,7 @@ fn array_to_java_array<'local>(
         env.new_object_array(values.len() as i32, "java/lang/Object", JObject::null())?;
 
     for (i, item) in values.into_iter().enumerate() {
-        let java_value = redis_value_to_java(env, item, encoding_utf8)?;
+        let java_value = resp_value_to_java(env, item, encoding_utf8)?;
         env.set_object_array_element(&items, i as i32, java_value)?;
     }
 
@@ -169,7 +169,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_valueFromPoin
                 pointer: jlong,
             ) -> Result<JObject<'a>, FFIError> {
                 let value = unsafe { Box::from_raw(pointer as *mut Value) };
-                redis_value_to_java(env, *value, true)
+                resp_value_to_java(env, *value, true)
             }
             let result = value_from_pointer(&mut env, pointer);
             handle_errors(&mut env, result)
@@ -194,7 +194,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_valueFromPoin
                 pointer: jlong,
             ) -> Result<JObject<'a>, FFIError> {
                 let value = unsafe { Box::from_raw(pointer as *mut Value) };
-                redis_value_to_java(env, *value, false)
+                resp_value_to_java(env, *value, false)
             }
             let result = value_from_pointer_binary(&mut env, pointer);
             handle_errors(&mut env, result)
