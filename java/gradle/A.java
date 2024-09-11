@@ -1,1 +1,0 @@
-launchctl list
