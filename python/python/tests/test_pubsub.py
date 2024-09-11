@@ -658,7 +658,7 @@ class TestPubSub:
 
             min_version = "7.0.0"
             if await check_if_server_version_lt(publishing_client, min_version):
-                pytest.skip(reason=f"Redis version required >= {min_version}")
+                pytest.skip(reason=f"Valkey version required >= {min_version}")
 
             # Publish messages to each channel
             for channel, message in channels_and_messages.items():
@@ -1247,9 +1247,9 @@ class TestPubSub:
                 pub_sub_exact,
             )
 
-            # Setup PUBSUB for sharded channels (Redis version > 7)
+            # Setup PUBSUB for sharded channels (Valkey version > 7)
             if await check_if_server_version_lt(publishing_client, "7.0.0"):
-                pytest.skip("Redis version required >= 7.0.0")
+                pytest.skip("Valkey version required >= 7.0.0")
 
             # Publish messages to all channels
             for channel, message in {
@@ -2062,9 +2062,9 @@ class TestPubSub:
                 timeout=10000,
             )
 
-            # (Redis version > 7)
+            # (Valkey version > 7)
             if await check_if_server_version_lt(publishing_client, "7.0.0"):
-                pytest.skip("Redis version required >= 7.0.0")
+                pytest.skip("Valkey version required >= 7.0.0")
 
             assert (
                 await cast(GlideClusterClient, publishing_client).publish(
