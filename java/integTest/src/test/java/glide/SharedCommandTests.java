@@ -1004,7 +1004,7 @@ public class SharedCommandTests {
         assertEquals(1, client.hset(hashKey, fieldValueMap).get());
         assertDeepEquals(new GlideString[] {gs(stringField)}, client.hkeys(hashKey).get());
         assertThrows(
-            ExecutionException.class, () -> client.hget(hashKey.toString(), stringField).get());
+                ExecutionException.class, () -> client.hget(hashKey.toString(), stringField).get());
 
         // Non UTF-8 set key and field value map
         assertEquals(1, client.hset(hashNonUTF8Key, fieldValueMap).get());
