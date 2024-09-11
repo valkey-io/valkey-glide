@@ -21,9 +21,9 @@ function parseOutput(input: string): {
         .split(",")
         .map((address) => address.split(":"))
         .map((address) => [address[0], Number(address[1])]) as [
-        string,
-        number
-    ][];
+            string,
+            number
+        ][];
 
     if (clusterFolder === undefined || ports === undefined) {
         throw new Error(`Insufficient data in input: ${input}`);
@@ -50,24 +50,29 @@ export class RedisCluster {
         this.version = version;
     }
 
-    private static async detectVersion(): Promise<string> {
+    private static async detectVersion(addresses: any): Promise<string> {
         return new Promise<string>((resolve, reject) => {
-            const extractVersion = (stdout: string): string =>
-                stdout.split("v=")[1].split(" ")[0];
+            const redisVersionKey = "redis_version:";
+            const valkeyVersionKey = "valkey_version:";
+            const extractVersion = (versionKey: string, stdout: string): string =>
+                stdout.split(versionKey)[1].split("\n")[0];
 
-            // First, try with `valkey-server -v`
-            exec("valkey-server -v", (error, stdout) => {
+            let redisInfoCommand = "redis-cli -h " + addresses[0][0] + " -p " + addresses[0][1] + " info";
+            let valkeyInfoCommand = "valkey-cli -h " + addresses[0][0] + " -p " + addresses[0][1] + " info";
+
+            //First, try with `valkey-server -v`
+            exec(valkeyInfoCommand, (error, stdout) => {
                 if (error) {
                     // If `valkey-server` fails, try `redis-server -v`
-                    exec("redis-server -v", (error, stdout) => {
+                    exec(redisInfoCommand, (error, stdout) => {
                         if (error) {
                             reject(error);
                         } else {
-                            resolve(extractVersion(stdout));
+                            resolve(extractVersion(redisVersionKey, stdout));
                         }
                     });
                 } else {
-                    resolve(extractVersion(stdout));
+                    resolve(extractVersion(valkeyVersionKey, stdout));
                 }
             });
         });
@@ -98,20 +103,17 @@ export class RedisCluster {
                 }
             }
 
-            console.log(command);
             execFile(
                 "python3",
                 [PY_SCRIPT_PATH, ...command.split(" ")],
                 (error, stdout, stderr) => {
                     if (error) {
-                        console.error(stderr);
                         reject(error);
                     } else {
                         const { clusterFolder, addresses: ports } =
                             parseOutput(stdout);
-
                         resolve(
-                            RedisCluster.detectVersion().then(
+                            RedisCluster.detectVersion(ports).then(
                                 (ver) =>
                                     new RedisCluster(ver, ports, clusterFolder)
                             )
@@ -125,7 +127,7 @@ export class RedisCluster {
     public static async initFromExistingCluster(
         addresses: [string, number][]
     ): Promise<RedisCluster> {
-        return RedisCluster.detectVersion().then(
+        return RedisCluster.detectVersion(addresses).then(
             (ver) => new RedisCluster(ver, addresses, "")
         );
     }

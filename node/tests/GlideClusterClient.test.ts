@@ -17,7 +17,11 @@ import {
     ClusterTransaction,
     convertRecordToGlideRecord,
     Decoder,
+    FlushMode,
     FunctionListResponse,
+    FunctionRestorePolicy,
+    FunctionStatsSingleResponse,
+    GeoUnit,
     GlideClusterClient,
     GlideReturnType,
     InfoOptions,
@@ -27,10 +31,6 @@ import {
     Routes,
     ScoreFilter,
     SlotKeyTypes,
-    FlushMode,
-    FunctionRestorePolicy,
-    FunctionStatsSingleResponse,
-    GeoUnit,
     SortOrder,
 } from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
