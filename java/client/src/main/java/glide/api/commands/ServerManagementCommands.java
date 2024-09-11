@@ -2,7 +2,6 @@
 package glide.api.commands;
 
 import glide.api.models.commands.FlushMode;
-import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -31,19 +30,20 @@ public interface ServerManagementCommands {
     CompletableFuture<String> info();
 
     /**
-     * Get information and statistics about the server.
+     * Get information and statistics about the server.<br>
+     * Starting from server version 7, command supports multiple section arguments.
      *
      * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
-     * @param options A list of {@link Section} values specifying which sections of information to
+     * @param sections A list of {@link Section} values specifying which sections of information to
      *     retrieve. When no parameter is provided, the {@link Section#DEFAULT} option is assumed.
      * @return A <code>String</code> containing the information for the sections requested.
      * @example
      *     <pre>{@code
-     * String response = regularClient.info(InfoOptions.builder().section(STATS).build()).get();
+     * String response = regularClient.info(new Section[] { Section.STATS }).get();
      * assert response.contains("total_net_input_bytes");
      * }</pre>
      */
-    CompletableFuture<String> info(InfoOptions options);
+    CompletableFuture<String> info(Section[] sections);
 
     /**
      * Changes the currently selected database.
