@@ -881,9 +881,9 @@ class StandaloneCommands(CoreCommands):
 
         Examples:
             >>> await client.lolwut(6, [40, 20]);
-                b"Valkey ver. 7.2.3" # Indicates the current Valkey version
+                b"Redis ver. 7.2.3" # Indicates the current Valkey version
             >>> await client.lolwut(5, [30, 5, 5]);
-                b"Valkey ver. 7.2.3" # Indicates the current Valkey version
+                b"Redis ver. 7.2.3" # Indicates the current Valkey version
         """
         args: List[TEncodable] = []
         if version is not None:
