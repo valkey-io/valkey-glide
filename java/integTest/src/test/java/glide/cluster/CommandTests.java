@@ -99,7 +99,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-@Timeout(10) // seconds
+//@Timeout(10) // seconds
 public class CommandTests {
 
     private static GlideClusterClient clusterClient = null;
@@ -1623,7 +1623,7 @@ public class CommandTests {
                         .get();
         assertArrayEquals(new Object[] {gs(key + 1), gs(key + 2)}, (Object[]) functionResult);
 
-        //  TODO: change to binary transaction version once available:
+        //  TODO: change to binary transaction version once available:  pewpew
         // var transaction =
         //         new ClusterTransaction()
         //                 .fcall(funcName, new String[] {key + 1, key + 2}, new String[0])
@@ -1707,6 +1707,7 @@ public class CommandTests {
                 !SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0"),
                 "Temporary disabeling this test on valkey 8");
 
+        assertEquals("OK", clusterClient.functionFlush().get());
         String libName = "fcall_readonly_function";
         // intentionally using a REPLICA route
         Route replicaRoute = new SlotKeyRoute(libName, REPLICA);

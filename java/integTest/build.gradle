@@ -30,22 +30,19 @@ dependencies {
     testAnnotationProcessor 'org.projectlombok:lombok:1.18.32'
 }
 
-def standalonePorts = []
-def clusterPorts = []
+def standaloneHosts = ''
+def clusterHosts = ''
 def serverVersion = ""
 
 ext {
-    extractPortsFromClusterManagerOutput = { String output ->
-        var res = []
+    extractAddressesFromClusterManagerOutput = { String output ->
         for (def line : output.split("\n")) {
             if (!line.startsWith("CLUSTER_NODES="))
                 continue
 
-            def addresses = line.split("=")[1].split(",")
-            for (def address : addresses)
-                res << address.split(":")[1]
+            return line.split("=")[1]
         }
-        return res
+        return ''
     }
     extractServerVersion = { String output ->
         // Redis response:
@@ -77,26 +74,34 @@ tasks.register('clearDirs', Delete) {
 
 tasks.register('startCluster') {
     doLast {
-        new ByteArrayOutputStream().withStream { os ->
-            exec {
-                workingDir "${project.rootDir}/../utils"
-                commandLine 'python3', 'cluster_manager.py', 'start', '--cluster-mode'
-                standardOutput = os
+        if (System.getProperty("cluster-endpoints") == null) {
+            new ByteArrayOutputStream().withStream { os ->
+                exec {
+                    workingDir "${project.rootDir}/../utils"
+                    commandLine 'python3', 'cluster_manager.py', 'start', '--cluster-mode'
+                    standardOutput = os
+                }
+                clusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
             }
-            clusterPorts = extractPortsFromClusterManagerOutput(os.toString())
+        } else {
+            clusterHosts = System.getProperty("cluster-endpoints")
         }
     }
 }
 
 tasks.register('startStandalone') {
     doLast {
-        new ByteArrayOutputStream().withStream { os ->
-            exec {
-                workingDir "${project.rootDir}/../utils"
-                commandLine 'python3', 'cluster_manager.py', 'start', '-r', '0'
-                standardOutput = os
+        if (System.getProperty("standalone-endpoints") == null) {
+            new ByteArrayOutputStream().withStream { os ->
+                exec {
+                    workingDir "${project.rootDir}/../utils"
+                    commandLine 'python3', 'cluster_manager.py', 'start', '-r', '0'
+                    standardOutput = os
+                }
+                standaloneHosts = extractAddressesFromClusterManagerOutput(os.toString())
             }
-            standalonePorts = extractPortsFromClusterManagerOutput(os.toString())
+        } else {
+            standaloneHosts = System.getProperty("standalone-endpoints")
         }
     }
 }
@@ -164,11 +169,11 @@ test.dependsOn ':client:buildRustRelease'
 
 tasks.withType(Test) {
     doFirst {
-        println "Cluster ports = ${clusterPorts}"
-        println "Standalone ports = ${standalonePorts}"
+        println "Cluster hosts = ${clusterHosts}"
+        println "Standalone hosts = ${standaloneHosts}"
         println "Server version = ${serverVersion}"
-        systemProperty 'test.server.standalone.ports', standalonePorts.join(',')
-        systemProperty 'test.server.cluster.ports', clusterPorts.join(',')
+        systemProperty 'test.server.standalone', standaloneHosts
+        systemProperty 'test.server.cluster', clusterHosts
         systemProperty 'test.server.version', serverVersion
     }
 

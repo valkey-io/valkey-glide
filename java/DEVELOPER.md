@@ -242,6 +242,13 @@ To run one class, use the following command:
 ./gradlew :client:test --tests 'TransactionTests' --rerun
 ```
 
+IT suite start the server for testing - standalone and cluster installation using `cluster_manager` script.
+If you want IT to use already started servers, use the following command line:
+```bash
+./gradlew :integTest:test -Dcluster-endpoints=localhost:7000 -Dstandalone-endpoints=localhost:6379
+```
+You can use test filter there as well.
+
 ### Generate files
 To (re)generate protobuf code, use the following command:
 
