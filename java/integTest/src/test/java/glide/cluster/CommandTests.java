@@ -1682,9 +1682,9 @@ public class CommandTests {
 
         // dbg:
         System.err.println("=====================================");
-        System.err.println(clusterClient.fcall("myfunc", primaryRoute).get().getSingleValue());
+        System.err.println(clusterClient.fcallReadOnly("myfunc", primaryRoute).get().getSingleValue());
         System.err.println("=====================================");
-        System.err.println(clusterClient.fcall("myfunc", replicaRoute).get().getSingleValue());
+        System.err.println(clusterClient.fcallReadOnly("myfunc", replicaRoute).get().getSingleValue());
 
         // fcall on a replica node should fail, because a function isn't guaranteed to be RO
         var executionException =
