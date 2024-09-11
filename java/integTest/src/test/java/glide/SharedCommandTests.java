@@ -987,6 +987,25 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void non_UTF8_GlideString_test(BaseClient client) {
+        byte[] nonUTF8Bytes = new byte[] {(byte) 0xEE};
+        GlideString key = gs(nonUTF8Bytes);
+        GlideString hashKey = gs(UUID.randomUUID().toString());
+        GlideString value = gs(nonUTF8Bytes);
+        String stringField = "field";
+        Map<GlideString, GlideString> fieldValueMap = Map.of(gs(stringField), value);
+
+        assertEquals(OK, client.set(key, value).get());
+        assertEquals(value, client.get(key).get());
+        assertEquals(1, client.hset(hashKey, fieldValueMap).get());
+        assertDeepEquals(new GlideString[] {gs(stringField)}, client.hkeys(hashKey).get());
+        assertThrows(
+                ExecutionException.class, () -> client.hget(hashKey.toString(), stringField).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void hset_hget_binary_existing_fields_non_existing_fields(BaseClient client) {
         GlideString key = gs(UUID.randomUUID().toString());
         GlideString field1 = gs(UUID.randomUUID().toString());
