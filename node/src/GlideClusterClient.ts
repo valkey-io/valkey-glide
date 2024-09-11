@@ -15,6 +15,7 @@ import {
     convertGlideRecordToRecord,
 } from "./BaseClient";
 
+import { log } from "console";
 import { ClusterScanCursor } from "glide-rs";
 import {
     FlushMode,
@@ -62,7 +63,6 @@ import {
     createUnWatch
 } from "./Commands";
 import { ClosingError } from "./Errors";
-import { Logger } from "./Logger";
 import { command_request, connection_request } from "./ProtobufMessage";
 import { ClusterTransaction } from "./Transaction";
 
@@ -376,13 +376,9 @@ export class GlideClusterClient extends BaseClient {
                             resolveAns[0].toString(),
                         );
                         resolve(resolveAns);
-                    } catch (err) {
-                        Logger.log(
-                            "error",
-                            "Decoder",
-                            `Decoding error: '${err}'`,
-                        );
-                        reject(err);
+                    } catch (error) {
+                        log("Error in scan promise: " + error);
+                        reject(error);
                     }
                 },
                 reject,
@@ -405,19 +401,13 @@ export class GlideClusterClient extends BaseClient {
      *
      * This method can iterate over all keys in the database from the start of the scan until it ends.
      * The same key may be returned in multiple scan iterations.
+     * The API does not accept `route` as it go through all slots in the cluster.
      *
      * @see {@link https://valkey.io/commands/scan/ | valkey.io} for more details.
      *
      * @param cursor - The cursor object that wraps the scan state.
      *   To start a new scan, create a new empty `ClusterScanCursor` using {@link ClusterScanCursor}.
-     * @param options - (Optional) The scan options.
-     * @param options.match - (Optional) A pattern to match keys against.
-     * @param options.count - (Optional) The number of keys to return in a single iteration.
-     *   The actual number returned can vary. This parameter serves as a hint to the server.
-     *   Default is 10.
-     * @param options.type - (Optional) The type of object to scan for, see {@link ScanOptions.type}.
-     * @param options.decoder - (Optional) The decoder to use for the response, see {@link DecoderOption}.
-     *
+     * @param options - (Optional) The scan options, see {@link ScanOptions} and  {@link DecoderOption}.
      * @returns A Promise resolving to an array containing the next cursor and an array of keys,
      *   formatted as [`ClusterScanCursor`, `string[]`].
      *

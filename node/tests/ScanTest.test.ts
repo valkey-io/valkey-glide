@@ -4,6 +4,7 @@
 
 import { afterAll, afterEach, beforeAll, describe } from "@jest/globals";
 import { ClusterScanCursor } from "glide-rs";
+import { v4 as uuidv4 } from "uuid";
 import {
     Decoder,
     GlideClient,
@@ -130,7 +131,7 @@ describe("Scan GlideClusterClient", () => {
             );
             const expectedKeys = Array.from(
                 { length: 100 },
-                (_, i) => `key:${i}`,
+                () => `key:${uuidv4()}`,
             );
             for (const key1 of expectedKeys)
                 expect(await client.set(key1, "value")).toEqual("OK");
@@ -164,19 +165,19 @@ describe("Scan GlideClusterClient", () => {
             );
             const expectedKeys = Array.from(
                 { length: 100 },
-                (_, i) => `key:${i}`,
+                () => `key:${uuidv4()}`,
             );
             for (const key1 of expectedKeys)
                 expect(await client.set(key1, "value")).toEqual("OK");
             const unexpectedTypeKeys = Array.from(
                 { length: 100 },
-                (_, i) => `key:${i + 100}`,
+                () => `key:${uuidv4() + 100}`,
             );
             for (const key2 of unexpectedTypeKeys)
                 expect(await client.sadd(key2, ["value"])).toEqual(1);
             const unexpectedPatternKeys = Array.from(
                 { length: 100 },
-                (_, i) => `${i + 200}`,
+                () => `${uuidv4() + 200}`,
             );
             for (const key3 of unexpectedPatternKeys)
                 expect(await client.set(key3, "value")).toEqual("OK");
@@ -213,7 +214,7 @@ describe("Scan GlideClusterClient", () => {
 
             const expectedKeys = Array.from(
                 { length: 100 },
-                (_, i) => `key:${i}`,
+                () => `key:${uuidv4()}`,
             );
             for (const key of expectedKeys)
                 expect(await client.set(key, "value")).toEqual("OK");
@@ -249,7 +250,7 @@ describe("Scan GlideClusterClient", () => {
 
             const expectedKeys = Array.from(
                 { length: 100 },
-                (_, i) => `key:${i}`,
+                () => `key:${uuidv4()}`,
             );
             for (const key of expectedKeys)
                 expect(await client.set(key, "value")).toEqual("OK");
@@ -258,7 +259,7 @@ describe("Scan GlideClusterClient", () => {
             );
             const unexpectedKeys = Array.from(
                 { length: 100 },
-                (_, i) => `${i}`,
+                () => `${uuidv4()}`,
             );
             for (const key of unexpectedKeys)
                 expect(await client.set(key, "value")).toEqual("OK");
@@ -297,7 +298,7 @@ describe("Scan GlideClusterClient", () => {
 
             const stringKeys = Array.from(
                 { length: 100 },
-                (_, i) => `key:${i}`,
+                () => `key:${uuidv4()}`,
             );
             for (const key of stringKeys)
                 expect(await client.set(key, "value")).toEqual("OK");
@@ -305,7 +306,7 @@ describe("Scan GlideClusterClient", () => {
 
             const setKeys = Array.from(
                 { length: 100 },
-                (_, i) => `stringKey:${i + 100}`,
+                () => `stringKey:${uuidv4() + 100}`,
             );
             for (const key of setKeys)
                 expect(await client.sadd(key, ["value"])).toEqual(1);
@@ -313,7 +314,7 @@ describe("Scan GlideClusterClient", () => {
 
             const hashKeys = Array.from(
                 { length: 100 },
-                (_, i) => `hashKey:${i + 200}`,
+                () => `hashKey:${uuidv4() + 200}`,
             );
             for (const key of hashKeys)
                 expect(await client.hset(key, { field: "value" })).toEqual(1);
@@ -321,7 +322,7 @@ describe("Scan GlideClusterClient", () => {
 
             const listKeys = Array.from(
                 { length: 100 },
-                (_, i) => `listKey:${i + 300}`,
+                () => `listKey:${uuidv4() + 300}`,
             );
             for (const key of listKeys)
                 expect(await client.lpush(key, ["value"])).toEqual(1);
@@ -329,7 +330,7 @@ describe("Scan GlideClusterClient", () => {
 
             const zsetKeys = Array.from(
                 { length: 100 },
-                (_, i) => `key:${i + 400}`,
+                () => `key:${uuidv4() + 400}`,
             );
             for (const key of zsetKeys)
                 expect(await client.zadd(key, { value: 1 })).toEqual(1);
@@ -337,7 +338,7 @@ describe("Scan GlideClusterClient", () => {
 
             const streamKeys = Array.from(
                 { length: 100 },
-                (_, i) => `key:${i + 500}`,
+                () => `key:${uuidv4() + 500}`,
             );
             for (const key of streamKeys)
                 await client.xadd(key, [["field", "value"]]);
@@ -377,7 +378,6 @@ describe("Scan GlideClusterClient", () => {
 });
 
 //standalone tests
-
 describe("Scan GlideClient", () => {
     const testsFailed = 0;
     let cluster: RedisCluster;
@@ -485,7 +485,7 @@ describe("Scan GlideClient", () => {
             );
             const expectedKeys = Array.from(
                 { length: 100 },
-                (_, i) => `key:${i}`,
+                () => `key:${uuidv4()}`,
             );
             for (const key1 of expectedKeys)
                 expect(await client.set(key1, "value")).toEqual("OK");
@@ -519,19 +519,19 @@ describe("Scan GlideClient", () => {
             );
             const expectedKeys = Array.from(
                 { length: 100 },
-                (_, i) => `key:${i}`,
+                () => `key:${uuidv4()}`,
             );
             for (const key1 of expectedKeys)
                 expect(await client.set(key1, "value")).toEqual("OK");
             const unexpectedTypeKeys = Array.from(
                 { length: 100 },
-                (_, i) => `key:${i + 100}`,
+                () => `key:${uuidv4() + 100}`,
             );
             for (const key2 of unexpectedTypeKeys)
                 expect(await client.sadd(key2, ["value"])).toEqual(1);
             const unexpectedPatternKeys = Array.from(
                 { length: 100 },
-                (_, i) => `${i + 200}`,
+                () => `${uuidv4() + 200}`,
             );
             for (const key3 of unexpectedPatternKeys)
                 expect(await client.set(key3, "value")).toEqual("OK");
@@ -568,7 +568,7 @@ describe("Scan GlideClient", () => {
 
             const expectedKeys = Array.from(
                 { length: 100 },
-                (_, i) => `key:${i}`,
+                () => `key:${uuidv4()}`,
             );
             for (const key of expectedKeys)
                 expect(await client.set(key, "value")).toEqual("OK");
@@ -604,7 +604,7 @@ describe("Scan GlideClient", () => {
 
             const expectedKeys = Array.from(
                 { length: 100 },
-                (_, i) => `key:${i}`,
+                () => `key:${uuidv4()}`,
             );
             for (const key of expectedKeys)
                 expect(await client.set(key, "value")).toEqual("OK");
@@ -613,7 +613,7 @@ describe("Scan GlideClient", () => {
             );
             const unexpectedKeys = Array.from(
                 { length: 100 },
-                (_, i) => `${i}`,
+                () => `${uuidv4()}`,
             );
             for (const key of unexpectedKeys)
                 expect(await client.set(key, "value")).toEqual("OK");
@@ -652,7 +652,7 @@ describe("Scan GlideClient", () => {
 
             const stringKeys = Array.from(
                 { length: 100 },
-                (_, i) => `key:${i}`,
+                () => `key:${uuidv4()}`,
             );
             for (const key of stringKeys)
                 expect(await client.set(key, "value")).toEqual("OK");
@@ -660,7 +660,7 @@ describe("Scan GlideClient", () => {
 
             const setKeys = Array.from(
                 { length: 100 },
-                (_, i) => `stringKey:${i + 100}`,
+                () => `stringKey:${uuidv4() + 100}`,
             );
             for (const key of setKeys)
                 expect(await client.sadd(key, ["value"])).toEqual(1);
@@ -668,7 +668,7 @@ describe("Scan GlideClient", () => {
 
             const hashKeys = Array.from(
                 { length: 100 },
-                (_, i) => `hashKey:${i + 200}`,
+                () => `hashKey:${uuidv4() + 200}`,
             );
             for (const key of hashKeys)
                 expect(await client.hset(key, { field: "value" })).toEqual(1);
@@ -676,7 +676,7 @@ describe("Scan GlideClient", () => {
 
             const listKeys = Array.from(
                 { length: 100 },
-                (_, i) => `listKey:${i + 300}`,
+                () => `listKey:${uuidv4() + 300}`,
             );
             for (const key of listKeys)
                 expect(await client.lpush(key, ["value"])).toEqual(1);
@@ -684,7 +684,7 @@ describe("Scan GlideClient", () => {
 
             const zsetKeys = Array.from(
                 { length: 100 },
-                (_, i) => `key:${i + 400}`,
+                () => `key:${uuidv4() + 400}`,
             );
             for (const key of zsetKeys)
                 expect(await client.zadd(key, { value: 1 })).toEqual(1);
@@ -692,7 +692,7 @@ describe("Scan GlideClient", () => {
 
             const streamKeys = Array.from(
                 { length: 100 },
-                (_, i) => `key:${i + 500}`,
+                () => `key:${uuidv4() + 500}`,
             );
             for (const key of streamKeys)
                 await client.xadd(key, [["field", "value"]]);

@@ -996,15 +996,8 @@ export class GlideClient extends BaseClient {
      * or an invalid cursor at any iteration, will lead to undefined results.
      * Using the same cursor in multiple iterations will, in case nothing changed between the iterations,
      * return the same elements multiple times.
-     * If the the db has changed, it may result an undefined behavior.
-     * @param options - (Optional) The options to use for the scan operation.
-     * @param options.match - (Optional) A pattern to match keys against.
-     * @param options.count - (Optional) The number of keys to return per iteration.
-     * The number of keys returned per iteration is not guaranteed to be the same as the count argument.
-     * the argument is used as a hint for the server to know how many "steps" it can use to retrieve the keys.
-     * The default value is 10.
-     * @param options.type - The type of object to scan for see {@link ScanOptions.type} for possible values.
-     * @param options.decoder - (Optional) The decoder to use for the response, see {@link DecoderOption}.
+     * If the the db has changed, it may result in undefined behavior.
+     * @param options - (Optional) The options to use for the scan operation, see {@link ScanOptions} and {@link DecoderOption}.
      * @returns A List containing the next cursor value and a list of keys,
      * formatted as [cursor, [key1, key2, ...]]
      *

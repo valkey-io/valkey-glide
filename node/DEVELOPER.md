@@ -167,7 +167,6 @@ Development on the Node wrapper may involve changes in either the TypeScript or 
     npm run lint
     # To automatically apply ESLint and/or prettier recommendations
     npx run lint:fix
-    npx prettier -w .
     ```
 
 2. Rust

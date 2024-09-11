@@ -273,20 +273,6 @@ export enum InfoOptions {
 }
 
 /**
- * Scan options for the SCAN command.
- * `match` - A pattern to match keys against. If not set, all keys are scanned.
- * `count` - The number of keys to return in a single iteration. If not set, the default value is 10.
- * `type` - The type of object to scan for. If not set, all objects are scanned.
- * @see {@link ObjectType} for possible values.
- */
-export interface ScanOptions {
-    match?: GlideString;
-    count?: number;
-    /// Enum of Valkey data types `STRING` `LIST` `SET` `ZSET` `HASH` `STREAM`
-    type?: ObjectType;
-}
-
-/**
  * @internal
  */
 export function createPing(str?: GlideString): command_request.Command {
@@ -1681,6 +1667,10 @@ export function createScan(
 
     if (options) {
         args = args.concat(convertBaseScanOptionsToArgsArray(options));
+    }
+
+    if (options?.type) {
+        args.push("TYPE", options.type);
     }
 
     return createCommand(RequestType.Scan, args);
@@ -3839,10 +3829,16 @@ export interface BaseScanOptions {
      * represent the results as compact single-allocation packed encoding.
      */
     readonly count?: number;
-    /**
-     * The type of the object to scan.
-     * Types are the data types of Valkey.
-     */
+}
+
+/**
+ * Options for the SCAN command.
+ * `match`: The match filter is applied to the result of the command and will only include keys that match the pattern specified.
+ * `count`: `COUNT` is a just a hint for the command for how many elements to fetch from the server, the default is 10.
+ * `type`: The type of the object to scan.
+ *  Types are the data types of Valkey: `string`, `list`, `set`, `zset`, `hash`, `stream`.
+ */
+export interface ScanOptions extends BaseScanOptions {
     type?: ObjectType;
 }
 
@@ -3882,10 +3878,6 @@ function convertBaseScanOptionsToArgsArray(
 
     if (options.count !== undefined) {
         args.push("COUNT", options.count.toString());
-    }
-
-    if (options.type) {
-        args.push("TYPE", options.type);
     }
 
     return args;

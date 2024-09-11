@@ -950,21 +950,32 @@ export class BaseClient {
             this.writeOrBufferCommandRequest(callbackIndex, command, route);
         });
     }
-    protected getValueToResolve<T>(resolveAns: T, decoder: boolean): T {
-        if (resolveAns instanceof PointerResponse) {
-            if (typeof resolveAns === "number") {
-                resolveAns = valueFromSplitPointer(0, resolveAns, decoder) as T;
-            } else {
-                resolveAns = valueFromSplitPointer(
-                    resolveAns.high!,
-                    resolveAns.low!,
-                    decoder,
-                ) as T;
-            }
-        }
 
-        return resolveAns;
+    protected getValueToResolve<T>(resolveAns: T, decoder: boolean): T {
+        try {
+            if (resolveAns instanceof PointerResponse) {
+                if (typeof resolveAns === "number") {
+                    resolveAns = valueFromSplitPointer(
+                        0,
+                        resolveAns,
+                        decoder,
+                    ) as T;
+                } else {
+                    resolveAns = valueFromSplitPointer(
+                        resolveAns.high!,
+                        resolveAns.low!,
+                        decoder,
+                    ) as T;
+                }
+            }
+
+            return resolveAns;
+        } catch (err) {
+            Logger.log("error", "Decoder", `Decoding error: '${err}'`);
+            return err as T;
+        }
     }
+
     protected writeOrBufferCommandRequest(
         callbackIdx: number,
         command:
