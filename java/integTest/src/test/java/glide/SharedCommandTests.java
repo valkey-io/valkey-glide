@@ -987,6 +987,40 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void non_UTF8_GlideString_test(BaseClient client) {
+        byte[] nonUTF8Bytes = new byte[] {(byte) 0xEE};
+        GlideString key = gs(nonUTF8Bytes);
+        GlideString hashKey = gs(UUID.randomUUID().toString());
+        GlideString hashNonUTF8Key = gs(new byte[] {(byte) 0xFF});
+        GlideString value = gs(nonUTF8Bytes);
+        String stringField = "field";
+        Map<GlideString, GlideString> fieldValueMap = Map.of(gs(stringField), value);
+
+        // Testing keys and values using byte[] that cannot be converted to UTF-8 Strings.
+        assertEquals(OK, client.set(key, value).get());
+        assertEquals(value, client.get(key).get());
+
+        // Testing set values using byte[] that cannot be converted to UTF-8 Strings.
+        assertEquals(1, client.hset(hashKey, fieldValueMap).get());
+        assertDeepEquals(new GlideString[] {gs(stringField)}, client.hkeys(hashKey).get());
+        assertThrows(
+                ExecutionException.class, () -> client.hget(hashKey.toString(), stringField).get());
+
+        // Testing keys for a set using byte[] that cannot be converted to UTF-8 Strings returns bytes.
+        assertEquals(1, client.hset(hashNonUTF8Key, fieldValueMap).get());
+        assertDeepEquals(new GlideString[] {gs(stringField)}, client.hkeys(hashNonUTF8Key).get());
+        // No error is thrown as GlideString will be returned when arguments are GlideStrings.
+        assertEquals(value, client.hget(hashNonUTF8Key, gs(stringField)).get());
+
+        // Converting non UTF-8 bytes result to String returns a message.
+        assertEquals(
+                "Value not convertible to string: byte[] 13",
+                client.hget(hashNonUTF8Key, gs(stringField)).get().toString());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void hset_hget_binary_existing_fields_non_existing_fields(BaseClient client) {
         GlideString key = gs(UUID.randomUUID().toString());
         GlideString field1 = gs(UUID.randomUUID().toString());
