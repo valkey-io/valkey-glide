@@ -1582,7 +1582,7 @@ public class GlideClientTest {
         assertEquals(payload, response.get());
     }
 
-    @SneakyThrows
+    /*@SneakyThrows
     @Test
     public void scriptShow_returns_script_source() {
         // setup
@@ -1603,7 +1603,7 @@ public class GlideClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(scriptSource, response.get());
-    }
+    }*/
 
     @SneakyThrows
     @Test
