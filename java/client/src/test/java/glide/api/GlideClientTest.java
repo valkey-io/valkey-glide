@@ -296,7 +296,7 @@ import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.GetExOptions;
-import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions;
@@ -1692,8 +1692,7 @@ public class GlideClientTest {
     @Test
     public void info_with_multiple_InfoOptions_returns_success() {
         // setup
-        String[] arguments =
-                new String[] {InfoOptions.Section.ALL.toString(), InfoOptions.Section.DEFAULT.toString()};
+        String[] arguments = new String[] {Section.ALL.toString(), Section.DEFAULT.toString()};
         String testPayload = "Key: Value";
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(testPayload);
@@ -1701,12 +1700,8 @@ public class GlideClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        InfoOptions options =
-                InfoOptions.builder()
-                        .section(InfoOptions.Section.ALL)
-                        .section(InfoOptions.Section.DEFAULT)
-                        .build();
-        CompletableFuture<String> response = service.info(options);
+        Section[] sections = {Section.ALL, Section.DEFAULT};
+        CompletableFuture<String> response = service.info(sections);
         String payload = response.get();
 
         // verify
@@ -1725,7 +1720,7 @@ public class GlideClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<String> response = service.info(InfoOptions.builder().build());
+        CompletableFuture<String> response = service.info(new Section[0]);
         String payload = response.get();
 
         // verify
