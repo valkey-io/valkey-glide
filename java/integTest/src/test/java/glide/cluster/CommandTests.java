@@ -1658,9 +1658,9 @@ public class CommandTests {
 
         // dbg:
         System.err.println("============================");
-        System.err.println(clusterClient.info(InfoOptions.builder().section(REPLICATION).build(), primaryRoute).get());
+        System.err.println(clusterClient.info(InfoOptions.builder().section(REPLICATION).build(), primaryRoute).get().getSingleValue());
         System.err.println("============================");
-        System.err.println(clusterClient.info(InfoOptions.builder().section(REPLICATION).build(), replicaRoute).get());
+        System.err.println(clusterClient.info(InfoOptions.builder().section(REPLICATION).build(), replicaRoute).get().getSingleValue());
 
         // function $funcName returns a magic number
         String code = generateLuaLibCode(libName, Map.of(funcName, "return 42"), false);
