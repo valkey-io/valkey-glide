@@ -32,8 +32,7 @@ public class ArrayTransformUtils {
     }
 
     /**
-     * Converts a map of GlideString keys and values of any type in to an array of GlideStrings with
-     * alternating keys and values.
+     * Converts a map of GlideString keys and values to an array of GlideStrings.
      *
      * @param args Map of GlideString keys to values of GlideString.
      * @return Array of strings [key1, gs(value1.toString()), key2, gs(value2.toString()), ...].
@@ -65,10 +64,10 @@ public class ArrayTransformUtils {
     }
 
     /**
-     * Converts a nested array of GlideString keys and values of any type in to an array of
-     * GlideStrings with alternating keys and values.
+     * Converts a nested array of GlideString keys and values in to an array of GlideStrings with
+     * alternating keys and values.
      *
-     * @param args Nested array of GlideString keys to values of any type to convert.
+     * @param args Nested array of GlideString keys and values to convert.
      * @return Array of strings [key1, gs(value1.toString()), key2, gs(value2.toString()), ...].
      */
     public static GlideString[] convertNestedArrayToKeyValueGlideStringArray(GlideString[][] args) {

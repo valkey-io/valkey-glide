@@ -996,20 +996,25 @@ public class SharedCommandTests {
         String stringField = "field";
         Map<GlideString, GlideString> fieldValueMap = Map.of(gs(stringField), value);
 
-        // Non UTF-8 key and value
+        // Testing keys and values using byte[] that cannot be converted to UTF-8 Strings.
         assertEquals(OK, client.set(key, value).get());
         assertEquals(value, client.get(key).get());
 
-        // Non UTF-8 field value map for a set
+        // Testing set values using byte[] that cannot be converted to UTF-8 Strings.
         assertEquals(1, client.hset(hashKey, fieldValueMap).get());
         assertDeepEquals(new GlideString[] {gs(stringField)}, client.hkeys(hashKey).get());
         assertThrows(
                 ExecutionException.class, () -> client.hget(hashKey.toString(), stringField).get());
 
-        // Non UTF-8 set key and field value map
+        // Testing keys for a set using byte[] that cannot be converted to UTF-8 Strings returns bytes.
         assertEquals(1, client.hset(hashNonUTF8Key, fieldValueMap).get());
         assertDeepEquals(new GlideString[] {gs(stringField)}, client.hkeys(hashNonUTF8Key).get());
         assertEquals(value, client.hget(hashNonUTF8Key, gs(stringField)).get());
+
+        // Converting non UTF-8 bytes result to String returns a message.
+        assertEquals(
+                "Value not convertible to string: byte[] 13",
+                client.hget(hashNonUTF8Key, gs(stringField)).get().toString());
     }
 
     @SneakyThrows
