@@ -299,11 +299,22 @@ describe("GlideClient", () => {
             client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            const key1 = uuidv4();
-            const key2 = uuidv4();
-            const value = "value";
+            const bytesTransaction = new Transaction();
+            const expectedBytesRes = await DumpAndRestoreTest(
+                bytesTransaction,
+                Buffer.from("value"),
+            );
+            bytesTransaction.select(0);
+            const result = await client.exec(bytesTransaction, {
+                decoder: Decoder.Bytes,
+            });
+            expectedBytesRes.push(["select(0)", "OK"]);
 
-            const transaction1 = new Transaction().set(key1, value).dump(key1);
+            validateTransactionResponse(result, expectedBytesRes);
+
+            const stringTransaction = new Transaction();
+            await DumpAndRestoreTest(stringTransaction, "value");
+            stringTransaction.select(0);
 
             // Since DUMP gets binary results, we cannot use the string decoder here, so we expected to get an error.
             await expect(
