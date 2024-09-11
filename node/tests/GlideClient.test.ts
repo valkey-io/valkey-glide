@@ -286,7 +286,7 @@ describe("GlideClient", () => {
             decoder,
         );
         transaction.select(0);
-        const result = await client.exec(transaction, decoder);
+        const result = await client.exec(transaction, { decoder });
         expectedRes.push(["select(0)", "OK"]);
 
         validateTransactionResponse(result, expectedRes);
