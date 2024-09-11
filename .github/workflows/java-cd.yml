@@ -42,6 +42,7 @@ jobs:
         needs: load-platform-matrix
         env:
             JAVA_VERSION: "11"
+            RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
         strategy:
             # Run all jobs
             fail-fast: false
