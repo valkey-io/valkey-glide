@@ -101,6 +101,18 @@ jobs:
                     export ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderValue="Bearer $(echo "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" | base64)"
                     export GLIDE_RELEASE_VERSION=${{ env.RELEASE_VERSION }}
                     ./gradlew :benchmarks:run --args="--minimal --clients glide"
+
+            -   name: Check Redis
+                run: |
+                    RESPONSE=$(redis-cli ping)
+                    if [ "$RESPONSE" = "PONG" ]; then
+                        echo "Redis is running"
+                        echo "REDIS_STATUS=running" >> $GITHUB_ENV
+                    else
+                        echo "Redis is not running"
+                        echo "REDIS_STATUS=not_running" >> $GITHUB_ENV
+                    fi
+
 #
 #    create-binaries-to-publish:
 #        needs: [set-release-version, load-platform-matrix]
