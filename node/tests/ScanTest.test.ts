@@ -269,6 +269,7 @@ describe("Scan GlideClusterClient", () => {
             let cursor = new ClusterScanCursor();
             let keys: GlideString[] = [];
             const allKeys: GlideString[] = [];
+
             while (!cursor.isFinished()) {
                 [cursor, keys] = await client.scan(cursor, {
                     match: "key*",
@@ -437,6 +438,7 @@ describe("Scan GlideClient", () => {
             ]);
             cursor = "0";
             const matchedKeys: GlideString[] = [];
+
             do {
                 [cursor, keys] = await client.scan(cursor, {
                     match: "*key*",
@@ -444,6 +446,7 @@ describe("Scan GlideClient", () => {
                 });
                 matchedKeys.push(...keys);
             } while (cursor !== "0");
+
             expect(matchedKeys).toEqual(
                 expect.arrayContaining(["key1", "key2", "key3", "notMykey"]),
             );
@@ -458,6 +461,7 @@ describe("Scan GlideClient", () => {
             await client.sadd("thisIsASet", ["value4"]);
             cursor = "0";
             const stringKeys: GlideString[] = [];
+
             do {
                 [cursor, keys] = await client.scan(cursor, {
                     type: ObjectType.STRING,
@@ -492,6 +496,7 @@ describe("Scan GlideClient", () => {
             let cursor: GlideString = "0";
             let keys: GlideString[] = [];
             const allKeys: GlideString[] = [];
+
             do {
                 [cursor, keys] = await client.scan(cursor, {
                     decoder: Decoder.Bytes,
@@ -534,6 +539,7 @@ describe("Scan GlideClient", () => {
             let cursor: GlideString = "0";
             let keys: GlideString[] = [];
             const allKeys: GlideString[] = [];
+
             do {
                 [cursor, keys] = await client.scan(cursor, {
                     match: "key*",
@@ -572,6 +578,7 @@ describe("Scan GlideClient", () => {
             let keysOf100: GlideString[] = [];
             const allKeys: GlideString[] = [];
             let successfulComparedScans = 0;
+
             do {
                 [cursor, keysOf1] = await client.scan(cursor, { count: 1 });
                 allKeys.push(...keysOf1);
@@ -617,6 +624,7 @@ describe("Scan GlideClient", () => {
             let cursor: GlideString = "0";
             let keys: GlideString[] = [];
             const allKeysEncoded: GlideString[] = [];
+
             do {
                 [cursor, keys] = await client.scan(cursor, {
                     match: "key*",
@@ -693,6 +701,7 @@ describe("Scan GlideClient", () => {
             let cursor: GlideString = "0";
             let keys: GlideString[] = [];
             const allKeys: GlideString[] = [];
+
             do {
                 [cursor, keys] = await client.scan(cursor, {
                     type: ObjectType.SET,
