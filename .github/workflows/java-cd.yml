@@ -58,28 +58,8 @@ jobs:
               env:
                   INPUT_VERSION: ${{ github.event.inputs.version }}
 
-    check-redis:
-        runs-on: ${{ matrix.host.RUNNER }}
-        strategy:
-            matrix:
-                host:
-                    - { RUNNER: ubuntu-latest }
-        steps:
-            - name: Check redis status
-              id: redis-check
-              run: |
-                  RESPONSE=$(redis-cli ping)
-                  if [ "$RESPONSE" = "PONG" ]; then
-                      echo "Redis is running"
-                      echo "::set-output name=REDIS_STATUS::running"
-                  else
-                      echo "Redis is not running"
-                      echo "::set-output name=REDIS_STATUS::not_running"
-                  fi
-
     deployment-all-platforms:
-        needs: [set-release-version, load-platform-matrix, check-redis]
-        if: needs.check-redis.outputs.REDIS_STATUS == 'running'
+        needs: [set-release-version, load-platform-matrix]
         env:
             JAVA_VERSION: "11"
             RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
@@ -91,6 +71,16 @@ jobs:
 
         runs-on: ${{ matrix.host.RUNNER }}
         steps:
+            - name: Start Redis server
+              run: |
+                  if [[ ${{ matrix.host.OS }} == ubuntu ]]; then
+                      sudo apt-get install redis
+                      sudo systemctl start redis
+                  else
+                    brew install redis
+                    brew services start redis
+                  fi
+
             - uses: actions/checkout@v4
               with:
                   submodules: recursive
@@ -114,13 +104,19 @@ jobs:
                   version: "26.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-            -   name: Test deployment
-                working-directory: java
-                run: |
-                    export ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderName="Authorization"
-                    export ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderValue="Bearer $(echo "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" | base64)"
-                    export GLIDE_RELEASE_VERSION=${{ env.RELEASE_VERSION }}
-                    ./gradlew :benchmarks:run --args="--minimal --clients glide"
+            - name: Test deployment
+              working-directory: java
+              run: |
+                  ./gradlew :benchmarks:run --args="--minimal --clients glide"
+
+            - name: Stop Redis server
+              if: ${{ always() }}
+              run: |
+                  if [[ ${{ matrix.host.OS }} == ubuntu ]]; then
+                      sudo systemctl stop redis
+                  else
+                      brew services stop redis
+                  fi
 
 #
 #    create-binaries-to-publish:
