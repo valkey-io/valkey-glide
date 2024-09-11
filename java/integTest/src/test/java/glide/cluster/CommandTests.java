@@ -99,7 +99,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-//@Timeout(10) // seconds
+// @Timeout(10) // seconds
 public class CommandTests {
 
     private static GlideClusterClient clusterClient = null;
@@ -1605,38 +1605,52 @@ public class CommandTests {
         GlideString funcName = gs("myfunc_with_keys");
         // function $funcName returns array with first two arguments
         String code =
-                generateLuaLibCode(libName, Map.of(funcName.toString(), "return {keys[1], keys[2]}"), true);
+                generateLuaLibCode(libName, Map.of(funcName.toString(), "return {args[1]}"), true);
 
         // loading function to the node where key is stored
         assertEquals(libName, clusterClient.functionLoad(code, false, route).get());
 
+        // getting a real binary value which cannot be represented as a string by dumping a key
+        assertEquals("OK", clusterClient.set(key, "fcall_binary_with_keys").get());
+        var binaryValue = gs(clusterClient.dump(gs(key)).get());
+
         // due to common prefix, all keys are mapped to the same hash slot
         var functionResult =
                 clusterClient
-                        .fcall(funcName, new GlideString[] {gs(key + 1), gs(key + 2)}, new GlideString[0])
+                        .fcall(
+                                funcName,
+                                new GlideString[] {gs(key + 1), gs(key + 2)},
+                                new GlideString[] {binaryValue})
                         .get();
-        assertArrayEquals(new Object[] {gs(key + 1), gs(key + 2)}, (Object[]) functionResult);
+        assertArrayEquals(new Object[] {binaryValue}, (Object[]) functionResult);
         functionResult =
                 clusterClient
                         .fcallReadOnly(
-                                funcName, new GlideString[] {gs(key + 1), gs(key + 2)}, new GlideString[0])
+                                funcName,
+                                new GlideString[] {gs(key + 1), gs(key + 2)},
+                                new GlideString[] {binaryValue})
                         .get();
-        assertArrayEquals(new Object[] {gs(key + 1), gs(key + 2)}, (Object[]) functionResult);
+        assertArrayEquals(new Object[] {binaryValue}, (Object[]) functionResult);
 
-        //  TODO: change to binary transaction version once available:  pewpew
-        // var transaction =
-        //         new ClusterTransaction()
-        //                 .fcall(funcName, new String[] {key + 1, key + 2}, new String[0])
-        //                 .fcallReadOnly(funcName, new String[] {key + 1, key + 2}, new String[0]);
+        var transaction =
+                new ClusterTransaction()
+                        .withBinaryOutput()
+                        .fcall(
+                                funcName,
+                                new GlideString[] {gs(key + 1), gs(key + 2)},
+                                new GlideString[] {binaryValue})
+                        .fcallReadOnly(
+                                funcName,
+                                new GlideString[] {gs(key + 1), gs(key + 2)},
+                                new GlideString[] {binaryValue});
 
-        // // check response from a routed transaction request
-        // assertDeepEquals(
-        //         new Object[][] {{key + 1, key + 2}, {key + 1, key + 2}},
-        //         clusterClient.exec(transaction, route).get());
-        // // if no route given, GLIDE should detect it automatically
-        // assertDeepEquals(
-        //         new Object[][] {{key + 1, key + 2}, {key + 1, key + 2}},
-        //         clusterClient.exec(transaction).get());
+        // check response from a routed transaction request
+        assertDeepEquals(
+                new Object[][] {{binaryValue}, {binaryValue}},
+                clusterClient.exec(transaction, route).get());
+        // if no route given, GLIDE should detect it automatically
+        assertDeepEquals(
+                new Object[][] {{binaryValue}, {binaryValue}}, clusterClient.exec(transaction).get());
 
         assertEquals(OK, clusterClient.functionDelete(libName, route).get());
     }
@@ -1645,9 +1659,6 @@ public class CommandTests {
     @Test
     public void fcall_readonly_function() {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
-//        assumeTrue(
-//                !SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0"),
-//                "Temporary disabeling this test on valkey 8");
 
         assertEquals("OK", clusterClient.functionFlush().get());
         String libName = "fcall_readonly_function";
@@ -1655,12 +1666,6 @@ public class CommandTests {
         Route replicaRoute = new SlotKeyRoute(libName, REPLICA);
         Route primaryRoute = new SlotKeyRoute(libName, PRIMARY);
         String funcName = "fcall_readonly_function";
-
-        // dbg:
-        System.err.println("============================");
-        System.err.println(clusterClient.info(InfoOptions.builder().section(REPLICATION).build(), primaryRoute).get().getSingleValue());
-        System.err.println("============================");
-        System.err.println(clusterClient.info(InfoOptions.builder().section(REPLICATION).build(), replicaRoute).get().getSingleValue());
 
         // function $funcName returns a magic number
         String code = generateLuaLibCode(libName, Map.of(funcName, "return 42"), false);
@@ -1710,9 +1715,6 @@ public class CommandTests {
     @Test
     public void fcall_readonly_binary_function() {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
-//        assumeTrue(
-//                !SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0"),
-//                "Temporary disabeling this test on valkey 8");
 
         assertEquals("OK", clusterClient.functionFlush().get());
         String libName = "fcall_readonly_function";
@@ -1720,12 +1722,6 @@ public class CommandTests {
         Route replicaRoute = new SlotKeyRoute(libName, REPLICA);
         Route primaryRoute = new SlotKeyRoute(libName, PRIMARY);
         GlideString funcName = gs("fcall_readonly_function");
-
-        // dbg:
-        System.err.println("============================");
-        System.err.println(clusterClient.info(InfoOptions.builder().section(REPLICATION).build(), primaryRoute).get());
-        System.err.println("============================");
-        System.err.println(clusterClient.info(InfoOptions.builder().section(REPLICATION).build(), replicaRoute).get());
 
         // function $funcName returns a magic number
         String code = generateLuaLibCode(libName, Map.of(funcName.toString(), "return 42"), false);
