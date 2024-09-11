@@ -991,16 +991,25 @@ public class SharedCommandTests {
         byte[] nonUTF8Bytes = new byte[] {(byte) 0xEE};
         GlideString key = gs(nonUTF8Bytes);
         GlideString hashKey = gs(UUID.randomUUID().toString());
+        GlideString hashNonUTF8Key = gs(new byte[] {(byte) 0xFF});
         GlideString value = gs(nonUTF8Bytes);
         String stringField = "field";
         Map<GlideString, GlideString> fieldValueMap = Map.of(gs(stringField), value);
 
+        // Non UTF-8 key and value
         assertEquals(OK, client.set(key, value).get());
         assertEquals(value, client.get(key).get());
+
+        // Non UTF-8 field value map for a set
         assertEquals(1, client.hset(hashKey, fieldValueMap).get());
         assertDeepEquals(new GlideString[] {gs(stringField)}, client.hkeys(hashKey).get());
         assertThrows(
-                ExecutionException.class, () -> client.hget(hashKey.toString(), stringField).get());
+            ExecutionException.class, () -> client.hget(hashKey.toString(), stringField).get());
+
+        // Non UTF-8 set key and field value map
+        assertEquals(1, client.hset(hashNonUTF8Key, fieldValueMap).get());
+        assertDeepEquals(new GlideString[] {gs(stringField)}, client.hkeys(hashNonUTF8Key).get());
+        assertEquals(value, client.hget(hashNonUTF8Key, gs(stringField)).get());
     }
 
     @SneakyThrows
