@@ -352,7 +352,7 @@ public class TransactionTests {
         transaction.info();
         results.add(Pair.of(Info, buildArgs()));
 
-        transaction.info(new Section[] { EVERYTHING });
+        transaction.info(new Section[] {EVERYTHING});
         results.add(Pair.of(Info, buildArgs(EVERYTHING.toString())));
 
         transaction.mset(Map.of("key", "value"));
