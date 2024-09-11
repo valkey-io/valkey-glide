@@ -124,6 +124,7 @@
 * Core: Change FUNCTION STATS command to return multi node response for standalone mode ([#2117](https://github.com/valkey-io/valkey-glide/pull/2117))
 
 #### Fixes
+* Java: Fix GlideString conversion from byte to String ([#2271](https://github.com/valkey-io/valkey-glide/pull/2271))
 * Java: Add overloads for XADD to allow duplicate entry keys ([#1970](https://github.com/valkey-io/valkey-glide/pull/1970))
 * Node: Fix ZADD bug where command could not be called with only the `changed` optional parameter ([#1995](https://github.com/valkey-io/valkey-glide/pull/1995))
 * Java: `XRange`/`XRevRange` should return `null` instead of `GlideException` when given a negative count ([#1920](https://github.com/valkey-io/valkey-glide/pull/1920))
