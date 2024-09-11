@@ -580,7 +580,7 @@ describe("GlideClusterClient", () => {
             // test with multi-node route
             const result1 = await client.lolwut({ route: "allNodes" });
             expect(intoString(result1)).toEqual(
-                expect.stringContaining("Valkey ver. "),
+                expect.stringContaining("Redis ver. "),
             );
 
             const result2 = await client.lolwut({
@@ -589,13 +589,13 @@ describe("GlideClusterClient", () => {
                 route: "allNodes",
             });
             expect(intoString(result2)).toEqual(
-                expect.stringContaining("Valkey ver. "),
+                expect.stringContaining("Redis ver. "),
             );
 
             // test with single-node route
             const result3 = await client.lolwut({ route: "randomNode" });
             expect(intoString(result3)).toEqual(
-                expect.stringContaining("Valkey ver. "),
+                expect.stringContaining("Redis ver. "),
             );
 
             const result4 = await client.lolwut({
@@ -604,7 +604,7 @@ describe("GlideClusterClient", () => {
                 route: "randomNode",
             });
             expect(intoString(result4)).toEqual(
-                expect.stringContaining("Valkey ver. "),
+                expect.stringContaining("Redis ver. "),
             );
 
             // transaction tests
@@ -618,7 +618,7 @@ describe("GlideClusterClient", () => {
             if (results) {
                 for (const element of results) {
                     expect(intoString(element)).toEqual(
-                        expect.stringContaining("Valkey ver. "),
+                        expect.stringContaining("Redis ver. "),
                     );
                 }
             } else {
