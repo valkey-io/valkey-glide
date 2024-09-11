@@ -56,25 +56,28 @@ export class RedisCluster {
             const valkeyVersionKey = "valkey_version:";
             const extractVersion = (versionKey: string, stdout: string): string =>
                 stdout.split(versionKey)[1].split("\n")[0];
+            if (addresses.length > 0 && addresses[0].length > 1) {
+                let redisInfoCommand = "redis-cli -h " + addresses[0][0] + " -p " + addresses[0][1] + " info";
+                let valkeyInfoCommand = "valkey-cli -h " + addresses[0][0] + " -p " + addresses[0][1] + " info";
 
-            let redisInfoCommand = "redis-cli -h " + addresses[0][0] + " -p " + addresses[0][1] + " info";
-            let valkeyInfoCommand = "valkey-cli -h " + addresses[0][0] + " -p " + addresses[0][1] + " info";
-
-            //First, try with `valkey-server -v`
-            exec(valkeyInfoCommand, (error, stdout) => {
-                if (error) {
-                    // If `valkey-server` fails, try `redis-server -v`
-                    exec(redisInfoCommand, (error, stdout) => {
-                        if (error) {
-                            reject(error);
-                        } else {
-                            resolve(extractVersion(redisVersionKey, stdout));
-                        }
-                    });
-                } else {
-                    resolve(extractVersion(valkeyVersionKey, stdout));
-                }
-            });
+                //First, try with `valkey-server -v`
+                exec(valkeyInfoCommand, (error, stdout) => {
+                    if (error) {
+                        // If `valkey-server` fails, try `redis-server -v`
+                        exec(redisInfoCommand, (error, stdout) => {
+                            if (error) {
+                                reject(error);
+                            } else {
+                                resolve(extractVersion(redisVersionKey, stdout));
+                            }
+                        });
+                    } else {
+                        resolve(extractVersion(valkeyVersionKey, stdout));
+                    }
+                });
+            } else {
+                reject("Addresses not found for getting valkey/redis version");
+            }
         });
     }
 
