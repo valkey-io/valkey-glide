@@ -1,4 +1,5 @@
 #### Changes
+* Node: Get valkey/redis version using cli command ([#2276]https://github.com/valkey-io/valkey-glide/pull/2276)
 * Java: Fetch server version using info command ([#2258](https://github.com/valkey-io/valkey-glide/pull/2258))
 * Node: Added binary variant for commands which have `Record` as input or output ([#2207](https://github.com/valkey-io/valkey-glide/pull/2207))
 * Node: Renamed `ReturnType` to `GlideReturnType` ([#2241](https://github.com/valkey-io/valkey-glide/pull/2241))
