@@ -4122,6 +4122,77 @@ export function runBaseTests(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "script exists test_%p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const script1 = new Script("return 'Hello'");
+                const script2 = new Script("return 'World'");
+                const script3 = new Script("return 'Hello World'");
+
+                // Load script1 to all nodes, do not load script2 and load script3 with a SlotKeyRoute
+                await client.invokeScript(script1);
+                await client.invokeScript(script3);
+
+                // Get the SHA1 digests of the scripts
+                const sha1 = script1.getHash();
+                const sha2 = script2.getHash();
+                const sha3 = script3.getHash();
+                const nonExistentSha = `0`.repeat(40);
+
+                // Check existence of scripts
+                const results = await client.scriptExists([
+                    sha1,
+                    sha2,
+                    sha3,
+                    nonExistentSha,
+                ]);
+
+                // script1 is loaded and returns true.
+                // script2 is only cached and not loaded, returns false.
+                // script3 is invoked with a SlotKeyRoute. Despite SCRIPT EXIST uses LogicalAggregate AND on the results,
+                //  SCRIPT LOAD during internal execution so the script still gets loaded on all nodes, returns true.
+                // non-existing sha returns false.
+                expect(results).toEqual([true, false, true, false]);
+
+                client.close();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "script flush test_%p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                // Load a script
+                const script = new Script("return 'Hello'");
+                expect(await client.invokeScript(script)).toEqual("Hello");
+
+                // Check existence of script
+                expect(await client.scriptExists([script.getHash()])).toEqual([
+                    true,
+                ]);
+
+                // Flush the script cache
+                expect(await client.scriptFlush()).toEqual("OK");
+
+                // Check that the script no longer exists
+                expect(await client.scriptExists([script.getHash()])).toEqual([
+                    false,
+                ]);
+
+                // Test with ASYNC mode
+                await client.invokeScript(script);
+                expect(await client.scriptFlush(FlushMode.ASYNC)).toEqual("OK");
+                expect(await client.scriptExists([script.getHash()])).toEqual([
+                    false,
+                ]);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zadd and zaddIncr test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
