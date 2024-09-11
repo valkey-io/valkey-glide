@@ -1672,6 +1672,20 @@ public class CommandTests {
 
         assertEquals(libName, clusterClient.functionLoad(code, false).get());
 
+        // dbg:
+        System.err.println("=====================================");
+        System.err.println(
+                clusterClient
+                        .info(InfoOptions.builder().section(REPLICATION).section(SERVER).build(), primaryRoute)
+                        .get()
+                        .getSingleValue());
+        System.err.println("=====================================");
+        System.err.println(
+                clusterClient
+                        .info(InfoOptions.builder().section(REPLICATION).section(SERVER).build(), replicaRoute)
+                        .get()
+                        .getSingleValue());
+
         // fcall on a replica node should fail, because a function isn't guaranteed to be RO
         var executionException =
                 assertThrows(
