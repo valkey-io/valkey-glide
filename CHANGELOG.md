@@ -1,5 +1,4 @@
 #### Changes
-* Java: Update INFO command ([#2274](https://github.com/valkey-io/valkey-glide/pull/2274))
 * Java: Fetch server version using info command ([#2258](https://github.com/valkey-io/valkey-glide/pull/2258))
 * Node: Added binary variant for commands which have `Record` as input or output ([#2207](https://github.com/valkey-io/valkey-glide/pull/2207))
 * Node: Renamed `ReturnType` to `GlideReturnType` ([#2241](https://github.com/valkey-io/valkey-glide/pull/2241))
@@ -115,6 +114,7 @@
 * Python: Add Script commands ([#2208](https://github.com/valkey-io/valkey-glide/pull/2208))
 
 #### Breaking Changes
+* Java: Update INFO command ([#2274](https://github.com/valkey-io/valkey-glide/pull/2274))
 * Node: (Refactor) Convert classes to types ([#2005](https://github.com/valkey-io/valkey-glide/pull/2005))
 * Core: Change FUNCTION STATS command to return multi node response for standalone mode ([#2117](https://github.com/valkey-io/valkey-glide/pull/2117))
 
