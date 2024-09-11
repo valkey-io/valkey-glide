@@ -1009,6 +1009,7 @@ public class SharedCommandTests {
         // Testing keys for a set using byte[] that cannot be converted to UTF-8 Strings returns bytes.
         assertEquals(1, client.hset(hashNonUTF8Key, fieldValueMap).get());
         assertDeepEquals(new GlideString[] {gs(stringField)}, client.hkeys(hashNonUTF8Key).get());
+        // No error is thrown as GlideString will be returned when arguments are GlideStrings.
         assertEquals(value, client.hget(hashNonUTF8Key, gs(stringField)).get());
 
         // Converting non UTF-8 bytes result to String returns a message.
