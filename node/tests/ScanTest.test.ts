@@ -6,6 +6,7 @@ import { afterAll, afterEach, beforeAll, describe } from "@jest/globals";
 import { ClusterScanCursor } from "glide-rs";
 import {
     Decoder,
+    GlideClient,
     GlideClusterClient,
     GlideString,
     ObjectType,
@@ -21,6 +22,7 @@ import {
 
 const TIMEOUT = 50000;
 
+//cluster tests
 describe("Scan GlideClusterClient", () => {
     const testsFailed = 0;
     let cluster: RedisCluster;
@@ -144,7 +146,6 @@ describe("Scan GlideClusterClient", () => {
                 [cursor, keys] = await client.scan(cursor, {
                     decoder: Decoder.Bytes,
                 });
-                console.log(keys);
                 allKeys.push(...keys);
             }
 
@@ -225,11 +226,9 @@ describe("Scan GlideClusterClient", () => {
 
             while (!cursor.isFinished()) {
                 [cursor, keysOf1] = await client.scan(cursor, { count: 1 });
-                console.log(keysOf1);
                 allKeys.push(...keysOf1);
                 if (cursor.isFinished()) break;
                 [cursor, keysOf100] = await client.scan(cursor, { count: 100 });
-                console.log(keysOf100);
                 allKeys.push(...keysOf100);
                 if (keysOf1.length < keysOf100.length)
                     successfulComparedScans += 1;
@@ -254,25 +253,36 @@ describe("Scan GlideClusterClient", () => {
             );
             for (const key of expectedKeys)
                 expect(await client.set(key, "value")).toEqual("OK");
+            const encodedExpectedKeys = expectedKeys.map((key) =>
+                Buffer.from(key),
+            );
             const unexpectedKeys = Array.from(
                 { length: 100 },
                 (_, i) => `${i}`,
             );
             for (const key of unexpectedKeys)
                 expect(await client.set(key, "value")).toEqual("OK");
+            const encodedUnexpectedKeys = unexpectedKeys.map((key) =>
+                Buffer.from(key),
+            );
 
             let cursor = new ClusterScanCursor();
             let keys: GlideString[] = [];
             const allKeys: GlideString[] = [];
-            const successfulComparedScans = 0;
-
             while (!cursor.isFinished()) {
-                [cursor, keys] = await client.scan(cursor, { match: "key*" });
+                [cursor, keys] = await client.scan(cursor, {
+                    match: "key*",
+                    decoder: Decoder.Bytes,
+                });
                 allKeys.push(...keys);
             }
 
-            expect(allKeys).toEqual(expect.arrayContaining(expectedKeys));
-            expect(allKeys).toEqual(expect.not.arrayContaining(unexpectedKeys));
+            expect(allKeys).toEqual(
+                expect.arrayContaining(encodedExpectedKeys),
+            );
+            expect(allKeys).toEqual(
+                expect.not.arrayContaining(encodedUnexpectedKeys),
+            );
         },
         TIMEOUT,
     );
@@ -290,6 +300,7 @@ describe("Scan GlideClusterClient", () => {
             );
             for (const key of stringKeys)
                 expect(await client.set(key, "value")).toEqual("OK");
+            const encodedStringKeys = stringKeys.map((key) => Buffer.from(key));
 
             const setKeys = Array.from(
                 { length: 100 },
@@ -297,6 +308,7 @@ describe("Scan GlideClusterClient", () => {
             );
             for (const key of setKeys)
                 expect(await client.sadd(key, ["value"])).toEqual(1);
+            const encodedSetKeys = setKeys.map((key) => Buffer.from(key));
 
             const hashKeys = Array.from(
                 { length: 100 },
@@ -304,6 +316,7 @@ describe("Scan GlideClusterClient", () => {
             );
             for (const key of hashKeys)
                 expect(await client.hset(key, { field: "value" })).toEqual(1);
+            const encodedHashKeys = hashKeys.map((key) => Buffer.from(key));
 
             const listKeys = Array.from(
                 { length: 100 },
@@ -319,6 +332,7 @@ describe("Scan GlideClusterClient", () => {
             );
             for (const key of zsetKeys)
                 expect(await client.zadd(key, { value: 1 })).toEqual(1);
+            const encodedZsetKeys = zsetKeys.map((key) => Buffer.from(key));
 
             const streamKeys = Array.from(
                 { length: 100 },
@@ -326,6 +340,7 @@ describe("Scan GlideClusterClient", () => {
             );
             for (const key of streamKeys)
                 await client.xadd(key, [["field", "value"]]);
+            const encodedStreamKeys = streamKeys.map((key) => Buffer.from(key));
 
             let cursor = new ClusterScanCursor();
             let keys: GlideString[] = [];
@@ -334,16 +349,374 @@ describe("Scan GlideClusterClient", () => {
             while (!cursor.isFinished()) {
                 [cursor, keys] = await client.scan(cursor, {
                     type: ObjectType.SET,
+                    decoder: Decoder.Bytes,
                 });
                 allKeys.push(...keys);
             }
 
-            expect(allKeys).toEqual(expect.arrayContaining(setKeys));
-            expect(allKeys).toEqual(expect.not.arrayContaining(listKeys));
-            expect(allKeys).toEqual(expect.not.arrayContaining(stringKeys));
-            expect(allKeys).toEqual(expect.not.arrayContaining(hashKeys));
-            expect(allKeys).toEqual(expect.not.arrayContaining(zsetKeys));
-            expect(allKeys).toEqual(expect.not.arrayContaining(streamKeys));
+            expect(allKeys).toEqual(expect.arrayContaining(encodedSetKeys));
+            expect(allKeys).toEqual(
+                expect.not.arrayContaining(encodedListKeys),
+            );
+            expect(allKeys).toEqual(
+                expect.not.arrayContaining(encodedStringKeys),
+            );
+            expect(allKeys).toEqual(
+                expect.not.arrayContaining(encodedHashKeys),
+            );
+            expect(allKeys).toEqual(
+                expect.not.arrayContaining(encodedZsetKeys),
+            );
+            expect(allKeys).toEqual(
+                expect.not.arrayContaining(encodedStreamKeys),
+            );
+        },
+        TIMEOUT,
+    );
+});
+
+//standalone tests
+
+describe("Scan GlideClient", () => {
+    const testsFailed = 0;
+    let cluster: RedisCluster;
+    let client: GlideClient;
+    beforeAll(async () => {
+        const clusterAddresses = parseCommandLineArgs()["cluster-endpoints"];
+        // Connect to cluster or create a new one based on the parsed addresses
+        cluster = clusterAddresses
+            ? await RedisCluster.initFromExistingCluster(
+                  parseEndpoints(clusterAddresses),
+              )
+            : // setting replicaCount to 1 to facilitate tests routed to replicas
+              await RedisCluster.createCluster(false, 3, 1);
+    }, 20000);
+
+    afterEach(async () => {
+        await flushAndCloseClient(false, cluster.getAddresses(), client);
+    });
+
+    afterAll(async () => {
+        if (testsFailed === 0) {
+            await cluster.close();
+        }
+    });
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `GlideClient test basic cluster scan_%p`,
+        async (protocol) => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            // Iterate over all keys in the cluster
+            await client.mset([
+                { key: "key1", value: "value1" },
+                { key: "key2", value: "value2" },
+                { key: "key3", value: "value3" },
+            ]);
+            let cursor: GlideString = "0";
+            const allKeys: GlideString[] = [];
+            let keys: GlideString[] = [];
+
+            do {
+                [cursor, keys] = await client.scan(cursor, { count: 10 });
+                allKeys.push(...keys);
+            } while (cursor !== "0");
+
+            expect(allKeys).toHaveLength(3);
+            expect(allKeys).toEqual(
+                expect.arrayContaining(["key1", "key2", "key3"]),
+            );
+
+            // Iterate over keys matching a pattern
+            await client.mset([
+                { key: "key1", value: "value1" },
+                { key: "key2", value: "value2" },
+                { key: "notMykey", value: "value3" },
+                { key: "somethingElse", value: "value4" },
+            ]);
+            cursor = "0";
+            const matchedKeys: GlideString[] = [];
+            do {
+                [cursor, keys] = await client.scan(cursor, {
+                    match: "*key*",
+                    count: 10,
+                });
+                matchedKeys.push(...keys);
+            } while (cursor !== "0");
+            expect(matchedKeys).toEqual(
+                expect.arrayContaining(["key1", "key2", "key3", "notMykey"]),
+            );
+            expect(matchedKeys).not.toContain("somethingElse");
+
+            // Iterate over keys of a specific type
+            await client.mset([
+                { key: "key1", value: "value1" },
+                { key: "key2", value: "value2" },
+                { key: "key3", value: "value3" },
+            ]);
+            await client.sadd("thisIsASet", ["value4"]);
+            cursor = "0";
+            const stringKeys: GlideString[] = [];
+            do {
+                [cursor, keys] = await client.scan(cursor, {
+                    type: ObjectType.STRING,
+                });
+                stringKeys.push(...keys);
+            } while (cursor !== "0");
+
+            expect(stringKeys).toEqual(
+                expect.arrayContaining(["key1", "key2", "key3"]),
+            );
+            expect(stringKeys).not.toContain("thisIsASet");
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `GlideClient simple scan with encoding %p`,
+        async (protocol) => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const expectedKeys = Array.from(
+                { length: 100 },
+                (_, i) => `key:${i}`,
+            );
+            for (const key1 of expectedKeys)
+                expect(await client.set(key1, "value")).toEqual("OK");
+            const expectedEncodedKeys = expectedKeys.map((key) =>
+                Buffer.from(key),
+            );
+
+            let cursor: GlideString = "0";
+            let keys: GlideString[] = [];
+            const allKeys: GlideString[] = [];
+            do {
+                [cursor, keys] = await client.scan(cursor, {
+                    decoder: Decoder.Bytes,
+                });
+                allKeys.push(...keys);
+            } while (!(cursor as Buffer).equals(Buffer.from("0")));
+
+            expect(allKeys).toEqual(
+                expect.arrayContaining(expectedEncodedKeys),
+            );
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `GlideClient scan with object type and pattern%p`,
+        async (protocol) => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const expectedKeys = Array.from(
+                { length: 100 },
+                (_, i) => `key:${i}`,
+            );
+            for (const key1 of expectedKeys)
+                expect(await client.set(key1, "value")).toEqual("OK");
+            const unexpectedTypeKeys = Array.from(
+                { length: 100 },
+                (_, i) => `key:${i + 100}`,
+            );
+            for (const key2 of unexpectedTypeKeys)
+                expect(await client.sadd(key2, ["value"])).toEqual(1);
+            const unexpectedPatternKeys = Array.from(
+                { length: 100 },
+                (_, i) => `${i + 200}`,
+            );
+            for (const key3 of unexpectedPatternKeys)
+                expect(await client.set(key3, "value")).toEqual("OK");
+
+            let cursor: GlideString = "0";
+            let keys: GlideString[] = [];
+            const allKeys: GlideString[] = [];
+            do {
+                [cursor, keys] = await client.scan(cursor, {
+                    match: "key*",
+                    type: ObjectType.STRING,
+                });
+                allKeys.push(...keys);
+            } while (cursor !== "0");
+
+            expect(allKeys).toEqual(expect.arrayContaining(expectedKeys));
+            expect(allKeys).toEqual(
+                expect.not.arrayContaining(unexpectedTypeKeys),
+            );
+            expect(allKeys).toEqual(
+                expect.not.arrayContaining(unexpectedPatternKeys),
+            );
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `GlideClient scan with count%p`,
+        async (protocol) => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const expectedKeys = Array.from(
+                { length: 100 },
+                (_, i) => `key:${i}`,
+            );
+            for (const key of expectedKeys)
+                expect(await client.set(key, "value")).toEqual("OK");
+
+            let cursor: GlideString = "0";
+            let keysOf1: GlideString[] = [];
+            let keysOf100: GlideString[] = [];
+            const allKeys: GlideString[] = [];
+            let successfulComparedScans = 0;
+            do {
+                [cursor, keysOf1] = await client.scan(cursor, { count: 1 });
+                allKeys.push(...keysOf1);
+                if (cursor == "0") break;
+                [cursor, keysOf100] = await client.scan(cursor, { count: 100 });
+                allKeys.push(...keysOf100);
+                if (keysOf1.length < keysOf100.length)
+                    successfulComparedScans += 1;
+            } while (cursor !== "0");
+
+            expect(allKeys).toEqual(expect.arrayContaining(expectedKeys));
+            expect(successfulComparedScans).toBeGreaterThan(0);
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `GlideClient scan with match%p`,
+        async (protocol) => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const expectedKeys = Array.from(
+                { length: 100 },
+                (_, i) => `key:${i}`,
+            );
+            for (const key of expectedKeys)
+                expect(await client.set(key, "value")).toEqual("OK");
+            const encodedExpectedKeys = expectedKeys.map((key) =>
+                Buffer.from(key),
+            );
+            const unexpectedKeys = Array.from(
+                { length: 100 },
+                (_, i) => `${i}`,
+            );
+            for (const key of unexpectedKeys)
+                expect(await client.set(key, "value")).toEqual("OK");
+            const encodedUnexpectedKeys = unexpectedKeys.map((key) =>
+                Buffer.from(key),
+            );
+
+            let cursor: GlideString = "0";
+            let keys: GlideString[] = [];
+            const allKeysEncoded: GlideString[] = [];
+            do {
+                [cursor, keys] = await client.scan(cursor, {
+                    match: "key*",
+                    decoder: Decoder.Bytes,
+                });
+                allKeysEncoded.push(...keys);
+            } while (!(cursor as Buffer).equals(Buffer.from("0")));
+
+            expect(allKeysEncoded).toEqual(
+                expect.arrayContaining(encodedExpectedKeys),
+            );
+            expect(allKeysEncoded).toEqual(
+                expect.not.arrayContaining(encodedUnexpectedKeys),
+            );
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `GlideClient scan with different types%p`,
+        async (protocol) => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const stringKeys = Array.from(
+                { length: 100 },
+                (_, i) => `key:${i}`,
+            );
+            for (const key of stringKeys)
+                expect(await client.set(key, "value")).toEqual("OK");
+            const encodedStringKeys = stringKeys.map((key) => Buffer.from(key));
+
+            const setKeys = Array.from(
+                { length: 100 },
+                (_, i) => `stringKey:${i + 100}`,
+            );
+            for (const key of setKeys)
+                expect(await client.sadd(key, ["value"])).toEqual(1);
+            const encodedSetKeys = setKeys.map((key) => Buffer.from(key));
+
+            const hashKeys = Array.from(
+                { length: 100 },
+                (_, i) => `hashKey:${i + 200}`,
+            );
+            for (const key of hashKeys)
+                expect(await client.hset(key, { field: "value" })).toEqual(1);
+            const encodedHashKeys = hashKeys.map((key) => Buffer.from(key));
+
+            const listKeys = Array.from(
+                { length: 100 },
+                (_, i) => `listKey:${i + 300}`,
+            );
+            for (const key of listKeys)
+                expect(await client.lpush(key, ["value"])).toEqual(1);
+            const encodedListKeys = listKeys.map((key) => Buffer.from(key));
+
+            const zsetKeys = Array.from(
+                { length: 100 },
+                (_, i) => `key:${i + 400}`,
+            );
+            for (const key of zsetKeys)
+                expect(await client.zadd(key, { value: 1 })).toEqual(1);
+            const encodedZsetKeys = zsetKeys.map((key) => Buffer.from(key));
+
+            const streamKeys = Array.from(
+                { length: 100 },
+                (_, i) => `key:${i + 500}`,
+            );
+            for (const key of streamKeys)
+                await client.xadd(key, [["field", "value"]]);
+            const encodedStreamKeys = streamKeys.map((key) => Buffer.from(key));
+
+            let cursor: GlideString = "0";
+            let keys: GlideString[] = [];
+            const allKeys: GlideString[] = [];
+            do {
+                [cursor, keys] = await client.scan(cursor, {
+                    type: ObjectType.SET,
+                    decoder: Decoder.Bytes,
+                });
+                allKeys.push(...keys);
+            } while (!(cursor as Buffer).equals(Buffer.from("0")));
+
+            expect(allKeys).toEqual(expect.arrayContaining(encodedSetKeys));
+            expect(allKeys).toEqual(
+                expect.not.arrayContaining(encodedListKeys),
+            );
+            expect(allKeys).toEqual(
+                expect.not.arrayContaining(encodedStringKeys),
+            );
+            expect(allKeys).toEqual(
+                expect.not.arrayContaining(encodedHashKeys),
+            );
+            expect(allKeys).toEqual(
+                expect.not.arrayContaining(encodedZsetKeys),
+            );
+            expect(allKeys).toEqual(
+                expect.not.arrayContaining(encodedStreamKeys),
+            );
         },
         TIMEOUT,
     );
