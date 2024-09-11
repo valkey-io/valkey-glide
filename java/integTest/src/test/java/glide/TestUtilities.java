@@ -14,7 +14,7 @@ import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
-import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
@@ -388,8 +388,7 @@ public class TestUtilities {
      */
     @SneakyThrows
     public static String getServerVersion(@NonNull final GlideClient glideClient) {
-        String infoResponse =
-                glideClient.info(InfoOptions.builder().section(InfoOptions.Section.SERVER).build()).get();
+        String infoResponse = glideClient.info(new Section[] {Section.SERVER}).get();
         Map<String, String> infoResponseMap = parseInfoResponseToMap(infoResponse);
         if (infoResponseMap.containsKey(VALKEY_VERSION_KEY)) {
             return infoResponseMap.get(VALKEY_VERSION_KEY);

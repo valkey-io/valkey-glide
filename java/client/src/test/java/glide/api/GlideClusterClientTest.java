@@ -59,7 +59,7 @@ import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.commands.FlushMode;
-import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.SortBaseOptions.Limit;
 import glide.api.models.commands.SortClusterOptions;
 import glide.api.models.commands.function.FunctionLoadOptions;
@@ -605,12 +605,8 @@ public class GlideClusterClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        InfoOptions options =
-                InfoOptions.builder()
-                        .section(InfoOptions.Section.ALL)
-                        .section(InfoOptions.Section.DEFAULT)
-                        .build();
-        CompletableFuture<ClusterValue<String>> response = service.info(options, route);
+        Section[] sections = {Section.ALL, Section.DEFAULT};
+        CompletableFuture<ClusterValue<String>> response = service.info(sections, route);
 
         // verify
         assertEquals(testResponse.get(), response.get());
@@ -655,7 +651,7 @@ public class GlideClusterClientTest {
 
         var data = "info string";
         try (var client = new TestClient(commandManager, data)) {
-            var value = client.info(InfoOptions.builder().build(), RANDOM).get();
+            var value = client.info(new Section[0], RANDOM).get();
             assertAll(
                     () -> assertTrue(value.hasSingleData()),
                     () -> assertEquals(data, value.getSingleValue()));
@@ -669,7 +665,7 @@ public class GlideClusterClientTest {
 
         var data = Map.of("key1", "value1", "key2", "value2");
         try (var client = new TestClient(commandManager, data)) {
-            var value = client.info(InfoOptions.builder().build(), ALL_NODES).get();
+            var value = client.info(new Section[0], ALL_NODES).get();
             assertAll(
                     () -> assertTrue(value.hasMultiData()), () -> assertEquals(data, value.getMultiValue()));
         }
