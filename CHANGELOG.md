@@ -115,6 +115,7 @@
 
 #### Breaking Changes
 * Java: Update INFO command ([#2274](https://github.com/valkey-io/valkey-glide/pull/2274))
+* Node: (Refactor) Convert types to interfaces ([#2263](https://github.com/valkey-io/valkey-glide/pull/2263))
 * Node: (Refactor) Convert classes to types ([#2005](https://github.com/valkey-io/valkey-glide/pull/2005))
 * Core: Change FUNCTION STATS command to return multi node response for standalone mode ([#2117](https://github.com/valkey-io/valkey-glide/pull/2117))
 
