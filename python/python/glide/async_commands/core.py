@@ -5405,7 +5405,10 @@ class CoreCommands(Protocol):
         Returns:
             bytes: The original source code of the script, if present in the cache.
 
-        Examples:
+        Raises:
+            RequestError: If the script is not found in the cache.
+
+        Example:
             >>> await client.script_show(script.get_hash())
                 b"return { KEYS[1], ARGV[1] }"
 
