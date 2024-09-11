@@ -50,7 +50,7 @@ export class RedisCluster {
         this.version = version;
     }
 
-    private static async detectVersion(addresses: any): Promise<string> {
+    private static async detectVersion(addresses: [string, number][]): Promise<string> {
         return new Promise<string>((resolve, reject) => {
             const redisVersionKey = "redis_version:";
             const valkeyVersionKey = "valkey_version:";
