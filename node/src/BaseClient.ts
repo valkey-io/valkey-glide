@@ -545,7 +545,7 @@ export interface BaseClientConfiguration {
      */
     readFrom?: ReadFrom;
     /**
-     * Choose the protocol to be used with the server.
+     * Choose the serialization protocol to be used with the server.
      * If not set, `RESP3` will be used.
      */
     protocol?: ProtocolVersion;
