@@ -271,25 +271,23 @@ describe("GlideClient", () => {
     );
 
     it.each([
-        {protocol: ProtocolVersion.RESP2, decoder: Decoder.String},
-        {protocol: ProtocolVersion.RESP2, decoder: Decoder.Bytes},
-        {protocol: ProtocolVersion.RESP3, decoder: Decoder.String},
-        {protocol: ProtocolVersion.RESP3, decoder: Decoder.Bytes},
-    ])(
-        `can send transactions_%p`,
-        async ({protocol, decoder}) => {
-            client = await GlideClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
-            );
-            const transaction = new Transaction();
-            const expectedRes = await transactionTest(
-                transaction,
-                cluster.getVersion(),
-                decoder,
-            );
-            transaction.select(0);
-            const result = await client.exec(transaction, decoder);
-            expectedRes.push(["select(0)", "OK"]);
+        { protocol: ProtocolVersion.RESP2, decoder: Decoder.String },
+        { protocol: ProtocolVersion.RESP2, decoder: Decoder.Bytes },
+        { protocol: ProtocolVersion.RESP3, decoder: Decoder.String },
+        { protocol: ProtocolVersion.RESP3, decoder: Decoder.Bytes },
+    ])(`can send transactions_%p`, async ({ protocol, decoder }) => {
+        client = await GlideClient.createClient(
+            getClientConfigurationOption(cluster.getAddresses(), protocol),
+        );
+        const transaction = new Transaction();
+        const expectedRes = await transactionTest(
+            transaction,
+            cluster.getVersion(),
+            decoder,
+        );
+        transaction.select(0);
+        const result = await client.exec(transaction, decoder);
+        expectedRes.push(["select(0)", "OK"]);
 
         validateTransactionResponse(result, expectedRes);
         client.close();
