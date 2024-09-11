@@ -1674,7 +1674,7 @@ public class CommandTests {
 
         clusterClient
                 .functionLoad(
-                        "#!lua name=mylib \\n"
+                        "#!lua name=mylib \n"
                                 + " redis.register_function{ function_name = 'myfunc', callback = function(keys,"
                                 + " args) return redis.call('info', 'replication') end, flags = { 'no-writes' } }",
                         false)
