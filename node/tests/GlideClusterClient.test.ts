@@ -1488,8 +1488,9 @@ describe("GlideClusterClient", () => {
                             client.close();
                         }
                     });
+                    
                     it(
-                        "invoke script invokeScript %p",
+                        "invoke script with route invokeScriptWithRoute %p",
                         async () => {
                             const client =
                                 await GlideClusterClient.createClient(

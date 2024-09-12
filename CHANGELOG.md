@@ -1,5 +1,5 @@
 #### Changes
-* Node: Added `invokeScript` API for cluster client ([#2284](https://github.com/valkey-io/valkey-glide/pull/2284))
+* Node: Added `invokeScript` API with routing for cluster client ([#2284](https://github.com/valkey-io/valkey-glide/pull/2284))
 * Python: Replace instances of Redis with Valkey ([#2266](https://github.com/valkey-io/valkey-glide/pull/2266))
 * Java: Replace instances of Redis with Valkey ([#2268](https://github.com/valkey-io/valkey-glide/pull/2268))
 * Node: Replace instances of Redis with Valkey ([#2260](https://github.com/valkey-io/valkey-glide/pull/2260))

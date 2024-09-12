@@ -1443,7 +1443,7 @@ export class GlideClusterClient extends BaseClient {
     }
 
     /**
-     * Invokes a Lua script with its keys and arguments.
+     * Invokes a Lua script with arguments.
      * This method simplifies the process of invoking scripts on a Valkey server by using an object that represents a Lua script.
      * The script loading, argument preparation, and execution will all be handled internally. If the script has not already been loaded,
      * it will be loaded automatically using the `SCRIPT LOAD` command. After that, it will be invoked using the `EVALSHA` command.
