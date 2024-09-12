@@ -3999,6 +3999,13 @@ export function createBZPopMin(
 }
 
 /**
+ * @internal
+ */
+export function createScriptShow(sha1: GlideString): command_request.Command {
+    return createCommand(RequestType.ScriptShow, [sha1]);
+}
+
+/**
  * Time unit representation which is used in optional arguments for {@link BaseClient.getex|getex} and {@link BaseClient.set|set} command.
  */
 export enum TimeUnit {
