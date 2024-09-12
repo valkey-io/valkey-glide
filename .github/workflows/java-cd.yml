@@ -274,6 +274,7 @@ jobs:
                   fi
 
     drop-deployment-if-validation-fails:
+        runs-on: ubuntu-latest
         steps:
             - name: Drop deployment if validation fails
               run: |
