@@ -283,6 +283,7 @@ jobs:
             - name: Drop deployment if validation fails
               run: |
                   curl --request DELETE \
+                  --verbose \
                   -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
                   "https://central.sonatype.com/api/v1/publisher/deployment/${{ env.DEPLOYMENT_ID }}"
 
