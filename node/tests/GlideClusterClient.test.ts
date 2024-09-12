@@ -81,7 +81,7 @@ describe("GlideClusterClient", () => {
                   },
               )
             : // setting replicaCount to 1 to facilitate tests routed to replicas
-              await RedisCluster.createCluster(
+              await ValkeyCluster.createCluster(
                   true,
                   3,
                   1,

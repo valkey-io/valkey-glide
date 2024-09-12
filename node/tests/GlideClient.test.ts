@@ -73,7 +73,7 @@ describe("GlideClient", () => {
                       return serverInfo;
                   },
               )
-            : await RedisCluster.createCluster(
+            : await ValkeyCluster.createCluster(
                   false,
                   1,
                   1,

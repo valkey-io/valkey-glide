@@ -114,11 +114,11 @@ export class ValkeyCluster {
     public static async initFromExistingCluster(
         addresses: [string, number][],
         getVersionCallback: (addresses: [string, number][]) => Promise<string>
-    ): Promise<RedisCluster> {
+    ): Promise<ValkeyCluster> {
         return getVersionCallback(addresses).then(info => {
             return this.extractVersion(info);
         }).then(
-            (ver) => new RedisCluster(ver, addresses, "")
+            (ver) => new ValkeyCluster(ver, addresses, "")
         );
     }
 

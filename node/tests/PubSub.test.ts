@@ -123,8 +123,6 @@ describe("PubSub", () => {
                       return serverInfo;
                   },
               );
-      
-      
     }, 40000);
     afterEach(async () => {
         await flushAndCloseClient(false, cmdCluster.getAddresses());
