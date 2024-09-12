@@ -58,7 +58,8 @@ import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.SortBaseOptions;
-import glide.api.models.commands.SortClusterOptions;
+import glide.api.models.commands.SortOptions;
+import glide.api.models.commands.SortOptionsBinary;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.commands.geospatial.GeoSearchOrigin;
@@ -977,7 +978,7 @@ public class CommandTests {
                 Arguments.of(
                         "sortStore",
                         "1.0.0",
-                        clusterClient.sortStore("abc", "def", SortClusterOptions.builder().alpha().build())),
+                        clusterClient.sortStore("abc", "def", SortOptions.builder().alpha().build())),
                 Arguments.of(
                         "geosearchstore",
                         "6.2.0",
@@ -2440,17 +2441,15 @@ public class CommandTests {
         assertArrayEquals(
                 new String[0],
                 clusterClient
-                        .sort(
-                                key1, SortClusterOptions.builder().limit(new SortBaseOptions.Limit(0L, 0L)).build())
+                        .sort(key1, SortOptions.builder().limit(new SortBaseOptions.Limit(0L, 0L)).build())
                         .get());
         assertArrayEquals(
                 key1DescendingList,
-                clusterClient.sort(key1, SortClusterOptions.builder().orderBy(DESC).build()).get());
+                clusterClient.sort(key1, SortOptions.builder().orderBy(DESC).build()).get());
         assertArrayEquals(
                 Arrays.copyOfRange(key1AscendingList, 0, 2),
                 clusterClient
-                        .sort(
-                                key1, SortClusterOptions.builder().limit(new SortBaseOptions.Limit(0L, 2L)).build())
+                        .sort(key1, SortOptions.builder().limit(new SortBaseOptions.Limit(0L, 2L)).build())
                         .get());
         assertEquals(7, clusterClient.lpush(key2, key2LpushArgs).get());
         assertArrayEquals(
@@ -2458,7 +2457,7 @@ public class CommandTests {
                 clusterClient
                         .sort(
                                 key2,
-                                SortClusterOptions.builder()
+                                SortOptions.builder()
                                         .alpha()
                                         .orderBy(DESC)
                                         .limit(new SortBaseOptions.Limit(0L, 4L))
@@ -2469,22 +2468,19 @@ public class CommandTests {
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertArrayEquals(
                     key1DescendingList,
-                    clusterClient
-                            .sortReadOnly(key1, SortClusterOptions.builder().orderBy(DESC).build())
-                            .get());
+                    clusterClient.sortReadOnly(key1, SortOptions.builder().orderBy(DESC).build()).get());
             assertArrayEquals(
                     Arrays.copyOfRange(key1AscendingList, 0, 2),
                     clusterClient
                             .sortReadOnly(
-                                    key1,
-                                    SortClusterOptions.builder().limit(new SortBaseOptions.Limit(0L, 2L)).build())
+                                    key1, SortOptions.builder().limit(new SortBaseOptions.Limit(0L, 2L)).build())
                             .get());
             assertArrayEquals(
                     key2DescendingListSubset,
                     clusterClient
                             .sortReadOnly(
                                     key2,
-                                    SortClusterOptions.builder()
+                                    SortOptions.builder()
                                             .alpha()
                                             .orderBy(DESC)
                                             .limit(new SortBaseOptions.Limit(0L, 4L))
@@ -2499,7 +2495,7 @@ public class CommandTests {
                         .sortStore(
                                 key2,
                                 key3,
-                                SortClusterOptions.builder()
+                                SortOptions.builder()
                                         .alpha()
                                         .orderBy(DESC)
                                         .limit(new SortBaseOptions.Limit(0L, 4L))
@@ -2532,16 +2528,16 @@ public class CommandTests {
                 new GlideString[0],
                 clusterClient
                         .sort(
-                                key1, SortClusterOptions.builder().limit(new SortBaseOptions.Limit(0L, 0L)).build())
+                                key1, SortOptionsBinary.builder().limit(new SortBaseOptions.Limit(0L, 0L)).build())
                         .get());
         assertArrayEquals(
                 key1DescendingList,
-                clusterClient.sort(key1, SortClusterOptions.builder().orderBy(DESC).build()).get());
+                clusterClient.sort(key1, SortOptionsBinary.builder().orderBy(DESC).build()).get());
         assertArrayEquals(
                 Arrays.copyOfRange(key1AscendingList, 0, 2),
                 clusterClient
                         .sort(
-                                key1, SortClusterOptions.builder().limit(new SortBaseOptions.Limit(0L, 2L)).build())
+                                key1, SortOptionsBinary.builder().limit(new SortBaseOptions.Limit(0L, 2L)).build())
                         .get());
         assertEquals(7, clusterClient.lpush(key2, key2LpushArgs).get());
         assertArrayEquals(
@@ -2549,7 +2545,7 @@ public class CommandTests {
                 clusterClient
                         .sort(
                                 key2,
-                                SortClusterOptions.builder()
+                                SortOptionsBinary.builder()
                                         .alpha()
                                         .orderBy(DESC)
                                         .limit(new SortBaseOptions.Limit(0L, 4L))
@@ -2561,21 +2557,21 @@ public class CommandTests {
             assertArrayEquals(
                     key1DescendingList,
                     clusterClient
-                            .sortReadOnly(key1, SortClusterOptions.builder().orderBy(DESC).build())
+                            .sortReadOnly(key1, SortOptionsBinary.builder().orderBy(DESC).build())
                             .get());
             assertArrayEquals(
                     Arrays.copyOfRange(key1AscendingList, 0, 2),
                     clusterClient
                             .sortReadOnly(
                                     key1,
-                                    SortClusterOptions.builder().limit(new SortBaseOptions.Limit(0L, 2L)).build())
+                                    SortOptionsBinary.builder().limit(new SortBaseOptions.Limit(0L, 2L)).build())
                             .get());
             assertArrayEquals(
                     key2DescendingListSubset,
                     clusterClient
                             .sortReadOnly(
                                     key2,
-                                    SortClusterOptions.builder()
+                                    SortOptionsBinary.builder()
                                             .alpha()
                                             .orderBy(DESC)
                                             .limit(new SortBaseOptions.Limit(0L, 4L))
@@ -2590,7 +2586,7 @@ public class CommandTests {
                         .sortStore(
                                 key2,
                                 key3,
-                                SortClusterOptions.builder()
+                                SortOptionsBinary.builder()
                                         .alpha()
                                         .orderBy(DESC)
                                         .limit(new SortBaseOptions.Limit(0L, 4L))
