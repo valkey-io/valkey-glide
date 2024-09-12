@@ -30,13 +30,10 @@ import static command_request.CommandRequestOuterClass.RequestType.PubSubSChanne
 import static command_request.CommandRequestOuterClass.RequestType.PubSubSNumSub;
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
 import static command_request.CommandRequestOuterClass.RequestType.SPublish;
-import static command_request.CommandRequestOuterClass.RequestType.Sort;
-import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
 import static command_request.CommandRequestOuterClass.RequestType.Time;
 import static command_request.CommandRequestOuterClass.RequestType.UnWatch;
 import static glide.api.commands.ServerManagementCommands.VERSION_VALKEY_API;
 import static glide.api.models.GlideString.gs;
-import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_VALKEY_API;
 import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_VALKEY_API;
 import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
@@ -57,7 +54,6 @@ import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
-import glide.api.models.commands.SortClusterOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.scan.ClusterScanCursor;
 import glide.api.models.commands.scan.ScanOptions;
@@ -74,7 +70,6 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 import lombok.NonNull;
-import org.apache.commons.lang3.ArrayUtils;
 import response.ResponseOuterClass.Response;
 
 /** Async (non-blocking) client for Cluster mode. Use {@link #createClient} to request a client. */
@@ -1128,72 +1123,6 @@ public class GlideClusterClient extends BaseClient
                 .submitClusterScan(cursor, options, this::handleArrayResponseBinary)
                 .thenApply(
                         result -> new Object[] {new NativeClusterScanCursor(result[0].toString()), result[1]});
-    }
-
-    @Override
-    public CompletableFuture<String[]> sort(
-            @NonNull String key, @NonNull SortClusterOptions sortClusterOptions) {
-        String[] arguments = ArrayUtils.addFirst(sortClusterOptions.toArgs(), key);
-        return commandManager.submitNewCommand(
-                Sort, arguments, response -> castArray(handleArrayResponse(response), String.class));
-    }
-
-    @Override
-    public CompletableFuture<GlideString[]> sort(
-            @NonNull GlideString key, @NonNull SortClusterOptions sortClusterOptions) {
-        GlideString[] arguments = new ArgsBuilder().add(key).add(sortClusterOptions.toArgs()).toArray();
-
-        return commandManager.submitNewCommand(
-                Sort,
-                arguments,
-                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
-    }
-
-    @Override
-    public CompletableFuture<String[]> sortReadOnly(
-            @NonNull String key, @NonNull SortClusterOptions sortClusterOptions) {
-        String[] arguments = ArrayUtils.addFirst(sortClusterOptions.toArgs(), key);
-        return commandManager.submitNewCommand(
-                SortReadOnly,
-                arguments,
-                response -> castArray(handleArrayResponse(response), String.class));
-    }
-
-    @Override
-    public CompletableFuture<GlideString[]> sortReadOnly(
-            @NonNull GlideString key, @NonNull SortClusterOptions sortClusterOptions) {
-        GlideString[] arguments = new ArgsBuilder().add(key).add(sortClusterOptions.toArgs()).toArray();
-        return commandManager.submitNewCommand(
-                SortReadOnly,
-                arguments,
-                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
-    }
-
-    @Override
-    public CompletableFuture<Long> sortStore(
-            @NonNull String key,
-            @NonNull String destination,
-            @NonNull SortClusterOptions sortClusterOptions) {
-        String[] storeArguments = new String[] {STORE_COMMAND_STRING, destination};
-        String[] arguments =
-                concatenateArrays(new String[] {key}, sortClusterOptions.toArgs(), storeArguments);
-        return commandManager.submitNewCommand(Sort, arguments, this::handleLongResponse);
-    }
-
-    @Override
-    public CompletableFuture<Long> sortStore(
-            @NonNull GlideString key,
-            @NonNull GlideString destination,
-            @NonNull SortClusterOptions sortClusterOptions) {
-        GlideString[] arguments =
-                new ArgsBuilder()
-                        .add(key)
-                        .add(sortClusterOptions.toArgs())
-                        .add(STORE_COMMAND_STRING)
-                        .add(destination)
-                        .toArray();
-
-        return commandManager.submitNewCommand(Sort, arguments, this::handleLongResponse);
     }
 
     /** A {@link ClusterScanCursor} implementation for interacting with the Rust layer. */

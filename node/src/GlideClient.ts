@@ -13,7 +13,6 @@ import {
     GlideReturnType,
     GlideString,
     PubSubMsg,
-    ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
 } from "./BaseClient";
 import {
     createClientGetName,
@@ -47,8 +46,6 @@ import {
     createScriptFlush,
     createScriptKill,
     createSelect,
-    createSort,
-    createSortReadOnly,
     createTime,
     createUnWatch,
     FlushMode,
@@ -58,7 +55,6 @@ import {
     FunctionStatsFullResponse,
     InfoOptions,
     LolwutOptions,
-    SortOptions,
 } from "./Commands";
 import { connection_request } from "./ProtobufMessage";
 import { Transaction } from "./Transaction";
@@ -863,106 +859,6 @@ export class GlideClient extends BaseClient {
         channel: GlideString,
     ): Promise<number> {
         return this.createWritePromise(createPublish(message, channel));
-    }
-
-    /**
-     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
-     *
-     * The `sort` command can be used to sort elements based on different criteria and
-     * apply transformations on sorted elements.
-     *
-     * To store the result into a new key, see {@link sortStore}.
-     *
-     * @see {@link https://valkey.io/commands/sort/|valkey.io} for more details.
-     *
-     * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param options - (Optional) The {@link SortOptions} and {@link DecoderOption}.
-     *
-     * @returns An `Array` of sorted elements.
-     *
-     * @example
-     * ```typescript
-     * await client.hset("user:1", new Map([["name", "Alice"], ["age", "30"]]));
-     * await client.hset("user:2", new Map([["name", "Bob"], ["age", "25"]]));
-     * await client.lpush("user_ids", ["2", "1"]);
-     * const result = await client.sort("user_ids", { byPattern: "user:*->age", getPattern: ["user:*->name"] });
-     * console.log(result); // Output: [ 'Bob', 'Alice' ] - Returns a list of the names sorted by age
-     * ```
-     */
-    public async sort(
-        key: GlideString,
-        options?: SortOptions & DecoderOption,
-    ): Promise<(GlideString | null)[]> {
-        return this.createWritePromise(createSort(key, options), options);
-    }
-
-    /**
-     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
-     *
-     * The `sortReadOnly` command can be used to sort elements based on different criteria and
-     * apply transformations on sorted elements.
-     *
-     * This command is routed depending on the client's {@link ReadFrom} strategy.
-     *
-     * @see {@link https://valkey.io/commands/sort/|valkey.io} for more details.
-     * @remarks Since Valkey version 7.0.0.
-     *
-     * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param options - (Optional) The {@link SortOptions} and {@link DecoderOption}.
-     * @returns An `Array` of sorted elements
-     *
-     * @example
-     * ```typescript
-     * await client.hset("user:1", new Map([["name", "Alice"], ["age", "30"]]));
-     * await client.hset("user:2", new Map([["name", "Bob"], ["age", "25"]]));
-     * await client.lpush("user_ids", ["2", "1"]);
-     * const result = await client.sortReadOnly("user_ids", { byPattern: "user:*->age", getPattern: ["user:*->name"] });
-     * console.log(result); // Output: [ 'Bob', 'Alice' ] - Returns a list of the names sorted by age
-     * ```
-     */
-    public async sortReadOnly(
-        key: GlideString,
-        options?: SortOptions & DecoderOption,
-    ): Promise<(GlideString | null)[]> {
-        return this.createWritePromise(
-            createSortReadOnly(key, options),
-            options,
-        );
-    }
-
-    /**
-     * Sorts the elements in the list, set, or sorted set at `key` and stores the result in
-     * `destination`.
-     *
-     * The `sort` command can be used to sort elements based on different criteria and
-     * apply transformations on sorted elements, and store the result in a new key.
-     *
-     * To get the sort result without storing it into a key, see {@link sort} or {@link sortReadOnly}.
-     *
-     * @see {@link https://valkey.io/commands/sort|valkey.io} for more details.
-     * @remarks When in cluster mode, `destination` and `key` must map to the same hash slot.
-     *
-     * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param destination - The key where the sorted result will be stored.
-     * @param options - (Optional) The {@link SortOptions}.
-     * @returns The number of elements in the sorted key stored at `destination`.
-     *
-     * @example
-     * ```typescript
-     * await client.hset("user:1", new Map([["name", "Alice"], ["age", "30"]]));
-     * await client.hset("user:2", new Map([["name", "Bob"], ["age", "25"]]));
-     * await client.lpush("user_ids", ["2", "1"]);
-     * const sortedElements = await client.sortStore("user_ids", "sortedList", { byPattern: "user:*->age", getPattern: ["user:*->name"] });
-     * console.log(sortedElements); // Output: 2 - number of elements sorted and stored
-     * console.log(await client.lrange("sortedList", 0, -1)); // Output: [ 'Bob', 'Alice' ] - Returns a list of the names sorted by age stored in `sortedList`
-     * ```
-     */
-    public async sortStore(
-        key: GlideString,
-        destination: GlideString,
-        options?: SortOptions,
-    ): Promise<number> {
-        return this.createWritePromise(createSort(key, options, destination));
     }
 
     /**

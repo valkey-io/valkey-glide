@@ -10,7 +10,7 @@ import lombok.experimental.SuperBuilder;
  * Optional arguments to sort, sortReadOnly, and sortStore commands
  *
  * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> and <a
- *     href="https://valkey.io/commands/sort_ro/">valkey.io</a>
+ *     href="https://valkey.io/commands/sort/">valkey.io</a>
  */
 @SuperBuilder
 public abstract class SortBaseOptions {

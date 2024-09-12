@@ -21,7 +21,7 @@ import glide.TransactionTestUtilities.TransactionBuilder;
 import glide.api.GlideClusterClient;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.GlideString;
-import glide.api.models.commands.SortClusterOptions;
+import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
@@ -291,25 +291,62 @@ public class ClusterTransactionTests {
     @Test
     @SneakyThrows
     public void sort() {
-        String key1 = "{key}-1" + UUID.randomUUID();
-        String key2 = "{key}-2" + UUID.randomUUID();
+        String key1 = "{key}:1" + UUID.randomUUID();
+        String key2 = "{key}:2" + UUID.randomUUID();
+        String key3 = "{key}:3";
+        String key4 = "{key}:4";
+        String key5 = "{key}:5" + UUID.randomUUID();
+        String key6 = "{key}:6" + UUID.randomUUID();
         String[] descendingList = new String[] {"3", "2", "1"};
         ClusterTransaction transaction = new ClusterTransaction();
+        String[] ascendingListByAge = new String[] {"Bob", "Alice"};
+        String[] descendingListByAge = new String[] {"Alice", "Bob"};
         transaction
                 .lpush(key1, new String[] {"3", "1", "2"})
-                .sort(key1, SortClusterOptions.builder().orderBy(DESC).build())
-                .sortStore(key1, key2, SortClusterOptions.builder().orderBy(DESC).build())
+                .sort(key1, SortOptions.builder().orderBy(DESC).build())
+                .sortStore(key1, key2, SortOptions.builder().orderBy(DESC).build())
                 .lrange(key2, 0, -1);
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            transaction.sortReadOnly(key1, SortClusterOptions.builder().orderBy(DESC).build());
+            transaction.sortReadOnly(key1, SortOptions.builder().orderBy(DESC).build());
+        }
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+            transaction
+                    .hset(key3, Map.of("name", "Alice", "age", "30"))
+                    .hset(key4, Map.of("name", "Bob", "age", "25"))
+                    .lpush(key5, new String[] {"4", "3"})
+                    .sort(
+                            key5,
+                            SortOptions.builder().byPattern("{key}:*->age").getPattern("{key}:*->name").build())
+                    .sort(
+                            key5,
+                            SortOptions.builder()
+                                    .orderBy(DESC)
+                                    .byPattern("{key}:*->age")
+                                    .getPattern("{key}:*->name")
+                                    .build())
+                    .sortStore(
+                            key5,
+                            key6,
+                            SortOptions.builder().byPattern("{key}:*->age").getPattern("{key}:*->name").build())
+                    .lrange(key6, 0, -1)
+                    .sortStore(
+                            key5,
+                            key6,
+                            SortOptions.builder()
+                                    .orderBy(DESC)
+                                    .byPattern("{key}:*->age")
+                                    .getPattern("{key}:*->name")
+                                    .build())
+                    .lrange(key6, 0, -1);
         }
 
         Object[] results = clusterClient.exec(transaction).get();
         Object[] expectedResult =
                 new Object[] {
                     3L, // lpush(key1, new String[] {"3", "1", "2"})
-                    descendingList, // sort(key1, SortClusterOptions.builder().orderBy(DESC).build())
+                    descendingList, // sort(key1, SortOptions.builder().orderBy(DESC).build())
                     3L, // sortStore(key1, key2, DESC))
                     descendingList, // lrange(key2, 0, -1)
                 };
@@ -319,6 +356,23 @@ public class ClusterTransactionTests {
                     concatenateArrays(
                             expectedResult, new Object[] {descendingList} // sortReadOnly(key1, DESC)
                             );
+        }
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+            expectedResult =
+                    concatenateArrays(
+                            expectedResult,
+                            new Object[] {
+                                2L, // hset(key3, Map.of("name", "Alice", "age", "30"))
+                                2L, // hset(key4, Map.of("name", "Bob", "age", "25"))
+                                2L, // lpush(key5, new String[] {"4", "3"})
+                                ascendingListByAge, // sort(key5, SortOptions)
+                                descendingListByAge, // sort(key5, SortOptions)
+                                2L, // sortStore(key5, ksy6, SortOptions)
+                                ascendingListByAge, // lrange(key6, 0, -1)
+                                2L, // sortStore(key5, ksy6, SortOptions)
+                                descendingListByAge, // lrange(key6, 0, -1)
+                            });
         }
 
         assertDeepEquals(expectedResult, results);

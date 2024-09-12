@@ -12,7 +12,6 @@ import {
     GlideReturnType,
     GlideString,
     PubSubMsg,
-    ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
     convertGlideRecordToRecord,
 } from "./BaseClient";
 import {
@@ -23,7 +22,6 @@ import {
     FunctionStatsSingleResponse,
     InfoOptions,
     LolwutOptions,
-    SortClusterOptions,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -57,8 +55,6 @@ import {
     createScriptExists,
     createScriptFlush,
     createScriptKill,
-    createSort,
-    createSortReadOnly,
     createTime,
     createUnWatch,
 } from "./Commands";
@@ -1262,98 +1258,6 @@ export class GlideClusterClient extends BaseClient {
                 return { channel: r.key, numSub: r.value };
             }),
         );
-    }
-
-    /**
-     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
-     *
-     * The `sort` command can be used to sort elements based on different criteria and
-     * apply transformations on sorted elements.
-     *
-     * To store the result into a new key, see {@link sortStore}.
-     *
-     * @see {@link https://valkey.io/commands/sort/|valkey.io} for details.
-     *
-     * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param options - (Optional) {@link SortClusterOptions} and {@link DecoderOption}.
-     * @returns An `Array` of sorted elements.
-     *
-     * @example
-     * ```typescript
-     * await client.lpush("mylist", ["3", "1", "2", "a"]);
-     * const result = await client.sort("mylist", { alpha: true, orderBy: SortOrder.DESC, limit: { offset: 0, count: 3 } });
-     * console.log(result); // Output: [ 'a', '3', '2' ] - List is sorted in descending order lexicographically
-     * ```
-     */
-    public async sort(
-        key: GlideString,
-        options?: SortClusterOptions & DecoderOption,
-    ): Promise<GlideString[]> {
-        return this.createWritePromise(createSort(key, options), options);
-    }
-
-    /**
-     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
-     *
-     * The `sortReadOnly` command can be used to sort elements based on different criteria and
-     * apply transformations on sorted elements.
-     *
-     * This command is routed depending on the client's {@link ReadFrom} strategy.
-     *
-     * @remarks Since Valkey version 7.0.0.
-     *
-     * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param options - (Optional) See {@link SortClusterOptions} and {@link DecoderOption}.
-     * @returns An `Array` of sorted elements
-     *
-     * @example
-     * ```typescript
-     * await client.lpush("mylist", ["3", "1", "2", "a"]);
-     * const result = await client.sortReadOnly("mylist", { alpha: true, orderBy: SortOrder.DESC, limit: { offset: 0, count: 3 } });
-     * console.log(result); // Output: [ 'a', '3', '2' ] - List is sorted in descending order lexicographically
-     * ```
-     */
-    public async sortReadOnly(
-        key: GlideString,
-        options?: SortClusterOptions & DecoderOption,
-    ): Promise<GlideString[]> {
-        return this.createWritePromise(
-            createSortReadOnly(key, options),
-            options,
-        );
-    }
-
-    /**
-     * Sorts the elements in the list, set, or sorted set at `key` and stores the result in
-     * `destination`.
-     *
-     * The `sort` command can be used to sort elements based on different criteria and
-     * apply transformations on sorted elements, and store the result in a new key.
-     *
-     * To get the sort result without storing it into a key, see {@link sort} or {@link sortReadOnly}.
-     *
-     * @see {@link https://valkey.io/commands/sort/|valkey.io} for details.
-     * @remarks When in cluster mode, `destination` and `key` must map to the same hash slot.
-     *
-     * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param destination - The key where the sorted result will be stored.
-     * @param options - (Optional) See {@link SortClusterOptions}.
-     * @returns The number of elements in the sorted key stored at `destination`.
-     *
-     * @example
-     * ```typescript
-     * await client.lpush("mylist", ["3", "1", "2", "a"]);
-     * const sortedElements = await client.sortReadOnly("mylist", "sortedList", { alpha: true, orderBy: SortOrder.DESC, limit: { offset: 0, count: 3 } });
-     * console.log(sortedElements); // Output: 3 - number of elements sorted and stored
-     * console.log(await client.lrange("sortedList", 0, -1)); // Output: [ 'a', '3', '2' ] - List is sorted in descending order lexicographically and stored in `sortedList`
-     * ```
-     */
-    public async sortStore(
-        key: GlideString,
-        destination: GlideString,
-        options?: SortClusterOptions,
-    ): Promise<number> {
-        return this.createWritePromise(createSort(key, options, destination));
     }
 
     /**

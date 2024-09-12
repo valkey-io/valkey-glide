@@ -5,14 +5,10 @@ import static command_request.CommandRequestOuterClass.RequestType.Copy;
 import static command_request.CommandRequestOuterClass.RequestType.Move;
 import static command_request.CommandRequestOuterClass.RequestType.Scan;
 import static command_request.CommandRequestOuterClass.RequestType.Select;
-import static command_request.CommandRequestOuterClass.RequestType.Sort;
-import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
 import static glide.api.commands.GenericBaseCommands.REPLACE_VALKEY_API;
 import static glide.api.commands.GenericCommands.DB_VALKEY_API;
-import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 
 import glide.api.GlideClient;
-import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.scan.ScanOptions;
 import lombok.NonNull;
 
@@ -122,77 +118,6 @@ public class Transaction extends BaseTransaction<Transaction> {
                                 .add(DB_VALKEY_API)
                                 .add(destinationDB)
                                 .addIf(REPLACE_VALKEY_API, replace)));
-        return this;
-    }
-
-    /**
-     * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
-     * The <code>sort</code> command can be used to sort elements based on different criteria and
-     * apply transformations on sorted elements.<br>
-     * To store the result into a new key, see {@link #sortStore(ArgType, ArgType, SortOptions)}.
-     *
-     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
-     *     will throw {@link IllegalArgumentException}.
-     * @see <a href="https://valkey.io/commands/sort">valkey.io</a> for details.
-     * @param key The key of the list, set, or sorted set to be sorted.
-     * @param sortOptions The {@link SortOptions}.
-     * @return Command Response - An <code>Array</code> of sorted elements.
-     */
-    public <ArgType> Transaction sort(@NonNull ArgType key, @NonNull SortOptions sortOptions) {
-        checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
-                buildCommand(Sort, newArgsBuilder().add(key).add(sortOptions.toArgs())));
-        return this;
-    }
-
-    /**
-     * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
-     * The <code>sortReadOnly</code> command can be used to sort elements based on different criteria
-     * and apply transformations on sorted elements.<br>
-     *
-     * @since Valkey 7.0 and above.
-     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
-     *     will throw {@link IllegalArgumentException}.
-     * @see <a href="https://valkey.io/commands/sort_ro">valkey.io</a> for details.
-     * @param key The key of the list, set, or sorted set to be sorted.
-     * @param sortOptions The {@link SortOptions}.
-     * @return Command Response - An <code>Array</code> of sorted elements.
-     */
-    public <ArgType> Transaction sortReadOnly(
-            @NonNull ArgType key, @NonNull SortOptions sortOptions) {
-        checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
-                buildCommand(SortReadOnly, newArgsBuilder().add(key).add(sortOptions.toArgs())));
-        return this;
-    }
-
-    /**
-     * Sorts the elements in the list, set, or sorted set at <code>key</code> and stores the result in
-     * <code>destination</code>. The <code>sort</code> command can be used to sort elements based on
-     * different criteria, apply transformations on sorted elements, and store the result in a new
-     * key.<br>
-     * To get the sort result without storing it into a key, see {@link #sort(ArgType, SortOptions)}.
-     *
-     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
-     *     will throw {@link IllegalArgumentException}.
-     * @see <a href="https://valkey.io/commands/sort">valkey.io</a> for details.
-     * @param key The key of the list, set, or sorted set to be sorted.
-     * @param sortOptions The {@link SortOptions}.
-     * @param destination The key where the sorted result will be stored.
-     * @return Command Response - The number of elements in the sorted key stored at <code>destination
-     *     </code>.
-     */
-    public <ArgType> Transaction sortStore(
-            @NonNull ArgType key, @NonNull ArgType destination, @NonNull SortOptions sortOptions) {
-        checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
-                buildCommand(
-                        Sort,
-                        newArgsBuilder()
-                                .add(key)
-                                .add(sortOptions.toArgs())
-                                .add(STORE_COMMAND_STRING)
-                                .add(destination)));
         return this;
     }
 

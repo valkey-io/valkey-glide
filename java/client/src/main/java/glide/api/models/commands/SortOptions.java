@@ -1,31 +1,33 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands;
 
-import glide.api.commands.GenericCommands;
+import glide.api.commands.GenericBaseCommands;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.Singular;
 import lombok.experimental.SuperBuilder;
 
 /**
- * Optional arguments to {@link GenericCommands#sort(String, SortOptions)}, {@link
- * GenericCommands#sortReadOnly(String, SortOptions)}, and {@link GenericCommands#sortStore(String,
- * String, SortOptions)}
+ * Optional arguments to {@link GenericBaseCommands#sort(String, SortOptions)}, {@link
+ * GenericBaseCommands#sortReadOnly(String, SortOptions)}, and {@link
+ * GenericBaseCommands#sortStore(String, String, SortOptions)}
  *
+ * @apiNote In cluster mode, {@link #byPattern} and {@link #getPatterns} must map to the same hash
+ *     slot as the key, and this is supported only since Valkey version 8.0.
  * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> and <a
- *     href="https://valkey.io/commands/sort_ro/">valkey.io</a>
+ *     href="https://valkey.io/commands/sort/">valkey.io</a>
  */
 @SuperBuilder
 public class SortOptions extends SortBaseOptions {
     /**
      * <code>BY</code> subcommand string to include in the <code>SORT</code> and <code>SORT_RO</code>
-     * commands.
+     * commands. Supported in cluster mode since Valkey version 8.0 and above.
      */
     public static final String BY_COMMAND_STRING = "BY";
 
     /**
      * <code>GET</code> subcommand string to include in the <code>SORT</code> and <code>SORT_RO</code>
-     * commands.
+     * commands. Supported in cluster mode since Valkey version 8.0 and above.
      */
     public static final String GET_COMMAND_STRING = "GET";
 
@@ -34,7 +36,8 @@ public class SortOptions extends SortBaseOptions {
      * pattern should contain an asterisk (*) as a placeholder for the element values, where the value
      * from the key replaces the asterisk to create the key name. For example, if <code>key</code>
      * contains IDs of objects, <code>byPattern</code> can be used to sort these IDs based on an
-     * attribute of the objects, like their weights or timestamps.
+     * attribute of the objects, like their weights or timestamps. Supported in cluster mode since
+     * Valkey version 8.0 and above.
      */
     private final String byPattern;
 
@@ -50,6 +53,7 @@ public class SortOptions extends SortBaseOptions {
      * arguments can be provided to retrieve multiple attributes. The special value <code>#</code> can
      * be used to include the actual element from <code>key</code> being sorted. If not provided, only
      * the sorted elements themselves are returned.<br>
+     * Supported in cluster mode since Valkey version 8.0 and above.
      *
      * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for more information.
      */
