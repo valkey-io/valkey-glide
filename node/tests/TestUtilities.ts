@@ -27,6 +27,7 @@ import {
     GlideReturnType,
     GlideString,
     InfBoundary,
+    InfoOptions,
     InsertPosition,
     ListDirection,
     ProtocolVersion,
@@ -1755,4 +1756,19 @@ export async function transactionTest(
     baseTransaction.wait(1, 200);
     responseData.push(["wait(1, 200)", 1]);
     return responseData;
+}
+
+/**
+ * This function gets server info for valkey server.
+ *
+ * @param addresses - addresses containing host and port for the valkey server.
+ * @returns A string with server info for valkey server
+ */
+export async function getServerInfo(
+    addresses: [string, number][],
+): Promise<string> {
+    const glideClient = await GlideClient.createClient(
+        getClientConfigurationOption(addresses, ProtocolVersion.RESP2),
+    );
+    return glideClient.info([InfoOptions.Server]);
 }

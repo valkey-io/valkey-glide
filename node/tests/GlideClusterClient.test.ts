@@ -22,7 +22,6 @@ import {
     FunctionRestorePolicy,
     FunctionStatsSingleResponse,
     GeoUnit,
-    GlideClient,
     GlideClusterClient,
     GlideReturnType,
     InfoOptions,
@@ -47,6 +46,7 @@ import {
     generateLuaLibCode,
     getClientConfigurationOption,
     getFirstResult,
+    getServerInfo,
     intoArray,
     intoString,
     parseCommandLineArgs,
@@ -70,13 +70,7 @@ describe("GlideClusterClient", () => {
             ? await ValkeyCluster.initFromExistingCluster(
                   parseEndpoints(clusterAddresses),
                   async (addresses: [string, number][]) => {
-                      const glideClient = await GlideClient.createClient(
-                          getClientConfigurationOption(
-                              addresses,
-                              ProtocolVersion.RESP2,
-                          ),
-                      );
-                      return glideClient.info([InfoOptions.Server]);
+                      return getServerInfo(addresses);
                   },
               )
             : // setting replicaCount to 1 to facilitate tests routed to replicas
@@ -85,13 +79,7 @@ describe("GlideClusterClient", () => {
                   3,
                   1,
                   async (addresses: [string, number][]) => {
-                      const glideClient = await GlideClient.createClient(
-                          getClientConfigurationOption(
-                              addresses,
-                              ProtocolVersion.RESP2,
-                          ),
-                      );
-                      return glideClient.info([InfoOptions.Server]);
+                      return getServerInfo(addresses);
                   },
               );
     }, 20000);

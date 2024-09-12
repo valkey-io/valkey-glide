@@ -20,7 +20,6 @@ import {
     GlideClient,
     GlideRecord,
     GlideString,
-    InfoOptions,
     ProtocolVersion,
     RequestError,
     Script,
@@ -41,6 +40,7 @@ import {
     flushAndCloseClient,
     generateLuaLibCode,
     getClientConfigurationOption,
+    getServerInfo,
     parseCommandLineArgs,
     parseEndpoints,
     transactionTest,
@@ -62,13 +62,7 @@ describe("GlideClient", () => {
             ? await ValkeyCluster.initFromExistingCluster(
                   parseEndpoints(standaloneAddresses),
                   async (addresses: [string, number][]) => {
-                      const glideClient = await GlideClient.createClient(
-                          getClientConfigurationOption(
-                              addresses,
-                              ProtocolVersion.RESP2,
-                          ),
-                      );
-                      return glideClient.info([InfoOptions.Server]);
+                      return getServerInfo(addresses);
                   },
               )
             : await ValkeyCluster.createCluster(
@@ -76,13 +70,7 @@ describe("GlideClient", () => {
                   1,
                   1,
                   async (addresses: [string, number][]) => {
-                      const glideClient = await GlideClient.createClient(
-                          getClientConfigurationOption(
-                              addresses,
-                              ProtocolVersion.RESP2,
-                          ),
-                      );
-                      return glideClient.info([InfoOptions.Server]);
+                      return getServerInfo(addresses);
                   },
               );
     }, 20000);

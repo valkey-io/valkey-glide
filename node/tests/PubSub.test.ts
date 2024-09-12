@@ -20,7 +20,6 @@ import {
     GlideClusterClient,
     GlideClusterClientConfiguration,
     GlideString,
-    InfoOptions,
     ProtocolVersion,
     PubSubMsg,
     TimeoutError,
@@ -28,7 +27,7 @@ import {
 import ValkeyCluster from "../../utils/TestUtils";
 import {
     flushAndCloseClient,
-    getClientConfigurationOption,
+    getServerInfo,
     parseCommandLineArgs,
     parseEndpoints,
 } from "./TestUtilities";
@@ -69,13 +68,7 @@ describe("PubSub", () => {
             ? await ValkeyCluster.initFromExistingCluster(
                   parseEndpoints(standaloneAddresses),
                   async (addresses: [string, number][]) => {
-                      const glideClient = await GlideClient.createClient(
-                          getClientConfigurationOption(
-                              addresses,
-                              ProtocolVersion.RESP2,
-                          ),
-                      );
-                      return glideClient.info([InfoOptions.Server]);
+                      return getServerInfo(addresses);
                   },
               )
             : await ValkeyCluster.createCluster(
@@ -83,26 +76,14 @@ describe("PubSub", () => {
                   1,
                   1,
                   async (addresses: [string, number][]) => {
-                      const glideClient = await GlideClient.createClient(
-                          getClientConfigurationOption(
-                              addresses,
-                              ProtocolVersion.RESP2,
-                          ),
-                      );
-                      return glideClient.info([InfoOptions.Server]);
+                      return getServerInfo(addresses);
                   },
               );
         cmeCluster = clusterAddresses
             ? await ValkeyCluster.initFromExistingCluster(
                   parseEndpoints(clusterAddresses),
                   async (addresses: [string, number][]) => {
-                      const glideClient = await GlideClient.createClient(
-                          getClientConfigurationOption(
-                              addresses,
-                              ProtocolVersion.RESP2,
-                          ),
-                      );
-                      return glideClient.info([InfoOptions.Server]);
+                      return getServerInfo(addresses);
                   },
               )
             : await ValkeyCluster.createCluster(
@@ -110,13 +91,7 @@ describe("PubSub", () => {
                   3,
                   1,
                   async (addresses: [string, number][]) => {
-                      const glideClient = await GlideClient.createClient(
-                          getClientConfigurationOption(
-                              addresses,
-                              ProtocolVersion.RESP2,
-                          ),
-                      );
-                      return glideClient.info([InfoOptions.Server]);
+                      return getServerInfo(addresses);
                   },
               );
     }, 40000);
