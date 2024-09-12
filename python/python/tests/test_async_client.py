@@ -10477,3 +10477,24 @@ class TestScripts:
 
         await test_client.close()
         await test_client2.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_script_show(self, glide_client: TGlideClient):
+        min_version = "7.9.0"
+        if await check_if_server_version_lt(glide_client, min_version):
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
+
+        code = f"return '{get_random_string(5)}'"
+        script = Script(code)
+
+        # Load the scripts
+        await glide_client.invoke_script(script)
+
+        # Get the SHA1 digests of the script
+        sha1 = script.get_hash()
+
+        assert await glide_client.script_show(sha1) == code.encode()
+
+        with pytest.raises(RequestError):
+            await glide_client.script_show("non existing sha1")
