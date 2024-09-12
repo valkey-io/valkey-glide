@@ -274,6 +274,7 @@ jobs:
                   fi
 
     drop-deployment-if-validation-fails:
+        steps:
         run: |
           curl --request DELETE \
           -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
