@@ -75,7 +75,14 @@ describe("PubSub", () => {
                   parseEndpoints(clusterAddresses),
                   getServerVersion,
               )
-            : await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
+            : await ValkeyCluster.createCluster(
+                  true,
+                  3,
+                  1,
+                  async (addresses: [string, number][]) => {
+                      return getServerVersion(addresses, true);
+                  },
+              );
     }, 40000);
     afterEach(async () => {
         await flushAndCloseClient(false, cmdCluster.getAddresses());
