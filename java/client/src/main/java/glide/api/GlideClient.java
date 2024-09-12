@@ -51,8 +51,6 @@ import glide.api.models.GlideString;
 import glide.api.models.Transaction;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
-import glide.api.models.commands.SortOptions;
-import glide.api.models.commands.SortOptionsBinary;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.GlideClientConfiguration;

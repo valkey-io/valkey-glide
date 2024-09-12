@@ -5142,45 +5142,4 @@ public abstract class BaseClient
                 new String[] {Long.toString(numreplicas), Long.toString(timeout)},
                 this::handleLongResponse);
     }
-
-    @Override
-    public CompletableFuture<Object> invokeScript(@NonNull Script script) {
-        if (script.getBinaryOutput()) {
-            return commandManager.submitScript(
-                    script, List.of(), List.of(), this::handleBinaryObjectOrNullResponse);
-        } else {
-            return commandManager.submitScript(
-                    script, List.of(), List.of(), this::handleObjectOrNullResponse);
-        }
-    }
-
-    @Override
-    public CompletableFuture<Object> invokeScript(
-            @NonNull Script script, @NonNull ScriptOptions options) {
-        if (script.getBinaryOutput()) {
-            return commandManager.submitScript(
-                    script,
-                    options.getKeys().stream().map(GlideString::gs).collect(Collectors.toList()),
-                    options.getArgs().stream().map(GlideString::gs).collect(Collectors.toList()),
-                    this::handleBinaryObjectOrNullResponse);
-        } else {
-            return commandManager.submitScript(
-                    script,
-                    options.getKeys().stream().map(GlideString::gs).collect(Collectors.toList()),
-                    options.getArgs().stream().map(GlideString::gs).collect(Collectors.toList()),
-                    this::handleObjectOrNullResponse);
-        }
-    }
-
-    @Override
-    public CompletableFuture<Object> invokeScript(
-            @NonNull Script script, @NonNull ScriptOptionsGlideString options) {
-        if (script.getBinaryOutput()) {
-            return commandManager.submitScript(
-                    script, options.getKeys(), options.getArgs(), this::handleBinaryObjectOrNullResponse);
-        } else {
-            return commandManager.submitScript(
-                    script, options.getKeys(), options.getArgs(), this::handleObjectOrNullResponse);
-        }
-    }
 }

@@ -4,8 +4,6 @@ package glide.api.commands;
 import glide.api.models.GlideString;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.RestoreOptions;
-import glide.api.models.commands.ScriptOptions;
-import glide.api.models.commands.ScriptOptionsGlideString;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.SortOptionsBinary;
 import glide.api.models.configuration.ReadFrom;
