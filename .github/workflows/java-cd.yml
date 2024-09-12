@@ -1,4 +1,4 @@
-name: Create Workflow
+name: Java Prepare Deployment
 
 on:
     push:
@@ -24,6 +24,7 @@ permissions:
 jobs:
     load-platform-matrix:
         runs-on: ubuntu-latest
+        environment: AWS_ACTIONS
         outputs:
             PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.PLATFORM_MATRIX }}
         steps:
@@ -273,6 +274,20 @@ jobs:
                       brew services stop redis
                   fi
 
+    publish-release-to-maven:
+        if: ${{ inputs.maven_publish == true || github.event_name == 'push' }}
+        needs: [publish-to-maven-central-deployment]
+        runs-on: ubuntu-latest
+        environment: AWS_ACTIONS
+        env:
+            DEPLOYMENT_ID: ${{ needs.publish-to-maven-central-deployment.outputs.DEPLOYMENT_ID }}
+        steps:
+            - name: Publish to Maven
+              run: |
+                  curl --request POST \
+                  -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
+                  "https://central.sonatype.com/api/v1/publisher/deployment/${{ env.DEPLOYMENT_ID }}"
+
     drop-deployment-if-validation-fails:
         if: ${{ failure() }}
         needs: [publish-to-maven-central-deployment, test-deployment-on-all-architectures]
@@ -283,7 +298,6 @@ jobs:
             - name: Drop deployment if validation fails
               run: |
                   curl --request DELETE \
-                  --verbose \
                   -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
                   "https://central.sonatype.com/api/v1/publisher/deployment/${{ env.DEPLOYMENT_ID }}"
 

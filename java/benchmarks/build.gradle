@@ -13,7 +13,7 @@ dependencies {
     def releaseVersion = System.getenv("GLIDE_RELEASE_VERSION");
 
     if (releaseVersion) {
-        implementation "io.valkey:valkey-glide:"+ releaseVersion + ":${osdetector.classifier}"
+        implementation "io.valkey:valkey-glide:" + releaseVersion + ":${osdetector.classifier}"
     } else {
         implementation project(':client')
     }
@@ -39,6 +39,5 @@ application {
         applicationDefaultJvmArgs = ['-Djava.library.path=../target/release']
     }
 }
-
 
 
