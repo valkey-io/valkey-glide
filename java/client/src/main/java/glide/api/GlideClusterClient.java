@@ -26,6 +26,7 @@ import static command_request.CommandRequestOuterClass.RequestType.Info;
 import static command_request.CommandRequestOuterClass.RequestType.LastSave;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
+import static command_request.CommandRequestOuterClass.RequestType.PubSubSChannels;
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
 import static command_request.CommandRequestOuterClass.RequestType.SPublish;
 import static command_request.CommandRequestOuterClass.RequestType.Sort;
@@ -1015,6 +1016,38 @@ public class GlideClusterClient extends BaseClient
                     handleLongResponse(response);
                     return OK;
                 });
+    }
+
+    @Override
+    public CompletableFuture<String[]> pubsubShardChannels() {
+        return commandManager.submitNewCommand(
+                PubSubSChannels,
+                new String[0],
+                response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<GlideString[]> pubsubShardChannelsBinary() {
+        return commandManager.submitNewCommand(
+                PubSubSChannels,
+                new GlideString[0],
+                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
+    }
+
+    @Override
+    public CompletableFuture<String[]> pubsubShardChannels(@NonNull String pattern) {
+        return commandManager.submitNewCommand(
+                PubSubSChannels,
+                new String[] {pattern},
+                response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<GlideString[]> pubsubShardChannels(@NonNull GlideString pattern) {
+        return commandManager.submitNewCommand(
+                PubSubSChannels,
+                new GlideString[] {pattern},
+                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
     }
 
     @Override
