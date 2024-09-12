@@ -54,7 +54,7 @@ export class ValkeyCluster {
         cluster_mode: boolean,
         shardCount: number,
         replicaCount: number,
-        getVersionCallback: (addresses: [string, number][]) => Promise<string>,
+        getVersionCallback: (addresses: [string, number][], clusterMode: boolean) => Promise<string>,
         loadModule?: string[]
     ): Promise<ValkeyCluster> {
         return new Promise<ValkeyCluster>((resolve, reject) => {
@@ -86,7 +86,7 @@ export class ValkeyCluster {
                         const { clusterFolder, addresses: ports } =
                             parseOutput(stdout);
                         resolve(
-                            getVersionCallback(ports).then(
+                            getVersionCallback(ports, cluster_mode).then(
                                 (ver) =>
                                     new ValkeyCluster(ver, ports, clusterFolder)
                             )
