@@ -1488,6 +1488,66 @@ describe("GlideClusterClient", () => {
                             client.close();
                         }
                     });
+                    it(
+                        "invoke script invokeScript %p",
+                        async () => {
+                            const client =
+                                await GlideClusterClient.createClient(
+                                    getClientConfigurationOption(
+                                        cluster.getAddresses(),
+                                        protocol,
+                                    ),
+                                );
+                            const route: Routes = singleNodeRoute
+                                ? { type: "primarySlotKey", key: "1" }
+                                : "allPrimaries";
+
+                            try {
+                                const arg = uuidv4();
+                                const script = new Script(
+                                    Buffer.from("return {ARGV[1]}"),
+                                );
+                                let res = await client.invokeScriptWithRoute(
+                                    script,
+                                    { args: [Buffer.from(arg)], route },
+                                );
+
+                                if (singleNodeRoute) {
+                                    expect(res).toEqual([arg]);
+                                } else {
+                                    Object.values(
+                                        res as Record<string, GlideReturnType>,
+                                    ).forEach((value) =>
+                                        expect(value).toEqual([arg]),
+                                    );
+                                }
+
+                                res = await client.invokeScriptWithRoute(
+                                    script,
+                                    {
+                                        args: [arg],
+                                        route,
+                                        decoder: Decoder.Bytes,
+                                    },
+                                );
+
+                                if (singleNodeRoute) {
+                                    expect(res).toEqual([Buffer.from(arg)]);
+                                } else {
+                                    Object.values(
+                                        res as Record<string, GlideReturnType>,
+                                    ).forEach((value) =>
+                                        expect(value).toEqual([
+                                            Buffer.from(arg),
+                                        ]),
+                                    );
+                                }
+                            } finally {
+                                client.close();
+                            }
+                        },
+                        TIMEOUT,
+                    );
                 },
             );
             it(
