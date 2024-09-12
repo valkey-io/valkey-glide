@@ -37,7 +37,7 @@ jobs:
     load-engine-matrix:
         runs-on: ubuntu-latest
         outputs:
-          matrix: ${{ steps.load-engine-matrix.outputs.matrix }}
+            matrix: ${{ steps.load-engine-matrix.outputs.matrix }}
         steps:
             - name: Checkout
               uses: actions/checkout@v4
@@ -112,7 +112,7 @@ jobs:
                       benchmarks/results/*
                       utils/clusters/**
 
-# TODO Add amazonlinux
+    # TODO Add amazonlinux
 
     lint-rust:
         timeout-minutes: 10

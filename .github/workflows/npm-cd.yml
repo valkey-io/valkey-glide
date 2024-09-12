@@ -4,29 +4,29 @@ name: NPM - Continuous Deployment
 
 on:
     pull_request:
-      paths:
-        - .github/workflows/npm-cd.yml
-        - .github/workflows/build-node-wrapper/action.yml
-        - .github/workflows/start-self-hosted-runner/action.yml
-        - .github/workflows/install-rust-and-protoc/action.yml
-        - .github/workflows/install-shared-dependencies/action.yml
-        - .github/workflows/install-valkey/action.yml
-        - .github/json_matrices/build-matrix.json
+        paths:
+            - .github/workflows/npm-cd.yml
+            - .github/workflows/build-node-wrapper/action.yml
+            - .github/workflows/start-self-hosted-runner/action.yml
+            - .github/workflows/install-rust-and-protoc/action.yml
+            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/workflows/install-valkey/action.yml
+            - .github/json_matrices/build-matrix.json
     push:
         tags:
             - "v*.*"
     workflow_dispatch:
-      inputs:
-        version:
-          description: 'The release version of GLIDE, formatted as *.*.* or *.*.*-rc*'
-          required: true
+        inputs:
+            version:
+                description: 'The release version of GLIDE, formatted as *.*.* or *.*.*-rc*'
+                required: true
 
 concurrency:
     group: npm-${{ github.head_ref || github.ref }}
     cancel-in-progress: true
 
 permissions:
-      id-token: write
+    id-token: write
 
 jobs:
     start-self-hosted-runner:
@@ -34,17 +34,17 @@ jobs:
         runs-on: ubuntu-latest
         environment: AWS_ACTIONS
         steps:
-          - name: Checkout
-            uses: actions/checkout@v4
-            with:
-                fetch-depth: 0
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
 
-          - name: Start self hosted EC2 runner
-            uses: ./.github/workflows/start-self-hosted-runner
-            with:
-                role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
-                aws-region: ${{ secrets.AWS_REGION }}
-                ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
+            - name: Start self hosted EC2 runner
+              uses: ./.github/workflows/start-self-hosted-runner
+              with:
+                  role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
+                  aws-region: ${{ secrets.AWS_REGION }}
+                  ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
 
     load-platform-matrix:
         runs-on: ubuntu-latest
@@ -58,9 +58,9 @@ jobs:
               id: load-platform-matrix
               shell: bash
               run: |
-                # Get the matrix from the matrix.json file, without the object that has the IMAGE key
-                export "PLATFORM_MATRIX=$(jq 'map(select(.PACKAGE_MANAGERS | contains(["npm"])))' < .github/json_matrices/build-matrix.json | jq -c .)"
-                echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
+                  # Get the matrix from the matrix.json file, without the object that has the IMAGE key
+                  export "PLATFORM_MATRIX=$(jq 'map(select(.PACKAGE_MANAGERS | contains(["npm"])))' < .github/json_matrices/build-matrix.json | jq -c .)"
+                  echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
 
     publish-binaries:
         needs: [start-self-hosted-runner, load-platform-matrix]
@@ -114,8 +114,8 @@ jobs:
                   fi
                   echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
               env:
-                EVENT_NAME: ${{ github.event_name }}
-                INPUT_VERSION: ${{ github.event.inputs.version }}
+                  EVENT_NAME: ${{ github.event_name }}
+                  INPUT_VERSION: ${{ github.event.inputs.version }}
 
             - name: Setup node
               if: ${{ matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
@@ -132,9 +132,9 @@ jobs:
               if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-musl' }}
               working-directory: ./node
               run: |
-                npm config set registry https://registry.npmjs.org/
-                npm config set '//registry.npmjs.org/:_authToken' ${{ secrets.NPM_AUTH_TOKEN }}
-                npm config set scope ${{ vars.NPM_SCOPE }}
+                  npm config set registry https://registry.npmjs.org/
+                  npm config set '//registry.npmjs.org/:_authToken' ${{ secrets.NPM_AUTH_TOKEN }}
+                  npm config set scope ${{ vars.NPM_SCOPE }}
 
             - name: Update package version in config.toml
               uses: ./.github/workflows/update-glide-version
@@ -170,9 +170,9 @@ jobs:
             - name: Check that the release version dont have typo init
               if: ${{ github.event_name != 'pull_request' && contains(env.RELEASE_VERSION, '-') && !contains(env.RELEASE_VERSION, 'rc') }}
               run: |
-                echo "The release version "${GITHUB_REF:11}" contains a typo, please fix it"
-                echo "The release version should be in the format v{major-version}.{minor-version}.{patch-version}-rc{release-candidate-number} when it a release candidate or v{major-version}.{minor-version}.{patch-version} in a stable release."
-                exit 1
+                  echo "The release version "${GITHUB_REF:11}" contains a typo, please fix it"
+                  echo "The release version should be in the format v{major-version}.{minor-version}.{patch-version}-rc{release-candidate-number} when it a release candidate or v{major-version}.{minor-version}.{patch-version} in a stable release."
+                  exit 1
 
             - name: Publish to NPM
               if: github.event_name != 'pull_request'
@@ -202,8 +202,8 @@ jobs:
               if: ${{ matrix.build.ARCH == 'arm64' }}
               shell: bash
               run: |
-                git reset --hard
-                git clean -xdf
+                  git reset --hard
+                  git clean -xdf
 
     publish-base-to-npm:
         if: github.event_name != 'pull_request'
@@ -294,20 +294,20 @@ jobs:
             - name: install Redis and git for alpine
               if: ${{ contains(matrix.build.TARGET, 'musl') }}
               run: |
-                apk update
-                apk add redis git
-                node -v
+                  apk update
+                  apk add redis git
+                  node -v
 
             - name: install Redis and Python for ubuntu
               if: ${{ contains(matrix.build.TARGET, 'linux-gnu') }}
               run: |
-                sudo apt-get update
-                sudo apt-get install redis-server python3
+                  sudo apt-get update
+                  sudo apt-get install redis-server python3
 
             - name: install Redis, Python for macos
               if: ${{ contains(matrix.build.RUNNER, 'mac') }}
               run: |
-                brew install redis python3
+                  brew install redis python3
 
             - name: Checkout
               if: ${{  matrix.build.TARGET != 'aarch64-unknown-linux-musl'}}
@@ -370,5 +370,5 @@ jobs:
               if: ${{ contains(matrix.build.RUNNER, 'self-hosted') }}
               shell: bash
               run: |
-                git reset --hard
-                git clean -xdf
+                  git reset --hard
+                  git clean -xdf
