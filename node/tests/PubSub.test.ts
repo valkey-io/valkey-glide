@@ -66,12 +66,14 @@ describe("PubSub", () => {
         // Connect to cluster or create a new one based on the parsed addresses
         cmdCluster = standaloneAddresses
             ? await ValkeyCluster.initFromExistingCluster(
+                  false,
                   parseEndpoints(standaloneAddresses),
                   getServerVersion,
               )
             : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
         cmeCluster = clusterAddresses
             ? await ValkeyCluster.initFromExistingCluster(
+                  true,
                   parseEndpoints(clusterAddresses),
                   getServerVersion,
               )

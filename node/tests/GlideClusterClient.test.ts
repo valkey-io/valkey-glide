@@ -68,10 +68,9 @@ describe("GlideClusterClient", () => {
         // Connect to cluster or create a new one based on the parsed addresses
         cluster = clusterAddresses
             ? await ValkeyCluster.initFromExistingCluster(
+                  true,
                   parseEndpoints(clusterAddresses),
-                  async (addresses: [string, number][]) => {
-                      return getServerVersion(addresses, true);
-                  },
+                  getServerVersion,
               )
             : // setting replicaCount to 1 to facilitate tests routed to replicas
               await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);

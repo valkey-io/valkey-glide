@@ -98,10 +98,11 @@ export class ValkeyCluster {
     }
 
     public static async initFromExistingCluster(
+        cluster_mode: boolean,
         addresses: [string, number][],
-        getVersionCallback: (addresses: [string, number][]) => Promise<string>
+        getVersionCallback: (addresses: [string, number][], clusterMode: boolean) => Promise<string>
     ): Promise<ValkeyCluster> {
-        return getVersionCallback(addresses).then(
+        return getVersionCallback(addresses, cluster_mode).then(
             (ver) => new ValkeyCluster(ver, addresses, "")
         );
     }

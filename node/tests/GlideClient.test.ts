@@ -60,6 +60,7 @@ describe("GlideClient", () => {
             parseCommandLineArgs()["standalone-endpoints"];
         cluster = standaloneAddresses
             ? await ValkeyCluster.initFromExistingCluster(
+                  false,
                   parseEndpoints(standaloneAddresses),
                   getServerVersion,
               )
