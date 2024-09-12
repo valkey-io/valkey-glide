@@ -67,60 +67,58 @@ describe("PubSub", () => {
         // Connect to cluster or create a new one based on the parsed addresses
         cmdCluster = standaloneAddresses
             ? await ValkeyCluster.initFromExistingCluster(
-                parseEndpoints(standaloneAddresses),
-                async (addresses: [string, number][]) => {
-                    const glideClient = await GlideClient.createClient(
-                        getClientConfigurationOption(
-                            addresses,
-                            ProtocolVersion.RESP2,
-                        ),
-                    );
-                    return glideClient.info([InfoOptions.Server]);
-                },
-            )
+                  parseEndpoints(standaloneAddresses),
+                  async (addresses: [string, number][]) => {
+                      const glideClient = await GlideClient.createClient(
+                          getClientConfigurationOption(
+                              addresses,
+                              ProtocolVersion.RESP2,
+                          ),
+                      );
+                      return glideClient.info([InfoOptions.Server]);
+                  },
+              )
             : await ValkeyCluster.createCluster(
-                false,
-                1,
-                1,
-                async (addresses: [string, number][]) => {
-                    const glideClient = await GlideClient.createClient(
-                        getClientConfigurationOption(
-                            addresses,
-                            ProtocolVersion.RESP2,
-                        ),
-                    );
-                    return glideClient.info([InfoOptions.Server]);
-                },
-            );
+                  false,
+                  1,
+                  1,
+                  async (addresses: [string, number][]) => {
+                      const glideClient = await GlideClient.createClient(
+                          getClientConfigurationOption(
+                              addresses,
+                              ProtocolVersion.RESP2,
+                          ),
+                      );
+                      return glideClient.info([InfoOptions.Server]);
+                  },
+              );
         cmeCluster = clusterAddresses
             ? await ValkeyCluster.initFromExistingCluster(
-                parseEndpoints(clusterAddresses),
-                async (addresses: [string, number][]) => {
-                    let glideClient = await GlideClient.createClient(
-                        getClientConfigurationOption(
-                            addresses,
-                            ProtocolVersion.RESP2,
-                        ),
-                    );
-                    const serverInfo = glideClient.info([InfoOptions.Server]);
-                    return serverInfo;
-                },
-            )
-            : await RedisCluster.createCluster(
-                true,
-                3,
-                1,
-                async (addresses: [string, number][]) => {
-                    let glideClient = await GlideClient.createClient(
-                        getClientConfigurationOption(
-                            addresses,
-                            ProtocolVersion.RESP2,
-                        ),
-                    );
-                    const serverInfo = glideClient.info([InfoOptions.Server]);
-                    return serverInfo;
-                },
-            );
+                  parseEndpoints(clusterAddresses),
+                  async (addresses: [string, number][]) => {
+                      const glideClient = await GlideClient.createClient(
+                          getClientConfigurationOption(
+                              addresses,
+                              ProtocolVersion.RESP2,
+                          ),
+                      );
+                      return glideClient.info([InfoOptions.Server]);
+                  },
+              )
+            : await ValkeyCluster.createCluster(
+                  true,
+                  3,
+                  1,
+                  async (addresses: [string, number][]) => {
+                      const glideClient = await GlideClient.createClient(
+                          getClientConfigurationOption(
+                              addresses,
+                              ProtocolVersion.RESP2,
+                          ),
+                      );
+                      return glideClient.info([InfoOptions.Server]);
+                  },
+              );
     }, 40000);
     afterEach(async () => {
         await flushAndCloseClient(false, cmdCluster.getAddresses());
@@ -286,11 +284,11 @@ describe("PubSub", () => {
     ) {
         if (clusterMode) {
             const mySubscriptions: GlideClusterClientConfiguration.PubSubSubscriptions =
-            {
-                channelsAndPatterns: clusterChannelsAndPatterns,
-                callback: callback,
-                context: context,
-            };
+                {
+                    channelsAndPatterns: clusterChannelsAndPatterns,
+                    callback: callback,
+                    context: context,
+                };
             return mySubscriptions;
         }
 
@@ -352,13 +350,13 @@ describe("PubSub", () => {
         boolean,
         (typeof MethodTesting)[keyof typeof MethodTesting],
     ][] = [
-            [true, MethodTesting.Async],
-            [true, MethodTesting.Sync],
-            [true, MethodTesting.Callback],
-            [false, MethodTesting.Async],
-            [false, MethodTesting.Sync],
-            [false, MethodTesting.Callback],
-        ];
+        [true, MethodTesting.Async],
+        [true, MethodTesting.Sync],
+        [true, MethodTesting.Callback],
+        [false, MethodTesting.Async],
+        [false, MethodTesting.Sync],
+        [false, MethodTesting.Callback],
+    ];
 
     /**
      * Tests the basic happy path for exact PUBSUB functionality.
@@ -658,8 +656,8 @@ describe("PubSub", () => {
                     {
                         [GlideClusterClientConfiguration.PubSubChannelModes
                             .Exact]: new Set(
-                                channelsAndMessages.map((a) => a[0].toString()),
-                            ),
+                            channelsAndMessages.map((a) => a[0].toString()),
+                        ),
                     },
                     {
                         [GlideClientConfiguration.PubSubChannelModes.Exact]:
@@ -773,8 +771,8 @@ describe("PubSub", () => {
                     {
                         [GlideClusterClientConfiguration.PubSubChannelModes
                             .Exact]: new Set(
-                                channelsAndMessages.map((a) => a[0].toString()),
-                            ),
+                            channelsAndMessages.map((a) => a[0].toString()),
+                        ),
                     },
                     {
                         [GlideClientConfiguration.PubSubChannelModes.Exact]:
@@ -1094,8 +1092,8 @@ describe("PubSub", () => {
                     {
                         [GlideClusterClientConfiguration.PubSubChannelModes
                             .Sharded]: new Set(
-                                channelsAndMessages.map((a) => a[0].toString()),
-                            ),
+                            channelsAndMessages.map((a) => a[0].toString()),
+                        ),
                     },
                     {},
                     callback,
@@ -1552,10 +1550,10 @@ describe("PubSub", () => {
                     {
                         [GlideClusterClientConfiguration.PubSubChannelModes
                             .Exact]: new Set(
-                                exactChannelsAndMessages.map((a) =>
-                                    a[0].toString(),
-                                ),
+                            exactChannelsAndMessages.map((a) =>
+                                a[0].toString(),
                             ),
+                        ),
                         [GlideClusterClientConfiguration.PubSubChannelModes
                             .Pattern]: new Set([PATTERN]),
                     },
@@ -1713,10 +1711,10 @@ describe("PubSub", () => {
                     {
                         [GlideClusterClientConfiguration.PubSubChannelModes
                             .Exact]: new Set(
-                                exactChannelsAndMessages.map((a) =>
-                                    a[0].toString(),
-                                ),
+                            exactChannelsAndMessages.map((a) =>
+                                a[0].toString(),
                             ),
+                        ),
                     },
                     {
                         [GlideClientConfiguration.PubSubChannelModes.Exact]:
@@ -1918,18 +1916,18 @@ describe("PubSub", () => {
                     {
                         [GlideClusterClientConfiguration.PubSubChannelModes
                             .Exact]: new Set(
-                                exactChannelsAndMessages.map((a) =>
-                                    a[0].toString(),
-                                ),
+                            exactChannelsAndMessages.map((a) =>
+                                a[0].toString(),
                             ),
+                        ),
                         [GlideClusterClientConfiguration.PubSubChannelModes
                             .Pattern]: new Set([PATTERN]),
                         [GlideClusterClientConfiguration.PubSubChannelModes
                             .Sharded]: new Set(
-                                shardedChannelsAndMessages.map((a) =>
-                                    a[0].toString(),
-                                ),
+                            shardedChannelsAndMessages.map((a) =>
+                                a[0].toString(),
                             ),
+                        ),
                     },
                     {},
                     callback,
@@ -2099,10 +2097,10 @@ describe("PubSub", () => {
                     {
                         [GlideClusterClientConfiguration.PubSubChannelModes
                             .Exact]: new Set(
-                                exactChannelsAndMessages.map((a) =>
-                                    a[0].toString(),
-                                ),
+                            exactChannelsAndMessages.map((a) =>
+                                a[0].toString(),
                             ),
+                        ),
                     },
                     {},
                     callback,
@@ -2141,10 +2139,10 @@ describe("PubSub", () => {
                     {
                         [GlideClusterClientConfiguration.PubSubChannelModes
                             .Sharded]: new Set(
-                                shardedChannelsAndMessages.map((a) =>
-                                    a[0].toString(),
-                                ),
+                            shardedChannelsAndMessages.map((a) =>
+                                a[0].toString(),
                             ),
+                        ),
                     },
                     {},
                     callback,
