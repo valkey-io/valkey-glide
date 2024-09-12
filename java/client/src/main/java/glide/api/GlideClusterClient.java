@@ -27,6 +27,7 @@ import static command_request.CommandRequestOuterClass.RequestType.LastSave;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
 import static command_request.CommandRequestOuterClass.RequestType.PubSubSChannels;
+import static command_request.CommandRequestOuterClass.RequestType.PubSubSNumSub;
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
 import static command_request.CommandRequestOuterClass.RequestType.SPublish;
 import static command_request.CommandRequestOuterClass.RequestType.Sort;
@@ -1048,6 +1049,18 @@ public class GlideClusterClient extends BaseClient
                 PubSubSChannels,
                 new GlideString[] {pattern},
                 response -> castArray(handleArrayResponseBinary(response), GlideString.class));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Long>> pubsubShardNumSub(@NonNull String[] channels) {
+        return commandManager.submitNewCommand(PubSubSNumSub, channels, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Long>> pubsubShardNumSub(
+            @NonNull GlideString[] channels) {
+        return commandManager.submitNewCommand(
+                PubSubSNumSub, channels, this::handleBinaryStringMapResponse);
     }
 
     @Override
