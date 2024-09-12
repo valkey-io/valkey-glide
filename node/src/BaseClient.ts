@@ -1754,11 +1754,6 @@ export class BaseClient {
      * The offset can also be a negative number indicating an offset starting at the end of the list, with `-1` being
      * the last byte of the list, `-2` being the penultimate, and so on.
      *
-     * If you are using Valkey 7.0.0 or above, the optional `indexType` can also be provided to specify whether the
-     * `start` and `end` offsets specify BIT or BYTE offsets. If `indexType` is not provided, BYTE offsets
-     * are assumed. If BIT is specified, `start=0` and `end=2` means to look at the first three bits. If BYTE is
-     * specified, `start=0` and `end=2` means to look at the first three bytes.
-     *
      * @see {@link https://valkey.io/commands/bitpos/|valkey.io} for details.
      *
      * @param key - The key of the string.
@@ -1774,14 +1769,14 @@ export class BaseClient {
      * const result1 = await client.bitpos("key1", 1);
      * console.log(result1); // Output: 1 - The first occurrence of bit value 1 in the string stored at "key1" is at the second position.
      *
-     * const result2 = await client.bitpos("key1", 1, -1);
+     * const result2 = await client.bitpos("key1", 1, { start: -1 });
      * console.log(result2); // Output: 10 - The first occurrence of bit value 1, starting at the last byte in the string stored at "key1", is at the eleventh position.
      *
      * await client.set("key1", "A12");  // "A12" has binary value 01000001 00110001 00110010
-     * const result3 = await client.bitpos("key1", 1, {start: 1, end: -1});
+     * const result3 = await client.bitpos("key1", 1, { start: 1, end: -1 });
      * console.log(result3); // Output: 10 - The first occurrence of bit value 1 in the second byte to the last byte of the string stored at "key1" is at the eleventh position.
      *
-     * const result4 = await client.bitpos("key1", 1, {start: 2, end: 9, indexType: BitmapIndexType.BIT});
+     * const result4 = await client.bitpos("key1", 1, { start: 2, end: 9, indexType: BitmapIndexType.BIT });
      * console.log(result4); // Output: 7 - The first occurrence of bit value 1 in the third to tenth bits of the string stored at "key1" is at the eighth position.
      * ```
      */
@@ -6411,7 +6406,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/bitcount/|valkey.io} for more details.
      *
      * @param key - The key for the string to count the set bits of.
-     * @param options - The offset options.
+     * @param options - The offset options - see {@link BitOffsetOptions}.
      * @returns If `options` is provided, returns the number of set bits in the string interval specified by `options`.
      *     If `options` is not provided, returns the number of set bits in the string stored at `key`.
      *     Otherwise, if `key` is missing, returns `0` as it is treated as an empty string.
