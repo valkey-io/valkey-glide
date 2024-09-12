@@ -3299,12 +3299,6 @@ public class CommandTests {
         String key = UUID.randomUUID().toString();
         RequestRoutingConfiguration.Route route =
                 new RequestRoutingConfiguration.SlotKeyRoute(key, PRIMARY);
-        //        String code =
-        //                "redis.call('SET', KEYS[1], 'value')\n"
-        //                        + "  local start = redis.call('time')[1]\n"
-        //                        + "  while redis.call('time')[1] - start < 5 do\n"
-        //                        + "      redis.call('SET', KEYS[1], 'value')\n"
-        //                        + "   end\n";
         String code = createLongRunningLuaScript(5, false);
         Script script = new Script(code, false);
 
