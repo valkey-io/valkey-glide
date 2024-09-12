@@ -1769,6 +1769,7 @@ export async function getServerVersion(
     clusterMode = false,
 ): Promise<string> {
     let info = "";
+
     if (clusterMode) {
         const glideClusterClient = await GlideClusterClient.createClient(
             getClientConfigurationOption(addresses, ProtocolVersion.RESP2),
