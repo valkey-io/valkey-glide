@@ -1,5 +1,8 @@
 #### Changes
 * Node: Get valkey/redis version using cli command ([#2276]https://github.com/valkey-io/valkey-glide/pull/2276)
+* Python: Replace instances of Redis with Valkey ([#2266](https://github.com/valkey-io/valkey-glide/pull/2266))
+* Java: Replace instances of Redis with Valkey ([#2268](https://github.com/valkey-io/valkey-glide/pull/2268))
+* Node: Replace instances of Redis with Valkey ([#2260](https://github.com/valkey-io/valkey-glide/pull/2260))
 * Java: Fetch server version using info command ([#2258](https://github.com/valkey-io/valkey-glide/pull/2258))
 * Node: Added binary variant for commands which have `Record` as input or output ([#2207](https://github.com/valkey-io/valkey-glide/pull/2207))
 * Node: Renamed `ReturnType` to `GlideReturnType` ([#2241](https://github.com/valkey-io/valkey-glide/pull/2241))
@@ -23,6 +26,8 @@
 * Node: Added XREADGROUP command ([#2124](https://github.com/valkey-io/valkey-glide/pull/2124))
 * Node: Added XINFO GROUPS command ([#2122](https://github.com/valkey-io/valkey-glide/pull/2122))
 * Java: Added PUBSUB CHANNELS, NUMPAT and NUMSUB commands ([#2105](https://github.com/valkey-io/valkey-glide/pull/2105))
+* Java: Added PUBSUB SHARDCHANNELS command ([#2265](https://github.com/valkey-io/valkey-glide/pull/2265))
+* Java: Added PUBSUB SHARDNUMSUB command ([#2279](https://github.com/valkey-io/valkey-glide/pull/2279))
 * Java: Added binary support for custom command ([#2109](https://github.com/valkey-io/valkey-glide/pull/2109))
 * Node: Added SSCAN command ([#2132](https://github.com/valkey-io/valkey-glide/pull/2132))
 * Node: Added HKEYS command ([#2136](https://github.com/valkey-io/valkey-glide/pull/2136))
@@ -113,12 +118,16 @@
 * Node: Added binary variant to stream commands ([#2200](https://github.com/valkey-io/valkey-glide/pull/2200), [#2222](https://github.com/valkey-io/valkey-glide/pull/2222))
 * Python, Node, Java: change BITCOUNT end param to optional ([#2248](https://github.com/valkey-io/valkey-glide/pull/2248))
 * Python: Add Script commands ([#2208](https://github.com/valkey-io/valkey-glide/pull/2208))
+* Node: Added Script commands ([#2267](https://github.com/valkey-io/valkey-glide/pull/2267))
 
 #### Breaking Changes
+* Java: Update INFO command ([#2274](https://github.com/valkey-io/valkey-glide/pull/2274))
+* Node: (Refactor) Convert types to interfaces ([#2263](https://github.com/valkey-io/valkey-glide/pull/2263))
 * Node: (Refactor) Convert classes to types ([#2005](https://github.com/valkey-io/valkey-glide/pull/2005))
 * Core: Change FUNCTION STATS command to return multi node response for standalone mode ([#2117](https://github.com/valkey-io/valkey-glide/pull/2117))
 
 #### Fixes
+* Java: Fix GlideString conversion from byte to String ([#2271](https://github.com/valkey-io/valkey-glide/pull/2271))
 * Java: Add overloads for XADD to allow duplicate entry keys ([#1970](https://github.com/valkey-io/valkey-glide/pull/1970))
 * Node: Fix ZADD bug where command could not be called with only the `changed` optional parameter ([#1995](https://github.com/valkey-io/valkey-glide/pull/1995))
 * Java: `XRange`/`XRevRange` should return `null` instead of `GlideException` when given a negative count ([#1920](https://github.com/valkey-io/valkey-glide/pull/1920))

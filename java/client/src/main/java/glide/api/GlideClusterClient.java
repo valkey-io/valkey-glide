@@ -26,6 +26,8 @@ import static command_request.CommandRequestOuterClass.RequestType.Info;
 import static command_request.CommandRequestOuterClass.RequestType.LastSave;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
+import static command_request.CommandRequestOuterClass.RequestType.PubSubSChannels;
+import static command_request.CommandRequestOuterClass.RequestType.PubSubSNumSub;
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
 import static command_request.CommandRequestOuterClass.RequestType.SPublish;
 import static command_request.CommandRequestOuterClass.RequestType.Sort;
@@ -54,7 +56,7 @@ import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.commands.FlushMode;
-import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.SortClusterOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.scan.ClusterScanCursor;
@@ -70,6 +72,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Stream;
 import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
 import response.ResponseOuterClass.Response;
@@ -224,17 +227,19 @@ public class GlideClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<ClusterValue<String>> info(@NonNull InfoOptions options) {
+    public CompletableFuture<ClusterValue<String>> info(@NonNull Section[] sections) {
         return commandManager.submitNewCommand(
-                Info, options.toArgs(), response -> ClusterValue.of(handleMapResponse(response)));
+                Info,
+                Stream.of(sections).map(Enum::toString).toArray(String[]::new),
+                response -> ClusterValue.of(handleMapResponse(response)));
     }
 
     @Override
     public CompletableFuture<ClusterValue<String>> info(
-            @NonNull InfoOptions options, @NonNull Route route) {
+            @NonNull Section[] sections, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 Info,
-                options.toArgs(),
+                Stream.of(sections).map(Enum::toString).toArray(String[]::new),
                 route,
                 response ->
                         route instanceof SingleNodeRoute
@@ -1012,6 +1017,50 @@ public class GlideClusterClient extends BaseClient
                     handleLongResponse(response);
                     return OK;
                 });
+    }
+
+    @Override
+    public CompletableFuture<String[]> pubsubShardChannels() {
+        return commandManager.submitNewCommand(
+                PubSubSChannels,
+                new String[0],
+                response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<GlideString[]> pubsubShardChannelsBinary() {
+        return commandManager.submitNewCommand(
+                PubSubSChannels,
+                new GlideString[0],
+                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
+    }
+
+    @Override
+    public CompletableFuture<String[]> pubsubShardChannels(@NonNull String pattern) {
+        return commandManager.submitNewCommand(
+                PubSubSChannels,
+                new String[] {pattern},
+                response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<GlideString[]> pubsubShardChannels(@NonNull GlideString pattern) {
+        return commandManager.submitNewCommand(
+                PubSubSChannels,
+                new GlideString[] {pattern},
+                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Long>> pubsubShardNumSub(@NonNull String[] channels) {
+        return commandManager.submitNewCommand(PubSubSNumSub, channels, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Long>> pubsubShardNumSub(
+            @NonNull GlideString[] channels) {
+        return commandManager.submitNewCommand(
+                PubSubSNumSub, channels, this::handleBinaryStringMapResponse);
     }
 
     @Override

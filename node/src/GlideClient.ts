@@ -43,6 +43,9 @@ import {
     createPing,
     createPublish,
     createRandomKey,
+    createScriptExists,
+    createScriptFlush,
+    createScriptKill,
     createSelect,
     createSort,
     createSortReadOnly,
@@ -136,7 +139,7 @@ export type GlideClientConfiguration = BaseClientConfiguration & {
 };
 
 /**
- * Client used for connection to standalone Redis servers.
+ * Client used for connection to standalone servers.
  *
  * @see For full documentation refer to {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#standalone|Valkey Glide Wiki}.
  */
@@ -539,7 +542,7 @@ export class GlideClient extends BaseClient {
      * @example
      * ```typescript
      * const response = await client.lolwut({ version: 6, parameters: [40, 20] });
-     * console.log(response); // Output: "Redis ver. 7.2.3" - Indicates the current server version.
+     * console.log(response); // Output: "Valkey ver. 7.2.3" - Indicates the current server version.
      * ```
      */
     public async lolwut(options?: LolwutOptions): Promise<string> {
@@ -1017,6 +1020,63 @@ export class GlideClient extends BaseClient {
      */
     public async unwatch(): Promise<"OK"> {
         return this.createWritePromise(createUnWatch(), {
+            decoder: Decoder.String,
+        });
+    }
+
+    /**
+     * Check existence of scripts in the script cache by their SHA1 digest.
+     *
+     * @see {@link https://valkey.io/commands/script-exists/|valkey.io} for more details.
+     *
+     * @param sha1s - List of SHA1 digests of the scripts to check.
+     * @returns A list of boolean values indicating the existence of each script.
+     *
+     * @example
+     * ```typescript
+     * console result = await client.scriptExists(["sha1_digest1", "sha1_digest2"]);
+     * console.log(result); // Output: [true, false]
+     * ```
+     */
+    public async scriptExists(sha1s: GlideString[]): Promise<boolean[]> {
+        return this.createWritePromise(createScriptExists(sha1s));
+    }
+
+    /**
+     * Flush the Lua scripts cache.
+     *
+     * @see {@link https://valkey.io/commands/script-flush/|valkey.io} for more details.
+     *
+     * @param mode - (Optional) The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * @returns A simple `"OK"` response.
+     *
+     * @example
+     * ```typescript
+     * console result = await client.scriptFlush(FlushMode.SYNC);
+     * console.log(result); // Output: "OK"
+     * ```
+     */
+    public async scriptFlush(mode?: FlushMode): Promise<"OK"> {
+        return this.createWritePromise(createScriptFlush(mode), {
+            decoder: Decoder.String,
+        });
+    }
+
+    /**
+     * Kill the currently executing Lua script, assuming no write operation was yet performed by the script.
+     *
+     * @see {@link https://valkey.io/commands/script-kill/|valkey.io} for more details.
+     *
+     * @returns A simple `"OK"` response.
+     *
+     * @example
+     * ```typescript
+     * console result = await client.scriptKill();
+     * console.log(result); // Output: "OK"
+     * ```
+     */
+    public async scriptKill(): Promise<"OK"> {
+        return this.createWritePromise(createScriptKill(), {
             decoder: Decoder.String,
         });
     }

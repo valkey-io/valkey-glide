@@ -25,7 +25,7 @@ import {
     PubSubMsg,
     TimeoutError,
 } from "..";
-import RedisCluster from "../../utils/TestUtils";
+import ValkeyCluster from "../../utils/TestUtils";
 import {
     flushAndCloseClient,
     getClientConfigurationOption,
@@ -58,15 +58,15 @@ const MethodTesting = {
 
 const TIMEOUT = 120000;
 describe("PubSub", () => {
-    let cmeCluster: RedisCluster;
-    let cmdCluster: RedisCluster;
+    let cmeCluster: ValkeyCluster;
+    let cmdCluster: ValkeyCluster;
     beforeAll(async () => {
         const standaloneAddresses =
             parseCommandLineArgs()["standalone-endpoints"];
         const clusterAddresses = parseCommandLineArgs()["cluster-endpoints"];
         // Connect to cluster or create a new one based on the parsed addresses
         cmdCluster = standaloneAddresses
-            ? await RedisCluster.initFromExistingCluster(
+            ? await ValkeyCluster.initFromExistingCluster(
                   parseEndpoints(standaloneAddresses),
                   async (addresses: [string, number][]) => {
                       let glideClient = await GlideClient.createClient(
@@ -95,7 +95,7 @@ describe("PubSub", () => {
                   },
               );
         cmeCluster = clusterAddresses
-            ? await RedisCluster.initFromExistingCluster(
+            ? await ValkeyCluster.initFromExistingCluster(
                   parseEndpoints(clusterAddresses),
                   async (addresses: [string, number][]) => {
                       let glideClient = await GlideClient.createClient(
@@ -123,6 +123,8 @@ describe("PubSub", () => {
                       return serverInfo;
                   },
               );
+      
+      
     }, 40000);
     afterEach(async () => {
         await flushAndCloseClient(false, cmdCluster.getAddresses());

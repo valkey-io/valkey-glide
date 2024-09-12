@@ -229,7 +229,6 @@ import glide.api.commands.StringBaseCommands;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.GetExOptions;
-import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
@@ -406,15 +405,16 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Gets information and statistics about the server.
+     * Gets information and statistics about the server.<br>
+     * Starting from server version 7, command supports multiple section arguments.
      *
      * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
-     * @param options A list of {@link Section} values specifying which sections of information to
+     * @param sections A list of {@link Section} values specifying which sections of information to
      *     retrieve. When no parameter is provided, the {@link Section#DEFAULT} option is assumed.
      * @return Command Response - A <code>String</code> containing the requested {@link Section}s.
      */
-    public T info(@NonNull InfoOptions options) {
-        protobufTransaction.addCommands(buildCommand(Info, newArgsBuilder().add(options.toArgs())));
+    public T info(@NonNull Section[] sections) {
+        protobufTransaction.addCommands(buildCommand(Info, newArgsBuilder().add(sections)));
         return getThis();
     }
 

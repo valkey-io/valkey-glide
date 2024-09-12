@@ -2,19 +2,13 @@
 package glide.api.models.commands;
 
 import glide.api.commands.ServerManagementCommands;
-import java.util.List;
-import lombok.Builder;
-import lombok.Singular;
 
 /**
  * Optional arguments to {@link ServerManagementCommands#info(InfoOptions)}
  *
  * @see <a href="https://valkey.io/commands/info/">valkey.io</a>
  */
-@Builder
 public final class InfoOptions {
-
-    @Singular private final List<Section> sections;
 
     public enum Section {
         /** SERVER: General information about the server */
@@ -51,14 +45,5 @@ public final class InfoOptions {
         DEFAULT,
         /** EVERYTHING: Includes all and modules */
         EVERYTHING,
-    }
-
-    /**
-     * Converts options enum into a String[] to add to the command request.
-     *
-     * @return String[]
-     */
-    public String[] toArgs() {
-        return sections.stream().map(Object::toString).toArray(String[]::new);
     }
 }
