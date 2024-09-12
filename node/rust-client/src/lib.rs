@@ -1,3 +1,4 @@
+use redis::GlideConnectionOptions;
 /**
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
@@ -69,7 +70,9 @@ impl AsyncClient {
         let _runtime_handle = runtime.enter();
         let client = to_js_result(redis::Client::open(connection_address))?;
         let connection =
-            to_js_result(runtime.block_on(client.get_multiplexed_async_connection(None)))?;
+            to_js_result(runtime.block_on(
+                client.get_multiplexed_async_connection(GlideConnectionOptions::default()),
+            ))?;
         Ok(AsyncClient {
             connection,
             runtime,
