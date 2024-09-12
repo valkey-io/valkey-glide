@@ -357,7 +357,7 @@ describe("GlideClusterClient", () => {
                 expectedRes.push(["pubsubShardNumSub()", []]);
             }
 
-            const result = await client.exec(transaction);
+            const result = await client.exec(transaction, { decoder });
             validateTransactionResponse(result, expectedRes);
         },
         TIMEOUT,
