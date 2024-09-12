@@ -565,17 +565,6 @@ export interface BaseClientConfiguration {
     defaultDecoder?: Decoder;
 }
 
-export interface ScriptOptions {
-    /**
-     * The keys that are used in the script.
-     */
-    keys?: GlideString[];
-    /**
-     * The arguments for the script.
-     */
-    args?: GlideString[];
-}
-
 /**
  * Enum of Valkey data types
  * `STRING`
@@ -3695,9 +3684,13 @@ export class BaseClient {
      * it will be loaded automatically using the `SCRIPT LOAD` command. After that, it will be invoked using the `EVALSHA` command.
      *
      * @see {@link https://valkey.io/commands/script-load/|SCRIPT LOAD} and {@link https://valkey.io/commands/evalsha/|EVALSHA} on valkey.io for details.
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
      *
      * @param script - The Lua script to execute.
-     * @param options - (Optional) See {@link ScriptOptions} and {@link DecoderOption}.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `keys` : the keys that are used in the script.
+     * - (Optional) `args`: the arguments for the script.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns A value that depends on the script that was executed.
      *
      * @example
@@ -3713,28 +3706,15 @@ export class BaseClient {
      */
     public async invokeScript(
         script: Script,
-        options?: ScriptOptions & DecoderOption,
+        options?: {
+            keys?: GlideString[];
+            args?: GlideString[];
+        } & DecoderOption,
     ): Promise<GlideReturnType> {
         const scriptInvocation = command_request.ScriptInvocation.create({
             hash: script.getHash(),
-            keys: options?.keys?.map((item) => {
-                if (typeof item === "string") {
-                    // Convert the string to a Buffer
-                    return Buffer.from(item);
-                } else {
-                    // If it's already a Buffer, just return it
-                    return item;
-                }
-            }),
-            args: options?.args?.map((item) => {
-                if (typeof item === "string") {
-                    // Convert the string to a Buffer
-                    return Buffer.from(item);
-                } else {
-                    // If it's already a Buffer, just return it
-                    return item;
-                }
-            }),
+            keys: options?.keys?.map(Buffer.from),
+            args: options?.args?.map(Buffer.from),
         });
         return this.createWritePromise(scriptInvocation, options);
     }

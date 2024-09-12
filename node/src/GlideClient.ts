@@ -923,7 +923,7 @@ export class GlideClient extends BaseClient {
     }
 
     /**
-     * Check existence of scripts in the script cache by their SHA1 digest.
+     * Checks existence of scripts in the script cache by their SHA1 digest.
      *
      * @see {@link https://valkey.io/commands/script-exists/|valkey.io} for more details.
      *
@@ -941,7 +941,7 @@ export class GlideClient extends BaseClient {
     }
 
     /**
-     * Flush the Lua scripts cache.
+     * Flushes the Lua scripts cache.
      *
      * @see {@link https://valkey.io/commands/script-flush/|valkey.io} for more details.
      *
@@ -961,7 +961,7 @@ export class GlideClient extends BaseClient {
     }
 
     /**
-     * Kill the currently executing Lua script, assuming no write operation was yet performed by the script.
+     * Kills the currently executing Lua script, assuming no write operation was yet performed by the script.
      *
      * @see {@link https://valkey.io/commands/script-kill/|valkey.io} for more details.
      *
