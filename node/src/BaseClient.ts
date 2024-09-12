@@ -2,6 +2,7 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 import {
+    ClusterScanCursor,
     DEFAULT_TIMEOUT_IN_MILLISECONDS,
     Script,
     StartSocketConnection,
@@ -46,6 +47,7 @@ import {
     ScoreFilter,
     SearchOrigin,
     SetOptions,
+    SortOptions,
     StreamAddOptions,
     StreamClaimOptions,
     StreamGroupOptions,
@@ -165,9 +167,12 @@ import {
     createSScan,
     createSUnion,
     createSUnionStore,
+    createScriptShow,
     createSet,
     createSetBit,
     createSetRange,
+    createSort,
+    createSortReadOnly,
     createStrlen,
     createTTL,
     createTouch,
@@ -231,9 +236,9 @@ import {
     ConfigurationError,
     ConnectionError,
     ExecAbortError,
-    ValkeyError,
     RequestError,
     TimeoutError,
+    ValkeyError,
 } from "./Errors";
 import { GlideClientConfiguration } from "./GlideClient";
 import {
@@ -571,6 +576,24 @@ export interface ScriptOptions {
     args?: GlideString[];
 }
 
+/**
+ * Enum of Valkey data types
+ * `STRING`
+ * `LIST`
+ * `SET`
+ * `ZSET`
+ * `HASH`
+ * `STREAM`
+ */
+export enum ObjectType {
+    STRING = "String",
+    LIST = "List",
+    SET = "Set",
+    ZSET = "ZSet",
+    HASH = "Hash",
+    STREAM = "Stream",
+}
+
 function getRequestErrorClass(
     type: response.RequestErrorType | null | undefined,
 ): typeof RequestError {
@@ -682,7 +705,7 @@ export type WritePromiseOptions = RouteOption & DecoderOption;
 
 export class BaseClient {
     private socket: net.Socket;
-    private readonly promiseCallbackFunctions: [
+    protected readonly promiseCallbackFunctions: [
         PromiseFunction,
         ErrorFunction,
     ][] = [];
@@ -691,7 +714,7 @@ export class BaseClient {
     private writeInProgress = false;
     private remainingReadData: Uint8Array | undefined;
     private readonly requestTimeout: number; // Timeout in milliseconds
-    private isClosed = false;
+    protected isClosed = false;
     protected defaultDecoder = Decoder.String;
     private readonly pubsubFutures: [PromiseFunction, ErrorFunction][] = [];
     private pendingPushNotification: response.Response[] = [];
@@ -863,7 +886,7 @@ export class BaseClient {
         this.defaultDecoder = options?.defaultDecoder ?? Decoder.String;
     }
 
-    private getCallbackIndex(): number {
+    protected getCallbackIndex(): number {
         return (
             this.availableCallbackSlots.pop() ??
             this.promiseCallbackFunctions.length
@@ -891,7 +914,8 @@ export class BaseClient {
         command:
             | command_request.Command
             | command_request.Command[]
-            | command_request.ScriptInvocation,
+            | command_request.ScriptInvocation
+            | command_request.ClusterScan,
         options: WritePromiseOptions = {},
     ): Promise<T> {
         const route = toProtobufRoute(options?.route);
@@ -910,6 +934,10 @@ export class BaseClient {
                 (resolveAns: T) => {
                     try {
                         if (resolveAns instanceof PointerResponse) {
+                            //   valueFromSplitPointer method is used to convert a pointer from a protobuf response into a TypeScript object.
+                            //   The protobuf response is received on a socket and the value in the response is a pointer to a Rust object.
+                            //   The pointer is a split pointer because JavaScript doesn't support `u64` and pointers in Rust can be `u64`,
+                            //   so we represent it with two`u32`(`high` and`low`).
                             if (typeof resolveAns === "number") {
                                 resolveAns = valueFromSplitPointer(
                                     0,
@@ -923,6 +951,16 @@ export class BaseClient {
                                     stringDecoder,
                                 ) as T;
                             }
+                        }
+
+                        if (command instanceof command_request.ClusterScan) {
+                            const resolveAnsArray = resolveAns as [
+                                ClusterScanCursor,
+                                GlideString[],
+                            ];
+                            resolveAnsArray[0] = new ClusterScanCursor(
+                                resolveAnsArray[0].toString(),
+                            );
                         }
 
                         resolve(resolveAns);
@@ -941,12 +979,13 @@ export class BaseClient {
         });
     }
 
-    private writeOrBufferCommandRequest(
+    protected writeOrBufferCommandRequest(
         callbackIdx: number,
         command:
             | command_request.Command
             | command_request.Command[]
-            | command_request.ScriptInvocation,
+            | command_request.ScriptInvocation
+            | command_request.ClusterScan,
         route?: command_request.Routes,
     ) {
         const message = Array.isArray(command)
@@ -961,10 +1000,15 @@ export class BaseClient {
                     callbackIdx,
                     singleCommand: command,
                 })
-              : command_request.CommandRequest.create({
-                    callbackIdx,
-                    scriptInvocation: command,
-                });
+              : command instanceof command_request.ClusterScan
+                ? command_request.CommandRequest.create({
+                      callbackIdx,
+                      clusterScan: command,
+                  })
+                : command_request.CommandRequest.create({
+                      callbackIdx,
+                      scriptInvocation: command,
+                  });
         message.route = route;
 
         this.writeOrBufferRequest(
@@ -3693,6 +3737,31 @@ export class BaseClient {
             }),
         });
         return this.createWritePromise(scriptInvocation, options);
+    }
+
+    /**
+     * Returns the original source code of a script in the script cache.
+     *
+     * @see {@link https://valkey.io/commands/script-show|valkey.io} for more details.
+     * @remarks Since Valkey version 8.0.0.
+     *
+     * @param sha1 - The SHA1 digest of the script.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @return The original source code of the script, if present in the cache.
+     * If the script is not found in the cache, an error is thrown.
+     *
+     * @example
+     * ```typescript
+     * const scriptHash = script.getHash();
+     * const scriptSource = await client.scriptShow(scriptHash);
+     * console.log(scriptSource); // Output: "return { KEYS[1], ARGV[1] }"
+     * ```
+     */
+    public async scriptShow(
+        sha1: GlideString,
+        options?: DecoderOption,
+    ): Promise<GlideString> {
+        return this.createWritePromise(createScriptShow(sha1), options);
     }
 
     /**
@@ -7304,6 +7373,112 @@ export class BaseClient {
                 return { channel: r.key, numSub: r.value };
             }),
         );
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+     *
+     * The `sort` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements.
+     *
+     * To store the result into a new key, see {@link sortStore}.
+     *
+     * @see {@link https://valkey.io/commands/sort/|valkey.io} for more details.
+     * @remarks When in cluster mode, both `key` and the patterns specified in {@link SortOptions.byPattern}
+     * and {@link SortOptions.getPatterns} must map to the same hash slot. The use of {@link SortOptions.byPattern}
+     * and {@link SortOptions.getPatterns} in cluster mode is supported since Valkey version 8.0.
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param options - (Optional) The {@link SortOptions} and {@link DecoderOption}.
+     *
+     * @returns An `Array` of sorted elements.
+     *
+     * @example
+     * ```typescript
+     * await client.hset("user:1", new Map([["name", "Alice"], ["age", "30"]]));
+     * await client.hset("user:2", new Map([["name", "Bob"], ["age", "25"]]));
+     * await client.lpush("user_ids", ["2", "1"]);
+     * const result = await client.sort("user_ids", { byPattern: "user:*->age", getPattern: ["user:*->name"] });
+     * console.log(result); // Output: [ 'Bob', 'Alice' ] - Returns a list of the names sorted by age
+     * ```
+     */
+    public async sort(
+        key: GlideString,
+        options?: SortOptions & DecoderOption,
+    ): Promise<(GlideString | null)[]> {
+        return this.createWritePromise(createSort(key, options), options);
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+     *
+     * The `sortReadOnly` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements.
+     *
+     * This command is routed depending on the client's {@link ReadFrom} strategy.
+     *
+     * @see {@link https://valkey.io/commands/sort/|valkey.io} for more details.
+     * @remarks Since Valkey version 7.0.0.
+     * @remarks When in cluster mode, both `key` and the patterns specified in {@link SortOptions.byPattern}
+     * and {@link SortOptions.getPatterns} must map to the same hash slot. The use of {@link SortOptions.byPattern}
+     * and {@link SortOptions.getPatterns} in cluster mode is supported since Valkey version 8.0.
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param options - (Optional) The {@link SortOptions} and {@link DecoderOption}.
+     * @returns An `Array` of sorted elements
+     *
+     * @example
+     * ```typescript
+     * await client.hset("user:1", new Map([["name", "Alice"], ["age", "30"]]));
+     * await client.hset("user:2", new Map([["name", "Bob"], ["age", "25"]]));
+     * await client.lpush("user_ids", ["2", "1"]);
+     * const result = await client.sortReadOnly("user_ids", { byPattern: "user:*->age", getPattern: ["user:*->name"] });
+     * console.log(result); // Output: [ 'Bob', 'Alice' ] - Returns a list of the names sorted by age
+     * ```
+     */
+    public async sortReadOnly(
+        key: GlideString,
+        options?: SortOptions & DecoderOption,
+    ): Promise<(GlideString | null)[]> {
+        return this.createWritePromise(
+            createSortReadOnly(key, options),
+            options,
+        );
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at `key` and stores the result in
+     * `destination`.
+     *
+     * The `sort` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements, and store the result in a new key.
+     *
+     * To get the sort result without storing it into a key, see {@link sort} or {@link sortReadOnly}.
+     *
+     * @see {@link https://valkey.io/commands/sort|valkey.io} for more details.
+     * @remarks When in cluster mode, `key`, `destination` and the patterns specified in {@link SortOptions.byPattern}
+     * and {@link SortOptions.getPatterns} must map to the same hash slot. The use of {@link SortOptions.byPattern}
+     * and {@link SortOptions.getPatterns} in cluster mode is supported since Valkey version 8.0.
+     *
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param destination - The key where the sorted result will be stored.
+     * @param options - (Optional) The {@link SortOptions}.
+     * @returns The number of elements in the sorted key stored at `destination`.
+     *
+     * @example
+     * ```typescript
+     * await client.hset("user:1", new Map([["name", "Alice"], ["age", "30"]]));
+     * await client.hset("user:2", new Map([["name", "Bob"], ["age", "25"]]));
+     * await client.lpush("user_ids", ["2", "1"]);
+     * const sortedElements = await client.sortStore("user_ids", "sortedList", { byPattern: "user:*->age", getPattern: ["user:*->name"] });
+     * console.log(sortedElements); // Output: 2 - number of elements sorted and stored
+     * console.log(await client.lrange("sortedList", 0, -1)); // Output: [ 'Bob', 'Alice' ] - Returns a list of the names sorted by age stored in `sortedList`
+     * ```
+     */
+    public async sortStore(
+        key: GlideString,
+        destination: GlideString,
+        options?: SortOptions,
+    ): Promise<number> {
+        return this.createWritePromise(createSort(key, options, destination));
     }
 
     /**

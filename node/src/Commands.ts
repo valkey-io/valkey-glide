@@ -11,6 +11,7 @@ import {
     GlideRecord,
     GlideString,
     HashDataType,
+    ObjectType,
     SortedSetDataType,
 } from "./BaseClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
@@ -1653,6 +1654,26 @@ export function createZMScore(
     members: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.ZMScore, [key, ...members]);
+}
+
+/**
+ * @internal
+ */
+export function createScan(
+    cursor: GlideString,
+    options?: ScanOptions,
+): command_request.Command {
+    let args: GlideString[] = [cursor];
+
+    if (options) {
+        args = args.concat(convertBaseScanOptionsToArgsArray(options));
+    }
+
+    if (options?.type) {
+        args.push("TYPE", options.type);
+    }
+
+    return createCommand(RequestType.Scan, args);
 }
 
 export enum InfBoundary {
@@ -3544,19 +3565,29 @@ export function createZIncrBy(
 }
 
 /**
- * Optional arguments to {@link GlideClient.sort|sort}, {@link GlideClient.sortStore|sortStore} and {@link GlideClient.sortReadOnly|sortReadOnly} commands.
+ * Optional arguments to {@link BaseClient.sort|sort}, {@link BaseClient.sortStore|sortStore} and {@link BaseClient.sortReadOnly|sortReadOnly} commands.
  *
  * See https://valkey.io/commands/sort/ for more details.
+ *
+ * @remarks When in cluster mode, {@link SortOptions.byPattern|byPattern} and {@link SortOptions.getPatterns|getPattern} must map to the same hash
+ *     slot as the key, and this is supported only since Valkey version 8.0.
  */
-export type SortOptions = SortBaseOptions & {
+export interface SortOptions {
     /**
      * A pattern to sort by external keys instead of by the elements stored at the key themselves. The
      * pattern should contain an asterisk (*) as a placeholder for the element values, where the value
      * from the key replaces the asterisk to create the key name. For example, if `key`
      * contains IDs of objects, `byPattern` can be used to sort these IDs based on an
      * attribute of the objects, like their weights or timestamps.
+     * Supported in cluster mode since Valkey version 8.0 and above.
      */
     byPattern?: GlideString;
+
+    /**
+     * Limiting the range of the query by setting offset and result count. See {@link Limit} class for
+     * more information.
+     */
+    limit?: Limit;
 
     /**
      * A pattern used to retrieve external keys' values, instead of the elements at `key`.
@@ -3570,16 +3601,9 @@ export type SortOptions = SortBaseOptions & {
      * arguments can be provided to retrieve multiple attributes. The special value `#` can
      * be used to include the actual element from `key` being sorted. If not provided, only
      * the sorted elements themselves are returned.
+     * Supported in cluster mode since Valkey version 8.0 and above.
      */
     getPatterns?: GlideString[];
-};
-
-interface SortBaseOptions {
-    /**
-     * Limiting the range of the query by setting offset and result count. See {@link Limit} class for
-     * more information.
-     */
-    limit?: Limit;
 
     /** Options for sorting order of elements. */
     orderBy?: SortOrder;
@@ -3591,13 +3615,6 @@ interface SortBaseOptions {
      */
     isAlpha?: boolean;
 }
-
-/**
- * Optional arguments to {@link GlideClusterClient.sort|sort}, {@link GlideClusterClient.sortStore|sortStore} and {@link GlideClusterClient.sortReadOnly|sortReadOnly} commands.
- *
- * See https://valkey.io/commands/sort/ for more details.
- */
-export type SortClusterOptions = SortBaseOptions;
 
 /**
  * The `LIMIT` argument is commonly used to specify a subset of results from the
@@ -3815,6 +3832,17 @@ export interface BaseScanOptions {
 }
 
 /**
+ * Options for the SCAN command.
+ * `match`: The match filter is applied to the result of the command and will only include keys that match the pattern specified.
+ * `count`: `COUNT` is a just a hint for the command for how many elements to fetch from the server, the default is 10.
+ * `type`: The type of the object to scan.
+ *  Types are the data types of Valkey: `string`, `list`, `set`, `zset`, `hash`, `stream`.
+ */
+export interface ScanOptions extends BaseScanOptions {
+    type?: ObjectType;
+}
+
+/**
  * Options specific to the ZSCAN command, extending from the base scan options.
  */
 export type ZScanOptions = BaseScanOptions & {
@@ -3996,6 +4024,13 @@ export function createBZPopMin(
     timeout: number,
 ): command_request.Command {
     return createCommand(RequestType.BZPopMin, [...keys, timeout.toString()]);
+}
+
+/**
+ * @internal
+ */
+export function createScriptShow(sha1: GlideString): command_request.Command {
+    return createCommand(RequestType.ScriptShow, [sha1]);
 }
 
 /**

@@ -2,17 +2,17 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
+import { ClusterScanCursor } from "glide-rs";
 import * as net from "net";
 import {
     BaseClient,
     BaseClientConfiguration,
     Decoder,
     DecoderOption,
-    GlideRecord, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GlideRecord,
     GlideReturnType,
     GlideString,
     PubSubMsg,
-    ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
     convertGlideRecordToRecord,
 } from "./BaseClient";
 import {
@@ -23,7 +23,7 @@ import {
     FunctionStatsSingleResponse,
     InfoOptions,
     LolwutOptions,
-    SortClusterOptions,
+    ScanOptions,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -57,12 +57,10 @@ import {
     createScriptExists,
     createScriptFlush,
     createScriptKill,
-    createSort,
-    createSortReadOnly,
     createTime,
     createUnWatch,
 } from "./Commands";
-import { connection_request } from "./ProtobufMessage";
+import { command_request, connection_request } from "./ProtobufMessage";
 import { ClusterTransaction } from "./Transaction";
 
 /** An extension to command option types with {@link Routes}. */
@@ -315,6 +313,111 @@ export class GlideClusterClient extends BaseClient {
             connectedSocket,
             (socket, options) => new GlideClusterClient(socket, options),
         );
+    }
+
+    /**
+     * @internal
+     */
+    protected scanOptionsToProto(
+        cursor: string,
+        options?: ScanOptions,
+    ): command_request.ClusterScan {
+        const command = command_request.ClusterScan.create();
+        command.cursor = cursor;
+
+        if (options?.match) {
+            command.matchPattern = Buffer.from(options.match);
+        }
+
+        if (options?.count) {
+            command.count = options.count;
+        }
+
+        if (options?.type) {
+            command.objectType = options.type;
+        }
+
+        return command;
+    }
+
+    /**
+     * @internal
+     */
+    protected createClusterScanPromise(
+        cursor: ClusterScanCursor,
+        options?: ScanOptions & DecoderOption,
+    ): Promise<[ClusterScanCursor, GlideString[]]> {
+        // separate decoder option from scan options
+        const { decoder, ...scanOptions } = options || {};
+        const cursorId = cursor.getCursor();
+        const command = this.scanOptionsToProto(cursorId, scanOptions);
+        return this.createWritePromise(command, { decoder });
+    }
+
+    /**
+     * Incrementally iterates over the keys in the Cluster.
+     *
+     * This command is similar to the `SCAN` command but designed for Cluster environments.
+     * It uses a {@link ClusterScanCursor} object to manage iterations.
+     *
+     * For each iteration, use the new cursor object to continue the scan.
+     * Using the same cursor object for multiple iterations may result in unexpected behavior.
+     *
+     * For more information about the Cluster Scan implementation, see
+     * {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan | Cluster Scan}.
+     *
+     * This method can iterate over all keys in the database from the start of the scan until it ends.
+     * The same key may be returned in multiple scan iterations.
+     * The API does not accept `route` as it go through all slots in the cluster.
+     *
+     * @see {@link https://valkey.io/commands/scan/ | valkey.io} for more details.
+     *
+     * @param cursor - The cursor object that wraps the scan state.
+     *   To start a new scan, create a new empty `ClusterScanCursor` using {@link ClusterScanCursor}.
+     * @param options - (Optional) The scan options, see {@link ScanOptions} and  {@link DecoderOption}.
+     * @returns A Promise resolving to an array containing the next cursor and an array of keys,
+     *   formatted as [`ClusterScanCursor`, `string[]`].
+     *
+     * @example
+     * ```typescript
+     * // Iterate over all keys in the cluster
+     * await client.mset([{key: "key1", value: "value1"}, {key: "key2", value: "value2"}, {key: "key3", value: "value3"}]);
+     * let cursor = new ClusterScanCursor();
+     * const allKeys: GlideString[] = [];
+     * let keys: GlideString[] = [];
+     * while (!cursor.isFinished()) {
+     *   [cursor, keys] = await client.scan(cursor, { count: 10 });
+     *   allKeys.push(...keys);
+     * }
+     * console.log(allKeys); // ["key1", "key2", "key3"]
+     *
+     * // Iterate over keys matching a pattern
+     * await client.mset([{key: "key1", value: "value1"}, {key: "key2", value: "value2"}, {key: "notMykey", value: "value3"}, {key: "somethingElse", value: "value4"}]);
+     * let cursor = new ClusterScanCursor();
+     * const matchedKeys: GlideString[] = [];
+     * while (!cursor.isFinished()) {
+     *   const [cursor, keys] = await client.scan(cursor, { match: "*key*", count: 10 });
+     *   matchedKeys.push(...keys);
+     * }
+     * console.log(matchedKeys); // ["key1", "key2", "notMykey"]
+     *
+     * // Iterate over keys of a specific type
+     * await client.mset([{key: "key1", value: "value1"}, {key: "key2", value: "value2"}, {key: "key3", value: "value3"}]);
+     * await client.sadd("thisIsASet", ["value4"]);
+     * let cursor = new ClusterScanCursor();
+     * const stringKeys: GlideString[] = [];
+     * while (!cursor.isFinished()) {
+     *   const [cursor, keys] = await client.scan(cursor, { type: object.STRING });
+     *   stringKeys.push(...keys);
+     * }
+     * console.log(stringKeys); // ["key1", "key2", "key3"]
+     * ```
+     */
+    public async scan(
+        cursor: ClusterScanCursor,
+        options?: ScanOptions & DecoderOption,
+    ): Promise<[ClusterScanCursor, GlideString[]]> {
+        return this.createClusterScanPromise(cursor, options);
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
@@ -1262,98 +1365,6 @@ export class GlideClusterClient extends BaseClient {
                 return { channel: r.key, numSub: r.value };
             }),
         );
-    }
-
-    /**
-     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
-     *
-     * The `sort` command can be used to sort elements based on different criteria and
-     * apply transformations on sorted elements.
-     *
-     * To store the result into a new key, see {@link sortStore}.
-     *
-     * @see {@link https://valkey.io/commands/sort/|valkey.io} for details.
-     *
-     * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param options - (Optional) {@link SortClusterOptions} and {@link DecoderOption}.
-     * @returns An `Array` of sorted elements.
-     *
-     * @example
-     * ```typescript
-     * await client.lpush("mylist", ["3", "1", "2", "a"]);
-     * const result = await client.sort("mylist", { alpha: true, orderBy: SortOrder.DESC, limit: { offset: 0, count: 3 } });
-     * console.log(result); // Output: [ 'a', '3', '2' ] - List is sorted in descending order lexicographically
-     * ```
-     */
-    public async sort(
-        key: GlideString,
-        options?: SortClusterOptions & DecoderOption,
-    ): Promise<GlideString[]> {
-        return this.createWritePromise(createSort(key, options), options);
-    }
-
-    /**
-     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
-     *
-     * The `sortReadOnly` command can be used to sort elements based on different criteria and
-     * apply transformations on sorted elements.
-     *
-     * This command is routed depending on the client's {@link ReadFrom} strategy.
-     *
-     * @remarks Since Valkey version 7.0.0.
-     *
-     * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param options - (Optional) See {@link SortClusterOptions} and {@link DecoderOption}.
-     * @returns An `Array` of sorted elements
-     *
-     * @example
-     * ```typescript
-     * await client.lpush("mylist", ["3", "1", "2", "a"]);
-     * const result = await client.sortReadOnly("mylist", { alpha: true, orderBy: SortOrder.DESC, limit: { offset: 0, count: 3 } });
-     * console.log(result); // Output: [ 'a', '3', '2' ] - List is sorted in descending order lexicographically
-     * ```
-     */
-    public async sortReadOnly(
-        key: GlideString,
-        options?: SortClusterOptions & DecoderOption,
-    ): Promise<GlideString[]> {
-        return this.createWritePromise(
-            createSortReadOnly(key, options),
-            options,
-        );
-    }
-
-    /**
-     * Sorts the elements in the list, set, or sorted set at `key` and stores the result in
-     * `destination`.
-     *
-     * The `sort` command can be used to sort elements based on different criteria and
-     * apply transformations on sorted elements, and store the result in a new key.
-     *
-     * To get the sort result without storing it into a key, see {@link sort} or {@link sortReadOnly}.
-     *
-     * @see {@link https://valkey.io/commands/sort/|valkey.io} for details.
-     * @remarks When in cluster mode, `destination` and `key` must map to the same hash slot.
-     *
-     * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param destination - The key where the sorted result will be stored.
-     * @param options - (Optional) See {@link SortClusterOptions}.
-     * @returns The number of elements in the sorted key stored at `destination`.
-     *
-     * @example
-     * ```typescript
-     * await client.lpush("mylist", ["3", "1", "2", "a"]);
-     * const sortedElements = await client.sortReadOnly("mylist", "sortedList", { alpha: true, orderBy: SortOrder.DESC, limit: { offset: 0, count: 3 } });
-     * console.log(sortedElements); // Output: 3 - number of elements sorted and stored
-     * console.log(await client.lrange("sortedList", 0, -1)); // Output: [ 'a', '3', '2' ] - List is sorted in descending order lexicographically and stored in `sortedList`
-     * ```
-     */
-    public async sortStore(
-        key: GlideString,
-        destination: GlideString,
-        options?: SortClusterOptions,
-    ): Promise<number> {
-        return this.createWritePromise(createSort(key, options, destination));
     }
 
     /**

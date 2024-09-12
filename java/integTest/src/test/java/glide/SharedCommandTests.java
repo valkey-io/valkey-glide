@@ -18,6 +18,8 @@ import static glide.api.models.commands.ScoreFilter.MIN;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS;
 import static glide.api.models.commands.SetOptions.Expiry.Milliseconds;
+import static glide.api.models.commands.SortBaseOptions.OrderBy.ASC;
+import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -39,10 +41,10 @@ import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
+import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
 import glide.api.models.commands.RangeOptions.LexBoundary;
-import glide.api.models.commands.RangeOptions.Limit;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.RangeOptions.RangeByLex;
 import glide.api.models.commands.RangeOptions.RangeByScore;
@@ -51,6 +53,9 @@ import glide.api.models.commands.RestoreOptions;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.ScriptOptionsGlideString;
 import glide.api.models.commands.SetOptions;
+import glide.api.models.commands.SortBaseOptions;
+import glide.api.models.commands.SortOptions;
+import glide.api.models.commands.SortOptionsBinary;
 import glide.api.models.commands.SortOrder;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
@@ -3247,6 +3252,33 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void scriptShow_test(BaseClient client) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0"));
+
+        String code = "return '" + UUID.randomUUID().toString().substring(0, 5) + "'";
+        Script script = new Script(code, false);
+
+        // Load the script
+        client.invokeScript(script).get();
+
+        // Get the SHA1 digest of the script
+        String sha1 = script.getHash();
+
+        // Test with String
+        assertEquals(code, client.scriptShow(sha1).get());
+
+        // Test with GlideString
+        assertEquals(gs(code), client.scriptShow(gs(sha1)).get());
+
+        // Test with non-existing SHA1
+        String nonExistingSha1 = UUID.randomUUID().toString();
+        assertThrows(ExecutionException.class, () -> client.scriptShow(nonExistingSha1).get());
+        assertThrows(ExecutionException.class, () -> client.scriptShow(gs(nonExistingSha1)).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void zadd_and_zaddIncr(BaseClient client) {
         String key = UUID.randomUUID().toString();
         Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
@@ -4591,7 +4623,9 @@ public class SharedCommandTests {
         // Range from negative to positive infinity. Limited to ranks 1 to 2.
         query =
                 new RangeByScore(
-                        InfScoreBound.NEGATIVE_INFINITY, InfScoreBound.POSITIVE_INFINITY, new Limit(1, 2));
+                        InfScoreBound.NEGATIVE_INFINITY,
+                        InfScoreBound.POSITIVE_INFINITY,
+                        new RangeOptions.Limit(1, 2));
         assertEquals(2, client.zrangestore(destination, source, query).get());
         assertEquals(
                 Map.of(gs("two"), 2.0, gs("three"), 3.0),
@@ -4600,7 +4634,9 @@ public class SharedCommandTests {
         // Range from positive to negative infinity with rev set to true. Limited to ranks 1 to 2.
         query =
                 new RangeByScore(
-                        InfScoreBound.POSITIVE_INFINITY, InfScoreBound.NEGATIVE_INFINITY, new Limit(1, 2));
+                        InfScoreBound.POSITIVE_INFINITY,
+                        InfScoreBound.NEGATIVE_INFINITY,
+                        new RangeOptions.Limit(1, 2));
         assertEquals(2, client.zrangestore(destination, source, query, true).get());
         assertEquals(
                 Map.of(gs("two"), 2.0, gs("one"), 1.0),
@@ -4659,7 +4695,9 @@ public class SharedCommandTests {
         // Range from negative to positive infinity. Limited to ranks 1 to 2.
         query =
                 new RangeByScore(
-                        InfScoreBound.NEGATIVE_INFINITY, InfScoreBound.POSITIVE_INFINITY, new Limit(1, 2));
+                        InfScoreBound.NEGATIVE_INFINITY,
+                        InfScoreBound.POSITIVE_INFINITY,
+                        new RangeOptions.Limit(1, 2));
         assertEquals(2, client.zrangestore(destination, source, query).get());
         assertEquals(
                 Map.of("two", 2.0, "three", 3.0),
@@ -4668,7 +4706,9 @@ public class SharedCommandTests {
         // Range from positive to negative infinity with rev set to true. Limited to ranks 1 to 2.
         query =
                 new RangeByScore(
-                        InfScoreBound.POSITIVE_INFINITY, InfScoreBound.NEGATIVE_INFINITY, new Limit(1, 2));
+                        InfScoreBound.POSITIVE_INFINITY,
+                        InfScoreBound.NEGATIVE_INFINITY,
+                        new RangeOptions.Limit(1, 2));
         assertEquals(2, client.zrangestore(destination, source, query, true).get());
         assertEquals(
                 Map.of("two", 2.0, "one", 1.0),
@@ -4726,7 +4766,9 @@ public class SharedCommandTests {
         // Range from negative to positive infinity. Limited to ranks 1 to 2.
         query =
                 new RangeByLex(
-                        InfLexBound.NEGATIVE_INFINITY, InfLexBound.POSITIVE_INFINITY, new Limit(1, 2));
+                        InfLexBound.NEGATIVE_INFINITY,
+                        InfLexBound.POSITIVE_INFINITY,
+                        new RangeOptions.Limit(1, 2));
         assertEquals(2, client.zrangestore(destination, source, query).get());
         assertEquals(
                 Map.of(gs("b"), 2.0, gs("c"), 3.0),
@@ -4735,7 +4777,9 @@ public class SharedCommandTests {
         // Range from positive to negative infinity with rev set to true. Limited to ranks 1 to 2.
         query =
                 new RangeByLex(
-                        InfLexBound.POSITIVE_INFINITY, InfLexBound.NEGATIVE_INFINITY, new Limit(1, 2));
+                        InfLexBound.POSITIVE_INFINITY,
+                        InfLexBound.NEGATIVE_INFINITY,
+                        new RangeOptions.Limit(1, 2));
         assertEquals(2, client.zrangestore(destination, source, query, true).get());
         assertEquals(
                 Map.of(gs("b"), 2.0, gs("a"), 1.0),
@@ -4788,7 +4832,9 @@ public class SharedCommandTests {
         // Range from negative to positive infinity. Limited to ranks 1 to 2.
         query =
                 new RangeByLex(
-                        InfLexBound.NEGATIVE_INFINITY, InfLexBound.POSITIVE_INFINITY, new Limit(1, 2));
+                        InfLexBound.NEGATIVE_INFINITY,
+                        InfLexBound.POSITIVE_INFINITY,
+                        new RangeOptions.Limit(1, 2));
         assertEquals(2, client.zrangestore(destination, source, query).get());
         assertEquals(
                 Map.of("b", 2.0, "c", 3.0),
@@ -4797,7 +4843,9 @@ public class SharedCommandTests {
         // Range from positive to negative infinity with rev set to true. Limited to ranks 1 to 2.
         query =
                 new RangeByLex(
-                        InfLexBound.POSITIVE_INFINITY, InfLexBound.NEGATIVE_INFINITY, new Limit(1, 2));
+                        InfLexBound.POSITIVE_INFINITY,
+                        InfLexBound.NEGATIVE_INFINITY,
+                        new RangeOptions.Limit(1, 2));
         assertEquals(2, client.zrangestore(destination, source, query, true).get());
         assertEquals(
                 Map.of("b", 2.0, "a", 1.0),
@@ -9324,7 +9372,7 @@ public class SharedCommandTests {
         query = new RangeByScore(new ScoreBoundary(3, false), NEGATIVE_INFINITY);
         assertArrayEquals(new String[] {"two", "one"}, client.zrange(key, query, true).get());
 
-        query = new RangeByScore(NEGATIVE_INFINITY, POSITIVE_INFINITY, new Limit(1, 2));
+        query = new RangeByScore(NEGATIVE_INFINITY, POSITIVE_INFINITY, new RangeOptions.Limit(1, 2));
         assertArrayEquals(new String[] {"two", "three"}, client.zrange(key, query).get());
 
         query = new RangeByScore(NEGATIVE_INFINITY, new ScoreBoundary(3, false));
@@ -9373,7 +9421,9 @@ public class SharedCommandTests {
 
         query =
                 new RangeByScore(
-                        InfScoreBound.NEGATIVE_INFINITY, InfScoreBound.POSITIVE_INFINITY, new Limit(1, 2));
+                        InfScoreBound.NEGATIVE_INFINITY,
+                        InfScoreBound.POSITIVE_INFINITY,
+                        new RangeOptions.Limit(1, 2));
         assertArrayEquals(new GlideString[] {gs("two"), gs("three")}, client.zrange(key, query).get());
 
         query = new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, false));
@@ -9411,7 +9461,9 @@ public class SharedCommandTests {
 
         query =
                 new RangeByLex(
-                        InfLexBound.NEGATIVE_INFINITY, InfLexBound.POSITIVE_INFINITY, new Limit(1, 2));
+                        InfLexBound.NEGATIVE_INFINITY,
+                        InfLexBound.POSITIVE_INFINITY,
+                        new RangeOptions.Limit(1, 2));
         assertArrayEquals(new String[] {"b", "c"}, client.zrange(key, query).get());
 
         query = new RangeByLex(new LexBoundary("c", false), InfLexBound.NEGATIVE_INFINITY);
@@ -9442,7 +9494,9 @@ public class SharedCommandTests {
 
         query =
                 new RangeByLex(
-                        InfLexBound.NEGATIVE_INFINITY, InfLexBound.POSITIVE_INFINITY, new Limit(1, 2));
+                        InfLexBound.NEGATIVE_INFINITY,
+                        InfLexBound.POSITIVE_INFINITY,
+                        new RangeOptions.Limit(1, 2));
         assertArrayEquals(new GlideString[] {gs("b"), gs("c")}, client.zrange(key, query).get());
 
         query = new RangeByLex(new LexBoundary("c", false), InfLexBound.NEGATIVE_INFINITY);
@@ -12470,6 +12524,390 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.sort(key2).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void sort_with_pattern(BaseClient client) {
+        if (client instanceof GlideClusterClient) {
+            assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0"), "This feature added in version 8");
+        }
+        String setKey1 = "{setKey}1";
+        String setKey2 = "{setKey}2";
+        String setKey3 = "{setKey}3";
+        String setKey4 = "{setKey}4";
+        String setKey5 = "{setKey}5";
+        String[] setKeys = new String[] {setKey1, setKey2, setKey3, setKey4, setKey5};
+        String listKey = "{setKey}listKey";
+        String storeKey = "{setKey}storeKey";
+        String nameField = "name";
+        String ageField = "age";
+        String[] names = new String[] {"Alice", "Bob", "Charlie", "Dave", "Eve"};
+        String[] namesSortedByAge = new String[] {"Dave", "Bob", "Alice", "Charlie", "Eve"};
+        String[] ages = new String[] {"30", "25", "35", "20", "40"};
+        String[] userIDs = new String[] {"3", "1", "5", "4", "2"};
+        String namePattern = "{setKey}*->name";
+        String agePattern = "{setKey}*->age";
+        String missingListKey = "100000";
+
+        for (int i = 0; i < setKeys.length; i++) {
+            assertEquals(
+                    2, client.hset(setKeys[i], Map.of(nameField, names[i], ageField, ages[i])).get());
+        }
+
+        assertEquals(5, client.rpush(listKey, userIDs).get());
+        assertArrayEquals(
+                new String[] {"Alice", "Bob"},
+                client
+                        .sort(
+                                listKey,
+                                SortOptions.builder()
+                                        .limit(new SortBaseOptions.Limit(0L, 2L))
+                                        .getPattern(namePattern)
+                                        .build())
+                        .get());
+        assertArrayEquals(
+                new String[] {"Eve", "Dave"},
+                client
+                        .sort(
+                                listKey,
+                                SortOptions.builder()
+                                        .limit(new SortBaseOptions.Limit(0L, 2L))
+                                        .orderBy(DESC)
+                                        .getPattern(namePattern)
+                                        .build())
+                        .get());
+        assertArrayEquals(
+                new String[] {"Eve", "40", "Charlie", "35"},
+                client
+                        .sort(
+                                listKey,
+                                SortOptions.builder()
+                                        .limit(new SortBaseOptions.Limit(0L, 2L))
+                                        .orderBy(DESC)
+                                        .byPattern(agePattern)
+                                        .getPatterns(List.of(namePattern, agePattern))
+                                        .build())
+                        .get());
+
+        // Non-existent key in the BY pattern will result in skipping the sorting operation
+        assertArrayEquals(
+                userIDs, client.sort(listKey, SortOptions.builder().byPattern("noSort").build()).get());
+
+        // Non-existent key in the GET pattern results in nulls
+        assertArrayEquals(
+                new String[] {null, null, null, null, null},
+                client
+                        .sort(listKey, SortOptions.builder().alpha().getPattern("{setKey}missing").build())
+                        .get());
+
+        // Missing key in the set
+        assertEquals(6, client.lpush(listKey, new String[] {missingListKey}).get());
+        assertArrayEquals(
+                new String[] {null, "Dave", "Bob", "Alice", "Charlie", "Eve"},
+                client
+                        .sort(
+                                listKey,
+                                SortOptions.builder().byPattern(agePattern).getPattern(namePattern).build())
+                        .get());
+        assertEquals(missingListKey, client.lpop(listKey).get());
+
+        // SORT_RO
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertArrayEquals(
+                    new String[] {"Alice", "Bob"},
+                    client
+                            .sortReadOnly(
+                                    listKey,
+                                    SortOptions.builder()
+                                            .limit(new SortBaseOptions.Limit(0L, 2L))
+                                            .getPattern(namePattern)
+                                            .build())
+                            .get());
+            assertArrayEquals(
+                    new String[] {"Eve", "Dave"},
+                    client
+                            .sortReadOnly(
+                                    listKey,
+                                    SortOptions.builder()
+                                            .limit(new SortBaseOptions.Limit(0L, 2L))
+                                            .orderBy(DESC)
+                                            .getPattern(namePattern)
+                                            .build())
+                            .get());
+            assertArrayEquals(
+                    new String[] {"Eve", "40", "Charlie", "35"},
+                    client
+                            .sortReadOnly(
+                                    listKey,
+                                    SortOptions.builder()
+                                            .limit(new SortBaseOptions.Limit(0L, 2L))
+                                            .orderBy(DESC)
+                                            .byPattern(agePattern)
+                                            .getPatterns(List.of(namePattern, agePattern))
+                                            .build())
+                            .get());
+
+            // Non-existent key in the BY pattern will result in skipping the sorting operation
+            assertArrayEquals(
+                    userIDs,
+                    client.sortReadOnly(listKey, SortOptions.builder().byPattern("noSort").build()).get());
+
+            // Non-existent key in the GET pattern results in nulls
+            assertArrayEquals(
+                    new String[] {null, null, null, null, null},
+                    client
+                            .sortReadOnly(
+                                    listKey, SortOptions.builder().alpha().getPattern("{setKey}missing").build())
+                            .get());
+
+            assertArrayEquals(
+                    namesSortedByAge,
+                    client
+                            .sortReadOnly(
+                                    listKey,
+                                    SortOptions.builder().byPattern(agePattern).getPattern(namePattern).build())
+                            .get());
+
+            // Missing key in the set
+            assertEquals(6, client.lpush(listKey, new String[] {missingListKey}).get());
+            assertArrayEquals(
+                    new String[] {null, "Dave", "Bob", "Alice", "Charlie", "Eve"},
+                    client
+                            .sortReadOnly(
+                                    listKey,
+                                    SortOptions.builder().byPattern(agePattern).getPattern(namePattern).build())
+                            .get());
+            assertEquals(missingListKey, client.lpop(listKey).get());
+        }
+
+        // SORT with STORE
+        assertEquals(
+                5,
+                client
+                        .sortStore(
+                                listKey,
+                                storeKey,
+                                SortOptions.builder()
+                                        .limit(new SortBaseOptions.Limit(0L, -1L))
+                                        .orderBy(ASC)
+                                        .byPattern(agePattern)
+                                        .getPattern(namePattern)
+                                        .build())
+                        .get());
+        assertArrayEquals(namesSortedByAge, client.lrange(storeKey, 0, -1).get());
+        assertEquals(
+                5,
+                client
+                        .sortStore(
+                                listKey,
+                                storeKey,
+                                SortOptions.builder().byPattern(agePattern).getPattern(namePattern).build())
+                        .get());
+        assertArrayEquals(namesSortedByAge, client.lrange(storeKey, 0, -1).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void sort_with_pattern_binary(BaseClient client) {
+        if (client instanceof GlideClusterClient) {
+            assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0"), "This feature added in version 8");
+        }
+
+        GlideString setKey1 = gs("{setKeyGs}1");
+        GlideString setKey2 = gs("{setKeyGs}2");
+        GlideString setKey3 = gs("{setKeyGs}3");
+        GlideString setKey4 = gs("{setKeyGs}4");
+        GlideString setKey5 = gs("{setKeyGs}5");
+        GlideString[] setKeys = new GlideString[] {setKey1, setKey2, setKey3, setKey4, setKey5};
+        GlideString listKey = gs("{setKeyGs}listKey");
+        GlideString storeKey = gs("{setKeyGs}storeKey");
+        GlideString nameField = gs("name");
+        GlideString ageField = gs("age");
+        GlideString[] names =
+                new GlideString[] {gs("Alice"), gs("Bob"), gs("Charlie"), gs("Dave"), gs("Eve")};
+        String[] namesSortedByAge = new String[] {"Dave", "Bob", "Alice", "Charlie", "Eve"};
+        GlideString[] namesSortedByAge_gs =
+                new GlideString[] {gs("Dave"), gs("Bob"), gs("Alice"), gs("Charlie"), gs("Eve")};
+        GlideString[] ages = new GlideString[] {gs("30"), gs("25"), gs("35"), gs("20"), gs("40")};
+        GlideString[] userIDs = new GlideString[] {gs("3"), gs("1"), gs("5"), gs("4"), gs("2")};
+        GlideString namePattern = gs("{setKeyGs}*->name");
+        GlideString agePattern = gs("{setKeyGs}*->age");
+        GlideString missingListKey = gs("100000");
+
+        for (int i = 0; i < setKeys.length; i++) {
+            assertEquals(
+                    2,
+                    client
+                            .hset(
+                                    setKeys[i].toString(),
+                                    Map.of(
+                                            nameField.toString(),
+                                            names[i].toString(),
+                                            ageField.toString(),
+                                            ages[i].toString()))
+                            .get());
+        }
+
+        assertEquals(5, client.rpush(listKey, userIDs).get());
+        assertArrayEquals(
+                new GlideString[] {gs("Alice"), gs("Bob")},
+                client
+                        .sort(
+                                listKey,
+                                SortOptionsBinary.builder()
+                                        .limit(new SortBaseOptions.Limit(0L, 2L))
+                                        .getPattern(namePattern)
+                                        .build())
+                        .get());
+
+        assertArrayEquals(
+                new GlideString[] {gs("Eve"), gs("Dave")},
+                client
+                        .sort(
+                                listKey,
+                                SortOptionsBinary.builder()
+                                        .limit(new SortBaseOptions.Limit(0L, 2L))
+                                        .orderBy(DESC)
+                                        .getPattern(namePattern)
+                                        .build())
+                        .get());
+        assertArrayEquals(
+                new GlideString[] {gs("Eve"), gs("40"), gs("Charlie"), gs("35")},
+                client
+                        .sort(
+                                listKey,
+                                SortOptionsBinary.builder()
+                                        .limit(new SortBaseOptions.Limit(0L, 2L))
+                                        .orderBy(DESC)
+                                        .byPattern(agePattern)
+                                        .getPatterns(List.of(namePattern, agePattern))
+                                        .build())
+                        .get());
+
+        // Non-existent key in the BY pattern will result in skipping the sorting operation
+        assertArrayEquals(
+                userIDs,
+                client.sort(listKey, SortOptionsBinary.builder().byPattern(gs("noSort")).build()).get());
+
+        // Non-existent key in the GET pattern results in nulls
+        assertArrayEquals(
+                new GlideString[] {null, null, null, null, null},
+                client
+                        .sort(
+                                listKey,
+                                SortOptionsBinary.builder().alpha().getPattern(gs("{setKeyGs}missing")).build())
+                        .get());
+
+        // Missing key in the set
+        assertEquals(6, client.lpush(listKey, new GlideString[] {missingListKey}).get());
+        assertArrayEquals(
+                new GlideString[] {null, gs("Dave"), gs("Bob"), gs("Alice"), gs("Charlie"), gs("Eve")},
+                client
+                        .sort(
+                                listKey,
+                                SortOptionsBinary.builder().byPattern(agePattern).getPattern(namePattern).build())
+                        .get());
+        assertEquals(missingListKey.toString(), client.lpop(listKey.toString()).get());
+
+        // SORT_RO
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertArrayEquals(
+                    new GlideString[] {gs("Alice"), gs("Bob")},
+                    client
+                            .sortReadOnly(
+                                    listKey,
+                                    SortOptionsBinary.builder()
+                                            .limit(new SortBaseOptions.Limit(0L, 2L))
+                                            .getPattern(namePattern)
+                                            .build())
+                            .get());
+            assertArrayEquals(
+                    new GlideString[] {gs("Eve"), gs("Dave")},
+                    client
+                            .sortReadOnly(
+                                    listKey,
+                                    SortOptionsBinary.builder()
+                                            .limit(new SortBaseOptions.Limit(0L, 2L))
+                                            .orderBy(DESC)
+                                            .getPattern(namePattern)
+                                            .build())
+                            .get());
+            assertArrayEquals(
+                    new GlideString[] {gs("Eve"), gs("40"), gs("Charlie"), gs("35")},
+                    client
+                            .sortReadOnly(
+                                    listKey,
+                                    SortOptionsBinary.builder()
+                                            .limit(new SortBaseOptions.Limit(0L, 2L))
+                                            .orderBy(DESC)
+                                            .byPattern(agePattern)
+                                            .getPatterns(List.of(namePattern, agePattern))
+                                            .build())
+                            .get());
+
+            // Non-existent key in the BY pattern will result in skipping the sorting operation
+            assertArrayEquals(
+                    userIDs,
+                    client
+                            .sortReadOnly(listKey, SortOptionsBinary.builder().byPattern(gs("noSort")).build())
+                            .get());
+
+            // Non-existent key in the GET pattern results in nulls
+            assertArrayEquals(
+                    new GlideString[] {null, null, null, null, null},
+                    client
+                            .sortReadOnly(
+                                    listKey,
+                                    SortOptionsBinary.builder().alpha().getPattern(gs("{setKeyGs}missing")).build())
+                            .get());
+
+            assertArrayEquals(
+                    namesSortedByAge_gs,
+                    client
+                            .sortReadOnly(
+                                    listKey,
+                                    SortOptionsBinary.builder().byPattern(agePattern).getPattern(namePattern).build())
+                            .get());
+
+            // Missing key in the set
+            assertEquals(6, client.lpush(listKey, new GlideString[] {missingListKey}).get());
+            assertArrayEquals(
+                    new GlideString[] {null, gs("Dave"), gs("Bob"), gs("Alice"), gs("Charlie"), gs("Eve")},
+                    client
+                            .sortReadOnly(
+                                    listKey,
+                                    SortOptionsBinary.builder().byPattern(agePattern).getPattern(namePattern).build())
+                            .get());
+            assertEquals(missingListKey.toString(), client.lpop(listKey.toString()).get());
+        }
+
+        // SORT with STORE
+        assertEquals(
+                5,
+                client
+                        .sortStore(
+                                listKey,
+                                storeKey,
+                                SortOptionsBinary.builder()
+                                        .limit(new SortBaseOptions.Limit(0L, -1L))
+                                        .orderBy(ASC)
+                                        .byPattern(agePattern)
+                                        .getPattern(namePattern)
+                                        .build())
+                        .get());
+        assertArrayEquals(namesSortedByAge, client.lrange(storeKey.toString(), 0, -1).get());
+        assertEquals(
+                5,
+                client
+                        .sortStore(
+                                listKey,
+                                storeKey,
+                                SortOptionsBinary.builder().byPattern(agePattern).getPattern(namePattern).build())
+                        .get());
+        assertArrayEquals(namesSortedByAge, client.lrange(storeKey.toString(), 0, -1).get());
     }
 
     @SneakyThrows

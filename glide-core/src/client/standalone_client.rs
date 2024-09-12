@@ -6,16 +6,15 @@ use super::reconnecting_connection::ReconnectingConnection;
 use super::{ConnectionRequest, NodeAddress, TlsMode};
 use crate::retry_strategies::RetryStrategy;
 use futures::{future, stream, StreamExt};
-#[cfg(feature = "standalone_heartbeat")]
 use logger_core::log_debug;
 use logger_core::log_warn;
 use rand::Rng;
+use redis::aio::ConnectionLike;
 use redis::cluster_routing::{self, is_readonly_cmd, ResponsePolicy, Routable, RoutingInfo};
 use redis::{PushInfo, RedisError, RedisResult, Value};
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use tokio::sync::mpsc;
-#[cfg(feature = "standalone_heartbeat")]
 use tokio::task;
 
 #[derive(Debug)]
@@ -188,6 +187,10 @@ impl StandaloneClient {
         #[cfg(feature = "standalone_heartbeat")]
         for node in nodes.iter() {
             Self::start_heartbeat(node.clone());
+        }
+
+        for node in nodes.iter() {
+            Self::start_periodic_connection_check(node.clone());
         }
 
         Ok(Self {
@@ -411,6 +414,45 @@ impl StandaloneClient {
                     .is_err_and(|err| err.is_connection_dropped() || err.is_connection_refusal())
                 {
                     log_debug("StandaloneClient", "heartbeat triggered reconnect");
+                    reconnecting_connection.reconnect();
+                }
+            }
+        });
+    }
+
+    // Monitors passive connection status and reconnects if necessary.
+    // This function is cheaper alternative to start_heartbeat(),
+    // as it avoids sending PING commands to the server, checking only the connection state.
+    fn start_periodic_connection_check(reconnecting_connection: ReconnectingConnection) {
+        task::spawn(async move {
+            loop {
+                reconnecting_connection
+                    .wait_for_disconnect_with_timeout(&super::CONNECTION_CHECKS_INTERVAL)
+                    .await;
+                // check connection is valid
+                if reconnecting_connection.is_dropped() {
+                    log_debug(
+                        "StandaloneClient",
+                        "connection checker stopped after connection was dropped",
+                    );
+                    // Client was dropped, checker can stop.
+                    return;
+                }
+
+                let Some(connection) = reconnecting_connection.try_get_connection().await else {
+                    log_debug(
+                        "StandaloneClient",
+                        "connection checker is skipping a connections since its reconnecting",
+                    );
+                    // Client is reconnecting..
+                    continue;
+                };
+
+                if connection.is_closed() {
+                    log_debug(
+                        "StandaloneClient",
+                        "connection checker has triggered reconnect",
+                    );
                     reconnecting_connection.reconnect();
                 }
             }

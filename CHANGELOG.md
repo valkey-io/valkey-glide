@@ -116,9 +116,13 @@
 * Node: Added XGROUP SETID command ([#2135](https://github.com/valkey-io/valkey-glide/pull/2135))
 * Node: Added binary variant to string commands ([#2183](https://github.com/valkey-io/valkey-glide/pull/2183))
 * Node: Added binary variant to stream commands ([#2200](https://github.com/valkey-io/valkey-glide/pull/2200), [#2222](https://github.com/valkey-io/valkey-glide/pull/2222))
-* Python, Node, Java: change BITCOUNT end param to optional ([#2248](https://github.com/valkey-io/valkey-glide/pull/2248))
 * Python: Add Script commands ([#2208](https://github.com/valkey-io/valkey-glide/pull/2208))
 * Node: Added Script commands ([#2267](https://github.com/valkey-io/valkey-glide/pull/2267))
+* Java, Node, Python: Add BY/GET support for SORT/RO in cluster mode (Valkey-8) ([#2252](https://github.com/valkey-io/valkey-glide/pull/2252))
+* Java, Node, Python: Add SCRIPT SHOW command (Valkey-8) ([#2171](https://github.com/valkey-io/valkey-glide/pull/2171))
+* Java, Node, Python: Change BITCOUNT end param to optional (Valkey-8) ([#2248](https://github.com/valkey-io/valkey-glide/pull/2248))
+* Java, Node, Python: Add NOSCORES option to ZSCAN & NOVALUES option to HSCAN (Valkey-8) ([#2174](https://github.com/valkey-io/valkey-glide/pull/2174))
+* Node: Add SCAN command ([#2257](https://github.com/valkey-io/valkey-glide/pull/2257))
 
 #### Breaking Changes
 * Java: Update INFO command ([#2274](https://github.com/valkey-io/valkey-glide/pull/2274))

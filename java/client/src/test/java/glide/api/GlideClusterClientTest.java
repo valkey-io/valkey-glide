@@ -63,7 +63,8 @@ import glide.api.models.GlideString;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.SortBaseOptions.Limit;
-import glide.api.models.commands.SortClusterOptions;
+import glide.api.models.commands.SortOptions;
+import glide.api.models.commands.SortOptionsBinary;
 import glide.api.models.commands.function.FunctionLoadOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.scan.ClusterScanCursor;
@@ -2934,7 +2935,7 @@ public class GlideClusterClientTest {
         CompletableFuture<String[]> response =
                 service.sort(
                         key,
-                        SortClusterOptions.builder()
+                        SortOptions.builder()
                                 .alpha()
                                 .limit(new Limit(limitOffset, limitCount))
                                 .orderBy(DESC)
@@ -2974,7 +2975,7 @@ public class GlideClusterClientTest {
         CompletableFuture<GlideString[]> response =
                 service.sort(
                         key,
-                        SortClusterOptions.builder()
+                        SortOptionsBinary.builder()
                                 .alpha()
                                 .limit(new Limit(limitOffset, limitCount))
                                 .orderBy(DESC)
@@ -3059,7 +3060,7 @@ public class GlideClusterClientTest {
         CompletableFuture<String[]> response =
                 service.sortReadOnly(
                         key,
-                        SortClusterOptions.builder()
+                        SortOptions.builder()
                                 .alpha()
                                 .limit(new Limit(limitOffset, limitCount))
                                 .orderBy(DESC)
@@ -3099,7 +3100,7 @@ public class GlideClusterClientTest {
         CompletableFuture<GlideString[]> response =
                 service.sortReadOnly(
                         key,
-                        SortClusterOptions.builder()
+                        SortOptionsBinary.builder()
                                 .alpha()
                                 .limit(new Limit(limitOffset, limitCount))
                                 .orderBy(DESC)
@@ -3190,7 +3191,7 @@ public class GlideClusterClientTest {
                 service.sortStore(
                         key,
                         destKey,
-                        SortClusterOptions.builder()
+                        SortOptions.builder()
                                 .alpha()
                                 .limit(new Limit(limitOffset, limitCount))
                                 .orderBy(DESC)
@@ -3233,7 +3234,7 @@ public class GlideClusterClientTest {
                 service.sortStore(
                         key,
                         destKey,
-                        SortClusterOptions.builder()
+                        SortOptionsBinary.builder()
                                 .alpha()
                                 .limit(new Limit(limitOffset, limitCount))
                                 .orderBy(DESC)

@@ -17,7 +17,7 @@ import command_request.CommandRequestOuterClass.Command;
 import command_request.CommandRequestOuterClass.Command.ArgsArray;
 import command_request.CommandRequestOuterClass.RequestType;
 import glide.api.models.commands.SortBaseOptions;
-import glide.api.models.commands.SortClusterOptions;
+import glide.api.models.commands.SortOptions;
 import java.util.LinkedList;
 import java.util.List;
 import org.apache.commons.lang3.tuple.Pair;
@@ -44,7 +44,7 @@ public class ClusterTransactionTests {
 
         transaction.sortReadOnly(
                 "key1",
-                SortClusterOptions.builder()
+                SortOptions.builder()
                         .orderBy(ASC)
                         .alpha()
                         .limit(new SortBaseOptions.Limit(0L, 1L))
@@ -57,7 +57,7 @@ public class ClusterTransactionTests {
 
         transaction.sort(
                 "key1",
-                SortClusterOptions.builder()
+                SortOptions.builder()
                         .orderBy(ASC)
                         .alpha()
                         .limit(new SortBaseOptions.Limit(0L, 1L))
@@ -71,7 +71,7 @@ public class ClusterTransactionTests {
         transaction.sortStore(
                 "key1",
                 "key2",
-                SortClusterOptions.builder()
+                SortOptions.builder()
                         .orderBy(ASC)
                         .alpha()
                         .limit(new SortBaseOptions.Limit(0L, 1L))

@@ -4193,6 +4193,33 @@ export function runBaseTests(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `script show test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster) => {
+                if (cluster.checkIfServerVersionLessThan("7.9.0")) {
+                    return;
+                }
+
+                const value = uuidv4();
+                const code = `return '${value}'`;
+                const script = new Script(Buffer.from(code));
+
+                expect(await client.invokeScript(script)).toEqual(value);
+
+                // Get the SHA1 digests of the script
+                const sha1 = script.getHash();
+
+                expect(await client.scriptShow(sha1)).toEqual(code);
+
+                await expect(
+                    client.scriptShow("non existing sha1"),
+                ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zadd and zaddIncr test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
@@ -12024,6 +12051,287 @@ export function runBaseTests(config: {
                     await expect(client.getex(key2)).rejects.toThrow(
                         RequestError,
                     );
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "sort sortstore sort_store sortro sort_ro sortreadonly test_%p",
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (
+                        cluster.checkIfServerVersionLessThan("7.9.0") &&
+                        client instanceof GlideClusterClient
+                    ) {
+                        return;
+                    }
+
+                    const setPrefix = "{slot}setKey" + uuidv4();
+                    const hashPrefix = "{slot}hashKey" + uuidv4();
+                    const list = "{slot}" + uuidv4();
+                    const store = "{slot}" + uuidv4();
+                    const names = ["Alice", "Bob", "Charlie", "Dave", "Eve"];
+                    const ages = ["30", "25", "35", "20", "40"];
+
+                    for (let i = 0; i < ages.length; i++) {
+                        const fieldValueList: HashDataType = [
+                            { field: "name", value: names[i] },
+                            { field: "age", value: ages[i] },
+                        ];
+                        expect(
+                            await client.hset(
+                                setPrefix + (i + 1),
+                                fieldValueList,
+                            ),
+                        ).toEqual(2);
+                    }
+
+                    expect(
+                        await client.rpush(list, ["3", "1", "5", "4", "2"]),
+                    ).toEqual(5);
+
+                    expect(
+                        await client.sort(list, {
+                            limit: { offset: 0, count: 2 },
+                            getPatterns: [setPrefix + "*->name"],
+                        }),
+                    ).toEqual(["Alice", "Bob"]);
+
+                    expect(
+                        await client.sort(Buffer.from(list), {
+                            limit: { offset: 0, count: 2 },
+                            getPatterns: [setPrefix + "*->name"],
+                            orderBy: SortOrder.DESC,
+                        }),
+                    ).toEqual(["Eve", "Dave"]);
+
+                    expect(
+                        await client.sort(list, {
+                            limit: { offset: 0, count: 2 },
+                            byPattern: setPrefix + "*->age",
+                            getPatterns: [
+                                setPrefix + "*->name",
+                                setPrefix + "*->age",
+                            ],
+                            orderBy: SortOrder.DESC,
+                        }),
+                    ).toEqual(["Eve", "40", "Charlie", "35"]);
+
+                    // test binary decoder
+                    expect(
+                        await client.sort(list, {
+                            limit: { offset: 0, count: 2 },
+                            byPattern: setPrefix + "*->age",
+                            getPatterns: [
+                                setPrefix + "*->name",
+                                setPrefix + "*->age",
+                            ],
+                            orderBy: SortOrder.DESC,
+                            decoder: Decoder.Bytes,
+                        }),
+                    ).toEqual([
+                        Buffer.from("Eve"),
+                        Buffer.from("40"),
+                        Buffer.from("Charlie"),
+                        Buffer.from("35"),
+                    ]);
+
+                    // Non-existent key in the BY pattern will result in skipping the sorting operation
+                    expect(
+                        await client.sort(list, { byPattern: "noSort" }),
+                    ).toEqual(["3", "1", "5", "4", "2"]);
+
+                    // Non-existent key in the GET pattern results in nulls
+                    expect(
+                        await client.sort(list, {
+                            isAlpha: true,
+                            getPatterns: ["{slot}missing"],
+                        }),
+                    ).toEqual([null, null, null, null, null]);
+
+                    // Missing key in the set
+                    expect(await client.lpush(list, ["42"])).toEqual(6);
+                    expect(
+                        await client.sort(list, {
+                            byPattern: setPrefix + "*->age",
+                            getPatterns: [setPrefix + "*->name"],
+                        }),
+                    ).toEqual([null, "Dave", "Bob", "Alice", "Charlie", "Eve"]);
+                    expect(await client.lpop(list)).toEqual("42");
+
+                    // sort RO
+                    if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                        expect(
+                            await client.sortReadOnly(list, {
+                                limit: { offset: 0, count: 2 },
+                                getPatterns: [setPrefix + "*->name"],
+                            }),
+                        ).toEqual(["Alice", "Bob"]);
+
+                        expect(
+                            await client.sortReadOnly(list, {
+                                limit: { offset: 0, count: 2 },
+                                getPatterns: [setPrefix + "*->name"],
+                                orderBy: SortOrder.DESC,
+                                decoder: Decoder.Bytes,
+                            }),
+                        ).toEqual([Buffer.from("Eve"), Buffer.from("Dave")]);
+
+                        expect(
+                            await client.sortReadOnly(Buffer.from(list), {
+                                limit: { offset: 0, count: 2 },
+                                byPattern: setPrefix + "*->age",
+                                getPatterns: [
+                                    setPrefix + "*->name",
+                                    setPrefix + "*->age",
+                                ],
+                                orderBy: SortOrder.DESC,
+                            }),
+                        ).toEqual(["Eve", "40", "Charlie", "35"]);
+
+                        // Non-existent key in the BY pattern will result in skipping the sorting operation
+                        expect(
+                            await client.sortReadOnly(list, {
+                                byPattern: "noSort",
+                            }),
+                        ).toEqual(["3", "1", "5", "4", "2"]);
+
+                        // Non-existent key in the GET pattern results in nulls
+                        expect(
+                            await client.sortReadOnly(list, {
+                                isAlpha: true,
+                                getPatterns: ["{slot}missing"],
+                            }),
+                        ).toEqual([null, null, null, null, null]);
+
+                        // Missing key in the set
+                        expect(await client.lpush(list, ["42"])).toEqual(6);
+                        expect(
+                            await client.sortReadOnly(list, {
+                                byPattern: setPrefix + "*->age",
+                                getPatterns: [setPrefix + "*->name"],
+                            }),
+                        ).toEqual([
+                            null,
+                            "Dave",
+                            "Bob",
+                            "Alice",
+                            "Charlie",
+                            "Eve",
+                        ]);
+                        expect(await client.lpop(list)).toEqual("42");
+                    }
+
+                    // SORT with STORE
+                    expect(
+                        await client.sortStore(list, store, {
+                            limit: { offset: 0, count: -1 },
+                            byPattern: setPrefix + "*->age",
+                            getPatterns: [setPrefix + "*->name"],
+                            orderBy: SortOrder.ASC,
+                        }),
+                    ).toEqual(5);
+                    expect(await client.lrange(store, 0, -1)).toEqual([
+                        "Dave",
+                        "Bob",
+                        "Alice",
+                        "Charlie",
+                        "Eve",
+                    ]);
+                    expect(
+                        await client.sortStore(Buffer.from(list), store, {
+                            byPattern: setPrefix + "*->age",
+                            getPatterns: [setPrefix + "*->name"],
+                        }),
+                    ).toEqual(5);
+                    expect(await client.lrange(store, 0, -1)).toEqual([
+                        "Dave",
+                        "Bob",
+                        "Alice",
+                        "Charlie",
+                        "Eve",
+                    ]);
+
+                    // transaction test
+                    const transaction =
+                        client instanceof GlideClient
+                            ? new Transaction()
+                            : new ClusterTransaction();
+                    transaction
+                        .hset(hashPrefix + 1, [
+                            { field: "name", value: "Alice" },
+                            { field: "age", value: "30" },
+                        ])
+                        .hset(hashPrefix + 2, {
+                            name: "Bob",
+                            age: "25",
+                        })
+                        .del([list])
+                        .lpush(list, ["2", "1"])
+                        .sort(list, {
+                            byPattern: hashPrefix + "*->age",
+                            getPatterns: [hashPrefix + "*->name"],
+                        })
+                        .sort(list, {
+                            byPattern: hashPrefix + "*->age",
+                            getPatterns: [hashPrefix + "*->name"],
+                            orderBy: SortOrder.DESC,
+                        })
+                        .sortStore(list, store, {
+                            byPattern: hashPrefix + "*->age",
+                            getPatterns: [hashPrefix + "*->name"],
+                        })
+                        .lrange(store, 0, -1)
+                        .sortStore(list, store, {
+                            byPattern: hashPrefix + "*->age",
+                            getPatterns: [hashPrefix + "*->name"],
+                            orderBy: SortOrder.DESC,
+                        })
+                        .lrange(store, 0, -1);
+
+                    if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                        transaction
+                            .sortReadOnly(list, {
+                                byPattern: hashPrefix + "*->age",
+                                getPatterns: [hashPrefix + "*->name"],
+                            })
+                            .sortReadOnly(list, {
+                                byPattern: hashPrefix + "*->age",
+                                getPatterns: [hashPrefix + "*->name"],
+                                orderBy: SortOrder.DESC,
+                            });
+                    }
+
+                    const expectedResult = [
+                        2,
+                        2,
+                        1,
+                        2,
+                        ["Bob", "Alice"],
+                        ["Alice", "Bob"],
+                        2,
+                        ["Bob", "Alice"],
+                        2,
+                        ["Alice", "Bob"],
+                    ];
+
+                    if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                        expectedResult.push(["Bob", "Alice"], ["Alice", "Bob"]);
+                    }
+
+                    const result =
+                        client instanceof GlideClient
+                            ? await client.exec(transaction as Transaction)
+                            : await client.exec(
+                                  transaction as ClusterTransaction,
+                              );
+                    expect(result).toEqual(expectedResult);
+
+                    client.close();
                 },
                 protocol,
             );
