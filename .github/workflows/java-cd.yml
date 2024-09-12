@@ -276,7 +276,7 @@ jobs:
 
     publish-release-to-maven:
         if: ${{ inputs.maven_publish == true || github.event_name == 'push' }}
-        needs: [publish-to-maven-central-deployment]
+        needs: [test-deployment-on-all-architectures]
         runs-on: ubuntu-latest
         environment: AWS_ACTIONS
         env:
