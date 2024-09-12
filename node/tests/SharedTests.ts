@@ -4193,6 +4193,33 @@ export function runBaseTests(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `script show test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster) => {
+                if (cluster.checkIfServerVersionLessThan("7.9.0")) {
+                    return;
+                }
+
+                const value = uuidv4();
+                const code = `return '${value}'`;
+                const script = new Script(Buffer.from(code));
+
+                expect(await client.invokeScript(script)).toEqual(value);
+
+                // Get the SHA1 digests of the script
+                const sha1 = script.getHash();
+
+                expect(await client.scriptShow(sha1)).toEqual(code);
+
+                await expect(
+                    client.scriptShow("non existing sha1"),
+                ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zadd and zaddIncr test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
