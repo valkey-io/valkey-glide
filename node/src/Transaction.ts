@@ -2862,7 +2862,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         group: GlideString,
         consumer: GlideString,
         minIdleTime: number,
-        ids: string[],
+        ids: GlideString[],
         options?: StreamClaimOptions,
     ): T {
         return this.addAndReturn(

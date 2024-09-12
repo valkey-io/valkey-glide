@@ -776,9 +776,9 @@ export async function transactionTest(
     responseData.push(['set(key2, "baz", { returnOldValue: true })', null]);
     baseTransaction.customCommand(["MGET", key1, key2]);
     responseData.push(['customCommand(["MGET", key1, key2])', ["bar", "baz"]]);
-    baseTransaction.mset({ [key3]: value });
+    baseTransaction.mset({ key: key3, value });
     responseData.push(["mset({ [key3]: value })", "OK"]);
-    baseTransaction.msetnx({ [key3]: value });
+    baseTransaction.msetnx({ key: key3, value });
     responseData.push(["msetnx({ [key3]: value })", false]);
     baseTransaction.mget([key1, key2]);
     responseData.push(["mget([key1, key2])", ["bar", "baz"]]);
@@ -838,10 +838,7 @@ export async function transactionTest(
     baseTransaction.hget(key4, field);
     responseData.push(["hget(key4, field)", value]);
     baseTransaction.hgetall(key4);
-    responseData.push([
-        "hgetall(key4)",
-        convertRecordToGlideRecord({ [field]: value }),
-    ]);
+    responseData.push(["hgetall(key4)", { key: field, value }]);
     baseTransaction.hdel(key4, [field]);
     responseData.push(["hdel(key4, [field])", 1]);
     baseTransaction.hmget(key4, [field]);
@@ -1247,15 +1244,16 @@ export async function transactionTest(
         "xrevrange(key9)",
         convertRecordToGlideRecord({ "0-1": [["field", "value1"]] }),
     ]);
-    baseTransaction.xread({ [key9]: "0-1" });
+    baseTransaction.xread({ key: key9, value: "0-1" });
     responseData.push([
         'xread({ [key9]: "0-1" })',
-        convertRecordToGlideRecord({
-            [key9]: convertRecordToGlideRecord({
-                "0-2": [["field", "value2"]],
-                "0-3": [["field", "value3"]],
-            }),
-        }),
+        {
+            key: key9,
+            value: [
+                { "0-2": [["field", "value2"]] },
+                { "0-3": [["field", "value3"]] },
+            ],
+        },
     ]);
     baseTransaction.xtrim(key9, {
         method: "minid",
@@ -1287,14 +1285,15 @@ export async function transactionTest(
         "xgroupCreateConsumer(key9, groupName1, consumer)",
         true,
     ]);
-    baseTransaction.xreadgroup(groupName1, consumer, { [key9]: ">" });
+    baseTransaction.xreadgroup(groupName1, consumer, { key: key9, value: ">" });
     responseData.push([
         'xreadgroup(groupName1, consumer, {[key9]: ">"})',
-        convertRecordToGlideRecord({
-            [key9]: convertRecordToGlideRecord({
+        {
+            key: key9,
+            value: {
                 "0-2": [["field", "value2"]],
-            }),
-        }),
+            },
+        },
     ]);
     baseTransaction.xpending(key9, groupName1);
     responseData.push([
@@ -1660,7 +1659,11 @@ export async function transactionTest(
         responseData.push(["functionList({ libName, true})", []]);
 
         baseTransaction
-            .mset({ [key1]: "abcd", [key2]: "bcde", [key3]: "wxyz" })
+            .mset([
+                { key: key1, value: "abcd" },
+                { key: key2, value: "bcde" },
+                { key: key3, value: "wxyz" },
+            ])
             .lcs(key1, key2)
             .lcs(key1, key3)
             .lcsLen(key1, key2)
