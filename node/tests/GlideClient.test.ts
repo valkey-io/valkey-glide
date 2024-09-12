@@ -61,9 +61,7 @@ describe("GlideClient", () => {
         cluster = standaloneAddresses
             ? await ValkeyCluster.initFromExistingCluster(
                   parseEndpoints(standaloneAddresses),
-                  async (addresses: [string, number][]) => {
-                      return getServerVersion(addresses);
-                  },
+                  getServerVersion,
               )
             : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
     }, 20000);
