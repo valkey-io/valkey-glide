@@ -650,6 +650,16 @@ export async function DumpAndRestoreTest(
 }
 
 /**
+ * @internal
+ */
+function toStringReturn(str: string, decoder: Decoder): GlideString {
+    if (decoder == Decoder.Bytes) {
+        return Buffer.from(str);
+    }
+    return str;
+}
+
+/**
  * Populates a transaction with commands to test.
  * @param baseTransaction - A transaction.
  * @returns Array of tuples, where first element is a test name/description, second - expected return value.
@@ -688,27 +698,30 @@ export async function transactionTest(
         key25, // Geospatial Data/ZSET
         key26, // sorted set
         key27, // sorted set
-    ] = Array.from({ length: 27 }, () => {
-        switch (decoder) {
-            case Decoder.String:
-                return "{key}" + uuidv4();
-            case Decoder.Bytes:
-                return Buffer.from("{key}" + uuidv4());
-        }
-    });
+    ] = Array.from({ length: 27 }, () =>
+        toStringReturn("{key}" + uuidv4(), decoder),
+    );
 
     // initialize non-key values
-    const [field, value, groupName1, groupName2, consumer] = Array.from(
-        { length: 27 },
-        () => {
-            switch (decoder) {
-                case Decoder.String:
-                    return uuidv4();
-                case Decoder.Bytes:
-                    return Buffer.from(uuidv4());
-            }
-        },
+    const [value, groupName1, groupName2, consumer] = Array.from(
+        { length: 4 },
+        () => toStringReturn(uuidv4(), decoder),
     );
+
+    const fieldStr = uuidv4();
+    const [field, field1, field2, field3, field4] = [
+        toStringReturn(fieldStr, decoder),
+        toStringReturn(fieldStr + 1, decoder),
+        toStringReturn(fieldStr + 2, decoder),
+        toStringReturn(fieldStr + 3, decoder),
+        toStringReturn(fieldStr + 4, decoder),
+    ];
+
+    const fooReturn = toStringReturn("foo", decoder);
+    const barReturn = toStringReturn("bar", decoder);
+    const bazReturn = toStringReturn("bar", decoder);
+
+    const zeroCursor = toStringReturn("0", decoder);
 
     // array of tuples - first element is test name/description, second - expected return value
     const responseData: [string, GlideReturnType][] = [];
@@ -733,17 +746,17 @@ export async function transactionTest(
     baseTransaction.dbsize();
     responseData.push(["dbsize()", 0]);
     baseTransaction.set(key1, "foo");
-    responseData.push(['set(key1, "bar")', "OK"]);
+    responseData.push(['set(key1, "foo")', "OK"]);
     baseTransaction.set(key1, "bar", { returnOldValue: true });
-    responseData.push(['set(key1, "bar", {returnOldValue: true})', "foo"]);
+    responseData.push(['set(key1, "bar", {returnOldValue: true})', fooReturn]);
 
     if (gte(version, "6.2.0")) {
         baseTransaction.getex(key1);
-        responseData.push(["getex(key1)", "bar"]);
+        responseData.push(["getex(key1)", barReturn]);
         baseTransaction.getex(key1, { type: TimeUnit.Seconds, duration: 1 });
         responseData.push([
             'getex(key1, {expiry: { type: "seconds", count: 1 }})',
-            "bar",
+            barReturn,
         ]);
     }
 
@@ -752,13 +765,19 @@ export async function transactionTest(
     baseTransaction.getrange(key1, 0, -1);
     responseData.push(["getrange(key1, 0, -1)", "bar"]);
     baseTransaction.getdel(key1);
-    responseData.push(["getdel(key1)", "bar"]);
+    responseData.push(["getdel(key1)", barReturn]);
     baseTransaction.set(key1, "bar");
     responseData.push(['set(key1, "bar")', "OK"]);
     baseTransaction.objectEncoding(key1);
-    responseData.push(["objectEncoding(key1)", "embstr"]);
+    responseData.push([
+        "objectEncoding(key1)",
+        decoder == Decoder.String ? "embstr" : Buffer.from("embstr"),
+    ]);
     baseTransaction.type(key1);
-    responseData.push(["type(key1)", "string"]);
+    responseData.push([
+        "type(key1)",
+        decoder == Decoder.String ? "string" : Buffer.from("string"),
+    ]);
     baseTransaction.echo(value);
     responseData.push(["echo(value)", value]);
     baseTransaction.persist(key1);
@@ -775,13 +794,16 @@ export async function transactionTest(
     baseTransaction.set(key2, "baz", { returnOldValue: true });
     responseData.push(['set(key2, "baz", { returnOldValue: true })', null]);
     baseTransaction.customCommand(["MGET", key1, key2]);
-    responseData.push(['customCommand(["MGET", key1, key2])', ["bar", "baz"]]);
+    responseData.push([
+        'customCommand(["MGET", key1, key2])',
+        [barReturn, bazReturn],
+    ]);
     baseTransaction.mset([{ key: key3, value }]);
     responseData.push(["mset({ [key3]: value })", "OK"]);
     baseTransaction.msetnx([{ key: key3, value }]);
     responseData.push(["msetnx({ [key3]: value })", false]);
     baseTransaction.mget([key1, key2]);
-    responseData.push(["mget([key1, key2])", ["bar", "baz"]]);
+    responseData.push(["mget([key1, key2])", [barReturn, bazReturn]]);
     baseTransaction.strlen(key1);
     responseData.push(["strlen(key1)", 3]);
     baseTransaction.setrange(key1, 0, "GLIDE");
@@ -795,13 +817,13 @@ export async function transactionTest(
     baseTransaction.hset(key4, [{ field, value }]);
     responseData.push(["hset(key4, { [field]: value })", 1]);
     baseTransaction.hscan(key4, "0");
-    responseData.push(['hscan(key4, "0")', ["0", [field, value]]]);
+    responseData.push(['hscan(key4, "0")', [zeroCursor, [field, value]]]);
 
     if (gte(version, "8.0.0")) {
         baseTransaction.hscan(key4, "0", { noValues: false });
         responseData.push([
             'hscan(key4, "0", {noValues: false})',
-            ["0", [field, value]],
+            [zeroCursor, [field, value]],
         ]);
         baseTransaction.hscan(key4, "0", {
             match: "*",
@@ -810,14 +832,14 @@ export async function transactionTest(
         });
         responseData.push([
             'hscan(key4, "0", {match: "*", count: 20, noValues:true})',
-            ["0", [field]],
+            [zeroCursor, [field]],
         ]);
     }
 
     baseTransaction.hscan(key4, "0", { match: "*", count: 20 });
     responseData.push([
         'hscan(key4, "0", {match: "*", count: 20})',
-        ["0", [field, value]],
+        [zeroCursor, [field, value]],
     ]);
     baseTransaction.hstrlen(key4, field);
     responseData.push(["hstrlen(key4, field)", value.length]);
@@ -838,7 +860,7 @@ export async function transactionTest(
     baseTransaction.hget(key4, field);
     responseData.push(["hget(key4, field)", value]);
     baseTransaction.hgetall(key4);
-    responseData.push(["hgetall(key4)", { key: field, value }]);
+    responseData.push(["hgetall(key4)", [{ key: field, value }]]);
     baseTransaction.hdel(key4, [field]);
     responseData.push(["hdel(key4, [field])", 1]);
     baseTransaction.hmget(key4, [field]);
@@ -874,17 +896,17 @@ export async function transactionTest(
     }
 
     baseTransaction.lpop(key5);
-    responseData.push(["lpop(key5)", field + "4"]);
+    responseData.push(["lpop(key5)", field4]);
     baseTransaction.llen(key5);
     responseData.push(["llen(key5)", 3]);
-    baseTransaction.lrem(key5, 1, field + "1");
+    baseTransaction.lrem(key5, 1, field1);
     responseData.push(['lrem(key5, 1, field + "1")', 1]);
     baseTransaction.ltrim(key5, 0, 1);
     responseData.push(["ltrim(key5, 0, 1)", "OK"]);
-    baseTransaction.lset(key5, 0, field + "3");
+    baseTransaction.lset(key5, 0, field3);
     responseData.push(['lset(key5, 0, field + "3")', "OK"]);
     baseTransaction.lrange(key5, 0, -1);
-    responseData.push(["lrange(key5, 0, -1)", [field + "3", field + "2"]]);
+    responseData.push(["lrange(key5, 0, -1)", [field3, field2]]);
 
     if (gte(version, "6.2.0")) {
         baseTransaction.lmove(
@@ -895,7 +917,7 @@ export async function transactionTest(
         );
         responseData.push([
             "lmove(key5, key20, ListDirection.LEFT, ListDirection.LEFT)",
-            field + "3",
+            field3,
         ]);
 
         baseTransaction.blmove(
@@ -907,7 +929,7 @@ export async function transactionTest(
         );
         responseData.push([
             "blmove(key20, key5, ListDirection.LEFT, ListDirection.LEFT, 3)",
-            field + "3",
+            field3,
         ]);
     }
 
@@ -921,39 +943,36 @@ export async function transactionTest(
         "element",
     );
     responseData.push(["linsert", 0]);
-    baseTransaction.rpush(key6, [field + "1", field + "2", field + "3"]);
+    baseTransaction.rpush(key6, [field1, field2, field3]);
     responseData.push([
         'rpush(key6, [field + "1", field + "2", field + "3"])',
         3,
     ]);
     baseTransaction.lindex(key6, 0);
-    responseData.push(["lindex(key6, 0)", field + "1"]);
+    responseData.push(["lindex(key6, 0)", field1]);
     baseTransaction.rpop(key6);
-    responseData.push(["rpop(key6)", field + "3"]);
+    responseData.push(["rpop(key6)", field3]);
     baseTransaction.rpopCount(key6, 2);
-    responseData.push(["rpopCount(key6, 2)", [field + "2", field + "1"]]);
+    responseData.push(["rpopCount(key6, 2)", [field2, field1]]);
     baseTransaction.rpushx(key15, ["_"]); // key15 is empty
     responseData.push(['rpushx(key15, ["_"])', 0]);
     baseTransaction.lpushx(key15, ["_"]);
     responseData.push(['lpushx(key15, ["_"])', 0]);
-    baseTransaction.rpush(key16, [
-        field + "1",
-        field + "1",
-        field + "2",
-        field + "3",
-        field + "3",
-    ]);
+    baseTransaction.rpush(key16, [field1, field1, field2, field3, field3]);
     responseData.push(["rpush(key16, [1, 1, 2, 3, 3,])", 5]);
-    baseTransaction.lpos(key16, field + "1", { rank: 2 });
-    responseData.push(['lpos(key16, field + "1", { rank: 2 })', 1]);
-    baseTransaction.lpos(key16, field + "1", { rank: 2, count: 0 });
-    responseData.push(['lpos(key16, field + "1", { rank: 2, count: 0 })', [1]]);
+    baseTransaction.lpos(key16, field1, { rank: 2 });
+    responseData.push(["lpos(key16, field1, { rank: 2 })", 1]);
+    baseTransaction.lpos(key16, field1, { rank: 2, count: 0 });
+    responseData.push(["lpos(key16, field1, { rank: 2, count: 0 })", [1]]);
     baseTransaction.sadd(key7, ["bar", "foo"]);
     responseData.push(['sadd(key7, ["bar", "foo"])', 2]);
     baseTransaction.sunionstore(key7, [key7, key7]);
     responseData.push(["sunionstore(key7, [key7, key7])", 2]);
     baseTransaction.sunion([key7, key7]);
-    responseData.push(["sunion([key7, key7])", new Set(["bar", "foo"])]);
+    responseData.push([
+        "sunion([key7, key7])",
+        new Set([barReturn, fooReturn]),
+    ]);
     baseTransaction.sinter([key7, key7]);
     responseData.push(["sinter([key7, key7])", new Set(["bar", "foo"])]);
 
@@ -973,11 +992,11 @@ export async function transactionTest(
     baseTransaction.srem(key7, ["foo"]);
     responseData.push(['srem(key7, ["foo"])', 1]);
     baseTransaction.sscan(key7, "0");
-    responseData.push(['sscan(key7, "0")', ["0", ["bar"]]]);
+    responseData.push(['sscan(key7, "0")', [zeroCursor, [barReturn]]]);
     baseTransaction.sscan(key7, "0", { match: "*", count: 20 });
     responseData.push([
         'sscan(key7, "0", {match: "*", count: 20})',
-        ["0", ["bar"]],
+        [zeroCursor, [barReturn]],
     ]);
     baseTransaction.scard(key7);
     responseData.push(["scard(key7)", 1]);
@@ -993,15 +1012,15 @@ export async function transactionTest(
     }
 
     baseTransaction.smembers(key7);
-    responseData.push(["smembers(key7)", new Set(["bar"])]);
+    responseData.push(["smembers(key7)", new Set([barReturn])]);
     baseTransaction.srandmember(key7);
-    responseData.push(["srandmember(key7)", "bar"]);
+    responseData.push(["srandmember(key7)", barReturn]);
     baseTransaction.srandmemberCount(key7, 2);
-    responseData.push(["srandmemberCount(key7, 2)", ["bar"]]);
+    responseData.push(["srandmemberCount(key7, 2)", [barReturn]]);
     baseTransaction.srandmemberCount(key7, -2);
-    responseData.push(["srandmemberCount(key7, -2)", ["bar", "bar"]]);
+    responseData.push(["srandmemberCount(key7, -2)", [barReturn, barReturn]]);
     baseTransaction.spop(key7);
-    responseData.push(["spop(key7)", "bar"]);
+    responseData.push(["spop(key7)", barReturn]);
     baseTransaction.spopCount(key7, 2);
     responseData.push(["spopCount(key7, 2)", new Set()]);
     baseTransaction.smove(key7, key7, "non_existing_member");
@@ -1061,13 +1080,32 @@ export async function transactionTest(
     baseTransaction.zadd(key12, { one: 1, two: 2 });
     responseData.push(["zadd(key12, { one: 1, two: 2 })", 2]);
     baseTransaction.zscan(key12, "0");
-    responseData.push(['zscan(key12, "0")', ["0", ["one", "1", "two", "2"]]]);
+    responseData.push([
+        'zscan(key12, "0")',
+        [
+            zeroCursor,
+            [
+                toStringReturn("one", decoder),
+                toStringReturn("1", decoder),
+                toStringReturn("two", decoder),
+                toStringReturn("2", decoder),
+            ],
+        ],
+    ]);
 
     if (gte(version, "8.0.0")) {
         baseTransaction.zscan(key12, "0", { noScores: false });
         responseData.push([
             'zscan(key12, "0", {noScores: false})',
-            ["0", ["one", "1", "two", "2"]],
+            [
+                zeroCursor,
+                [
+                    toStringReturn("one", decoder),
+                    toStringReturn("1", decoder),
+                    toStringReturn("two", decoder),
+                    toStringReturn("2", decoder),
+                ],
+            ],
         ]);
 
         baseTransaction.zscan(key12, "0", {
@@ -1077,14 +1115,28 @@ export async function transactionTest(
         });
         responseData.push([
             'zscan(key12, "0", {match: "*", count: 20, noScores:true})',
-            ["0", ["one", "two"]],
+            [
+                zeroCursor,
+                [
+                    toStringReturn("one", decoder),
+                    toStringReturn("two", decoder),
+                ],
+            ],
         ]);
     }
 
     baseTransaction.zscan(key12, "0", { match: "*", count: 20 });
     responseData.push([
         'zscan(key12, "0", {match: "*", count: 20})',
-        ["0", ["one", "1", "two", "2"]],
+        [
+            zeroCursor,
+            [
+                toStringReturn("one", decoder),
+                toStringReturn("1", decoder),
+                toStringReturn("two", decoder),
+                toStringReturn("2", decoder),
+            ],
+        ],
     ]);
     baseTransaction.zadd(key13, { one: 1, two: 2, three: 3.5 });
     responseData.push(["zadd(key13, { one: 1, two: 2, three: 3.5 })", 3]);
@@ -1096,7 +1148,10 @@ export async function transactionTest(
             4,
         ]);
         baseTransaction.zdiff([key13, key12]);
-        responseData.push(["zdiff([key13, key12])", ["three"]]);
+        responseData.push([
+            "zdiff([key13, key12])",
+            [toStringReturn("three", decoder)],
+        ]);
         baseTransaction.zdiffWithScores([key13, key12]);
         responseData.push([
             "zdiffWithScores([key13, key12])",
@@ -1120,18 +1175,29 @@ export async function transactionTest(
                 3,
             ]);
             baseTransaction.zinter([key27, key26]);
-            responseData.push(["zinter([key27, key26])", ["one", "two"]]);
+            responseData.push([
+                "zinter([key27, key26])",
+                [
+                    toStringReturn("one", decoder),
+                    toStringReturn("two", decoder),
+                ],
+            ]);
             baseTransaction.zinterWithScores([key27, key26]);
             responseData.push([
                 "zinterWithScores([key27, key26])",
-                convertRecordToGlideRecord({ one: 2, two: 4 }),
+                [
+                    { key: toStringReturn("one", decoder), value: 2 },
+                    { key: toStringReturn("two", decoder), value: 4 },
+                ],
             ]);
             baseTransaction.zunionWithScores([key27, key26]);
             responseData.push([
                 "zunionWithScores([key27, key26])",
-                convertRecordToGlideRecord({ one: 2, two: 4, three: 3.5 }).sort(
-                    (a, b) => a.value - b.value,
-                ),
+                [
+                    { key: toStringReturn("one", decoder), value: 2 },
+                    { key: toStringReturn("two", decoder), value: 4 },
+                    { key: toStringReturn("three", decoder), value: 3.5 },
+                ].sort((a, b) => a.value - b.value),
             ]);
         }
     } else {
@@ -1247,13 +1313,15 @@ export async function transactionTest(
     baseTransaction.xread([{ key: key9, value: "0-1" }]);
     responseData.push([
         'xread({ [key9]: "0-1" })',
-        {
-            key: key9,
-            value: [
-                { "0-2": [["field", "value2"]] },
-                { "0-3": [["field", "value3"]] },
-            ],
-        },
+        [
+            {
+                key: key9,
+                value: [
+                    { "0-2": [["field", "value2"]] },
+                    { "0-3": [["field", "value3"]] },
+                ],
+            },
+        ],
     ]);
     baseTransaction.xtrim(key9, {
         method: "minid",
@@ -1290,12 +1358,14 @@ export async function transactionTest(
     ]);
     responseData.push([
         'xreadgroup(groupName1, consumer, {[key9]: ">"})',
-        {
-            key: key9,
-            value: {
-                "0-2": [["field", "value2"]],
+        [
+            {
+                key: key9,
+                value: {
+                    "0-2": [["field", "value2"]],
+                },
             },
-        },
+        ],
     ]);
     baseTransaction.xpending(key9, groupName1);
     responseData.push([
