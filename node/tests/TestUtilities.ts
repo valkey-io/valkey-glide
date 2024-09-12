@@ -659,8 +659,6 @@ export async function transactionTest(
     version: string,
     decoder: Decoder,
 ): Promise<[string, GlideReturnType][]> {
-    const isString = decoder == Decoder.String;
-
     // initialize key values to work within the same hashslot
     const [
         key1, // string
