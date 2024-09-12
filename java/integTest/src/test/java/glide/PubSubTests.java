@@ -1476,10 +1476,10 @@ public class PubSubTests {
 
         // no channels exists yet
         GlideClusterClient client = (GlideClusterClient) createClient(false);
-        assertEquals(0, client.pubsubChannels().get().length);
-        assertEquals(0, client.pubsubChannelsBinary().get().length);
-        assertEquals(0, client.pubsubChannels("**").get().length);
-        assertEquals(0, client.pubsubChannels(gs("**")).get().length);
+        assertEquals(0, client.pubsubShardChannels().get().length);
+        assertEquals(0, client.pubsubShardChannelsBinary().get().length);
+        assertEquals(0, client.pubsubShardChannels("*").get().length);
+        assertEquals(0, client.pubsubShardChannels(gs("*")).get().length);
 
         var channels = Set.of("test_shardchannel1", "test_shardchannel2", "some_shardchannel3");
         String pattern = "test_*";
