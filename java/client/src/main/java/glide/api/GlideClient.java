@@ -52,6 +52,8 @@ import glide.api.models.Script;
 import glide.api.models.Transaction;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.ScriptOptions;
+import glide.api.models.commands.ScriptOptionsGlideString;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.SortOptionsBinary;
 import glide.api.models.commands.function.FunctionRestorePolicy;
@@ -521,30 +523,31 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<Object> invokeScript(
-            @NonNull Script script, @NonNull List<String> keys, List<String> args) {
+            @NonNull Script script, @NonNull ScriptOptions options) {
         if (script.getBinaryOutput()) {
             return commandManager.submitScript(
                     script,
-                    keys.stream().map(GlideString::gs).collect(Collectors.toList()),
-                    args.stream().map(GlideString::gs).collect(Collectors.toList()),
+                    options.getKeys().stream().map(GlideString::gs).collect(Collectors.toList()),
+                    options.getArgs().stream().map(GlideString::gs).collect(Collectors.toList()),
                     this::handleBinaryObjectOrNullResponse);
         } else {
             return commandManager.submitScript(
                     script,
-                    keys.stream().map(GlideString::gs).collect(Collectors.toList()),
-                    args.stream().map(GlideString::gs).collect(Collectors.toList()),
+                    options.getKeys().stream().map(GlideString::gs).collect(Collectors.toList()),
+                    options.getArgs().stream().map(GlideString::gs).collect(Collectors.toList()),
                     this::handleObjectOrNullResponse);
         }
     }
 
     @Override
-    public CompletableFuture<Object> invokeScriptBinary(
-            @NonNull Script script, List<GlideString> keys, List<GlideString> args) {
+    public CompletableFuture<Object> invokeScript(
+            @NonNull Script script, @NonNull ScriptOptionsGlideString options) {
         if (script.getBinaryOutput()) {
             return commandManager.submitScript(
-                    script, keys, args, this::handleBinaryObjectOrNullResponse);
+                    script, options.getKeys(), options.getArgs(), this::handleBinaryObjectOrNullResponse);
         } else {
-            return commandManager.submitScript(script, keys, args, this::handleObjectOrNullResponse);
+            return commandManager.submitScript(
+                    script, options.getKeys(), options.getArgs(), this::handleObjectOrNullResponse);
         }
     }
 

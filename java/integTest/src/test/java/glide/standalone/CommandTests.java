@@ -49,6 +49,8 @@ import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.ScriptOptions;
+import glide.api.models.commands.ScriptOptionsGlideString;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.SortOptionsBinary;
 import glide.api.models.commands.scan.ScanOptions;
@@ -1459,21 +1461,28 @@ public class CommandTests {
 
         try (Script script = new Script("return redis.call('SET', KEYS[1], ARGV[1])", false)) {
             Object setResponse1 =
-                    regularClient.invokeScript(script, List.of(key1), List.of("value1")).get();
+                    regularClient
+                            .invokeScript(script, ScriptOptions.builder().key(key1).arg("value1").build())
+                            .get();
             assertEquals(OK, setResponse1);
 
             Object setResponse2 =
-                    regularClient.invokeScript(script, List.of(key2), List.of("value2")).get();
+                    regularClient
+                            .invokeScript(script, ScriptOptions.builder().key(key2).arg("value2").build())
+                            .get();
             assertEquals(OK, setResponse2);
         }
 
         try (Script script = new Script("return redis.call('GET', KEYS[1])", false)) {
-            Object getResponse1 = regularClient.invokeScript(script, List.of(key1), List.of()).get();
+            Object getResponse1 =
+                    regularClient.invokeScript(script, ScriptOptions.builder().key(key1).build()).get();
             assertEquals("value1", getResponse1);
 
             // Use GlideString in option but we still expect nonbinary output
             Object getResponse2 =
-                    regularClient.invokeScriptBinary(script, List.of(gs(key2)), List.of()).get();
+                    regularClient
+                            .invokeScript(script, ScriptOptionsGlideString.builder().key(gs(key2)).build())
+                            .get();
             assertEquals("value2", getResponse2);
         }
     }
@@ -1486,25 +1495,37 @@ public class CommandTests {
 
         try (Script script = new Script("return KEYS[1]", false)) {
             // 1 very big key
-            Object response = regularClient.invokeScript(script, List.of(str1 + str2), List.of()).get();
+            Object response =
+                    regularClient
+                            .invokeScript(script, ScriptOptions.builder().key(str1 + str2).build())
+                            .get();
             assertEquals(str1 + str2, response);
         }
 
         try (Script script = new Script("return KEYS[1]", false)) {
             // 2 big keys
-            Object response = regularClient.invokeScript(script, List.of(str1, str2), List.of()).get();
+            Object response =
+                    regularClient
+                            .invokeScript(script, ScriptOptions.builder().key(str1).key(str2).build())
+                            .get();
             assertEquals(str1, response);
         }
 
         try (Script script = new Script("return ARGV[1]", false)) {
             // 1 very big arg
-            Object response = regularClient.invokeScript(script, List.of(), List.of(str1 + str2)).get();
+            Object response =
+                    regularClient
+                            .invokeScript(script, ScriptOptions.builder().arg(str1 + str2).build())
+                            .get();
             assertEquals(str1 + str2, response);
         }
 
         try (Script script = new Script("return ARGV[1]", false)) {
             // 1 big arg + 1 big key
-            Object response = regularClient.invokeScript(script, List.of(str1), List.of(str2)).get();
+            Object response =
+                    regularClient
+                            .invokeScript(script, ScriptOptions.builder().arg(str1).key(str2).build())
+                            .get();
             assertEquals(str2, response);
         }
     }
@@ -1522,22 +1543,32 @@ public class CommandTests {
 
         try (Script script = new Script(gs("return redis.call('SET', KEYS[1], ARGV[1])"), true)) {
             Object setResponse1 =
-                    regularClient.invokeScriptBinary(script, List.of(key1), List.of(gs("value1"))).get();
+                    regularClient
+                            .invokeScript(
+                                    script, ScriptOptionsGlideString.builder().key(key1).arg(gs("value1")).build())
+                            .get();
             assertEquals(OK, setResponse1);
 
             Object setResponse2 =
-                    regularClient.invokeScriptBinary(script, List.of(key2), List.of(gs("value2"))).get();
+                    regularClient
+                            .invokeScript(
+                                    script, ScriptOptionsGlideString.builder().key(key2).arg(gs("value2")).build())
+                            .get();
             assertEquals(OK, setResponse2);
         }
 
         try (Script script = new Script(gs("return redis.call('GET', KEYS[1])"), true)) {
             Object getResponse1 =
-                    regularClient.invokeScriptBinary(script, List.of(key1), List.of()).get();
+                    regularClient
+                            .invokeScript(script, ScriptOptionsGlideString.builder().key(key1).build())
+                            .get();
             assertEquals(gs("value1"), getResponse1);
 
             // Use String in option but we still expect binary output (GlideString)
             Object getResponse2 =
-                    regularClient.invokeScript(script, List.of(key2.toString()), List.of()).get();
+                    regularClient
+                            .invokeScript(script, ScriptOptions.builder().key(key2.toString()).build())
+                            .get();
             assertEquals(gs("value2"), getResponse2);
         }
     }
@@ -1685,7 +1716,7 @@ public class CommandTests {
                 GlideClient.createClient(commonClientConfig().requestTimeout(30000).build()).get()) {
             try {
                 // run the script without await
-                promise = testClient.invokeScript(script, List.of(key), List.of());
+                promise = testClient.invokeScript(script, ScriptOptions.builder().key(key).build());
 
                 Thread.sleep(1000);
 

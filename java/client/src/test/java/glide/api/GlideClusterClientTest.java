@@ -66,6 +66,8 @@ import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.ScriptOptions;
+import glide.api.models.commands.ScriptOptionsGlideString;
 import glide.api.models.commands.SortBaseOptions.Limit;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.SortOptionsBinary;
@@ -3460,12 +3462,15 @@ public class GlideClusterClientTest {
 
     @SneakyThrows
     @Test
-    public void invokeScript_with_keys_args_returns_success() {
+    public void invokeScript_with_ScriptOptions_returns_success() {
         // setup
         Script script = mock(Script.class);
         String hash = UUID.randomUUID().toString();
         when(script.getHash()).thenReturn(hash);
         String payload = "hello";
+
+        ScriptOptions options =
+                ScriptOptions.builder().key("key1").key("key2").arg("arg1").arg("arg2").build();
 
         CompletableFuture<Object> testResponse = new CompletableFuture<>();
         testResponse.complete(payload);
@@ -3479,8 +3484,7 @@ public class GlideClusterClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Object> response =
-                service.invokeScript(script, List.of("key1", "key2"), List.of("arg1", "arg2"));
+        CompletableFuture<Object> response = service.invokeScript(script, options);
 
         // verify
         assertEquals(testResponse, response);
@@ -3489,12 +3493,20 @@ public class GlideClusterClientTest {
 
     @SneakyThrows
     @Test
-    public void invokeScriptBinary_with_keys_args_returns_success() {
+    public void invokeScript_with_ScriptOptionsGlideString_returns_success() {
         // setup
         Script script = mock(Script.class);
         String hash = UUID.randomUUID().toString();
         when(script.getHash()).thenReturn(hash);
         GlideString payload = gs("hello");
+
+        ScriptOptionsGlideString options =
+                ScriptOptionsGlideString.builder()
+                        .key(gs("key1"))
+                        .key(gs("key2"))
+                        .arg(gs("arg1"))
+                        .arg(gs("arg2"))
+                        .build();
 
         CompletableFuture<Object> testResponse = new CompletableFuture<>();
         testResponse.complete(payload);
@@ -3508,8 +3520,7 @@ public class GlideClusterClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Object> response =
-                service.invokeScript(script, List.of("key1", "key2"), List.of("arg1", "arg2"));
+        CompletableFuture<Object> response = service.invokeScript(script, options);
 
         // verify
         assertEquals(testResponse, response);

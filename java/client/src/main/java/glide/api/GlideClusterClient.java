@@ -60,6 +60,8 @@ import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.ScriptOptions;
+import glide.api.models.commands.ScriptOptionsGlideString;
 import glide.api.models.commands.SortClusterOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.scan.ClusterScanCursor;
@@ -968,30 +970,31 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<Object> invokeScript(
-            @NonNull Script script, @NonNull List<String> keys, @NonNull List<String> args) {
+            @NonNull Script script, @NonNull ScriptOptions options) {
         if (script.getBinaryOutput()) {
             return commandManager.submitScript(
                     script,
-                    keys.stream().map(GlideString::gs).collect(Collectors.toList()),
-                    args.stream().map(GlideString::gs).collect(Collectors.toList()),
+                    options.getKeys().stream().map(GlideString::gs).collect(Collectors.toList()),
+                    options.getArgs().stream().map(GlideString::gs).collect(Collectors.toList()),
                     this::handleBinaryObjectOrNullResponse);
         } else {
             return commandManager.submitScript(
                     script,
-                    keys.stream().map(GlideString::gs).collect(Collectors.toList()),
-                    args.stream().map(GlideString::gs).collect(Collectors.toList()),
+                    options.getKeys().stream().map(GlideString::gs).collect(Collectors.toList()),
+                    options.getArgs().stream().map(GlideString::gs).collect(Collectors.toList()),
                     this::handleObjectOrNullResponse);
         }
     }
 
     @Override
-    public CompletableFuture<Object> invokeScriptBinary(
-            @NonNull Script script, @NonNull List<GlideString> keys, @NonNull List<GlideString> args) {
+    public CompletableFuture<Object> invokeScript(
+            @NonNull Script script, @NonNull ScriptOptionsGlideString options) {
         if (script.getBinaryOutput()) {
             return commandManager.submitScript(
-                    script, keys, args, this::handleBinaryObjectOrNullResponse);
+                    script, options.getKeys(), options.getArgs(), this::handleBinaryObjectOrNullResponse);
         } else {
-            return commandManager.submitScript(script, keys, args, this::handleObjectOrNullResponse);
+            return commandManager.submitScript(
+                    script, options.getKeys(), options.getArgs(), this::handleObjectOrNullResponse);
         }
     }
 
