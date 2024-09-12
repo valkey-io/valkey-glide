@@ -1764,11 +1764,20 @@ export async function transactionTest(
  * @param addresses - addresses containing host and port for the valkey server.
  * @returns A string with server info for valkey server
  */
-export async function getServerInfo(
+export async function getServerVersion(
     addresses: [string, number][],
 ): Promise<string> {
     const glideClient = await GlideClient.createClient(
         getClientConfigurationOption(addresses, ProtocolVersion.RESP2),
     );
-    return glideClient.info([InfoOptions.Server]);
+    let info = await glideClient.info([InfoOptions.Server]);
+    let version = "";
+    const redisVersionKey = "redis_version:";
+    const valkeyVersionKey = "valkey_version:";
+    if (info.includes(valkeyVersionKey)) {
+        version = info.split(valkeyVersionKey)[1].split("\n")[0];
+    } else if (info.includes(redisVersionKey)) {
+        version = info.split(redisVersionKey)[1].split("\n")[0];
+    }
+    return version;
 }

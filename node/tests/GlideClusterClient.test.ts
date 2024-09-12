@@ -46,7 +46,7 @@ import {
     generateLuaLibCode,
     getClientConfigurationOption,
     getFirstResult,
-    getServerInfo,
+    getServerVersion,
     intoArray,
     intoString,
     parseCommandLineArgs,
@@ -70,7 +70,7 @@ describe("GlideClusterClient", () => {
             ? await ValkeyCluster.initFromExistingCluster(
                   parseEndpoints(clusterAddresses),
                   async (addresses: [string, number][]) => {
-                      return getServerInfo(addresses);
+                      return getServerVersion(addresses);
                   },
               )
             : // setting replicaCount to 1 to facilitate tests routed to replicas
@@ -79,7 +79,7 @@ describe("GlideClusterClient", () => {
                   3,
                   1,
                   async (addresses: [string, number][]) => {
-                      return getServerInfo(addresses);
+                      return getServerVersion(addresses);
                   },
               );
     }, 20000);

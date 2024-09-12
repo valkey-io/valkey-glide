@@ -27,7 +27,7 @@ import {
 import ValkeyCluster from "../../utils/TestUtils";
 import {
     flushAndCloseClient,
-    getServerInfo,
+    getServerVersion,
     parseCommandLineArgs,
     parseEndpoints,
 } from "./TestUtilities";
@@ -68,7 +68,7 @@ describe("PubSub", () => {
             ? await ValkeyCluster.initFromExistingCluster(
                   parseEndpoints(standaloneAddresses),
                   async (addresses: [string, number][]) => {
-                      return getServerInfo(addresses);
+                      return getServerVersion(addresses);
                   },
               )
             : await ValkeyCluster.createCluster(
@@ -76,14 +76,14 @@ describe("PubSub", () => {
                   1,
                   1,
                   async (addresses: [string, number][]) => {
-                      return getServerInfo(addresses);
+                      return getServerVersion(addresses);
                   },
               );
         cmeCluster = clusterAddresses
             ? await ValkeyCluster.initFromExistingCluster(
                   parseEndpoints(clusterAddresses),
                   async (addresses: [string, number][]) => {
-                      return getServerInfo(addresses);
+                      return getServerVersion(addresses);
                   },
               )
             : await ValkeyCluster.createCluster(
@@ -91,7 +91,7 @@ describe("PubSub", () => {
                   3,
                   1,
                   async (addresses: [string, number][]) => {
-                      return getServerInfo(addresses);
+                      return getServerVersion(addresses);
                   },
               );
     }, 40000);

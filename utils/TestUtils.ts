@@ -50,18 +50,6 @@ export class ValkeyCluster {
         this.version = version;
     }
 
-    private static extractVersion(stdout: string): string {
-        let version = "";
-        const redisVersionKey = "redis_version:";
-        const valkeyVersionKey = "valkey_version:";
-        if (stdout.includes(valkeyVersionKey)) {
-            version = stdout.split(valkeyVersionKey)[1].split("\n")[0];
-        } else if (stdout.includes(redisVersionKey)) {
-            version = stdout.split(redisVersionKey)[1].split("\n")[0];
-        }
-        return version;
-    }
-
     public static createCluster(
         cluster_mode: boolean,
         shardCount: number,
@@ -98,9 +86,7 @@ export class ValkeyCluster {
                         const { clusterFolder, addresses: ports } =
                             parseOutput(stdout);
                         resolve(
-                            getVersionCallback(ports).then((info) => {
-                                return this.extractVersion(info);
-                            }).then(
+                            getVersionCallback(ports).then(
                                 (ver) =>
                                     new ValkeyCluster(ver, ports, clusterFolder)
                             )
@@ -115,9 +101,7 @@ export class ValkeyCluster {
         addresses: [string, number][],
         getVersionCallback: (addresses: [string, number][]) => Promise<string>
     ): Promise<ValkeyCluster> {
-        return getVersionCallback(addresses).then(info => {
-            return this.extractVersion(info);
-        }).then(
+        return getVersionCallback(addresses).then(
             (ver) => new ValkeyCluster(ver, addresses, "")
         );
     }

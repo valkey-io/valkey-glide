@@ -40,7 +40,7 @@ import {
     flushAndCloseClient,
     generateLuaLibCode,
     getClientConfigurationOption,
-    getServerInfo,
+    getServerVersion,
     parseCommandLineArgs,
     parseEndpoints,
     transactionTest,
@@ -62,7 +62,7 @@ describe("GlideClient", () => {
             ? await ValkeyCluster.initFromExistingCluster(
                   parseEndpoints(standaloneAddresses),
                   async (addresses: [string, number][]) => {
-                      return getServerInfo(addresses);
+                      return getServerVersion(addresses);
                   },
               )
             : await ValkeyCluster.createCluster(
@@ -70,7 +70,7 @@ describe("GlideClient", () => {
                   1,
                   1,
                   async (addresses: [string, number][]) => {
-                      return getServerInfo(addresses);
+                      return getServerVersion(addresses);
                   },
               );
     }, 20000);
