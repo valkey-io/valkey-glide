@@ -1075,8 +1075,9 @@ public interface ScriptingAndFunctionsClusterCommands {
      * @example
      *     <pre>{@code
      * try(Script luaScript = new Script("return { ARGV[1] }", false)) {
-     *     Object[] result = (Object[]) client.invokeScript(luaScript, {"foo"}, ALL_PRIMARIES).get();
-     *     assert result[0].equals("foo");
+     *     ScriptArgOptions scriptArgOptions = ScriptArgOptions.builder().arg("abc").build();
+     *     Object[] result = (Object[]) client.invokeScript(luaScript, scriptOptions, ALL_PRIMARIES).get();
+     *     assert result[0].equals("abc");
      * }
      * }</pre>
      */
@@ -1100,8 +1101,9 @@ public interface ScriptingAndFunctionsClusterCommands {
      * @example
      *     <pre>{@code
      * try(Script luaScript = new Script(gs("return { ARGV[1] }", true))) {
-     *     Object[] result = (Object[]) client.invokeScript(luaScript, {"foo"}, ALL_PRIMARIES).get();
-     *     assert result[0].equals(gs("foo"));
+     *     ScriptArgOptionsGlideString options = ScriptArgOptions.builder().arg(gs("abc")).build();
+     *     Object[] result = (Object[]) client.invokeScript(luaScript, options, ALL_PRIMARIES).get();
+     *     assert result[0].equals(gs("abc"));
      * }
      * }</pre>
      */

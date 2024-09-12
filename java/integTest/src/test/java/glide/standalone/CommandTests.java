@@ -1700,12 +1700,7 @@ public class CommandTests {
     @Test
     public void scriptKill_unkillable() {
         String key = UUID.randomUUID().toString();
-        String code =
-                "redis.call('SET', KEYS[1], 'value')\n"
-                        + "  local start = redis.call('time')[1]\n"
-                        + "  while redis.call('time')[1] - start < 5 do\n"
-                        + "      redis.call('SET', KEYS[1], 'value')\n"
-                        + "   end\n";
+        String code = createLongRunningLuaScript(5, false);
         Script script = new Script(code, false);
 
         CompletableFuture<Object> promise = new CompletableFuture<>();

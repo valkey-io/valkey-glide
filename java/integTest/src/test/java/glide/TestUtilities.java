@@ -366,14 +366,19 @@ public class TestUtilities {
      */
     public static String createLongRunningLuaScript(int timeout, boolean readOnly) {
         String script =
-                "  local started = tonumber(redis.pcall('time')[1])\n"
-                        + "  while (true) do\n"
-                        + "    local now = tonumber(redis.pcall('time')[1])\n"
-                        + "    if now > started + $timeout then\n"
-                        + "      return 'Timed out $timeout sec'\n"
-                        + "    end\n"
-                        + "  end\n"
-                        + (readOnly ? "flags={ 'no-writes' }\n" : "");
+                readOnly
+                        ? "  local started = tonumber(redis.pcall('time')[1])\n"
+                                + "  while (true) do\n"
+                                + "    local now = tonumber(redis.pcall('time')[1])\n"
+                                + "    if now > started + $timeout then\n"
+                                + "      return 'Timed out $timeout sec'\n"
+                                + "    end\n"
+                                + "  end\n"
+                        : "redis.call('SET', KEYS[1], 'value')\n"
+                                + "  local start = redis.call('time')[1]\n"
+                                + "  while redis.call('time')[1] - start < $timeout do\n"
+                                + "      redis.call('SET', KEYS[1], 'value')\n"
+                                + "   end\n";
         return script.replace("$timeout", Integer.toString(timeout));
     }
 

@@ -196,7 +196,7 @@ public interface ScriptingAndFunctionsBaseCommands {
      *
      * @apiNote When in cluster mode
      *     <ul>
-     *       <li>all <code>keys</code> must map to the same hash slot.
+     *       <li>all <code>keys</code> in <code>options</code> must map to the same hash slot.
      *       <li>if no <code>keys</code> are given, command will be routed to a random primary node.
      *     </ul>
      *
@@ -227,7 +227,7 @@ public interface ScriptingAndFunctionsBaseCommands {
      *
      * @apiNote When in cluster mode
      *     <ul>
-     *       <li>all <code>keys</code> must map to the same hash slot.
+     *       <li>all <code>keys</code> in <code>options</code> must map to the same hash slot.
      *       <li>if no <code>keys</code> are given, command will be routed to a random primary node.
      *     </ul>
      *
