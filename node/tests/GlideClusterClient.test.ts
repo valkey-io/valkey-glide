@@ -70,14 +70,13 @@ describe("GlideClusterClient", () => {
             ? await ValkeyCluster.initFromExistingCluster(
                   parseEndpoints(clusterAddresses),
                   async (addresses: [string, number][]) => {
-                      let glideClient = await GlideClient.createClient(
+                      const glideClient = await GlideClient.createClient(
                           getClientConfigurationOption(
                               addresses,
                               ProtocolVersion.RESP2,
                           ),
                       );
-                      const serverInfo = glideClient.info([InfoOptions.Server]);
-                      return serverInfo;
+                      return glideClient.info([InfoOptions.Server]);
                   },
               )
             : // setting replicaCount to 1 to facilitate tests routed to replicas
@@ -86,14 +85,13 @@ describe("GlideClusterClient", () => {
                   3,
                   1,
                   async (addresses: [string, number][]) => {
-                      let glideClient = await GlideClient.createClient(
+                      const glideClient = await GlideClient.createClient(
                           getClientConfigurationOption(
                               addresses,
                               ProtocolVersion.RESP2,
                           ),
                       );
-                      const serverInfo = glideClient.info([InfoOptions.Server]);
-                      return serverInfo;
+                      return glideClient.info([InfoOptions.Server]);
                   },
               );
     }, 20000);

@@ -20,7 +20,6 @@ import {
     GlideClient,
     GlideRecord,
     GlideString,
-    HashDataType,
     InfoOptions,
     ProtocolVersion,
     RequestError,
@@ -63,14 +62,13 @@ describe("GlideClient", () => {
             ? await ValkeyCluster.initFromExistingCluster(
                   parseEndpoints(standaloneAddresses),
                   async (addresses: [string, number][]) => {
-                      let glideClient = await GlideClient.createClient(
+                      const glideClient = await GlideClient.createClient(
                           getClientConfigurationOption(
                               addresses,
                               ProtocolVersion.RESP2,
                           ),
                       );
-                      const serverInfo = glideClient.info([InfoOptions.Server]);
-                      return serverInfo;
+                      return glideClient.info([InfoOptions.Server]);
                   },
               )
             : await ValkeyCluster.createCluster(
@@ -78,14 +76,13 @@ describe("GlideClient", () => {
                   1,
                   1,
                   async (addresses: [string, number][]) => {
-                      let glideClient = await GlideClient.createClient(
+                      const glideClient = await GlideClient.createClient(
                           getClientConfigurationOption(
                               addresses,
                               ProtocolVersion.RESP2,
                           ),
                       );
-                      const serverInfo = glideClient.info([InfoOptions.Server]);
-                      return serverInfo;
+                      return glideClient.info([InfoOptions.Server]);
                   },
               );
     }, 20000);
