@@ -1777,13 +1777,13 @@ export async function getServerVersion(
         info = getFirstResult(
             await glideClusterClient.info({ sections: [InfoOptions.Server] }),
         ).toString();
-        await flushAndCloseClient(true, addresses, glideClusterClient);
+        await flushAndCloseClient(clusterMode, addresses, glideClusterClient);
     } else {
         const glideClient = await GlideClient.createClient(
             getClientConfigurationOption(addresses, ProtocolVersion.RESP2),
         );
         info = await glideClient.info([InfoOptions.Server]);
-        await flushAndCloseClient(true, addresses, glideClient);
+        await flushAndCloseClient(clusterMode, addresses, glideClient);
     }
 
     let version = "";
