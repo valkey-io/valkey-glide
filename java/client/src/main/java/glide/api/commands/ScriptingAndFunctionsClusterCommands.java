@@ -1068,7 +1068,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * @see <a href="https://valkey.io/commands/script-load/">SCRIPT LOAD</a> and <a
      *     href="https://valkey.io/commands/evalsha/">EVALSHA</a> for details.
      * @param script The Lua script to execute.
-     * @param args The non-key arguments for the script.
+     * @param options The script option that contains the non-key arguments for the script.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
      * @return A value that depends on the script that was executed.
@@ -1093,7 +1093,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * @see <a href="https://valkey.io/commands/script-load/">SCRIPT LOAD</a> and <a
      *     href="https://valkey.io/commands/evalsha/">EVALSHA</a> for details.
      * @param script The Lua script to execute.
-     * @param args The non-key arguments for the script.
+     * @param options The script option that contains the non-key arguments for the script.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
      * @return A value that depends on the script that was executed.
@@ -1149,9 +1149,8 @@ public interface ScriptingAndFunctionsClusterCommands {
      *
      * @see <a href="https://valkey.io/commands/script-exists">SCRIPT EXISTS</a> for details.
      * @param sha1s The Lua script to execute.
-     * @param route The command will be routed to all primary nodes, unless <code>route</code> is
-     *     provided, in which case the client will route the command to the nodes defined by <code>
-     *     route</code>. Defaults to None.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return An array of <code>boolean</code> values indicating the existence of each script.
      * @example
      *     <pre>{@code
@@ -1169,9 +1168,8 @@ public interface ScriptingAndFunctionsClusterCommands {
      *
      * @see <a href="https://valkey.io/commands/script-exists">SCRIPT EXISTS</a> for details.
      * @param sha1s The Lua script to execute.
-     * @param route The command will be routed to all primary nodes, unless <code>route</code> is
-     *     provided, in which case the client will route the command to the nodes defined by <code>
-     *     route</code>. Defaults to None.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return An array of <code>boolean</code> values indicating the existence of each script.
      * @example
      *     <pre>{@code
