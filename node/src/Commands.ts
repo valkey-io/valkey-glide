@@ -2507,9 +2507,17 @@ export interface BitOffsetOptions {
  */
 function joinBitOptions(options: BitOffsetOptions): GlideString[] {
     const args: GlideString[] = [];
-    if (options.start != undefined) args.push(options.start.toString());
-    if (options.end != undefined) args.push(options.end.toString());
-    if (options.indexType) args.push(options.indexType);
+    if (!options) return args;
+
+    if (options.start !== undefined) {
+        args.push(options.start.toString());
+
+        if (options.end !== undefined) {
+            args.push(options.end.toString());
+            
+            if (options.indexType) args.push(options.indexType);
+        }
+    }
 
     return args;
 }
