@@ -95,6 +95,8 @@ async def transaction_test(
     key23 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # string
     key24 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # string
     key25 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # list
+    key26 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # sort
+    key27 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # sort
 
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value_bytes = value.encode()
@@ -718,6 +720,31 @@ async def transaction_test(
         alpha=True,
     )
     args.append(4)
+    if not await check_if_server_version_lt(glide_client, "7.9.0"):
+        transaction.hset(f"{{{keyslot}}}:1", {"name": "Alice", "age": "30"})
+        args.append(2)
+        transaction.hset(f"{{{keyslot}}}:2", {"name": "Bob", "age": "25"})
+        args.append(2)
+        transaction.lpush(key26, ["2", "1"])
+        args.append(2)
+        transaction.sort(
+            key26,
+            by_pattern=f"{{{keyslot}}}:*->age",
+            get_patterns=[f"{{{keyslot}}}:*->name"],
+            order=OrderBy.ASC,
+            alpha=True,
+        )
+        args.append([b"Bob", b"Alice"])
+        transaction.sort_store(
+            key26,
+            key27,
+            by_pattern=f"{{{keyslot}}}:*->age",
+            get_patterns=[f"{{{keyslot}}}:*->name"],
+            order=OrderBy.ASC,
+            alpha=True,
+        )
+        args.append(2)
+
     transaction.sadd(key7, ["one"])
     args.append(1)
     transaction.srandmember(key7)

@@ -25,7 +25,7 @@ public class ZScanOptionsBinary extends BaseScanOptionsBinary {
 
     /**
      * When set to true, the command will not include scores in the results. This option is available
-     * from Redis version 8.0.0 and above.
+     * from Valkey version 8.0.0 and above.
      */
     @Builder.Default protected boolean noScores = false;
 

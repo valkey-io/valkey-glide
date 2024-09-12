@@ -24,9 +24,6 @@ import static glide.api.models.commands.InfoOptions.Section.EVERYTHING;
 import static glide.api.models.commands.InfoOptions.Section.MEMORY;
 import static glide.api.models.commands.InfoOptions.Section.SERVER;
 import static glide.api.models.commands.InfoOptions.Section.STATS;
-import static glide.api.models.commands.SortBaseOptions.Limit;
-import static glide.api.models.commands.SortBaseOptions.OrderBy.ASC;
-import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
 import static glide.api.models.commands.function.FunctionRestorePolicy.APPEND;
 import static glide.api.models.commands.function.FunctionRestorePolicy.FLUSH;
 import static glide.api.models.commands.function.FunctionRestorePolicy.REPLACE;
@@ -35,8 +32,8 @@ import static glide.api.models.commands.scan.ScanOptions.ObjectType.SET;
 import static glide.api.models.commands.scan.ScanOptions.ObjectType.STRING;
 import static glide.cluster.CommandTests.DEFAULT_INFO_SECTIONS;
 import static glide.cluster.CommandTests.EVERYTHING_INFO_SECTIONS;
+import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static org.junit.jupiter.api.Assertions.assertAll;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -48,9 +45,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.GlideClient;
 import glide.api.models.GlideString;
-import glide.api.models.commands.InfoOptions;
-import glide.api.models.commands.SortOptions;
-import glide.api.models.commands.SortOptionsBinary;
+import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
@@ -157,15 +152,14 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void info_with_multiple_options() {
-        InfoOptions.InfoOptionsBuilder builder = InfoOptions.builder().section(CLUSTER);
+        Section[] sections = {CLUSTER};
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            builder.section(CPU).section(MEMORY);
+            sections = concatenateArrays(sections, new Section[] {CPU, MEMORY});
         }
-        InfoOptions options = builder.build();
-        String data = regularClient.info(options).get();
-        for (String section : options.toArgs()) {
+        String data = regularClient.info(sections).get();
+        for (Section section : sections) {
             assertTrue(
-                    data.toLowerCase().contains("# " + section.toLowerCase()),
+                    data.toLowerCase().contains("# " + section.toString().toLowerCase()),
                     "Section " + section + " is missing");
         }
     }
@@ -173,8 +167,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void info_with_everything_option() {
-        InfoOptions options = InfoOptions.builder().section(EVERYTHING).build();
-        String data = regularClient.info(options).get();
+        String data = regularClient.info(new Section[] {EVERYTHING}).get();
         for (String section : EVERYTHING_INFO_SECTIONS) {
             assertTrue(data.contains("# " + section), "Section " + section + " is missing");
         }
@@ -285,13 +278,13 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void config_reset_stat() {
-        String data = regularClient.info(InfoOptions.builder().section(STATS).build()).get();
+        String data = regularClient.info(new Section[] {STATS}).get();
         long value_before = getValueFromInfo(data, "total_net_input_bytes");
 
         var result = regularClient.configResetStat().get();
         assertEquals(OK, result);
 
-        data = regularClient.info(InfoOptions.builder().section(STATS).build()).get();
+        data = regularClient.info(new Section[] {STATS}).get();
         long value_after = getValueFromInfo(data, "total_net_input_bytes");
         assertTrue(value_after < value_before);
     }
@@ -299,7 +292,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void config_rewrite_non_existent_config_file() {
-        var info = regularClient.info(InfoOptions.builder().section(SERVER).build()).get();
+        var info = regularClient.info(new Section[] {SERVER}).get();
         var configFile = parseInfoResponseToMap(info).get("config_file");
 
         if (configFile.isEmpty()) {
@@ -1152,376 +1145,6 @@ public class CommandTests {
         // no keys in database
         assertEquals(OK, regularClient.flushall().get());
         assertNull(regularClient.randomKeyBinary().get());
-    }
-
-    @Test
-    @SneakyThrows
-    public void sort() {
-        String setKey1 = "setKey1";
-        String setKey2 = "setKey2";
-        String setKey3 = "setKey3";
-        String setKey4 = "setKey4";
-        String setKey5 = "setKey5";
-        String[] setKeys = new String[] {setKey1, setKey2, setKey3, setKey4, setKey5};
-        String listKey = "listKey";
-        String storeKey = "storeKey";
-        String nameField = "name";
-        String ageField = "age";
-        String[] names = new String[] {"Alice", "Bob", "Charlie", "Dave", "Eve"};
-        String[] namesSortedByAge = new String[] {"Dave", "Bob", "Alice", "Charlie", "Eve"};
-        String[] ages = new String[] {"30", "25", "35", "20", "40"};
-        String[] userIDs = new String[] {"3", "1", "5", "4", "2"};
-        String namePattern = "setKey*->name";
-        String agePattern = "setKey*->age";
-        String missingListKey = "100000";
-
-        for (int i = 0; i < setKeys.length; i++) {
-            assertEquals(
-                    2, regularClient.hset(setKeys[i], Map.of(nameField, names[i], ageField, ages[i])).get());
-        }
-
-        assertEquals(5, regularClient.rpush(listKey, userIDs).get());
-        assertArrayEquals(
-                new String[] {"Alice", "Bob"},
-                regularClient
-                        .sort(
-                                listKey,
-                                SortOptions.builder().limit(new Limit(0L, 2L)).getPattern(namePattern).build())
-                        .get());
-        assertArrayEquals(
-                new String[] {"Eve", "Dave"},
-                regularClient
-                        .sort(
-                                listKey,
-                                SortOptions.builder()
-                                        .limit(new Limit(0L, 2L))
-                                        .orderBy(DESC)
-                                        .getPattern(namePattern)
-                                        .build())
-                        .get());
-        assertArrayEquals(
-                new String[] {"Eve", "40", "Charlie", "35"},
-                regularClient
-                        .sort(
-                                listKey,
-                                SortOptions.builder()
-                                        .limit(new Limit(0L, 2L))
-                                        .orderBy(DESC)
-                                        .byPattern(agePattern)
-                                        .getPatterns(List.of(namePattern, agePattern))
-                                        .build())
-                        .get());
-
-        // Non-existent key in the BY pattern will result in skipping the sorting operation
-        assertArrayEquals(
-                userIDs,
-                regularClient.sort(listKey, SortOptions.builder().byPattern("noSort").build()).get());
-
-        // Non-existent key in the GET pattern results in nulls
-        assertArrayEquals(
-                new String[] {null, null, null, null, null},
-                regularClient
-                        .sort(listKey, SortOptions.builder().alpha().getPattern("missing").build())
-                        .get());
-
-        // Missing key in the set
-        assertEquals(6, regularClient.lpush(listKey, new String[] {missingListKey}).get());
-        assertArrayEquals(
-                new String[] {null, "Dave", "Bob", "Alice", "Charlie", "Eve"},
-                regularClient
-                        .sort(
-                                listKey,
-                                SortOptions.builder().byPattern(agePattern).getPattern(namePattern).build())
-                        .get());
-        assertEquals(missingListKey, regularClient.lpop(listKey).get());
-
-        // SORT_RO
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            assertArrayEquals(
-                    new String[] {"Alice", "Bob"},
-                    regularClient
-                            .sortReadOnly(
-                                    listKey,
-                                    SortOptions.builder().limit(new Limit(0L, 2L)).getPattern(namePattern).build())
-                            .get());
-            assertArrayEquals(
-                    new String[] {"Eve", "Dave"},
-                    regularClient
-                            .sortReadOnly(
-                                    listKey,
-                                    SortOptions.builder()
-                                            .limit(new Limit(0L, 2L))
-                                            .orderBy(DESC)
-                                            .getPattern(namePattern)
-                                            .build())
-                            .get());
-            assertArrayEquals(
-                    new String[] {"Eve", "40", "Charlie", "35"},
-                    regularClient
-                            .sortReadOnly(
-                                    listKey,
-                                    SortOptions.builder()
-                                            .limit(new Limit(0L, 2L))
-                                            .orderBy(DESC)
-                                            .byPattern(agePattern)
-                                            .getPatterns(List.of(namePattern, agePattern))
-                                            .build())
-                            .get());
-
-            // Non-existent key in the BY pattern will result in skipping the sorting operation
-            assertArrayEquals(
-                    userIDs,
-                    regularClient
-                            .sortReadOnly(listKey, SortOptions.builder().byPattern("noSort").build())
-                            .get());
-
-            // Non-existent key in the GET pattern results in nulls
-            assertArrayEquals(
-                    new String[] {null, null, null, null, null},
-                    regularClient
-                            .sortReadOnly(listKey, SortOptions.builder().alpha().getPattern("missing").build())
-                            .get());
-
-            assertArrayEquals(
-                    namesSortedByAge,
-                    regularClient
-                            .sortReadOnly(
-                                    listKey,
-                                    SortOptions.builder().byPattern(agePattern).getPattern(namePattern).build())
-                            .get());
-
-            // Missing key in the set
-            assertEquals(6, regularClient.lpush(listKey, new String[] {missingListKey}).get());
-            assertArrayEquals(
-                    new String[] {null, "Dave", "Bob", "Alice", "Charlie", "Eve"},
-                    regularClient
-                            .sortReadOnly(
-                                    listKey,
-                                    SortOptions.builder().byPattern(agePattern).getPattern(namePattern).build())
-                            .get());
-            assertEquals(missingListKey, regularClient.lpop(listKey).get());
-        }
-
-        // SORT with STORE
-        assertEquals(
-                5,
-                regularClient
-                        .sortStore(
-                                listKey,
-                                storeKey,
-                                SortOptions.builder()
-                                        .limit(new Limit(0L, -1L))
-                                        .orderBy(ASC)
-                                        .byPattern(agePattern)
-                                        .getPattern(namePattern)
-                                        .build())
-                        .get());
-        assertArrayEquals(namesSortedByAge, regularClient.lrange(storeKey, 0, -1).get());
-        assertEquals(
-                5,
-                regularClient
-                        .sortStore(
-                                listKey,
-                                storeKey,
-                                SortOptions.builder().byPattern(agePattern).getPattern(namePattern).build())
-                        .get());
-        assertArrayEquals(namesSortedByAge, regularClient.lrange(storeKey, 0, -1).get());
-    }
-
-    @Test
-    @SneakyThrows
-    public void sort_binary() {
-        GlideString setKey1 = gs("setKey1");
-        GlideString setKey2 = gs("setKey2");
-        GlideString setKey3 = gs("setKey3");
-        GlideString setKey4 = gs("setKey4");
-        GlideString setKey5 = gs("setKey5");
-        GlideString[] setKeys = new GlideString[] {setKey1, setKey2, setKey3, setKey4, setKey5};
-        GlideString listKey = gs("listKey");
-        GlideString storeKey = gs("storeKey");
-        GlideString nameField = gs("name");
-        GlideString ageField = gs("age");
-        GlideString[] names =
-                new GlideString[] {gs("Alice"), gs("Bob"), gs("Charlie"), gs("Dave"), gs("Eve")};
-        String[] namesSortedByAge = new String[] {"Dave", "Bob", "Alice", "Charlie", "Eve"};
-        GlideString[] namesSortedByAge_gs =
-                new GlideString[] {gs("Dave"), gs("Bob"), gs("Alice"), gs("Charlie"), gs("Eve")};
-        GlideString[] ages = new GlideString[] {gs("30"), gs("25"), gs("35"), gs("20"), gs("40")};
-        GlideString[] userIDs = new GlideString[] {gs("3"), gs("1"), gs("5"), gs("4"), gs("2")};
-        GlideString namePattern = gs("setKey*->name");
-        GlideString agePattern = gs("setKey*->age");
-        GlideString missingListKey = gs("100000");
-
-        for (int i = 0; i < setKeys.length; i++) {
-            assertEquals(
-                    2,
-                    regularClient
-                            .hset(
-                                    setKeys[i].toString(),
-                                    Map.of(
-                                            nameField.toString(),
-                                            names[i].toString(),
-                                            ageField.toString(),
-                                            ages[i].toString()))
-                            .get());
-        }
-
-        assertEquals(5, regularClient.rpush(listKey, userIDs).get());
-        assertArrayEquals(
-                new GlideString[] {gs("Alice"), gs("Bob")},
-                regularClient
-                        .sort(
-                                listKey,
-                                SortOptionsBinary.builder()
-                                        .limit(new Limit(0L, 2L))
-                                        .getPattern(namePattern)
-                                        .build())
-                        .get());
-
-        assertArrayEquals(
-                new GlideString[] {gs("Eve"), gs("Dave")},
-                regularClient
-                        .sort(
-                                listKey,
-                                SortOptionsBinary.builder()
-                                        .limit(new Limit(0L, 2L))
-                                        .orderBy(DESC)
-                                        .getPattern(namePattern)
-                                        .build())
-                        .get());
-        assertArrayEquals(
-                new GlideString[] {gs("Eve"), gs("40"), gs("Charlie"), gs("35")},
-                regularClient
-                        .sort(
-                                listKey,
-                                SortOptionsBinary.builder()
-                                        .limit(new Limit(0L, 2L))
-                                        .orderBy(DESC)
-                                        .byPattern(agePattern)
-                                        .getPatterns(List.of(namePattern, agePattern))
-                                        .build())
-                        .get());
-
-        // Non-existent key in the BY pattern will result in skipping the sorting operation
-        assertArrayEquals(
-                userIDs,
-                regularClient
-                        .sort(listKey, SortOptionsBinary.builder().byPattern(gs("noSort")).build())
-                        .get());
-
-        // Non-existent key in the GET pattern results in nulls
-        assertArrayEquals(
-                new GlideString[] {null, null, null, null, null},
-                regularClient
-                        .sort(listKey, SortOptionsBinary.builder().alpha().getPattern(gs("missing")).build())
-                        .get());
-
-        // Missing key in the set
-        assertEquals(6, regularClient.lpush(listKey, new GlideString[] {missingListKey}).get());
-        assertArrayEquals(
-                new GlideString[] {null, gs("Dave"), gs("Bob"), gs("Alice"), gs("Charlie"), gs("Eve")},
-                regularClient
-                        .sort(
-                                listKey,
-                                SortOptionsBinary.builder().byPattern(agePattern).getPattern(namePattern).build())
-                        .get());
-        assertEquals(missingListKey.toString(), regularClient.lpop(listKey.toString()).get());
-
-        // SORT_RO
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            assertArrayEquals(
-                    new GlideString[] {gs("Alice"), gs("Bob")},
-                    regularClient
-                            .sortReadOnly(
-                                    listKey,
-                                    SortOptionsBinary.builder()
-                                            .limit(new Limit(0L, 2L))
-                                            .getPattern(namePattern)
-                                            .build())
-                            .get());
-            assertArrayEquals(
-                    new GlideString[] {gs("Eve"), gs("Dave")},
-                    regularClient
-                            .sortReadOnly(
-                                    listKey,
-                                    SortOptionsBinary.builder()
-                                            .limit(new Limit(0L, 2L))
-                                            .orderBy(DESC)
-                                            .getPattern(namePattern)
-                                            .build())
-                            .get());
-            assertArrayEquals(
-                    new GlideString[] {gs("Eve"), gs("40"), gs("Charlie"), gs("35")},
-                    regularClient
-                            .sortReadOnly(
-                                    listKey,
-                                    SortOptionsBinary.builder()
-                                            .limit(new Limit(0L, 2L))
-                                            .orderBy(DESC)
-                                            .byPattern(agePattern)
-                                            .getPatterns(List.of(namePattern, agePattern))
-                                            .build())
-                            .get());
-
-            // Non-existent key in the BY pattern will result in skipping the sorting operation
-            assertArrayEquals(
-                    userIDs,
-                    regularClient
-                            .sortReadOnly(listKey, SortOptionsBinary.builder().byPattern(gs("noSort")).build())
-                            .get());
-
-            // Non-existent key in the GET pattern results in nulls
-            assertArrayEquals(
-                    new GlideString[] {null, null, null, null, null},
-                    regularClient
-                            .sortReadOnly(
-                                    listKey, SortOptionsBinary.builder().alpha().getPattern(gs("missing")).build())
-                            .get());
-
-            assertArrayEquals(
-                    namesSortedByAge_gs,
-                    regularClient
-                            .sortReadOnly(
-                                    listKey,
-                                    SortOptionsBinary.builder().byPattern(agePattern).getPattern(namePattern).build())
-                            .get());
-
-            // Missing key in the set
-            assertEquals(6, regularClient.lpush(listKey, new GlideString[] {missingListKey}).get());
-            assertArrayEquals(
-                    new GlideString[] {null, gs("Dave"), gs("Bob"), gs("Alice"), gs("Charlie"), gs("Eve")},
-                    regularClient
-                            .sortReadOnly(
-                                    listKey,
-                                    SortOptionsBinary.builder().byPattern(agePattern).getPattern(namePattern).build())
-                            .get());
-            assertEquals(missingListKey.toString(), regularClient.lpop(listKey.toString()).get());
-        }
-
-        // SORT with STORE
-        assertEquals(
-                5,
-                regularClient
-                        .sortStore(
-                                listKey,
-                                storeKey,
-                                SortOptionsBinary.builder()
-                                        .limit(new Limit(0L, -1L))
-                                        .orderBy(ASC)
-                                        .byPattern(agePattern)
-                                        .getPattern(namePattern)
-                                        .build())
-                        .get());
-        assertArrayEquals(namesSortedByAge, regularClient.lrange(storeKey.toString(), 0, -1).get());
-        assertEquals(
-                5,
-                regularClient
-                        .sortStore(
-                                listKey,
-                                storeKey,
-                                SortOptionsBinary.builder().byPattern(agePattern).getPattern(namePattern).build())
-                        .get());
-        assertArrayEquals(namesSortedByAge, regularClient.lrange(storeKey.toString(), 0, -1).get());
     }
 
     @Test

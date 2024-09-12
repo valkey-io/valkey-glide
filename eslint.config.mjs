@@ -1,72 +1,60 @@
-import { fixupConfigRules, fixupPluginRules } from "@eslint/compat";
-import typescriptEslint from "@typescript-eslint/eslint-plugin";
-import tsdoc from "eslint-plugin-tsdoc";
-import _import from "eslint-plugin-import";
-import globals from "globals";
-import tsParser from "@typescript-eslint/parser";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import js from "@eslint/js";
-import { FlatCompat } from "@eslint/eslintrc";
+// @ts-check
+import eslint from "@eslint/js";
+import prettierConfig from "eslint-config-prettier";
+import tseslint from "typescript-eslint";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const compat = new FlatCompat({
-    baseDirectory: __dirname,
-    recommendedConfig: js.configs.recommended,
-    allConfig: js.configs.all
-});
-
-export default [...fixupConfigRules(compat.extends(
-    "eslint:recommended",
-    "plugin:@typescript-eslint/recommended",
-    "plugin:import/errors",
-    "plugin:import/warnings",
-)), {
-    plugins: {
-        "@typescript-eslint": fixupPluginRules(typescriptEslint),
-        tsdoc,
-        import: fixupPluginRules(_import),
+export default tseslint.config(
+    eslint.configs.recommended,
+    ...tseslint.configs.recommended,
+    ...tseslint.configs.stylistic,
+    { files: ["**/*.js"], ...tseslint.configs.disableTypeChecked },
+    {
+        ignores: [
+            "*/ProtobufMessage.*",
+            "**/*.d.ts",
+            "node_modules/**",
+            "build-ts/**",
+            "jest.config.js",
+            "docs/**"
+        ],
     },
-
-    languageOptions: {
-        globals: {
-            ...globals.browser,
-            ...globals.node,
-            ...globals.jest,
+    {
+        rules: {
+            "import/no-unresolved": "off",
+            "padding-line-between-statements": [
+                "error",
+                {
+                    blankLine: "always",
+                    prev: "*",
+                    next: "class",
+                },
+                {
+                    blankLine: "always",
+                    prev: "class",
+                    next: "*",
+                },
+                {
+                    blankLine: "always",
+                    prev: "*",
+                    next: "function",
+                },
+                {
+                    blankLine: "always",
+                    prev: "function",
+                    next: "*",
+                },
+                {
+                    blankLine: "always",
+                    prev: "*",
+                    next: "multiline-block-like",
+                },
+                {
+                    blankLine: "always",
+                    prev: "multiline-block-like",
+                    next: "*",
+                },
+            ],
         },
-
-        parser: tsParser,
     },
-
-    rules: {
-        "tsdoc/syntax": "error",
-        "import/no-unresolved": "off",
-
-        "padding-line-between-statements": ["error", {
-            blankLine: "always",
-            prev: "*",
-            next: "class",
-        }, {
-            blankLine: "always",
-            prev: "class",
-            next: "*",
-        }, {
-            blankLine: "always",
-            prev: "*",
-            next: "function",
-        }, {
-            blankLine: "always",
-            prev: "function",
-            next: "*",
-        }, {
-            blankLine: "always",
-            prev: "*",
-            next: "multiline-block-like",
-        }, {
-            blankLine: "always",
-            prev: "multiline-block-like",
-            next: "*",
-        }],
-    },
-}];
+    prettierConfig,
+);

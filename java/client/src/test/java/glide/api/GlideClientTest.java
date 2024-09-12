@@ -136,6 +136,7 @@ import static command_request.CommandRequestOuterClass.RequestType.SScan;
 import static command_request.CommandRequestOuterClass.RequestType.SUnion;
 import static command_request.CommandRequestOuterClass.RequestType.SUnionStore;
 import static command_request.CommandRequestOuterClass.RequestType.Scan;
+import static command_request.CommandRequestOuterClass.RequestType.ScriptShow;
 import static command_request.CommandRequestOuterClass.RequestType.Select;
 import static command_request.CommandRequestOuterClass.RequestType.SetBit;
 import static command_request.CommandRequestOuterClass.RequestType.SetRange;
@@ -296,7 +297,7 @@ import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.GetExOptions;
-import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions;
@@ -1583,6 +1584,49 @@ public class GlideClientTest {
 
     @SneakyThrows
     @Test
+    public void scriptShow_returns_script_source() {
+        // setup
+        String scriptSource = "return { KEYS[1], ARGV[1] }";
+        String hash = UUID.randomUUID().toString();
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(scriptSource);
+
+        when(commandManager.<String>submitNewCommand(eq(ScriptShow), eq(new String[] {hash}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.scriptShow(hash);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(scriptSource, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void scriptShow_returns_script_source_glidestring() {
+        // setup
+        GlideString scriptSource = gs("return { KEYS[1], ARGV[1] }");
+        GlideString hash = gs(UUID.randomUUID().toString());
+
+        CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
+        testResponse.complete(scriptSource);
+
+        when(commandManager.<GlideString>submitNewCommand(
+                        eq(ScriptShow), eq(new GlideString[] {hash}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString> response = service.scriptShow(hash);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(scriptSource, response.get());
+    }
+
+    @SneakyThrows
+    @Test
     public void pttl_returns_success() {
         // setup
         String key = "testKey";
@@ -1692,8 +1736,7 @@ public class GlideClientTest {
     @Test
     public void info_with_multiple_InfoOptions_returns_success() {
         // setup
-        String[] arguments =
-                new String[] {InfoOptions.Section.ALL.toString(), InfoOptions.Section.DEFAULT.toString()};
+        String[] arguments = new String[] {Section.ALL.toString(), Section.DEFAULT.toString()};
         String testPayload = "Key: Value";
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(testPayload);
@@ -1701,12 +1744,8 @@ public class GlideClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        InfoOptions options =
-                InfoOptions.builder()
-                        .section(InfoOptions.Section.ALL)
-                        .section(InfoOptions.Section.DEFAULT)
-                        .build();
-        CompletableFuture<String> response = service.info(options);
+        Section[] sections = {Section.ALL, Section.DEFAULT};
+        CompletableFuture<String> response = service.info(sections);
         String payload = response.get();
 
         // verify
@@ -1725,7 +1764,7 @@ public class GlideClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<String> response = service.info(InfoOptions.builder().build());
+        CompletableFuture<String> response = service.info(new Section[0]);
         String payload = response.get();
 
         // verify

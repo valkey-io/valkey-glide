@@ -3,17 +3,19 @@
  */
 use super::{NodeAddress, TlsMode};
 use crate::retry_strategies::RetryStrategy;
+use async_trait::async_trait;
 use futures_intrusive::sync::ManualResetEvent;
-use logger_core::{log_debug, log_trace, log_warn};
-use redis::aio::MultiplexedConnection;
-use redis::{PushInfo, RedisConnectionInfo, RedisError, RedisResult};
+use logger_core::{log_debug, log_error, log_trace, log_warn};
+use redis::aio::{DisconnectNotifier, MultiplexedConnection};
+use redis::{GlideConnectionOptions, PushInfo, RedisConnectionInfo, RedisError, RedisResult};
 use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Notify};
 use tokio::task;
+use tokio::time::timeout;
 use tokio_retry::Retry;
 
 use super::{run_with_timeout, DEFAULT_CONNECTION_ATTEMPT_TIMEOUT};
@@ -46,7 +48,7 @@ struct InnerReconnectingConnection {
 #[derive(Clone)]
 pub(super) struct ReconnectingConnection {
     inner: Arc<InnerReconnectingConnection>,
-    push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
+    connection_options: GlideConnectionOptions,
 }
 
 impl fmt::Debug for ReconnectingConnection {
@@ -57,13 +59,44 @@ impl fmt::Debug for ReconnectingConnection {
 
 async fn get_multiplexed_connection(
     client: &redis::Client,
-    push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
+    connection_options: &GlideConnectionOptions,
 ) -> RedisResult<MultiplexedConnection> {
     run_with_timeout(
         Some(DEFAULT_CONNECTION_ATTEMPT_TIMEOUT),
-        client.get_multiplexed_async_connection(push_sender),
+        client.get_multiplexed_async_connection(connection_options.clone()),
     )
     .await
+}
+
+#[derive(Clone)]
+struct TokioDisconnectNotifier {
+    disconnect_notifier: Arc<Notify>,
+}
+
+#[async_trait]
+impl DisconnectNotifier for TokioDisconnectNotifier {
+    fn notify_disconnect(&mut self) {
+        self.disconnect_notifier.notify_one();
+    }
+
+    async fn wait_for_disconnect_with_timeout(&self, max_wait: &Duration) {
+        let _ = timeout(*max_wait, async {
+            self.disconnect_notifier.notified().await;
+        })
+        .await;
+    }
+
+    fn clone_box(&self) -> Box<dyn DisconnectNotifier> {
+        Box::new(self.clone())
+    }
+}
+
+impl TokioDisconnectNotifier {
+    fn new() -> TokioDisconnectNotifier {
+        TokioDisconnectNotifier {
+            disconnect_notifier: Arc::new(Notify::new()),
+        }
+    }
 }
 
 async fn create_connection(
@@ -72,7 +105,13 @@ async fn create_connection(
     push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
 ) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
     let client = &connection_backend.connection_info;
-    let action = || get_multiplexed_connection(client, push_sender.clone());
+    let connection_options = GlideConnectionOptions {
+        push_sender,
+        disconnect_notifier: Some::<Box<dyn DisconnectNotifier>>(Box::new(
+            TokioDisconnectNotifier::new(),
+        )),
+    };
+    let action = || get_multiplexed_connection(client, &connection_options);
 
     match Retry::spawn(retry_strategy.get_iterator(), action).await {
         Ok(connection) => {
@@ -91,7 +130,7 @@ async fn create_connection(
                     state: Mutex::new(ConnectionState::Connected(connection)),
                     backend: connection_backend,
                 }),
-                push_sender,
+                connection_options,
             })
         }
         Err(err) => {
@@ -110,7 +149,7 @@ async fn create_connection(
                     state: Mutex::new(ConnectionState::InitializedDisconnected),
                     backend: connection_backend,
                 }),
-                push_sender,
+                connection_options,
             };
             connection.reconnect();
             Err((connection, err))
@@ -220,7 +259,6 @@ impl ReconnectingConnection {
         log_debug("reconnect", "starting");
 
         let connection_clone = self.clone();
-        let push_sender = self.push_sender.clone();
         // The reconnect task is spawned instead of awaited here, so that the reconnect attempt will continue in the
         // background, regardless of whether the calling task is dropped or not.
         task::spawn(async move {
@@ -234,7 +272,8 @@ impl ReconnectingConnection {
                     // Client was dropped, reconnection attempts can stop
                     return;
                 }
-                match get_multiplexed_connection(client, push_sender.clone()).await {
+                match get_multiplexed_connection(client, &connection_clone.connection_options).await
+                {
                     Ok(mut connection) => {
                         if connection
                             .send_packed_command(&redis::cmd("PING"))
@@ -267,5 +306,16 @@ impl ReconnectingConnection {
             *self.inner.state.lock().unwrap(),
             ConnectionState::Reconnecting
         )
+    }
+
+    pub async fn wait_for_disconnect_with_timeout(&self, max_wait: &Duration) {
+        // disconnect_notifier should always exists
+        if let Some(disconnect_notifier) = &self.connection_options.disconnect_notifier {
+            disconnect_notifier
+                .wait_for_disconnect_with_timeout(max_wait)
+                .await;
+        } else {
+            log_error("disconnect notifier", "BUG! Disconnect notifier is not set");
+        }
     }
 }

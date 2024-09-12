@@ -15,31 +15,32 @@ import { v4 as uuidv4 } from "uuid";
 import {
     BitwiseOperation,
     ClusterTransaction,
+    convertRecordToGlideRecord,
     Decoder,
+    FlushMode,
     FunctionListResponse,
+    FunctionRestorePolicy,
+    FunctionStatsSingleResponse,
+    GeoUnit,
     GlideClusterClient,
+    GlideReturnType,
     InfoOptions,
     ListDirection,
     ProtocolVersion,
     RequestError,
-    ReturnType,
     Routes,
     ScoreFilter,
+    Script,
     SlotKeyTypes,
-} from "..";
-import { RedisCluster } from "../../utils/TestUtils.js";
-import {
-    FlushMode,
-    FunctionRestorePolicy,
-    FunctionStatsSingleResponse,
-    GeoUnit,
     SortOrder,
-} from "../build-ts/src/Commands";
+} from "..";
+import { ValkeyCluster } from "../../utils/TestUtils.js";
 import { runBaseTests } from "./SharedTests";
 import {
     checkClusterResponse,
     checkFunctionListResponse,
     checkFunctionStatsResponse,
+    createLongRunningLuaScript,
     createLuaLibWithLongRunningFunction,
     flushAndCloseClient,
     generateLuaLibCode,
@@ -52,23 +53,24 @@ import {
     transactionTest,
     validateTransactionResponse,
     waitForNotBusy,
+    waitForScriptNotBusy,
 } from "./TestUtilities";
 
 const TIMEOUT = 50000;
 
 describe("GlideClusterClient", () => {
     let testsFailed = 0;
-    let cluster: RedisCluster;
+    let cluster: ValkeyCluster;
     let client: GlideClusterClient;
     beforeAll(async () => {
         const clusterAddresses = parseCommandLineArgs()["cluster-endpoints"];
         // Connect to cluster or create a new one based on the parsed addresses
         cluster = clusterAddresses
-            ? await RedisCluster.initFromExistingCluster(
+            ? await ValkeyCluster.initFromExistingCluster(
                   parseEndpoints(clusterAddresses),
               )
             : // setting replicaCount to 1 to facilitate tests routed to replicas
-              await RedisCluster.createCluster(true, 3, 1);
+              await ValkeyCluster.createCluster(true, 3, 1);
     }, 20000);
 
     afterEach(async () => {
@@ -274,13 +276,14 @@ describe("GlideClusterClient", () => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            const transaction = new ClusterTransaction();
-            transaction.configSet({ timeout: "1000" });
-            transaction.configGet(["timeout"]);
+            const transaction = new ClusterTransaction()
+                .configSet({ timeout: "1000" })
+                .configGet(["timeout"]);
             const result = await client.exec(transaction);
-            expect(intoString(result)).toEqual(
-                intoString(["OK", { timeout: "1000" }]),
-            );
+            expect(result).toEqual([
+                "OK",
+                convertRecordToGlideRecord({ timeout: "1000" }),
+            ]);
         },
         TIMEOUT,
     );
@@ -304,8 +307,8 @@ describe("GlideClusterClient", () => {
 
                 transaction.pubsubShardChannels();
                 expectedRes.push(["pubsubShardChannels()", []]);
-                transaction.pubsubShardNumSub();
-                expectedRes.push(["pubsubShardNumSub()", {}]);
+                transaction.pubsubShardNumSub([]);
+                expectedRes.push(["pubsubShardNumSub()", []]);
             }
 
             const result = await client.exec(transaction);
@@ -384,8 +387,10 @@ describe("GlideClusterClient", () => {
                 client.sdiffstore("abc", ["zxy", "lkn"]),
                 client.sortStore("abc", "zyx"),
                 client.sortStore("abc", "zyx", { isAlpha: true }),
-                client.lmpop(["abc", "def"], ListDirection.LEFT, 1),
-                client.blmpop(["abc", "def"], ListDirection.RIGHT, 0.1, 1),
+                client.lmpop(["abc", "def"], ListDirection.LEFT, { count: 1 }),
+                client.blmpop(["abc", "def"], ListDirection.RIGHT, 0.1, {
+                    count: 1,
+                }),
                 client.bzpopmax(["abc", "def"], 0.5),
                 client.bzpopmin(["abc", "def"], 0.5),
                 client.xread({ abc: "0-0", zxy: "0-0", lkn: "0-0" }),
@@ -467,7 +472,7 @@ describe("GlideClusterClient", () => {
             const key = uuidv4();
             const maxmemoryPolicyKey = "maxmemory-policy";
             const config = await client.configGet([maxmemoryPolicyKey]);
-            const maxmemoryPolicy = String(config[maxmemoryPolicyKey]);
+            const maxmemoryPolicy = config[maxmemoryPolicyKey] as string;
 
             try {
                 const transaction = new ClusterTransaction();
@@ -508,7 +513,7 @@ describe("GlideClusterClient", () => {
             const key = uuidv4();
             const maxmemoryPolicyKey = "maxmemory-policy";
             const config = await client.configGet([maxmemoryPolicyKey]);
-            const maxmemoryPolicy = String(config[maxmemoryPolicyKey]);
+            const maxmemoryPolicy = config[maxmemoryPolicyKey] as string;
 
             try {
                 const transaction = new ClusterTransaction();
@@ -1313,7 +1318,7 @@ describe("GlideClusterClient", () => {
                         TIMEOUT,
                     );
 
-                    it("function dump function restore %p", async () => {
+                    it("function dump function restore", async () => {
                         if (cluster.checkIfServerVersionLessThan("7.0.0"))
                             return;
 
@@ -1461,7 +1466,7 @@ describe("GlideClusterClient", () => {
                                 expect(res).toEqual("meow");
                             } else {
                                 Object.values(
-                                    res as Record<string, ReturnType>,
+                                    res as Record<string, GlideReturnType>,
                                 ).forEach((r) => expect(r).toEqual("meow"));
                             }
 
@@ -1475,7 +1480,7 @@ describe("GlideClusterClient", () => {
                                 expect(res).toEqual(2);
                             } else {
                                 Object.values(
-                                    res as Record<string, ReturnType>,
+                                    res as Record<string, GlideReturnType>,
                                 ).forEach((r) => expect(r).toEqual(2));
                             }
                         } finally {
@@ -1768,6 +1773,134 @@ describe("GlideClusterClient", () => {
             expect(await client.get(key2)).toEqual("foobar");
 
             client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "script kill unkillable test_%p",
+        async (protocol) => {
+            const config = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+                { requestTimeout: 10000 },
+            );
+            const client1 = await GlideClusterClient.createClient(config);
+            const client2 = await GlideClusterClient.createClient(config);
+
+            // Verify that script kill raises an error when no script is running
+            await expect(client1.scriptKill()).rejects.toThrow(
+                "No scripts in execution right now",
+            );
+
+            // Create a long-running script
+            const longScript = new Script(createLongRunningLuaScript(5, true));
+            let promise = null;
+
+            try {
+                // call the script without await
+                promise = client2.invokeScript(longScript, {
+                    keys: ["{key}-" + uuidv4()],
+                });
+
+                let foundUnkillable = false;
+                let timeout = 4000;
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                while (timeout >= 0) {
+                    try {
+                        // keep trying to kill until we get an "OK"
+                        await client1.scriptKill();
+                    } catch (err) {
+                        // a RequestError may occur if the script is not yet running
+                        // sleep and try again
+                        if (
+                            (err as Error).message
+                                .toLowerCase()
+                                .includes("unkillable")
+                        ) {
+                            foundUnkillable = true;
+                            break;
+                        }
+                    }
+
+                    await new Promise((resolve) => setTimeout(resolve, 500));
+                    timeout -= 500;
+                }
+
+                expect(foundUnkillable).toBeTruthy();
+            } finally {
+                // If script wasn't killed, and it didn't time out - it blocks the server and cause the
+                // test to fail. Wait for the script to complete (we cannot kill it)
+                expect(await promise).toContain("Timed out");
+                client1.close();
+                client2.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "script kill killable test_%p",
+        async (protocol) => {
+            const config = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+                { requestTimeout: 10000 },
+            );
+            const client1 = await GlideClusterClient.createClient(config);
+            const client2 = await GlideClusterClient.createClient(config);
+
+            try {
+                // Verify that script kill raises an error when no script is running
+                await expect(client1.scriptKill()).rejects.toThrow(
+                    "No scripts in execution right now",
+                );
+
+                // Create a long-running script
+                const longScript = new Script(
+                    createLongRunningLuaScript(5, false),
+                );
+
+                try {
+                    // call the script without await
+                    const promise = client2
+                        .invokeScript(longScript)
+                        .catch((e) =>
+                            expect((e as Error).message).toContain(
+                                "Script killed",
+                            ),
+                        );
+
+                    let killed = false;
+                    let timeout = 4000;
+                    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                    while (timeout >= 0) {
+                        try {
+                            expect(await client1.scriptKill()).toEqual("OK");
+                            killed = true;
+                            break;
+                        } catch {
+                            // do nothing
+                        }
+
+                        await new Promise((resolve) =>
+                            setTimeout(resolve, 500),
+                        );
+                        timeout -= 500;
+                    }
+
+                    expect(killed).toBeTruthy();
+                    await promise;
+                } finally {
+                    await waitForScriptNotBusy(client1);
+                }
+            } finally {
+                expect(await client1.scriptFlush()).toEqual("OK");
+                client1.close();
+                client2.close();
+            }
         },
         TIMEOUT,
     );

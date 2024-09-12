@@ -38,6 +38,7 @@ import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleM
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.PRIMARY;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.REPLICA;
+import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -53,11 +54,12 @@ import glide.api.GlideClusterClient;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
-import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.SortBaseOptions;
-import glide.api.models.commands.SortClusterOptions;
+import glide.api.models.commands.SortOptions;
+import glide.api.models.commands.SortOptionsBinary;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.commands.geospatial.GeoSearchOrigin;
@@ -305,16 +307,15 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void info_with_multiple_options() {
-        InfoOptions.InfoOptionsBuilder builder = InfoOptions.builder().section(CLUSTER);
+        Section[] sections = {CLUSTER};
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            builder.section(CPU).section(MEMORY);
+            sections = concatenateArrays(sections, new Section[] {CPU, MEMORY});
         }
-        InfoOptions options = builder.build();
-        ClusterValue<String> data = clusterClient.info(options).get();
+        ClusterValue<String> data = clusterClient.info(sections).get();
         for (String info : data.getMultiValue().values()) {
-            for (String section : options.toArgs()) {
+            for (Section section : sections) {
                 assertTrue(
-                        info.toLowerCase().contains("# " + section.toLowerCase()),
+                        info.toLowerCase().contains("# " + section.toString().toLowerCase()),
                         "Section " + section + " is missing");
             }
         }
@@ -323,8 +324,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void info_with_everything_option() {
-        InfoOptions options = InfoOptions.builder().section(EVERYTHING).build();
-        ClusterValue<String> data = clusterClient.info(options).get();
+        ClusterValue<String> data = clusterClient.info(new Section[] {EVERYTHING}).get();
         assertTrue(data.hasMultiData());
         for (String info : data.getMultiValue().values()) {
             for (String section : EVERYTHING_INFO_SECTIONS) {
@@ -350,17 +350,16 @@ public class CommandTests {
         var slotKey =
                 (String) ((Object[]) ((Object[]) ((Object[]) slotData.getSingleValue())[0])[2])[2];
 
-        InfoOptions.InfoOptionsBuilder builder = InfoOptions.builder().section(CLIENTS);
+        Section[] sections = {CLIENTS};
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            builder.section(COMMANDSTATS).section(REPLICATION);
+            sections = concatenateArrays(sections, new Section[] {COMMANDSTATS, REPLICATION});
         }
-        InfoOptions options = builder.build();
         SlotKeyRoute routing = new SlotKeyRoute(slotKey, PRIMARY);
-        ClusterValue<String> data = clusterClient.info(options, routing).get();
+        ClusterValue<String> data = clusterClient.info(sections, routing).get();
 
-        for (String section : options.toArgs()) {
+        for (Section section : sections) {
             assertTrue(
-                    data.getSingleValue().toLowerCase().contains("# " + section.toLowerCase()),
+                    data.getSingleValue().toLowerCase().contains("# " + section.toString().toLowerCase()),
                     "Section " + section + " is missing");
         }
     }
@@ -368,17 +367,16 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void info_with_multi_node_route_and_options() {
-        InfoOptions.InfoOptionsBuilder builder = InfoOptions.builder().section(CLIENTS);
+        Section[] sections = {CLIENTS};
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            builder.section(COMMANDSTATS).section(REPLICATION);
+            sections = concatenateArrays(sections, new Section[] {COMMANDSTATS, REPLICATION});
         }
-        InfoOptions options = builder.build();
-        ClusterValue<String> data = clusterClient.info(options, ALL_NODES).get();
+        ClusterValue<String> data = clusterClient.info(sections, ALL_NODES).get();
 
         for (String info : data.getMultiValue().values()) {
-            for (String section : options.toArgs()) {
+            for (Section section : sections) {
                 assertTrue(
-                        info.toLowerCase().contains("# " + section.toLowerCase()),
+                        info.toLowerCase().contains("# " + section.toString().toLowerCase()),
                         "Section " + section + " is missing");
             }
         }
@@ -447,14 +445,14 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void config_reset_stat() {
-        var data = clusterClient.info(InfoOptions.builder().section(STATS).build()).get();
+        var data = clusterClient.info(new Section[] {STATS}).get();
         String firstNodeInfo = getFirstEntryFromMultiValue(data);
         long value_before = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
 
         var result = clusterClient.configResetStat().get();
         assertEquals(OK, result);
 
-        data = clusterClient.info(InfoOptions.builder().section(STATS).build()).get();
+        data = clusterClient.info(new Section[] {STATS}).get();
         firstNodeInfo = getFirstEntryFromMultiValue(data);
         long value_after = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
         assertTrue(value_after < value_before);
@@ -463,7 +461,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void config_rewrite_non_existent_config_file() {
-        var info = clusterClient.info(InfoOptions.builder().section(SERVER).build(), RANDOM).get();
+        var info = clusterClient.info(new Section[] {SERVER}, RANDOM).get();
         var configFile = parseInfoResponseToMap(info.getSingleValue()).get("config_file");
 
         if (configFile.isEmpty()) {
@@ -980,7 +978,7 @@ public class CommandTests {
                 Arguments.of(
                         "sortStore",
                         "1.0.0",
-                        clusterClient.sortStore("abc", "def", SortClusterOptions.builder().alpha().build())),
+                        clusterClient.sortStore("abc", "def", SortOptions.builder().alpha().build())),
                 Arguments.of(
                         "geosearchstore",
                         "6.2.0",
@@ -2443,17 +2441,15 @@ public class CommandTests {
         assertArrayEquals(
                 new String[0],
                 clusterClient
-                        .sort(
-                                key1, SortClusterOptions.builder().limit(new SortBaseOptions.Limit(0L, 0L)).build())
+                        .sort(key1, SortOptions.builder().limit(new SortBaseOptions.Limit(0L, 0L)).build())
                         .get());
         assertArrayEquals(
                 key1DescendingList,
-                clusterClient.sort(key1, SortClusterOptions.builder().orderBy(DESC).build()).get());
+                clusterClient.sort(key1, SortOptions.builder().orderBy(DESC).build()).get());
         assertArrayEquals(
                 Arrays.copyOfRange(key1AscendingList, 0, 2),
                 clusterClient
-                        .sort(
-                                key1, SortClusterOptions.builder().limit(new SortBaseOptions.Limit(0L, 2L)).build())
+                        .sort(key1, SortOptions.builder().limit(new SortBaseOptions.Limit(0L, 2L)).build())
                         .get());
         assertEquals(7, clusterClient.lpush(key2, key2LpushArgs).get());
         assertArrayEquals(
@@ -2461,7 +2457,7 @@ public class CommandTests {
                 clusterClient
                         .sort(
                                 key2,
-                                SortClusterOptions.builder()
+                                SortOptions.builder()
                                         .alpha()
                                         .orderBy(DESC)
                                         .limit(new SortBaseOptions.Limit(0L, 4L))
@@ -2472,22 +2468,19 @@ public class CommandTests {
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertArrayEquals(
                     key1DescendingList,
-                    clusterClient
-                            .sortReadOnly(key1, SortClusterOptions.builder().orderBy(DESC).build())
-                            .get());
+                    clusterClient.sortReadOnly(key1, SortOptions.builder().orderBy(DESC).build()).get());
             assertArrayEquals(
                     Arrays.copyOfRange(key1AscendingList, 0, 2),
                     clusterClient
                             .sortReadOnly(
-                                    key1,
-                                    SortClusterOptions.builder().limit(new SortBaseOptions.Limit(0L, 2L)).build())
+                                    key1, SortOptions.builder().limit(new SortBaseOptions.Limit(0L, 2L)).build())
                             .get());
             assertArrayEquals(
                     key2DescendingListSubset,
                     clusterClient
                             .sortReadOnly(
                                     key2,
-                                    SortClusterOptions.builder()
+                                    SortOptions.builder()
                                             .alpha()
                                             .orderBy(DESC)
                                             .limit(new SortBaseOptions.Limit(0L, 4L))
@@ -2502,7 +2495,7 @@ public class CommandTests {
                         .sortStore(
                                 key2,
                                 key3,
-                                SortClusterOptions.builder()
+                                SortOptions.builder()
                                         .alpha()
                                         .orderBy(DESC)
                                         .limit(new SortBaseOptions.Limit(0L, 4L))
@@ -2535,16 +2528,16 @@ public class CommandTests {
                 new GlideString[0],
                 clusterClient
                         .sort(
-                                key1, SortClusterOptions.builder().limit(new SortBaseOptions.Limit(0L, 0L)).build())
+                                key1, SortOptionsBinary.builder().limit(new SortBaseOptions.Limit(0L, 0L)).build())
                         .get());
         assertArrayEquals(
                 key1DescendingList,
-                clusterClient.sort(key1, SortClusterOptions.builder().orderBy(DESC).build()).get());
+                clusterClient.sort(key1, SortOptionsBinary.builder().orderBy(DESC).build()).get());
         assertArrayEquals(
                 Arrays.copyOfRange(key1AscendingList, 0, 2),
                 clusterClient
                         .sort(
-                                key1, SortClusterOptions.builder().limit(new SortBaseOptions.Limit(0L, 2L)).build())
+                                key1, SortOptionsBinary.builder().limit(new SortBaseOptions.Limit(0L, 2L)).build())
                         .get());
         assertEquals(7, clusterClient.lpush(key2, key2LpushArgs).get());
         assertArrayEquals(
@@ -2552,7 +2545,7 @@ public class CommandTests {
                 clusterClient
                         .sort(
                                 key2,
-                                SortClusterOptions.builder()
+                                SortOptionsBinary.builder()
                                         .alpha()
                                         .orderBy(DESC)
                                         .limit(new SortBaseOptions.Limit(0L, 4L))
@@ -2564,21 +2557,21 @@ public class CommandTests {
             assertArrayEquals(
                     key1DescendingList,
                     clusterClient
-                            .sortReadOnly(key1, SortClusterOptions.builder().orderBy(DESC).build())
+                            .sortReadOnly(key1, SortOptionsBinary.builder().orderBy(DESC).build())
                             .get());
             assertArrayEquals(
                     Arrays.copyOfRange(key1AscendingList, 0, 2),
                     clusterClient
                             .sortReadOnly(
                                     key1,
-                                    SortClusterOptions.builder().limit(new SortBaseOptions.Limit(0L, 2L)).build())
+                                    SortOptionsBinary.builder().limit(new SortBaseOptions.Limit(0L, 2L)).build())
                             .get());
             assertArrayEquals(
                     key2DescendingListSubset,
                     clusterClient
                             .sortReadOnly(
                                     key2,
-                                    SortClusterOptions.builder()
+                                    SortOptionsBinary.builder()
                                             .alpha()
                                             .orderBy(DESC)
                                             .limit(new SortBaseOptions.Limit(0L, 4L))
@@ -2593,7 +2586,7 @@ public class CommandTests {
                         .sortStore(
                                 key2,
                                 key3,
-                                SortClusterOptions.builder()
+                                SortOptionsBinary.builder()
                                         .alpha()
                                         .orderBy(DESC)
                                         .limit(new SortBaseOptions.Limit(0L, 4L))
