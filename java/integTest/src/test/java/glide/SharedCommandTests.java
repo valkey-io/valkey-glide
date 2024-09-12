@@ -996,7 +996,7 @@ public class SharedCommandTests {
         byte[] nonUTF8Bytes = new byte[] {(byte) 0xEE};
         GlideString key = gs(nonUTF8Bytes);
         GlideString hashKey = gs(UUID.randomUUID().toString());
-        GlideString hashNonUTF8Key = gs(new byte[] {(byte) 0xFF});
+        GlideString hashNonUTF8Key = gs(new byte[] {(byte) 0xDD});
         GlideString value = gs(nonUTF8Bytes);
         String stringField = "field";
         Map<GlideString, GlideString> fieldValueMap = Map.of(gs(stringField), value);
@@ -1029,7 +1029,7 @@ public class SharedCommandTests {
     public void non_UTF8_GlideString_map_with_double(BaseClient client) {
         byte[] nonUTF8Bytes = new byte[] {(byte) 0xEE};
         GlideString key = gs(UUID.randomUUID().toString());
-        GlideString nonUTF8Key = gs(new byte[] {(byte) 0xFF});
+        GlideString nonUTF8Key = gs(new byte[] {(byte) 0xEF});
         Map<GlideString, Double> membersScores =
                 Map.of(gs(nonUTF8Bytes), 1.0, gs("two"), 2.0, gs("three"), 3.0);
 
@@ -1095,7 +1095,7 @@ public class SharedCommandTests {
     public void non_UTF8_GlideString_map_with_geospatial(BaseClient client) {
         byte[] nonUTF8Bytes = new byte[] {(byte) 0xEE};
         GlideString key = gs(UUID.randomUUID().toString());
-        GlideString nonUTF8Key = gs(new byte[] {(byte) 0xFF});
+        GlideString nonUTF8Key = gs(new byte[] {(byte) 0xDF});
         Map<GlideString, GeospatialData> membersToCoordinates = new HashMap<>();
         membersToCoordinates.put(gs(nonUTF8Bytes), new GeospatialData(13.361389, 38.115556));
         membersToCoordinates.put(gs("Catania"), new GeospatialData(15.087269, 37.502669));
@@ -1145,7 +1145,7 @@ public class SharedCommandTests {
     public void non_UTF8_GlideString_map_of_arrays(BaseClient client) {
         byte[] nonUTF8Bytes = new byte[] {(byte) 0xEE};
         GlideString key = gs(UUID.randomUUID().toString());
-        GlideString nonUTF8Key = gs(new byte[] {(byte) 0xFF});
+        GlideString nonUTF8Key = gs(new byte[] {(byte) 0xFE});
         GlideString[] lpushArgs = {gs(nonUTF8Bytes), gs("two")};
 
         // Testing map of arrays using byte[] that cannot be converted to UTF-8 Strings.
