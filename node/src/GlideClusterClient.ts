@@ -3,6 +3,7 @@
  */
 
 import { ClusterScanCursor } from "glide-rs";
+import { Script } from "index";
 import * as net from "net";
 import {
     BaseClient,
@@ -1442,7 +1443,46 @@ export class GlideClusterClient extends BaseClient {
     }
 
     /**
-     * Check existence of scripts in the script cache by their SHA1 digest.
+     * Invokes a Lua script with arguments.
+     * This method simplifies the process of invoking scripts on a Valkey server by using an object that represents a Lua script.
+     * The script loading, argument preparation, and execution will all be handled internally. If the script has not already been loaded,
+     * it will be loaded automatically using the `SCRIPT LOAD` command. After that, it will be invoked using the `EVALSHA` command.
+     *
+     * The command will be routed to a random node, unless `route` is provided.
+     *
+     * @see {@link https://valkey.io/commands/script-load/|SCRIPT LOAD} and {@link https://valkey.io/commands/evalsha/|EVALSHA} on valkey.io for details.
+     *
+     * @param script - The Lua script to execute.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `args`: the arguments for the script.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
+     * - (Optional) `route`: see {@link RouteOption}.
+     * @returns A value that depends on the script that was executed.
+     *
+     * @example
+     * ```typescript
+     * const luaScript = new Script("return { ARGV[1] }");
+     * const result = await invokeScript(luaScript, { args: ["bar"] });
+     * console.log(result); // Output: ['bar']
+     * ```
+     */
+    public async invokeScriptWithRoute(
+        script: Script,
+        options?: { args?: GlideString[] } & DecoderOption & RouteOption,
+    ): Promise<ClusterResponse<GlideReturnType>> {
+        const scriptInvocation = command_request.ScriptInvocation.create({
+            hash: script.getHash(),
+            keys: [],
+            args: options?.args?.map(Buffer.from),
+        });
+        return this.createWritePromise<ClusterGlideRecord<GlideReturnType>>(
+            scriptInvocation,
+            options,
+        ).then((res) => convertClusterGlideRecord(res, true, options?.route));
+    }
+
+    /**
+     * Checks existence of scripts in the script cache by their SHA1 digest.
      *
      * @see {@link https://valkey.io/commands/script-exists/|valkey.io} for more details.
      *
@@ -1464,7 +1504,7 @@ export class GlideClusterClient extends BaseClient {
     }
 
     /**
-     * Flush the Lua scripts cache.
+     * Flushes the Lua scripts cache.
      *
      * @see {@link https://valkey.io/commands/script-flush/|valkey.io} for more details.
      *
@@ -1491,7 +1531,7 @@ export class GlideClusterClient extends BaseClient {
     }
 
     /**
-     * Kill the currently executing Lua script, assuming no write operation was yet performed by the script.
+     * Kills the currently executing Lua script, assuming no write operation was yet performed by the script.
      *
      * @see {@link https://valkey.io/commands/script-kill/|valkey.io} for more details.
      * @remarks The command is routed to all nodes, and aggregates the response to a single array.
