@@ -42,7 +42,7 @@ ext {
         // Line in format like: libprotoc 28.1
         int majorVersion = Integer.parseInt(output.split(" ")[1].split("\\.")[0].trim());
         int minorVersion = Integer.parseInt(output.split(" ")[1].split("\\.")[1].trim());
-        if (majorVersion < 28)
+        if (majorVersion < 28) {
             throw new GradleException("Protobuf compiler (protoc) version 28.0 or newer is required. Current version: $output");
         }
         return output.split(" ")[1]
