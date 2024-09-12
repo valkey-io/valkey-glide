@@ -7,7 +7,8 @@ use redis::{
     aio::{ConnectionLike, ConnectionManager, MultiplexedConnection},
     cluster::ClusterClientBuilder,
     cluster_async::ClusterConnection,
-    AsyncCommands, ConnectionAddr, ConnectionInfo, RedisConnectionInfo, RedisResult, Value,
+    AsyncCommands, ConnectionAddr, ConnectionInfo, GlideConnectionOptions, RedisConnectionInfo,
+    RedisResult, Value,
 };
 use std::env;
 use tokio::runtime::{Builder, Runtime};
@@ -83,7 +84,12 @@ fn get_connection_info(address: ConnectionAddr) -> redis::ConnectionInfo {
 fn multiplexer_benchmark(c: &mut Criterion, address: ConnectionAddr, group: &str) {
     benchmark(c, address, "multiplexer", group, |address, runtime| {
         let client = redis::Client::open(get_connection_info(address)).unwrap();
-        runtime.block_on(async { client.get_multiplexed_tokio_connection(None).await.unwrap() })
+        runtime.block_on(async {
+            client
+                .get_multiplexed_tokio_connection(GlideConnectionOptions::default())
+                .await
+                .unwrap()
+        })
     });
 }
 

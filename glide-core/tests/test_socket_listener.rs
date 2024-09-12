@@ -16,6 +16,7 @@ use utilities::*;
 /// Response header length approximation, including the length of the message and the callback index
 const APPROX_RESP_HEADER_LEN: usize = 3;
 const KEY_LENGTH: usize = 6;
+const REQUEST_TIMEOUT_MS: u32 = 1000;
 
 #[cfg(test)]
 mod socket_listener {
@@ -362,7 +363,7 @@ mod socket_listener {
             &TestConfiguration {
                 use_tls: use_tls.to_bool(),
                 cluster_mode,
-                request_timeout: Some(10000),
+                request_timeout: Some(REQUEST_TIMEOUT_MS),
                 ..Default::default()
             },
         );
@@ -1093,50 +1094,6 @@ mod socket_listener {
             CALLBACK_INDEX,
             ResponseType::RequestError,
         );
-
-        let mut buffer = Vec::with_capacity(100);
-        write_get(
-            &mut buffer,
-            &mut socket,
-            CALLBACK_INDEX,
-            key.as_str(),
-            false,
-        );
-
-        assert_null_response(&mut buffer, &mut socket, CALLBACK_INDEX);
-    }
-
-    #[rstest]
-    #[serial_test::serial]
-    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
-    fn test_handle_request_after_reporting_disconnet() {
-        let test_basics = setup_server_test_basics(Tls::NoTls, TestServer::Unique);
-        let mut socket = test_basics.socket.try_clone().unwrap();
-        let address = test_basics.server.as_ref().unwrap().get_client_addr();
-        drop(test_basics);
-
-        const CALLBACK_INDEX: u32 = 0;
-        let key = generate_random_string(KEY_LENGTH);
-        let mut buffer = Vec::with_capacity(100);
-        write_get(
-            &mut buffer,
-            &mut socket,
-            CALLBACK_INDEX,
-            key.as_str(),
-            false,
-        );
-
-        assert_error_response(
-            &mut buffer,
-            &mut socket,
-            CALLBACK_INDEX,
-            ResponseType::RequestError,
-        );
-
-        let new_server = RedisServer::new_with_addr_and_modules(address, &[]);
-        block_on_all(wait_for_server_to_become_ready(
-            &new_server.get_client_addr(),
-        ));
 
         let mut buffer = Vec::with_capacity(100);
         write_get(

@@ -26,9 +26,15 @@ pub const HEARTBEAT_SLEEP_DURATION: Duration = Duration::from_secs(1);
 pub const DEFAULT_RETRIES: u32 = 3;
 pub const DEFAULT_RESPONSE_TIMEOUT: Duration = Duration::from_millis(250);
 pub const DEFAULT_CONNECTION_ATTEMPT_TIMEOUT: Duration = Duration::from_millis(250);
-pub const DEFAULT_PERIODIC_CHECKS_INTERVAL: Duration = Duration::from_secs(60);
+pub const DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL: Duration = Duration::from_secs(60);
 pub const INTERNAL_CONNECTION_TIMEOUT: Duration = Duration::from_millis(250);
 pub const FINISHED_SCAN_CURSOR: &str = "finished";
+
+// The connection check interval is currently not exposed to the user via ConnectionRequest,
+// as improper configuration could negatively impact performance or pub/sub resiliency.
+// A 3-second interval provides a reasonable balance between connection validation
+// and performance overhead.
+pub const CONNECTION_CHECKS_INTERVAL: Duration = Duration::from_secs(3);
 
 pub(super) fn get_port(address: &NodeAddress) -> u16 {
     const DEFAULT_PORT: u16 = 6379;
@@ -443,11 +449,11 @@ async fn create_cluster_client(
         .collect();
     let read_from = request.read_from.unwrap_or_default();
     let read_from_replicas = !matches!(read_from, ReadFrom::Primary); // TODO - implement different read from replica strategies.
-    let periodic_checks = match request.periodic_checks {
+    let periodic_topology_checks = match request.periodic_checks {
         Some(PeriodicCheck::Disabled) => None,
-        Some(PeriodicCheck::Enabled) => Some(DEFAULT_PERIODIC_CHECKS_INTERVAL),
+        Some(PeriodicCheck::Enabled) => Some(DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL),
         Some(PeriodicCheck::ManualInterval(interval)) => Some(interval),
-        None => Some(DEFAULT_PERIODIC_CHECKS_INTERVAL),
+        None => Some(DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL),
     };
     let mut builder = redis::cluster::ClusterClientBuilder::new(initial_nodes)
         .connection_timeout(INTERNAL_CONNECTION_TIMEOUT)
@@ -455,7 +461,7 @@ async fn create_cluster_client(
     if read_from_replicas {
         builder = builder.read_from_replicas();
     }
-    if let Some(interval_duration) = periodic_checks {
+    if let Some(interval_duration) = periodic_topology_checks {
         builder = builder.periodic_topology_checks(interval_duration);
     }
     builder = builder.use_protocol(request.protocol.unwrap_or_default());
@@ -473,6 +479,10 @@ async fn create_cluster_client(
     if let Some(pubsub_subscriptions) = redis_connection_info.pubsub_subscriptions {
         builder = builder.pubsub_subscriptions(pubsub_subscriptions);
     }
+
+    // Always use with Glide
+    builder = builder.periodic_connections_checks(CONNECTION_CHECKS_INTERVAL);
+
     let client = builder.build()?;
     client.get_async_connection(push_sender).await
 }
@@ -571,7 +581,7 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
             Some(PeriodicCheck::Disabled) => "\nPeriodic Checks: Disabled".to_string(),
             Some(PeriodicCheck::Enabled) => format!(
                 "\nPeriodic Checks: Enabled with default interval of {:?}",
-                DEFAULT_PERIODIC_CHECKS_INTERVAL
+                DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL
             ),
             Some(PeriodicCheck::ManualInterval(interval)) => format!(
                 "\nPeriodic Checks: Enabled with manual interval of {:?}s",
