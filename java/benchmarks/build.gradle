@@ -39,5 +39,3 @@ application {
         applicationDefaultJvmArgs = ['-Djava.library.path=../target/release']
     }
 }
-
-
