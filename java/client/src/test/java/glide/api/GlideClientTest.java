@@ -1587,7 +1587,6 @@ public class GlideClientTest {
     public void scriptShow_returns_script_source_glidestring() {
         // setup
         GlideString scriptSource = gs("return { KEYS[1], ARGV[1] }");
-        Script script = mock(Script.class);
         GlideString hash = gs(UUID.randomUUID().toString());
         when(script.getHash()).thenReturn(hash.toString());
 
