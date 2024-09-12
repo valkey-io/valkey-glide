@@ -1657,10 +1657,10 @@ public class CommandTests {
         promise.complete(null);
 
         // create and load a long-running script
-        Script script = new Script(createLongRunningLuaScript(10, true), true);
+        Script script = new Script(createLongRunningLuaScript(5, true), true);
 
         try (var testClient =
-                GlideClient.createClient(commonClientConfig().requestTimeout(30000).build()).get()) {
+                GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
             try {
                 testClient.invokeScript(script);
 
@@ -1713,7 +1713,7 @@ public class CommandTests {
         promise.complete(null);
 
         try (var testClient =
-                GlideClient.createClient(commonClientConfig().requestTimeout(30000).build()).get()) {
+                GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
             try {
                 // run the script without await
                 promise = testClient.invokeScript(script, ScriptOptions.builder().key(key).build());

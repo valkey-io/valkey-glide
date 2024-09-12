@@ -3237,7 +3237,7 @@ public class CommandTests {
     @SneakyThrows
     public void scriptKill_with_route() {
         // create and load a long-running script and a primary node route
-        Script script = new Script(createLongRunningLuaScript(10, true), true);
+        Script script = new Script(createLongRunningLuaScript(5, true), true);
         RequestRoutingConfiguration.Route route =
                 new RequestRoutingConfiguration.SlotKeyRoute(UUID.randomUUID().toString(), PRIMARY);
 
@@ -3255,7 +3255,7 @@ public class CommandTests {
         promise.complete(null);
 
         try (var testClient =
-                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(30000).build())
+                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get()) {
             try {
                 testClient.invokeScript(script, route);
@@ -3311,7 +3311,7 @@ public class CommandTests {
         promise.complete(null);
 
         try (var testClient =
-                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(30000).build())
+                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get()) {
             try {
                 // run the script without await

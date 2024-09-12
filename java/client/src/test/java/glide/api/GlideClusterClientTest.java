@@ -66,6 +66,8 @@ import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.ScriptArgOptions;
+import glide.api.models.commands.ScriptArgOptionsGlideString;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.ScriptOptionsGlideString;
 import glide.api.models.commands.SortBaseOptions.Limit;
@@ -3562,7 +3564,7 @@ public class GlideClusterClientTest {
         String payload = "hello";
         SingleNodeRoute route = RANDOM;
 
-        List<String> args = List.of("arg1", "arg2");
+        ScriptArgOptions options = ScriptArgOptions.builder().arg("arg1").arg("arg2").build();
 
         CompletableFuture<Object> testResponse = new CompletableFuture<>();
         testResponse.complete(payload);
@@ -3573,7 +3575,7 @@ public class GlideClusterClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Object> response = service.invokeScript(script, args, route);
+        CompletableFuture<Object> response = service.invokeScript(script, options, route);
 
         // verify
         assertEquals(testResponse, response);
@@ -3590,7 +3592,8 @@ public class GlideClusterClientTest {
         GlideString payload = gs("hello");
         SingleNodeRoute route = RANDOM;
 
-        List<GlideString> args = List.of(gs("arg1"), gs("arg2"));
+        ScriptArgOptionsGlideString options =
+                ScriptArgOptionsGlideString.builder().arg(gs("arg1")).arg(gs("arg2")).build();
 
         CompletableFuture<Object> testResponse = new CompletableFuture<>();
         testResponse.complete(payload);
@@ -3601,7 +3604,7 @@ public class GlideClusterClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Object> response = service.invokeScriptBinary(script, args, route);
+        CompletableFuture<Object> response = service.invokeScript(script, options, route);
 
         // verify
         assertEquals(testResponse, response);

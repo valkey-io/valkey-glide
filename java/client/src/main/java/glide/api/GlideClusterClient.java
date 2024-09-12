@@ -60,8 +60,8 @@ import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
-import glide.api.models.commands.ScriptOptions;
-import glide.api.models.commands.ScriptOptionsGlideString;
+import glide.api.models.commands.ScriptArgOptions;
+import glide.api.models.commands.ScriptArgOptionsGlideString;
 import glide.api.models.commands.SortClusterOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.scan.ClusterScanCursor;
@@ -958,47 +958,6 @@ public class GlideClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<Object> invokeScript(@NonNull Script script) {
-        if (script.getBinaryOutput()) {
-            return commandManager.submitScript(
-                    script, List.of(), List.of(), this::handleBinaryObjectOrNullResponse);
-        } else {
-            return commandManager.submitScript(
-                    script, List.of(), List.of(), this::handleObjectOrNullResponse);
-        }
-    }
-
-    @Override
-    public CompletableFuture<Object> invokeScript(
-            @NonNull Script script, @NonNull ScriptOptions options) {
-        if (script.getBinaryOutput()) {
-            return commandManager.submitScript(
-                    script,
-                    options.getKeys().stream().map(GlideString::gs).collect(Collectors.toList()),
-                    options.getArgs().stream().map(GlideString::gs).collect(Collectors.toList()),
-                    this::handleBinaryObjectOrNullResponse);
-        } else {
-            return commandManager.submitScript(
-                    script,
-                    options.getKeys().stream().map(GlideString::gs).collect(Collectors.toList()),
-                    options.getArgs().stream().map(GlideString::gs).collect(Collectors.toList()),
-                    this::handleObjectOrNullResponse);
-        }
-    }
-
-    @Override
-    public CompletableFuture<Object> invokeScript(
-            @NonNull Script script, @NonNull ScriptOptionsGlideString options) {
-        if (script.getBinaryOutput()) {
-            return commandManager.submitScript(
-                    script, options.getKeys(), options.getArgs(), this::handleBinaryObjectOrNullResponse);
-        } else {
-            return commandManager.submitScript(
-                    script, options.getKeys(), options.getArgs(), this::handleObjectOrNullResponse);
-        }
-    }
-
-    @Override
     public CompletableFuture<Object> invokeScript(@NonNull Script script, @NonNull Route route) {
         if (script.getBinaryOutput()) {
             return commandManager.submitScript(
@@ -1011,31 +970,26 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<Object> invokeScript(
-            @NonNull Script script, @NonNull List<String> args, @NonNull Route route) {
-        if (script.getBinaryOutput()) {
-            return commandManager.submitScript(
-                    script,
-                    args.stream().map(GlideString::gs).collect(Collectors.toList()),
-                    route,
-                    this::handleBinaryObjectOrNullResponse);
-        } else {
-            return commandManager.submitScript(
-                    script,
-                    args.stream().map(GlideString::gs).collect(Collectors.toList()),
-                    route,
-                    this::handleObjectOrNullResponse);
-        }
+            @NonNull Script script, @NonNull ScriptArgOptions options, @NonNull Route route) {
+        return commandManager.submitScript(
+                script,
+                options.getArgs().stream().map(GlideString::gs).collect(Collectors.toList()),
+                route,
+                script.getBinaryOutput()
+                        ? this::handleBinaryObjectOrNullResponse
+                        : this::handleObjectOrNullResponse);
     }
 
     @Override
-    public CompletableFuture<Object> invokeScriptBinary(
-            @NonNull Script script, @NonNull List<GlideString> args, @NonNull Route route) {
-        if (script.getBinaryOutput()) {
-            return commandManager.submitScript(
-                    script, args, route, this::handleBinaryObjectOrNullResponse);
-        } else {
-            return commandManager.submitScript(script, args, route, this::handleObjectOrNullResponse);
-        }
+    public CompletableFuture<Object> invokeScript(
+            @NonNull Script script, @NonNull ScriptArgOptionsGlideString options, @NonNull Route route) {
+        return commandManager.submitScript(
+                script,
+                options.getArgs(),
+                route,
+                script.getBinaryOutput()
+                        ? this::handleBinaryObjectOrNullResponse
+                        : this::handleObjectOrNullResponse);
     }
 
     @Override
