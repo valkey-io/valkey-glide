@@ -11,6 +11,7 @@ import {
     GlideRecord,
     GlideString,
     HashDataType,
+    ObjectType,
     SortedSetDataType,
 } from "./BaseClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
@@ -1653,6 +1654,26 @@ export function createZMScore(
     members: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.ZMScore, [key, ...members]);
+}
+
+/**
+ * @internal
+ */
+export function createScan(
+    cursor: GlideString,
+    options?: ScanOptions,
+): command_request.Command {
+    let args: GlideString[] = [cursor];
+
+    if (options) {
+        args = args.concat(convertBaseScanOptionsToArgsArray(options));
+    }
+
+    if (options?.type) {
+        args.push("TYPE", options.type);
+    }
+
+    return createCommand(RequestType.Scan, args);
 }
 
 export enum InfBoundary {
@@ -3808,6 +3829,17 @@ export interface BaseScanOptions {
      * represent the results as compact single-allocation packed encoding.
      */
     readonly count?: number;
+}
+
+/**
+ * Options for the SCAN command.
+ * `match`: The match filter is applied to the result of the command and will only include keys that match the pattern specified.
+ * `count`: `COUNT` is a just a hint for the command for how many elements to fetch from the server, the default is 10.
+ * `type`: The type of the object to scan.
+ *  Types are the data types of Valkey: `string`, `list`, `set`, `zset`, `hash`, `stream`.
+ */
+export interface ScanOptions extends BaseScanOptions {
+    type?: ObjectType;
 }
 
 /**
