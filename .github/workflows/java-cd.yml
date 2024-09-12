@@ -275,8 +275,10 @@ jobs:
 
     drop-deployment-if-validation-fails:
         if: ${{ always() }}
-        needs: [ set-release-version, load-platform-matrix, create-binaries-to-publish, publish-to-maven-central-deployment, test-deployment-on-all-architectures ]
+        needs: [publish-to-maven-central-deployment, test-deployment-on-all-architectures]
         runs-on: ubuntu-latest
+        env:
+            DEPLOYMENT_ID: ${{ needs.publish-to-maven-central-deployment.outputs.DEPLOYMENT_ID }}
         steps:
             - name: Drop deployment if validation fails
               run: |
