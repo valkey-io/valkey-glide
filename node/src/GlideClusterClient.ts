@@ -8,7 +8,7 @@ import {
     BaseClientConfiguration,
     Decoder,
     DecoderOption,
-    GlideRecord, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GlideRecord,
     GlideReturnType,
     GlideString,
     PubSubMsg,

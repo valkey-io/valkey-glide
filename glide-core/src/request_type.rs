@@ -226,6 +226,7 @@ pub enum RequestType {
     ScriptExists = 215,
     ScriptFlush = 216,
     ScriptKill = 217,
+    ScriptShow = 218,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -455,6 +456,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::ScriptExists => RequestType::ScriptExists,
             ProtobufRequestType::ScriptFlush => RequestType::ScriptFlush,
             ProtobufRequestType::ScriptKill => RequestType::ScriptKill,
+            ProtobufRequestType::ScriptShow => RequestType::ScriptShow,
         }
     }
 }
@@ -679,6 +681,7 @@ impl RequestType {
             RequestType::PubSubNumPat => Some(get_two_word_command("PUBSUB", "NUMPAT")),
             RequestType::PubSubSChannels => Some(get_two_word_command("PUBSUB", "SHARDCHANNELS")),
             RequestType::PubSubSNumSub => Some(get_two_word_command("PUBSUB", "SHARDNUMSUB")),
+            RequestType::ScriptShow => Some(get_two_word_command("SCRIPT", "SHOW")),
             RequestType::ScriptExists => Some(get_two_word_command("SCRIPT", "EXISTS")),
             RequestType::ScriptFlush => Some(get_two_word_command("SCRIPT", "FLUSH")),
             RequestType::ScriptKill => Some(get_two_word_command("SCRIPT", "KILL")),

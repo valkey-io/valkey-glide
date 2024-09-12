@@ -165,6 +165,7 @@ import {
     createSScan,
     createSUnion,
     createSUnionStore,
+    createScriptShow,
     createSet,
     createSetBit,
     createSetRange,
@@ -231,9 +232,9 @@ import {
     ConfigurationError,
     ConnectionError,
     ExecAbortError,
-    ValkeyError,
     RequestError,
     TimeoutError,
+    ValkeyError,
 } from "./Errors";
 import { GlideClientConfiguration } from "./GlideClient";
 import {
@@ -3693,6 +3694,31 @@ export class BaseClient {
             }),
         });
         return this.createWritePromise(scriptInvocation, options);
+    }
+
+    /**
+     * Returns the original source code of a script in the script cache.
+     *
+     * @see {@link https://valkey.io/commands/script-show|valkey.io} for more details.
+     * @remarks Since Valkey version 8.0.0.
+     *
+     * @param sha1 - The SHA1 digest of the script.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @return The original source code of the script, if present in the cache.
+     * If the script is not found in the cache, an error is thrown.
+     *
+     * @example
+     * ```typescript
+     * const scriptHash = script.getHash();
+     * const scriptSource = await client.scriptShow(scriptHash);
+     * console.log(scriptSource); // Output: "return { KEYS[1], ARGV[1] }"
+     * ```
+     */
+    public async scriptShow(
+        sha1: GlideString,
+        options?: DecoderOption,
+    ): Promise<GlideString> {
+        return this.createWritePromise(createScriptShow(sha1), options);
     }
 
     /**
