@@ -70,7 +70,7 @@ describe("GlideClusterClient", () => {
             ? await ValkeyCluster.initFromExistingCluster(
                   parseEndpoints(clusterAddresses),
                   async (addresses: [string, number][]) => {
-                      return getServerVersion(addresses);
+                      return getServerVersion(addresses, true);
                   },
               )
             : // setting replicaCount to 1 to facilitate tests routed to replicas
@@ -79,7 +79,7 @@ describe("GlideClusterClient", () => {
                   3,
                   1,
                   async (addresses: [string, number][]) => {
-                      return getServerVersion(addresses);
+                      return getServerVersion(addresses, true);
                   },
               );
     }, 20000);
