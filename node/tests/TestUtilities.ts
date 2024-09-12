@@ -465,7 +465,7 @@ export function checkFunctionListResponse(
             typeof libName === "string"
                 ? libName === lib["library_name"]
                 : (libName as Buffer).compare(lib["library_name"] as Buffer) ==
-                  0;
+                0;
 
         if (hasLib) {
             const functions = lib["functions"];
@@ -518,7 +518,7 @@ export function checkFunctionStatsResponse(
     if (response.running_script !== null && runningFunction.length == 0) {
         fail(
             "Unexpected running function info: " +
-                (response.running_script.command as string[]).join(" "),
+            (response.running_script.command as string[]).join(" "),
         );
     }
 
@@ -558,10 +558,10 @@ export function validateTransactionResponse(
             const actual =
                 response?.[i] instanceof Map
                     ? JSON.stringify(
-                          Array.from(
-                              (response?.[i] as ReturnTypeMap)?.entries(),
-                          ),
-                      )
+                        Array.from(
+                            (response?.[i] as ReturnTypeMap)?.entries(),
+                        ),
+                    )
                     : JSON.stringify(response?.[i]);
             failedChecks.push(
                 `${testName} failed, expected <${expected}>, actual <${actual}>`,
@@ -572,7 +572,7 @@ export function validateTransactionResponse(
     if (failedChecks.length > 0) {
         throw new Error(
             "Checks failed in transaction response:\n" +
-                failedChecks.join("\n"),
+            failedChecks.join("\n"),
         );
     }
 }
@@ -1360,18 +1360,18 @@ export async function transactionTest(
             'xautoclaim(key9, groupName1, consumer, 0, "0-0", 1)',
             gte(version, "7.0.0")
                 ? [
-                      "0-0",
-                      convertRecordToGlideRecord({
-                          "0-2": [["field", "value2"]],
-                      }),
-                      [],
-                  ]
+                    "0-0",
+                    convertRecordToGlideRecord({
+                        "0-2": [["field", "value2"]],
+                    }),
+                    [],
+                ]
                 : [
-                      "0-0",
-                      convertRecordToGlideRecord({
-                          "0-2": [["field", "value2"]],
-                      }),
-                  ],
+                    "0-0",
+                    convertRecordToGlideRecord({
+                        "0-2": [["field", "value2"]],
+                    }),
+                ],
         ]);
         baseTransaction.xautoclaimJustId(key9, groupName1, consumer, 0, "0-0");
         responseData.push([
@@ -1759,10 +1759,10 @@ export async function transactionTest(
 }
 
 /**
- * This function gets server info for valkey server.
+ * This function gets server version using info command in glide client.
  *
- * @param addresses - addresses containing host and port for the valkey server.
- * @returns A string with server info for valkey server
+ * @param addresses - Addresses containing host and port for the valkey server.
+ * @returns Server version for valkey server
  */
 export async function getServerVersion(
     addresses: [string, number][],
