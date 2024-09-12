@@ -4713,19 +4713,25 @@ class TestCommands:
 
         assert (await glide_client.type(key)).lower() == b"none"
 
-    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_sort_and_sort_store_with_get_or_by_args(
-        self, glide_client: GlideClient
+        self, glide_client: TGlideClient
     ):
-        key = "{SameSlotKey}" + get_random_string(10)
-        store = "{SameSlotKey}" + get_random_string(10)
+        if isinstance(
+            glide_client, GlideClusterClient
+        ) and await check_if_server_version_lt(glide_client, "7.9.0"):
+            return pytest.mark.skip(
+                reason=f"Valkey version required in cluster mode>= 8.0.0"
+            )
+        key = "{user}" + get_random_string(10)
+        store = "{user}" + get_random_string(10)
         user_key1, user_key2, user_key3, user_key4, user_key5 = (
-            "user:1",
-            "user:2",
-            "user:3",
-            "user:4",
-            "user:5",
+            "{user}:1",
+            "{user}:2",
+            "{user}:3",
+            "{user}:4",
+            "{user}:5",
         )
 
         # Prepare some data. Some keys and values randomaly encoded
@@ -4743,7 +4749,7 @@ class TestCommands:
             await glide_client.hset(user_key5, {"name": "Eve", "age": "40".encode()})
             == 2
         )
-        assert await glide_client.lpush("user_ids", ["5", "4", "3", "2", "1"]) == 5
+        assert await glide_client.lpush("{user}_ids", ["5", "4", "3", "2", "1"]) == 5
 
         # SORT_RO Available since: 7.0.0
         skip_sort_ro_test = False
@@ -4756,7 +4762,7 @@ class TestCommands:
         result = await glide_client.sort(
             key,
             limit=Limit(0, 2),
-            get_patterns=["user:*->name"],
+            get_patterns=["{user}:*->name"],
             order=OrderBy.ASC,
             alpha=True,
         )
@@ -4766,7 +4772,7 @@ class TestCommands:
             result_ro = await glide_client.sort_ro(
                 key,
                 limit=Limit(0, 2),
-                get_patterns=[b"user:*->name"],
+                get_patterns=[b"{user}:*->name"],
                 order=OrderBy.ASC,
                 alpha=True,
             )
@@ -4777,7 +4783,7 @@ class TestCommands:
             key,
             store,
             limit=Limit(0, 2),
-            get_patterns=["user:*->name"],
+            get_patterns=["{user}:*->name"],
             order=OrderBy.ASC,
             alpha=True,
         )
@@ -4787,28 +4793,28 @@ class TestCommands:
 
         # Test sort with `by` argument
         result = await glide_client.sort(
-            "user_ids",
-            by_pattern="user:*->age",
-            get_patterns=["user:*->name"],
+            "{user}_ids",
+            by_pattern="{user}:*->age",
+            get_patterns=["{user}:*->name"],
             alpha=True,
         )
         assert result == [b"Dave", b"Bob", b"Alice", b"Charlie", b"Eve"]
 
         if not skip_sort_ro_test:
             result_ro = await glide_client.sort_ro(
-                b"user_ids",
-                by_pattern=b"user:*->age",
-                get_patterns=["user:*->name"],
+                "{user}_ids",
+                by_pattern=b"{user}:*->age",
+                get_patterns=["{user}:*->name"],
                 alpha=True,
             )
             assert result_ro == [b"Dave", b"Bob", b"Alice", b"Charlie", b"Eve"]
 
         # Test sort with `by` argument with missing keys to sort by
-        assert await glide_client.lpush("user_ids", ["a"]) == 6
+        assert await glide_client.lpush("{user}_ids", ["a"]) == 6
         result = await glide_client.sort(
-            "user_ids",
-            by_pattern="user:*->age",
-            get_patterns=["user:*->name"],
+            "{user}_ids",
+            by_pattern="{user}:*->age",
+            get_patterns=["{user}:*->name"],
             alpha=True,
         )
         assert result == convert_string_to_bytes_object(
@@ -4817,18 +4823,18 @@ class TestCommands:
 
         if not skip_sort_ro_test:
             result_ro = await glide_client.sort_ro(
-                "user_ids",
-                by_pattern=b"user:*->age",
-                get_patterns=["user:*->name"],
+                "{user}_ids",
+                by_pattern="{user}:*->age",
+                get_patterns=["{user}:*->name"],
                 alpha=True,
             )
             assert result_ro == [None, b"Dave", b"Bob", b"Alice", b"Charlie", b"Eve"]
 
         # Test sort with `by` argument with missing keys to sort by
         result = await glide_client.sort(
-            "user_ids",
-            by_pattern="user:*->name",
-            get_patterns=["user:*->age"],
+            "{user}_ids",
+            by_pattern="{user}:*->name",
+            get_patterns=["{user}:*->age"],
             alpha=True,
         )
         assert result == convert_string_to_bytes_object(
@@ -4837,16 +4843,16 @@ class TestCommands:
 
         if not skip_sort_ro_test:
             result_ro = await glide_client.sort_ro(
-                "user_ids",
-                by_pattern=b"user:*->name",
-                get_patterns=[b"user:*->age"],
+                "{user}_ids",
+                by_pattern="{user}:*->name",
+                get_patterns=["{user}:*->age"],
                 alpha=True,
             )
             assert result_ro == [None, b"30", b"25", b"35", b"20", b"40"]
 
         # Test Limit with count 0
         result = await glide_client.sort(
-            "user_ids",
+            "{user}_ids",
             limit=Limit(0, 0),
             alpha=True,
         )
@@ -4854,7 +4860,7 @@ class TestCommands:
 
         if not skip_sort_ro_test:
             result_ro = await glide_client.sort_ro(
-                "user_ids",
+                "{user}_ids",
                 limit=Limit(0, 0),
                 alpha=True,
             )

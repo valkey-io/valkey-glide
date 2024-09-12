@@ -56,7 +56,6 @@ import {
     ScoreFilter,
     SearchOrigin,
     SetOptions,
-    SortClusterOptions,
     SortOptions,
     StreamAddOptions,
     StreamClaimOptions,
@@ -3970,6 +3969,78 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     public pubsubNumSub(channels: GlideString[]): T {
         return this.addAndReturn(createPubSubNumSub(channels));
     }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+     *
+     * The `sort` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements.
+     *
+     * To store the result into a new key, see {@link sortStore}.
+     *
+     * @see {@link https://valkey.io/commands/sort/|valkey.io} for more details.
+     * @remarks When in cluster mode, both `key` and the patterns specified in {@link SortOptions.byPattern}
+     * and {@link SortOptions.getPatterns} must map to the same hash slot. The use of {@link SortOptions.byPattern}
+     * and {@link SortOptions.getPatterns} in cluster mode is supported since Valkey version 8.0.
+     *
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param options - (Optional) {@link SortOptions}.
+     *
+     * Command Response - An `Array` of sorted elements.
+     */
+    public sort(key: GlideString, options?: SortOptions): T {
+        return this.addAndReturn(createSort(key, options));
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+     *
+     * The `sortReadOnly` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements.
+     *
+     * This command is routed depending on the client's {@link ReadFrom} strategy.
+     *
+     * @remarks Since Valkey version 7.0.0.
+     * @remarks When in cluster mode, both `key` and the patterns specified in {@link SortOptions.byPattern}
+     * and {@link SortOptions.getPatterns} must map to the same hash slot. The use of {@link SortOptions.byPattern}
+     * and {@link SortOptions.getPatterns} in cluster mode is supported since Valkey version 8.0.
+     *
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param options - (Optional) {@link SortOptions}.
+     *
+     * Command Response - An `Array` of sorted elements
+     */
+    public sortReadOnly(key: GlideString, options?: SortOptions): T {
+        return this.addAndReturn(createSortReadOnly(key, options));
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at `key` and stores the result in
+     * `destination`.
+     *
+     * The `sort` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements, and store the result in a new key.
+     *
+     * To get the sort result without storing it into a key, see {@link sort} or {@link sortReadOnly}.
+     *
+     * @see {@link https://valkey.io/commands/sort/|valkey.io} for more details.
+     * @remarks When in cluster mode, `key`, `destination` and the patterns specified in {@link SortOptions.byPattern}
+     * and {@link SortOptions.getPatterns} must map to the same hash slot. The use of {@link SortOptions.byPattern}
+     * and {@link SortOptions.getPatterns} in cluster mode is supported since Valkey version 8.0.
+     *
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param destination - The key where the sorted result will be stored.
+     * @param options - (Optional) {@link SortOptions}.
+     *
+     * Command Response - The number of elements in the sorted key stored at `destination`.
+     */
+    public sortStore(
+        key: GlideString,
+        destination: GlideString,
+        options?: SortOptions,
+    ): T {
+        return this.addAndReturn(createSort(key, options, destination));
+    }
 }
 
 /**
@@ -4006,69 +4077,6 @@ export class Transaction extends BaseTransaction<Transaction> {
      */
     public select(index: number): Transaction {
         return this.addAndReturn(createSelect(index));
-    }
-
-    /**
-     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
-     *
-     * The `sort` command can be used to sort elements based on different criteria and
-     * apply transformations on sorted elements.
-     *
-     * To store the result into a new key, see {@link sortStore}.
-     *
-     * @see {@link https://valkey.io/commands/sort/|valkey.io} for more details.
-     *
-     * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param options - (Optional) {@link SortOptions}.
-     *
-     * Command Response - An `Array` of sorted elements.
-     */
-    public sort(key: GlideString, options?: SortOptions): Transaction {
-        return this.addAndReturn(createSort(key, options));
-    }
-
-    /**
-     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
-     *
-     * The `sortReadOnly` command can be used to sort elements based on different criteria and
-     * apply transformations on sorted elements.
-     *
-     * This command is routed depending on the client's {@link ReadFrom} strategy.
-     *
-     * @remarks Since Valkey version 7.0.0.
-     *
-     * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param options - (Optional) {@link SortOptions}.
-     *
-     * Command Response - An `Array` of sorted elements
-     */
-    public sortReadOnly(key: GlideString, options?: SortOptions): Transaction {
-        return this.addAndReturn(createSortReadOnly(key, options));
-    }
-
-    /**
-     * Sorts the elements in the list, set, or sorted set at `key` and stores the result in
-     * `destination`.
-     *
-     * The `sort` command can be used to sort elements based on different criteria and
-     * apply transformations on sorted elements, and store the result in a new key.
-     *
-     * To get the sort result without storing it into a key, see {@link sort} or {@link sortReadOnly}.
-     *
-     * @see {@link https://valkey.io/commands/sort/|valkey.io} for more details.
-     *
-     * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param destination - The key where the sorted result will be stored.
-     * @param options - (Optional) {@link SortOptions}.
-     *
-     * Command Response - The number of elements in the sorted key stored at `destination`.
-     */
-    public sortStore(
-        key: GlideString,
-        destination: GlideString,
-        options?: SortOptions,
-    ): Transaction {
-        return this.addAndReturn(createSort(key, options, destination));
     }
 
     /**
@@ -4140,76 +4148,6 @@ export class Transaction extends BaseTransaction<Transaction> {
  */
 export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
     /// TODO: add all CLUSTER commands
-
-    /**
-     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
-     *
-     * The `sort` command can be used to sort elements based on different criteria and
-     * apply transformations on sorted elements.
-     *
-     * To store the result into a new key, see {@link sortStore}.
-     *
-     * @see {@link https://valkey.io/commands/sort/|valkey.io} for more details.
-     *
-     * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param options - (Optional) {@link SortClusterOptions}.
-     *
-     * Command Response - An `Array` of sorted elements.
-     */
-    public sort(
-        key: GlideString,
-        options?: SortClusterOptions,
-    ): ClusterTransaction {
-        return this.addAndReturn(createSort(key, options));
-    }
-
-    /**
-     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
-     *
-     * The `sortReadOnly` command can be used to sort elements based on different criteria and
-     * apply transformations on sorted elements.
-     *
-     * This command is routed depending on the client's {@link ReadFrom} strategy.
-     *
-     * @see {@link https://valkey.io/commands/sort/|valkey.io} for more details.
-     * @remarks Since Valkey version 7.0.0.
-     *
-     * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param options - (Optional) {@link SortClusterOptions}.
-     *
-     * Command Response - An `Array` of sorted elements
-     */
-    public sortReadOnly(
-        key: GlideString,
-        options?: SortClusterOptions,
-    ): ClusterTransaction {
-        return this.addAndReturn(createSortReadOnly(key, options));
-    }
-
-    /**
-     * Sorts the elements in the list, set, or sorted set at `key` and stores the result in
-     * `destination`.
-     *
-     * The `sort` command can be used to sort elements based on different criteria and
-     * apply transformations on sorted elements, and store the result in a new key.
-     *
-     * To get the sort result without storing it into a key, see {@link sort} or {@link sortReadOnly}.
-     *
-     * @see {@link https://valkey.io/commands/sort|valkey.io} for more details.
-     *
-     * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param destination - The key where the sorted result will be stored.
-     * @param options - (Optional) {@link SortClusterOptions}.
-     *
-     * Command Response - The number of elements in the sorted key stored at `destination`.
-     */
-    public sortStore(
-        key: GlideString,
-        destination: GlideString,
-        options?: SortClusterOptions,
-    ): ClusterTransaction {
-        return this.addAndReturn(createSort(key, options, destination));
-    }
 
     /**
      * Copies the value stored at the `source` to the `destination` key. When `replace` is true,
