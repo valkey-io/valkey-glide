@@ -992,7 +992,7 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
-    public void non_UTF8_GlideString_test(BaseClient client) {
+    public void non_UTF8_GlideString_map(BaseClient client) {
         byte[] nonUTF8Bytes = new byte[] {(byte) 0xEE};
         GlideString key = gs(nonUTF8Bytes);
         GlideString hashKey = gs(UUID.randomUUID().toString());
@@ -1021,6 +1021,150 @@ public class SharedCommandTests {
         assertEquals(
                 "Value not convertible to string: byte[] 13",
                 client.hget(hashNonUTF8Key, gs(stringField)).get().toString());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void non_UTF8_GlideString_map_with_double(BaseClient client) {
+        byte[] nonUTF8Bytes = new byte[] {(byte) 0xEE};
+        GlideString key = gs(UUID.randomUUID().toString());
+        GlideString nonUTF8Key = gs(new byte[] {(byte) 0xFF});
+        Map<GlideString, Double> membersScores =
+                Map.of(gs(nonUTF8Bytes), 1.0, gs("two"), 2.0, gs("three"), 3.0);
+
+        // Testing map values using byte[] that cannot be converted to UTF-8 Strings.
+        assertEquals(3, client.zadd(key, membersScores).get());
+        assertThrows(
+                ExecutionException.class,
+                () -> client.zrange(key.toString(), new RangeByIndex(0, 1)).get());
+
+        // Testing keys for a map using byte[] that cannot be converted to UTF-8 Strings returns bytes.
+        assertEquals(3, client.zadd(nonUTF8Key, membersScores).get());
+        // No error is thrown as GlideString will be returned when arguments are GlideStrings.
+        assertDeepEquals(
+                new GlideString[] {gs(nonUTF8Bytes), gs("two"), gs("three")},
+                client.zrange(nonUTF8Key, new RangeByIndex(0, -1)).get());
+
+        // Converting non UTF-8 bytes result to String returns a message.
+        assertEquals(
+                "Value not convertible to string: byte[] 13",
+                client.zrange(nonUTF8Key, new RangeByIndex(0, -1)).get()[0].toString());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void non_UTF8_GlideString_nested_array(BaseClient client) {
+        byte[] nonUTF8Bytes = new byte[] {(byte) 0xEE};
+        GlideString key = gs(UUID.randomUUID().toString());
+        GlideString nonUTF8Key = gs(new byte[] {(byte) 0xFF});
+        GlideString field = gs(nonUTF8Bytes);
+        GlideString value1 = gs(nonUTF8Bytes);
+        GlideString value2 = gs("foobar");
+        GlideString[][] entry = new GlideString[][] {{field, value1}, {field, value2}};
+
+        // Testing stream values using byte[] that cannot be converted to UTF-8 Strings.
+        client.xadd(key, entry).get();
+        assertThrows(
+                ExecutionException.class,
+                () -> client.xrange(key.toString(), InfRangeBound.MIN, InfRangeBound.MAX).get());
+
+        // Testing keys for a stream using byte[] that cannot be converted to UTF-8 Strings returns
+        // bytes.
+        GlideString streamId = client.xadd(nonUTF8Key, entry).get();
+        // No error is thrown as GlideString will be returned when arguments are GlideStrings.
+        Map<GlideString, GlideString[][]> expected =
+                Map.of(streamId, new GlideString[][] {{field, value1}, {field, value2}});
+        assertDeepEquals(
+                expected, client.xrange(nonUTF8Key, InfRangeBound.MIN, InfRangeBound.MAX).get());
+
+        // Converting non UTF-8 bytes result to String returns a message.
+        assertEquals(
+                "Value not convertible to string: byte[] 13",
+                client
+                        .xrange(nonUTF8Key, InfRangeBound.MIN, InfRangeBound.MAX)
+                        .get()
+                        .get(streamId)[0][0]
+                        .toString());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void non_UTF8_GlideString_map_with_geospatial(BaseClient client) {
+        byte[] nonUTF8Bytes = new byte[] {(byte) 0xEE};
+        GlideString key = gs(UUID.randomUUID().toString());
+        GlideString nonUTF8Key = gs(new byte[] {(byte) 0xFF});
+        Map<GlideString, GeospatialData> membersToCoordinates = new HashMap<>();
+        membersToCoordinates.put(gs(nonUTF8Bytes), new GeospatialData(13.361389, 38.115556));
+        membersToCoordinates.put(gs("Catania"), new GeospatialData(15.087269, 37.502669));
+
+        // Testing geospatial values using byte[] that cannot be converted to UTF-8 Strings.
+        assertEquals(2, client.geoadd(key, membersToCoordinates).get());
+        assertThrows(
+                ExecutionException.class,
+                () ->
+                        client
+                                .geosearch(
+                                        key.toString(),
+                                        new CoordOrigin(new GeospatialData(15, 37)),
+                                        new GeoSearchShape(400, 400, GeoUnit.KILOMETERS))
+                                .get());
+
+        // Testing keys for geospatial using byte[] that cannot be converted to UTF-8 Strings returns
+        // bytes.
+        assertEquals(2, client.geoadd(nonUTF8Key, membersToCoordinates).get());
+        // No error is thrown as GlideString will be returned when arguments are GlideStrings.
+        assertTrue(
+                Set.of(new GlideString[] {gs(nonUTF8Bytes), gs("Catania")})
+                        .containsAll(
+                                Set.of(
+                                        client
+                                                .geosearch(
+                                                        nonUTF8Key,
+                                                        new CoordOrigin(new GeospatialData(15, 37)),
+                                                        new GeoSearchShape(400, 400, GeoUnit.KILOMETERS))
+                                                .get())));
+
+        // Converting non UTF-8 bytes result to String returns a message.
+        assertEquals(
+                "Value not convertible to string: byte[] 13",
+                client
+                        .geosearch(
+                                nonUTF8Key,
+                                new CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(400, 400, GeoUnit.KILOMETERS))
+                        .get()[0]
+                        .toString());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void non_UTF8_GlideString_map_of_arrays(BaseClient client) {
+        byte[] nonUTF8Bytes = new byte[] {(byte) 0xEE};
+        GlideString key = gs(UUID.randomUUID().toString());
+        GlideString nonUTF8Key = gs(new byte[] {(byte) 0xFF});
+        GlideString[] lpushArgs = {gs(nonUTF8Bytes), gs("two")};
+
+        // Testing map of arrays using byte[] that cannot be converted to UTF-8 Strings.
+        assertEquals(2, client.lpush(key, lpushArgs).get());
+        assertThrows(
+            ExecutionException.class,
+            () -> client.lmpop(new String[] {key.toString()}, ListDirection.RIGHT).get());
+
+        // Testing map of arrays using byte[] that cannot be converted to UTF-8 Strings returns bytes.
+        assertEquals(2, client.lpush(nonUTF8Key, lpushArgs).get());
+        // No error is thrown as GlideString will be returned when arguments are GlideStrings.
+        assertDeepEquals(
+            Map.of(nonUTF8Key, new GlideString[] {gs(nonUTF8Bytes)}),
+            client.lmpop(new GlideString[]{nonUTF8Key}, ListDirection.RIGHT).get());
+
+        // Converting non UTF-8 bytes result to String returns a message.
+        assertEquals(
+            "Value not convertible to string: byte[] 13",
+            client.lmpop(new GlideString[]{nonUTF8Key}, ListDirection.RIGHT).get().get(nonUTF8Key)[0]);
     }
 
     @SneakyThrows

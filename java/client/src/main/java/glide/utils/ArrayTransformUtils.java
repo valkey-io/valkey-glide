@@ -86,10 +86,10 @@ public class ArrayTransformUtils {
      * Converts a map of string keys and values of any type into an array of strings with alternating
      * values and keys.
      *
-     * @param args Map of string keys to values of any type to convert.
+     * @param args Map of string keys to values of Double type to convert.
      * @return Array of strings [value1.toString(), key1, value2.toString(), key2, ...].
      */
-    public static String[] convertMapToValueKeyStringArray(Map<String, ?> args) {
+    public static String[] convertMapToValueKeyStringArray(Map<String, Double> args) {
         return args.entrySet().stream()
                 .flatMap(entry -> Stream.of(entry.getValue().toString(), entry.getKey()))
                 .toArray(String[]::new);
