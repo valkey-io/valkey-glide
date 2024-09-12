@@ -2475,12 +2475,17 @@ export function createFunctionRestore(
 }
 
 /**
- * Represents offsets specifying a string interval to analyze in the {@link BaseClient.bitcount|bitcount and @link BaseClient.bitpos} command. The offsets are
- * zero-based indexes, with `0` being the first index of the string, `1` being the next index and so on.
+ * Represents offsets specifying a string interval to analyze in the {@link BaseClient.bitcount | bitcount} and {@link BaseClient.bitpos | bitpos} commands.
+ * The offsets are zero-based indexes, with `0` being the first index of the string, `1` being the next index and so on.
  * The offsets can also be negative numbers indicating offsets starting at the end of the string, with `-1` being
  * the last index of the string, `-2` being the penultimate, and so on.
  *
- * See https://valkey.io/commands/bitcount/ for more details.
+ * If you are using Valkey 7.0.0 or above, the optional `indexType` can also be provided to specify whether the
+ * `start` and `end` offsets specify `BIT` or `BYTE` offsets. If `indexType` is not provided, `BYTE` offsets
+ * are assumed. If `BIT` is specified, `start=0` and `end=2` means to look at the first three bits. If `BYTE` is
+ * specified, `start=0` and `end=2` means to look at the first three bytes.
+ *
+ * @see {@link https://valkey.io/commands/bitcount/ | bitcount} and {@link https://valkey.io/commands/bitpos/ | bitpos} for more details.
  */
 export interface BitOffsetOptions {
     /** The starting offset index. */
@@ -2549,12 +2554,11 @@ export function createBitPos(
     bit: number,
     options?: BitOffsetOptions,
 ): command_request.Command {
-    let args: GlideString[] = [key, bit.toString()];
-
-    if (options) {
-        const optionResults: GlideString[] = joinBitOptions(options);
-        args = args.concat(optionResults);
-    }
+    const args: GlideString[] = [
+        key,
+        bit.toString(),
+        ...convertBitOptionsToArgs(options),
+    ];
 
     return createCommand(RequestType.BitPos, args);
 }
