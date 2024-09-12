@@ -9,7 +9,7 @@ use tikv_jemallocator::Jemalloc;
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
-
+pub const FINISHED_SCAN_CURSOR: &str = "finished";
 use byteorder::{LittleEndian, WriteBytesExt};
 use bytes::Bytes;
 use glide_core::start_socket_listener;
@@ -418,5 +418,63 @@ impl Script {
 impl Drop for Script {
     fn drop(&mut self) {
         glide_core::scripts_container::remove_script(&self.hash);
+    }
+}
+
+/// This struct is used to keep track of the cursor of a cluster scan.
+/// We want to avoid passing the cursor between layers of the application,
+/// So we keep the state in the container and only pass the id of the cursor.
+/// The cursor is stored in the container and can be retrieved using the id.
+/// The cursor is removed from the container when the object is deleted (dropped).
+/// To create a cursor:
+/// ```typescript
+/// // For a new cursor
+/// let cursor = new ClusterScanCursor();
+/// // Using an existing id
+/// let cursor = new ClusterScanCursor("cursor_id");
+/// ```
+/// To get the cursor id:
+/// ```typescript
+/// let cursorId = cursor.getCursor();
+/// ```
+/// To check if the scan is finished:
+/// ```typescript
+/// let isFinished = cursor.isFinished(); // true if the scan is finished
+/// ```
+#[napi]
+#[derive(Default)]
+pub struct ClusterScanCursor {
+    cursor: String,
+}
+
+#[napi]
+impl ClusterScanCursor {
+    #[napi(constructor)]
+    #[allow(dead_code)]
+    pub fn new(new_cursor: Option<String>) -> Self {
+        match new_cursor {
+            Some(cursor) => ClusterScanCursor { cursor },
+            None => ClusterScanCursor::default(),
+        }
+    }
+
+    /// Returns the cursor id.
+    #[napi]
+    #[allow(dead_code)]
+    pub fn get_cursor(&self) -> String {
+        self.cursor.clone()
+    }
+
+    #[napi]
+    #[allow(dead_code)]
+    /// Returns true if the scan is finished.
+    pub fn is_finished(&self) -> bool {
+        self.cursor.eq(FINISHED_SCAN_CURSOR)
+    }
+}
+
+impl Drop for ClusterScanCursor {
+    fn drop(&mut self) {
+        glide_core::cluster_scan_container::remove_scan_state_cursor(self.cursor.clone());
     }
 }
