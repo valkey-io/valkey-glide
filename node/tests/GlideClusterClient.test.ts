@@ -1488,7 +1488,7 @@ describe("GlideClusterClient", () => {
                             client.close();
                         }
                     });
-                    
+
                     it(
                         "invoke script with route invokeScriptWithRoute %p",
                         async () => {
