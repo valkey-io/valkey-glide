@@ -2,6 +2,7 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
+import { ClusterScanCursor } from "glide-rs";
 import * as net from "net";
 import {
     BaseClient,
@@ -10,13 +11,10 @@ import {
     DecoderOption,
     GlideRecord,
     GlideReturnType,
-    GlideString, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GlideString,
     PubSubMsg,
     convertGlideRecordToRecord,
 } from "./BaseClient";
-
-import { log } from "console";
-import { ClusterScanCursor } from "glide-rs";
 import {
     FlushMode,
     FunctionListOptions,
@@ -62,7 +60,6 @@ import {
     createTime,
     createUnWatch
 } from "./Commands";
-import { ClosingError } from "./Errors";
 import { command_request, connection_request } from "./ProtobufMessage";
 import { ClusterTransaction } from "./Transaction";
 
@@ -352,39 +349,9 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<[ClusterScanCursor, GlideString[]]> {
         // separate decoder option from scan options
         const { decoder, ...scanOptions } = options || {};
-        const stringDecoder: boolean =
-            (decoder ?? this.defaultDecoder) === Decoder.String;
-
-        if (this.isClosed) {
-            throw new ClosingError(
-                "Unable to execute requests; the client is closed. Please create a new client.",
-            );
-        }
-
         const cursorId = cursor.getCursor();
         const command = this.scanOptionsToProto(cursorId, scanOptions);
-        return new Promise((resolve, reject) => {
-            const callbackIndex = this.getCallbackIndex();
-            this.promiseCallbackFunctions[callbackIndex] = [
-                (resolveAns) => {
-                    try {
-                        resolveAns = this.getValueToResolve(
-                            resolveAns,
-                            stringDecoder,
-                        );
-                        resolveAns[0] = new ClusterScanCursor(
-                            resolveAns[0].toString(),
-                        );
-                        resolve(resolveAns);
-                    } catch (error) {
-                        log("Error in scan promise: " + error);
-                        reject(error);
-                    }
-                },
-                reject,
-            ];
-            this.writeOrBufferCommandRequest(callbackIndex, command);
-        });
+        return this.createWritePromise(command, { decoder });
     }
 
     /**
@@ -1071,14 +1038,14 @@ export class GlideClusterClient extends BaseClient {
             res.length == 0
                 ? (res as FunctionListResponse) // no libs
                 : ((Array.isArray(res[0])
-                    ? // single node response
-                    ((res as GlideRecord<unknown>[]).map(
-                        convertGlideRecordToRecord,
-                    ) as FunctionListResponse)
-                    : // multi node response
-                    convertGlideRecordToRecord(
-                        res as GlideRecord<unknown>,
-                    )) as ClusterResponse<FunctionListResponse>),
+                      ? // single node response
+                        ((res as GlideRecord<unknown>[]).map(
+                            convertGlideRecordToRecord,
+                        ) as FunctionListResponse)
+                      : // multi node response
+                        convertGlideRecordToRecord(
+                            res as GlideRecord<unknown>,
+                        )) as ClusterResponse<FunctionListResponse>),
         );
     }
 

@@ -13,7 +13,7 @@ import {
     ObjectType,
     ProtocolVersion,
 } from "..";
-import { RedisCluster } from "../../utils/TestUtils.js";
+import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
     flushAndCloseClient,
     getClientConfigurationOption,
@@ -26,17 +26,17 @@ const TIMEOUT = 50000;
 //cluster tests
 describe("Scan GlideClusterClient", () => {
     const testsFailed = 0;
-    let cluster: RedisCluster;
+    let cluster: ValkeyCluster;
     let client: GlideClusterClient;
     beforeAll(async () => {
         const clusterAddresses = parseCommandLineArgs()["cluster-endpoints"];
         // Connect to cluster or create a new one based on the parsed addresses
         cluster = clusterAddresses
-            ? await RedisCluster.initFromExistingCluster(
+            ? await ValkeyCluster.initFromExistingCluster(
                   parseEndpoints(clusterAddresses),
               )
             : // setting replicaCount to 1 to facilitate tests routed to replicas
-              await RedisCluster.createCluster(true, 3, 1);
+              await ValkeyCluster.createCluster(true, 3, 1);
     }, 20000);
 
     afterEach(async () => {
@@ -380,17 +380,17 @@ describe("Scan GlideClusterClient", () => {
 //standalone tests
 describe("Scan GlideClient", () => {
     const testsFailed = 0;
-    let cluster: RedisCluster;
+    let cluster: ValkeyCluster;
     let client: GlideClient;
     beforeAll(async () => {
         const clusterAddresses = parseCommandLineArgs()["cluster-endpoints"];
         // Connect to cluster or create a new one based on the parsed addresses
         cluster = clusterAddresses
-            ? await RedisCluster.initFromExistingCluster(
+            ? await ValkeyCluster.initFromExistingCluster(
                   parseEndpoints(clusterAddresses),
               )
             : // setting replicaCount to 1 to facilitate tests routed to replicas
-              await RedisCluster.createCluster(false, 3, 1);
+              await ValkeyCluster.createCluster(false, 3, 1);
     }, 20000);
 
     afterEach(async () => {

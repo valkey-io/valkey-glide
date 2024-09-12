@@ -469,7 +469,7 @@ impl ClusterScanCursor {
     #[allow(dead_code)]
     /// Returns true if the scan is finished.
     pub fn is_finished(&self) -> bool {
-        self.cursor == *FINISHED_SCAN_CURSOR.to_string()
+        self.cursor.eq(FINISHED_SCAN_CURSOR)
     }
 }
 
