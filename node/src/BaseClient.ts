@@ -232,9 +232,9 @@ import {
     ConfigurationError,
     ConnectionError,
     ExecAbortError,
-    ValkeyError,
     RequestError,
     TimeoutError,
+    ValkeyError,
 } from "./Errors";
 import { GlideClientConfiguration } from "./GlideClient";
 import {
@@ -3704,8 +3704,8 @@ export class BaseClient {
      *
      * @param sha1 - The SHA1 digest of the script.
      * @param options - (Optional) See {@link DecoderOption}.
-     * @returns The original source code of the script, if present in the cache.
-     * @throws RequestError if the script is not found in the cache.
+     * @return The original source code of the script, if present in the cache.
+     * If the script is not found in the cache, an error is thrown.
      *
      * @example
      * ```typescript

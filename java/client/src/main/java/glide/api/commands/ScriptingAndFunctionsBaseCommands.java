@@ -135,8 +135,8 @@ public interface ScriptingAndFunctionsBaseCommands {
      * @see <a href="https://valkey.io/commands/script-show">valkey.io</a> for details.
      * @since Valkey 8.0.0 and above.
      * @param sha1 The SHA1 digest of the script.
-     * @return The original source code of the script, if present in the cache.
-     * @throws RequestException if the script is not found in the cache.
+     * @return The original source code of the script, if present in the cache. If the script is not
+     *     found in the cache, an error is thrown.
      * @example
      *     <pre>{@code
      * String scriptSource = client.scriptShow(luaScript.getHash()).get();
@@ -151,8 +151,8 @@ public interface ScriptingAndFunctionsBaseCommands {
      * @see <a href="https://valkey.io/commands/script-show">valkey.io</a> for details.
      * @since Valkey 8.0.0 and above.
      * @param sha1 The SHA1 digest of the script.
-     * @return The original source code of the script, if present in the cache.
-     * @throws RequestException if the script is not found in the cache.
+     * @return The original source code of the script, if present in the cache. If the script is not
+     *     found in the cache, an error is thrown.
      * @example
      *     <pre>{@code
      * String scriptSource = client.scriptShow(gs(luaScript.getHash())).get();
