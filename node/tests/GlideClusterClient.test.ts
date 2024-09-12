@@ -328,9 +328,14 @@ describe("GlideClusterClient", () => {
         TIMEOUT,
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    it.each([
+        { protocol: ProtocolVersion.RESP2, decoder: Decoder.String },
+        { protocol: ProtocolVersion.RESP2, decoder: Decoder.Bytes },
+        { protocol: ProtocolVersion.RESP3, decoder: Decoder.String },
+        { protocol: ProtocolVersion.RESP3, decoder: Decoder.Bytes },
+    ])(
         `can send transactions_%p`,
-        async (protocol) => {
+        async ({ protocol, decoder }) => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
@@ -339,6 +344,7 @@ describe("GlideClusterClient", () => {
             const expectedRes = await transactionTest(
                 transaction,
                 cluster.getVersion(),
+                decoder,
             );
 
             if (!cluster.checkIfServerVersionLessThan("7.0.0")) {

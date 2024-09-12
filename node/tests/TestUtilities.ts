@@ -5,7 +5,6 @@
 import { expect } from "@jest/globals";
 import { exec } from "child_process";
 import { gte } from "semver";
-import { Decoder } from "src/BaseClient";
 import { v4 as uuidv4 } from "uuid";
 import {
     BaseClient,
@@ -17,6 +16,7 @@ import {
     BitmapIndexType,
     BitwiseOperation,
     ClusterTransaction,
+    Decoder,
     FlushMode,
     FunctionListResponse,
     FunctionStatsSingleResponse,
