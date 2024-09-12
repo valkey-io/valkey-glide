@@ -46,4 +46,58 @@ public interface PubSubClusterCommands {
      * }</pre>
      */
     CompletableFuture<String> publish(GlideString message, GlideString channel, boolean sharded);
+
+    /**
+     * Lists the currently active shard channels.
+     *
+     * @see <a href="https://valkey.io/commands/pubsub-shardchannels/">valkey.io</a> for details.
+     * @return An <code>array</code> of all active shard channels.
+     * @example
+     *     <pre>{@code
+     * String[] result = client.pubsubShardChannels().get();
+     * assert Arrays.equals(result, new String[] { "channel1", "channel2" });
+     * }</pre>
+     */
+    CompletableFuture<String[]> pubsubShardChannels();
+
+    /**
+     * Lists the currently active shard channels.
+     *
+     * @see <a href="https://valkey.io/commands/pubsub-shardchannels/">valkey.io</a> for details.
+     * @return An <code>array</code> of all active shard channels.
+     * @example
+     *     <pre>{@code
+     * GlideString[] result = client.pubsubShardChannelsBinary().get();
+     * assert Arrays.equals(result, new GlideString[] { gs("channel1"), gs("channel2") });
+     * }</pre>
+     */
+    CompletableFuture<GlideString[]> pubsubShardChannelsBinary();
+
+    /**
+     * Lists the currently active shard channels.
+     *
+     * @see <a href="https://valkey.io/commands/pubsub-shardchannels/">valkey.io</a> for details.
+     * @param pattern A glob-style pattern to match active shard channels.
+     * @return An <code>array</code> of currently active shard channels matching the given pattern.
+     * @example
+     *     <pre>{@code
+     * String[] result = client.pubsubShardChannels("channel*").get();
+     * assert Arrays.equals(result, new String[] { "channel1", "channel2" });
+     * }</pre>
+     */
+    CompletableFuture<String[]> pubsubShardChannels(String pattern);
+
+    /**
+     * Lists the currently active shard channels.
+     *
+     * @see <a href="https://valkey.io/commands/pubsub-shardchannels/">valkey.io</a> for details.
+     * @param pattern A glob-style pattern to match active shard channels.
+     * @return An <code>array</code> of currently active shard channels matching the given pattern.
+     * @example
+     *     <pre>{@code
+     * GlideString[] result = client.pubsubShardChannels(gs.("channel*")).get();
+     * assert Arrays.equals(result, new GlideString[] { gs("channel1"), gs("channel2") });
+     * }</pre>
+     */
+    CompletableFuture<GlideString[]> pubsubShardChannels(GlideString pattern);
 }
