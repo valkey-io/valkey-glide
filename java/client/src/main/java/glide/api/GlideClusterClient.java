@@ -1057,7 +1057,8 @@ public class GlideClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<Map<GlideString, Long>> pubsubShardNumSub(@NonNull GlideString[] channels) {
+    public CompletableFuture<Map<GlideString, Long>> pubsubShardNumSub(
+            @NonNull GlideString[] channels) {
         return commandManager.submitNewCommand(
                 PubSubSNumSub, channels, this::handleBinaryStringMapResponse);
     }
