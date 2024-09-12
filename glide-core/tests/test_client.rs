@@ -5,6 +5,8 @@ mod utilities;
 
 #[cfg(test)]
 pub(crate) mod shared_client_tests {
+    use std::collections::HashMap;
+
     use super::*;
     use glide_core::client::{Client, DEFAULT_RESPONSE_TIMEOUT};
     use redis::{
@@ -276,7 +278,7 @@ pub(crate) mod shared_client_tests {
                 .unwrap_err();
             assert!(
                 get_result.is_connection_dropped()
-                    || get_result.kind() == redis::ErrorKind::ClusterConnectionNotFound
+                    || get_result.kind() == redis::ErrorKind::ConnectionNotFoundForRoute
             );
         });
     }
@@ -497,36 +499,44 @@ pub(crate) mod shared_client_tests {
                 },
             )
             .await;
-            let mut client = test_basics.client;
-            let client_info: String = redis::from_owned_redis_value(
-                client.send_command(&client_info_cmd, None).await.unwrap(),
-            )
-            .unwrap();
-            assert!(client_info.contains(&format!("name={CLIENT_NAME}")));
 
-            kill_connection(&mut client).await;
+            for i in 0..2 {
+                // ensure all connections have CLIENT_NAME set
+                let mut client = test_basics.client.clone();
+                let client_infos: HashMap<String, String> = {
+                    let variant_res = client
+                        .send_command(
+                            &client_info_cmd,
+                            Some(RoutingInfo::MultiNode((
+                                MultipleNodeRoutingInfo::AllNodes,
+                                None,
+                            ))),
+                        )
+                        .await
+                        .unwrap();
 
-            let error = client.send_command(&client_info_cmd, None).await;
-            // In Standalone mode the error is passed back to the client,
-            // while in Cluster mode the request is retried with reconnect
-            if !use_cluster {
-                assert!(error.is_err(), "{error:?}",);
-                let error = error.unwrap_err();
-                assert!(
-                    error.is_connection_dropped() || error.is_timeout(),
-                    "{error:?}",
-                );
+                    if use_cluster {
+                        redis::from_owned_redis_value(variant_res).unwrap()
+                    } else {
+                        [(
+                            "DONT_CARE".to_string(),
+                            redis::from_owned_redis_value(variant_res).unwrap(),
+                        )]
+                        .into()
+                    }
+                };
+
+                for client_info in client_infos.values() {
+                    assert!(client_info.contains(&format!("name={CLIENT_NAME}")));
+                }
+
+                if i == 0 {
+                    // first pass - kill the connections
+                    kill_connection(&mut client).await;
+                    // short sleep to allow the connection validation task to reconnect - 1s is enough since the detection should happen immediately
+                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                }
             }
-            let client_info: String = repeat_try_create(|| async {
-                let mut client = client.clone();
-                redis::from_owned_redis_value(
-                    client.send_command(&client_info_cmd, None).await.unwrap(),
-                )
-                .ok()
-            })
-            .await;
-
-            assert!(client_info.contains(&format!("name={CLIENT_NAME}")));
         });
     }
 

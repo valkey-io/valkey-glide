@@ -19,44 +19,6 @@ mod standalone_client_tests {
 
     #[rstest]
     #[serial_test::serial]
-    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
-    fn test_report_disconnect_and_reconnect_after_temporary_disconnect(
-        #[values(false, true)] use_tls: bool,
-    ) {
-        block_on_all(async move {
-            let test_basics = setup_test_basics_internal(&TestConfiguration {
-                use_tls,
-                shared_server: true,
-                ..Default::default()
-            })
-            .await;
-            let mut client = test_basics.client;
-
-            kill_connection(&mut client).await;
-
-            let mut get_command = redis::Cmd::new();
-            get_command
-                .arg("GET")
-                .arg("test_report_disconnect_and_reconnect_after_temporary_disconnect");
-            let error = client.send_command(&get_command).await;
-            assert!(error.is_err(), "{error:?}",);
-            let error = error.unwrap_err();
-            assert!(
-                error.is_connection_dropped() || error.is_timeout(),
-                "{error:?}",
-            );
-
-            let get_result = repeat_try_create(|| async {
-                let mut client = client.clone();
-                client.send_command(&get_command).await.ok()
-            })
-            .await;
-            assert_eq!(get_result, Value::Nil);
-        });
-    }
-
-    #[rstest]
-    #[serial_test::serial]
     #[timeout(LONG_STANDALONE_TEST_TIMEOUT)]
     #[cfg(feature = "standalone_heartbeat")]
     fn test_detect_disconnect_and_reconnect_using_heartbeat(#[values(false, true)] use_tls: bool) {
@@ -88,6 +50,64 @@ mod standalone_client_tests {
                 .arg("test_detect_disconnect_and_reconnect_using_heartbeat");
             let get_result = test_basics.client.send_command(&get_command).await.unwrap();
             assert_eq!(get_result, Value::Nil);
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_automatic_reconnect(#[values(false, true)] use_tls: bool) {
+        block_on_all(async move {
+            let shared_config = TestConfiguration {
+                use_tls,
+                cluster_mode: ClusterMode::Disabled,
+                shared_server: true,
+                ..Default::default()
+            };
+
+            let mut validation_client = setup_test_basics_internal(&shared_config).await;
+
+            let mut monitoring_client = setup_test_basics_internal(&shared_config).await;
+
+            let mut info_clients_cmd = redis::Cmd::new();
+            info_clients_cmd.arg("INFO").arg("CLIENTS");
+
+            // validate 2 connected clients
+            let info_clients: String = redis::from_owned_redis_value(
+                monitoring_client
+                    .client
+                    .send_command(&info_clients_cmd)
+                    .await
+                    .unwrap(),
+            )
+            .unwrap();
+
+            assert!(info_clients.contains("connected_clients:2"));
+
+            kill_connection(&mut validation_client.client).await;
+
+            // short sleep to allow the connections checker task to reconnect - 1s is enough since the detection should happen immediately
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+            // validate 2 connected clients
+            let info_clients: String = redis::from_owned_redis_value(
+                monitoring_client
+                    .client
+                    .send_command(&info_clients_cmd)
+                    .await
+                    .unwrap(),
+            )
+            .unwrap();
+
+            assert!(info_clients.contains("connected_clients:2"));
+
+            // validate connection works
+            let ping_result = validation_client
+                .client
+                .send_command(&redis::cmd("PING"))
+                .await
+                .ok();
+            assert_eq!(ping_result, Some(Value::SimpleString("PONG".to_string())));
         });
     }
 
