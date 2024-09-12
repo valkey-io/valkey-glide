@@ -1766,18 +1766,18 @@ export async function transactionTest(
  */
 export async function getServerVersion(
     addresses: [string, number][],
-    clusterMode: boolean = false,
+    clusterMode = false,
 ): Promise<string> {
     let info = "";
     if (clusterMode) {
-        let glideClusterClient = await GlideClusterClient.createClient(
+        const glideClusterClient = await GlideClusterClient.createClient(
             getClientConfigurationOption(addresses, ProtocolVersion.RESP2),
         );
         info = getFirstResult(
             await glideClusterClient.info({ sections: [InfoOptions.Server] }),
         ).toString();
     } else {
-        let glideClient = await GlideClient.createClient(
+        const glideClient = await GlideClient.createClient(
             getClientConfigurationOption(addresses, ProtocolVersion.RESP2),
         );
         info = await glideClient.info([InfoOptions.Server]);
@@ -1786,10 +1786,12 @@ export async function getServerVersion(
     let version = "";
     const redisVersionKey = "redis_version:";
     const valkeyVersionKey = "valkey_version:";
+
     if (info.includes(valkeyVersionKey)) {
         version = info.split(valkeyVersionKey)[1].split("\n")[0];
     } else if (info.includes(redisVersionKey)) {
         version = info.split(redisVersionKey)[1].split("\n")[0];
     }
+
     return version;
 }
