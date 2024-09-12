@@ -1151,20 +1151,20 @@ public class SharedCommandTests {
         // Testing map of arrays using byte[] that cannot be converted to UTF-8 Strings.
         assertEquals(2, client.lpush(key, lpushArgs).get());
         assertThrows(
-            ExecutionException.class,
-            () -> client.lmpop(new String[] {key.toString()}, ListDirection.RIGHT).get());
+                ExecutionException.class,
+                () -> client.lmpop(new String[] {key.toString()}, ListDirection.RIGHT).get());
 
         // Testing map of arrays using byte[] that cannot be converted to UTF-8 Strings returns bytes.
         assertEquals(2, client.lpush(nonUTF8Key, lpushArgs).get());
         // No error is thrown as GlideString will be returned when arguments are GlideStrings.
         assertDeepEquals(
-            Map.of(nonUTF8Key, new GlideString[] {gs(nonUTF8Bytes)}),
-            client.lmpop(new GlideString[]{nonUTF8Key}, ListDirection.RIGHT).get());
+                Map.of(nonUTF8Key, new GlideString[] {gs(nonUTF8Bytes)}),
+                client.lmpop(new GlideString[] {nonUTF8Key}, ListDirection.RIGHT).get());
 
         // Converting non UTF-8 bytes result to String returns a message.
         assertEquals(
-            "Value not convertible to string: byte[] 13",
-            client.lmpop(new GlideString[]{nonUTF8Key}, ListDirection.RIGHT).get().get(nonUTF8Key)[0]);
+                "Value not convertible to string: byte[] 13",
+                client.lmpop(new GlideString[] {nonUTF8Key}, ListDirection.RIGHT).get().get(nonUTF8Key)[0]);
     }
 
     @SneakyThrows
