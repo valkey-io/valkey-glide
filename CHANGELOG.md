@@ -1,4 +1,5 @@
 #### Changes
+* Java: Bump protobuf (protoc) version to 28.1 ([#2280](https://github.com/valkey-io/valkey-glide/pull/2280))
 * Python: Replace instances of Redis with Valkey ([#2266](https://github.com/valkey-io/valkey-glide/pull/2266))
 * Java: Replace instances of Redis with Valkey ([#2268](https://github.com/valkey-io/valkey-glide/pull/2268))
 * Node: Replace instances of Redis with Valkey ([#2260](https://github.com/valkey-io/valkey-glide/pull/2260))
