@@ -20,6 +20,7 @@ import {
     GlideClusterClient,
     GlideClusterClientConfiguration,
     GlideString,
+    InfoOptions,
     ProtocolVersion,
     PubSubMsg,
     TimeoutError,
@@ -27,6 +28,7 @@ import {
 import RedisCluster from "../../utils/TestUtils";
 import {
     flushAndCloseClient,
+    getClientConfigurationOption,
     parseCommandLineArgs,
     parseEndpoints,
 } from "./TestUtilities";
@@ -66,13 +68,61 @@ describe("PubSub", () => {
         cmdCluster = standaloneAddresses
             ? await RedisCluster.initFromExistingCluster(
                   parseEndpoints(standaloneAddresses),
+                  async (addresses: [string, number][]) => {
+                      let glideClient = await GlideClient.createClient(
+                          getClientConfigurationOption(
+                              addresses,
+                              ProtocolVersion.RESP2,
+                          ),
+                      );
+                      const serverInfo = glideClient.info([InfoOptions.Server]);
+                      return serverInfo;
+                  },
               )
-            : await RedisCluster.createCluster(false, 1, 1);
+            : await RedisCluster.createCluster(
+                  false,
+                  1,
+                  1,
+                  async (addresses: [string, number][]) => {
+                      let glideClient = await GlideClient.createClient(
+                          getClientConfigurationOption(
+                              addresses,
+                              ProtocolVersion.RESP2,
+                          ),
+                      );
+                      const serverInfo = glideClient.info([InfoOptions.Server]);
+                      return serverInfo;
+                  },
+              );
         cmeCluster = clusterAddresses
             ? await RedisCluster.initFromExistingCluster(
                   parseEndpoints(clusterAddresses),
+                  async (addresses: [string, number][]) => {
+                      let glideClient = await GlideClient.createClient(
+                          getClientConfigurationOption(
+                              addresses,
+                              ProtocolVersion.RESP2,
+                          ),
+                      );
+                      const serverInfo = glideClient.info([InfoOptions.Server]);
+                      return serverInfo;
+                  },
               )
-            : await RedisCluster.createCluster(true, 3, 1);
+            : await RedisCluster.createCluster(
+                  true,
+                  3,
+                  1,
+                  async (addresses: [string, number][]) => {
+                      let glideClient = await GlideClient.createClient(
+                          getClientConfigurationOption(
+                              addresses,
+                              ProtocolVersion.RESP2,
+                          ),
+                      );
+                      const serverInfo = glideClient.info([InfoOptions.Server]);
+                      return serverInfo;
+                  },
+              );
     }, 40000);
     afterEach(async () => {
         await flushAndCloseClient(false, cmdCluster.getAddresses());

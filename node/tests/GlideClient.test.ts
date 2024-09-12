@@ -21,6 +21,7 @@ import {
     GlideRecord,
     GlideString,
     HashDataType,
+    InfoOptions,
     ProtocolVersion,
     RequestError,
     SortOrder,
@@ -56,12 +57,35 @@ describe("GlideClient", () => {
     beforeAll(async () => {
         const standaloneAddresses =
             parseCommandLineArgs()["standalone-endpoints"];
-        // Connect to cluster or create a new one based on the parsed addresses
         cluster = standaloneAddresses
             ? await RedisCluster.initFromExistingCluster(
                   parseEndpoints(standaloneAddresses),
+                  async (addresses: [string, number][]) => {
+                      let glideClient = await GlideClient.createClient(
+                          getClientConfigurationOption(
+                              addresses,
+                              ProtocolVersion.RESP2,
+                          ),
+                      );
+                      const serverInfo = glideClient.info([InfoOptions.Server]);
+                      return serverInfo;
+                  },
               )
-            : await RedisCluster.createCluster(false, 1, 1);
+            : await RedisCluster.createCluster(
+                  false,
+                  1,
+                  1,
+                  async (addresses: [string, number][]) => {
+                      let glideClient = await GlideClient.createClient(
+                          getClientConfigurationOption(
+                              addresses,
+                              ProtocolVersion.RESP2,
+                          ),
+                      );
+                      const serverInfo = glideClient.info([InfoOptions.Server]);
+                      return serverInfo;
+                  },
+              );
     }, 20000);
 
     afterEach(async () => {

@@ -2,7 +2,7 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { exec, execFile } from "child_process";
+import { execFile } from "child_process";
 import { lt } from "semver";
 
 const PY_SCRIPT_PATH = __dirname + "/cluster_manager.py";
@@ -50,41 +50,23 @@ export class RedisCluster {
         this.version = version;
     }
 
-    private static async detectVersion(addresses: [string, number][]): Promise<string> {
-        return new Promise<string>((resolve, reject) => {
-            const redisVersionKey = "redis_version:";
-            const valkeyVersionKey = "valkey_version:";
-            const extractVersion = (versionKey: string, stdout: string): string =>
-                stdout.split(versionKey)[1].split("\n")[0];
-            if (addresses.length > 0 && addresses[0].length > 1) {
-                let redisInfoCommand = "redis-cli -h " + addresses[0][0] + " -p " + addresses[0][1] + " info";
-                let valkeyInfoCommand = "valkey-cli -h " + addresses[0][0] + " -p " + addresses[0][1] + " info";
-
-                //First, try with `valkey-server -v`
-                exec(valkeyInfoCommand, (error, stdout) => {
-                    if (error) {
-                        // If `valkey-server` fails, try `redis-server -v`
-                        exec(redisInfoCommand, (error, stdout) => {
-                            if (error) {
-                                reject(error);
-                            } else {
-                                resolve(extractVersion(redisVersionKey, stdout));
-                            }
-                        });
-                    } else {
-                        resolve(extractVersion(valkeyVersionKey, stdout));
-                    }
-                });
-            } else {
-                reject("Addresses not found for getting valkey/redis version");
-            }
-        });
+    private static extractVersion(stdout: string): string {
+        let version = "";
+        const redisVersionKey = "redis_version:";
+        const valkeyVersionKey = "valkey_version:";
+        if (stdout.includes(valkeyVersionKey)) {
+            version = stdout.split(valkeyVersionKey)[1].split("\n")[0];
+        } else if (stdout.includes(redisVersionKey)) {
+            version = stdout.split(redisVersionKey)[1].split("\n")[0];
+        }
+        return version;
     }
 
     public static createCluster(
         cluster_mode: boolean,
         shardCount: number,
         replicaCount: number,
+        getVersionCallback: (addresses: [string, number][]) => Promise<string>,
         loadModule?: string[]
     ): Promise<RedisCluster> {
         return new Promise<RedisCluster>((resolve, reject) => {
@@ -116,7 +98,9 @@ export class RedisCluster {
                         const { clusterFolder, addresses: ports } =
                             parseOutput(stdout);
                         resolve(
-                            RedisCluster.detectVersion(ports).then(
+                            getVersionCallback(ports).then((info) => {
+                                return this.extractVersion(info);
+                            }).then(
                                 (ver) =>
                                     new RedisCluster(ver, ports, clusterFolder)
                             )
@@ -128,9 +112,12 @@ export class RedisCluster {
     }
 
     public static async initFromExistingCluster(
-        addresses: [string, number][]
+        addresses: [string, number][],
+        getVersionCallback: (addresses: [string, number][]) => Promise<string>
     ): Promise<RedisCluster> {
-        return RedisCluster.detectVersion(addresses).then(
+        return getVersionCallback(addresses).then(info => {
+            return this.extractVersion(info);
+        }).then(
             (ver) => new RedisCluster(ver, addresses, "")
         );
     }

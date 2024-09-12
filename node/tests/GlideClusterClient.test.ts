@@ -22,6 +22,7 @@ import {
     FunctionRestorePolicy,
     FunctionStatsSingleResponse,
     GeoUnit,
+    GlideClient,
     GlideClusterClient,
     GlideReturnType,
     InfoOptions,
@@ -65,9 +66,33 @@ describe("GlideClusterClient", () => {
         cluster = clusterAddresses
             ? await RedisCluster.initFromExistingCluster(
                   parseEndpoints(clusterAddresses),
+                  async (addresses: [string, number][]) => {
+                      let glideClient = await GlideClient.createClient(
+                          getClientConfigurationOption(
+                              addresses,
+                              ProtocolVersion.RESP2,
+                          ),
+                      );
+                      const serverInfo = glideClient.info([InfoOptions.Server]);
+                      return serverInfo;
+                  },
               )
             : // setting replicaCount to 1 to facilitate tests routed to replicas
-              await RedisCluster.createCluster(true, 3, 1);
+              await RedisCluster.createCluster(
+                  true,
+                  3,
+                  1,
+                  async (addresses: [string, number][]) => {
+                      let glideClient = await GlideClient.createClient(
+                          getClientConfigurationOption(
+                              addresses,
+                              ProtocolVersion.RESP2,
+                          ),
+                      );
+                      const serverInfo = glideClient.info([InfoOptions.Server]);
+                      return serverInfo;
+                  },
+              );
     }, 20000);
 
     afterEach(async () => {
