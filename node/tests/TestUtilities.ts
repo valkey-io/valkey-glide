@@ -776,9 +776,9 @@ export async function transactionTest(
     responseData.push(['set(key2, "baz", { returnOldValue: true })', null]);
     baseTransaction.customCommand(["MGET", key1, key2]);
     responseData.push(['customCommand(["MGET", key1, key2])', ["bar", "baz"]]);
-    baseTransaction.mset({ key: key3, value });
+    baseTransaction.mset([{ key: key3, value }]);
     responseData.push(["mset({ [key3]: value })", "OK"]);
-    baseTransaction.msetnx({ key: key3, value });
+    baseTransaction.msetnx([{ key: key3, value }]);
     responseData.push(["msetnx({ [key3]: value })", false]);
     baseTransaction.mget([key1, key2]);
     responseData.push(["mget([key1, key2])", ["bar", "baz"]]);
@@ -862,14 +862,14 @@ export async function transactionTest(
         baseTransaction.lmpop([key24], ListDirection.LEFT);
         responseData.push([
             "lmpop([key22], ListDirection.LEFT)",
-            convertRecordToGlideRecord({ [key24]: [field + "2"] }),
+            [{ key: key24, elements: [field + "2"] }],
         ]);
         baseTransaction.lpush(key24, [field + "2"]);
         responseData.push(["lpush(key22, [2])", 2]);
         baseTransaction.blmpop([key24], ListDirection.LEFT, 0.1, 1);
         responseData.push([
             "blmpop([key22], ListDirection.LEFT, 0.1, 1)",
-            convertRecordToGlideRecord({ [key24]: [field + "2"] }),
+            [{ key: key24, elements: [field + "2"] }],
         ]);
     }
 
@@ -1244,7 +1244,7 @@ export async function transactionTest(
         "xrevrange(key9)",
         convertRecordToGlideRecord({ "0-1": [["field", "value1"]] }),
     ]);
-    baseTransaction.xread({ key: key9, value: "0-1" });
+    baseTransaction.xread([{ key: key9, value: "0-1" }]);
     responseData.push([
         'xread({ [key9]: "0-1" })',
         {
@@ -1285,7 +1285,9 @@ export async function transactionTest(
         "xgroupCreateConsumer(key9, groupName1, consumer)",
         true,
     ]);
-    baseTransaction.xreadgroup(groupName1, consumer, { key: key9, value: ">" });
+    baseTransaction.xreadgroup(groupName1, consumer, [
+        { key: key9, value: ">" },
+    ]);
     responseData.push([
         'xreadgroup(groupName1, consumer, {[key9]: ">"})',
         {
