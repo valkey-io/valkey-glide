@@ -1584,6 +1584,27 @@ public class GlideClientTest {
 
     @SneakyThrows
     @Test
+    public void scriptShow_returns_script_source() {
+        // setup
+        String scriptSource = "return { KEYS[1], ARGV[1] }";
+        String hash = UUID.randomUUID().toString();
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(scriptSource);
+
+        when(commandManager.<String>submitNewCommand(eq(ScriptShow), eq(new String[] {hash}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.scriptShow(hash);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(scriptSource, response.get());
+    }
+
+    @SneakyThrows
+    @Test
     public void scriptShow_returns_script_source_glidestring() {
         // setup
         GlideString scriptSource = gs("return { KEYS[1], ARGV[1] }");
