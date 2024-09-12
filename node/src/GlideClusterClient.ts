@@ -2,6 +2,7 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
+import { ClusterScanCursor } from "glide-rs";
 import * as net from "net";
 import {
     BaseClient,
@@ -22,6 +23,7 @@ import {
     FunctionStatsSingleResponse,
     InfoOptions,
     LolwutOptions,
+    ScanOptions,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -58,7 +60,7 @@ import {
     createTime,
     createUnWatch,
 } from "./Commands";
-import { connection_request } from "./ProtobufMessage";
+import { command_request, connection_request } from "./ProtobufMessage";
 import { ClusterTransaction } from "./Transaction";
 
 /** An extension to command option types with {@link Routes}. */
@@ -311,6 +313,111 @@ export class GlideClusterClient extends BaseClient {
             connectedSocket,
             (socket, options) => new GlideClusterClient(socket, options),
         );
+    }
+
+    /**
+     * @internal
+     */
+    protected scanOptionsToProto(
+        cursor: string,
+        options?: ScanOptions,
+    ): command_request.ClusterScan {
+        const command = command_request.ClusterScan.create();
+        command.cursor = cursor;
+
+        if (options?.match) {
+            command.matchPattern = Buffer.from(options.match);
+        }
+
+        if (options?.count) {
+            command.count = options.count;
+        }
+
+        if (options?.type) {
+            command.objectType = options.type;
+        }
+
+        return command;
+    }
+
+    /**
+     * @internal
+     */
+    protected createClusterScanPromise(
+        cursor: ClusterScanCursor,
+        options?: ScanOptions & DecoderOption,
+    ): Promise<[ClusterScanCursor, GlideString[]]> {
+        // separate decoder option from scan options
+        const { decoder, ...scanOptions } = options || {};
+        const cursorId = cursor.getCursor();
+        const command = this.scanOptionsToProto(cursorId, scanOptions);
+        return this.createWritePromise(command, { decoder });
+    }
+
+    /**
+     * Incrementally iterates over the keys in the Cluster.
+     *
+     * This command is similar to the `SCAN` command but designed for Cluster environments.
+     * It uses a {@link ClusterScanCursor} object to manage iterations.
+     *
+     * For each iteration, use the new cursor object to continue the scan.
+     * Using the same cursor object for multiple iterations may result in unexpected behavior.
+     *
+     * For more information about the Cluster Scan implementation, see
+     * {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan | Cluster Scan}.
+     *
+     * This method can iterate over all keys in the database from the start of the scan until it ends.
+     * The same key may be returned in multiple scan iterations.
+     * The API does not accept `route` as it go through all slots in the cluster.
+     *
+     * @see {@link https://valkey.io/commands/scan/ | valkey.io} for more details.
+     *
+     * @param cursor - The cursor object that wraps the scan state.
+     *   To start a new scan, create a new empty `ClusterScanCursor` using {@link ClusterScanCursor}.
+     * @param options - (Optional) The scan options, see {@link ScanOptions} and  {@link DecoderOption}.
+     * @returns A Promise resolving to an array containing the next cursor and an array of keys,
+     *   formatted as [`ClusterScanCursor`, `string[]`].
+     *
+     * @example
+     * ```typescript
+     * // Iterate over all keys in the cluster
+     * await client.mset([{key: "key1", value: "value1"}, {key: "key2", value: "value2"}, {key: "key3", value: "value3"}]);
+     * let cursor = new ClusterScanCursor();
+     * const allKeys: GlideString[] = [];
+     * let keys: GlideString[] = [];
+     * while (!cursor.isFinished()) {
+     *   [cursor, keys] = await client.scan(cursor, { count: 10 });
+     *   allKeys.push(...keys);
+     * }
+     * console.log(allKeys); // ["key1", "key2", "key3"]
+     *
+     * // Iterate over keys matching a pattern
+     * await client.mset([{key: "key1", value: "value1"}, {key: "key2", value: "value2"}, {key: "notMykey", value: "value3"}, {key: "somethingElse", value: "value4"}]);
+     * let cursor = new ClusterScanCursor();
+     * const matchedKeys: GlideString[] = [];
+     * while (!cursor.isFinished()) {
+     *   const [cursor, keys] = await client.scan(cursor, { match: "*key*", count: 10 });
+     *   matchedKeys.push(...keys);
+     * }
+     * console.log(matchedKeys); // ["key1", "key2", "notMykey"]
+     *
+     * // Iterate over keys of a specific type
+     * await client.mset([{key: "key1", value: "value1"}, {key: "key2", value: "value2"}, {key: "key3", value: "value3"}]);
+     * await client.sadd("thisIsASet", ["value4"]);
+     * let cursor = new ClusterScanCursor();
+     * const stringKeys: GlideString[] = [];
+     * while (!cursor.isFinished()) {
+     *   const [cursor, keys] = await client.scan(cursor, { type: object.STRING });
+     *   stringKeys.push(...keys);
+     * }
+     * console.log(stringKeys); // ["key1", "key2", "key3"]
+     * ```
+     */
+    public async scan(
+        cursor: ClusterScanCursor,
+        options?: ScanOptions & DecoderOption,
+    ): Promise<[ClusterScanCursor, GlideString[]]> {
+        return this.createClusterScanPromise(cursor, options);
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,

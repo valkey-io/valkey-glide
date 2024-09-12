@@ -2,6 +2,7 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 import {
+    ClusterScanCursor,
     DEFAULT_TIMEOUT_IN_MILLISECONDS,
     Script,
     StartSocketConnection,
@@ -575,6 +576,24 @@ export interface ScriptOptions {
     args?: GlideString[];
 }
 
+/**
+ * Enum of Valkey data types
+ * `STRING`
+ * `LIST`
+ * `SET`
+ * `ZSET`
+ * `HASH`
+ * `STREAM`
+ */
+export enum ObjectType {
+    STRING = "String",
+    LIST = "List",
+    SET = "Set",
+    ZSET = "ZSet",
+    HASH = "Hash",
+    STREAM = "Stream",
+}
+
 function getRequestErrorClass(
     type: response.RequestErrorType | null | undefined,
 ): typeof RequestError {
@@ -686,7 +705,7 @@ export type WritePromiseOptions = RouteOption & DecoderOption;
 
 export class BaseClient {
     private socket: net.Socket;
-    private readonly promiseCallbackFunctions: [
+    protected readonly promiseCallbackFunctions: [
         PromiseFunction,
         ErrorFunction,
     ][] = [];
@@ -695,7 +714,7 @@ export class BaseClient {
     private writeInProgress = false;
     private remainingReadData: Uint8Array | undefined;
     private readonly requestTimeout: number; // Timeout in milliseconds
-    private isClosed = false;
+    protected isClosed = false;
     protected defaultDecoder = Decoder.String;
     private readonly pubsubFutures: [PromiseFunction, ErrorFunction][] = [];
     private pendingPushNotification: response.Response[] = [];
@@ -867,7 +886,7 @@ export class BaseClient {
         this.defaultDecoder = options?.defaultDecoder ?? Decoder.String;
     }
 
-    private getCallbackIndex(): number {
+    protected getCallbackIndex(): number {
         return (
             this.availableCallbackSlots.pop() ??
             this.promiseCallbackFunctions.length
@@ -895,7 +914,8 @@ export class BaseClient {
         command:
             | command_request.Command
             | command_request.Command[]
-            | command_request.ScriptInvocation,
+            | command_request.ScriptInvocation
+            | command_request.ClusterScan,
         options: WritePromiseOptions = {},
     ): Promise<T> {
         const route = toProtobufRoute(options?.route);
@@ -914,6 +934,10 @@ export class BaseClient {
                 (resolveAns: T) => {
                     try {
                         if (resolveAns instanceof PointerResponse) {
+                            //   valueFromSplitPointer method is used to convert a pointer from a protobuf response into a TypeScript object.
+                            //   The protobuf response is received on a socket and the value in the response is a pointer to a Rust object.
+                            //   The pointer is a split pointer because JavaScript doesn't support `u64` and pointers in Rust can be `u64`,
+                            //   so we represent it with two`u32`(`high` and`low`).
                             if (typeof resolveAns === "number") {
                                 resolveAns = valueFromSplitPointer(
                                     0,
@@ -927,6 +951,16 @@ export class BaseClient {
                                     stringDecoder,
                                 ) as T;
                             }
+                        }
+
+                        if (command instanceof command_request.ClusterScan) {
+                            const resolveAnsArray = resolveAns as [
+                                ClusterScanCursor,
+                                GlideString[],
+                            ];
+                            resolveAnsArray[0] = new ClusterScanCursor(
+                                resolveAnsArray[0].toString(),
+                            );
                         }
 
                         resolve(resolveAns);
@@ -945,12 +979,13 @@ export class BaseClient {
         });
     }
 
-    private writeOrBufferCommandRequest(
+    protected writeOrBufferCommandRequest(
         callbackIdx: number,
         command:
             | command_request.Command
             | command_request.Command[]
-            | command_request.ScriptInvocation,
+            | command_request.ScriptInvocation
+            | command_request.ClusterScan,
         route?: command_request.Routes,
     ) {
         const message = Array.isArray(command)
@@ -965,10 +1000,15 @@ export class BaseClient {
                     callbackIdx,
                     singleCommand: command,
                 })
-              : command_request.CommandRequest.create({
-                    callbackIdx,
-                    scriptInvocation: command,
-                });
+              : command instanceof command_request.ClusterScan
+                ? command_request.CommandRequest.create({
+                      callbackIdx,
+                      clusterScan: command,
+                  })
+                : command_request.CommandRequest.create({
+                      callbackIdx,
+                      scriptInvocation: command,
+                  });
         message.route = route;
 
         this.writeOrBufferRequest(
