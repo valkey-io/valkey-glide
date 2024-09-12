@@ -83,12 +83,12 @@ export class ValkeyCluster {
                     if (error) {
                         reject(error);
                     } else {
-                        const { clusterFolder, addresses: ports } =
+                        const { clusterFolder, addresses } =
                             parseOutput(stdout);
                         resolve(
-                            getVersionCallback(ports, cluster_mode).then(
+                            getVersionCallback(addresses, cluster_mode).then(
                                 (ver) =>
-                                    new ValkeyCluster(ver, ports, clusterFolder)
+                                    new ValkeyCluster(ver, addresses, clusterFolder)
                             )
                         );
                     }

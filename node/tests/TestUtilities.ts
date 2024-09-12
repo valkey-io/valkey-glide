@@ -1782,6 +1782,7 @@ export async function getServerVersion(
             getClientConfigurationOption(addresses, ProtocolVersion.RESP2),
         );
         info = await glideClient.info([InfoOptions.Server]);
+        await flushAndCloseClient(true, addresses, glideClient);
     }
 
     let version = "";
