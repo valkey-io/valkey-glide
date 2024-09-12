@@ -1523,4 +1523,57 @@ public class PubSubTests {
         assertEquals(0, listener.pubsubShardChannels("non_matching_*").get().length);
         assertEquals(0, listener.pubsubShardChannels(gs("non_matching_*")).get().length);
     }
+
+    @SneakyThrows
+    @Test
+    public void pubsub_shardnumsub() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
+
+        // no channels exists yet
+        GlideClusterClient client = (GlideClusterClient) createClient(false);
+        var channels = new String[] {"channel1", "channel2", "channel3"};
+        assertEquals(
+                Arrays.stream(channels).collect(Collectors.toMap(c -> c, c -> 0L)),
+                client.pubsubNumSub(channels).get());
+
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions1 =
+                Map.of(
+                        PubSubClusterChannelMode.SHARDED,
+                        Set.of(gs("channel1"), gs("channel2"), gs("channel3")));
+        GlideClusterClient listener1 =
+                (GlideClusterClient) createClientWithSubscriptions(false, subscriptions1);
+
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions2 =
+                Map.of(PubSubClusterChannelMode.SHARDED, Set.of(gs("channel2"), gs("channel3")));
+        GlideClusterClient listener2 =
+                (GlideClusterClient) createClientWithSubscriptions(false, subscriptions2);
+
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions3 =
+                Map.of(PubSubClusterChannelMode.SHARDED, Set.of(gs("channel3")));
+        GlideClusterClient listener3 =
+                (GlideClusterClient) createClientWithSubscriptions(false, subscriptions3);
+
+        clients.addAll(List.of(client, listener1, listener2, listener3));
+
+        var expected = Map.of("channel1", 1L, "channel2", 2L, "channel3", 3L, "channel4", 0L);
+        assertEquals(
+                expected, client.pubsubShardNumSub(ArrayUtils.addFirst(channels, "channel4")).get());
+        assertEquals(
+                expected, listener1.pubsubShardNumSub(ArrayUtils.addFirst(channels, "channel4")).get());
+
+        var expectedGs =
+                Map.of(gs("channel1"), 1L, gs("channel2"), 2L, gs("channel3"), 3L, gs("channel4"), 0L);
+        assertEquals(
+                expectedGs,
+                client
+                        .pubsubShardNumSub(
+                                new GlideString[] {gs("channel1"), gs("channel2"), gs("channel3"), gs("channel4")})
+                        .get());
+        assertEquals(
+                expectedGs,
+                listener2
+                        .pubsubShardNumSub(
+                                new GlideString[] {gs("channel1"), gs("channel2"), gs("channel3"), gs("channel4")})
+                        .get());
+    }
 }

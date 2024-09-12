@@ -26,6 +26,7 @@ import static command_request.CommandRequestOuterClass.RequestType.LastSave;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
 import static command_request.CommandRequestOuterClass.RequestType.PubSubSChannels;
+import static command_request.CommandRequestOuterClass.RequestType.PubSubSNumSub;
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
 import static command_request.CommandRequestOuterClass.RequestType.SPublish;
 import static command_request.CommandRequestOuterClass.RequestType.Sort;
@@ -2806,6 +2807,54 @@ public class GlideClusterClientTest {
         // exercise
         CompletableFuture<GlideString[]> response = service.pubsubShardChannels(pattern);
         GlideString[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void pubsubShardNumSub_returns_success() {
+        // setup
+        String[] arguments = new String[] {"ch1", "ch2"};
+        Map<String, Long> value = Map.of();
+
+        CompletableFuture<Map<String, Long>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Long>>submitNewCommand(
+                        eq(PubSubSNumSub), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Long>> response = service.pubsubShardNumSub(arguments);
+        Map<String, Long> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void pubsubShardNumSub_binary_returns_success() {
+        // setup
+        GlideString[] arguments = new GlideString[] {gs("ch1"), gs("ch2")};
+        Map<GlideString, Long> value = Map.of();
+
+        CompletableFuture<Map<GlideString, Long>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, Long>>submitNewCommand(
+                        eq(PubSubSNumSub), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<GlideString, Long>> response = service.pubsubShardNumSub(arguments);
+        Map<GlideString, Long> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);

@@ -2,6 +2,7 @@
 package glide.api.models;
 
 import static command_request.CommandRequestOuterClass.RequestType.PubSubSChannels;
+import static command_request.CommandRequestOuterClass.RequestType.PubSubSNumSub;
 import static command_request.CommandRequestOuterClass.RequestType.SPublish;
 import static command_request.CommandRequestOuterClass.RequestType.Sort;
 import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
@@ -57,6 +58,24 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
         checkTypeOrThrow(channel);
         protobufTransaction.addCommands(
                 buildCommand(SPublish, newArgsBuilder().add(channel).add(message)));
+        return getThis();
+    }
+
+    /**
+     * Returns the number of subscribers (exclusive of clients subscribed to patterns) for the
+     * specified shard channels. Note that it is valid to call this command without channels. In this
+     * case, it will just return an empty map.
+     *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @see <a href="https://valkey.io/commands/pubsub-shardnumsub/">valkey.io</a> for details.
+     * @param channels The list of shard channels to query for the number of subscribers.
+     * @return Command response - An <code>Map</code> where keys are the shard channel names and
+     *     values are the number of subscribers.
+     */
+    public <ArgType> ClusterTransaction pubsubShardNumSub(@NonNull ArgType[] channels) {
+        checkTypeOrThrow(channels);
+        protobufTransaction.addCommands(buildCommand(PubSubSNumSub, newArgsBuilder().add(channels)));
         return getThis();
     }
 
