@@ -2514,7 +2514,7 @@ function joinBitOptions(options: BitOffsetOptions): GlideString[] {
 
         if (options.end !== undefined) {
             args.push(options.end.toString());
-            
+
             if (options.indexType) args.push(options.indexType);
         }
     }
