@@ -5,8 +5,6 @@ import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.FlushMode;
-import glide.api.models.commands.ScriptOptions;
-import glide.api.models.commands.ScriptOptionsGlideString;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.configuration.ReadFrom;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
@@ -1073,19 +1071,19 @@ public interface ScriptingAndFunctionsClusterCommands {
      * @see <a href="https://valkey.io/commands/script-load/">SCRIPT LOAD</a> and <a
      *     href="https://valkey.io/commands/evalsha/">EVALSHA</a> for details.
      * @param script The Lua script to execute.
-     * @param options The script option that contains keys and arguments for the script.
+     * @param keys The keys that are used in the script.
+     * @param args The arguments for the script.
      * @return A value that depends on the script that was executed.
      * @example
      *     <pre>{@code
      * try(Script luaScript = new Script("return { KEYS[1], ARGV[1] }", false)) {
-     *     ScriptOptions scriptOptions = ScriptOptions.builder().key("foo").arg("bar").build();
-     *     Object[] result = (Object[]) client.invokeScript(luaScript, scriptOptions).get();
+     *     Object[] result = (Object[]) client.invokeScript(luaScript, List.of("foo"), List.of("bar")).get();
      *     assert result[0].equals("foo");
      *     assert result[1].equals("bar");
      * }
      * }</pre>
      */
-    CompletableFuture<Object> invokeScript(Script script, ScriptOptions options);
+    CompletableFuture<Object> invokeScript(Script script, List<String> keys, List<String> args);
 
     /**
      * Invokes a Lua script with its keys and arguments.<br>
@@ -1095,28 +1093,30 @@ public interface ScriptingAndFunctionsClusterCommands {
      * using the <code>SCRIPT LOAD</code> command. After that, it will be invoked using the <code>
      * EVALSHA</code> command.
      *
+     * @param script The Lua script to execute.
+     * @param keys The keys that are used in the script.
+     * @param args The arguments for the script.
+     * @return A value that depends on the script that was executed.
      * @apiNote When in cluster mode
      *     <ul>
      *       <li>all <code>keys</code> must map to the same hash slot.
      *       <li>if no <code>keys</code> are given, command will be routed to a random primary node.
      *     </ul>
      *
-     * @see <a href="https://valkey.io/commands/script-load/">SCRIPT LOAD</a> and <a
-     *     href="https://valkey.io/commands/evalsha/">EVALSHA</a> for details.
-     * @param script The Lua script to execute.
-     * @param options The script option that contains keys and arguments for the script.
-     * @return A value that depends on the script that was executed.
      * @example
      *     <pre>{@code
      * try(Script luaScript = new Script(gs("return { KEYS[1], ARGV[1] }", true))) {
-     *     ScriptOptionsGlideString scriptOptions = ScriptOptionsGlideString.builder().key(gs("foo")).arg(gs("bar")).build();
-     *     Object[] result = (Object[]) client.invokeScript(luaScript, scriptOptions).get();
+     *     Object[] result = (Object[]) client.invokeScript(luaScript, List.of(gs("foo")), List.of(gs("bar"))).get();
      *     assert result[0].equals(gs("foo"));
      *     assert result[1].equals(gs("bar"));
      * }
      * }</pre>
+     *
+     * @see <a href="https://valkey.io/commands/script-load/">SCRIPT LOAD</a> and <a
+     *     href="https://valkey.io/commands/evalsha/">EVALSHA</a> for details.
      */
-    CompletableFuture<Object> invokeScript(Script script, ScriptOptionsGlideString options);
+    CompletableFuture<Object> invokeScriptBinary(
+            Script script, List<GlideString> keys, List<GlideString> args);
 
     /**
      * Invokes a Lua script.<br>
