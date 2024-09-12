@@ -56,7 +56,7 @@ import {
     FunctionStatsFullResponse,
     InfoOptions,
     LolwutOptions,
-    ScanOptions
+    ScanOptions,
 } from "./Commands";
 import { connection_request } from "./ProtobufMessage";
 import { Transaction } from "./Transaction";

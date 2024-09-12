@@ -58,7 +58,7 @@ import {
     createScriptFlush,
     createScriptKill,
     createTime,
-    createUnWatch
+    createUnWatch,
 } from "./Commands";
 import { command_request, connection_request } from "./ProtobufMessage";
 import { ClusterTransaction } from "./Transaction";

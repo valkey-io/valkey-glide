@@ -439,7 +439,7 @@ impl Drop for Script {
 /// ```
 /// To check if the scan is finished:
 /// ```typescript
-/// let isFinished = cursor.isFinished();
+/// let isFinished = cursor.isFinished(); // true if the scan is finished
 /// ```
 #[napi]
 #[derive(Default)]
