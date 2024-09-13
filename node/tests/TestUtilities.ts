@@ -803,7 +803,10 @@ export async function transactionTest(
     baseTransaction.hset(key4, [{ field, value }]);
     responseData.push(["hset(key4, { [field]: value })", 1]);
     baseTransaction.hscan(key4, "0");
-    responseData.push(['hscan(key4, "0")', ["0", [field, value]]]);
+    responseData.push([
+        'hscan(key4, "0")',
+        ["0", [field.toString(), value.toString()]],
+    ]);
 
     if (gte(version, "8.0.0")) {
         baseTransaction.hscan(key4, "0", { noValues: false });
@@ -825,28 +828,37 @@ export async function transactionTest(
     baseTransaction.hscan(key4, "0", { match: "*", count: 20 });
     responseData.push([
         'hscan(key4, "0", {match: "*", count: 20})',
-        ["0", [field, value]],
+        ["0", [field.toString(), value.toString()]],
     ]);
     baseTransaction.hstrlen(key4, field);
     responseData.push(["hstrlen(key4, field)", value.length]);
     baseTransaction.hlen(key4);
     responseData.push(["hlen(key4)", 1]);
     baseTransaction.hrandfield(key4);
-    responseData.push(["hrandfield(key4)", field]);
+    responseData.push(["hrandfield(key4)", field.toString()]);
     baseTransaction.hrandfieldCount(key4, -2);
-    responseData.push(["hrandfieldCount(key4, -2)", [field, field]]);
+    responseData.push([
+        "hrandfieldCount(key4, -2)",
+        [field.toString(), field.toString()],
+    ]);
     baseTransaction.hrandfieldWithValues(key4, 2);
-    responseData.push(["hrandfieldWithValues(key4, 2)", [[field, value]]]);
+    responseData.push([
+        "hrandfieldWithValues(key4, 2)",
+        [[field.toString(), value.toString()]],
+    ]);
     baseTransaction.hsetnx(key4, field, value);
     responseData.push(["hsetnx(key4, field, value)", false]);
     baseTransaction.hvals(key4);
-    responseData.push(["hvals(key4)", [value]]);
+    responseData.push(["hvals(key4)", [value.toString()]]);
     baseTransaction.hkeys(key4);
-    responseData.push(["hkeys(key4)", [field]]);
+    responseData.push(["hkeys(key4)", [field.toString()]]);
     baseTransaction.hget(key4, field);
-    responseData.push(["hget(key4, field)", value]);
+    responseData.push(["hget(key4, field)", value.toString()]);
     baseTransaction.hgetall(key4);
-    responseData.push(["hgetall(key4)", [{ key: field, value }]]);
+    responseData.push([
+        "hgetall(key4)",
+        [{ key: field.toString(), value: value.toString() }],
+    ]);
     baseTransaction.hdel(key4, [field]);
     responseData.push(["hdel(key4, [field])", 1]);
     baseTransaction.hmget(key4, [field]);
@@ -877,7 +889,7 @@ export async function transactionTest(
     }
 
     baseTransaction.lpop(key5);
-    responseData.push(["lpop(key5)", field4]);
+    responseData.push(["lpop(key5)", field4.toString()]);
     baseTransaction.llen(key5);
     responseData.push(["llen(key5)", 3]);
     baseTransaction.lrem(key5, 1, field1);
@@ -887,7 +899,10 @@ export async function transactionTest(
     baseTransaction.lset(key5, 0, field3);
     responseData.push(['lset(key5, 0, field + "3")', "OK"]);
     baseTransaction.lrange(key5, 0, -1);
-    responseData.push(["lrange(key5, 0, -1)", [field3, field2]]);
+    responseData.push([
+        "lrange(key5, 0, -1)",
+        [field3.toString(), field2.toString()],
+    ]);
 
     if (gte(version, "6.2.0")) {
         baseTransaction.lmove(
@@ -898,7 +913,7 @@ export async function transactionTest(
         );
         responseData.push([
             "lmove(key5, key20, ListDirection.LEFT, ListDirection.LEFT)",
-            field3,
+            field3.toString(),
         ]);
 
         baseTransaction.blmove(
@@ -910,12 +925,15 @@ export async function transactionTest(
         );
         responseData.push([
             "blmove(key20, key5, ListDirection.LEFT, ListDirection.LEFT, 3)",
-            field3,
+            field3.toString(),
         ]);
     }
 
     baseTransaction.lpopCount(key5, 2);
-    responseData.push(["lpopCount(key5, 2)", [field + "3", field + "2"]]);
+    responseData.push([
+        "lpopCount(key5, 2)",
+        [field3.toString(), field2.toString()],
+    ]);
 
     baseTransaction.linsert(
         key5,
@@ -924,22 +942,35 @@ export async function transactionTest(
         "element",
     );
     responseData.push(["linsert", 0]);
-    baseTransaction.rpush(key6, [field1, field2, field3]);
+    baseTransaction.rpush(key6, [
+        field1.toString(),
+        field2.toString(),
+        field3.toString(),
+    ]);
     responseData.push([
         'rpush(key6, [field + "1", field + "2", field + "3"])',
         3,
     ]);
     baseTransaction.lindex(key6, 0);
-    responseData.push(["lindex(key6, 0)", field1]);
+    responseData.push(["lindex(key6, 0)", field1.toString()]);
     baseTransaction.rpop(key6);
-    responseData.push(["rpop(key6)", field3]);
+    responseData.push(["rpop(key6)", field3.toString()]);
     baseTransaction.rpopCount(key6, 2);
-    responseData.push(["rpopCount(key6, 2)", [field2, field1]]);
+    responseData.push([
+        "rpopCount(key6, 2)",
+        [field2.toString(), field1.toString()],
+    ]);
     baseTransaction.rpushx(key15, ["_"]); // key15 is empty
     responseData.push(['rpushx(key15, ["_"])', 0]);
     baseTransaction.lpushx(key15, ["_"]);
     responseData.push(['lpushx(key15, ["_"])', 0]);
-    baseTransaction.rpush(key16, [field1, field1, field2, field3, field3]);
+    baseTransaction.rpush(key16, [
+        field1.toString(),
+        field1.toString(),
+        field2.toString(),
+        field3.toString(),
+        field3.toString(),
+    ]);
     responseData.push(["rpush(key16, [1, 1, 2, 3, 3,])", 5]);
     baseTransaction.lpos(key16, field1, { rank: 2 });
     responseData.push(["lpos(key16, field1, { rank: 2 })", 1]);
@@ -1163,11 +1194,17 @@ export async function transactionTest(
     baseTransaction.zadd(key8, { member6: 6 });
     responseData.push(["zadd(key8, {member6: 6})", 1]);
     baseTransaction.bzpopmax([key8], 0.5);
-    responseData.push(["bzpopmax([key8], 0.5)", [key8, "member6", 6]]);
+    responseData.push([
+        "bzpopmax([key8], 0.5)",
+        [key8.toString(), "member6", 6],
+    ]);
     baseTransaction.zadd(key8, { member7: 1 });
     responseData.push(["zadd(key8, {member7: 1})", 1]);
     baseTransaction.bzpopmin([key8], 0.5);
-    responseData.push(["bzpopmin([key8], 0.5)", [key8, "member7", 1]]);
+    responseData.push([
+        "bzpopmin([key8], 0.5)",
+        [key8.toString(), "member7", 1],
+    ]);
     baseTransaction.zremRangeByRank(key8, 1, 1);
     responseData.push(["zremRangeByRank(key8, 1, 1)", 1]);
     baseTransaction.zremRangeByScore(
@@ -1196,12 +1233,12 @@ export async function transactionTest(
         baseTransaction.zmpop([key14], ScoreFilter.MAX);
         responseData.push([
             "zmpop([key14], MAX)",
-            [key14, [{ key: "two", value: 2.0 }]],
+            [key14.toString(), [{ key: "two", value: 2.0 }]],
         ]);
         baseTransaction.zmpop([key14], ScoreFilter.MAX, 1);
         responseData.push([
             "zmpop([key14], MAX, 1)",
-            [key14, [{ key: "one", value: 1.0 }]],
+            [key14.toString(), [{ key: "one", value: 1.0 }]],
         ]);
         baseTransaction.zadd(key14, [
             { element: "one", score: 1.0 },
@@ -1211,12 +1248,12 @@ export async function transactionTest(
         baseTransaction.bzmpop([key14], ScoreFilter.MAX, 0.1);
         responseData.push([
             "bzmpop([key14], ScoreFilter.MAX, 0.1)",
-            [key14, [{ key: "two", value: 2.0 }]],
+            [key14.toString(), [{ key: "two", value: 2.0 }]],
         ]);
         baseTransaction.bzmpop([key14], ScoreFilter.MAX, 0.1, 1);
         responseData.push([
             "bzmpop([key14], ScoreFilter.MAX, 0.1, 1)",
-            [key14, [{ key: "one", value: 1.0 }]],
+            [key14.toString(), [{ key: "one", value: 1.0 }]],
         ]);
     }
 
@@ -1252,7 +1289,7 @@ export async function transactionTest(
         'xread({ [key9]: "0-1" })',
         [
             {
-                key: key9,
+                key: key9.toString(),
                 value: [
                     { key: "0-2", value: [["field", "value2"]] },
                     { key: "0-3", value: [["field", "value3"]] },
@@ -1297,7 +1334,7 @@ export async function transactionTest(
         'xreadgroup(groupName1, consumer, {[key9]: ">"})',
         [
             {
-                key: key9,
+                key: key9.toString(),
                 value: [
                     {
                         key: "0-2",
@@ -1307,10 +1344,19 @@ export async function transactionTest(
             },
         ],
     ]);
-    baseTransaction.xpending(key9, groupName1);
+    baseTransaction.xpending(key9.toString(), groupName1.toString());
     responseData.push([
         "xpending(key9, groupName1)",
-        [1, "0-2", "0-2", [[consumer, "1"]]],
+        [1, "0-2", "0-2", [[consumer.toString(), "1"]]],
+    ]);
+    baseTransaction.xpendingWithOptions(key9, groupName1, {
+        start: InfBoundary.NegativeInfinity,
+        end: InfBoundary.PositiveInfinity,
+        count: 10,
+    });
+    responseData.push([
+        "xpendingWithOptions(key9, groupName1, -, +, 10)",
+        [["0-2", consumer.toString(), 0, 1]],
     ]);
     baseTransaction.xclaim(key9, groupName1, consumer, 0, ["0-2"]);
     responseData.push([
@@ -1395,9 +1441,15 @@ export async function transactionTest(
         3,
     ]);
     baseTransaction.brpop([key6], 0.1);
-    responseData.push(["brpop([key6], 0.1)", [key6, field + "3"]]);
+    responseData.push([
+        "brpop([key6], 0.1)",
+        [key6.toString(), field3.toString()],
+    ]);
     baseTransaction.blpop([key6], 0.1);
-    responseData.push(["blpop([key6], 0.1)", [key6, field + "1"]]);
+    responseData.push([
+        "blpop([key6], 0.1)",
+        [key6.toString(), field1.toString()],
+    ]);
 
     baseTransaction.setbit(key17, 1, 1);
     responseData.push(["setbit(key17, 1, 1)", 0]);
