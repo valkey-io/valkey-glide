@@ -805,23 +805,24 @@ export class GlideClusterClient extends BaseClient {
      *
      * @param source - The key to the source value.
      * @param destination - The key where the value should be copied to.
-     * @param replace - (Optional) If `true`, the `destination` key should be removed before copying the
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `replace`: if `true`, the `destination` key should be removed before copying the
      *     value to it. If not provided, no action will be performed if the key already exists.
      * @returns `true` if `source` was copied, `false` if the `source` was not copied.
      *
      * @example
      * ```typescript
-     * const result = await client.copy("set1", "set2", true);
+     * const result = await client.copy("set1", "set2", { replace: true });
      * console.log(result); // Output: true - "set1" was copied to "set2".
      * ```
      */
     public async copy(
         source: GlideString,
         destination: GlideString,
-        replace?: boolean,
+        options?: { replace?: boolean },
     ): Promise<boolean> {
         return this.createWritePromise(
-            createCopy(source, destination, { replace: replace }),
+            createCopy(source, destination, options),
         );
     }
 
