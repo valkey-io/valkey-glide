@@ -11,12 +11,9 @@
     },
     "homepage": "https://github.com/valkey-io/valkey-glide#readme",
     "dependencies": {
-        "@eslint/compat": "^1.1.1",
-        "eslint-config-prettier": "^9.1.0",
         "glide-rs": "file:rust-client",
         "long": "^5.2.3",
         "npmignore": "^0.3.1",
-        "prettier": "^3.3.3",
         "protobufjs": "^7.4.0"
     },
     "bundleDependencies": [
@@ -44,7 +41,6 @@
         "prettier:format": "npx prettier --write . --ignore-unknown '!**/*.{js,d.ts}'"
     },
     "devDependencies": {
-        "@babel/preset-env": "^7.25.4",
         "@jest/globals": "^29.7.0",
         "@types/jest": "^29.5.12",
         "@types/minimist": "^1.2.5",
