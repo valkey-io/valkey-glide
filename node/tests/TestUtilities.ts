@@ -978,8 +978,8 @@ export async function transactionTest(
     if (gte(version, "7.0.0")) {
         baseTransaction.sintercard([key7, key7]);
         responseData.push(["sintercard([key7, key7])", 2]);
-        baseTransaction.sintercard([key7, key7], 1);
-        responseData.push(["sintercard([key7, key7], 1)", 1]);
+        baseTransaction.sintercard([key7, key7], { limit: 1 });
+        responseData.push(["sintercard([key7, key7], { limit: 1 })", 1]);
     }
 
     baseTransaction.sinterstore(key7, [key7, key7]);
@@ -1209,8 +1209,8 @@ export async function transactionTest(
         responseData.push(["zadd(key14, { one: 1.0, two: 2.0 })", 2]);
         baseTransaction.zintercard([key8, key14]);
         responseData.push(["zintercard([key8, key14])", 0]);
-        baseTransaction.zintercard([key8, key14], 1);
-        responseData.push(["zintercard([key8, key14], 1)", 0]);
+        baseTransaction.zintercard([key8, key14], { limit: 1 });
+        responseData.push(["zintercard([key8, key14], { limit: 1 })", 0]);
         baseTransaction.zmpop([key14], ScoreFilter.MAX);
         responseData.push([
             "zmpop([key14], MAX)",
@@ -1355,9 +1355,11 @@ export async function transactionTest(
     ]);
 
     if (gte(version, "6.2.0")) {
-        baseTransaction.xautoclaim(key9, groupName1, consumer, 0, "0-0", 1);
+        baseTransaction.xautoclaim(key9, groupName1, consumer, 0, "0-0", {
+            count: 1,
+        });
         responseData.push([
-            'xautoclaim(key9, groupName1, consumer, 0, "0-0", 1)',
+            'xautoclaim(key9, groupName1, consumer, 0, "0-0", { count: 1 })',
             gte(version, "7.0.0")
                 ? [
                       "0-0",
@@ -1503,9 +1505,11 @@ export async function transactionTest(
     ]);
     baseTransaction.geodist(key18, "Palermo", "Catania");
     responseData.push(['geodist(key18, "Palermo", "Catania")', 166274.1516]);
-    baseTransaction.geodist(key18, "Palermo", "Catania", GeoUnit.KILOMETERS);
+    baseTransaction.geodist(key18, "Palermo", "Catania", {
+        unit: GeoUnit.KILOMETERS,
+    });
     responseData.push([
-        'geodist(key18, "Palermo", "Catania", GeoUnit.KILOMETERS)',
+        'geodist(key18, "Palermo", "Catania", { unit: GeoUnit.KILOMETERS })',
         166.2742,
     ]);
     baseTransaction.geohash(key18, ["Palermo", "Catania", "NonExisting"]);
