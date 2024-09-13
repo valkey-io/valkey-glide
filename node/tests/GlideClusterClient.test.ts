@@ -409,7 +409,7 @@ describe("GlideClusterClient", () => {
                     client.zdiff(["abc", "zxy", "lkn"]),
                     client.zdiffWithScores(["abc", "zxy", "lkn"]),
                     client.zdiffstore("abc", ["zxy", "lkn"]),
-                    client.copy("abc", "zxy", true),
+                    client.copy("abc", "zxy", { replace: true }),
                     client.geosearchstore(
                         "abc",
                         "zxy",
@@ -648,7 +648,9 @@ describe("GlideClusterClient", () => {
             const value2 = uuidv4();
 
             // neither key exists
-            expect(await client.copy(source, destination, true)).toEqual(false);
+            expect(
+                await client.copy(source, destination, { replace: true }),
+            ).toEqual(false);
             expect(await client.copy(Buffer.from(source), destination)).toEqual(
                 false,
             );
@@ -656,7 +658,9 @@ describe("GlideClusterClient", () => {
             // source exists, destination does not
             expect(await client.set(source, value1)).toEqual("OK");
             expect(
-                await client.copy(source, Buffer.from(destination), false),
+                await client.copy(source, Buffer.from(destination), {
+                    replace: false,
+                }),
             ).toEqual(true);
             expect(await client.get(destination)).toEqual(value1);
 
@@ -670,21 +674,23 @@ describe("GlideClusterClient", () => {
                     Buffer.from(destination),
                 ),
             ).toEqual(false);
-            expect(await client.copy(source, destination, false)).toEqual(
-                false,
-            );
+            expect(
+                await client.copy(source, destination, { replace: false }),
+            ).toEqual(false);
             expect(await client.get(destination)).toEqual(value1);
 
             // both exists, with REPLACE
             expect(
-                await client.copy(source, Buffer.from(destination), true),
+                await client.copy(source, Buffer.from(destination), {
+                    replace: true,
+                }),
             ).toEqual(true);
             expect(await client.get(destination)).toEqual(value2);
 
             //transaction tests
             const transaction = new ClusterTransaction();
             transaction.set(source, value1);
-            transaction.copy(source, destination, true);
+            transaction.copy(source, destination, { replace: true });
             transaction.get(destination);
             const results = await client.exec(transaction);
 

@@ -2180,7 +2180,7 @@ export function createXAdd(
  */
 export function createXDel(
     key: GlideString,
-    ids: GlideString[],
+    ids: string[],
 ): command_request.Command {
     return createCommand(RequestType.XDel, [key, ...ids]);
 }
@@ -2582,8 +2582,8 @@ export enum FlushMode {
  * @returns same data in GlideRecord type.
  */
 export function convertKeysAndEntries(
-    record: Record<string, GlideString> | GlideRecord<GlideString>,
-): GlideRecord<GlideString> {
+    record: Record<string, string> | GlideRecord<string>,
+): GlideRecord<string> {
     if (!Array.isArray(record)) {
         return convertRecordToGlideRecord(record);
     }
@@ -2633,7 +2633,7 @@ function addReadOptions(options?: StreamReadOptions): GlideString[] {
 }
 
 /** @internal */
-function addStreamsArgs(keys_and_ids: GlideRecord<GlideString>): GlideString[] {
+function addStreamsArgs(keys_and_ids: GlideRecord<string>): GlideString[] {
     return [
         "STREAMS",
         ...keys_and_ids.map((e) => e.key),
@@ -2645,7 +2645,7 @@ function addStreamsArgs(keys_and_ids: GlideRecord<GlideString>): GlideString[] {
  * @internal
  */
 export function createXRead(
-    keys_and_ids: GlideRecord<GlideString>,
+    keys_and_ids: GlideRecord<string>,
     options?: StreamReadOptions,
 ): command_request.Command {
     const args = addReadOptions(options);
@@ -2657,7 +2657,7 @@ export function createXRead(
 export function createXReadGroup(
     group: GlideString,
     consumer: GlideString,
-    keys_and_ids: GlideRecord<GlideString>,
+    keys_and_ids: GlideRecord<string>,
     options?: StreamReadGroupOptions,
 ): command_request.Command {
     const args: GlideString[] = ["GROUP", group, consumer];
@@ -2788,7 +2788,7 @@ export function createXClaim(
     group: GlideString,
     consumer: GlideString,
     minIdleTime: number,
-    ids: GlideString[],
+    ids: string[],
     options?: StreamClaimOptions,
     justId?: boolean,
 ): command_request.Command {
@@ -2856,7 +2856,7 @@ export interface StreamGroupOptions {
 export function createXGroupCreate(
     key: GlideString,
     groupName: GlideString,
-    id: GlideString,
+    id: string,
     options?: StreamGroupOptions,
 ): command_request.Command {
     const args: GlideString[] = [key, groupName, id];
@@ -4093,7 +4093,7 @@ export function createGetEx(
 export function createXAck(
     key: GlideString,
     group: GlideString,
-    ids: GlideString[],
+    ids: string[],
 ): command_request.Command {
     return createCommand(RequestType.XAck, [key, group, ...ids]);
 }
@@ -4104,7 +4104,7 @@ export function createXAck(
 export function createXGroupSetid(
     key: GlideString,
     groupName: GlideString,
-    id: GlideString,
+    id: string,
     entriesRead?: number,
 ): command_request.Command {
     const args = [key, groupName, id];
