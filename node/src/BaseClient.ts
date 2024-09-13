@@ -5672,7 +5672,7 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * const result = await client.xautoclaim("myStream", "myGroup", "myConsumer", 42, "0-0", 25);
+     * const result = await client.xautoclaim("myStream", "myGroup", "myConsumer", 42, "0-0", { count: 25 });
      * console.log(result); // Output:
      * // [
      * //     "1609338788321-0",                // value to be used as `start` argument
