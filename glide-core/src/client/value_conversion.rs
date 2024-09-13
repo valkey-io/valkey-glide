@@ -141,9 +141,19 @@ pub(crate) fn convert_to_expected_type(
             )
                 .into()),
         },
-        ExpectedReturnType::BulkString => Ok(Value::BulkString(
-            from_owned_redis_value::<String>(value)?.into(),
-        )),
+        ExpectedReturnType::BulkString => match value {
+            Value::Okay | Value::Nil | Value::BulkString(_) => Ok(value),
+            Value::Int(_) | Value::Double(_) | Value::Boolean(_) | Value::BigNumber(_) => Ok(Value::BulkString(
+                from_owned_redis_value::<String>(value)?.into(),
+            )),
+            // Don't convert simple strings or other types (e.g. arrays) to a BulkString
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted to BulkString",
+                format!("(response was {:?})", get_value_type(&value)),
+            )
+                .into()),
+        },
         ExpectedReturnType::SimpleString => Ok(Value::SimpleString(
             from_owned_redis_value::<String>(value)?,
         )),
@@ -340,7 +350,7 @@ pub(crate) fn convert_to_expected_type(
         //
         // Example:
         // let input = ["key", "val1", "val2"]
-        // let expected =("key", vec!["val1", "val2"])
+        // let output = ("key", vec!["val1", "val2"])
         ExpectedReturnType::ArrayOfStringAndArrays => match value {
             Value::Nil => Ok(value),
             Value::Array(array) if array.len() == 2 && matches!(array[1], Value::Array(_)) => {
