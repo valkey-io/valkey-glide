@@ -27,6 +27,7 @@ import {
 import ValkeyCluster from "../../utils/TestUtils";
 import {
     flushAndCloseClient,
+    getServerVersion,
     parseCommandLineArgs,
     parseEndpoints,
 } from "./TestUtilities";
@@ -65,14 +66,18 @@ describe("PubSub", () => {
         // Connect to cluster or create a new one based on the parsed addresses
         cmdCluster = standaloneAddresses
             ? await ValkeyCluster.initFromExistingCluster(
+                  false,
                   parseEndpoints(standaloneAddresses),
+                  getServerVersion,
               )
-            : await ValkeyCluster.createCluster(false, 1, 1);
+            : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
         cmeCluster = clusterAddresses
             ? await ValkeyCluster.initFromExistingCluster(
+                  true,
                   parseEndpoints(clusterAddresses),
+                  getServerVersion,
               )
-            : await ValkeyCluster.createCluster(true, 3, 1);
+            : await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
     }, 40000);
     afterEach(async () => {
         await flushAndCloseClient(false, cmdCluster.getAddresses());

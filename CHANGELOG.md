@@ -1,8 +1,8 @@
 #### Changes
+* Node: Added `invokeScript` API with routing for cluster client ([#2284](https://github.com/valkey-io/valkey-glide/pull/2284))
 * Python: Replace instances of Redis with Valkey ([#2266](https://github.com/valkey-io/valkey-glide/pull/2266))
 * Java: Replace instances of Redis with Valkey ([#2268](https://github.com/valkey-io/valkey-glide/pull/2268))
 * Node: Replace instances of Redis with Valkey ([#2260](https://github.com/valkey-io/valkey-glide/pull/2260))
-* Java: Fetch server version using info command ([#2258](https://github.com/valkey-io/valkey-glide/pull/2258))
 * Node: Added binary variant for commands which have `Record` as input or output ([#2207](https://github.com/valkey-io/valkey-glide/pull/2207))
 * Node: Renamed `ReturnType` to `GlideReturnType` ([#2241](https://github.com/valkey-io/valkey-glide/pull/2241))
 * Node, Python: Rename `stop` to `end` in sorted set queries ([#2214](https://github.com/valkey-io/valkey-glide/pull/2214))
@@ -122,6 +122,7 @@
 * Java, Node, Python: Change BITCOUNT end param to optional (Valkey-8) ([#2248](https://github.com/valkey-io/valkey-glide/pull/2248))
 * Java, Node, Python: Add NOSCORES option to ZSCAN & NOVALUES option to HSCAN (Valkey-8) ([#2174](https://github.com/valkey-io/valkey-glide/pull/2174))
 * Node: Add SCAN command ([#2257](https://github.com/valkey-io/valkey-glide/pull/2257))
+* Java: Add Script commands ([#2261](https://github.com/valkey-io/valkey-glide/pull/2261))
 
 #### Breaking Changes
 * Java: Update INFO command ([#2274](https://github.com/valkey-io/valkey-glide/pull/2274))
@@ -137,6 +138,8 @@
 * Python: Fix `XClaim` return type to `List[bytes]` instead of `List[TEncodable]` ([#2075](https://github.com/valkey-io/valkey-glide/pull/2075))
 
 ### Operational Enhancements
+* Node: Get valkey/redis version using client's info command ([#2276]https://github.com/valkey-io/valkey-glide/pull/2276)
+* Java: Fetch server version using client's info command ([#2258](https://github.com/valkey-io/valkey-glide/pull/2258))
 * CI/CD: Add workflow for automating Maven release ([#2128](https://github.com/valkey-io/valkey-glide/pull/2128))
 
 ## 1.0.0 (2024-07-09)

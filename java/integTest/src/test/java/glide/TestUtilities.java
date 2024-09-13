@@ -360,6 +360,28 @@ public class TestUtilities {
                 .replace("$libName", libName);
     }
 
+    /**
+     * Create a lua script which runs an endless loop up to timeout sec.<br>
+     * Execution takes at least 5 sec regardless of the timeout configured.
+     */
+    public static String createLongRunningLuaScript(int timeout, boolean readOnly) {
+        String script =
+                readOnly
+                        ? "  local started = tonumber(redis.pcall('time')[1])\n"
+                                + "  while (true) do\n"
+                                + "    local now = tonumber(redis.pcall('time')[1])\n"
+                                + "    if now > started + $timeout then\n"
+                                + "      return 'Timed out $timeout sec'\n"
+                                + "    end\n"
+                                + "  end\n"
+                        : "redis.call('SET', KEYS[1], 'value')\n"
+                                + "  local start = redis.call('time')[1]\n"
+                                + "  while redis.call('time')[1] - start < $timeout do\n"
+                                + "      redis.call('SET', KEYS[1], 'value')\n"
+                                + "   end\n";
+        return script.replace("$timeout", Integer.toString(timeout));
+    }
+
     public static void waitForNotBusy(BaseClient client) {
         // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
         // test to fail.

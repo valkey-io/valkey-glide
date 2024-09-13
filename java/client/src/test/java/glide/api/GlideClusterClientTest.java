@@ -29,6 +29,9 @@ import static command_request.CommandRequestOuterClass.RequestType.PubSubSChanne
 import static command_request.CommandRequestOuterClass.RequestType.PubSubSNumSub;
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
 import static command_request.CommandRequestOuterClass.RequestType.SPublish;
+import static command_request.CommandRequestOuterClass.RequestType.ScriptExists;
+import static command_request.CommandRequestOuterClass.RequestType.ScriptFlush;
+import static command_request.CommandRequestOuterClass.RequestType.ScriptKill;
 import static command_request.CommandRequestOuterClass.RequestType.Sort;
 import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
 import static command_request.CommandRequestOuterClass.RequestType.Time;
@@ -60,8 +63,13 @@ import command_request.CommandRequestOuterClass.CommandRequest;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
+import glide.api.models.Script;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.ScriptArgOptions;
+import glide.api.models.commands.ScriptArgOptionsGlideString;
+import glide.api.models.commands.ScriptOptions;
+import glide.api.models.commands.ScriptOptionsGlideString;
 import glide.api.models.commands.SortBaseOptions.Limit;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.SortOptionsBinary;
@@ -75,8 +83,10 @@ import glide.managers.CommandManager;
 import glide.managers.GlideExceptionCheckedFunction;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.BeforeEach;
@@ -3426,5 +3436,338 @@ public class GlideClusterClientTest {
                 mockResultCursor.getCursorHandle(),
                 ((CommandManager.ClusterScanCursorDetail) payload[0]).getCursorHandle());
         assertArrayEquals(new Object[] {gs("foo")}, (Object[]) payload[1]);
+    }
+
+    @SneakyThrows
+    @Test
+    public void invokeScript_returns_success() {
+        // setup
+        Script script = mock(Script.class);
+        String hash = UUID.randomUUID().toString();
+        when(script.getHash()).thenReturn(hash);
+        String payload = "hello";
+
+        CompletableFuture<Object> testResponse = new CompletableFuture<>();
+        testResponse.complete(payload);
+
+        // match on protobuf request
+        when(commandManager.submitScript(eq(script), eq(List.of()), eq(List.of()), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object> response = service.invokeScript(script);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(payload, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void invokeScript_with_ScriptOptions_returns_success() {
+        // setup
+        Script script = mock(Script.class);
+        String hash = UUID.randomUUID().toString();
+        when(script.getHash()).thenReturn(hash);
+        String payload = "hello";
+
+        ScriptOptions options =
+                ScriptOptions.builder().key("key1").key("key2").arg("arg1").arg("arg2").build();
+
+        CompletableFuture<Object> testResponse = new CompletableFuture<>();
+        testResponse.complete(payload);
+
+        // match on protobuf request
+        when(commandManager.submitScript(
+                        eq(script),
+                        eq(List.of(gs("key1"), gs("key2"))),
+                        eq(List.of(gs("arg1"), gs("arg2"))),
+                        any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object> response = service.invokeScript(script, options);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(payload, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void invokeScript_with_ScriptOptionsGlideString_returns_success() {
+        // setup
+        Script script = mock(Script.class);
+        String hash = UUID.randomUUID().toString();
+        when(script.getHash()).thenReturn(hash);
+        GlideString payload = gs("hello");
+
+        ScriptOptionsGlideString options =
+                ScriptOptionsGlideString.builder()
+                        .key(gs("key1"))
+                        .key(gs("key2"))
+                        .arg(gs("arg1"))
+                        .arg(gs("arg2"))
+                        .build();
+
+        CompletableFuture<Object> testResponse = new CompletableFuture<>();
+        testResponse.complete(payload);
+
+        // match on protobuf request
+        when(commandManager.submitScript(
+                        eq(script),
+                        eq(List.of(gs("key1"), gs("key2"))),
+                        eq(List.of(gs("arg1"), gs("arg2"))),
+                        any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object> response = service.invokeScript(script, options);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(payload, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void invokeScript_with_route_returns_success() {
+        // setup
+        Script script = mock(Script.class);
+        String hash = UUID.randomUUID().toString();
+        when(script.getHash()).thenReturn(hash);
+        String payload = "hello";
+        SingleNodeRoute route = RANDOM;
+
+        CompletableFuture<Object> testResponse = new CompletableFuture<>();
+        testResponse.complete(payload);
+
+        // match on protobuf request
+        when(commandManager.submitScript(eq(script), eq(List.of()), eq(route), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object> response = service.invokeScript(script, route);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(payload, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void invokeScript_with_route_args_returns_success() {
+        // setup
+        Script script = mock(Script.class);
+        String hash = UUID.randomUUID().toString();
+        when(script.getHash()).thenReturn(hash);
+        String payload = "hello";
+        SingleNodeRoute route = RANDOM;
+
+        ScriptArgOptions options = ScriptArgOptions.builder().arg("arg1").arg("arg2").build();
+
+        CompletableFuture<Object> testResponse = new CompletableFuture<>();
+        testResponse.complete(payload);
+
+        // match on protobuf request
+        when(commandManager.submitScript(
+                        eq(script), eq(List.of(gs("arg1"), gs("arg2"))), eq(route), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object> response = service.invokeScript(script, options, route);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(payload, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void invokeScriptBinary_with_route_args_returns_success() {
+        // setup
+        Script script = mock(Script.class);
+        String hash = UUID.randomUUID().toString();
+        when(script.getHash()).thenReturn(hash);
+        GlideString payload = gs("hello");
+        SingleNodeRoute route = RANDOM;
+
+        ScriptArgOptionsGlideString options =
+                ScriptArgOptionsGlideString.builder().arg(gs("arg1")).arg(gs("arg2")).build();
+
+        CompletableFuture<Object> testResponse = new CompletableFuture<>();
+        testResponse.complete(payload);
+
+        // match on protobuf request
+        when(commandManager.submitScript(
+                        eq(script), eq(List.of(gs("arg1"), gs("arg2"))), eq(route), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object> response = service.invokeScript(script, options, route);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(payload, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void scriptExists_returns_success() {
+        // setup
+        String hash = UUID.randomUUID().toString();
+        String[] sha1s = {hash};
+        Boolean[] value = {true};
+
+        CompletableFuture<Boolean[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Boolean[]>submitNewCommand(eq(ScriptExists), eq(sha1s), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean[]> response = service.scriptExists(sha1s);
+        Boolean[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void scriptExists_with_route_returns_success() {
+        // setup
+        String hash = UUID.randomUUID().toString();
+        String[] sha1s = {hash};
+        Boolean[] value = {true};
+
+        CompletableFuture<Boolean[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Boolean[]>submitNewCommand(eq(ScriptExists), eq(sha1s), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean[]> response = service.scriptExists(sha1s, RANDOM);
+        Boolean[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void scriptExists_binary_returns_success() {
+        // setup
+        GlideString hash = gs(UUID.randomUUID().toString());
+        GlideString[] sha1s = {hash};
+        Boolean[] value = {true};
+
+        CompletableFuture<Boolean[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Boolean[]>submitNewCommand(eq(ScriptExists), eq(sha1s), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean[]> response = service.scriptExists(sha1s);
+        Boolean[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void scriptExists_binary_with_route_returns_success() {
+        // setup
+        GlideString hash = gs(UUID.randomUUID().toString());
+        GlideString[] sha1s = {hash};
+        Boolean[] value = {true};
+
+        CompletableFuture<Boolean[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Boolean[]>submitNewCommand(eq(ScriptExists), eq(sha1s), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean[]> response = service.scriptExists(sha1s, RANDOM);
+        Boolean[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void scriptFlush_with_route_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(ScriptFlush), eq(new String[0]), eq(ALL_PRIMARIES), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.scriptFlush(ALL_PRIMARIES);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void scriptFlush_with_mode_and_route_returns_success() {
+        // setup
+        String[] args = new String[] {ASYNC.toString()};
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(ScriptFlush), eq(args), eq(ALL_PRIMARIES), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.scriptFlush(ASYNC, ALL_PRIMARIES);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void scriptKill_with_route_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(ScriptKill), eq(new String[0]), eq(ALL_PRIMARIES), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.scriptKill(ALL_PRIMARIES);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
     }
 }

@@ -46,6 +46,7 @@ import {
     generateLuaLibCode,
     getClientConfigurationOption,
     getFirstResult,
+    getServerVersion,
     intoArray,
     intoString,
     parseCommandLineArgs,
@@ -67,10 +68,12 @@ describe("GlideClusterClient", () => {
         // Connect to cluster or create a new one based on the parsed addresses
         cluster = clusterAddresses
             ? await ValkeyCluster.initFromExistingCluster(
+                  true,
                   parseEndpoints(clusterAddresses),
+                  getServerVersion,
               )
             : // setting replicaCount to 1 to facilitate tests routed to replicas
-              await ValkeyCluster.createCluster(true, 3, 1);
+              await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
     }, 20000);
 
     afterEach(async () => {
@@ -1488,6 +1491,67 @@ describe("GlideClusterClient", () => {
                             client.close();
                         }
                     });
+
+                    it(
+                        "invoke script with route invokeScriptWithRoute %p",
+                        async () => {
+                            const client =
+                                await GlideClusterClient.createClient(
+                                    getClientConfigurationOption(
+                                        cluster.getAddresses(),
+                                        protocol,
+                                    ),
+                                );
+                            const route: Routes = singleNodeRoute
+                                ? { type: "primarySlotKey", key: "1" }
+                                : "allPrimaries";
+
+                            try {
+                                const arg = uuidv4();
+                                const script = new Script(
+                                    Buffer.from("return {ARGV[1]}"),
+                                );
+                                let res = await client.invokeScriptWithRoute(
+                                    script,
+                                    { args: [Buffer.from(arg)], route },
+                                );
+
+                                if (singleNodeRoute) {
+                                    expect(res).toEqual([arg]);
+                                } else {
+                                    Object.values(
+                                        res as Record<string, GlideReturnType>,
+                                    ).forEach((value) =>
+                                        expect(value).toEqual([arg]),
+                                    );
+                                }
+
+                                res = await client.invokeScriptWithRoute(
+                                    script,
+                                    {
+                                        args: [arg],
+                                        route,
+                                        decoder: Decoder.Bytes,
+                                    },
+                                );
+
+                                if (singleNodeRoute) {
+                                    expect(res).toEqual([Buffer.from(arg)]);
+                                } else {
+                                    Object.values(
+                                        res as Record<string, GlideReturnType>,
+                                    ).forEach((value) =>
+                                        expect(value).toEqual([
+                                            Buffer.from(arg),
+                                        ]),
+                                    );
+                                }
+                            } finally {
+                                client.close();
+                            }
+                        },
+                        TIMEOUT,
+                    );
                 },
             );
             it(
