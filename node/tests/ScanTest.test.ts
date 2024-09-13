@@ -59,10 +59,15 @@ describe("Scan GlideClusterClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             // Iterate over all keys in the cluster
+            const [key1, key2, key3] = [
+                `key:${uuidv4()}`,
+                `key:${uuidv4()}`,
+                `key:${uuidv4()}`,
+            ];
             await client.mset([
-                { key: "key1", value: "value1" },
-                { key: "key2", value: "value2" },
-                { key: "key3", value: "value3" },
+                { key: key1, value: "value1" },
+                { key: key2, value: "value2" },
+                { key: key3, value: "value3" },
             ]);
             let cursor = new ClusterScanCursor();
             const allKeys: GlideString[] = [];
@@ -74,16 +79,13 @@ describe("Scan GlideClusterClient", () => {
             }
 
             expect(allKeys).toHaveLength(3);
-            expect(allKeys).toEqual(
-                expect.arrayContaining(["key1", "key2", "key3"]),
-            );
+            expect(allKeys).toEqual(expect.arrayContaining([key1, key2, key3]));
 
             // Iterate over keys matching a pattern
+            const [key4, key5] = ["notMykey", "somethingElse"];
             await client.mset([
-                { key: "key1", value: "value1" },
-                { key: "key2", value: "value2" },
-                { key: "notMykey", value: "value3" },
-                { key: "somethingElse", value: "value4" },
+                { key: key4, value: "value4" },
+                { key: key5, value: "value5" },
             ]);
             cursor = new ClusterScanCursor();
             const matchedKeys: GlideString[] = [];
@@ -97,16 +99,11 @@ describe("Scan GlideClusterClient", () => {
             }
 
             expect(matchedKeys).toEqual(
-                expect.arrayContaining(["key1", "key2", "key3", "notMykey"]),
+                expect.arrayContaining([key1, key2, key3, key4]),
             );
             expect(matchedKeys).not.toContain("somethingElse");
 
             // Iterate over keys of a specific type
-            await client.mset([
-                { key: "key1", value: "value1" },
-                { key: "key2", value: "value2" },
-                { key: "key3", value: "value3" },
-            ]);
             await client.sadd("thisIsASet", ["value4"]);
             cursor = new ClusterScanCursor();
             const stringKeys: GlideString[] = [];
@@ -119,7 +116,7 @@ describe("Scan GlideClusterClient", () => {
             }
 
             expect(stringKeys).toEqual(
-                expect.arrayContaining(["key1", "key2", "key3"]),
+                expect.arrayContaining([key1, key2, key3, key4, key5]),
             );
             expect(stringKeys).not.toContain("thisIsASet");
         },
@@ -386,16 +383,15 @@ describe("Scan GlideClient", () => {
     let cluster: ValkeyCluster;
     let client: GlideClient;
     beforeAll(async () => {
-        const clusterAddresses = parseCommandLineArgs()["cluster-endpoints"];
-        // Connect to cluster or create a new one based on the parsed addresses
-        cluster = clusterAddresses
+        const standaloneAddresses =
+            parseCommandLineArgs()["standalone-endpoints"];
+        cluster = standaloneAddresses
             ? await ValkeyCluster.initFromExistingCluster(
-                  true,
-                  parseEndpoints(clusterAddresses),
+                  false,
+                  parseEndpoints(standaloneAddresses),
                   getServerVersion,
               )
-            : // setting replicaCount to 1 to facilitate tests routed to replicas
-              await ValkeyCluster.createCluster(false, 3, 1, getServerVersion);
+            : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
     }, 20000);
 
     afterEach(async () => {
@@ -409,16 +405,21 @@ describe("Scan GlideClient", () => {
     });
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `GlideClient test basic cluster scan_%p`,
+        `GlideClient test basic scan_%p`,
         async (protocol) => {
             client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             // Iterate over all keys in the cluster
+            const [key1, key2, key3] = [
+                `key:${uuidv4()}`,
+                `key:${uuidv4()}`,
+                `key:${uuidv4()}`,
+            ];
             await client.mset([
-                { key: "key1", value: "value1" },
-                { key: "key2", value: "value2" },
-                { key: "key3", value: "value3" },
+                { key: key1, value: "value1" },
+                { key: key2, value: "value2" },
+                { key: key3, value: "value3" },
             ]);
             let cursor: GlideString = "0";
             const allKeys: GlideString[] = [];
@@ -430,16 +431,14 @@ describe("Scan GlideClient", () => {
             } while (cursor !== "0");
 
             expect(allKeys).toHaveLength(3);
-            expect(allKeys).toEqual(
-                expect.arrayContaining(["key1", "key2", "key3"]),
-            );
+            expect(allKeys).toEqual(expect.arrayContaining([key1, key2, key3]));
 
             // Iterate over keys matching a pattern
+            const key4 = "notMykey";
+            const key5 = "somethingElse";
             await client.mset([
-                { key: "key1", value: "value1" },
-                { key: "key2", value: "value2" },
-                { key: "notMykey", value: "value3" },
-                { key: "somethingElse", value: "value4" },
+                { key: key4, value: "value4" },
+                { key: key5, value: "value5" },
             ]);
             cursor = "0";
             const matchedKeys: GlideString[] = [];
@@ -453,16 +452,11 @@ describe("Scan GlideClient", () => {
             } while (cursor !== "0");
 
             expect(matchedKeys).toEqual(
-                expect.arrayContaining(["key1", "key2", "key3", "notMykey"]),
+                expect.arrayContaining([key1, key2, key3, key4]),
             );
             expect(matchedKeys).not.toContain("somethingElse");
 
             // Iterate over keys of a specific type
-            await client.mset([
-                { key: "key1", value: "value1" },
-                { key: "key2", value: "value2" },
-                { key: "key3", value: "value3" },
-            ]);
             await client.sadd("thisIsASet", ["value4"]);
             cursor = "0";
             const stringKeys: GlideString[] = [];
@@ -475,7 +469,7 @@ describe("Scan GlideClient", () => {
             } while (cursor !== "0");
 
             expect(stringKeys).toEqual(
-                expect.arrayContaining(["key1", "key2", "key3"]),
+                expect.arrayContaining([key1, key2, key3, key4, key5]),
             );
             expect(stringKeys).not.toContain("thisIsASet");
         },
