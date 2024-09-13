@@ -46,6 +46,7 @@ import {
     generateLuaLibCode,
     getClientConfigurationOption,
     getFirstResult,
+    getServerVersion,
     intoArray,
     intoString,
     parseCommandLineArgs,
@@ -67,10 +68,12 @@ describe("GlideClusterClient", () => {
         // Connect to cluster or create a new one based on the parsed addresses
         cluster = clusterAddresses
             ? await ValkeyCluster.initFromExistingCluster(
+                  true,
                   parseEndpoints(clusterAddresses),
+                  getServerVersion,
               )
             : // setting replicaCount to 1 to facilitate tests routed to replicas
-              await ValkeyCluster.createCluster(true, 3, 1);
+              await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
     }, 20000);
 
     afterEach(async () => {
