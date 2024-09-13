@@ -20,6 +20,8 @@ import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRout
  *   <li><code>FUNCTION FLUSH</code> command implemented by {@link
  *       GlideClient#functionFlush(FlushMode)}, {@link GlideClusterClient#functionFlush(FlushMode)},
  *       and {@link GlideClusterClient#functionFlush(FlushMode, Route)}.
+ *   <li><code>SCRIPT FLUSH</code> command implemented by {@link GlideClient#scriptFlush(FlushMode)}
+ *       and {@link GlideClusterClient#scriptFlush(FlushMode, Route)}
  * </ul>
  *
  * @see <a href="https://valkey.io/commands/flushall/">flushall</a>, <a
