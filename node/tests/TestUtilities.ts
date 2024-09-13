@@ -756,7 +756,7 @@ export async function transactionTest(
     }
 
     baseTransaction.randomKey();
-    responseData.push(["randomKey()", key1]);
+    responseData.push(["randomKey()", key1.toString()]);
     baseTransaction.getrange(key1, 0, -1);
     responseData.push(["getrange(key1, 0, -1)", "bar"]);
     baseTransaction.getdel(key1);
@@ -768,7 +768,7 @@ export async function transactionTest(
     baseTransaction.type(key1);
     responseData.push(["type(key1)", "string"]);
     baseTransaction.echo(value);
-    responseData.push(["echo(value)", value]);
+    responseData.push(["echo(value)", value.toString()]);
     baseTransaction.persist(key1);
     responseData.push(["persist(key1)", false]);
 
@@ -1298,10 +1298,12 @@ export async function transactionTest(
         [
             {
                 key: key9,
-                value: {
-                    key: "0-2",
-                    value: [["field", "value2"]],
-                },
+                value: [
+                    {
+                        key: "0-2",
+                        value: [["field", "value2"]],
+                    },
+                ],
             },
         ],
     ]);
