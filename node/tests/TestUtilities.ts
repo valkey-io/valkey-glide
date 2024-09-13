@@ -821,7 +821,7 @@ export async function transactionTest(
         });
         responseData.push([
             'hscan(key4, "0", {match: "*", count: 20, noValues:true})',
-            ["0", [field]],
+            ["0", [field.toString()]],
         ]);
     }
 
