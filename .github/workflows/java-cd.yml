@@ -224,15 +224,11 @@ jobs:
 
         runs-on: ${{ matrix.host.RUNNER }}
         steps:
-            - name: Start Redis server
-              run: |
-                  if [[ ${{ matrix.host.OS }} == ubuntu ]]; then
-                      sudo apt-get install redis
-                      sudo systemctl start redis
-                  else
-                    brew install redis
-                    brew services start redis
-                  fi
+            - name: Start Valkey server
+              uses: ./.github/actions/install-valkey
+              with:
+                engine-version: "7.2.5"
+                target: ${{ matrix.host.TARGET }}
 
             - uses: actions/checkout@v4
               with:
@@ -264,15 +260,6 @@ jobs:
                   export ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderValue="Bearer $(echo "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" | base64)"
                   export GLIDE_RELEASE_VERSION=${{ env.RELEASE_VERSION }}
                   ./gradlew :benchmarks:run --args="--minimal --clients glide"
-
-            - name: Stop Redis server
-              if: ${{ always() }}
-              run: |
-                  if [[ ${{ matrix.host.OS }} == ubuntu ]]; then
-                      sudo systemctl stop redis
-                  else
-                      brew services stop redis
-                  fi
 
     publish-release-to-maven:
         if: ${{ inputs.maven_publish == true || github.event_name == 'push' }}
