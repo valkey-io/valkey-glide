@@ -344,7 +344,7 @@ describe("GlideClusterClient", () => {
             const expectedRes = await transactionTest(
                 transaction,
                 cluster.getVersion(),
-                Decoder.String,
+                decoder,
             );
 
             if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
@@ -357,7 +357,9 @@ describe("GlideClusterClient", () => {
                 expectedRes.push(["pubsubShardNumSub()", []]);
             }
 
-            const result = await client.exec(transaction, { decoder });
+            const result = await client.exec(transaction, {
+                decoder: Decoder.String,
+            });
             validateTransactionResponse(result, expectedRes);
         },
         TIMEOUT,

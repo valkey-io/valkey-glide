@@ -283,10 +283,12 @@ describe("GlideClient", () => {
         const expectedRes = await transactionTest(
             transaction,
             cluster.getVersion(),
-            Decoder.String,
+            decoder,
         );
         transaction.select(0);
-        const result = await client.exec(transaction, { decoder });
+        const result = await client.exec(transaction, {
+            decoder: Decoder.String,
+        });
         expectedRes.push(["select(0)", "OK"]);
 
         validateTransactionResponse(result, expectedRes);
