@@ -11,7 +11,6 @@ use glide_core::errors::RequestErrorType;
 use glide_core::request_type::RequestType;
 use glide_core::ConnectionRequest;
 use protobuf::Message;
-use redis::FromRedisValue;
 use redis::{RedisResult, Value};
 use std::slice::from_raw_parts;
 use std::{
@@ -27,6 +26,7 @@ use tokio::runtime::Runtime;
 /// It will have one of the value populated depending on the return type of the command.
 ///
 /// The struct is freed by the external caller by using `free_command_response` to avoid memory leaks.
+/// TODO: Add a type enum to validate what type of response is being sent in the CommandResponse.
 #[repr(C)]
 #[derive(Derivative)]
 #[derivative(Debug, Default)]
@@ -42,14 +42,11 @@ pub struct CommandResponse {
     string_value: *mut c_char,
     string_value_len: c_long,
 
-    // Below three values are related to each other.
-    // `array_value` represents the array of strings.
-    // `array_elements_len` represents the length of each array element.
+    // Below two values are related to each other.
+    // `array_value` represents the array of CommandResponse.
     // `array_value_len` represents the length of the array.
     #[derivative(Default(value = "std::ptr::null_mut()"))]
-    array_value: *mut *mut c_char,
-    #[derivative(Default(value = "std::ptr::null_mut()"))]
-    array_elements_len: *mut c_long,
+    array_value: *mut CommandResponse,
     array_value_len: c_long,
 }
 
@@ -227,22 +224,27 @@ pub unsafe extern "C" fn free_connection_response(
 /// * `free_command_response` can only be called once per `CommandResponse`. Calling it twice is undefined behavior, since the address will be freed twice.
 /// * `command_response_ptr` must be obtained from the `CommandResponse` returned in [`SuccessCallback`] from [`command`].
 /// * `command_response_ptr` must be valid until `free_command_response` is called.
-/// * The contained `string_value` must be obtained from the `CommandResponse` returned in [`SuccessCallback`] from [`command`].
-/// * The contained `string_value` must be valid until `free_command_response` is called and it must outlive the `CommandResponse` that contains it.
-/// * The contained `array_elements_len` must be obtained from the `CommandResponse` returned in [`SuccessCallback`] from [`command`].
-/// * The contained `array_elements_len` must be valid until `free_command_response` is called and it must outlive the `CommandResponse` that contains it.
-/// * The contained `array_value` must be obtained from the `CommandResponse` returned in [`SuccessCallback`] from [`command`].
-/// * The contained `array_value` must be valid until `free_command_response` is called and it must outlive the `CommandResponse` that contains it.
 #[no_mangle]
 pub unsafe extern "C" fn free_command_response(command_response_ptr: *mut CommandResponse) {
     assert!(!command_response_ptr.is_null());
     let command_response = unsafe { Box::from_raw(command_response_ptr) };
+    free_command_response_elements(*command_response);
+}
+
+/// Frees the nested elements of `CommandResponse`.
+///
+/// # Safety
+///
+/// * `free_command_response_elements` can only be called once per `CommandResponse`. Calling it twice is undefined behavior, since the address will be freed twice.
+/// * The contained `string_value` must be obtained from the `CommandResponse` returned in [`SuccessCallback`] from [`command`].
+/// * The contained `string_value` must be valid until `free_command_response` is called and it must outlive the `CommandResponse` that contains it.
+/// * The contained `array_value` must be obtained from the `CommandResponse` returned in [`SuccessCallback`] from [`command`].
+/// * The contained `array_value` must be valid until `free_command_response` is called and it must outlive the `CommandResponse` that contains it.
+fn free_command_response_elements(command_response: CommandResponse) {
     let string_value = command_response.string_value;
     let string_value_len = command_response.string_value_len;
     let array_value = command_response.array_value;
     let array_value_len = command_response.array_value_len;
-    let array_elements_len = command_response.array_elements_len;
-    drop(command_response);
     if !string_value.is_null() {
         let len = string_value_len as usize;
         unsafe { Vec::from_raw_parts(string_value, len, len) };
@@ -250,12 +252,8 @@ pub unsafe extern "C" fn free_command_response(command_response_ptr: *mut Comman
     if !array_value.is_null() {
         let len = array_value_len as usize;
         let vec = unsafe { Vec::from_raw_parts(array_value, len, len) };
-        let elem_len = unsafe { Vec::from_raw_parts(array_elements_len, len, len) };
-        for i in 0..len {
-            if !vec[i].is_null() {
-                let e_len = elem_len[i] as usize;
-                unsafe { Vec::from_raw_parts(vec[i], e_len, e_len) };
-            }
+        for element in vec.into_iter() {
+            free_command_response_elements(element);
         }
     }
 }
@@ -304,6 +302,70 @@ fn convert_vec_to_pointer<T>(mut vec: Vec<T>) -> (*mut T, c_long) {
     let len = vec.len() as c_long;
     mem::forget(vec);
     (vec_ptr, len)
+}
+
+fn valkey_value_to_command_response(value: Value) -> RedisResult<Option<CommandResponse>> {
+    let mut command_response = CommandResponse::default();
+    let result: RedisResult<Option<CommandResponse>> = match value {
+        Value::Nil => Ok(None),
+        Value::SimpleString(text) => {
+            let vec = text.chars().map(|b| b as c_char).collect::<Vec<_>>();
+            let (vec_ptr, len) = convert_vec_to_pointer(vec);
+            command_response.string_value = vec_ptr;
+            command_response.string_value_len = len;
+            Ok(Some(command_response))
+        }
+        Value::BulkString(text) => {
+            let vec = text.iter().map(|b| *b as c_char).collect::<Vec<_>>();
+            let (vec_ptr, len) = convert_vec_to_pointer(vec);
+            command_response.string_value = vec_ptr;
+            command_response.string_value_len = len;
+            Ok(Some(command_response))
+        }
+        Value::VerbatimString { format: _, text } => {
+            let vec = text.chars().map(|b| b as c_char).collect::<Vec<_>>();
+            let (vec_ptr, len) = convert_vec_to_pointer(vec);
+            command_response.string_value = vec_ptr;
+            command_response.string_value_len = len;
+            Ok(Some(command_response))
+        }
+        Value::Okay => {
+            let vec = "OK".chars().map(|b| b as c_char).collect::<Vec<_>>();
+            let (vec_ptr, len) = convert_vec_to_pointer(vec);
+            command_response.string_value = vec_ptr;
+            command_response.string_value_len = len;
+            Ok(Some(command_response))
+        }
+        Value::Int(num) => {
+            command_response.int_value = num;
+            Ok(Some(command_response))
+        }
+        Value::Double(num) => {
+            command_response.float_value = num;
+            Ok(Some(command_response))
+        }
+        Value::Boolean(boolean) => {
+            command_response.bool_value = boolean;
+            Ok(Some(command_response))
+        }
+        Value::Array(array) => {
+            let vec: Vec<CommandResponse> = array
+                .into_iter()
+                .map(|v| {
+                    valkey_value_to_command_response(v)
+                        .expect("Value couldn't be converted to CommandResponse")
+                        .unwrap_or_default()
+                })
+                .collect();
+            let (vec_ptr, len) = convert_vec_to_pointer(vec);
+            command_response.array_value = vec_ptr;
+            command_response.array_value_len = len;
+            Ok(Some(command_response))
+        }
+        // TODO: Add support for other return types.
+        _ => todo!(),
+    };
+    result
 }
 
 // TODO: Finish documentation
@@ -358,79 +420,7 @@ pub unsafe extern "C" fn command(
             }
         };
 
-        let mut command_response = CommandResponse::default();
-        let result: RedisResult<Option<CommandResponse>> = match value {
-            Value::Nil => Ok(None),
-            Value::SimpleString(text) => {
-                let vec = text.chars().map(|b| b as c_char).collect::<Vec<_>>();
-                let (vec_ptr, len) = convert_vec_to_pointer(vec);
-                command_response.string_value = vec_ptr;
-                command_response.string_value_len = len;
-                Ok(Some(command_response))
-            }
-            Value::BulkString(text) => {
-                let vec = text.iter().map(|b| *b as c_char).collect::<Vec<_>>();
-                let (vec_ptr, len) = convert_vec_to_pointer(vec);
-                command_response.string_value = vec_ptr;
-                command_response.string_value_len = len;
-                Ok(Some(command_response))
-            }
-            Value::VerbatimString { format: _, text } => {
-                let vec = text.chars().map(|b| b as c_char).collect::<Vec<_>>();
-                let (vec_ptr, len) = convert_vec_to_pointer(vec);
-                command_response.string_value = vec_ptr;
-                command_response.string_value_len = len;
-                Ok(Some(command_response))
-            }
-            Value::Okay => {
-                let vec = "OK".chars().map(|b| b as c_char).collect::<Vec<_>>();
-                let (vec_ptr, len) = convert_vec_to_pointer(vec);
-                command_response.string_value = vec_ptr;
-                command_response.string_value_len = len;
-                Ok(Some(command_response))
-            }
-            Value::Int(num) => {
-                command_response.int_value = num;
-                Ok(Some(command_response))
-            }
-            Value::Double(num) => {
-                command_response.float_value = num;
-                Ok(Some(command_response))
-            }
-            Value::Boolean(boolean) => {
-                command_response.bool_value = boolean;
-                Ok(Some(command_response))
-            }
-            Value::Array(array) => {
-                let len = array.len();
-                let mut vec_elements_len: Vec<c_long> = Vec::<c_long>::with_capacity(len);
-                let vec = array
-                    .iter()
-                    .map(|value| {
-                        if *value == Value::Nil {
-                            vec_elements_len.push(0);
-                            return std::ptr::null_mut();
-                        }
-                        let res = <Vec<u8>>::from_redis_value(value)
-                            .expect("Couldn't read bytes from RedisValue")
-                            .into_iter()
-                            .map(|b| b as c_char)
-                            .collect::<Vec<_>>();
-                        let (res_ptr, res_len) = convert_vec_to_pointer(res);
-                        vec_elements_len.push(res_len);
-                        res_ptr
-                    })
-                    .collect::<Vec<_>>();
-                let (vec_ptr, len) = convert_vec_to_pointer(vec);
-                let (vec_elements_len_ptr, _) = convert_vec_to_pointer(vec_elements_len);
-                command_response.array_value = vec_ptr;
-                command_response.array_value_len = len;
-                command_response.array_elements_len = vec_elements_len_ptr;
-                Ok(Some(command_response))
-            }
-            // TODO: Add support for other return types.
-            _ => todo!(),
-        };
+        let result: RedisResult<Option<CommandResponse>> = valkey_value_to_command_response(value);
 
         unsafe {
             match result {
