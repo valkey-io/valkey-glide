@@ -136,6 +136,9 @@ import static command_request.CommandRequestOuterClass.RequestType.SScan;
 import static command_request.CommandRequestOuterClass.RequestType.SUnion;
 import static command_request.CommandRequestOuterClass.RequestType.SUnionStore;
 import static command_request.CommandRequestOuterClass.RequestType.Scan;
+import static command_request.CommandRequestOuterClass.RequestType.ScriptExists;
+import static command_request.CommandRequestOuterClass.RequestType.ScriptFlush;
+import static command_request.CommandRequestOuterClass.RequestType.ScriptKill;
 import static command_request.CommandRequestOuterClass.RequestType.ScriptShow;
 import static command_request.CommandRequestOuterClass.RequestType.Select;
 import static command_request.CommandRequestOuterClass.RequestType.SetBit;
@@ -15671,5 +15674,114 @@ public class GlideClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(summary, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void scriptExists_returns_success() {
+        // setup
+        String hash = UUID.randomUUID().toString();
+        String[] sha1s = {hash};
+        Boolean[] value = {true};
+
+        CompletableFuture<Boolean[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Boolean[]>submitNewCommand(eq(ScriptExists), eq(sha1s), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean[]> response = service.scriptExists(sha1s);
+        Boolean[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void scriptExists_binary_returns_success() {
+        // setup
+        GlideString hash = gs(UUID.randomUUID().toString());
+        GlideString[] sha1s = {hash};
+        Boolean[] value = {true};
+
+        CompletableFuture<Boolean[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Boolean[]>submitNewCommand(eq(ScriptExists), eq(sha1s), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean[]> response = service.scriptExists(sha1s);
+        Boolean[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void scriptFlush_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(ScriptFlush), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.scriptFlush();
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void scriptFlush_with_mode_returns_success() {
+        // setup
+        String[] args = new String[] {ASYNC.toString()};
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(ScriptFlush), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.scriptFlush(ASYNC);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void scriptKill_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(ScriptKill), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.scriptKill();
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
     }
 }

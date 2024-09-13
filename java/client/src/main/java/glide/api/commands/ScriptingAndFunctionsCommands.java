@@ -413,4 +413,80 @@ public interface ScriptingAndFunctionsCommands {
      * }</pre>
      */
     CompletableFuture<Map<String, Map<GlideString, Map<GlideString, Object>>>> functionStatsBinary();
+
+    /**
+     * Checks existence of scripts in the script cache by their SHA1 digest.
+     *
+     * @see <a href="https://valkey.io/commands/script-exists">SCRIPT EXISTS</a> for details.
+     * @param sha1s The Lua script to execute.
+     * @return An array of <code>boolean</code> values indicating the existence of each script.
+     * @example
+     *     <pre>{@code
+     * try(Script luaScript = new Script("return { KEYS[1], ARGV[1] }", true)) {
+     *     client.invokeScript(luaScript).get();
+     *     Boolean[] result = client.scriptExists(new String[]{luaScript.getHash()});
+     *     assert result[0].equals(true);
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Boolean[]> scriptExists(String[] sha1s);
+
+    /**
+     * Checks existence of scripts in the script cache by their SHA1 digest.
+     *
+     * @see <a href="https://valkey.io/commands/script-exists">SCRIPT EXISTS</a> for details.
+     * @param sha1s The Lua script to execute.
+     * @return An array of <code>boolean</code> values indicating the existence of each script.
+     * @example
+     *     <pre>{@code
+     * try(Script luaScript = new Script(gs("return { KEYS[1], ARGV[1] }", true))) {
+     *     client.invokeScript(luaScript).get();
+     *     Boolean[] result = client.scriptExists(new String[]{luaScript.getHash()});
+     *     assert result[0].equals(true);
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Boolean[]> scriptExists(GlideString[] sha1s);
+
+    /**
+     * Flushes the Lua scripts cache.
+     *
+     * @see <a href="https://valkey.io/commands/script-flush">SCRIPT FLUSH</a> for details.
+     * @return A simple "OK" response.
+     * @example
+     *     <pre>{@code
+     * String result = client.scriptFlush();
+     * assert "OK".equals(result);
+     * }</pre>
+     */
+    CompletableFuture<String> scriptFlush();
+
+    /**
+     * Flushes the Lua scripts cache.
+     *
+     * @see <a href="https://valkey.io/commands/script-flush">SCRIPT FLUSH</a> for details.
+     * @param flushMode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
+     *     FlushMode#ASYNC}.
+     * @return A simple "OK" response.
+     * @example
+     *     <pre>{@code
+     * String result = client.scriptFlush(ASYNC);
+     * assert "OK".equals(result);
+     * }</pre>
+     */
+    CompletableFuture<String> scriptFlush(FlushMode flushMode);
+
+    /**
+     * Kill the currently executing Lua script, assuming no write operation was yet performed by the
+     * script.
+     *
+     * @see <a href="https://valkey.io/commands/script-kill">SCRIPT KILL</a> for details.
+     * @return A simple "OK" response.
+     * @example
+     *     <pre>{@code
+     * String result = client.scriptKill();
+     * assert "OK".equals(result);
+     * }</pre>
+     */
+    CompletableFuture<String> scriptKill();
 }
