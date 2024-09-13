@@ -3081,7 +3081,8 @@ export class BaseClient {
      * @remarks Since Valkey version 7.0.0.
      *
      * @param keys - The keys of the sets.
-     * @param limit - The limit for the intersection cardinality value. If not specified, or set to `0`, no limit is used.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `limit`: the limit for the intersection cardinality value. If not specified, or set to `0`, no limit is used.
      * @returns The cardinality of the intersection result. If one or more sets do not exist, `0` is returned.
      *
      * @example
@@ -3091,15 +3092,15 @@ export class BaseClient {
      * const result1 = await client.sintercard(["set1", "set2"]);
      * console.log(result1); // Output: 2 - The intersection of "set1" and "set2" contains 2 elements: "b" and "c".
      *
-     * const result2 = await client.sintercard(["set1", "set2"], 1);
+     * const result2 = await client.sintercard(["set1", "set2"], { limit: 1 });
      * console.log(result2); // Output: 1 - The computation stops early as the intersection cardinality reaches the limit of 1.
      * ```
      */
     public async sintercard(
         keys: GlideString[],
-        limit?: number,
+        options?: { limit?: number },
     ): Promise<number> {
-        return this.createWritePromise(createSInterCard(keys, limit));
+        return this.createWritePromise(createSInterCard(keys, options?.limit));
     }
 
     /**
@@ -3470,7 +3471,8 @@ export class BaseClient {
      *
      * @param key - The key to set timeout on it.
      * @param seconds - The timeout in seconds.
-     * @param option - (Optional) The expire option - see {@link ExpireOptions}.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `expireOption`: the expire option - see {@link ExpireOptions}.
      * @returns `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
      * or operation skipped due to the provided arguments.
      *
@@ -3484,16 +3486,18 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of the expire method with exisiting expiry
-     * const result = await client.expire("my_key", 60, ExpireOptions.HasNoExpiry);
+     * const result = await client.expire("my_key", 60, { expireOption: ExpireOptions.HasNoExpiry });
      * console.log(result); // Output: false - Indicates that "my_key" has an existing expiry.
      * ```
      */
     public async expire(
         key: GlideString,
         seconds: number,
-        option?: ExpireOptions,
+        options?: { expireOption?: ExpireOptions },
     ): Promise<boolean> {
-        return this.createWritePromise(createExpire(key, seconds, option));
+        return this.createWritePromise(
+            createExpire(key, seconds, options?.expireOption),
+        );
     }
 
     /**
@@ -3506,24 +3510,25 @@ export class BaseClient {
      *
      * @param key - The key to set timeout on it.
      * @param unixSeconds - The timeout in an absolute Unix timestamp.
-     * @param option - (Optional) The expire option - see {@link ExpireOptions}.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `expireOption`: the expire option - see {@link ExpireOptions}.
      * @returns `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
      * or operation skipped due to the provided arguments.
      *
      * @example
      * ```typescript
      * // Example usage of the expireAt method on a key with no previous expiry
-     * const result = await client.expireAt("my_key", 1672531200, ExpireOptions.HasNoExpiry);
+     * const result = await client.expireAt("my_key", 1672531200, { expireOption: ExpireOptions.HasNoExpiry });
      * console.log(result); // Output: true - Indicates that the expiration time for "my_key" was successfully set.
      * ```
      */
     public async expireAt(
         key: GlideString,
         unixSeconds: number,
-        option?: ExpireOptions,
+        options?: { expireOption?: ExpireOptions },
     ): Promise<boolean> {
         return this.createWritePromise(
-            createExpireAt(key, unixSeconds, option),
+            createExpireAt(key, unixSeconds, options?.expireOption),
         );
     }
 
@@ -3565,24 +3570,25 @@ export class BaseClient {
      *
      * @param key - The key to set timeout on it.
      * @param milliseconds - The timeout in milliseconds.
-     * @param option - (Optional) The expire option - see {@link ExpireOptions}.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `expireOption`: the expire option - see {@link ExpireOptions}.
      * @returns `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
      * or operation skipped due to the provided arguments.
      *
      * @example
      * ```typescript
      * // Example usage of the pexpire method on a key with no previous expiry
-     * const result = await client.pexpire("my_key", 60000, ExpireOptions.HasNoExpiry);
+     * const result = await client.pexpire("my_key", 60000, { expireOption: ExpireOptions.HasNoExpiry });
      * console.log(result); // Output: true - Indicates that a timeout of 60,000 milliseconds has been set for "my_key".
      * ```
      */
     public async pexpire(
         key: GlideString,
         milliseconds: number,
-        option?: ExpireOptions,
+        options?: { expireOption?: ExpireOptions },
     ): Promise<boolean> {
         return this.createWritePromise(
-            createPExpire(key, milliseconds, option),
+            createPExpire(key, milliseconds, options?.expireOption),
         );
     }
 
@@ -3596,24 +3602,25 @@ export class BaseClient {
      *
      * @param key - The key to set timeout on it.
      * @param unixMilliseconds - The timeout in an absolute Unix timestamp.
-     * @param option - (Optional) The expire option - see {@link ExpireOptions}.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `expireOption`: the expire option - see {@link ExpireOptions}.
      * @returns `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
      * or operation skipped due to the provided arguments.
      *
      * @example
      * ```typescript
      * // Example usage of the pexpireAt method on a key with no previous expiry
-     * const result = await client.pexpireAt("my_key", 1672531200000, ExpireOptions.HasNoExpiry);
+     * const result = await client.pexpireAt("my_key", 1672531200000, { expireOption: ExpireOptions.HasNoExpiry });
      * console.log(result); // Output: true - Indicates that the expiration time for "my_key" was successfully set.
      * ```
      */
     public async pexpireAt(
         key: GlideString,
         unixMilliseconds: number,
-        option?: ExpireOptions,
+        options?: { expireOption?: ExpireOptions },
     ): Promise<number> {
         return this.createWritePromise(
-            createPExpireAt(key, unixMilliseconds, option),
+            createPExpireAt(key, unixMilliseconds, options?.expireOption),
         );
     }
 
@@ -3991,21 +3998,21 @@ export class BaseClient {
      * @remarks Since Valkey version 7.0.0.
      *
      * @param keys - The keys of the sorted sets to intersect.
-     * @param limit - An optional argument that can be used to specify a maximum number for the
-     * intersection cardinality. If limit is not supplied, or if it is set to `0`, there will be no limit.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `limit`: the limit for the intersection cardinality value. If not specified, or set to `0`, no limit is used.
      * @returns The cardinality of the intersection of the given sorted sets.
      *
      * @example
      * ```typescript
-     * const cardinality = await client.zintercard(["key1", "key2"], 10);
+     * const cardinality = await client.zintercard(["key1", "key2"], { limit: 10 });
      * console.log(cardinality); // Output: 3 - The intersection of the sorted sets at "key1" and "key2" has a cardinality of 3.
      * ```
      */
     public async zintercard(
         keys: GlideString[],
-        limit?: number,
+        options?: { limit?: number },
     ): Promise<number> {
-        return this.createWritePromise(createZInterCard(keys, limit));
+        return this.createWritePromise(createZInterCard(keys, options?.limit));
     }
 
     /**
@@ -4152,7 +4159,9 @@ export class BaseClient {
      * @param keys - The keys of the sorted sets with possible formats:
      *  - `GlideString[]` - for keys only.
      *  - `KeyWeight[]` - for weighted keys with their score multipliers.
-     * @param aggregationType - Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `aggregationType`: the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
+     *   If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
      * @returns The number of elements in the resulting sorted set stored at `destination`.
      *
      * @example
@@ -4170,7 +4179,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * // use `zunionstore` with default weights
-     * console.log(await client.zunionstore("my_sorted_set", ["key1", "key2"], AggregationType.MAX))
+     * console.log(await client.zunionstore("my_sorted_set", ["key1", "key2"], { aggregationType: AggregationType.MAX }))
      * // Output: 2 - Indicates that the sorted set "my_sorted_set" contains two elements, and each score is the maximum score between the sets.
      * console.log(await client.zrangeWithScores("my_sorted_set", {start: 0, stop: -1}))
      * // Output: {'member1': 10.5, 'member2': 8.2} - "member1" is now stored in "my_sorted_set" with score of 10.5 and "member2" with score of 8.2.
@@ -4186,10 +4195,10 @@ export class BaseClient {
     public async zunionstore(
         destination: GlideString,
         keys: GlideString[] | KeyWeight[],
-        aggregationType?: AggregationType,
+        options?: { aggregationType?: AggregationType },
     ): Promise<number> {
         return this.createWritePromise(
-            createZUnionStore(destination, keys, aggregationType),
+            createZUnionStore(destination, keys, options?.aggregationType),
         );
     }
 
@@ -4409,8 +4418,9 @@ export class BaseClient {
      * @param keys - The keys of the sorted sets with possible formats:
      *  - `GlideString[]` - for keys only.
      *  - `KeyWeight[]` - for weighted keys with score multipliers.
-     * @param aggregationType - (Optional) Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
-     * If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `aggregationType`: the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
+     *   If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
      * @returns The number of elements in the resulting sorted set stored at `destination`.
      *
      * @example
@@ -4425,7 +4435,7 @@ export class BaseClient {
      * // Output: {'member1': 20} - "member1" is now stored in "my_sorted_set" with score of 20.
      *
      * // use `zinterstore` with default weights
-     * console.log(await client.zinterstore("my_sorted_set", ["key1", "key2"] , AggregationType.MAX))
+     * console.log(await client.zinterstore("my_sorted_set", ["key1", "key2"] , { aggregationType: AggregationType.MAX }))
      * // Output: 1 - Indicates that the sorted set "my_sorted_set" contains one element, and it's score is the maximum score between the sets.
      * console.log(await client.zrangeWithScores("my_sorted_set", {start: 0, end: -1}))
      * // Output: {'member1': 10.5} - "member1" is now stored in "my_sorted_set" with score of 10.5.
@@ -4434,10 +4444,10 @@ export class BaseClient {
     public async zinterstore(
         destination: GlideString,
         keys: GlideString[] | KeyWeight[],
-        aggregationType?: AggregationType,
+        options?: { aggregationType?: AggregationType },
     ): Promise<number> {
         return this.createWritePromise(
-            createZInterstore(destination, keys, aggregationType),
+            createZInterstore(destination, keys, options?.aggregationType),
         );
     }
 
@@ -5212,7 +5222,7 @@ export class BaseClient {
      * // Output is 2 since the stream marked 2 entries as deleted.
      * ```
      */
-    public async xdel(key: GlideString, ids: GlideString[]): Promise<number> {
+    public async xdel(key: GlideString, ids: string[]): Promise<number> {
         return this.createWritePromise(createXDel(key, ids));
     }
 
@@ -5264,7 +5274,7 @@ export class BaseClient {
      * ```
      */
     public async xread(
-        keys_and_ids: Record<string, GlideString> | GlideRecord<GlideString>,
+        keys_and_ids: Record<string, string> | GlideRecord<string>,
         options?: StreamReadOptions & DecoderOption,
     ): Promise<GlideRecord<StreamEntryDataType> | null> {
         return this.createWritePromise<GlideRecord<
@@ -5325,7 +5335,7 @@ export class BaseClient {
     public async xreadgroup(
         group: GlideString,
         consumer: GlideString,
-        keys_and_ids: Record<string, GlideString> | GlideRecord<GlideString>,
+        keys_and_ids: Record<string, string> | GlideRecord<string>,
         options?: StreamReadGroupOptions & DecoderOption,
     ): Promise<GlideRecord<
         Record<string, [GlideString, GlideString][] | null>
@@ -5551,7 +5561,7 @@ export class BaseClient {
         group: GlideString,
         consumer: GlideString,
         minIdleTime: number,
-        ids: GlideString[],
+        ids: string[],
         options?: StreamClaimOptions & DecoderOption,
     ): Promise<StreamEntryDataType> {
         return this.createWritePromise<
@@ -5588,7 +5598,7 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * const result = await client.xautoclaim("myStream", "myGroup", "myConsumer", 42, "0-0", 25);
+     * const result = await client.xautoclaim("myStream", "myGroup", "myConsumer", 42, "0-0", { count: 25 });
      * console.log(result); // Output:
      * // [
      * //     "1609338788321-0",                // value to be used as `start` argument
@@ -5611,7 +5621,7 @@ export class BaseClient {
         group: GlideString,
         consumer: GlideString,
         minIdleTime: number,
-        start: GlideString,
+        start: string,
         options?: { count?: number } & DecoderOption,
     ): Promise<[GlideString, StreamEntryDataType, GlideString[]?]> {
         return this.createWritePromise<
@@ -5649,7 +5659,8 @@ export class BaseClient {
      * @param minIdleTime - The minimum idle time for the message to be claimed.
      * @param start - Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
-     * @param count - (Optional) Limits the number of claimed entries to the specified value.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `count`: limits the number of claimed entries to the specified value.
      * @returns An `array` containing the following elements:
      *   - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
      *     equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
@@ -5661,7 +5672,7 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * const result = await client.xautoclaim("myStream", "myGroup", "myConsumer", 42, "0-0", 25);
+     * const result = await client.xautoclaim("myStream", "myGroup", "myConsumer", 42, "0-0", { count: 25 });
      * console.log(result); // Output:
      * // [
      * //     "1609338788321-0",                // value to be used as `start` argument
@@ -5678,12 +5689,12 @@ export class BaseClient {
      * ```
      */
     public async xautoclaimJustId(
-        key: string,
-        group: string,
-        consumer: string,
+        key: GlideString,
+        group: GlideString,
+        consumer: GlideString,
         minIdleTime: number,
         start: string,
-        count?: number,
+        options?: { count?: number },
     ): Promise<[string, string[], string[]?]> {
         return this.createWritePromise(
             createXAutoClaim(
@@ -5692,9 +5703,10 @@ export class BaseClient {
                 consumer,
                 minIdleTime,
                 start,
-                count,
+                options?.count,
                 true,
             ),
+            { decoder: Decoder.String },
         );
     }
 
@@ -5720,15 +5732,16 @@ export class BaseClient {
      * ```
      */
     public async xclaimJustId(
-        key: string,
-        group: string,
-        consumer: string,
+        key: GlideString,
+        group: GlideString,
+        consumer: GlideString,
         minIdleTime: number,
         ids: string[],
         options?: StreamClaimOptions,
     ): Promise<string[]> {
         return this.createWritePromise(
             createXClaim(key, group, consumer, minIdleTime, ids, options, true),
+            { decoder: Decoder.String },
         );
     }
 
@@ -5752,7 +5765,7 @@ export class BaseClient {
     public async xgroupCreate(
         key: GlideString,
         groupName: GlideString,
-        id: GlideString,
+        id: string,
         options?: StreamGroupOptions,
     ): Promise<"OK"> {
         return this.createWritePromise(
@@ -5951,7 +5964,7 @@ export class BaseClient {
     public async xack(
         key: GlideString,
         group: GlideString,
-        ids: GlideString[],
+        ids: string[],
     ): Promise<number> {
         return this.createWritePromise(createXAck(key, group, ids));
     }
@@ -5963,28 +5976,26 @@ export class BaseClient {
      *
      * @param key - The key of the stream.
      * @param groupName - The consumer group name.
-     * @param id - The stream entry ID that should be set as the last delivered ID for the consumer
-     *     group.
-     * @param entriesRead - (Optional) A value representing the number of stream entries already read by the group.
+     * @param id - The stream entry ID that should be set as the last delivered ID for the consumer group.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `entriesRead`: the number of stream entries already read by the group.
      *     This option can only be specified if you are using Valkey version 7.0.0 or above.
      * @returns `"OK"`.
      *
      * * @example
      * ```typescript
-     * console.log(await client.xgroupSetId("mystream", "mygroup", "0", 1)); // Output is "OK"
+     * console.log(await client.xgroupSetId("mystream", "mygroup", "0", { entriesRead: 1 })); // Output is "OK"
      * ```
      */
     public async xgroupSetId(
         key: GlideString,
         groupName: GlideString,
-        id: GlideString,
-        entriesRead?: number,
+        id: string,
+        options?: { entriesRead?: number },
     ): Promise<"OK"> {
         return this.createWritePromise(
-            createXGroupSetid(key, groupName, id, entriesRead),
-            {
-                decoder: Decoder.String,
-            },
+            createXGroupSetid(key, groupName, id, options?.entriesRead),
+            { decoder: Decoder.String },
         );
     }
 
@@ -6890,13 +6901,15 @@ export class BaseClient {
      * @param key - The key of the sorted set.
      * @param member1 - The name of the first member.
      * @param member2 - The name of the second member.
-     * @param geoUnit - (Optional) The unit of distance measurement - see {@link GeoUnit}. If not specified, the {@link GeoUnit.METERS} is used as a default unit.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `unit`: the unit of distance measurement - see {@link GeoUnit}.
+     *   If not specified, the {@link GeoUnit.METERS} is used as a default unit.
      * @returns The distance between `member1` and `member2`. Returns `null`, if one or both members do not exist,
      *     or if the key does not exist.
      *
      * @example
      * ```typescript
-     * const result = await client.geodist("mySortedSet", "Place1", "Place2", GeoUnit.KILOMETERS);
+     * const result = await client.geodist("mySortedSet", "Place1", "Place2", { unit: GeoUnit.KILOMETERS });
      * console.log(num); // Output: the distance between Place1 and Place2.
      * ```
      */
@@ -6904,10 +6917,10 @@ export class BaseClient {
         key: GlideString,
         member1: GlideString,
         member2: GlideString,
-        geoUnit?: GeoUnit,
+        options?: { unit?: GeoUnit },
     ): Promise<number | null> {
         return this.createWritePromise(
-            createGeoDist(key, member1, member2, geoUnit),
+            createGeoDist(key, member1, member2, options?.unit),
         );
     }
 

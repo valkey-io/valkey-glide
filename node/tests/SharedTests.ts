@@ -3092,12 +3092,14 @@ export function runBaseTests(config: {
 
                 // returns limit as cardinality when the limit is reached partway through the computation
                 const limit = 2;
-                expect(await client.sintercard([key1, key2], limit)).toEqual(
-                    limit,
-                );
+                expect(
+                    await client.sintercard([key1, key2], { limit }),
+                ).toEqual(limit);
 
                 // returns actual cardinality if limit is higher
-                expect(await client.sintercard([key1, key2], 4)).toEqual(3);
+                expect(
+                    await client.sintercard([key1, key2], { limit: 4 }),
+                ).toEqual(3);
 
                 // one of the keys is empty, intersection is empty, cardinality equals 0
                 expect(await client.sintercard([key1, nonExistingKey])).toEqual(
@@ -3108,10 +3110,9 @@ export function runBaseTests(config: {
                     await client.sintercard([nonExistingKey, nonExistingKey]),
                 ).toEqual(0);
                 expect(
-                    await client.sintercard(
-                        [nonExistingKey, nonExistingKey],
-                        2,
-                    ),
+                    await client.sintercard([nonExistingKey, nonExistingKey], {
+                        limit: 2,
+                    }),
                 ).toEqual(0);
 
                 // with keys as binary buffers
@@ -3799,11 +3800,9 @@ export function runBaseTests(config: {
                     ).toEqual(true);
                 } else {
                     expect(
-                        await client.pexpire(
-                            Buffer.from(key),
-                            10000,
-                            ExpireOptions.HasNoExpiry,
-                        ),
+                        await client.pexpire(Buffer.from(key), 10000, {
+                            expireOption: ExpireOptions.HasNoExpiry,
+                        }),
                     ).toEqual(true);
                 }
 
@@ -3818,11 +3817,9 @@ export function runBaseTests(config: {
                     );
                 } else {
                     expect(
-                        await client.expire(
-                            Buffer.from(key),
-                            15,
-                            ExpireOptions.HasExistingExpiry,
-                        ),
+                        await client.expire(Buffer.from(key), 15, {
+                            expireOption: ExpireOptions.HasExistingExpiry,
+                        }),
                     ).toEqual(true);
                     expect(await client.expiretime(key)).toBeGreaterThan(
                         Math.floor(Date.now() / 1000),
@@ -3873,7 +3870,10 @@ export function runBaseTests(config: {
                         await client.expireAt(
                             Buffer.from(key),
                             Math.floor(Date.now() / 1000) + 50,
-                            ExpireOptions.NewExpiryGreaterThanCurrent,
+                            {
+                                expireOption:
+                                    ExpireOptions.NewExpiryGreaterThanCurrent,
+                            },
                         ),
                     ).toEqual(true);
                 }
@@ -3885,18 +3885,16 @@ export function runBaseTests(config: {
 
                 if (!versionLessThan) {
                     expect(
-                        await client.pexpireAt(
-                            key,
-                            Date.now() + 50000,
-                            ExpireOptions.HasExistingExpiry,
-                        ),
+                        await client.pexpireAt(key, Date.now() + 50000, {
+                            expireOption: ExpireOptions.HasExistingExpiry,
+                        }),
                     ).toEqual(false);
                     // test Buffer input argument
                     expect(
                         await client.pexpireAt(
                             Buffer.from(key),
                             Date.now() + 50000,
-                            ExpireOptions.HasExistingExpiry,
+                            { expireOption: ExpireOptions.HasExistingExpiry },
                         ),
                     ).toEqual(false);
                 }
@@ -4379,16 +4377,22 @@ export function runBaseTests(config: {
                     0,
                 );
 
-                expect(await client.zintercard([key1, key2], 0)).toEqual(2);
-                expect(await client.zintercard([key1, key2], 1)).toEqual(1);
-                expect(await client.zintercard([key1, key2], 2)).toEqual(2);
+                expect(
+                    await client.zintercard([key1, key2], { limit: 0 }),
+                ).toEqual(2);
+                expect(
+                    await client.zintercard([key1, key2], { limit: 1 }),
+                ).toEqual(1);
+                expect(
+                    await client.zintercard([key1, key2], { limit: 2 }),
+                ).toEqual(2);
 
                 // invalid argument - key list must not be empty
                 await expect(client.zintercard([])).rejects.toThrow();
 
                 // invalid argument - limit must be non-negative
                 await expect(
-                    client.zintercard([key1, key2], -1),
+                    client.zintercard([key1, key2], { limit: -1 }),
                 ).rejects.toThrow();
 
                 // key exists, but it is not a sorted set
@@ -4623,7 +4627,9 @@ export function runBaseTests(config: {
 
         // Union results are aggregated by the MAX score of elements
         expect(
-            await client.zunionstore(key3, [key1, Buffer.from(key2)], "MAX"),
+            await client.zunionstore(key3, [key1, Buffer.from(key2)], {
+                aggregationType: "MAX",
+            }),
         ).toEqual(3);
         const zunionstoreMapMax = await client.zrangeWithScores(key3, range);
         const expectedMapMax = {
@@ -4653,7 +4659,9 @@ export function runBaseTests(config: {
 
         // Union results are aggregated by the MIN score of elements
         expect(
-            await client.zunionstore(Buffer.from(key3), [key1, key2], "MIN"),
+            await client.zunionstore(Buffer.from(key3), [key1, key2], {
+                aggregationType: "MIN",
+            }),
         ).toEqual(3);
         const zunionstoreMapMin = await client.zrangeWithScores(key3, range);
         const expectedMapMin = {
@@ -4682,7 +4690,11 @@ export function runBaseTests(config: {
         expect(await client.zadd(key2, membersScores2)).toEqual(3);
 
         // Union results are aggregated by the SUM score of elements
-        expect(await client.zunionstore(key3, [key1, key2], "SUM")).toEqual(3);
+        expect(
+            await client.zunionstore(key3, [key1, key2], {
+                aggregationType: "SUM",
+            }),
+        ).toEqual(3);
         const zunionstoreMapSum = await client.zrangeWithScores(key3, range);
         const expectedMapSum = {
             one: 2.5,
@@ -4743,7 +4755,7 @@ export function runBaseTests(config: {
                     [key1, 2.0],
                     [Buffer.from(key2), 2.0],
                 ],
-                "SUM",
+                { aggregationType: "SUM" },
             ),
         ).toEqual(3);
         const zunionstoreMapMultiplied = await client.zrangeWithScores(
@@ -5446,7 +5458,11 @@ export function runBaseTests(config: {
         expect(await client.zadd(key2, membersScores2)).toEqual(3);
 
         // Intersection results are aggregated by the MAX score of elements
-        expect(await client.zinterstore(key3, [key1, key2], "MAX")).toEqual(2);
+        expect(
+            await client.zinterstore(key3, [key1, key2], {
+                aggregationType: "MAX",
+            }),
+        ).toEqual(2);
         const zinterstoreMapMax = await client.zrangeWithScores(key3, range);
         const expectedMapMax = {
             one: 2,
@@ -5458,7 +5474,9 @@ export function runBaseTests(config: {
 
         // Intersection results are aggregated by the MIN score of elements
         expect(
-            await client.zinterstore(Buffer.from(key3), [key1, key2], "MIN"),
+            await client.zinterstore(Buffer.from(key3), [key1, key2], {
+                aggregationType: "MIN",
+            }),
         ).toEqual(2);
         const zinterstoreMapMin = await client.zrangeWithScores(key3, range);
         const expectedMapMin = {
@@ -5471,7 +5489,9 @@ export function runBaseTests(config: {
 
         // Intersection results are aggregated by the SUM score of elements
         expect(
-            await client.zinterstore(key3, [Buffer.from(key1), key2], "SUM"),
+            await client.zinterstore(key3, [Buffer.from(key1), key2], {
+                aggregationType: "SUM",
+            }),
         ).toEqual(2);
         const zinterstoreMapSum = await client.zrangeWithScores(key3, range);
         const expectedMapSum = {
@@ -5529,7 +5549,7 @@ export function runBaseTests(config: {
                     [key1, 2.0],
                     [key2, 2.0],
                 ],
-                "SUM",
+                { aggregationType: "SUM" },
             ),
         ).toEqual(2);
         const zinterstoreMapMultiplied = await client.zrangeWithScores(
@@ -7294,7 +7314,7 @@ export function runBaseTests(config: {
                         },
                         {
                             key: key2,
-                            value: Buffer.from(timestamp_2_1),
+                            value: timestamp_2_1,
                         },
                     ],
                     {
@@ -7366,7 +7386,7 @@ export function runBaseTests(config: {
                     await client.xgroupCreate(
                         Buffer.from(key1),
                         Buffer.from(group),
-                        Buffer.from("0"),
+                        "0",
                         {
                             mkStream: true,
                         },
@@ -7397,7 +7417,7 @@ export function runBaseTests(config: {
                             [
                                 {
                                     key: Buffer.from(key1),
-                                    value: Buffer.from(">"),
+                                    value: ">",
                                 },
                             ],
                         ))!,
@@ -10037,12 +10057,9 @@ export function runBaseTests(config: {
 
                 // checking result with metric specification of kilometers
                 expect(
-                    await client.geodist(
-                        key1,
-                        member1,
-                        member2,
-                        GeoUnit.KILOMETERS,
-                    ),
+                    await client.geodist(key1, member1, member2, {
+                        unit: GeoUnit.KILOMETERS,
+                    }),
                 ).toBeCloseTo(expectedKM, delta);
 
                 // null result when member index is missing
@@ -10552,9 +10569,7 @@ export function runBaseTests(config: {
                     1,
                 );
                 expect(
-                    await client.xdel(Buffer.from(nonExistentKey), [
-                        Buffer.from(streamId3),
-                    ]),
+                    await client.xdel(Buffer.from(nonExistentKey), [streamId3]),
                 ).toEqual(0);
 
                 // invalid argument - id list should not be empty
@@ -10977,7 +10992,7 @@ export function runBaseTests(config: {
                                 key,
                                 groupName,
                                 streamid1_1,
-                                1,
+                                { entriesRead: 1 },
                             ),
                         ).toBe("OK");
                     }
@@ -11022,7 +11037,7 @@ export function runBaseTests(config: {
                         await client.xgroupSetId(
                             Buffer.from(key),
                             Buffer.from(groupName),
-                            Buffer.from("99-99"),
+                            "99-99",
                         ),
                     ).toBe("OK");
 
@@ -11231,7 +11246,7 @@ export function runBaseTests(config: {
                         Buffer.from(group),
                         Buffer.from("consumer"),
                         0,
-                        [Buffer.from("000")],
+                        ["000"],
                     ),
                 ).toEqual({});
                 expect(
@@ -11312,7 +11327,7 @@ export function runBaseTests(config: {
                     Buffer.from(group),
                     Buffer.from("consumer"),
                     0,
-                    Buffer.from("0-0"),
+                    "0-0",
                     { count: 1 },
                 );
                 let expected: typeof result = [
@@ -11454,7 +11469,7 @@ export function runBaseTests(config: {
                     await client.xack(
                         Buffer.from(key),
                         Buffer.from(groupName),
-                        [Buffer.from(stream_id1_0), Buffer.from(stream_id1_1)],
+                        [stream_id1_0, stream_id1_1],
                     ),
                 ).toBe(0);
 
