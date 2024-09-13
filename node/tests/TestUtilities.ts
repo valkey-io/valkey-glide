@@ -24,12 +24,13 @@ import {
     GeospatialData,
     GlideClient,
     GlideClusterClient,
+    GlideReturnType,
     GlideString,
     InfBoundary,
+    InfoOptions,
     InsertPosition,
     ListDirection,
     ProtocolVersion,
-    GlideReturnType,
     ReturnTypeMap,
     ScoreFilter,
     SignedEncoding,
@@ -1755,4 +1756,45 @@ export async function transactionTest(
     baseTransaction.wait(1, 200);
     responseData.push(["wait(1, 200)", 1]);
     return responseData;
+}
+
+/**
+ * This function gets server version using info command in glide client.
+ *
+ * @param addresses - Addresses containing host and port for the valkey server.
+ * @returns Server version for valkey server
+ */
+export async function getServerVersion(
+    addresses: [string, number][],
+    clusterMode = false,
+): Promise<string> {
+    let info = "";
+
+    if (clusterMode) {
+        const glideClusterClient = await GlideClusterClient.createClient(
+            getClientConfigurationOption(addresses, ProtocolVersion.RESP2),
+        );
+        info = getFirstResult(
+            await glideClusterClient.info({ sections: [InfoOptions.Server] }),
+        ).toString();
+        await flushAndCloseClient(clusterMode, addresses, glideClusterClient);
+    } else {
+        const glideClient = await GlideClient.createClient(
+            getClientConfigurationOption(addresses, ProtocolVersion.RESP2),
+        );
+        info = await glideClient.info([InfoOptions.Server]);
+        await flushAndCloseClient(clusterMode, addresses, glideClient);
+    }
+
+    let version = "";
+    const redisVersionKey = "redis_version:";
+    const valkeyVersionKey = "valkey_version:";
+
+    if (info.includes(valkeyVersionKey)) {
+        version = info.split(valkeyVersionKey)[1].split("\n")[0];
+    } else if (info.includes(redisVersionKey)) {
+        version = info.split(redisVersionKey)[1].split("\n")[0];
+    }
+
+    return version;
 }

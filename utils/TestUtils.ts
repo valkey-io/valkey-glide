@@ -2,7 +2,7 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { exec, execFile } from "child_process";
+import { execFile } from "child_process";
 import { lt } from "semver";
 
 const PY_SCRIPT_PATH = __dirname + "/cluster_manager.py";
@@ -21,9 +21,9 @@ function parseOutput(input: string): {
         .split(",")
         .map((address) => address.split(":"))
         .map((address) => [address[0], Number(address[1])]) as [
-        string,
-        number
-    ][];
+            string,
+            number
+        ][];
 
     if (clusterFolder === undefined || ports === undefined) {
         throw new Error(`Insufficient data in input: ${input}`);
@@ -50,33 +50,11 @@ export class ValkeyCluster {
         this.version = version;
     }
 
-    private static async detectVersion(): Promise<string> {
-        return new Promise<string>((resolve, reject) => {
-            const extractVersion = (stdout: string): string =>
-                stdout.split("v=")[1].split(" ")[0];
-
-            // First, try with `valkey-server -v`
-            exec("valkey-server -v", (error, stdout) => {
-                if (error) {
-                    // If `valkey-server` fails, try `redis-server -v`
-                    exec("redis-server -v", (error, stdout) => {
-                        if (error) {
-                            reject(error);
-                        } else {
-                            resolve(extractVersion(stdout));
-                        }
-                    });
-                } else {
-                    resolve(extractVersion(stdout));
-                }
-            });
-        });
-    }
-
     public static createCluster(
         cluster_mode: boolean,
         shardCount: number,
         replicaCount: number,
+        getVersionCallback: (addresses: [string, number][], clusterMode: boolean) => Promise<string>,
         loadModule?: string[]
     ): Promise<ValkeyCluster> {
         return new Promise<ValkeyCluster>((resolve, reject) => {
@@ -98,22 +76,19 @@ export class ValkeyCluster {
                 }
             }
 
-            console.log(command);
             execFile(
                 "python3",
                 [PY_SCRIPT_PATH, ...command.split(" ")],
                 (error, stdout, stderr) => {
                     if (error) {
-                        console.error(stderr);
                         reject(error);
                     } else {
-                        const { clusterFolder, addresses: ports } =
+                        const { clusterFolder, addresses } =
                             parseOutput(stdout);
-
                         resolve(
-                            ValkeyCluster.detectVersion().then(
+                            getVersionCallback(addresses, cluster_mode).then(
                                 (ver) =>
-                                    new ValkeyCluster(ver, ports, clusterFolder)
+                                    new ValkeyCluster(ver, addresses, clusterFolder)
                             )
                         );
                     }
@@ -123,9 +98,11 @@ export class ValkeyCluster {
     }
 
     public static async initFromExistingCluster(
-        addresses: [string, number][]
+        cluster_mode: boolean,
+        addresses: [string, number][],
+        getVersionCallback: (addresses: [string, number][], clusterMode: boolean) => Promise<string>
     ): Promise<ValkeyCluster> {
-        return ValkeyCluster.detectVersion().then(
+        return getVersionCallback(addresses, cluster_mode).then(
             (ver) => new ValkeyCluster(ver, addresses, "")
         );
     }

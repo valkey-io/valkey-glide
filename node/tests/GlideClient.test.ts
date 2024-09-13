@@ -40,6 +40,7 @@ import {
     flushAndCloseClient,
     generateLuaLibCode,
     getClientConfigurationOption,
+    getServerVersion,
     parseCommandLineArgs,
     parseEndpoints,
     transactionTest,
@@ -57,12 +58,13 @@ describe("GlideClient", () => {
     beforeAll(async () => {
         const standaloneAddresses =
             parseCommandLineArgs()["standalone-endpoints"];
-        // Connect to cluster or create a new one based on the parsed addresses
         cluster = standaloneAddresses
             ? await ValkeyCluster.initFromExistingCluster(
+                  false,
                   parseEndpoints(standaloneAddresses),
+                  getServerVersion,
               )
-            : await ValkeyCluster.createCluster(false, 1, 1);
+            : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
     }, 20000);
 
     afterEach(async () => {

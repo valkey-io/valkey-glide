@@ -17,6 +17,7 @@ import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
     flushAndCloseClient,
     getClientConfigurationOption,
+    getServerVersion,
     parseCommandLineArgs,
     parseEndpoints,
 } from "./TestUtilities";
@@ -33,10 +34,12 @@ describe("Scan GlideClusterClient", () => {
         // Connect to cluster or create a new one based on the parsed addresses
         cluster = clusterAddresses
             ? await ValkeyCluster.initFromExistingCluster(
+                  true,
                   parseEndpoints(clusterAddresses),
+                  getServerVersion,
               )
             : // setting replicaCount to 1 to facilitate tests routed to replicas
-              await ValkeyCluster.createCluster(true, 3, 1);
+              await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
     }, 20000);
 
     afterEach(async () => {
@@ -387,10 +390,12 @@ describe("Scan GlideClient", () => {
         // Connect to cluster or create a new one based on the parsed addresses
         cluster = clusterAddresses
             ? await ValkeyCluster.initFromExistingCluster(
+                  true,
                   parseEndpoints(clusterAddresses),
+                  getServerVersion,
               )
             : // setting replicaCount to 1 to facilitate tests routed to replicas
-              await ValkeyCluster.createCluster(false, 3, 1);
+              await ValkeyCluster.createCluster(false, 3, 1, getServerVersion);
     }, 20000);
 
     afterEach(async () => {
