@@ -1196,12 +1196,12 @@ export async function transactionTest(
         baseTransaction.zmpop([key14], ScoreFilter.MAX);
         responseData.push([
             "zmpop([key14], MAX)",
-            [key14, [{ element: "two", score: 2.0 }]],
+            [key14, [{ key: "two", value: 2.0 }]],
         ]);
         baseTransaction.zmpop([key14], ScoreFilter.MAX, 1);
         responseData.push([
             "zmpop([key14], MAX, 1)",
-            [key14, [{ element: "one", score: 1.0 }]],
+            [key14, [{ key: "one", value: 1.0 }]],
         ]);
         baseTransaction.zadd(key14, [
             { element: "one", score: 1.0 },
@@ -1211,12 +1211,12 @@ export async function transactionTest(
         baseTransaction.bzmpop([key14], ScoreFilter.MAX, 0.1);
         responseData.push([
             "bzmpop([key14], ScoreFilter.MAX, 0.1)",
-            [key14, [{ element: "two", score: 2.0 }]],
+            [key14, [{ key: "two", value: 2.0 }]],
         ]);
         baseTransaction.bzmpop([key14], ScoreFilter.MAX, 0.1, 1);
         responseData.push([
             "bzmpop([key14], ScoreFilter.MAX, 0.1, 1)",
-            [key14, [{ element: "one", score: 1.0 }]],
+            [key14, [{ key: "one", value: 1.0 }]],
         ]);
     }
 
@@ -1254,8 +1254,8 @@ export async function transactionTest(
             {
                 key: key9,
                 value: [
-                    { "0-2": [["field", "value2"]] },
-                    { "0-3": [["field", "value3"]] },
+                    { key: "0-2", value: [["field", "value2"]] },
+                    { key: "0-3", value: [["field", "value3"]] },
                 ],
             },
         ],
@@ -1299,7 +1299,8 @@ export async function transactionTest(
             {
                 key: key9,
                 value: {
-                    "0-2": [["field", "value2"]],
+                    key: "0-2",
+                    value: [["field", "value2"]],
                 },
             },
         ],
