@@ -764,15 +764,9 @@ export async function transactionTest(
     baseTransaction.set(key1, "bar");
     responseData.push(['set(key1, "bar")', "OK"]);
     baseTransaction.objectEncoding(key1);
-    responseData.push([
-        "objectEncoding(key1)",
-        decoder == Decoder.String ? "embstr" : Buffer.from("embstr"),
-    ]);
+    responseData.push(["objectEncoding(key1)", "embstr"]);
     baseTransaction.type(key1);
-    responseData.push([
-        "type(key1)",
-        decoder == Decoder.String ? "string" : Buffer.from("string"),
-    ]);
+    responseData.push(["type(key1)", "string"]);
     baseTransaction.echo(value);
     responseData.push(["echo(value)", value]);
     baseTransaction.persist(key1);
@@ -862,28 +856,23 @@ export async function transactionTest(
     baseTransaction.hrandfield(key4);
     responseData.push(["hrandfield(key4)", null]);
 
-    baseTransaction.lpush(key5, [
-        field + "1",
-        field + "2",
-        field + "3",
-        field + "4",
-    ]);
+    baseTransaction.lpush(key5, [field1, field2, field3, field4]);
     responseData.push(["lpush(key5, [1, 2, 3, 4])", 4]);
 
-    if (gte(version, "7.0.0")) {
-        baseTransaction.lpush(key24, [field + "1", field + "2"]);
+    if (gte("7.0.0", version)) {
+        baseTransaction.lpush(key24, [field1, field2]);
         responseData.push(["lpush(key22, [1, 2])", 2]);
         baseTransaction.lmpop([key24], ListDirection.LEFT);
         responseData.push([
             "lmpop([key22], ListDirection.LEFT)",
-            [{ key: key24, elements: [field + "2"] }],
+            [{ key: key24, elements: [field2] }],
         ]);
-        baseTransaction.lpush(key24, [field + "2"]);
+        baseTransaction.lpush(key24, [field2]);
         responseData.push(["lpush(key22, [2])", 2]);
         baseTransaction.blmpop([key24], ListDirection.LEFT, 0.1, 1);
         responseData.push([
             "blmpop([key22], ListDirection.LEFT, 0.1, 1)",
-            [{ key: key24, elements: [field + "2"] }],
+            [{ key: key24, elements: [field2] }],
         ]);
     }
 
@@ -1195,7 +1184,10 @@ export async function transactionTest(
     responseData.push(["zremRangeByLex(key8, -Inf, +Inf)", 0]); // key8 is already empty
 
     if (gte(version, "7.0.0")) {
-        baseTransaction.zadd(key14, { one: 1.0, two: 2.0 });
+        baseTransaction.zadd(key14, [
+            { element: "one", score: 1.0 },
+            { element: "two", score: 2.0 },
+        ]);
         responseData.push(["zadd(key14, { one: 1.0, two: 2.0 })", 2]);
         baseTransaction.zintercard([key8, key14]);
         responseData.push(["zintercard([key8, key14])", 0]);
@@ -1204,24 +1196,27 @@ export async function transactionTest(
         baseTransaction.zmpop([key14], ScoreFilter.MAX);
         responseData.push([
             "zmpop([key14], MAX)",
-            [key14, convertRecordToGlideRecord({ two: 2.0 })],
+            [key14, [{ element: "two", score: 2.0 }]],
         ]);
         baseTransaction.zmpop([key14], ScoreFilter.MAX, 1);
         responseData.push([
             "zmpop([key14], MAX, 1)",
-            [key14, convertRecordToGlideRecord({ one: 1.0 })],
+            [key14, [{ element: "one", score: 1.0 }]],
         ]);
-        baseTransaction.zadd(key14, { one: 1.0, two: 2.0 });
+        baseTransaction.zadd(key14, [
+            { element: "one", score: 1.0 },
+            { element: "two", score: 2.0 },
+        ]);
         responseData.push(["zadd(key14, { one: 1.0, two: 2.0 })", 2]);
         baseTransaction.bzmpop([key14], ScoreFilter.MAX, 0.1);
         responseData.push([
             "bzmpop([key14], ScoreFilter.MAX, 0.1)",
-            [key14, convertRecordToGlideRecord({ two: 2.0 })],
+            [key14, [{ element: "two", score: 2.0 }]],
         ]);
         baseTransaction.bzmpop([key14], ScoreFilter.MAX, 0.1, 1);
         responseData.push([
             "bzmpop([key14], ScoreFilter.MAX, 0.1, 1)",
-            [key14, convertRecordToGlideRecord({ one: 1.0 })],
+            [key14, [{ element: "one", score: 1.0 }]],
         ]);
     }
 
