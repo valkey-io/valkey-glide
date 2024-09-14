@@ -1,6 +1,7 @@
 plugins {
     // Apply the application plugin to add support for building a CLI application in Java.
     id 'application'
+    id "com.google.osdetector" version "1.7.3"
 }
 
 repositories {
@@ -12,7 +13,7 @@ dependencies {
     def releaseVersion = System.getenv("GLIDE_RELEASE_VERSION");
 
     if (releaseVersion) {
-        implementation "io.valkey:valkey-glide:" + releaseVersion
+        implementation "io.valkey:valkey-glide:" + releaseVersion + ":${osdetector.classifier}"
     } else {
         implementation project(':client')
     }
