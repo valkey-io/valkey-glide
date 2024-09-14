@@ -211,6 +211,25 @@ jobs:
                   echo "Deployment ${{ env.DEPLOYMENT_ID }} was unsuccessful with status $DEPLOYMENT_STATUS"
                   exit 1
 
+    test-deployment-on-all-architectures:
+        needs: [set-release-version, load-platform-matrix, publish-to-maven-central-deployment]
+        env:
+            JAVA_VERSION: "11"
+            RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
+        strategy:
+            # Run all jobs
+            fail-fast: false
+            matrix:
+                host: ${{ fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX) }}
+
+        runs-on: ${{ matrix.host.RUNNER }}
+        steps:
+            - name: Start Valkey server
+              uses: ./.github/actions/install-valkey
+              with:
+                engine-version: "7.2.5"
+                target: ${{ matrix.host.TARGET }}
+
             - uses: actions/checkout@v4
               with:
                   submodules: recursive
@@ -219,7 +238,14 @@ jobs:
               uses: actions/setup-java@v4
               with:
                   distribution: "temurin"
-                  java-version: "11"
+                  java-version: ${{ env.JAVA_VERSION }}
+
+            - name: Install shared software dependencies
+              uses: ./.github/workflows/install-shared-dependencies
+              with:
+                  os: ${{ matrix.host.OS }}
+                  target: ${{ matrix.host.TARGET }}
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
@@ -235,16 +261,9 @@ jobs:
                   export GLIDE_RELEASE_VERSION=${{ env.RELEASE_VERSION }}
                   ./gradlew :benchmarks:run --args="--minimal --clients glide"
 
-            - name: Drop deployment if validation fails
-              if: ${{ failure() }}
-              run: |
-                  curl --request DELETE \
-                  -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
-                  "https://central.sonatype.com/api/v1/publisher/deployment/${{ env.DEPLOYMENT_ID }}"
-
     publish-release-to-maven:
         if: ${{ inputs.maven_publish == true || github.event_name == 'push' }}
-        needs: [publish-to-maven-central-deployment]
+        needs: [test-deployment-on-all-architectures]
         runs-on: ubuntu-latest
         environment: AWS_ACTIONS
         env:
@@ -255,3 +274,17 @@ jobs:
                   curl --request POST \
                   -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
                   "https://central.sonatype.com/api/v1/publisher/deployment/${{ env.DEPLOYMENT_ID }}"
+
+    drop-deployment-if-validation-fails:
+        if: ${{ failure() }}
+        needs: [publish-to-maven-central-deployment, test-deployment-on-all-architectures]
+        runs-on: ubuntu-latest
+        env:
+            DEPLOYMENT_ID: ${{ needs.publish-to-maven-central-deployment.outputs.DEPLOYMENT_ID }}
+        steps:
+            - name: Drop deployment if validation fails
+              run: |
+                  curl --request DELETE \
+                  -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
+                  "https://central.sonatype.com/api/v1/publisher/deployment/${{ env.DEPLOYMENT_ID }}"
+
