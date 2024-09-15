@@ -622,3 +622,17 @@ func (client *baseClient) PingWithMessage(message string) (string, error) {
 	}
 	return response.Value(), nil
 }
+
+func (client *baseClient) Del(keys []string) (int64, error) {
+	result, err := client.executeCommand(C.Del, keys)
+	if err != nil {
+		return 0, err
+	}
+
+	deletedCount, handleErr := handleLongResponse(result)
+	if handleErr != nil {
+		return 0, handleErr
+	}
+
+	return deletedCount.Value(), nil
+}
