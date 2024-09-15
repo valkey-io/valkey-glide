@@ -1,6 +1,8 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static command_request.CommandRequestOuterClass.RequestType.PubSubSChannels;
+import static command_request.CommandRequestOuterClass.RequestType.PubSubSNumSub;
 import static command_request.CommandRequestOuterClass.RequestType.SPublish;
 import static command_request.CommandRequestOuterClass.RequestType.Sort;
 import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
@@ -15,7 +17,7 @@ import command_request.CommandRequestOuterClass.Command;
 import command_request.CommandRequestOuterClass.Command.ArgsArray;
 import command_request.CommandRequestOuterClass.RequestType;
 import glide.api.models.commands.SortBaseOptions;
-import glide.api.models.commands.SortClusterOptions;
+import glide.api.models.commands.SortOptions;
 import java.util.LinkedList;
 import java.util.List;
 import org.apache.commons.lang3.tuple.Pair;
@@ -31,9 +33,18 @@ public class ClusterTransactionTests {
         transaction.publish("msg", "ch1", true);
         results.add(Pair.of(SPublish, buildArgs("ch1", "msg")));
 
+        transaction.pubsubShardChannels();
+        results.add(Pair.of(PubSubSChannels, buildArgs()));
+
+        transaction.pubsubShardChannels("test*");
+        results.add(Pair.of(PubSubSChannels, buildArgs("test*")));
+
+        transaction.pubsubShardNumSub(new String[] {"ch1", "ch2"});
+        results.add(Pair.of(PubSubSNumSub, buildArgs("ch1", "ch2")));
+
         transaction.sortReadOnly(
                 "key1",
-                SortClusterOptions.builder()
+                SortOptions.builder()
                         .orderBy(ASC)
                         .alpha()
                         .limit(new SortBaseOptions.Limit(0L, 1L))
@@ -46,7 +57,7 @@ public class ClusterTransactionTests {
 
         transaction.sort(
                 "key1",
-                SortClusterOptions.builder()
+                SortOptions.builder()
                         .orderBy(ASC)
                         .alpha()
                         .limit(new SortBaseOptions.Limit(0L, 1L))
@@ -60,7 +71,7 @@ public class ClusterTransactionTests {
         transaction.sortStore(
                 "key1",
                 "key2",
-                SortClusterOptions.builder()
+                SortOptions.builder()
                         .orderBy(ASC)
                         .alpha()
                         .limit(new SortBaseOptions.Limit(0L, 1L))

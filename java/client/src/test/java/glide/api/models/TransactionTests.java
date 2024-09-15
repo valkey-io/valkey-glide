@@ -250,7 +250,7 @@ import command_request.CommandRequestOuterClass.Command.ArgsArray;
 import command_request.CommandRequestOuterClass.RequestType;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.GetExOptions;
-import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions;
@@ -352,7 +352,7 @@ public class TransactionTests {
         transaction.info();
         results.add(Pair.of(Info, buildArgs()));
 
-        transaction.info(InfoOptions.builder().section(EVERYTHING).build());
+        transaction.info(new Section[] {EVERYTHING});
         results.add(Pair.of(Info, buildArgs(EVERYTHING.toString())));
 
         transaction.mset(Map.of("key", "value"));
@@ -1171,6 +1171,9 @@ public class TransactionTests {
 
         transaction.bitcount("key");
         results.add(Pair.of(BitCount, buildArgs("key")));
+
+        transaction.bitcount("key", 1);
+        results.add(Pair.of(BitCount, buildArgs("key", "1")));
 
         transaction.bitcount("key", 1, 1);
         results.add(Pair.of(BitCount, buildArgs("key", "1", "1")));

@@ -8,7 +8,6 @@
 // represents a running server instance. See first 2 test cases as examples.
 
 import { expect, it } from "@jest/globals";
-import { GlideRecord, HashDataType } from "src/BaseClient";
 import { v4 as uuidv4 } from "uuid";
 import {
     BaseClientConfiguration,
@@ -31,14 +30,16 @@ import {
     GeospatialData,
     GlideClient,
     GlideClusterClient,
+    GlideRecord,
+    GlideReturnType,
     GlideString,
+    HashDataType,
     InfBoundary,
     InfoOptions,
     InsertPosition,
     ListDirection,
     ProtocolVersion,
     RequestError,
-    ReturnType,
     ScoreFilter,
     Script,
     SignedEncoding,
@@ -49,15 +50,13 @@ import {
     Transaction,
     UnsignedEncoding,
     UpdateByScore,
+    convertElementsAndScores,
+    convertFieldsAndValuesToHashDataType,
+    convertGlideRecordToRecord,
     parseInfoResponse,
-} from "../";
-import { RedisCluster } from "../../utils/TestUtils";
-import {
-    Client,
-    GetAndSetRandomValue,
-    compareMaps,
-    getFirstResult,
-} from "./TestUtilities";
+} from "..";
+import { ValkeyCluster } from "../../utils/TestUtils";
+import { Client, GetAndSetRandomValue, getFirstResult } from "./TestUtilities";
 
 export type BaseClient = GlideClient | GlideClusterClient;
 
@@ -70,7 +69,7 @@ export function runBaseTests(config: {
         configOverrides?: ClientConfig,
     ) => Promise<{
         client: BaseClient;
-        cluster: RedisCluster;
+        cluster: ValkeyCluster;
     }>;
     close: (testSucceeded: boolean) => void;
     timeout?: number;
@@ -82,7 +81,7 @@ export function runBaseTests(config: {
     });
 
     const runTest = async (
-        test: (client: BaseClient, cluster: RedisCluster) => Promise<void>,
+        test: (client: BaseClient, cluster: ValkeyCluster) => Promise<void>,
         protocol: ProtocolVersion,
         configOverrides?: ClientConfig,
     ) => {
@@ -103,15 +102,21 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `should register client library name and version_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
-                if (cluster.checkIfServerVersionLessThan("7.2.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("7.2.0")) {
+                        return;
+                    }
 
-                const result = await client.customCommand(["CLIENT", "INFO"]);
-                expect(result).toContain("lib-name=GlideJS");
-                expect(result).toContain("lib-ver=unknown");
-            }, protocol);
+                    const result = await client.customCommand([
+                        "CLIENT",
+                        "INFO",
+                    ]);
+                    expect(result).toContain("lib-name=GlideJS");
+                    expect(result).toContain("lib-ver=unknown");
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -138,9 +143,11 @@ export function runBaseTests(config: {
         `Check protocol version is RESP3`,
         async () => {
             await runTest(async (client: BaseClient) => {
-                const result = (await client.customCommand(["HELLO"])) as {
-                    proto: number;
-                };
+                const result = convertGlideRecordToRecord(
+                    (await client.customCommand([
+                        "HELLO",
+                    ])) as GlideRecord<number>,
+                );
                 expect(result?.proto).toEqual(3);
             }, ProtocolVersion.RESP3);
         },
@@ -151,9 +158,11 @@ export function runBaseTests(config: {
         `Check possible to opt-in to RESP2`,
         async () => {
             await runTest(async (client: BaseClient) => {
-                const result = (await client.customCommand(["HELLO"])) as {
-                    proto: number;
-                };
+                const result = convertGlideRecordToRecord(
+                    (await client.customCommand([
+                        "HELLO",
+                    ])) as GlideRecord<number>,
+                );
                 expect(result?.proto).toEqual(2);
             }, ProtocolVersion.RESP2);
         },
@@ -292,7 +301,7 @@ export function runBaseTests(config: {
                     expect(await client.configRewrite()).toEqual("OK");
                 } else {
                     try {
-                        /// We expect Redis to return an error since the test cluster doesn't use redis.conf file
+                        /// We expect Valkey to return an error since the test cluster doesn't use redis.conf file
                         expect(await client.configRewrite()).toThrow();
                     } catch (e) {
                         expect((e as Error).message).toMatch(
@@ -1237,13 +1246,13 @@ export function runBaseTests(config: {
             await runTest(async (client: BaseClient) => {
                 const prevTimeout = (await client.configGet([
                     "timeout",
-                ])) as Record<string, string>;
+                ])) as Record<string, GlideString>;
                 expect(await client.configSet({ timeout: "1000" })).toEqual(
                     "OK",
                 );
                 const currTimeout = (await client.configGet([
                     "timeout",
-                ])) as Record<string, string>;
+                ])) as Record<string, GlideString>;
                 expect(currTimeout).toEqual({ timeout: "1000" });
                 /// Revert to the pervious configuration
                 expect(
@@ -1343,6 +1352,13 @@ export function runBaseTests(config: {
                 await expect(
                     client.getrange(nonStringKey, 0, -1),
                 ).rejects.toThrow(RequestError);
+
+                // unique chars key
+                expect(await client.set(key, "爱和美力")).toEqual("OK");
+                expect(await client.getrange(key, 0, 5)).toEqual("爱和");
+
+                expect(await client.set(key, "😊🌸")).toEqual("OK");
+                expect(await client.getrange(key, 4, 7)).toEqual("🌸");
             }, protocol);
         },
         config.timeout,
@@ -1611,77 +1627,84 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hscan and sscan empty set, negative cursor, negative count, and non-hash key exception tests`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
-                const key1 = "{key}-1" + uuidv4();
-                const key2 = "{key}-2" + uuidv4();
-                const initialCursor = "0";
-                const resultCursorIndex = 0;
-                const resultCollectionIndex = 1;
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    const key1 = "{key}-1" + uuidv4();
+                    const key2 = "{key}-2" + uuidv4();
+                    const initialCursor = "0";
+                    const resultCursorIndex = 0;
+                    const resultCollectionIndex = 1;
 
-                // Empty set
-                let result = await client.hscan(key1, initialCursor);
-                expect(result[resultCursorIndex]).toEqual(initialCursor);
-                expect(result[resultCollectionIndex]).toEqual([]);
-
-                let result2 = await client.sscan(key1, initialCursor);
-                expect(result2[resultCursorIndex]).toEqual(initialCursor);
-                expect(result2[resultCollectionIndex]).toEqual([]);
-
-                // Negative cursor
-                if (cluster.checkIfServerVersionLessThan("7.9.0")) {
-                    result = await client.hscan(key1, "-1");
+                    // Empty set
+                    let result = await client.hscan(key1, initialCursor);
                     expect(result[resultCursorIndex]).toEqual(initialCursor);
                     expect(result[resultCollectionIndex]).toEqual([]);
 
-                    result2 = await client.sscan(key1, "-1");
+                    let result2 = await client.sscan(key1, initialCursor);
                     expect(result2[resultCursorIndex]).toEqual(initialCursor);
                     expect(result2[resultCollectionIndex]).toEqual([]);
-                } else {
-                    await expect(client.hscan(key1, "-1")).rejects.toThrow(
-                        RequestError,
-                    );
 
-                    await expect(client.sscan(key1, "-1")).rejects.toThrow(
-                        RequestError,
-                    );
-                }
+                    // Negative cursor
+                    if (cluster.checkIfServerVersionLessThan("7.9.0")) {
+                        result = await client.hscan(key1, "-1");
+                        expect(result[resultCursorIndex]).toEqual(
+                            initialCursor,
+                        );
+                        expect(result[resultCollectionIndex]).toEqual([]);
 
-                // Exceptions
-                // Non-hash key
-                expect(await client.set(key2, "test")).toEqual("OK");
-                await expect(client.hscan(key2, initialCursor)).rejects.toThrow(
-                    RequestError,
-                );
-                await expect(
-                    client.hscan(key2, initialCursor, {
-                        match: "test",
-                        count: 20,
-                    }),
-                ).rejects.toThrow(RequestError);
+                        result2 = await client.sscan(key1, "-1");
+                        expect(result2[resultCursorIndex]).toEqual(
+                            initialCursor,
+                        );
+                        expect(result2[resultCollectionIndex]).toEqual([]);
+                    } else {
+                        await expect(client.hscan(key1, "-1")).rejects.toThrow(
+                            RequestError,
+                        );
 
-                await expect(client.sscan(key2, initialCursor)).rejects.toThrow(
-                    RequestError,
-                );
-                await expect(
-                    client.sscan(key2, initialCursor, {
-                        match: "test",
-                        count: 30,
-                    }),
-                ).rejects.toThrow(RequestError);
+                        await expect(client.sscan(key1, "-1")).rejects.toThrow(
+                            RequestError,
+                        );
+                    }
 
-                // Negative count
-                await expect(
-                    client.hscan(key2, initialCursor, {
-                        count: -1,
-                    }),
-                ).rejects.toThrow(RequestError);
+                    // Exceptions
+                    // Non-hash key
+                    expect(await client.set(key2, "test")).toEqual("OK");
+                    await expect(
+                        client.hscan(key2, initialCursor),
+                    ).rejects.toThrow(RequestError);
+                    await expect(
+                        client.hscan(key2, initialCursor, {
+                            match: "test",
+                            count: 20,
+                        }),
+                    ).rejects.toThrow(RequestError);
 
-                await expect(
-                    client.sscan(key2, initialCursor, {
-                        count: -1,
-                    }),
-                ).rejects.toThrow(RequestError);
-            }, protocol);
+                    await expect(
+                        client.sscan(key2, initialCursor),
+                    ).rejects.toThrow(RequestError);
+                    await expect(
+                        client.sscan(key2, initialCursor, {
+                            match: "test",
+                            count: 30,
+                        }),
+                    ).rejects.toThrow(RequestError);
+
+                    // Negative count
+                    await expect(
+                        client.hscan(key2, initialCursor, {
+                            count: -1,
+                        }),
+                    ).rejects.toThrow(RequestError);
+
+                    await expect(
+                        client.sscan(key2, initialCursor, {
+                            count: -1,
+                        }),
+                    ).rejects.toThrow(RequestError);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -1817,14 +1840,29 @@ export function runBaseTests(config: {
                 };
                 expect(await client.hset(key, fieldValueMap)).toEqual(2);
 
-                expect(await client.hgetall(key)).toEqual({
-                    [field1]: value,
-                    [field2]: value,
-                });
+                expect(await client.hgetall(key)).toEqual(
+                    convertFieldsAndValuesToHashDataType({
+                        [field1]: value,
+                        [field2]: value,
+                    }),
+                );
+
+                expect(
+                    await client.hgetall(key, { decoder: Decoder.Bytes }),
+                ).toEqual([
+                    {
+                        field: Buffer.from(field1),
+                        value: Buffer.from(value),
+                    },
+                    {
+                        field: Buffer.from(field2),
+                        value: Buffer.from(value),
+                    },
+                ]);
 
                 expect(
                     await client.hgetall(Buffer.from("nonExistingKey")),
-                ).toEqual({});
+                ).toEqual([]);
             }, protocol);
         },
         config.timeout,
@@ -3054,12 +3092,14 @@ export function runBaseTests(config: {
 
                 // returns limit as cardinality when the limit is reached partway through the computation
                 const limit = 2;
-                expect(await client.sintercard([key1, key2], limit)).toEqual(
-                    limit,
-                );
+                expect(
+                    await client.sintercard([key1, key2], { limit }),
+                ).toEqual(limit);
 
                 // returns actual cardinality if limit is higher
-                expect(await client.sintercard([key1, key2], 4)).toEqual(3);
+                expect(
+                    await client.sintercard([key1, key2], { limit: 4 }),
+                ).toEqual(3);
 
                 // one of the keys is empty, intersection is empty, cardinality equals 0
                 expect(await client.sintercard([key1, nonExistingKey])).toEqual(
@@ -3070,10 +3110,9 @@ export function runBaseTests(config: {
                     await client.sintercard([nonExistingKey, nonExistingKey]),
                 ).toEqual(0);
                 expect(
-                    await client.sintercard(
-                        [nonExistingKey, nonExistingKey],
-                        2,
-                    ),
+                    await client.sintercard([nonExistingKey, nonExistingKey], {
+                        limit: 2,
+                    }),
                 ).toEqual(0);
 
                 // with keys as binary buffers
@@ -3304,7 +3343,7 @@ export function runBaseTests(config: {
 
                 const numberMembersSet: string[] = numberMembers;
                 const charMembers: string[] = ["a", "b", "c", "d", "e"];
-                const charMembersSet: Set<string> = new Set(charMembers);
+                const charMembersSet = new Set<string>(charMembers);
                 const resultCursorIndex = 0;
                 const resultCollectionIndex = 1;
 
@@ -3761,11 +3800,9 @@ export function runBaseTests(config: {
                     ).toEqual(true);
                 } else {
                     expect(
-                        await client.pexpire(
-                            Buffer.from(key),
-                            10000,
-                            ExpireOptions.HasNoExpiry,
-                        ),
+                        await client.pexpire(Buffer.from(key), 10000, {
+                            expireOption: ExpireOptions.HasNoExpiry,
+                        }),
                     ).toEqual(true);
                 }
 
@@ -3780,11 +3817,9 @@ export function runBaseTests(config: {
                     );
                 } else {
                     expect(
-                        await client.expire(
-                            Buffer.from(key),
-                            15,
-                            ExpireOptions.HasExistingExpiry,
-                        ),
+                        await client.expire(Buffer.from(key), 15, {
+                            expireOption: ExpireOptions.HasExistingExpiry,
+                        }),
                     ).toEqual(true);
                     expect(await client.expiretime(key)).toBeGreaterThan(
                         Math.floor(Date.now() / 1000),
@@ -3835,7 +3870,10 @@ export function runBaseTests(config: {
                         await client.expireAt(
                             Buffer.from(key),
                             Math.floor(Date.now() / 1000) + 50,
-                            ExpireOptions.NewExpiryGreaterThanCurrent,
+                            {
+                                expireOption:
+                                    ExpireOptions.NewExpiryGreaterThanCurrent,
+                            },
                         ),
                     ).toEqual(true);
                 }
@@ -3847,18 +3885,16 @@ export function runBaseTests(config: {
 
                 if (!versionLessThan) {
                     expect(
-                        await client.pexpireAt(
-                            key,
-                            Date.now() + 50000,
-                            ExpireOptions.HasExistingExpiry,
-                        ),
+                        await client.pexpireAt(key, Date.now() + 50000, {
+                            expireOption: ExpireOptions.HasExistingExpiry,
+                        }),
                     ).toEqual(false);
                     // test Buffer input argument
                     expect(
                         await client.pexpireAt(
                             Buffer.from(key),
                             Date.now() + 50000,
-                            ExpireOptions.HasExistingExpiry,
+                            { expireOption: ExpireOptions.HasExistingExpiry },
                         ),
                     ).toEqual(false);
                 }
@@ -4084,6 +4120,104 @@ export function runBaseTests(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "script exists test_%p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const script1 = new Script("return 'Hello'");
+                const script2 = new Script("return 'World'");
+                const script3 = new Script("return 'Hello World'");
+
+                // Load script1 to all nodes, do not load script2 and load script3 with a SlotKeyRoute
+                await client.invokeScript(script1);
+                await client.invokeScript(script3);
+
+                // Get the SHA1 digests of the scripts
+                const sha1 = script1.getHash();
+                const sha2 = script2.getHash();
+                const sha3 = script3.getHash();
+                const nonExistentSha = `0`.repeat(40);
+
+                // Check existence of scripts
+                const results = await client.scriptExists([
+                    sha1,
+                    sha2,
+                    sha3,
+                    nonExistentSha,
+                ]);
+
+                // script1 is loaded and returns true.
+                // script2 is only cached and not loaded, returns false.
+                // script3 is invoked with a SlotKeyRoute. Despite SCRIPT EXIST uses LogicalAggregate AND on the results,
+                //  SCRIPT LOAD during internal execution so the script still gets loaded on all nodes, returns true.
+                // non-existing sha returns false.
+                expect(results).toEqual([true, false, true, false]);
+
+                client.close();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "script flush test_%p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                // Load a script
+                const script = new Script("return 'Hello'");
+                expect(await client.invokeScript(script)).toEqual("Hello");
+
+                // Check existence of script
+                expect(await client.scriptExists([script.getHash()])).toEqual([
+                    true,
+                ]);
+
+                // Flush the script cache
+                expect(await client.scriptFlush()).toEqual("OK");
+
+                // Check that the script no longer exists
+                expect(await client.scriptExists([script.getHash()])).toEqual([
+                    false,
+                ]);
+
+                // Test with ASYNC mode
+                await client.invokeScript(script);
+                expect(await client.scriptFlush(FlushMode.ASYNC)).toEqual("OK");
+                expect(await client.scriptExists([script.getHash()])).toEqual([
+                    false,
+                ]);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `script show test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster) => {
+                if (cluster.checkIfServerVersionLessThan("7.9.0")) {
+                    return;
+                }
+
+                const value = uuidv4();
+                const code = `return '${value}'`;
+                const script = new Script(Buffer.from(code));
+
+                expect(await client.invokeScript(script)).toEqual(value);
+
+                // Get the SHA1 digests of the script
+                const sha1 = script.getHash();
+
+                expect(await client.scriptShow(sha1)).toEqual(code);
+
+                await expect(
+                    client.scriptShow("non existing sha1"),
+                ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zadd and zaddIncr test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
@@ -4243,16 +4377,22 @@ export function runBaseTests(config: {
                     0,
                 );
 
-                expect(await client.zintercard([key1, key2], 0)).toEqual(2);
-                expect(await client.zintercard([key1, key2], 1)).toEqual(1);
-                expect(await client.zintercard([key1, key2], 2)).toEqual(2);
+                expect(
+                    await client.zintercard([key1, key2], { limit: 0 }),
+                ).toEqual(2);
+                expect(
+                    await client.zintercard([key1, key2], { limit: 1 }),
+                ).toEqual(1);
+                expect(
+                    await client.zintercard([key1, key2], { limit: 2 }),
+                ).toEqual(2);
 
                 // invalid argument - key list must not be empty
                 await expect(client.zintercard([])).rejects.toThrow();
 
                 // invalid argument - limit must be non-negative
                 await expect(
-                    client.zintercard([key1, key2], -1),
+                    client.zintercard([key1, key2], { limit: -1 }),
                 ).rejects.toThrow();
 
                 // key exists, but it is not a sorted set
@@ -4307,23 +4447,33 @@ export function runBaseTests(config: {
                 expect(await client.zdiff([nonExistingKey, key3])).toEqual([]);
 
                 let result = await client.zdiffWithScores([key1, key2]);
-                const expected = {
+                const expected = convertElementsAndScores({
                     one: 1.0,
                     three: 3.0,
-                };
-                expect(compareMaps(result, expected)).toBe(true);
+                });
+                expect(result).toEqual(expected);
+
                 // same with byte[]
-                result = await client.zdiffWithScores([
-                    key1,
-                    Buffer.from(key2),
+                result = await client.zdiffWithScores(
+                    [key1, Buffer.from(key2)],
+                    { decoder: Decoder.Bytes },
+                );
+                expect(result).toEqual([
+                    {
+                        element: Buffer.from("one"),
+                        score: 1.0,
+                    },
+                    {
+                        element: Buffer.from("three"),
+                        score: 3.0,
+                    },
                 ]);
-                expect(compareMaps(result, expected)).toBe(true);
 
                 result = await client.zdiffWithScores([key1, key3]);
-                expect(compareMaps(result, {})).toBe(true);
+                expect(result).toEqual([]);
 
                 result = await client.zdiffWithScores([nonExistingKey, key3]);
-                expect(compareMaps(result, {})).toBe(true);
+                expect(result).toEqual([]);
 
                 // invalid arg - key list must not be empty
                 await expect(client.zdiff([])).rejects.toThrow(RequestError);
@@ -4377,10 +4527,13 @@ export function runBaseTests(config: {
                 expect(await client.zdiffstore(key4, [key1, key2])).toEqual(2);
                 const result1 = await client.zrangeWithScores(key4, {
                     start: 0,
-                    stop: -1,
+                    end: -1,
                 });
-                const expected1 = { one: 1.0, three: 3.0 };
-                expect(compareMaps(result1, expected1)).toBe(true);
+                const expected1 = convertElementsAndScores({
+                    one: 1.0,
+                    three: 3.0,
+                });
+                expect(result1).toEqual(expected1);
 
                 expect(
                     await client.zdiffstore(Buffer.from(key4), [
@@ -4391,27 +4544,29 @@ export function runBaseTests(config: {
                 ).toEqual(1);
                 const result2 = await client.zrangeWithScores(key4, {
                     start: 0,
-                    stop: -1,
+                    end: -1,
                 });
-                expect(compareMaps(result2, { four: 4.0 })).toBe(true);
+                expect(result2).toEqual(
+                    convertElementsAndScores({ four: 4.0 }),
+                );
 
                 expect(
                     await client.zdiffstore(key4, [Buffer.from(key1), key3]),
                 ).toEqual(0);
                 const result3 = await client.zrangeWithScores(key4, {
                     start: 0,
-                    stop: -1,
+                    end: -1,
                 });
-                expect(compareMaps(result3, {})).toBe(true);
+                expect(result3).toEqual([]);
 
                 expect(
                     await client.zdiffstore(key4, [nonExistingKey, key1]),
                 ).toEqual(0);
                 const result4 = await client.zrangeWithScores(key4, {
                     start: 0,
-                    stop: -1,
+                    end: -1,
                 });
-                expect(compareMaps(result4, {})).toBe(true);
+                expect(result4).toEqual([]);
 
                 // invalid arg - key list must not be empty
                 await expect(client.zdiffstore(key4, [])).rejects.toThrow(
@@ -4461,7 +4616,7 @@ export function runBaseTests(config: {
         const key3 = "{testKey}:3-" + uuidv4();
         const range = {
             start: 0,
-            stop: -1,
+            end: -1,
         };
 
         const membersScores1 = { one: 1.0, two: 2.0 };
@@ -4472,7 +4627,9 @@ export function runBaseTests(config: {
 
         // Union results are aggregated by the MAX score of elements
         expect(
-            await client.zunionstore(key3, [key1, Buffer.from(key2)], "MAX"),
+            await client.zunionstore(key3, [key1, Buffer.from(key2)], {
+                aggregationType: "MAX",
+            }),
         ).toEqual(3);
         const zunionstoreMapMax = await client.zrangeWithScores(key3, range);
         const expectedMapMax = {
@@ -4480,7 +4637,9 @@ export function runBaseTests(config: {
             two: 2.5,
             three: 3.5,
         };
-        expect(zunionstoreMapMax).toEqual(expectedMapMax);
+        expect(zunionstoreMapMax).toEqual(
+            convertElementsAndScores(expectedMapMax),
+        );
     }
 
     async function zunionStoreWithMinAggregation(client: BaseClient) {
@@ -4489,7 +4648,7 @@ export function runBaseTests(config: {
         const key3 = "{testKey}:3-" + uuidv4();
         const range = {
             start: 0,
-            stop: -1,
+            end: -1,
         };
 
         const membersScores1 = { one: 1.0, two: 2.0 };
@@ -4500,7 +4659,9 @@ export function runBaseTests(config: {
 
         // Union results are aggregated by the MIN score of elements
         expect(
-            await client.zunionstore(Buffer.from(key3), [key1, key2], "MIN"),
+            await client.zunionstore(Buffer.from(key3), [key1, key2], {
+                aggregationType: "MIN",
+            }),
         ).toEqual(3);
         const zunionstoreMapMin = await client.zrangeWithScores(key3, range);
         const expectedMapMin = {
@@ -4508,7 +4669,9 @@ export function runBaseTests(config: {
             two: 2.0,
             three: 3.5,
         };
-        expect(zunionstoreMapMin).toEqual(expectedMapMin);
+        expect(zunionstoreMapMin).toEqual(
+            convertElementsAndScores(expectedMapMin),
+        );
     }
 
     async function zunionStoreWithSumAggregation(client: BaseClient) {
@@ -4517,7 +4680,7 @@ export function runBaseTests(config: {
         const key3 = "{testKey}:3-" + uuidv4();
         const range = {
             start: 0,
-            stop: -1,
+            end: -1,
         };
 
         const membersScores1 = { one: 1.0, two: 2.0 };
@@ -4527,14 +4690,22 @@ export function runBaseTests(config: {
         expect(await client.zadd(key2, membersScores2)).toEqual(3);
 
         // Union results are aggregated by the SUM score of elements
-        expect(await client.zunionstore(key3, [key1, key2], "SUM")).toEqual(3);
+        expect(
+            await client.zunionstore(key3, [key1, key2], {
+                aggregationType: "SUM",
+            }),
+        ).toEqual(3);
         const zunionstoreMapSum = await client.zrangeWithScores(key3, range);
         const expectedMapSum = {
             one: 2.5,
             two: 4.5,
             three: 3.5,
         };
-        expect(zunionstoreMapSum).toEqual(expectedMapSum);
+        expect(zunionstoreMapSum).toEqual(
+            convertElementsAndScores(expectedMapSum).sort(
+                (a, b) => a.score - b.score,
+            ),
+        );
     }
 
     async function zunionStoreBasicTest(client: BaseClient) {
@@ -4543,7 +4714,7 @@ export function runBaseTests(config: {
         const key3 = "{testKey}:3-" + uuidv4();
         const range = {
             start: 0,
-            stop: -1,
+            end: -1,
         };
 
         const membersScores1 = { one: 1.0, two: 2.0 };
@@ -4559,7 +4730,7 @@ export function runBaseTests(config: {
             three: 4.0,
             two: 5.0,
         };
-        expect(zunionstoreMap).toEqual(expectedMap);
+        expect(zunionstoreMap).toEqual(convertElementsAndScores(expectedMap));
     }
 
     async function zunionStoreWithWeightsAndAggregation(client: BaseClient) {
@@ -4568,7 +4739,7 @@ export function runBaseTests(config: {
         const key3 = "{testKey}:3-" + uuidv4();
         const range = {
             start: 0,
-            stop: -1,
+            end: -1,
         };
         const membersScores1 = { one: 1.0, two: 2.0 };
         const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
@@ -4584,7 +4755,7 @@ export function runBaseTests(config: {
                     [key1, 2.0],
                     [Buffer.from(key2), 2.0],
                 ],
-                "SUM",
+                { aggregationType: "SUM" },
             ),
         ).toEqual(3);
         const zunionstoreMapMultiplied = await client.zrangeWithScores(
@@ -4596,7 +4767,9 @@ export function runBaseTests(config: {
             three: 7.0,
             two: 9.0,
         };
-        expect(zunionstoreMapMultiplied).toEqual(expectedMapMultiplied);
+        expect(zunionstoreMapMultiplied).toEqual(
+            convertElementsAndScores(expectedMapMultiplied),
+        );
     }
 
     async function zunionStoreEmptyCases(client: BaseClient) {
@@ -4604,7 +4777,7 @@ export function runBaseTests(config: {
         const key2 = "{testKey}:2-" + uuidv4();
         const range = {
             start: 0,
-            stop: -1,
+            end: -1,
         };
         const membersScores1 = { one: 1.0, two: 2.0 };
 
@@ -4627,7 +4800,9 @@ export function runBaseTests(config: {
             one: 1.0,
             two: 2.0,
         };
-        expect(zunionstore_map_nonexistingkey).toEqual(expectedMapMultiplied);
+        expect(zunionstore_map_nonexistingkey).toEqual(
+            convertElementsAndScores(expectedMapMultiplied),
+        );
 
         // Empty list check
         await expect(client.zunionstore("{xyz}", [])).rejects.toThrow();
@@ -4773,34 +4948,35 @@ export function runBaseTests(config: {
                 const membersScores = { one: 1, two: 2, three: 3 };
                 expect(await client.zadd(key, membersScores)).toEqual(3);
 
-                expect(await client.zrange(key, { start: 0, stop: 1 })).toEqual(
-                    ["one", "two"],
-                );
+                expect(await client.zrange(key, { start: 0, end: 1 })).toEqual([
+                    "one",
+                    "two",
+                ]);
                 const result = await client.zrangeWithScores(key, {
                     start: 0,
-                    stop: -1,
+                    end: -1,
                 });
 
-                expect(
-                    compareMaps(result, {
+                expect(result).toEqual(
+                    convertElementsAndScores({
                         one: 1.0,
                         two: 2.0,
                         three: 3.0,
                     }),
-                ).toBe(true);
+                );
                 expect(
                     await client.zrange(
                         Buffer.from(key),
-                        { start: 0, stop: 1 },
+                        { start: 0, end: 1 },
                         { reverse: true, decoder: Decoder.Bytes },
                     ),
                 ).toEqual([Buffer.from("three"), Buffer.from("two")]);
-                expect(await client.zrange(key, { start: 3, stop: 1 })).toEqual(
+                expect(await client.zrange(key, { start: 3, end: 1 })).toEqual(
                     [],
                 );
                 expect(
-                    await client.zrangeWithScores(key, { start: 3, stop: 1 }),
-                ).toEqual({});
+                    await client.zrangeWithScores(key, { start: 3, end: 1 }),
+                ).toEqual([]);
             }, protocol);
         },
         config.timeout,
@@ -4817,29 +4993,29 @@ export function runBaseTests(config: {
                 expect(
                     await client.zrange(key, {
                         start: InfBoundary.NegativeInfinity,
-                        stop: { value: 3, isInclusive: false },
+                        end: { value: 3, isInclusive: false },
                         type: "byScore",
                     }),
                 ).toEqual(["one", "two"]);
                 const result = await client.zrangeWithScores(Buffer.from(key), {
                     start: InfBoundary.NegativeInfinity,
-                    stop: InfBoundary.PositiveInfinity,
+                    end: InfBoundary.PositiveInfinity,
                     type: "byScore",
                 });
 
-                expect(
-                    compareMaps(result, {
+                expect(result).toEqual(
+                    convertElementsAndScores({
                         one: 1.0,
                         two: 2.0,
                         three: 3.0,
                     }),
-                ).toBe(true);
+                );
                 expect(
                     await client.zrange(
                         key,
                         {
                             start: { value: 3, isInclusive: false },
-                            stop: InfBoundary.NegativeInfinity,
+                            end: InfBoundary.NegativeInfinity,
                             type: "byScore",
                         },
                         { reverse: true },
@@ -4851,7 +5027,7 @@ export function runBaseTests(config: {
                         key,
                         {
                             start: InfBoundary.NegativeInfinity,
-                            stop: InfBoundary.PositiveInfinity,
+                            end: InfBoundary.PositiveInfinity,
                             limit: { offset: 1, count: 2 },
                             type: "byScore",
                         },
@@ -4864,7 +5040,7 @@ export function runBaseTests(config: {
                         key,
                         {
                             start: InfBoundary.NegativeInfinity,
-                            stop: { value: 3, isInclusive: false },
+                            end: { value: 3, isInclusive: false },
                             type: "byScore",
                         },
                         { reverse: true },
@@ -4874,7 +5050,7 @@ export function runBaseTests(config: {
                 expect(
                     await client.zrange(key, {
                         start: InfBoundary.PositiveInfinity,
-                        stop: { value: 3, isInclusive: false },
+                        end: { value: 3, isInclusive: false },
                         type: "byScore",
                     }),
                 ).toEqual([]);
@@ -4884,20 +5060,20 @@ export function runBaseTests(config: {
                         key,
                         {
                             start: InfBoundary.NegativeInfinity,
-                            stop: { value: 3, isInclusive: false },
+                            end: { value: 3, isInclusive: false },
                             type: "byScore",
                         },
                         { reverse: true },
                     ),
-                ).toEqual({});
+                ).toEqual([]);
 
                 expect(
                     await client.zrangeWithScores(key, {
                         start: InfBoundary.PositiveInfinity,
-                        stop: { value: 3, isInclusive: false },
+                        end: { value: 3, isInclusive: false },
                         type: "byScore",
                     }),
-                ).toEqual({});
+                ).toEqual([]);
             }, protocol);
         },
         config.timeout,
@@ -4914,7 +5090,7 @@ export function runBaseTests(config: {
                 expect(
                     await client.zrange(Buffer.from(key), {
                         start: InfBoundary.NegativeInfinity,
-                        stop: { value: Buffer.from("c"), isInclusive: false },
+                        end: { value: Buffer.from("c"), isInclusive: false },
                         type: "byLex",
                     }),
                 ).toEqual(["a", "b"]);
@@ -4924,7 +5100,7 @@ export function runBaseTests(config: {
                         key,
                         {
                             start: InfBoundary.PositiveInfinity,
-                            stop: InfBoundary.NegativeInfinity,
+                            end: InfBoundary.NegativeInfinity,
                             limit: { offset: 1, count: 2 },
                             type: "byLex",
                         },
@@ -4937,7 +5113,7 @@ export function runBaseTests(config: {
                         key,
                         {
                             start: { value: "c", isInclusive: false },
-                            stop: InfBoundary.NegativeInfinity,
+                            end: InfBoundary.NegativeInfinity,
                             type: "byLex",
                         },
                         { reverse: true },
@@ -4949,7 +5125,7 @@ export function runBaseTests(config: {
                         key,
                         {
                             start: InfBoundary.NegativeInfinity,
-                            stop: { value: "c", isInclusive: false },
+                            end: { value: "c", isInclusive: false },
                             type: "byLex",
                         },
                         { reverse: true },
@@ -4959,7 +5135,7 @@ export function runBaseTests(config: {
                 expect(
                     await client.zrange(key, {
                         start: InfBoundary.PositiveInfinity,
-                        stop: { value: "c", isInclusive: false },
+                        end: { value: "c", isInclusive: false },
                         type: "byLex",
                     }),
                 ).toEqual([]);
@@ -4971,53 +5147,56 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zrangeStore by index test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
-                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
 
-                const key = "{testKey}:1-" + uuidv4();
-                const destkey = "{testKey}:2-" + uuidv4();
-                const membersScores = { one: 1, two: 2, three: 3 };
-                expect(await client.zadd(key, membersScores)).toEqual(3);
+                    const key = "{testKey}:1-" + uuidv4();
+                    const destkey = "{testKey}:2-" + uuidv4();
+                    const membersScores = { one: 1, two: 2, three: 3 };
+                    expect(await client.zadd(key, membersScores)).toEqual(3);
 
-                expect(
-                    await client.zrangeStore(destkey, Buffer.from(key), {
-                        start: 0,
-                        stop: 1,
-                    }),
-                ).toEqual(2);
-                expect(
-                    await client.zrange(destkey, {
-                        start: 0,
-                        stop: -1,
-                    }),
-                ).toEqual(["one", "two"]);
-
-                expect(
-                    await client.zrangeStore(
-                        Buffer.from(destkey),
-                        key,
-                        { start: 0, stop: 1 },
-                        true,
-                    ),
-                ).toEqual(2);
-                expect(
-                    await client.zrange(
-                        destkey,
-                        {
+                    expect(
+                        await client.zrangeStore(destkey, Buffer.from(key), {
                             start: 0,
-                            stop: -1,
-                        },
-                        { reverse: true },
-                    ),
-                ).toEqual(["three", "two"]);
+                            end: 1,
+                        }),
+                    ).toEqual(2);
+                    expect(
+                        await client.zrange(destkey, {
+                            start: 0,
+                            end: -1,
+                        }),
+                    ).toEqual(["one", "two"]);
 
-                expect(
-                    await client.zrangeStore(destkey, key, {
-                        start: 3,
-                        stop: 1,
-                    }),
-                ).toEqual(0);
-            }, protocol);
+                    expect(
+                        await client.zrangeStore(
+                            Buffer.from(destkey),
+                            key,
+                            { start: 0, end: 1 },
+                            true,
+                        ),
+                    ).toEqual(2);
+                    expect(
+                        await client.zrange(
+                            destkey,
+                            {
+                                start: 0,
+                                end: -1,
+                            },
+                            { reverse: true },
+                        ),
+                    ).toEqual(["three", "two"]);
+
+                    expect(
+                        await client.zrangeStore(destkey, key, {
+                            start: 3,
+                            end: 1,
+                        }),
+                    ).toEqual(0);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -5025,86 +5204,89 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zrangeStore by score test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
-                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-                const key = "{testKey}:1-" + uuidv4();
-                const destkey = "{testKey}:2-" + uuidv4();
-                const membersScores = { one: 1, two: 2, three: 3 };
-                expect(await client.zadd(key, membersScores)).toEqual(3);
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                    const key = "{testKey}:1-" + uuidv4();
+                    const destkey = "{testKey}:2-" + uuidv4();
+                    const membersScores = { one: 1, two: 2, three: 3 };
+                    expect(await client.zadd(key, membersScores)).toEqual(3);
 
-                expect(
-                    await client.zrangeStore(destkey, key, {
-                        start: InfBoundary.NegativeInfinity,
-                        stop: { value: 3, isInclusive: false },
-                        type: "byScore",
-                    }),
-                ).toEqual(2);
-                expect(
-                    await client.zrange(destkey, {
-                        start: 0,
-                        stop: -1,
-                    }),
-                ).toEqual(["one", "two"]);
-
-                expect(
-                    await client.zrangeStore(
-                        destkey,
-                        key,
-                        {
-                            start: { value: 3, isInclusive: false },
-                            stop: InfBoundary.NegativeInfinity,
-                            type: "byScore",
-                        },
-                        true,
-                    ),
-                ).toEqual(2);
-                expect(
-                    await client.zrange(
-                        destkey,
-                        {
-                            start: 0,
-                            stop: -1,
-                        },
-                        { reverse: true },
-                    ),
-                ).toEqual(["two", "one"]);
-
-                expect(
-                    await client.zrangeStore(destkey, key, {
-                        start: InfBoundary.NegativeInfinity,
-                        stop: InfBoundary.PositiveInfinity,
-                        limit: { offset: 1, count: 2 },
-                        type: "byScore",
-                    }),
-                ).toEqual(2);
-                expect(
-                    await client.zrange(destkey, {
-                        start: 0,
-                        stop: -1,
-                    }),
-                ).toEqual(["two", "three"]);
-
-                expect(
-                    await client.zrangeStore(
-                        destkey,
-                        key,
-                        {
+                    expect(
+                        await client.zrangeStore(destkey, key, {
                             start: InfBoundary.NegativeInfinity,
-                            stop: { value: 3, isInclusive: false },
+                            end: { value: 3, isInclusive: false },
                             type: "byScore",
-                        },
-                        true,
-                    ),
-                ).toEqual(0);
+                        }),
+                    ).toEqual(2);
+                    expect(
+                        await client.zrange(destkey, {
+                            start: 0,
+                            end: -1,
+                        }),
+                    ).toEqual(["one", "two"]);
 
-                expect(
-                    await client.zrangeStore(destkey, key, {
-                        start: InfBoundary.PositiveInfinity,
-                        stop: { value: 3, isInclusive: false },
-                        type: "byScore",
-                    }),
-                ).toEqual(0);
-            }, protocol);
+                    expect(
+                        await client.zrangeStore(
+                            destkey,
+                            key,
+                            {
+                                start: { value: 3, isInclusive: false },
+                                end: InfBoundary.NegativeInfinity,
+                                type: "byScore",
+                            },
+                            true,
+                        ),
+                    ).toEqual(2);
+                    expect(
+                        await client.zrange(
+                            destkey,
+                            {
+                                start: 0,
+                                end: -1,
+                            },
+                            { reverse: true },
+                        ),
+                    ).toEqual(["two", "one"]);
+
+                    expect(
+                        await client.zrangeStore(destkey, key, {
+                            start: InfBoundary.NegativeInfinity,
+                            end: InfBoundary.PositiveInfinity,
+                            limit: { offset: 1, count: 2 },
+                            type: "byScore",
+                        }),
+                    ).toEqual(2);
+                    expect(
+                        await client.zrange(destkey, {
+                            start: 0,
+                            end: -1,
+                        }),
+                    ).toEqual(["two", "three"]);
+
+                    expect(
+                        await client.zrangeStore(
+                            destkey,
+                            key,
+                            {
+                                start: InfBoundary.NegativeInfinity,
+                                end: { value: 3, isInclusive: false },
+                                type: "byScore",
+                            },
+                            true,
+                        ),
+                    ).toEqual(0);
+
+                    expect(
+                        await client.zrangeStore(destkey, key, {
+                            start: InfBoundary.PositiveInfinity,
+                            end: { value: 3, isInclusive: false },
+                            type: "byScore",
+                        }),
+                    ).toEqual(0);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -5112,86 +5294,92 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zrangeStore by lex test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
-                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-                const key = "{testKey}:1-" + uuidv4();
-                const destkey = "{testKey}:2-" + uuidv4();
-                const membersScores = { a: 1, b: 2, c: 3 };
-                expect(await client.zadd(key, membersScores)).toEqual(3);
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                    const key = "{testKey}:1-" + uuidv4();
+                    const destkey = "{testKey}:2-" + uuidv4();
+                    const membersScores = { a: 1, b: 2, c: 3 };
+                    expect(await client.zadd(key, membersScores)).toEqual(3);
 
-                expect(
-                    await client.zrangeStore(destkey, key, {
-                        start: InfBoundary.NegativeInfinity,
-                        stop: { value: Buffer.from("c"), isInclusive: false },
-                        type: "byLex",
-                    }),
-                ).toEqual(2);
-                expect(
-                    await client.zrange(destkey, {
-                        start: 0,
-                        stop: -1,
-                    }),
-                ).toEqual(["a", "b"]);
-
-                expect(
-                    await client.zrangeStore(destkey, key, {
-                        start: InfBoundary.NegativeInfinity,
-                        stop: InfBoundary.PositiveInfinity,
-                        limit: { offset: 1, count: 2 },
-                        type: "byLex",
-                    }),
-                ).toEqual(2);
-                expect(
-                    await client.zrange(destkey, {
-                        start: 0,
-                        stop: -1,
-                    }),
-                ).toEqual(["b", "c"]);
-
-                expect(
-                    await client.zrangeStore(
-                        destkey,
-                        key,
-                        {
-                            start: { value: "c", isInclusive: false },
-                            stop: InfBoundary.NegativeInfinity,
-                            type: "byLex",
-                        },
-                        true,
-                    ),
-                ).toEqual(2);
-                expect(
-                    await client.zrange(
-                        destkey,
-                        {
-                            start: 0,
-                            stop: -1,
-                        },
-                        { reverse: true },
-                    ),
-                ).toEqual(["b", "a"]);
-
-                expect(
-                    await client.zrangeStore(
-                        destkey,
-                        key,
-                        {
+                    expect(
+                        await client.zrangeStore(destkey, key, {
                             start: InfBoundary.NegativeInfinity,
-                            stop: { value: "c", isInclusive: false },
+                            end: {
+                                value: Buffer.from("c"),
+                                isInclusive: false,
+                            },
                             type: "byLex",
-                        },
-                        true,
-                    ),
-                ).toEqual(0);
+                        }),
+                    ).toEqual(2);
+                    expect(
+                        await client.zrange(destkey, {
+                            start: 0,
+                            end: -1,
+                        }),
+                    ).toEqual(["a", "b"]);
 
-                expect(
-                    await client.zrangeStore(destkey, key, {
-                        start: InfBoundary.PositiveInfinity,
-                        stop: { value: "c", isInclusive: false },
-                        type: "byLex",
-                    }),
-                ).toEqual(0);
-            }, protocol);
+                    expect(
+                        await client.zrangeStore(destkey, key, {
+                            start: InfBoundary.NegativeInfinity,
+                            end: InfBoundary.PositiveInfinity,
+                            limit: { offset: 1, count: 2 },
+                            type: "byLex",
+                        }),
+                    ).toEqual(2);
+                    expect(
+                        await client.zrange(destkey, {
+                            start: 0,
+                            end: -1,
+                        }),
+                    ).toEqual(["b", "c"]);
+
+                    expect(
+                        await client.zrangeStore(
+                            destkey,
+                            key,
+                            {
+                                start: { value: "c", isInclusive: false },
+                                end: InfBoundary.NegativeInfinity,
+                                type: "byLex",
+                            },
+                            true,
+                        ),
+                    ).toEqual(2);
+                    expect(
+                        await client.zrange(
+                            destkey,
+                            {
+                                start: 0,
+                                end: -1,
+                            },
+                            { reverse: true },
+                        ),
+                    ).toEqual(["b", "a"]);
+
+                    expect(
+                        await client.zrangeStore(
+                            destkey,
+                            key,
+                            {
+                                start: InfBoundary.NegativeInfinity,
+                                end: { value: "c", isInclusive: false },
+                                type: "byLex",
+                            },
+                            true,
+                        ),
+                    ).toEqual(0);
+
+                    expect(
+                        await client.zrangeStore(destkey, key, {
+                            start: InfBoundary.PositiveInfinity,
+                            end: { value: "c", isInclusive: false },
+                            type: "byLex",
+                        }),
+                    ).toEqual(0);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -5199,53 +5387,56 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zrange and zrangeStore different types of keys test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
-                const key = "{testKey}:1-" + uuidv4();
-                const nonExistingKey = "{testKey}:2-" + uuidv4();
-                const destkey = "{testKey}:3-" + uuidv4();
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    const key = "{testKey}:1-" + uuidv4();
+                    const nonExistingKey = "{testKey}:2-" + uuidv4();
+                    const destkey = "{testKey}:3-" + uuidv4();
 
-                // test non-existing key - return an empty set
-                expect(
-                    await client.zrange(nonExistingKey, {
-                        start: 0,
-                        stop: 1,
-                    }),
-                ).toEqual([]);
+                    // test non-existing key - return an empty set
+                    expect(
+                        await client.zrange(nonExistingKey, {
+                            start: 0,
+                            end: 1,
+                        }),
+                    ).toEqual([]);
 
-                expect(
-                    await client.zrangeWithScores(nonExistingKey, {
-                        start: 0,
-                        stop: 1,
-                    }),
-                ).toEqual({});
+                    expect(
+                        await client.zrangeWithScores(nonExistingKey, {
+                            start: 0,
+                            end: 1,
+                        }),
+                    ).toEqual([]);
 
-                // test against a non-sorted set - throw RequestError
-                expect(await client.set(key, "value")).toEqual("OK");
+                    // test against a non-sorted set - throw RequestError
+                    expect(await client.set(key, "value")).toEqual("OK");
 
-                await expect(
-                    client.zrange(key, { start: 0, stop: 1 }),
-                ).rejects.toThrow();
+                    await expect(
+                        client.zrange(key, { start: 0, end: 1 }),
+                    ).rejects.toThrow();
 
-                await expect(
-                    client.zrangeWithScores(key, { start: 0, stop: 1 }),
-                ).rejects.toThrow();
+                    await expect(
+                        client.zrangeWithScores(key, { start: 0, end: 1 }),
+                    ).rejects.toThrow();
 
-                // test zrangeStore - added in version 6.2.0
-                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                    // test zrangeStore - added in version 6.2.0
+                    if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
 
-                // test non-existing key - stores an empty set
-                expect(
-                    await client.zrangeStore(destkey, nonExistingKey, {
-                        start: 0,
-                        stop: 1,
-                    }),
-                ).toEqual(0);
+                    // test non-existing key - stores an empty set
+                    expect(
+                        await client.zrangeStore(destkey, nonExistingKey, {
+                            start: 0,
+                            end: 1,
+                        }),
+                    ).toEqual(0);
 
-                // test against a non-sorted set - throw RequestError
-                await expect(
-                    client.zrangeStore(destkey, key, { start: 0, stop: 1 }),
-                ).rejects.toThrow();
-            }, protocol);
+                    // test against a non-sorted set - throw RequestError
+                    await expect(
+                        client.zrangeStore(destkey, key, { start: 0, end: 1 }),
+                    ).rejects.toThrow();
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -5257,7 +5448,7 @@ export function runBaseTests(config: {
         const key3 = "{testKey}:3-" + uuidv4();
         const range = {
             start: 0,
-            stop: -1,
+            end: -1,
         };
 
         const membersScores1 = { one: 1.0, two: 2.0 };
@@ -5267,35 +5458,49 @@ export function runBaseTests(config: {
         expect(await client.zadd(key2, membersScores2)).toEqual(3);
 
         // Intersection results are aggregated by the MAX score of elements
-        expect(await client.zinterstore(key3, [key1, key2], "MAX")).toEqual(2);
+        expect(
+            await client.zinterstore(key3, [key1, key2], {
+                aggregationType: "MAX",
+            }),
+        ).toEqual(2);
         const zinterstoreMapMax = await client.zrangeWithScores(key3, range);
         const expectedMapMax = {
             one: 2,
             two: 3,
         };
-        expect(compareMaps(zinterstoreMapMax, expectedMapMax)).toBe(true);
+        expect(zinterstoreMapMax).toEqual(
+            convertElementsAndScores(expectedMapMax),
+        );
 
         // Intersection results are aggregated by the MIN score of elements
         expect(
-            await client.zinterstore(Buffer.from(key3), [key1, key2], "MIN"),
+            await client.zinterstore(Buffer.from(key3), [key1, key2], {
+                aggregationType: "MIN",
+            }),
         ).toEqual(2);
         const zinterstoreMapMin = await client.zrangeWithScores(key3, range);
         const expectedMapMin = {
             one: 1,
             two: 2,
         };
-        expect(compareMaps(zinterstoreMapMin, expectedMapMin)).toBe(true);
+        expect(zinterstoreMapMin).toEqual(
+            convertElementsAndScores(expectedMapMin),
+        );
 
         // Intersection results are aggregated by the SUM score of elements
         expect(
-            await client.zinterstore(key3, [Buffer.from(key1), key2], "SUM"),
+            await client.zinterstore(key3, [Buffer.from(key1), key2], {
+                aggregationType: "SUM",
+            }),
         ).toEqual(2);
         const zinterstoreMapSum = await client.zrangeWithScores(key3, range);
         const expectedMapSum = {
             one: 3,
             two: 5,
         };
-        expect(compareMaps(zinterstoreMapSum, expectedMapSum)).toBe(true);
+        expect(zinterstoreMapSum).toEqual(
+            convertElementsAndScores(expectedMapSum),
+        );
     }
 
     async function zinterstoreBasicTest(client: BaseClient) {
@@ -5304,7 +5509,7 @@ export function runBaseTests(config: {
         const key3 = "{testKey}:3-" + uuidv4();
         const range = {
             start: 0,
-            stop: -1,
+            end: -1,
         };
 
         const membersScores1 = { one: 1.0, two: 2.0 };
@@ -5319,7 +5524,7 @@ export function runBaseTests(config: {
             one: 3,
             two: 5,
         };
-        expect(compareMaps(zinterstoreMap, expectedMap)).toBe(true);
+        expect(zinterstoreMap).toEqual(convertElementsAndScores(expectedMap));
     }
 
     async function zinterstoreWithWeightsAndAggregation(client: BaseClient) {
@@ -5328,7 +5533,7 @@ export function runBaseTests(config: {
         const key3 = "{testKey}:3-" + uuidv4();
         const range = {
             start: 0,
-            stop: -1,
+            end: -1,
         };
         const membersScores1 = { one: 1.0, two: 2.0 };
         const membersScores2 = { one: 2.0, two: 3.0, three: 4.0 };
@@ -5344,7 +5549,7 @@ export function runBaseTests(config: {
                     [key1, 2.0],
                     [key2, 2.0],
                 ],
-                "SUM",
+                { aggregationType: "SUM" },
             ),
         ).toEqual(2);
         const zinterstoreMapMultiplied = await client.zrangeWithScores(
@@ -5355,9 +5560,9 @@ export function runBaseTests(config: {
             one: 6,
             two: 10,
         };
-        expect(
-            compareMaps(zinterstoreMapMultiplied, expectedMapMultiplied),
-        ).toBe(true);
+        expect(zinterstoreMapMultiplied).toEqual(
+            convertElementsAndScores(expectedMapMultiplied),
+        );
     }
 
     async function zinterstoreEmptyCases(client: BaseClient) {
@@ -5392,31 +5597,33 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zinter basic test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
-                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-                const key1 = "{testKey}:1-" + uuidv4();
-                const key2 = "{testKey}:2-" + uuidv4();
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                    const key1 = "{testKey}:1-" + uuidv4();
+                    const key2 = "{testKey}:2-" + uuidv4();
 
-                const membersScores1 = { one: 1.0, two: 2.0 };
-                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+                    const membersScores1 = { one: 1.0, two: 2.0 };
+                    const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
 
-                expect(await client.zadd(key1, membersScores1)).toEqual(2);
-                expect(await client.zadd(key2, membersScores2)).toEqual(3);
+                    expect(await client.zadd(key1, membersScores1)).toEqual(2);
+                    expect(await client.zadd(key2, membersScores2)).toEqual(3);
 
-                expect(await client.zinter([key1, key2])).toEqual([
-                    "one",
-                    "two",
-                ]);
-                expect(await client.zinter([key1, Buffer.from(key2)])).toEqual([
-                    "one",
-                    "two",
-                ]);
-                expect(
-                    await client.zinter([key1, key2], {
-                        decoder: Decoder.Bytes,
-                    }),
-                ).toEqual([Buffer.from("one"), Buffer.from("two")]);
-            }, protocol);
+                    expect(await client.zinter([key1, key2])).toEqual([
+                        "one",
+                        "two",
+                    ]);
+                    expect(
+                        await client.zinter([key1, Buffer.from(key2)]),
+                    ).toEqual(["one", "two"]);
+                    expect(
+                        await client.zinter([key1, key2], {
+                            decoder: Decoder.Bytes,
+                        }),
+                    ).toEqual([Buffer.from("one"), Buffer.from("two")]);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -5424,29 +5631,33 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zinter with scores basic test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
-                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-                const key1 = "{testKey}:1-" + uuidv4();
-                const key2 = "{testKey}:2-" + uuidv4();
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                    const key1 = "{testKey}:1-" + uuidv4();
+                    const key2 = "{testKey}:2-" + uuidv4();
 
-                const membersScores1 = { one: 1.0, two: 2.0 };
-                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+                    const membersScores1 = { one: 1.0, two: 2.0 };
+                    const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
 
-                expect(await client.zadd(key1, membersScores1)).toEqual(2);
-                expect(await client.zadd(key2, membersScores2)).toEqual(3);
+                    expect(await client.zadd(key1, membersScores1)).toEqual(2);
+                    expect(await client.zadd(key2, membersScores2)).toEqual(3);
 
-                const resultZinterWithScores = await client.zinterWithScores([
-                    key1,
-                    Buffer.from(key2),
-                ]);
-                const expectedZinterWithScores = {
-                    one: 2.5,
-                    two: 4.5,
-                };
-                expect(resultZinterWithScores).toEqual(
-                    expectedZinterWithScores,
-                );
-            }, protocol);
+                    const resultZinterWithScores =
+                        await client.zinterWithScores([
+                            key1,
+                            Buffer.from(key2),
+                        ]);
+                    const expectedZinterWithScores = {
+                        one: 2.5,
+                        two: 4.5,
+                    };
+                    expect(resultZinterWithScores).toEqual(
+                        convertElementsAndScores(expectedZinterWithScores),
+                    );
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -5454,28 +5665,38 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zinter with scores with max aggregation test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
-                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-                const key1 = "{testKey}:1-" + uuidv4();
-                const key2 = "{testKey}:2-" + uuidv4();
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                    const key1 = "{testKey}:1-" + uuidv4();
+                    const key2 = "{testKey}:2-" + uuidv4();
 
-                const membersScores1 = { one: 1.0, two: 2.0 };
-                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+                    const membersScores1 = { one: 1.0, two: 2.0 };
+                    const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
 
-                expect(await client.zadd(key1, membersScores1)).toEqual(2);
-                expect(await client.zadd(key2, membersScores2)).toEqual(3);
+                    expect(await client.zadd(key1, membersScores1)).toEqual(2);
+                    expect(await client.zadd(key2, membersScores2)).toEqual(3);
 
-                // Intersection results are aggregated by the MAX score of elements
-                const zinterWithScoresResults = await client.zinterWithScores(
-                    [key1, key2],
-                    { aggregationType: "MAX" },
-                );
-                const expectedMapMax = {
-                    one: 1.5,
-                    two: 2.5,
-                };
-                expect(zinterWithScoresResults).toEqual(expectedMapMax);
-            }, protocol);
+                    // Intersection results are aggregated by the MAX score of elements
+                    const zinterWithScoresResults =
+                        await client.zinterWithScores([key1, key2], {
+                            aggregationType: "MAX",
+                            decoder: Decoder.Bytes,
+                        });
+                    const expected = [
+                        {
+                            element: Buffer.from("one"),
+                            score: 1.5,
+                        },
+                        {
+                            element: Buffer.from("two"),
+                            score: 2.5,
+                        },
+                    ];
+                    expect(zinterWithScoresResults).toEqual(expected);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -5483,28 +5704,33 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zinter with scores with min aggregation test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
-                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-                const key1 = "{testKey}:1-" + uuidv4();
-                const key2 = "{testKey}:2-" + uuidv4();
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                    const key1 = "{testKey}:1-" + uuidv4();
+                    const key2 = "{testKey}:2-" + uuidv4();
 
-                const membersScores1 = { one: 1.0, two: 2.0 };
-                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+                    const membersScores1 = { one: 1.0, two: 2.0 };
+                    const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
 
-                expect(await client.zadd(key1, membersScores1)).toEqual(2);
-                expect(await client.zadd(key2, membersScores2)).toEqual(3);
+                    expect(await client.zadd(key1, membersScores1)).toEqual(2);
+                    expect(await client.zadd(key2, membersScores2)).toEqual(3);
 
-                // Intersection results are aggregated by the MIN score of elements
-                const zinterWithScoresResults = await client.zinterWithScores(
-                    [key1, key2],
-                    { aggregationType: "MIN" },
-                );
-                const expectedMapMin = {
-                    one: 1.0,
-                    two: 2.0,
-                };
-                expect(zinterWithScoresResults).toEqual(expectedMapMin);
-            }, protocol);
+                    // Intersection results are aggregated by the MIN score of elements
+                    const zinterWithScoresResults =
+                        await client.zinterWithScores([key1, key2], {
+                            aggregationType: "MIN",
+                        });
+                    const expectedMapMin = {
+                        one: 1.0,
+                        two: 2.0,
+                    };
+                    expect(zinterWithScoresResults).toEqual(
+                        convertElementsAndScores(expectedMapMin),
+                    );
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -5512,28 +5738,33 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zinter with scores with sum aggregation test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
-                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-                const key1 = "{testKey}:1-" + uuidv4();
-                const key2 = "{testKey}:2-" + uuidv4();
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                    const key1 = "{testKey}:1-" + uuidv4();
+                    const key2 = "{testKey}:2-" + uuidv4();
 
-                const membersScores1 = { one: 1.0, two: 2.0 };
-                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+                    const membersScores1 = { one: 1.0, two: 2.0 };
+                    const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
 
-                expect(await client.zadd(key1, membersScores1)).toEqual(2);
-                expect(await client.zadd(key2, membersScores2)).toEqual(3);
+                    expect(await client.zadd(key1, membersScores1)).toEqual(2);
+                    expect(await client.zadd(key2, membersScores2)).toEqual(3);
 
-                // Intersection results are aggregated by the SUM score of elements
-                const zinterWithScoresResults = await client.zinterWithScores(
-                    [key1, key2],
-                    { aggregationType: "SUM" },
-                );
-                const expectedMapSum = {
-                    one: 2.5,
-                    two: 4.5,
-                };
-                expect(zinterWithScoresResults).toEqual(expectedMapSum);
-            }, protocol);
+                    // Intersection results are aggregated by the SUM score of elements
+                    const zinterWithScoresResults =
+                        await client.zinterWithScores([key1, key2], {
+                            aggregationType: "SUM",
+                        });
+                    const expectedMapSum = {
+                        one: 2.5,
+                        two: 4.5,
+                    };
+                    expect(zinterWithScoresResults).toEqual(
+                        convertElementsAndScores(expectedMapSum),
+                    );
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -5541,31 +5772,37 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zinter with scores with weights and aggregation test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
-                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-                const key1 = "{testKey}:1-" + uuidv4();
-                const key2 = "{testKey}:2-" + uuidv4();
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                    const key1 = "{testKey}:1-" + uuidv4();
+                    const key2 = "{testKey}:2-" + uuidv4();
 
-                const membersScores1 = { one: 1.0, two: 2.0 };
-                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+                    const membersScores1 = { one: 1.0, two: 2.0 };
+                    const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
 
-                expect(await client.zadd(key1, membersScores1)).toEqual(2);
-                expect(await client.zadd(key2, membersScores2)).toEqual(3);
+                    expect(await client.zadd(key1, membersScores1)).toEqual(2);
+                    expect(await client.zadd(key2, membersScores2)).toEqual(3);
 
-                // Intersection results are aggregated by the SUM score of elements with weights
-                const zinterWithScoresResults = await client.zinterWithScores(
-                    [
-                        [key1, 3],
-                        [key2, 2],
-                    ],
-                    { aggregationType: "SUM" },
-                );
-                const expectedMapSum = {
-                    one: 6,
-                    two: 11,
-                };
-                expect(zinterWithScoresResults).toEqual(expectedMapSum);
-            }, protocol);
+                    // Intersection results are aggregated by the SUM score of elements with weights
+                    const zinterWithScoresResults =
+                        await client.zinterWithScores(
+                            [
+                                [key1, 3],
+                                [key2, 2],
+                            ],
+                            { aggregationType: "SUM" },
+                        );
+                    const expectedMapSum = {
+                        one: 6,
+                        two: 11,
+                    };
+                    expect(zinterWithScoresResults).toEqual(
+                        convertElementsAndScores(expectedMapSum),
+                    );
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -5573,29 +5810,35 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zinter empty test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
-                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-                const key1 = "{testKey}:1-" + uuidv4();
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                    const key1 = "{testKey}:1-" + uuidv4();
 
-                // Non existing key zinter
-                expect(
-                    await client.zinter([key1, "{testKey}-non_existing_key"]),
-                ).toEqual([]);
+                    // Non existing key zinter
+                    expect(
+                        await client.zinter([
+                            key1,
+                            "{testKey}-non_existing_key",
+                        ]),
+                    ).toEqual([]);
 
-                // Non existing key zinterWithScores
-                expect(
-                    await client.zinterWithScores([
-                        key1,
-                        "{testKey}-non_existing_key",
-                    ]),
-                ).toEqual({});
+                    // Non existing key zinterWithScores
+                    expect(
+                        await client.zinterWithScores([
+                            key1,
+                            "{testKey}-non_existing_key",
+                        ]),
+                    ).toEqual([]);
 
-                // Empty list check zinter
-                await expect(client.zinter([])).rejects.toThrow();
+                    // Empty list check zinter
+                    await expect(client.zinter([])).rejects.toThrow();
 
-                // Empty list check zinterWithScores
-                await expect(client.zinterWithScores([])).rejects.toThrow();
-            }, protocol);
+                    // Empty list check zinterWithScores
+                    await expect(client.zinterWithScores([])).rejects.toThrow();
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -5603,30 +5846,33 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zunion basic test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
-                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-                const key1 = "{testKey}:1-" + uuidv4();
-                const key2 = "{testKey}:2-" + uuidv4();
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                    const key1 = "{testKey}:1-" + uuidv4();
+                    const key2 = "{testKey}:2-" + uuidv4();
 
-                const membersScores1 = { one: 1.0, two: 2.0 };
-                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+                    const membersScores1 = { one: 1.0, two: 2.0 };
+                    const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
 
-                expect(await client.zadd(key1, membersScores1)).toEqual(2);
-                expect(await client.zadd(key2, membersScores2)).toEqual(3);
+                    expect(await client.zadd(key1, membersScores1)).toEqual(2);
+                    expect(await client.zadd(key2, membersScores2)).toEqual(3);
 
-                const expectedZunion = ["one", "two", "three"].sort();
+                    const expectedZunion = ["one", "two", "three"].sort();
 
-                expect(
-                    (await client.zunion([key1, Buffer.from(key2)])).sort(),
-                ).toEqual(expectedZunion);
-                expect(
-                    (
-                        await client.zunion([key1, key2], {
-                            decoder: Decoder.Bytes,
-                        })
-                    ).sort(),
-                ).toEqual(expectedZunion.map(Buffer.from));
-            }, protocol);
+                    expect(
+                        (await client.zunion([key1, Buffer.from(key2)])).sort(),
+                    ).toEqual(expectedZunion);
+                    expect(
+                        (
+                            await client.zunion([key1, key2], {
+                                decoder: Decoder.Bytes,
+                            })
+                        ).sort(),
+                    ).toEqual(expectedZunion.map(Buffer.from));
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -5634,30 +5880,33 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zunion with scores basic test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
-                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-                const key1 = "{testKey}:1-" + uuidv4();
-                const key2 = "{testKey}:2-" + uuidv4();
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                    const key1 = "{testKey}:1-" + uuidv4();
+                    const key2 = "{testKey}:2-" + uuidv4();
 
-                const membersScores1 = { one: 1.0, two: 2.0 };
-                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+                    const membersScores1 = { one: 1.0, two: 2.0 };
+                    const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
 
-                expect(await client.zadd(key1, membersScores1)).toEqual(2);
-                expect(await client.zadd(key2, membersScores2)).toEqual(3);
+                    expect(await client.zadd(key1, membersScores1)).toEqual(2);
+                    expect(await client.zadd(key2, membersScores2)).toEqual(3);
 
-                const resultZunionWithScores = await client.zunionWithScores([
-                    key1,
-                    key2,
-                ]);
-                const expectedZunionWithScores = {
-                    one: 2.5,
-                    two: 4.5,
-                    three: 3.5,
-                };
-                expect(resultZunionWithScores).toEqual(
-                    expectedZunionWithScores,
-                );
-            }, protocol);
+                    const resultZunionWithScores =
+                        await client.zunionWithScores([key1, key2]);
+                    const expectedZunionWithScores = {
+                        one: 2.5,
+                        two: 4.5,
+                        three: 3.5,
+                    };
+                    expect(resultZunionWithScores).toEqual(
+                        convertElementsAndScores(expectedZunionWithScores).sort(
+                            (a, b) => a.score - b.score,
+                        ),
+                    );
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -5665,29 +5914,42 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zunion with scores with max aggregation test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
-                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-                const key1 = "{testKey}:1-" + uuidv4();
-                const key2 = "{testKey}:2-" + uuidv4();
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                    const key1 = "{testKey}:1-" + uuidv4();
+                    const key2 = "{testKey}:2-" + uuidv4();
 
-                const membersScores1 = { one: 1.0, two: 2.0 };
-                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+                    const membersScores1 = { one: 1.0, two: 2.0 };
+                    const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
 
-                expect(await client.zadd(key1, membersScores1)).toEqual(2);
-                expect(await client.zadd(key2, membersScores2)).toEqual(3);
+                    expect(await client.zadd(key1, membersScores1)).toEqual(2);
+                    expect(await client.zadd(key2, membersScores2)).toEqual(3);
 
-                // Union results are aggregated by the MAX score of elements
-                const zunionWithScoresResults = await client.zunionWithScores(
-                    [key1, Buffer.from(key2)],
-                    { aggregationType: "MAX" },
-                );
-                const expectedMapMax = {
-                    one: 1.5,
-                    two: 2.5,
-                    three: 3.5,
-                };
-                expect(zunionWithScoresResults).toEqual(expectedMapMax);
-            }, protocol);
+                    // Union results are aggregated by the MAX score of elements
+                    const zunionWithScoresResults =
+                        await client.zunionWithScores(
+                            [key1, Buffer.from(key2)],
+                            { aggregationType: "MAX", decoder: Decoder.Bytes },
+                        );
+                    const expected = [
+                        {
+                            element: Buffer.from("one"),
+                            score: 1.5,
+                        },
+                        {
+                            element: Buffer.from("two"),
+                            score: 2.5,
+                        },
+                        {
+                            element: Buffer.from("three"),
+                            score: 3.5,
+                        },
+                    ];
+                    expect(zunionWithScoresResults).toEqual(expected);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -5695,29 +5957,34 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zunion with scores with min aggregation test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
-                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-                const key1 = "{testKey}:1-" + uuidv4();
-                const key2 = "{testKey}:2-" + uuidv4();
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                    const key1 = "{testKey}:1-" + uuidv4();
+                    const key2 = "{testKey}:2-" + uuidv4();
 
-                const membersScores1 = { one: 1.0, two: 2.0 };
-                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+                    const membersScores1 = { one: 1.0, two: 2.0 };
+                    const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
 
-                expect(await client.zadd(key1, membersScores1)).toEqual(2);
-                expect(await client.zadd(key2, membersScores2)).toEqual(3);
+                    expect(await client.zadd(key1, membersScores1)).toEqual(2);
+                    expect(await client.zadd(key2, membersScores2)).toEqual(3);
 
-                // Union results are aggregated by the MIN score of elements
-                const zunionWithScoresResults = await client.zunionWithScores(
-                    [key1, key2],
-                    { aggregationType: "MIN" },
-                );
-                const expectedMapMin = {
-                    one: 1.0,
-                    two: 2.0,
-                    three: 3.5,
-                };
-                expect(zunionWithScoresResults).toEqual(expectedMapMin);
-            }, protocol);
+                    // Union results are aggregated by the MIN score of elements
+                    const zunionWithScoresResults =
+                        await client.zunionWithScores([key1, key2], {
+                            aggregationType: "MIN",
+                        });
+                    const expectedMapMin = {
+                        one: 1.0,
+                        two: 2.0,
+                        three: 3.5,
+                    };
+                    expect(zunionWithScoresResults).toEqual(
+                        convertElementsAndScores(expectedMapMin),
+                    );
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -5725,29 +5992,36 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zunion with scores with sum aggregation test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
-                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-                const key1 = "{testKey}:1-" + uuidv4();
-                const key2 = "{testKey}:2-" + uuidv4();
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                    const key1 = "{testKey}:1-" + uuidv4();
+                    const key2 = "{testKey}:2-" + uuidv4();
 
-                const membersScores1 = { one: 1.0, two: 2.0 };
-                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+                    const membersScores1 = { one: 1.0, two: 2.0 };
+                    const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
 
-                expect(await client.zadd(key1, membersScores1)).toEqual(2);
-                expect(await client.zadd(key2, membersScores2)).toEqual(3);
+                    expect(await client.zadd(key1, membersScores1)).toEqual(2);
+                    expect(await client.zadd(key2, membersScores2)).toEqual(3);
 
-                // Union results are aggregated by the SUM score of elements
-                const zunionWithScoresResults = await client.zunionWithScores(
-                    [key1, key2],
-                    { aggregationType: "SUM" },
-                );
-                const expectedMapSum = {
-                    one: 2.5,
-                    two: 4.5,
-                    three: 3.5,
-                };
-                expect(zunionWithScoresResults).toEqual(expectedMapSum);
-            }, protocol);
+                    // Union results are aggregated by the SUM score of elements
+                    const zunionWithScoresResults =
+                        await client.zunionWithScores([key1, key2], {
+                            aggregationType: "SUM",
+                        });
+                    const expectedMapSum = {
+                        one: 2.5,
+                        two: 4.5,
+                        three: 3.5,
+                    };
+                    expect(zunionWithScoresResults).toEqual(
+                        convertElementsAndScores(expectedMapSum).sort(
+                            (a, b) => a.score - b.score,
+                        ),
+                    );
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -5755,32 +6029,40 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zunion with scores with weights and aggregation test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
-                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-                const key1 = "{testKey}:1-" + uuidv4();
-                const key2 = "{testKey}:2-" + uuidv4();
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                    const key1 = "{testKey}:1-" + uuidv4();
+                    const key2 = "{testKey}:2-" + uuidv4();
 
-                const membersScores1 = { one: 1.0, two: 2.0 };
-                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+                    const membersScores1 = { one: 1.0, two: 2.0 };
+                    const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
 
-                expect(await client.zadd(key1, membersScores1)).toEqual(2);
-                expect(await client.zadd(key2, membersScores2)).toEqual(3);
+                    expect(await client.zadd(key1, membersScores1)).toEqual(2);
+                    expect(await client.zadd(key2, membersScores2)).toEqual(3);
 
-                // Union results are aggregated by the SUM score of elements with weights
-                const zunionWithScoresResults = await client.zunionWithScores(
-                    [
-                        [key1, 3],
-                        [Buffer.from(key2), 2],
-                    ],
-                    { aggregationType: "SUM" },
-                );
-                const expectedMapSum = {
-                    one: 6,
-                    two: 11,
-                    three: 7,
-                };
-                expect(zunionWithScoresResults).toEqual(expectedMapSum);
-            }, protocol);
+                    // Union results are aggregated by the SUM score of elements with weights
+                    const zunionWithScoresResults =
+                        await client.zunionWithScores(
+                            [
+                                [key1, 3],
+                                [Buffer.from(key2), 2],
+                            ],
+                            { aggregationType: "SUM" },
+                        );
+                    const expectedMapSum = {
+                        one: 6,
+                        two: 11,
+                        three: 7,
+                    };
+                    expect(zunionWithScoresResults).toEqual(
+                        convertElementsAndScores(expectedMapSum).sort(
+                            (a, b) => a.score - b.score,
+                        ),
+                    );
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -5788,33 +6070,39 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zunion empty test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
-                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-                const key1 = "{testKey}:1-" + uuidv4();
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                    const key1 = "{testKey}:1-" + uuidv4();
 
-                const membersScores1 = { one: 1.0, two: 2.0 };
+                    const membersScores1 = { one: 1.0, two: 2.0 };
 
-                expect(await client.zadd(key1, membersScores1)).toEqual(2);
+                    expect(await client.zadd(key1, membersScores1)).toEqual(2);
 
-                // Non existing key zunion
-                expect(
-                    await client.zunion([key1, "{testKey}-non_existing_key"]),
-                ).toEqual(["one", "two"]);
+                    // Non existing key zunion
+                    expect(
+                        await client.zunion([
+                            key1,
+                            "{testKey}-non_existing_key",
+                        ]),
+                    ).toEqual(["one", "two"]);
 
-                // Non existing key zunionWithScores
-                expect(
-                    await client.zunionWithScores([
-                        key1,
-                        "{testKey}-non_existing_key",
-                    ]),
-                ).toEqual(membersScores1);
+                    // Non existing key zunionWithScores
+                    expect(
+                        await client.zunionWithScores([
+                            key1,
+                            "{testKey}-non_existing_key",
+                        ]),
+                    ).toEqual(convertElementsAndScores(membersScores1));
 
-                // Empty list check zunion
-                await expect(client.zunion([])).rejects.toThrow();
+                    // Empty list check zunion
+                    await expect(client.zunion([])).rejects.toThrow();
 
-                // Empty list check zunionWithScores
-                await expect(client.zunionWithScores([])).rejects.toThrow();
-            }, protocol);
+                    // Empty list check zunionWithScores
+                    await expect(client.zunionWithScores([])).rejects.toThrow();
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -6066,20 +6354,29 @@ export function runBaseTests(config: {
                 const key = uuidv4();
                 const membersScores = { a: 1, b: 2, c: 3 };
                 expect(await client.zadd(key, membersScores)).toEqual(3);
-                expect(await client.zpopmin(Buffer.from(key))).toEqual({
-                    a: 1.0,
-                });
+                expect(await client.zpopmin(Buffer.from(key))).toEqual(
+                    convertElementsAndScores({ a: 1.0 }),
+                );
 
                 expect(
-                    compareMaps(await client.zpopmin(key, { count: 3 }), {
-                        b: 2.0,
-                        c: 3.0,
+                    await client.zpopmin(key, {
+                        count: 3,
+                        decoder: Decoder.Bytes,
                     }),
-                ).toBe(true);
-                expect(await client.zpopmin(key)).toEqual({});
+                ).toEqual([
+                    {
+                        element: Buffer.from("b"),
+                        score: 2.0,
+                    },
+                    {
+                        element: Buffer.from("c"),
+                        score: 3.0,
+                    },
+                ]);
+                expect(await client.zpopmin(key)).toEqual([]);
                 expect(await client.set(key, "value")).toEqual("OK");
                 await expect(client.zpopmin(key)).rejects.toThrow();
-                expect(await client.zpopmin("notExsitingKey")).toEqual({});
+                expect(await client.zpopmin("notExsitingKey")).toEqual([]);
             }, protocol);
         },
         config.timeout,
@@ -6092,20 +6389,29 @@ export function runBaseTests(config: {
                 const key = uuidv4();
                 const membersScores = { a: 1, b: 2, c: 3 };
                 expect(await client.zadd(key, membersScores)).toEqual(3);
-                expect(await client.zpopmax(Buffer.from(key))).toEqual({
-                    c: 3.0,
-                });
+                expect(await client.zpopmax(Buffer.from(key))).toEqual(
+                    convertElementsAndScores({ c: 3.0 }),
+                );
 
                 expect(
-                    compareMaps(await client.zpopmax(key, { count: 3 }), {
-                        b: 2.0,
-                        a: 1.0,
+                    await client.zpopmax(key, {
+                        count: 3,
+                        decoder: Decoder.Bytes,
                     }),
-                ).toBe(true);
-                expect(await client.zpopmax(key)).toEqual({});
+                ).toEqual([
+                    {
+                        element: Buffer.from("b"),
+                        score: 2.0,
+                    },
+                    {
+                        element: Buffer.from("a"),
+                        score: 1.0,
+                    },
+                ]);
+                expect(await client.zpopmax(key)).toEqual([]);
                 expect(await client.set(key, "value")).toEqual("OK");
                 await expect(client.zpopmax(key)).rejects.toThrow();
-                expect(await client.zpopmax("notExsitingKey")).toEqual({});
+                expect(await client.zpopmax("notExsitingKey")).toEqual([]);
             }, protocol);
         },
         config.timeout,
@@ -6114,46 +6420,49 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `bzpopmax test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
-                const key1 = "{key}-1" + uuidv4();
-                const key2 = "{key}-2" + uuidv4();
-                const key3 = "{key}-3" + uuidv4();
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    const key1 = "{key}-1" + uuidv4();
+                    const key2 = "{key}-2" + uuidv4();
+                    const key3 = "{key}-3" + uuidv4();
 
-                expect(await client.zadd(key1, { a: 1.0, b: 1.5 })).toBe(2);
-                expect(await client.zadd(key2, { c: 2.0 })).toBe(1);
-                expect(await client.bzpopmax([key1, key2], 0.5)).toEqual([
-                    key1,
-                    "b",
-                    1.5,
-                ]);
+                    expect(await client.zadd(key1, { a: 1.0, b: 1.5 })).toBe(2);
+                    expect(await client.zadd(key2, { c: 2.0 })).toBe(1);
+                    expect(await client.bzpopmax([key1, key2], 0.5)).toEqual([
+                        key1,
+                        "b",
+                        1.5,
+                    ]);
 
-                // nothing popped out / key does not exist
-                expect(
-                    await client.bzpopmax(
-                        [key3],
-                        cluster.checkIfServerVersionLessThan("6.0.0")
-                            ? 1.0
-                            : 0.001,
-                    ),
-                ).toBeNull();
+                    // nothing popped out / key does not exist
+                    expect(
+                        await client.bzpopmax(
+                            [key3],
+                            cluster.checkIfServerVersionLessThan("6.0.0")
+                                ? 1.0
+                                : 0.001,
+                        ),
+                    ).toBeNull();
 
-                // pops from the second key
-                expect(
-                    await client.bzpopmax([key3, Buffer.from(key2)], 0.5),
-                ).toEqual([key2, "c", 2.0]);
-                // pop with decoder
-                expect(
-                    await client.bzpopmax([key1], 0.5, {
-                        decoder: Decoder.Bytes,
-                    }),
-                ).toEqual([Buffer.from(key1), Buffer.from("a"), 1.0]);
+                    // pops from the second key
+                    expect(
+                        await client.bzpopmax([key3, Buffer.from(key2)], 0.5),
+                    ).toEqual([key2, "c", 2.0]);
+                    // pop with decoder
+                    expect(
+                        await client.bzpopmax([key1], 0.5, {
+                            decoder: Decoder.Bytes,
+                        }),
+                    ).toEqual([Buffer.from(key1), Buffer.from("a"), 1.0]);
 
-                // key exists but holds non-ZSET value
-                expect(await client.set(key3, "bzpopmax")).toBe("OK");
-                await expect(client.bzpopmax([key3], 0.5)).rejects.toThrow(
-                    RequestError,
-                );
-            }, protocol);
+                    // key exists but holds non-ZSET value
+                    expect(await client.set(key3, "bzpopmax")).toBe("OK");
+                    await expect(client.bzpopmax([key3], 0.5)).rejects.toThrow(
+                        RequestError,
+                    );
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -6161,46 +6470,49 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `bzpopmin test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
-                const key1 = "{key}-1" + uuidv4();
-                const key2 = "{key}-2" + uuidv4();
-                const key3 = "{key}-3" + uuidv4();
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    const key1 = "{key}-1" + uuidv4();
+                    const key2 = "{key}-2" + uuidv4();
+                    const key3 = "{key}-3" + uuidv4();
 
-                expect(await client.zadd(key1, { a: 1.0, b: 1.5 })).toBe(2);
-                expect(await client.zadd(key2, { c: 2.0 })).toBe(1);
-                expect(await client.bzpopmin([key1, key2], 0.5)).toEqual([
-                    key1,
-                    "a",
-                    1.0,
-                ]);
+                    expect(await client.zadd(key1, { a: 1.0, b: 1.5 })).toBe(2);
+                    expect(await client.zadd(key2, { c: 2.0 })).toBe(1);
+                    expect(await client.bzpopmin([key1, key2], 0.5)).toEqual([
+                        key1,
+                        "a",
+                        1.0,
+                    ]);
 
-                // nothing popped out / key does not exist
-                expect(
-                    await client.bzpopmin(
-                        [key3],
-                        cluster.checkIfServerVersionLessThan("6.0.0")
-                            ? 1.0
-                            : 0.001,
-                    ),
-                ).toBeNull();
+                    // nothing popped out / key does not exist
+                    expect(
+                        await client.bzpopmin(
+                            [key3],
+                            cluster.checkIfServerVersionLessThan("6.0.0")
+                                ? 1.0
+                                : 0.001,
+                        ),
+                    ).toBeNull();
 
-                // pops from the second key
-                expect(
-                    await client.bzpopmin([key3, Buffer.from(key2)], 0.5),
-                ).toEqual([key2, "c", 2.0]);
-                // pop with decoder
-                expect(
-                    await client.bzpopmin([key1], 0.5, {
-                        decoder: Decoder.Bytes,
-                    }),
-                ).toEqual([Buffer.from(key1), Buffer.from("b"), 1.5]);
+                    // pops from the second key
+                    expect(
+                        await client.bzpopmin([key3, Buffer.from(key2)], 0.5),
+                    ).toEqual([key2, "c", 2.0]);
+                    // pop with decoder
+                    expect(
+                        await client.bzpopmin([key1], 0.5, {
+                            decoder: Decoder.Bytes,
+                        }),
+                    ).toEqual([Buffer.from(key1), Buffer.from("b"), 1.5]);
 
-                // key exists but holds non-ZSET value
-                expect(await client.set(key3, "bzpopmin")).toBe("OK");
-                await expect(client.bzpopmin([key3], 0.5)).rejects.toThrow(
-                    RequestError,
-                );
-            }, protocol);
+                    // key exists but holds non-ZSET value
+                    expect(await client.set(key3, "bzpopmin")).toBe("OK");
+                    await expect(client.bzpopmin([key3], 0.5)).rejects.toThrow(
+                        RequestError,
+                    );
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -6554,7 +6866,7 @@ export function runBaseTests(config: {
                         exact: true,
                     }),
                 ).toEqual(1);
-                // Unlike other Redis collection types, stream keys still exist even after removing all entries
+                // Unlike other Valkey collection types, stream keys still exist even after removing all entries
                 expect(await client.exists([key])).toEqual(1);
                 expect(await client.xlen(key)).toEqual(0);
 
@@ -6652,7 +6964,7 @@ export function runBaseTests(config: {
                             Buffer.from(key),
                             { isInclusive: false, value: streamId2 },
                             { value: "5" },
-                            1,
+                            { count: 1 },
                         ),
                     ).toEqual({ [streamId3]: [["f3", "v3"]] });
 
@@ -6661,7 +6973,7 @@ export function runBaseTests(config: {
                             key,
                             { value: "5" },
                             { isInclusive: false, value: streamId2 },
-                            1,
+                            { count: 1 },
                         ),
                     ).toEqual({ [streamId3]: [["f3", "v3"]] });
                 }
@@ -6675,7 +6987,7 @@ export function runBaseTests(config: {
                         key,
                         InfBoundary.NegativeInfinity,
                         InfBoundary.PositiveInfinity,
-                        10,
+                        { count: 10 },
                     ),
                 ).toEqual({});
                 expect(
@@ -6683,7 +6995,7 @@ export function runBaseTests(config: {
                         key,
                         InfBoundary.PositiveInfinity,
                         InfBoundary.NegativeInfinity,
-                        10,
+                        { count: 10 },
                     ),
                 ).toEqual({});
 
@@ -6708,7 +7020,7 @@ export function runBaseTests(config: {
                         key,
                         InfBoundary.NegativeInfinity,
                         InfBoundary.PositiveInfinity,
-                        0,
+                        { count: 0 },
                     ),
                 ).toEqual(null);
                 expect(
@@ -6716,7 +7028,7 @@ export function runBaseTests(config: {
                         key,
                         InfBoundary.NegativeInfinity,
                         InfBoundary.PositiveInfinity,
-                        -1,
+                        { count: -1 },
                     ),
                 ).toEqual(null);
                 expect(
@@ -6724,7 +7036,7 @@ export function runBaseTests(config: {
                         key,
                         InfBoundary.PositiveInfinity,
                         InfBoundary.NegativeInfinity,
-                        0,
+                        { count: 0 },
                     ),
                 ).toEqual(null);
                 expect(
@@ -6732,7 +7044,7 @@ export function runBaseTests(config: {
                         key,
                         InfBoundary.PositiveInfinity,
                         InfBoundary.NegativeInfinity,
-                        -1,
+                        { count: -1 },
                     ),
                 ).toEqual(null);
 
@@ -6971,38 +7283,38 @@ export function runBaseTests(config: {
                 const field2 = "bar";
                 const field3 = "barvaz";
 
-                const timestamp_1_1 = await client.xadd(key1, [
+                const timestamp_1_1 = (await client.xadd(key1, [
                     [field1, "foo1"],
                     [field3, "barvaz1"],
-                ]);
+                ])) as string;
                 expect(timestamp_1_1).not.toBeNull();
-                const timestamp_2_1 = await client.xadd(key2, [
+                const timestamp_2_1 = (await client.xadd(key2, [
                     [field2, "bar1"],
-                ]);
+                ])) as string;
                 expect(timestamp_2_1).not.toBeNull();
-                const timestamp_1_2 = await client.xadd(key1, [
+                const timestamp_1_2 = (await client.xadd(key1, [
                     [field1, "foo2"],
-                ]);
-                const timestamp_2_2 = await client.xadd(key2, [
+                ])) as string;
+                const timestamp_2_2 = (await client.xadd(key2, [
                     [field2, "bar2"],
-                ]);
-                const timestamp_1_3 = await client.xadd(key1, [
+                ])) as string;
+                const timestamp_1_3 = (await client.xadd(key1, [
                     [field1, "foo3"],
                     [field3, "barvaz3"],
-                ]);
-                const timestamp_2_3 = await client.xadd(key2, [
+                ])) as string;
+                const timestamp_2_3 = (await client.xadd(key2, [
                     [field2, "bar3"],
-                ]);
+                ])) as string;
 
                 const result = await client.xread(
                     [
                         {
                             key: Buffer.from(key1),
-                            value: timestamp_1_1 as string,
+                            value: timestamp_1_1,
                         },
                         {
                             key: key2,
-                            value: Buffer.from(timestamp_2_1 as string),
+                            value: timestamp_2_1,
                         },
                     ],
                     {
@@ -7012,32 +7324,42 @@ export function runBaseTests(config: {
 
                 const expected = {
                     [key1]: {
-                        [timestamp_1_2 as string]: [[field1, "foo2"]],
-                        [timestamp_1_3 as string]: [
+                        [timestamp_1_2]: [[field1, "foo2"]],
+                        [timestamp_1_3]: [
                             [field1, "foo3"],
                             [field3, "barvaz3"],
                         ],
                     },
                     [key2]: {
-                        [timestamp_2_2 as string]: [["bar", "bar2"]],
-                        [timestamp_2_3 as string]: [["bar", "bar3"]],
+                        [timestamp_2_2]: [["bar", "bar2"]],
+                        [timestamp_2_3]: [["bar", "bar3"]],
                     },
                 };
-                expect(result).toEqual(expected);
+                expect(convertGlideRecordToRecord(result!)).toEqual(expected);
 
                 // key does not exist
                 expect(await client.xread({ [key3]: "0-0" })).toBeNull();
                 expect(
-                    await client.xread({
-                        [key2]: timestamp_2_1 as string,
-                        [key3]: "0-0",
-                    }),
-                ).toEqual({
-                    [key2]: {
-                        [timestamp_2_2 as string]: [["bar", "bar2"]],
-                        [timestamp_2_3 as string]: [["bar", "bar3"]],
+                    await client.xread(
+                        {
+                            [key2]: timestamp_2_1,
+                            [key3]: "0-0",
+                        },
+                        { decoder: Decoder.Bytes },
+                    ),
+                ).toEqual([
+                    {
+                        key: Buffer.from(key2),
+                        value: {
+                            [timestamp_2_2]: [
+                                [Buffer.from("bar"), Buffer.from("bar2")],
+                            ],
+                            [timestamp_2_3]: [
+                                [Buffer.from("bar"), Buffer.from("bar3")],
+                            ],
+                        },
                     },
-                });
+                ]);
 
                 // key is not a stream
                 expect(await client.set(key3, uuidv4())).toEqual("OK");
@@ -7064,7 +7386,7 @@ export function runBaseTests(config: {
                     await client.xgroupCreate(
                         Buffer.from(key1),
                         Buffer.from(group),
-                        Buffer.from("0"),
+                        "0",
                         {
                             mkStream: true,
                         },
@@ -7088,10 +7410,17 @@ export function runBaseTests(config: {
 
                 // read the entire stream for the consumer and mark messages as pending
                 expect(
-                    await client.xreadgroup(
-                        Buffer.from(group),
-                        Buffer.from(consumer),
-                        [{ key: Buffer.from(key1), value: Buffer.from(">") }],
+                    convertGlideRecordToRecord(
+                        (await client.xreadgroup(
+                            Buffer.from(group),
+                            Buffer.from(consumer),
+                            [
+                                {
+                                    key: Buffer.from(key1),
+                                    value: ">",
+                                },
+                            ],
+                        ))!,
                     ),
                 ).toEqual({
                     [key1]: {
@@ -7105,7 +7434,11 @@ export function runBaseTests(config: {
 
                 // now xreadgroup returns one empty entry and one non-empty entry
                 expect(
-                    await client.xreadgroup(group, consumer, { [key1]: "0" }),
+                    convertGlideRecordToRecord(
+                        (await client.xreadgroup(group, consumer, {
+                            [key1]: "0",
+                        }))!,
+                    ),
                 ).toEqual({
                     [key1]: {
                         [entry1]: null,
@@ -7123,7 +7456,11 @@ export function runBaseTests(config: {
                     ["e", "f"],
                 ])) as string;
                 expect(
-                    await client.xreadgroup(group, consumer, { [key1]: ">" }),
+                    convertGlideRecordToRecord(
+                        (await client.xreadgroup(group, consumer, {
+                            [key1]: ">",
+                        }))!,
+                    ),
                 ).toEqual({
                     [key1]: {
                         [entry3]: [["e", "f"]],
@@ -7142,10 +7479,12 @@ export function runBaseTests(config: {
 
                 // read both keys
                 expect(
-                    await client.xreadgroup(group, consumer, {
-                        [key1]: "0",
-                        [key2]: "0",
-                    }),
+                    convertGlideRecordToRecord(
+                        (await client.xreadgroup(group, consumer, {
+                            [key1]: "0",
+                            [key2]: "0",
+                        }))!,
+                    ),
                 ).toEqual({
                     [key1]: {
                         [entry1]: null,
@@ -7176,7 +7515,11 @@ export function runBaseTests(config: {
                     "OK",
                 );
                 expect(
-                    await client.xreadgroup(group, "_", { [key3]: "0-0" }),
+                    convertGlideRecordToRecord(
+                        (await client.xreadgroup(group, "_", {
+                            [key3]: "0-0",
+                        }))!,
+                    ),
                 ).toEqual({
                     [key3]: {},
                 });
@@ -7243,10 +7586,9 @@ export function runBaseTests(config: {
                         id: streamId1_1,
                     }),
                 ).toEqual(streamId1_1);
-                const fullResult = (await client.xinfoStream(
-                    Buffer.from(key),
-                    1,
-                )) as {
+                const fullResult = (await client.xinfoStream(Buffer.from(key), {
+                    fullOptions: 1,
+                })) as {
                     length: number;
                     "radix-tree-keys": number;
                     "radix-tree-nodes": number;
@@ -7359,7 +7701,9 @@ export function runBaseTests(config: {
                 expect(result["last-entry"]).toEqual(null);
 
                 // XINFO STREAM FULL called against empty stream. Negative count values are ignored.
-                const fullResult = await client.xinfoStream(key, -3);
+                const fullResult = await client.xinfoStream(key, {
+                    fullOptions: -3,
+                });
                 expect(fullResult["length"]).toEqual(0);
                 expect(fullResult["entries"]).toEqual([]);
                 expect(fullResult["groups"]).toEqual([]);
@@ -7369,20 +7713,20 @@ export function runBaseTests(config: {
                     client.xinfoStream(nonExistentKey),
                 ).rejects.toThrow();
                 await expect(
-                    client.xinfoStream(nonExistentKey, true),
+                    client.xinfoStream(nonExistentKey, { fullOptions: true }),
                 ).rejects.toThrow();
                 await expect(
-                    client.xinfoStream(nonExistentKey, 2),
+                    client.xinfoStream(nonExistentKey, { fullOptions: 2 }),
                 ).rejects.toThrow();
 
                 // Key exists, but it is not a stream
                 await client.set(stringKey, "boofar");
                 await expect(client.xinfoStream(stringKey)).rejects.toThrow();
                 await expect(
-                    client.xinfoStream(stringKey, true),
+                    client.xinfoStream(stringKey, { fullOptions: true }),
                 ).rejects.toThrow();
                 await expect(
-                    client.xinfoStream(stringKey, 2),
+                    client.xinfoStream(stringKey, { fullOptions: 2 }),
                 ).rejects.toThrow();
             }, protocol);
         },
@@ -7724,6 +8068,8 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
+                const key_2 = uuidv4();
+                const key_3 = uuidv4();
                 const nonStringKey = uuidv4();
 
                 // new key
@@ -7732,6 +8078,18 @@ export function runBaseTests(config: {
                 // existing key
                 expect(await client.setrange(key, 6, "GLIDE")).toBe(11);
                 expect(await client.get(key)).toEqual("Hello GLIDE");
+
+                // unique chars keys, size of 3 bytes each
+                expect(await client.setrange(key_2, 0, "爱和美力")).toBe(12);
+
+                expect(await client.setrange(key_2, 3, "abc")).toBe(12);
+                expect(await client.get(key_2)).toEqual("爱abc美力");
+
+                // unique char key, size of 4 bytes
+                expect(await client.setrange(key_3, 0, "😊")).toBe(4);
+
+                expect(await client.setrange(key_3, 4, "GLIDE")).toBe(9);
+                expect(await client.get(key_3)).toEqual("😊GLIDE");
 
                 // offset > len
                 expect(await client.setrange(key, 15, "GLIDE")).toBe(20);
@@ -8201,7 +8559,7 @@ export function runBaseTests(config: {
                 const nonExistingKey = uuidv4();
                 const maxmemoryPolicyKey = "maxmemory-policy";
                 const config = await client.configGet([maxmemoryPolicyKey]);
-                const maxmemoryPolicy = String(config[maxmemoryPolicyKey]);
+                const maxmemoryPolicy = config[maxmemoryPolicyKey] as string;
 
                 try {
                     expect(
@@ -8236,7 +8594,7 @@ export function runBaseTests(config: {
                 const nonExistingKey = uuidv4();
                 const maxmemoryPolicyKey = "maxmemory-policy";
                 const config = await client.configGet([maxmemoryPolicyKey]);
-                const maxmemoryPolicy = String(config[maxmemoryPolicyKey]);
+                const maxmemoryPolicy = config[maxmemoryPolicyKey] as string;
 
                 try {
                     expect(
@@ -8562,6 +8920,42 @@ export function runBaseTests(config: {
                         }),
                     ).rejects.toThrow(RequestError);
                 }
+
+                if (cluster.checkIfServerVersionLessThan("7.9.0")) {
+                    await expect(
+                        client.bitcount(key1, {
+                            start: 2,
+                        }),
+                    ).rejects.toThrow();
+                } else {
+                    expect(
+                        await client.bitcount(key1, {
+                            start: 0,
+                        }),
+                    ).toEqual(26);
+                    expect(
+                        await client.bitcount(key1, {
+                            start: 5,
+                        }),
+                    ).toEqual(4);
+                    expect(
+                        await client.bitcount(key1, {
+                            start: 80,
+                        }),
+                    ).toEqual(0);
+                    expect(
+                        await client.bitcount(uuidv4(), {
+                            start: 80,
+                        }),
+                    ).toEqual(0);
+
+                    // key exists, but it is not a string
+                    await expect(
+                        client.bitcount(key2, {
+                            start: 1,
+                        }),
+                    ).rejects.toThrow(RequestError);
+                }
             }, protocol);
         },
         config.timeout,
@@ -8705,7 +9099,7 @@ export function runBaseTests(config: {
                     "edge2",
                     "edge1",
                 ];
-                const membersSet: Set<string> = new Set(members);
+                const membersSet = new Set<string>(members);
                 const membersCoordinates: [number, number][] = [
                     [15.087269, 37.502669],
                     [13.361389, 38.115556],
@@ -8782,7 +9176,7 @@ export function runBaseTests(config: {
                     ),
                 ).toEqual(4);
                 expect(
-                    await client.zrange(key2, { start: 0, stop: -1 }),
+                    await client.zrange(key2, { start: 0, end: -1 }),
                 ).toEqual(searchResult);
 
                 // order search result
@@ -8804,7 +9198,7 @@ export function runBaseTests(config: {
                     ),
                 ).toEqual(4);
                 expect(
-                    await client.zrange(key2, { start: 0, stop: -1 }),
+                    await client.zrange(key2, { start: 0, end: -1 }),
                 ).toEqual(searchResult);
 
                 // order and query all extra data
@@ -8850,7 +9244,7 @@ export function runBaseTests(config: {
                     ),
                 ).toEqual(1);
                 expect(
-                    await client.zrange(key2, { start: 0, stop: -1 }),
+                    await client.zrange(key2, { start: 0, end: -1 }),
                 ).toEqual([members[0]]);
 
                 // test search by box, unit: meters, from member, with distance
@@ -8884,14 +9278,16 @@ export function runBaseTests(config: {
                 expect(
                     await client.zrangeWithScores(
                         key2,
-                        { start: 0, stop: -1 },
+                        { start: 0, end: -1 },
                         { reverse: true },
                     ),
-                ).toEqual({
-                    edge2: 236529.17986494553,
-                    Palermo: 166274.15156960033,
-                    Catania: 0.0,
-                });
+                ).toEqual(
+                    convertElementsAndScores({
+                        edge2: 236529.17986494553,
+                        Palermo: 166274.15156960033,
+                        Catania: 0.0,
+                    }),
+                );
 
                 // test search by box, unit: feet, from member, with limited count 2, with hash
                 const feet = 400 * 3280.8399;
@@ -8925,11 +9321,13 @@ export function runBaseTests(config: {
                     ),
                 ).toEqual(2);
                 expect(
-                    await client.zrangeWithScores(key2, { start: 0, stop: -1 }),
-                ).toEqual({
-                    Palermo: 3479099956230698,
-                    edge1: 3479273021651468,
-                });
+                    await client.zrangeWithScores(key2, { start: 0, end: -1 }),
+                ).toEqual(
+                    convertElementsAndScores({
+                        Palermo: 3479099956230698,
+                        edge1: 3479273021651468,
+                    }),
+                );
 
                 // test search by box, unit: miles, from geospatial position, with limited ANY count to 1
                 const miles = 250;
@@ -8951,7 +9349,7 @@ export function runBaseTests(config: {
                     ),
                 ).toEqual(1);
                 expect(
-                    await client.zrange(key2, { start: 0, stop: -1 }),
+                    await client.zrange(key2, { start: 0, end: -1 }),
                 ).toEqual(searchResult);
 
                 // test search by radius, units: feet, from member
@@ -8974,7 +9372,7 @@ export function runBaseTests(config: {
                     ),
                 ).toEqual(2);
                 expect(
-                    await client.zrange(key2, { start: 0, stop: -1 }),
+                    await client.zrange(key2, { start: 0, end: -1 }),
                 ).toEqual(searchResult);
 
                 // Test search by radius, unit: meters, from member
@@ -8999,7 +9397,7 @@ export function runBaseTests(config: {
                 expect(
                     await client.zrange(
                         key2,
-                        { start: 0, stop: -1 },
+                        { start: 0, end: -1 },
                         { reverse: true },
                     ),
                 ).toEqual(searchResult);
@@ -9044,7 +9442,7 @@ export function runBaseTests(config: {
                 expect(
                     await client.zrange(
                         key2,
-                        { start: 0, stop: -1 },
+                        { start: 0, end: -1 },
                         { reverse: true },
                     ),
                 ).toEqual(searchResult);
@@ -9078,7 +9476,7 @@ export function runBaseTests(config: {
                     ),
                 ).toEqual(2);
                 expect(
-                    await client.zrange(key2, { start: 0, stop: -1 }),
+                    await client.zrange(key2, { start: 0, end: -1 }),
                 ).toEqual(members.slice(0, 2));
 
                 // Test search by radius, unit: kilometers, from a geospatial data, with limited ANY count to 1
@@ -9111,7 +9509,7 @@ export function runBaseTests(config: {
                     ),
                 ).toEqual(1);
                 expect(
-                    await client.zrange(key2, { start: 0, stop: -1 }),
+                    await client.zrange(key2, { start: 0, end: -1 }),
                 ).toEqual([searchResult[0][0]]);
 
                 // no members within the area
@@ -9196,74 +9594,93 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zmpop test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
-                if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
-                const key1 = "{key}-1" + uuidv4();
-                const key2 = "{key}-2" + uuidv4();
-                const nonExistingKey = "{key}-0" + uuidv4();
-                const stringKey = "{key}-string" + uuidv4();
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
+                    const key1 = "{key}-1" + uuidv4();
+                    const key2 = "{key}-2" + uuidv4();
+                    const nonExistingKey = "{key}-0" + uuidv4();
+                    const stringKey = "{key}-string" + uuidv4();
 
-                expect(await client.zadd(key1, { a1: 1, b1: 2 })).toEqual(2);
-                expect(await client.zadd(key2, { a2: 0.1, b2: 0.2 })).toEqual(
-                    2,
-                );
+                    expect(await client.zadd(key1, { a1: 1, b1: 2 })).toEqual(
+                        2,
+                    );
+                    expect(
+                        await client.zadd(key2, { a2: 0.1, b2: 0.2 }),
+                    ).toEqual(2);
 
-                expect(
-                    await client.zmpop([key1, key2], ScoreFilter.MAX),
-                ).toEqual([key1, { b1: 2 }]);
-                expect(
-                    await client.zmpop(
-                        [Buffer.from(key2), key1],
-                        ScoreFilter.MAX,
-                        { count: 10 },
-                    ),
-                ).toEqual([key2, { a2: 0.1, b2: 0.2 }]);
+                    expect(
+                        await client.zmpop([key1, key2], ScoreFilter.MAX),
+                    ).toEqual([key1, convertElementsAndScores({ b1: 2 })]);
+                    expect(
+                        await client.zmpop(
+                            [Buffer.from(key2), key1],
+                            ScoreFilter.MAX,
+                            {
+                                count: 10,
+                                decoder: Decoder.Bytes,
+                            },
+                        ),
+                    ).toEqual([
+                        Buffer.from(key2),
 
-                expect(
-                    await client.zmpop([nonExistingKey], ScoreFilter.MIN),
-                ).toBeNull();
-                expect(
-                    await client.zmpop([nonExistingKey], ScoreFilter.MIN, {
-                        count: 1,
-                    }),
-                ).toBeNull();
+                        [
+                            { element: Buffer.from("b2"), score: 0.2 },
+                            { element: Buffer.from("a2"), score: 0.1 },
+                        ],
+                    ]);
 
-                // key exists, but it is not a sorted set
-                expect(await client.set(stringKey, "value")).toEqual("OK");
-                await expect(
-                    client.zmpop([stringKey], ScoreFilter.MAX),
-                ).rejects.toThrow(RequestError);
-                await expect(
-                    client.zmpop([stringKey], ScoreFilter.MAX, { count: 1 }),
-                ).rejects.toThrow(RequestError);
+                    expect(
+                        await client.zmpop([nonExistingKey], ScoreFilter.MIN),
+                    ).toBeNull();
+                    expect(
+                        await client.zmpop([nonExistingKey], ScoreFilter.MIN, {
+                            count: 1,
+                        }),
+                    ).toBeNull();
 
-                // incorrect argument: key list should not be empty
-                await expect(
-                    client.zmpop([], ScoreFilter.MAX, { count: 1 }),
-                ).rejects.toThrow(RequestError);
+                    // key exists, but it is not a sorted set
+                    expect(await client.set(stringKey, "value")).toEqual("OK");
+                    await expect(
+                        client.zmpop([stringKey], ScoreFilter.MAX),
+                    ).rejects.toThrow(RequestError);
+                    await expect(
+                        client.zmpop([stringKey], ScoreFilter.MAX, {
+                            count: 1,
+                        }),
+                    ).rejects.toThrow(RequestError);
 
-                // incorrect argument: count should be greater than 0
-                await expect(
-                    client.zmpop([key1], ScoreFilter.MAX, { count: 0 }),
-                ).rejects.toThrow(RequestError);
+                    // incorrect argument: key list should not be empty
+                    await expect(
+                        client.zmpop([], ScoreFilter.MAX, { count: 1 }),
+                    ).rejects.toThrow(RequestError);
 
-                // check that order of entries in the response is preserved
-                const entries: Record<string, number> = {};
+                    // incorrect argument: count should be greater than 0
+                    await expect(
+                        client.zmpop([key1], ScoreFilter.MAX, { count: 0 }),
+                    ).rejects.toThrow(RequestError);
 
-                for (let i = 0; i < 10; i++) {
-                    // a0 => 0, a1 => 1 etc
-                    entries["a" + i] = i;
-                }
+                    // check that order of entries in the response is preserved
+                    const entries: Record<string, number> = {};
 
-                expect(await client.zadd(key2, entries)).toEqual(10);
-                const result = await client.zmpop([key2], ScoreFilter.MIN, {
-                    count: 10,
-                });
+                    for (let i = 0; i < 10; i++) {
+                        // a0 => 0, a1 => 1 etc
+                        entries["a" + i] = i;
+                    }
 
-                if (result) {
-                    expect(result[1]).toEqual(entries);
-                }
-            }, protocol);
+                    expect(await client.zadd(key2, entries)).toEqual(10);
+                    const result = await client.zmpop([key2], ScoreFilter.MIN, {
+                        count: 10,
+                    });
+
+                    if (result) {
+                        expect(result[1]).toEqual(
+                            convertElementsAndScores(entries),
+                        );
+                    }
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -9306,173 +9723,190 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zscan test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
-                const key1 = "{key}-1" + uuidv4();
-                const key2 = "{key}-2" + uuidv4();
-                const initialCursor = "0";
-                const defaultCount = 20;
-                const resultCursorIndex = 0;
-                const resultCollectionIndex = 1;
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    const key1 = "{key}-1" + uuidv4();
+                    const key2 = "{key}-2" + uuidv4();
+                    const initialCursor = "0";
+                    const defaultCount = 20;
+                    const resultCursorIndex = 0;
+                    const resultCollectionIndex = 1;
 
-                // Setup test data - use a large number of entries to force an iterative cursor.
-                const numberMap: Record<string, number> = {};
+                    // Setup test data - use a large number of entries to force an iterative cursor.
+                    const numberMap: Record<string, number> = {};
 
-                for (let i = 0; i < 50000; i++) {
-                    numberMap["member" + i.toString()] = i;
-                }
+                    for (let i = 0; i < 50000; i++) {
+                        numberMap["member" + i.toString()] = i;
+                    }
 
-                const charMembers = ["a", "b", "c", "d", "e"];
-                const charMap: Record<string, number> = {};
-                const expectedCharMapArray: string[] = [];
+                    const charMembers = ["a", "b", "c", "d", "e"];
+                    const charMap: Record<string, number> = {};
+                    const expectedCharMapArray: string[] = [];
 
-                for (let i = 0; i < charMembers.length; i++) {
-                    expectedCharMapArray.push(charMembers[i]);
-                    expectedCharMapArray.push(i.toString());
-                    charMap[charMembers[i]] = i;
-                }
+                    for (let i = 0; i < charMembers.length; i++) {
+                        expectedCharMapArray.push(charMembers[i]);
+                        expectedCharMapArray.push(i.toString());
+                        charMap[charMembers[i]] = i;
+                    }
 
-                // Empty set
-                let result = await client.zscan(key1, initialCursor);
-                expect(result[resultCursorIndex]).toEqual(initialCursor);
-                expect(result[resultCollectionIndex]).toEqual([]);
-
-                // Negative cursor
-                if (cluster.checkIfServerVersionLessThan("7.9.0")) {
-                    result = await client.zscan(key1, "-1");
+                    // Empty set
+                    let result = await client.zscan(key1, initialCursor);
                     expect(result[resultCursorIndex]).toEqual(initialCursor);
                     expect(result[resultCollectionIndex]).toEqual([]);
-                } else {
-                    await expect(client.zscan(key1, "-1")).rejects.toThrow(
-                        "ResponseError: invalid cursor",
+
+                    // Negative cursor
+                    if (cluster.checkIfServerVersionLessThan("7.9.0")) {
+                        result = await client.zscan(key1, "-1");
+                        expect(result[resultCursorIndex]).toEqual(
+                            initialCursor,
+                        );
+                        expect(result[resultCollectionIndex]).toEqual([]);
+                    } else {
+                        await expect(client.zscan(key1, "-1")).rejects.toThrow(
+                            "ResponseError: invalid cursor",
+                        );
+                    }
+
+                    // Result contains the whole set
+                    expect(await client.zadd(key1, charMap)).toEqual(
+                        charMembers.length,
                     );
-                }
-
-                // Result contains the whole set
-                expect(await client.zadd(key1, charMap)).toEqual(
-                    charMembers.length,
-                );
-                result = await client.zscan(key1, initialCursor, {
-                    decoder: Decoder.Bytes,
-                });
-                expect(result[resultCursorIndex]).toEqual(initialCursor);
-                expect(result[resultCollectionIndex].length).toEqual(
-                    expectedCharMapArray.length,
-                );
-                expect(result[resultCollectionIndex]).toEqual(
-                    expectedCharMapArray.map(Buffer.from),
-                );
-
-                result = await client.zscan(Buffer.from(key1), initialCursor, {
-                    match: "a",
-                });
-                expect(result[resultCursorIndex]).toEqual(initialCursor);
-                expect(result[resultCollectionIndex]).toEqual(["a", "0"]);
-
-                // Result contains a subset of the key
-                expect(await client.zadd(key1, numberMap)).toEqual(
-                    Object.keys(numberMap).length,
-                );
-
-                result = await client.zscan(key1, initialCursor);
-                let resultCursor = result[resultCursorIndex];
-                let resultIterationCollection = result[resultCollectionIndex];
-                let fullResultMapArray = resultIterationCollection;
-                let nextResult;
-                let nextResultCursor;
-
-                // 0 is returned for the cursor of the last iteration.
-                while (resultCursor != "0") {
-                    nextResult = await client.zscan(key1, resultCursor);
-                    nextResultCursor = nextResult[resultCursorIndex];
-                    expect(nextResultCursor).not.toEqual(resultCursor);
-
-                    expect(nextResult[resultCollectionIndex]).not.toEqual(
-                        resultIterationCollection,
-                    );
-                    fullResultMapArray = fullResultMapArray.concat(
-                        nextResult[resultCollectionIndex],
-                    );
-                    resultIterationCollection =
-                        nextResult[resultCollectionIndex];
-                    resultCursor = nextResultCursor;
-                }
-
-                // Fetching by cursor is randomized.
-                const expectedFullMap: Record<string, number> = {
-                    ...numberMap,
-                    ...charMap,
-                };
-
-                expect(fullResultMapArray.length).toEqual(
-                    Object.keys(expectedFullMap).length * 2,
-                );
-
-                for (let i = 0; i < fullResultMapArray.length; i += 2) {
-                    expect(
-                        (fullResultMapArray[i] as string) in expectedFullMap,
-                    ).toEqual(true);
-                }
-
-                // Test match pattern
-                result = await client.zscan(key1, initialCursor, {
-                    match: "*",
-                });
-                expect(result[resultCursorIndex]).not.toEqual(initialCursor);
-                expect(
-                    result[resultCollectionIndex].length,
-                ).toBeGreaterThanOrEqual(defaultCount);
-
-                // Test count
-                result = await client.zscan(key1, initialCursor, { count: 20 });
-                expect(result[resultCursorIndex]).not.toEqual("0");
-                expect(
-                    result[resultCollectionIndex].length,
-                ).toBeGreaterThanOrEqual(20);
-
-                // Test count with match returns a non-empty list
-                result = await client.zscan(key1, initialCursor, {
-                    match: "member1*",
-                    count: 20,
-                });
-                expect(result[resultCursorIndex]).not.toEqual("0");
-                expect(result[resultCollectionIndex].length).toBeGreaterThan(0);
-
-                if (!cluster.checkIfServerVersionLessThan("7.9.0")) {
-                    const result = await client.zscan(key1, initialCursor, {
-                        noScores: true,
+                    result = await client.zscan(key1, initialCursor, {
+                        decoder: Decoder.Bytes,
                     });
-                    const resultCursor = result[resultCursorIndex];
-                    const fieldsArray = result[
-                        resultCollectionIndex
-                    ] as string[];
+                    expect(result[resultCursorIndex]).toEqual(initialCursor);
+                    expect(result[resultCollectionIndex].length).toEqual(
+                        expectedCharMapArray.length,
+                    );
+                    expect(result[resultCollectionIndex]).toEqual(
+                        expectedCharMapArray.map(Buffer.from),
+                    );
 
-                    // Verify that the cursor is not "0" and values are not included
-                    expect(resultCursor).not.toEqual("0");
+                    result = await client.zscan(
+                        Buffer.from(key1),
+                        initialCursor,
+                        {
+                            match: "a",
+                        },
+                    );
+                    expect(result[resultCursorIndex]).toEqual(initialCursor);
+                    expect(result[resultCollectionIndex]).toEqual(["a", "0"]);
+
+                    // Result contains a subset of the key
+                    expect(await client.zadd(key1, numberMap)).toEqual(
+                        Object.keys(numberMap).length,
+                    );
+
+                    result = await client.zscan(key1, initialCursor);
+                    let resultCursor = result[resultCursorIndex];
+                    let resultIterationCollection =
+                        result[resultCollectionIndex];
+                    let fullResultMapArray = resultIterationCollection;
+                    let nextResult;
+                    let nextResultCursor;
+
+                    // 0 is returned for the cursor of the last iteration.
+                    while (resultCursor != "0") {
+                        nextResult = await client.zscan(key1, resultCursor);
+                        nextResultCursor = nextResult[resultCursorIndex];
+                        expect(nextResultCursor).not.toEqual(resultCursor);
+
+                        expect(nextResult[resultCollectionIndex]).not.toEqual(
+                            resultIterationCollection,
+                        );
+                        fullResultMapArray = fullResultMapArray.concat(
+                            nextResult[resultCollectionIndex],
+                        );
+                        resultIterationCollection =
+                            nextResult[resultCollectionIndex];
+                        resultCursor = nextResultCursor;
+                    }
+
+                    // Fetching by cursor is randomized.
+                    const expectedFullMap: Record<string, number> = {
+                        ...numberMap,
+                        ...charMap,
+                    };
+
+                    expect(fullResultMapArray.length).toEqual(
+                        Object.keys(expectedFullMap).length * 2,
+                    );
+
+                    for (let i = 0; i < fullResultMapArray.length; i += 2) {
+                        expect(
+                            (fullResultMapArray[i] as string) in
+                                expectedFullMap,
+                        ).toEqual(true);
+                    }
+
+                    // Test match pattern
+                    result = await client.zscan(key1, initialCursor, {
+                        match: "*",
+                    });
+                    expect(result[resultCursorIndex]).not.toEqual(
+                        initialCursor,
+                    );
                     expect(
-                        fieldsArray.every((field) =>
-                            field.startsWith("member"),
-                        ),
-                    ).toBeTruthy();
-                }
+                        result[resultCollectionIndex].length,
+                    ).toBeGreaterThanOrEqual(defaultCount);
 
-                // Exceptions
-                // Non-set key
-                expect(await client.set(key2, "test")).toEqual("OK");
-                await expect(client.zscan(key2, initialCursor)).rejects.toThrow(
-                    RequestError,
-                );
-                await expect(
-                    client.zscan(key2, initialCursor, {
-                        match: "test",
+                    // Test count
+                    result = await client.zscan(key1, initialCursor, {
                         count: 20,
-                    }),
-                ).rejects.toThrow(RequestError);
+                    });
+                    expect(result[resultCursorIndex]).not.toEqual("0");
+                    expect(
+                        result[resultCollectionIndex].length,
+                    ).toBeGreaterThanOrEqual(20);
 
-                // Negative count
-                await expect(
-                    client.zscan(key2, initialCursor, { count: -1 }),
-                ).rejects.toThrow(RequestError);
-            }, protocol);
+                    // Test count with match returns a non-empty list
+                    result = await client.zscan(key1, initialCursor, {
+                        match: "member1*",
+                        count: 20,
+                    });
+                    expect(result[resultCursorIndex]).not.toEqual("0");
+                    expect(
+                        result[resultCollectionIndex].length,
+                    ).toBeGreaterThan(0);
+
+                    if (!cluster.checkIfServerVersionLessThan("7.9.0")) {
+                        const result = await client.zscan(key1, initialCursor, {
+                            noScores: true,
+                        });
+                        const resultCursor = result[resultCursorIndex];
+                        const fieldsArray = result[
+                            resultCollectionIndex
+                        ] as string[];
+
+                        // Verify that the cursor is not "0" and values are not included
+                        expect(resultCursor).not.toEqual("0");
+                        expect(
+                            fieldsArray.every((field) =>
+                                field.startsWith("member"),
+                            ),
+                        ).toBeTruthy();
+                    }
+
+                    // Exceptions
+                    // Non-set key
+                    expect(await client.set(key2, "test")).toEqual("OK");
+                    await expect(
+                        client.zscan(key2, initialCursor),
+                    ).rejects.toThrow(RequestError);
+                    await expect(
+                        client.zscan(key2, initialCursor, {
+                            match: "test",
+                            count: 20,
+                        }),
+                    ).rejects.toThrow(RequestError);
+
+                    // Negative count
+                    await expect(
+                        client.zscan(key2, initialCursor, { count: -1 }),
+                    ).rejects.toThrow(RequestError);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -9480,91 +9914,113 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `bzmpop test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
-                if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
-                const key1 = "{key}-1" + uuidv4();
-                const key2 = "{key}-2" + uuidv4();
-                const nonExistingKey = "{key}-0" + uuidv4();
-                const stringKey = "{key}-string" + uuidv4();
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
+                    const key1 = "{key}-1" + uuidv4();
+                    const key2 = "{key}-2" + uuidv4();
+                    const nonExistingKey = "{key}-0" + uuidv4();
+                    const stringKey = "{key}-string" + uuidv4();
 
-                expect(await client.zadd(key1, { a1: 1, b1: 2 })).toEqual(2);
-                expect(await client.zadd(key2, { a2: 0.1, b2: 0.2 })).toEqual(
-                    2,
-                );
+                    expect(await client.zadd(key1, { a1: 1, b1: 2 })).toEqual(
+                        2,
+                    );
+                    expect(
+                        await client.zadd(key2, { a2: 0.1, b2: 0.2 }),
+                    ).toEqual(2);
 
-                expect(
-                    await client.bzmpop([key1, key2], ScoreFilter.MAX, 0.1),
-                ).toEqual([key1, { b1: 2 }]);
-                expect(
-                    await client.bzmpop(
-                        [key2, Buffer.from(key1)],
-                        ScoreFilter.MAX,
-                        0.1,
-                        {
+                    expect(
+                        await client.bzmpop([key1, key2], ScoreFilter.MAX, 0.1),
+                    ).toEqual([key1, convertElementsAndScores({ b1: 2 })]);
+                    expect(
+                        await client.bzmpop(
+                            [key2, Buffer.from(key1)],
+                            ScoreFilter.MAX,
+                            0.1,
+                            {
+                                count: 10,
+                                decoder: Decoder.Bytes,
+                            },
+                        ),
+                    ).toEqual([
+                        Buffer.from(key2),
+                        [
+                            { element: Buffer.from("b2"), score: 0.2 },
+                            { element: Buffer.from("a2"), score: 0.1 },
+                        ],
+                    ]);
+
+                    // ensure that command doesn't time out even if timeout > request timeout (250ms by default)
+                    expect(
+                        await client.bzmpop(
+                            [nonExistingKey],
+                            ScoreFilter.MAX,
+                            0.5,
+                        ),
+                    ).toBeNull();
+                    expect(
+                        await client.bzmpop(
+                            [nonExistingKey],
+                            ScoreFilter.MAX,
+                            0.55,
+                            { count: 1 },
+                        ),
+                    ).toBeNull();
+
+                    // key exists, but it is not a sorted set
+                    expect(await client.set(stringKey, "value")).toEqual("OK");
+                    await expect(
+                        client.bzmpop([stringKey], ScoreFilter.MAX, 0.1),
+                    ).rejects.toThrow(RequestError);
+                    await expect(
+                        client.bzmpop([stringKey], ScoreFilter.MAX, 0.1, {
+                            count: 1,
+                        }),
+                    ).rejects.toThrow(RequestError);
+
+                    // incorrect argument: key list should not be empty
+                    await expect(
+                        client.bzmpop([], ScoreFilter.MAX, 0.1, { count: 1 }),
+                    ).rejects.toThrow(RequestError);
+
+                    // incorrect argument: count should be greater than 0
+                    await expect(
+                        client.bzmpop([key1], ScoreFilter.MAX, 0.1, {
+                            count: 0,
+                        }),
+                    ).rejects.toThrow(RequestError);
+
+                    // incorrect argument: timeout can not be a negative number
+                    await expect(
+                        client.bzmpop([key1], ScoreFilter.MAX, -1, {
                             count: 10,
-                        },
-                    ),
-                ).toEqual([key2, { a2: 0.1, b2: 0.2 }]);
+                        }),
+                    ).rejects.toThrow(RequestError);
 
-                // ensure that command doesn't time out even if timeout > request timeout (250ms by default)
-                expect(
-                    await client.bzmpop([nonExistingKey], ScoreFilter.MAX, 0.5),
-                ).toBeNull();
-                expect(
-                    await client.bzmpop(
-                        [nonExistingKey],
-                        ScoreFilter.MAX,
-                        0.55,
-                        { count: 1 },
-                    ),
-                ).toBeNull();
+                    // check that order of entries in the response is preserved
+                    const entries: Record<string, number> = {};
 
-                // key exists, but it is not a sorted set
-                expect(await client.set(stringKey, "value")).toEqual("OK");
-                await expect(
-                    client.bzmpop([stringKey], ScoreFilter.MAX, 0.1),
-                ).rejects.toThrow(RequestError);
-                await expect(
-                    client.bzmpop([stringKey], ScoreFilter.MAX, 0.1, {
-                        count: 1,
-                    }),
-                ).rejects.toThrow(RequestError);
+                    for (let i = 0; i < 10; i++) {
+                        // a0 => 0, a1 => 1 etc
+                        entries["a" + i] = i;
+                    }
 
-                // incorrect argument: key list should not be empty
-                await expect(
-                    client.bzmpop([], ScoreFilter.MAX, 0.1, { count: 1 }),
-                ).rejects.toThrow(RequestError);
+                    expect(await client.zadd(key2, entries)).toEqual(10);
+                    const result = await client.bzmpop(
+                        [key2],
+                        ScoreFilter.MIN,
+                        0.1,
+                        { count: 10 },
+                    );
 
-                // incorrect argument: count should be greater than 0
-                await expect(
-                    client.bzmpop([key1], ScoreFilter.MAX, 0.1, { count: 0 }),
-                ).rejects.toThrow(RequestError);
-
-                // incorrect argument: timeout can not be a negative number
-                await expect(
-                    client.bzmpop([key1], ScoreFilter.MAX, -1, { count: 10 }),
-                ).rejects.toThrow(RequestError);
-
-                // check that order of entries in the response is preserved
-                const entries: Record<string, number> = {};
-
-                for (let i = 0; i < 10; i++) {
-                    // a0 => 0, a1 => 1 etc
-                    entries["a" + i] = i;
-                }
-
-                expect(await client.zadd(key2, entries)).toEqual(10);
-                const result = await client.bzmpop(
-                    [key2],
-                    ScoreFilter.MIN,
-                    0.1,
-                    { count: 10 },
-                );
-
-                if (result) {
-                    expect(result[1]).toEqual(entries);
-                }
-            }, protocol);
+                    if (result) {
+                        expect(result[1]).toEqual(
+                            convertElementsAndScores(entries),
+                        );
+                    }
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -9601,12 +10057,9 @@ export function runBaseTests(config: {
 
                 // checking result with metric specification of kilometers
                 expect(
-                    await client.geodist(
-                        key1,
-                        member1,
-                        member2,
-                        GeoUnit.KILOMETERS,
-                    ),
+                    await client.geodist(key1, member1, member2, {
+                        unit: GeoUnit.KILOMETERS,
+                    }),
                 ).toBeCloseTo(expectedKM, delta);
 
                 // null result when member index is missing
@@ -9760,7 +10213,7 @@ export function runBaseTests(config: {
                     ),
                 ).toEqual(4);
                 expect(
-                    await client.zrange(key2, { start: 0, stop: -1 }),
+                    await client.zrange(key2, { start: 0, end: -1 }),
                 ).toEqual(searchResult);
             }, protocol);
         },
@@ -10116,9 +10569,7 @@ export function runBaseTests(config: {
                     1,
                 );
                 expect(
-                    await client.xdel(Buffer.from(nonExistentKey), [
-                        Buffer.from(streamId3),
-                    ]),
+                    await client.xdel(Buffer.from(nonExistentKey), [streamId3]),
                 ).toEqual(0);
 
                 // invalid argument - id list should not be empty
@@ -10184,14 +10635,13 @@ export function runBaseTests(config: {
                     await client.xgroupCreate(key, groupName1, "0-0"),
                 ).toEqual("OK");
 
-                expect(
-                    await client.xreadgroup(
-                        groupName1,
-                        consumer1,
-                        { [key]: ">" },
-                        { count: 1 },
-                    ),
-                ).toEqual({
+                let xreadgroup = await client.xreadgroup(
+                    groupName1,
+                    consumer1,
+                    { [key]: ">" },
+                    { count: 1 },
+                );
+                expect(convertGlideRecordToRecord(xreadgroup!)).toEqual({
                     [key]: {
                         [streamId1]: [
                             ["entry1_field1", "entry1_value1"],
@@ -10218,19 +10668,37 @@ export function runBaseTests(config: {
                         consumer2,
                     ),
                 ).toBeTruthy();
-                expect(
-                    await client.xreadgroup(groupName1, consumer2, {
+                xreadgroup = await client.xreadgroup(
+                    groupName1,
+                    consumer2,
+                    {
                         [key]: ">",
-                    }),
-                ).toEqual({
-                    [key]: {
-                        [streamId2]: [
-                            ["entry2_field1", "entry2_value1"],
-                            ["entry2_field2", "entry2_value2"],
-                        ],
-                        [streamId3]: [["entry3_field1", "entry3_value1"]],
                     },
-                });
+                    { decoder: Decoder.Bytes },
+                );
+                expect(xreadgroup).toEqual([
+                    {
+                        key: Buffer.from(key),
+                        value: {
+                            [streamId2]: [
+                                [
+                                    Buffer.from("entry2_field1"),
+                                    Buffer.from("entry2_value1"),
+                                ],
+                                [
+                                    Buffer.from("entry2_field2"),
+                                    Buffer.from("entry2_value2"),
+                                ],
+                            ],
+                            [streamId3]: [
+                                [
+                                    Buffer.from("entry3_field1"),
+                                    Buffer.from("entry3_value1"),
+                                ],
+                            ],
+                        },
+                    },
+                ]);
 
                 // Verify that xinfo_consumers contains info for 2 consumers now
                 result = await client.xinfoConsumers(key, groupName1);
@@ -10364,17 +10832,12 @@ export function runBaseTests(config: {
                           ],
                 );
 
-                expect(
-                    await client.customCommand([
-                        "XREADGROUP",
-                        "GROUP",
-                        groupName1,
-                        consumer1,
-                        "STREAMS",
-                        key,
-                        ">",
-                    ]),
-                ).toEqual({
+                const xreadgroup = await client.xreadgroup(
+                    groupName1,
+                    consumer1,
+                    { [key]: ">" },
+                );
+                expect(convertGlideRecordToRecord(xreadgroup!)).toEqual({
                     [key]: {
                         [streamId1]: [
                             ["entry1_field1", "entry1_value1"],
@@ -10410,14 +10873,9 @@ export function runBaseTests(config: {
                           ],
                 );
 
-                expect(
-                    await client.customCommand([
-                        "XACK",
-                        key,
-                        groupName1,
-                        streamId1,
-                    ]),
-                ).toEqual(1);
+                expect(await client.xack(key, groupName1, [streamId1])).toEqual(
+                    1,
+                );
                 // once message ack'ed, pending counter decreased
                 expect(await client.xinfoGroups(key)).toEqual(
                     cluster.checkIfServerVersionLessThan("7.0.0")
@@ -10464,110 +10922,135 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `xgroupSetId test %p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
-                const key = "testKey" + uuidv4();
-                const nonExistingKey = "group" + uuidv4();
-                const stringKey = "testKey" + uuidv4();
-                const groupName = uuidv4();
-                const consumerName = uuidv4();
-                const streamid0 = "0";
-                const streamid1_0 = "1-0";
-                const streamid1_1 = "1-1";
-                const streamid1_2 = "1-2";
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    const key = "testKey" + uuidv4();
+                    const nonExistingKey = "group" + uuidv4();
+                    const stringKey = "testKey" + uuidv4();
+                    const groupName = uuidv4();
+                    const consumerName = uuidv4();
+                    const streamid0 = "0";
+                    const streamid1_0 = "1-0";
+                    const streamid1_1 = "1-1";
+                    const streamid1_2 = "1-2";
 
-                // Setup: Create stream with 3 entries, create consumer group, read entries to add them to the Pending Entries List
-                expect(
-                    await client.xadd(key, [["f0", "v0"]], { id: streamid1_0 }),
-                ).toBe(streamid1_0);
-                expect(
-                    await client.xadd(key, [["f1", "v1"]], { id: streamid1_1 }),
-                ).toBe(streamid1_1);
-                expect(
-                    await client.xadd(key, [["f2", "v2"]], { id: streamid1_2 }),
-                ).toBe(streamid1_2);
-
-                expect(
-                    await client.xgroupCreate(key, groupName, streamid0),
-                ).toBe("OK");
-
-                expect(
-                    await client.xreadgroup(groupName, consumerName, {
-                        [key]: ">",
-                    }),
-                ).toEqual({
-                    [key]: {
-                        [streamid1_0]: [["f0", "v0"]],
-                        [streamid1_1]: [["f1", "v1"]],
-                        [streamid1_2]: [["f2", "v2"]],
-                    },
-                });
-
-                // Sanity check: xreadgroup should not return more entries since they're all already in the
-                // Pending Entries List.
-                expect(
-                    await client.xreadgroup(groupName, consumerName, {
-                        [key]: ">",
-                    }),
-                ).toBeNull();
-
-                // Reset the last delivered ID for the consumer group to "1-1"
-                if (cluster.checkIfServerVersionLessThan("7.0.0")) {
+                    // Setup: Create stream with 3 entries, create consumer group, read entries to add them to the Pending Entries List
                     expect(
-                        await client.xgroupSetId(key, groupName, streamid1_1),
+                        await client.xadd(key, [["f0", "v0"]], {
+                            id: streamid1_0,
+                        }),
+                    ).toBe(streamid1_0);
+                    expect(
+                        await client.xadd(key, [["f1", "v1"]], {
+                            id: streamid1_1,
+                        }),
+                    ).toBe(streamid1_1);
+                    expect(
+                        await client.xadd(key, [["f2", "v2"]], {
+                            id: streamid1_2,
+                        }),
+                    ).toBe(streamid1_2);
+
+                    expect(
+                        await client.xgroupCreate(key, groupName, streamid0),
                     ).toBe("OK");
-                } else {
+
+                    expect(
+                        convertGlideRecordToRecord(
+                            (await client.xreadgroup(groupName, consumerName, {
+                                [key]: ">",
+                            }))!,
+                        ),
+                    ).toEqual({
+                        [key]: {
+                            [streamid1_0]: [["f0", "v0"]],
+                            [streamid1_1]: [["f1", "v1"]],
+                            [streamid1_2]: [["f2", "v2"]],
+                        },
+                    });
+
+                    // Sanity check: xreadgroup should not return more entries since they're all already in the
+                    // Pending Entries List.
+                    expect(
+                        await client.xreadgroup(groupName, consumerName, {
+                            [key]: ">",
+                        }),
+                    ).toBeNull();
+
+                    // Reset the last delivered ID for the consumer group to "1-1"
+                    if (cluster.checkIfServerVersionLessThan("7.0.0")) {
+                        expect(
+                            await client.xgroupSetId(
+                                key,
+                                groupName,
+                                streamid1_1,
+                            ),
+                        ).toBe("OK");
+                    } else {
+                        expect(
+                            await client.xgroupSetId(
+                                key,
+                                groupName,
+                                streamid1_1,
+                                { entriesRead: 1 },
+                            ),
+                        ).toBe("OK");
+                    }
+
+                    // xreadgroup should only return entry 1-2 since we reset the last delivered ID to 1-1
+                    const newResult = await client.xreadgroup(
+                        groupName,
+                        consumerName,
+                        { [key]: ">" },
+                    );
+                    expect(convertGlideRecordToRecord(newResult!)).toEqual({
+                        [key]: {
+                            [streamid1_2]: [["f2", "v2"]],
+                        },
+                    });
+
+                    // An error is raised if XGROUP SETID is called with a non-existing key
+                    await expect(
+                        client.xgroupSetId(
+                            nonExistingKey,
+                            groupName,
+                            streamid0,
+                        ),
+                    ).rejects.toThrow(RequestError);
+
+                    // An error is raised if XGROUP SETID is called with a non-existing group
+                    await expect(
+                        client.xgroupSetId(
+                            key,
+                            "non_existing_group",
+                            streamid0,
+                        ),
+                    ).rejects.toThrow(RequestError);
+
+                    // Setting the ID to a non-existing ID is allowed
+                    expect(
+                        await client.xgroupSetId(key, groupName, "99-99"),
+                    ).toBe("OK");
+
+                    // Testing binary parameters with an non-existing ID
                     expect(
                         await client.xgroupSetId(
-                            key,
-                            groupName,
-                            streamid1_1,
-                            1,
+                            Buffer.from(key),
+                            Buffer.from(groupName),
+                            "99-99",
                         ),
                     ).toBe("OK");
-                }
 
-                // xreadgroup should only return entry 1-2 since we reset the last delivered ID to 1-1
-                const newResult = await client.xreadgroup(
-                    groupName,
-                    consumerName,
-                    { [key]: ">" },
-                );
-                expect(newResult).toEqual({
-                    [key]: {
-                        [streamid1_2]: [["f2", "v2"]],
-                    },
-                });
-
-                // An error is raised if XGROUP SETID is called with a non-existing key
-                await expect(
-                    client.xgroupSetId(nonExistingKey, groupName, streamid0),
-                ).rejects.toThrow(RequestError);
-
-                // An error is raised if XGROUP SETID is called with a non-existing group
-                await expect(
-                    client.xgroupSetId(key, "non_existing_group", streamid0),
-                ).rejects.toThrow(RequestError);
-
-                // Setting the ID to a non-existing ID is allowed
-                expect(await client.xgroupSetId(key, groupName, "99-99")).toBe(
-                    "OK",
-                );
-
-                // Testing binary parameters with an non-existing ID
-                expect(
-                    await client.xgroupSetId(
-                        Buffer.from(key),
-                        Buffer.from(groupName),
-                        Buffer.from("99-99"),
-                    ),
-                ).toBe("OK");
-
-                // key exists, but is not a stream
-                expect(await client.set(stringKey, "xgroup setid")).toBe("OK");
-                await expect(
-                    client.xgroupSetId(stringKey, groupName, streamid1_0),
-                ).rejects.toThrow(RequestError);
-            }, protocol);
+                    // key exists, but is not a stream
+                    expect(await client.set(stringKey, "xgroup setid")).toBe(
+                        "OK",
+                    );
+                    await expect(
+                        client.xgroupSetId(stringKey, groupName, streamid1_0),
+                    ).rejects.toThrow(RequestError);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -10585,13 +11068,7 @@ export function runBaseTests(config: {
                     }),
                 ).toEqual("OK");
                 expect(
-                    await client.customCommand([
-                        "xgroup",
-                        "createconsumer",
-                        key,
-                        group,
-                        "consumer",
-                    ]),
+                    await client.xgroupCreateConsumer(key, group, "consumer"),
                 ).toEqual(true);
 
                 expect(
@@ -10613,7 +11090,11 @@ export function runBaseTests(config: {
                 ).toEqual("0-2");
 
                 expect(
-                    await client.xreadgroup(group, "consumer", { [key]: ">" }),
+                    convertGlideRecordToRecord(
+                        (await client.xreadgroup(group, "consumer", {
+                            [key]: ">",
+                        }))!,
+                    ),
                 ).toEqual({
                     [key]: {
                         "0-1": [
@@ -10709,7 +11190,11 @@ export function runBaseTests(config: {
                 ).toEqual("0-2");
 
                 expect(
-                    await client.xreadgroup(group, "consumer", { [key]: ">" }),
+                    convertGlideRecordToRecord(
+                        (await client.xreadgroup(group, "consumer", {
+                            [key]: ">",
+                        }))!,
+                    ),
                 ).toEqual({
                     [key]: {
                         "0-1": [
@@ -10761,7 +11246,7 @@ export function runBaseTests(config: {
                         Buffer.from(group),
                         Buffer.from("consumer"),
                         0,
-                        [Buffer.from("000")],
+                        ["000"],
                     ),
                 ).toEqual({});
                 expect(
@@ -10821,7 +11306,11 @@ export function runBaseTests(config: {
                 ).toEqual("0-2");
 
                 expect(
-                    await client.xreadgroup(group, "consumer", { [key]: ">" }),
+                    convertGlideRecordToRecord(
+                        (await client.xreadgroup(group, "consumer", {
+                            [key]: ">",
+                        }))!,
+                    ),
                 ).toEqual({
                     [key]: {
                         "0-1": [
@@ -10838,8 +11327,8 @@ export function runBaseTests(config: {
                     Buffer.from(group),
                     Buffer.from("consumer"),
                     0,
-                    Buffer.from("0-0"),
-                    1,
+                    "0-0",
+                    { count: 1 },
                 );
                 let expected: typeof result = [
                     "0-2",
@@ -10940,9 +11429,11 @@ export function runBaseTests(config: {
                     await client.xgroupCreate(key, groupName, stream_id0),
                 ).toBe("OK");
                 expect(
-                    await client.xreadgroup(groupName, consumerName, {
-                        [key]: ">",
-                    }),
+                    convertGlideRecordToRecord(
+                        (await client.xreadgroup(groupName, consumerName, {
+                            [key]: ">",
+                        }))!,
+                    ),
                 ).toEqual({
                     [key]: {
                         [stream_id1_0]: [["f0", "v0"]],
@@ -10978,15 +11469,17 @@ export function runBaseTests(config: {
                     await client.xack(
                         Buffer.from(key),
                         Buffer.from(groupName),
-                        [Buffer.from(stream_id1_0), Buffer.from(stream_id1_1)],
+                        [stream_id1_0, stream_id1_1],
                     ),
                 ).toBe(0);
 
                 // read the last unacknowledged entry
                 expect(
-                    await client.xreadgroup(groupName, consumerName, {
-                        [key]: ">",
-                    }),
+                    convertGlideRecordToRecord(
+                        (await client.xreadgroup(groupName, consumerName, {
+                            [key]: ">",
+                        }))!,
+                    ),
                 ).toEqual({ [key]: { [stream_id1_2]: [["f2", "v2"]] } });
 
                 // deleting the consumer, returns 1 since the last entry still hasn't been acknowledged
@@ -11036,86 +11529,93 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `lmpop test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
-                if (cluster.checkIfServerVersionLessThan("7.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("7.0.0")) {
+                        return;
+                    }
 
-                const key1 = "{key}" + uuidv4();
-                const key2 = "{key}" + uuidv4();
-                const nonListKey = uuidv4();
-                const singleKeyArray = [key1];
-                const multiKeyArray = [key2, key1];
-                const count = 1;
-                const lpushArgs = ["one", "two", "three", "four", "five"];
-                const expected = { [key1]: ["five"] };
-                const expected2 = { [key2]: ["one", "two"] };
+                    const key1 = "{key}" + uuidv4();
+                    const key2 = "{key}" + uuidv4();
+                    const nonListKey = uuidv4();
+                    const singleKeyArray = [key1];
+                    const multiKeyArray = [key2, key1];
+                    const count = 1;
+                    const lpushArgs = ["one", "two", "three", "four", "five"];
+                    const expected = { key: key1, elements: ["five"] };
+                    const expected2 = { key: key2, elements: ["one", "two"] };
 
-                // nothing to be popped
-                expect(
-                    await client.lmpop(
-                        singleKeyArray,
-                        ListDirection.LEFT,
-                        count,
-                    ),
-                ).toBeNull();
+                    // nothing to be popped
+                    expect(
+                        await client.lmpop(singleKeyArray, ListDirection.LEFT, {
+                            count,
+                        }),
+                    ).toBeNull();
 
-                // pushing to the arrays to be popped
-                expect(await client.lpush(key1, lpushArgs)).toEqual(5);
-                expect(await client.lpush(key2, lpushArgs)).toEqual(5);
+                    // pushing to the arrays to be popped
+                    expect(await client.lpush(key1, lpushArgs)).toEqual(5);
+                    expect(await client.lpush(key2, lpushArgs)).toEqual(5);
 
-                // checking correct result from popping
-                expect(
-                    await client.lmpop(singleKeyArray, ListDirection.LEFT),
-                ).toEqual(expected);
+                    // checking correct result from popping
+                    expect(
+                        await client.lmpop(singleKeyArray, ListDirection.LEFT),
+                    ).toEqual(expected);
 
-                // popping multiple elements from the right
-                expect(
-                    await client.lmpop(multiKeyArray, ListDirection.RIGHT, 2),
-                ).toEqual(expected2);
+                    // popping multiple elements from the right
+                    expect(
+                        await client.lmpop(multiKeyArray, ListDirection.RIGHT, {
+                            count: 2,
+                            decoder: Decoder.String,
+                        }),
+                    ).toEqual(expected2);
 
-                // Key exists, but is not a set
-                expect(await client.set(nonListKey, "lmpop")).toBe("OK");
-                await expect(
-                    client.lmpop([nonListKey], ListDirection.RIGHT),
-                ).rejects.toThrow(RequestError);
+                    // Key exists, but is not a set
+                    expect(await client.set(nonListKey, "lmpop")).toBe("OK");
+                    await expect(
+                        client.lmpop([nonListKey], ListDirection.RIGHT),
+                    ).rejects.toThrow(RequestError);
 
-                // Test with single binary key array as input
-                const key3 = "{key}" + uuidv4();
-                const singleKeyArrayWithKey3 = [Buffer.from(key3)];
+                    // Test with single binary key array as input
+                    const key3 = "{key}" + uuidv4();
+                    const singleKeyArrayWithKey3 = [Buffer.from(key3)];
 
-                // pushing to the arrays to be popped
-                expect(await client.lpush(key3, lpushArgs)).toEqual(5);
-                const expectedWithKey3 = { [key3]: ["five"] };
+                    // pushing to the arrays to be popped
+                    expect(await client.lpush(key3, lpushArgs)).toEqual(5);
+                    const expectedWithKey3 = { key: key3, elements: ["five"] };
 
-                // checking correct result from popping
-                expect(
-                    await client.lmpop(
-                        singleKeyArrayWithKey3,
-                        ListDirection.LEFT,
-                    ),
-                ).toEqual(expectedWithKey3);
+                    // checking correct result from popping
+                    expect(
+                        await client.lmpop(
+                            singleKeyArrayWithKey3,
+                            ListDirection.LEFT,
+                        ),
+                    ).toEqual(expectedWithKey3);
 
-                // test with multiple binary keys array as input
-                const key4 = "{key}" + uuidv4();
-                const multiKeyArrayWithKey3AndKey4 = [
-                    Buffer.from(key4),
-                    Buffer.from(key3),
-                ];
+                    // test with multiple binary keys array as input
+                    const key4 = "{key}" + uuidv4();
+                    const multiKeyArrayWithKey3AndKey4 = [
+                        Buffer.from(key4),
+                        Buffer.from(key3),
+                    ];
 
-                // pushing to the arrays to be popped
-                expect(await client.lpush(key4, lpushArgs)).toEqual(5);
-                const expectedWithKey4 = { [key4]: ["one", "two"] };
+                    // pushing to the arrays to be popped
+                    expect(await client.lpush(key4, lpushArgs)).toEqual(5);
+                    const expectedWithKey4 = {
+                        key: Buffer.from(key4),
+                        elements: [Buffer.from("one"), Buffer.from("two")],
+                    };
 
-                // checking correct result from popping
-                expect(
-                    await client.lmpop(
-                        multiKeyArrayWithKey3AndKey4,
-                        ListDirection.RIGHT,
-                        2,
-                    ),
-                ).toEqual(expectedWithKey4);
-            }, protocol);
+                    // checking correct result from popping
+                    expect(
+                        await client.lmpop(
+                            multiKeyArrayWithKey3AndKey4,
+                            ListDirection.RIGHT,
+                            { count: 2, decoder: Decoder.Bytes },
+                        ),
+                    ).toEqual(expectedWithKey4);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -11123,98 +11623,106 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `blmpop test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
-                if (cluster.checkIfServerVersionLessThan("7.0.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("7.0.0")) {
+                        return;
+                    }
 
-                const key1 = "{key}" + uuidv4();
-                const key2 = "{key}" + uuidv4();
-                const nonListKey = uuidv4();
-                const singleKeyArray = [key1];
-                const multiKeyArray = [key2, key1];
-                const count = 1;
-                const lpushArgs = ["one", "two", "three", "four", "five"];
-                const expected = { [key1]: ["five"] };
-                const expected2 = { [key2]: ["one", "two"] };
+                    const key1 = "{key}" + uuidv4();
+                    const key2 = "{key}" + uuidv4();
+                    const nonListKey = uuidv4();
+                    const singleKeyArray = [key1];
+                    const multiKeyArray = [key2, key1];
+                    const count = 1;
+                    const lpushArgs = ["one", "two", "three", "four", "five"];
+                    const expected = { key: key1, elements: ["five"] };
+                    const expected2 = { key: key2, elements: ["one", "two"] };
 
-                // nothing to be popped
-                expect(
-                    await client.blmpop(
-                        singleKeyArray,
-                        ListDirection.LEFT,
-                        0.1,
-                        count,
-                    ),
-                ).toBeNull();
+                    // nothing to be popped
+                    expect(
+                        await client.blmpop(
+                            singleKeyArray,
+                            ListDirection.LEFT,
+                            0.1,
+                            { count },
+                        ),
+                    ).toBeNull();
 
-                // pushing to the arrays to be popped
-                expect(await client.lpush(key1, lpushArgs)).toEqual(5);
-                expect(await client.lpush(key2, lpushArgs)).toEqual(5);
+                    // pushing to the arrays to be popped
+                    expect(await client.lpush(key1, lpushArgs)).toEqual(5);
+                    expect(await client.lpush(key2, lpushArgs)).toEqual(5);
 
-                // checking correct result from popping
-                expect(
-                    await client.blmpop(
-                        singleKeyArray,
-                        ListDirection.LEFT,
-                        0.1,
-                    ),
-                ).toEqual(expected);
+                    // checking correct result from popping
+                    expect(
+                        await client.blmpop(
+                            singleKeyArray,
+                            ListDirection.LEFT,
+                            0.1,
+                        ),
+                    ).toEqual(expected);
 
-                // popping multiple elements from the right
-                expect(
-                    await client.blmpop(
-                        multiKeyArray,
-                        ListDirection.RIGHT,
-                        0.1,
-                        2,
-                    ),
-                ).toEqual(expected2);
+                    // popping multiple elements from the right
+                    expect(
+                        await client.blmpop(
+                            multiKeyArray,
+                            ListDirection.RIGHT,
+                            0.1,
+                            { count: 2, decoder: Decoder.String },
+                        ),
+                    ).toEqual(expected2);
 
-                // Key exists, but is not a set
-                expect(await client.set(nonListKey, "blmpop")).toBe("OK");
-                await expect(
-                    client.blmpop([nonListKey], ListDirection.RIGHT, 0.1, 1),
-                ).rejects.toThrow(RequestError);
+                    // Key exists, but is not a set
+                    expect(await client.set(nonListKey, "blmpop")).toBe("OK");
+                    await expect(
+                        client.blmpop([nonListKey], ListDirection.RIGHT, 0.1, {
+                            count: 1,
+                        }),
+                    ).rejects.toThrow(RequestError);
 
-                // Test with single binary key array as input
-                const key3 = "{key}" + uuidv4();
-                const singleKeyArrayWithKey3 = [Buffer.from(key3)];
+                    // Test with single binary key array as input
+                    const key3 = "{key}" + uuidv4();
+                    const singleKeyArrayWithKey3 = [Buffer.from(key3)];
 
-                // pushing to the arrays to be popped
-                expect(await client.lpush(key3, lpushArgs)).toEqual(5);
-                const expectedWithKey3 = { [key3]: ["five"] };
+                    // pushing to the arrays to be popped
+                    expect(await client.lpush(key3, lpushArgs)).toEqual(5);
+                    const expectedWithKey3 = { key: key3, elements: ["five"] };
 
-                // checking correct result from popping
-                expect(
-                    await client.blmpop(
-                        singleKeyArrayWithKey3,
-                        ListDirection.LEFT,
-                        0.1,
-                    ),
-                ).toEqual(expectedWithKey3);
+                    // checking correct result from popping
+                    expect(
+                        await client.blmpop(
+                            singleKeyArrayWithKey3,
+                            ListDirection.LEFT,
+                            0.1,
+                        ),
+                    ).toEqual(expectedWithKey3);
 
-                // test with multiple binary keys array as input
-                const key4 = "{key}" + uuidv4();
-                const multiKeyArrayWithKey3AndKey4 = [
-                    Buffer.from(key4),
-                    Buffer.from(key3),
-                ];
+                    // test with multiple binary keys array as input
+                    const key4 = "{key}" + uuidv4();
+                    const multiKeyArrayWithKey3AndKey4 = [
+                        Buffer.from(key4),
+                        Buffer.from(key3),
+                    ];
 
-                // pushing to the arrays to be popped
-                expect(await client.lpush(key4, lpushArgs)).toEqual(5);
-                const expectedWithKey4 = { [key4]: ["one", "two"] };
+                    // pushing to the arrays to be popped
+                    expect(await client.lpush(key4, lpushArgs)).toEqual(5);
+                    const expectedWithKey4 = {
+                        key: Buffer.from(key4),
+                        elements: [Buffer.from("one"), Buffer.from("two")],
+                    };
 
-                // checking correct result from popping
-                expect(
-                    await client.blmpop(
-                        multiKeyArrayWithKey3AndKey4,
-                        ListDirection.RIGHT,
-                        0.1,
-                        2,
-                    ),
-                ).toEqual(expectedWithKey4);
-            }, protocol);
+                    // checking correct result from popping
+                    expect(
+                        await client.blmpop(
+                            multiKeyArrayWithKey3AndKey4,
+                            ListDirection.RIGHT,
+                            0.1,
+                            { count: 2, decoder: Decoder.Bytes },
+                        ),
+                    ).toEqual(expectedWithKey4);
+                },
+                protocol,
+            );
         },
         config.timeout,
     );
@@ -11280,9 +11788,11 @@ export function runBaseTests(config: {
 
                 // read the entire stream for the consumer and mark messages as pending
                 expect(
-                    await client.xreadgroup(groupName, consumer, {
-                        [key]: ">",
-                    }),
+                    convertGlideRecordToRecord(
+                        (await client.xreadgroup(groupName, consumer, {
+                            [key]: ">",
+                        }))!,
+                    ),
                 ).toEqual({
                     [key]: {
                         [streamid1 as string]: [["field1", "value1"]],
@@ -11436,7 +11946,7 @@ export function runBaseTests(config: {
                     mkStream: true,
                 });
 
-                const promiseList: [string, Promise<ReturnType>][] = [
+                const promiseList: [string, Promise<GlideReturnType>][] = [
                     ["bzpopmax", client.bzpopmax(keyz, 0)],
                     ["bzpopmin", client.bzpopmin(keyz, 0)],
                     ["blpop", client.blpop(keyz, 0)],
@@ -11501,59 +12011,345 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `getex test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
-                if (cluster.checkIfServerVersionLessThan("6.2.0")) {
-                    return;
-                }
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("6.2.0")) {
+                        return;
+                    }
 
-                const key1 = "{key}" + uuidv4();
-                const key2 = "{key}" + uuidv4();
-                const value = uuidv4();
+                    const key1 = "{key}" + uuidv4();
+                    const key2 = "{key}" + uuidv4();
+                    const value = uuidv4();
 
-                expect(await client.set(key1, value)).toBe("OK");
-                expect(await client.getex(key1)).toEqual(value);
-                expect(await client.ttl(key1)).toBe(-1);
+                    expect(await client.set(key1, value)).toBe("OK");
+                    expect(await client.getex(key1)).toEqual(value);
+                    expect(await client.ttl(key1)).toBe(-1);
 
-                expect(
-                    await client.getex(key1, {
-                        expiry: {
-                            type: TimeUnit.Seconds,
-                            duration: 15,
-                        },
-                    }),
-                ).toEqual(value);
-                // test the binary option
-                expect(
-                    await client.getex(Buffer.from(key1), {
-                        expiry: {
-                            type: TimeUnit.Seconds,
-                            duration: 1,
-                        },
-                    }),
-                ).toEqual(value);
-                expect(await client.ttl(key1)).toBeGreaterThan(0);
-                expect(await client.getex(key1, { expiry: "persist" })).toEqual(
-                    value,
-                );
-                expect(await client.ttl(key1)).toBe(-1);
+                    expect(
+                        await client.getex(key1, {
+                            expiry: {
+                                type: TimeUnit.Seconds,
+                                duration: 15,
+                            },
+                        }),
+                    ).toEqual(value);
+                    // test the binary option
+                    expect(
+                        await client.getex(Buffer.from(key1), {
+                            expiry: {
+                                type: TimeUnit.Seconds,
+                                duration: 1,
+                            },
+                        }),
+                    ).toEqual(value);
+                    expect(await client.ttl(key1)).toBeGreaterThan(0);
+                    expect(
+                        await client.getex(key1, { expiry: "persist" }),
+                    ).toEqual(value);
+                    expect(await client.ttl(key1)).toBe(-1);
 
-                // non existent key
-                expect(await client.getex(key2)).toBeNull();
+                    // non existent key
+                    expect(await client.getex(key2)).toBeNull();
 
-                // invalid time measurement
-                await expect(
-                    client.getex(key1, {
-                        expiry: {
-                            type: TimeUnit.Seconds,
-                            duration: -10,
-                        },
-                    }),
-                ).rejects.toThrow(RequestError);
+                    // invalid time measurement
+                    await expect(
+                        client.getex(key1, {
+                            expiry: {
+                                type: TimeUnit.Seconds,
+                                duration: -10,
+                            },
+                        }),
+                    ).rejects.toThrow(RequestError);
 
-                // Key exists, but is not a string
-                expect(await client.sadd(key2, ["a"])).toBe(1);
-                await expect(client.getex(key2)).rejects.toThrow(RequestError);
-            }, protocol);
+                    // Key exists, but is not a string
+                    expect(await client.sadd(key2, ["a"])).toBe(1);
+                    await expect(client.getex(key2)).rejects.toThrow(
+                        RequestError,
+                    );
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "sort sortstore sort_store sortro sort_ro sortreadonly test_%p",
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (
+                        cluster.checkIfServerVersionLessThan("7.9.0") &&
+                        client instanceof GlideClusterClient
+                    ) {
+                        return;
+                    }
+
+                    const setPrefix = "{slot}setKey" + uuidv4();
+                    const hashPrefix = "{slot}hashKey" + uuidv4();
+                    const list = "{slot}" + uuidv4();
+                    const store = "{slot}" + uuidv4();
+                    const names = ["Alice", "Bob", "Charlie", "Dave", "Eve"];
+                    const ages = ["30", "25", "35", "20", "40"];
+
+                    for (let i = 0; i < ages.length; i++) {
+                        const fieldValueList: HashDataType = [
+                            { field: "name", value: names[i] },
+                            { field: "age", value: ages[i] },
+                        ];
+                        expect(
+                            await client.hset(
+                                setPrefix + (i + 1),
+                                fieldValueList,
+                            ),
+                        ).toEqual(2);
+                    }
+
+                    expect(
+                        await client.rpush(list, ["3", "1", "5", "4", "2"]),
+                    ).toEqual(5);
+
+                    expect(
+                        await client.sort(list, {
+                            limit: { offset: 0, count: 2 },
+                            getPatterns: [setPrefix + "*->name"],
+                        }),
+                    ).toEqual(["Alice", "Bob"]);
+
+                    expect(
+                        await client.sort(Buffer.from(list), {
+                            limit: { offset: 0, count: 2 },
+                            getPatterns: [setPrefix + "*->name"],
+                            orderBy: SortOrder.DESC,
+                        }),
+                    ).toEqual(["Eve", "Dave"]);
+
+                    expect(
+                        await client.sort(list, {
+                            limit: { offset: 0, count: 2 },
+                            byPattern: setPrefix + "*->age",
+                            getPatterns: [
+                                setPrefix + "*->name",
+                                setPrefix + "*->age",
+                            ],
+                            orderBy: SortOrder.DESC,
+                        }),
+                    ).toEqual(["Eve", "40", "Charlie", "35"]);
+
+                    // test binary decoder
+                    expect(
+                        await client.sort(list, {
+                            limit: { offset: 0, count: 2 },
+                            byPattern: setPrefix + "*->age",
+                            getPatterns: [
+                                setPrefix + "*->name",
+                                setPrefix + "*->age",
+                            ],
+                            orderBy: SortOrder.DESC,
+                            decoder: Decoder.Bytes,
+                        }),
+                    ).toEqual([
+                        Buffer.from("Eve"),
+                        Buffer.from("40"),
+                        Buffer.from("Charlie"),
+                        Buffer.from("35"),
+                    ]);
+
+                    // Non-existent key in the BY pattern will result in skipping the sorting operation
+                    expect(
+                        await client.sort(list, { byPattern: "noSort" }),
+                    ).toEqual(["3", "1", "5", "4", "2"]);
+
+                    // Non-existent key in the GET pattern results in nulls
+                    expect(
+                        await client.sort(list, {
+                            isAlpha: true,
+                            getPatterns: ["{slot}missing"],
+                        }),
+                    ).toEqual([null, null, null, null, null]);
+
+                    // Missing key in the set
+                    expect(await client.lpush(list, ["42"])).toEqual(6);
+                    expect(
+                        await client.sort(list, {
+                            byPattern: setPrefix + "*->age",
+                            getPatterns: [setPrefix + "*->name"],
+                        }),
+                    ).toEqual([null, "Dave", "Bob", "Alice", "Charlie", "Eve"]);
+                    expect(await client.lpop(list)).toEqual("42");
+
+                    // sort RO
+                    if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                        expect(
+                            await client.sortReadOnly(list, {
+                                limit: { offset: 0, count: 2 },
+                                getPatterns: [setPrefix + "*->name"],
+                            }),
+                        ).toEqual(["Alice", "Bob"]);
+
+                        expect(
+                            await client.sortReadOnly(list, {
+                                limit: { offset: 0, count: 2 },
+                                getPatterns: [setPrefix + "*->name"],
+                                orderBy: SortOrder.DESC,
+                                decoder: Decoder.Bytes,
+                            }),
+                        ).toEqual([Buffer.from("Eve"), Buffer.from("Dave")]);
+
+                        expect(
+                            await client.sortReadOnly(Buffer.from(list), {
+                                limit: { offset: 0, count: 2 },
+                                byPattern: setPrefix + "*->age",
+                                getPatterns: [
+                                    setPrefix + "*->name",
+                                    setPrefix + "*->age",
+                                ],
+                                orderBy: SortOrder.DESC,
+                            }),
+                        ).toEqual(["Eve", "40", "Charlie", "35"]);
+
+                        // Non-existent key in the BY pattern will result in skipping the sorting operation
+                        expect(
+                            await client.sortReadOnly(list, {
+                                byPattern: "noSort",
+                            }),
+                        ).toEqual(["3", "1", "5", "4", "2"]);
+
+                        // Non-existent key in the GET pattern results in nulls
+                        expect(
+                            await client.sortReadOnly(list, {
+                                isAlpha: true,
+                                getPatterns: ["{slot}missing"],
+                            }),
+                        ).toEqual([null, null, null, null, null]);
+
+                        // Missing key in the set
+                        expect(await client.lpush(list, ["42"])).toEqual(6);
+                        expect(
+                            await client.sortReadOnly(list, {
+                                byPattern: setPrefix + "*->age",
+                                getPatterns: [setPrefix + "*->name"],
+                            }),
+                        ).toEqual([
+                            null,
+                            "Dave",
+                            "Bob",
+                            "Alice",
+                            "Charlie",
+                            "Eve",
+                        ]);
+                        expect(await client.lpop(list)).toEqual("42");
+                    }
+
+                    // SORT with STORE
+                    expect(
+                        await client.sortStore(list, store, {
+                            limit: { offset: 0, count: -1 },
+                            byPattern: setPrefix + "*->age",
+                            getPatterns: [setPrefix + "*->name"],
+                            orderBy: SortOrder.ASC,
+                        }),
+                    ).toEqual(5);
+                    expect(await client.lrange(store, 0, -1)).toEqual([
+                        "Dave",
+                        "Bob",
+                        "Alice",
+                        "Charlie",
+                        "Eve",
+                    ]);
+                    expect(
+                        await client.sortStore(Buffer.from(list), store, {
+                            byPattern: setPrefix + "*->age",
+                            getPatterns: [setPrefix + "*->name"],
+                        }),
+                    ).toEqual(5);
+                    expect(await client.lrange(store, 0, -1)).toEqual([
+                        "Dave",
+                        "Bob",
+                        "Alice",
+                        "Charlie",
+                        "Eve",
+                    ]);
+
+                    // transaction test
+                    const transaction =
+                        client instanceof GlideClient
+                            ? new Transaction()
+                            : new ClusterTransaction();
+                    transaction
+                        .hset(hashPrefix + 1, [
+                            { field: "name", value: "Alice" },
+                            { field: "age", value: "30" },
+                        ])
+                        .hset(hashPrefix + 2, {
+                            name: "Bob",
+                            age: "25",
+                        })
+                        .del([list])
+                        .lpush(list, ["2", "1"])
+                        .sort(list, {
+                            byPattern: hashPrefix + "*->age",
+                            getPatterns: [hashPrefix + "*->name"],
+                        })
+                        .sort(list, {
+                            byPattern: hashPrefix + "*->age",
+                            getPatterns: [hashPrefix + "*->name"],
+                            orderBy: SortOrder.DESC,
+                        })
+                        .sortStore(list, store, {
+                            byPattern: hashPrefix + "*->age",
+                            getPatterns: [hashPrefix + "*->name"],
+                        })
+                        .lrange(store, 0, -1)
+                        .sortStore(list, store, {
+                            byPattern: hashPrefix + "*->age",
+                            getPatterns: [hashPrefix + "*->name"],
+                            orderBy: SortOrder.DESC,
+                        })
+                        .lrange(store, 0, -1);
+
+                    if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                        transaction
+                            .sortReadOnly(list, {
+                                byPattern: hashPrefix + "*->age",
+                                getPatterns: [hashPrefix + "*->name"],
+                            })
+                            .sortReadOnly(list, {
+                                byPattern: hashPrefix + "*->age",
+                                getPatterns: [hashPrefix + "*->name"],
+                                orderBy: SortOrder.DESC,
+                            });
+                    }
+
+                    const expectedResult = [
+                        2,
+                        2,
+                        1,
+                        2,
+                        ["Bob", "Alice"],
+                        ["Alice", "Bob"],
+                        2,
+                        ["Bob", "Alice"],
+                        2,
+                        ["Alice", "Bob"],
+                    ];
+
+                    if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                        expectedResult.push(["Bob", "Alice"], ["Alice", "Bob"]);
+                    }
+
+                    const result =
+                        client instanceof GlideClient
+                            ? await client.exec(transaction as Transaction)
+                            : await client.exec(
+                                  transaction as ClusterTransaction,
+                              );
+                    expect(result).toEqual(expectedResult);
+
+                    client.close();
+                },
+                protocol,
+            );
         },
         config.timeout,
     );

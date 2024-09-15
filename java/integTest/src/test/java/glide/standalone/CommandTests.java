@@ -8,6 +8,7 @@ import static glide.TestUtilities.checkFunctionListResponseBinary;
 import static glide.TestUtilities.checkFunctionStatsBinaryResponse;
 import static glide.TestUtilities.checkFunctionStatsResponse;
 import static glide.TestUtilities.commonClientConfig;
+import static glide.TestUtilities.createLongRunningLuaScript;
 import static glide.TestUtilities.createLuaLibWithLongRunningFunction;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.generateLuaLibCodeBinary;
@@ -24,9 +25,6 @@ import static glide.api.models.commands.InfoOptions.Section.EVERYTHING;
 import static glide.api.models.commands.InfoOptions.Section.MEMORY;
 import static glide.api.models.commands.InfoOptions.Section.SERVER;
 import static glide.api.models.commands.InfoOptions.Section.STATS;
-import static glide.api.models.commands.SortBaseOptions.Limit;
-import static glide.api.models.commands.SortBaseOptions.OrderBy.ASC;
-import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
 import static glide.api.models.commands.function.FunctionRestorePolicy.APPEND;
 import static glide.api.models.commands.function.FunctionRestorePolicy.FLUSH;
 import static glide.api.models.commands.function.FunctionRestorePolicy.REPLACE;
@@ -35,6 +33,7 @@ import static glide.api.models.commands.scan.ScanOptions.ObjectType.SET;
 import static glide.api.models.commands.scan.ScanOptions.ObjectType.STRING;
 import static glide.cluster.CommandTests.DEFAULT_INFO_SECTIONS;
 import static glide.cluster.CommandTests.EVERYTHING_INFO_SECTIONS;
+import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -48,9 +47,11 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.GlideClient;
 import glide.api.models.GlideString;
-import glide.api.models.commands.InfoOptions;
-import glide.api.models.commands.SortOptions;
-import glide.api.models.commands.SortOptionsBinary;
+import glide.api.models.Script;
+import glide.api.models.commands.FlushMode;
+import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.ScriptOptions;
+import glide.api.models.commands.ScriptOptionsGlideString;
 import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
@@ -157,15 +158,14 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void info_with_multiple_options() {
-        InfoOptions.InfoOptionsBuilder builder = InfoOptions.builder().section(CLUSTER);
+        Section[] sections = {CLUSTER};
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            builder.section(CPU).section(MEMORY);
+            sections = concatenateArrays(sections, new Section[] {CPU, MEMORY});
         }
-        InfoOptions options = builder.build();
-        String data = regularClient.info(options).get();
-        for (String section : options.toArgs()) {
+        String data = regularClient.info(sections).get();
+        for (Section section : sections) {
             assertTrue(
-                    data.toLowerCase().contains("# " + section.toLowerCase()),
+                    data.toLowerCase().contains("# " + section.toString().toLowerCase()),
                     "Section " + section + " is missing");
         }
     }
@@ -173,8 +173,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void info_with_everything_option() {
-        InfoOptions options = InfoOptions.builder().section(EVERYTHING).build();
-        String data = regularClient.info(options).get();
+        String data = regularClient.info(new Section[] {EVERYTHING}).get();
         for (String section : EVERYTHING_INFO_SECTIONS) {
             assertTrue(data.contains("# " + section), "Section " + section + " is missing");
         }
@@ -285,13 +284,13 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void config_reset_stat() {
-        String data = regularClient.info(InfoOptions.builder().section(STATS).build()).get();
+        String data = regularClient.info(new Section[] {STATS}).get();
         long value_before = getValueFromInfo(data, "total_net_input_bytes");
 
         var result = regularClient.configResetStat().get();
         assertEquals(OK, result);
 
-        data = regularClient.info(InfoOptions.builder().section(STATS).build()).get();
+        data = regularClient.info(new Section[] {STATS}).get();
         long value_after = getValueFromInfo(data, "total_net_input_bytes");
         assertTrue(value_after < value_before);
     }
@@ -299,7 +298,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void config_rewrite_non_existent_config_file() {
-        var info = regularClient.info(InfoOptions.builder().section(SERVER).build()).get();
+        var info = regularClient.info(new Section[] {SERVER}).get();
         var configFile = parseInfoResponseToMap(info).get("config_file");
 
         if (configFile.isEmpty()) {
@@ -1156,376 +1155,6 @@ public class CommandTests {
 
     @Test
     @SneakyThrows
-    public void sort() {
-        String setKey1 = "setKey1";
-        String setKey2 = "setKey2";
-        String setKey3 = "setKey3";
-        String setKey4 = "setKey4";
-        String setKey5 = "setKey5";
-        String[] setKeys = new String[] {setKey1, setKey2, setKey3, setKey4, setKey5};
-        String listKey = "listKey";
-        String storeKey = "storeKey";
-        String nameField = "name";
-        String ageField = "age";
-        String[] names = new String[] {"Alice", "Bob", "Charlie", "Dave", "Eve"};
-        String[] namesSortedByAge = new String[] {"Dave", "Bob", "Alice", "Charlie", "Eve"};
-        String[] ages = new String[] {"30", "25", "35", "20", "40"};
-        String[] userIDs = new String[] {"3", "1", "5", "4", "2"};
-        String namePattern = "setKey*->name";
-        String agePattern = "setKey*->age";
-        String missingListKey = "100000";
-
-        for (int i = 0; i < setKeys.length; i++) {
-            assertEquals(
-                    2, regularClient.hset(setKeys[i], Map.of(nameField, names[i], ageField, ages[i])).get());
-        }
-
-        assertEquals(5, regularClient.rpush(listKey, userIDs).get());
-        assertArrayEquals(
-                new String[] {"Alice", "Bob"},
-                regularClient
-                        .sort(
-                                listKey,
-                                SortOptions.builder().limit(new Limit(0L, 2L)).getPattern(namePattern).build())
-                        .get());
-        assertArrayEquals(
-                new String[] {"Eve", "Dave"},
-                regularClient
-                        .sort(
-                                listKey,
-                                SortOptions.builder()
-                                        .limit(new Limit(0L, 2L))
-                                        .orderBy(DESC)
-                                        .getPattern(namePattern)
-                                        .build())
-                        .get());
-        assertArrayEquals(
-                new String[] {"Eve", "40", "Charlie", "35"},
-                regularClient
-                        .sort(
-                                listKey,
-                                SortOptions.builder()
-                                        .limit(new Limit(0L, 2L))
-                                        .orderBy(DESC)
-                                        .byPattern(agePattern)
-                                        .getPatterns(List.of(namePattern, agePattern))
-                                        .build())
-                        .get());
-
-        // Non-existent key in the BY pattern will result in skipping the sorting operation
-        assertArrayEquals(
-                userIDs,
-                regularClient.sort(listKey, SortOptions.builder().byPattern("noSort").build()).get());
-
-        // Non-existent key in the GET pattern results in nulls
-        assertArrayEquals(
-                new String[] {null, null, null, null, null},
-                regularClient
-                        .sort(listKey, SortOptions.builder().alpha().getPattern("missing").build())
-                        .get());
-
-        // Missing key in the set
-        assertEquals(6, regularClient.lpush(listKey, new String[] {missingListKey}).get());
-        assertArrayEquals(
-                new String[] {null, "Dave", "Bob", "Alice", "Charlie", "Eve"},
-                regularClient
-                        .sort(
-                                listKey,
-                                SortOptions.builder().byPattern(agePattern).getPattern(namePattern).build())
-                        .get());
-        assertEquals(missingListKey, regularClient.lpop(listKey).get());
-
-        // SORT_RO
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            assertArrayEquals(
-                    new String[] {"Alice", "Bob"},
-                    regularClient
-                            .sortReadOnly(
-                                    listKey,
-                                    SortOptions.builder().limit(new Limit(0L, 2L)).getPattern(namePattern).build())
-                            .get());
-            assertArrayEquals(
-                    new String[] {"Eve", "Dave"},
-                    regularClient
-                            .sortReadOnly(
-                                    listKey,
-                                    SortOptions.builder()
-                                            .limit(new Limit(0L, 2L))
-                                            .orderBy(DESC)
-                                            .getPattern(namePattern)
-                                            .build())
-                            .get());
-            assertArrayEquals(
-                    new String[] {"Eve", "40", "Charlie", "35"},
-                    regularClient
-                            .sortReadOnly(
-                                    listKey,
-                                    SortOptions.builder()
-                                            .limit(new Limit(0L, 2L))
-                                            .orderBy(DESC)
-                                            .byPattern(agePattern)
-                                            .getPatterns(List.of(namePattern, agePattern))
-                                            .build())
-                            .get());
-
-            // Non-existent key in the BY pattern will result in skipping the sorting operation
-            assertArrayEquals(
-                    userIDs,
-                    regularClient
-                            .sortReadOnly(listKey, SortOptions.builder().byPattern("noSort").build())
-                            .get());
-
-            // Non-existent key in the GET pattern results in nulls
-            assertArrayEquals(
-                    new String[] {null, null, null, null, null},
-                    regularClient
-                            .sortReadOnly(listKey, SortOptions.builder().alpha().getPattern("missing").build())
-                            .get());
-
-            assertArrayEquals(
-                    namesSortedByAge,
-                    regularClient
-                            .sortReadOnly(
-                                    listKey,
-                                    SortOptions.builder().byPattern(agePattern).getPattern(namePattern).build())
-                            .get());
-
-            // Missing key in the set
-            assertEquals(6, regularClient.lpush(listKey, new String[] {missingListKey}).get());
-            assertArrayEquals(
-                    new String[] {null, "Dave", "Bob", "Alice", "Charlie", "Eve"},
-                    regularClient
-                            .sortReadOnly(
-                                    listKey,
-                                    SortOptions.builder().byPattern(agePattern).getPattern(namePattern).build())
-                            .get());
-            assertEquals(missingListKey, regularClient.lpop(listKey).get());
-        }
-
-        // SORT with STORE
-        assertEquals(
-                5,
-                regularClient
-                        .sortStore(
-                                listKey,
-                                storeKey,
-                                SortOptions.builder()
-                                        .limit(new Limit(0L, -1L))
-                                        .orderBy(ASC)
-                                        .byPattern(agePattern)
-                                        .getPattern(namePattern)
-                                        .build())
-                        .get());
-        assertArrayEquals(namesSortedByAge, regularClient.lrange(storeKey, 0, -1).get());
-        assertEquals(
-                5,
-                regularClient
-                        .sortStore(
-                                listKey,
-                                storeKey,
-                                SortOptions.builder().byPattern(agePattern).getPattern(namePattern).build())
-                        .get());
-        assertArrayEquals(namesSortedByAge, regularClient.lrange(storeKey, 0, -1).get());
-    }
-
-    @Test
-    @SneakyThrows
-    public void sort_binary() {
-        GlideString setKey1 = gs("setKey1");
-        GlideString setKey2 = gs("setKey2");
-        GlideString setKey3 = gs("setKey3");
-        GlideString setKey4 = gs("setKey4");
-        GlideString setKey5 = gs("setKey5");
-        GlideString[] setKeys = new GlideString[] {setKey1, setKey2, setKey3, setKey4, setKey5};
-        GlideString listKey = gs("listKey");
-        GlideString storeKey = gs("storeKey");
-        GlideString nameField = gs("name");
-        GlideString ageField = gs("age");
-        GlideString[] names =
-                new GlideString[] {gs("Alice"), gs("Bob"), gs("Charlie"), gs("Dave"), gs("Eve")};
-        String[] namesSortedByAge = new String[] {"Dave", "Bob", "Alice", "Charlie", "Eve"};
-        GlideString[] namesSortedByAge_gs =
-                new GlideString[] {gs("Dave"), gs("Bob"), gs("Alice"), gs("Charlie"), gs("Eve")};
-        GlideString[] ages = new GlideString[] {gs("30"), gs("25"), gs("35"), gs("20"), gs("40")};
-        GlideString[] userIDs = new GlideString[] {gs("3"), gs("1"), gs("5"), gs("4"), gs("2")};
-        GlideString namePattern = gs("setKey*->name");
-        GlideString agePattern = gs("setKey*->age");
-        GlideString missingListKey = gs("100000");
-
-        for (int i = 0; i < setKeys.length; i++) {
-            assertEquals(
-                    2,
-                    regularClient
-                            .hset(
-                                    setKeys[i].toString(),
-                                    Map.of(
-                                            nameField.toString(),
-                                            names[i].toString(),
-                                            ageField.toString(),
-                                            ages[i].toString()))
-                            .get());
-        }
-
-        assertEquals(5, regularClient.rpush(listKey, userIDs).get());
-        assertArrayEquals(
-                new GlideString[] {gs("Alice"), gs("Bob")},
-                regularClient
-                        .sort(
-                                listKey,
-                                SortOptionsBinary.builder()
-                                        .limit(new Limit(0L, 2L))
-                                        .getPattern(namePattern)
-                                        .build())
-                        .get());
-
-        assertArrayEquals(
-                new GlideString[] {gs("Eve"), gs("Dave")},
-                regularClient
-                        .sort(
-                                listKey,
-                                SortOptionsBinary.builder()
-                                        .limit(new Limit(0L, 2L))
-                                        .orderBy(DESC)
-                                        .getPattern(namePattern)
-                                        .build())
-                        .get());
-        assertArrayEquals(
-                new GlideString[] {gs("Eve"), gs("40"), gs("Charlie"), gs("35")},
-                regularClient
-                        .sort(
-                                listKey,
-                                SortOptionsBinary.builder()
-                                        .limit(new Limit(0L, 2L))
-                                        .orderBy(DESC)
-                                        .byPattern(agePattern)
-                                        .getPatterns(List.of(namePattern, agePattern))
-                                        .build())
-                        .get());
-
-        // Non-existent key in the BY pattern will result in skipping the sorting operation
-        assertArrayEquals(
-                userIDs,
-                regularClient
-                        .sort(listKey, SortOptionsBinary.builder().byPattern(gs("noSort")).build())
-                        .get());
-
-        // Non-existent key in the GET pattern results in nulls
-        assertArrayEquals(
-                new GlideString[] {null, null, null, null, null},
-                regularClient
-                        .sort(listKey, SortOptionsBinary.builder().alpha().getPattern(gs("missing")).build())
-                        .get());
-
-        // Missing key in the set
-        assertEquals(6, regularClient.lpush(listKey, new GlideString[] {missingListKey}).get());
-        assertArrayEquals(
-                new GlideString[] {null, gs("Dave"), gs("Bob"), gs("Alice"), gs("Charlie"), gs("Eve")},
-                regularClient
-                        .sort(
-                                listKey,
-                                SortOptionsBinary.builder().byPattern(agePattern).getPattern(namePattern).build())
-                        .get());
-        assertEquals(missingListKey.toString(), regularClient.lpop(listKey.toString()).get());
-
-        // SORT_RO
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            assertArrayEquals(
-                    new GlideString[] {gs("Alice"), gs("Bob")},
-                    regularClient
-                            .sortReadOnly(
-                                    listKey,
-                                    SortOptionsBinary.builder()
-                                            .limit(new Limit(0L, 2L))
-                                            .getPattern(namePattern)
-                                            .build())
-                            .get());
-            assertArrayEquals(
-                    new GlideString[] {gs("Eve"), gs("Dave")},
-                    regularClient
-                            .sortReadOnly(
-                                    listKey,
-                                    SortOptionsBinary.builder()
-                                            .limit(new Limit(0L, 2L))
-                                            .orderBy(DESC)
-                                            .getPattern(namePattern)
-                                            .build())
-                            .get());
-            assertArrayEquals(
-                    new GlideString[] {gs("Eve"), gs("40"), gs("Charlie"), gs("35")},
-                    regularClient
-                            .sortReadOnly(
-                                    listKey,
-                                    SortOptionsBinary.builder()
-                                            .limit(new Limit(0L, 2L))
-                                            .orderBy(DESC)
-                                            .byPattern(agePattern)
-                                            .getPatterns(List.of(namePattern, agePattern))
-                                            .build())
-                            .get());
-
-            // Non-existent key in the BY pattern will result in skipping the sorting operation
-            assertArrayEquals(
-                    userIDs,
-                    regularClient
-                            .sortReadOnly(listKey, SortOptionsBinary.builder().byPattern(gs("noSort")).build())
-                            .get());
-
-            // Non-existent key in the GET pattern results in nulls
-            assertArrayEquals(
-                    new GlideString[] {null, null, null, null, null},
-                    regularClient
-                            .sortReadOnly(
-                                    listKey, SortOptionsBinary.builder().alpha().getPattern(gs("missing")).build())
-                            .get());
-
-            assertArrayEquals(
-                    namesSortedByAge_gs,
-                    regularClient
-                            .sortReadOnly(
-                                    listKey,
-                                    SortOptionsBinary.builder().byPattern(agePattern).getPattern(namePattern).build())
-                            .get());
-
-            // Missing key in the set
-            assertEquals(6, regularClient.lpush(listKey, new GlideString[] {missingListKey}).get());
-            assertArrayEquals(
-                    new GlideString[] {null, gs("Dave"), gs("Bob"), gs("Alice"), gs("Charlie"), gs("Eve")},
-                    regularClient
-                            .sortReadOnly(
-                                    listKey,
-                                    SortOptionsBinary.builder().byPattern(agePattern).getPattern(namePattern).build())
-                            .get());
-            assertEquals(missingListKey.toString(), regularClient.lpop(listKey.toString()).get());
-        }
-
-        // SORT with STORE
-        assertEquals(
-                5,
-                regularClient
-                        .sortStore(
-                                listKey,
-                                storeKey,
-                                SortOptionsBinary.builder()
-                                        .limit(new Limit(0L, -1L))
-                                        .orderBy(ASC)
-                                        .byPattern(agePattern)
-                                        .getPattern(namePattern)
-                                        .build())
-                        .get());
-        assertArrayEquals(namesSortedByAge, regularClient.lrange(storeKey.toString(), 0, -1).get());
-        assertEquals(
-                5,
-                regularClient
-                        .sortStore(
-                                listKey,
-                                storeKey,
-                                SortOptionsBinary.builder().byPattern(agePattern).getPattern(namePattern).build())
-                        .get());
-        assertArrayEquals(namesSortedByAge, regularClient.lrange(storeKey.toString(), 0, -1).get());
-    }
-
-    @Test
-    @SneakyThrows
     public void scan() {
         String initialCursor = "0";
 
@@ -1816,5 +1445,304 @@ public class CommandTests {
             hashCursor = (GlideString) hashResult[resultCursorIndex];
             assertEquals(0, ((Object[]) hashResult[resultCollectionIndex]).length);
         } while (!hashCursor.equals(gs("0"))); // 0 is returned for the cursor of the last iteration.
+    }
+
+    @SneakyThrows
+    @Test
+    public void invokeScript_test() {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        try (Script script = new Script("return 'Hello'", false)) {
+            Object response = regularClient.invokeScript(script).get();
+            assertEquals("Hello", response);
+        }
+
+        try (Script script = new Script("return redis.call('SET', KEYS[1], ARGV[1])", false)) {
+            Object setResponse1 =
+                    regularClient
+                            .invokeScript(script, ScriptOptions.builder().key(key1).arg("value1").build())
+                            .get();
+            assertEquals(OK, setResponse1);
+
+            Object setResponse2 =
+                    regularClient
+                            .invokeScript(script, ScriptOptions.builder().key(key2).arg("value2").build())
+                            .get();
+            assertEquals(OK, setResponse2);
+        }
+
+        try (Script script = new Script("return redis.call('GET', KEYS[1])", false)) {
+            Object getResponse1 =
+                    regularClient.invokeScript(script, ScriptOptions.builder().key(key1).build()).get();
+            assertEquals("value1", getResponse1);
+
+            // Use GlideString in option but we still expect nonbinary output
+            Object getResponse2 =
+                    regularClient
+                            .invokeScript(script, ScriptOptionsGlideString.builder().key(gs(key2)).build())
+                            .get();
+            assertEquals("value2", getResponse2);
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void script_large_keys_and_or_args() {
+        String str1 = "0".repeat(1 << 12); // 4k
+        String str2 = "0".repeat(1 << 12); // 4k
+
+        try (Script script = new Script("return KEYS[1]", false)) {
+            // 1 very big key
+            Object response =
+                    regularClient
+                            .invokeScript(script, ScriptOptions.builder().key(str1 + str2).build())
+                            .get();
+            assertEquals(str1 + str2, response);
+        }
+
+        try (Script script = new Script("return KEYS[1]", false)) {
+            // 2 big keys
+            Object response =
+                    regularClient
+                            .invokeScript(script, ScriptOptions.builder().key(str1).key(str2).build())
+                            .get();
+            assertEquals(str1, response);
+        }
+
+        try (Script script = new Script("return ARGV[1]", false)) {
+            // 1 very big arg
+            Object response =
+                    regularClient
+                            .invokeScript(script, ScriptOptions.builder().arg(str1 + str2).build())
+                            .get();
+            assertEquals(str1 + str2, response);
+        }
+
+        try (Script script = new Script("return ARGV[1]", false)) {
+            // 1 big arg + 1 big key
+            Object response =
+                    regularClient
+                            .invokeScript(script, ScriptOptions.builder().arg(str1).key(str2).build())
+                            .get();
+            assertEquals(str2, response);
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void invokeScript_gs_test() {
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+
+        try (Script script = new Script(gs("return 'Hello'"), true)) {
+            Object response = regularClient.invokeScript(script).get();
+            assertEquals(gs("Hello"), response);
+        }
+
+        try (Script script = new Script(gs("return redis.call('SET', KEYS[1], ARGV[1])"), true)) {
+            Object setResponse1 =
+                    regularClient
+                            .invokeScript(
+                                    script, ScriptOptionsGlideString.builder().key(key1).arg(gs("value1")).build())
+                            .get();
+            assertEquals(OK, setResponse1);
+
+            Object setResponse2 =
+                    regularClient
+                            .invokeScript(
+                                    script, ScriptOptionsGlideString.builder().key(key2).arg(gs("value2")).build())
+                            .get();
+            assertEquals(OK, setResponse2);
+        }
+
+        try (Script script = new Script(gs("return redis.call('GET', KEYS[1])"), true)) {
+            Object getResponse1 =
+                    regularClient
+                            .invokeScript(script, ScriptOptionsGlideString.builder().key(key1).build())
+                            .get();
+            assertEquals(gs("value1"), getResponse1);
+
+            // Use String in option but we still expect binary output (GlideString)
+            Object getResponse2 =
+                    regularClient
+                            .invokeScript(script, ScriptOptions.builder().key(key2.toString()).build())
+                            .get();
+            assertEquals(gs("value2"), getResponse2);
+        }
+    }
+
+    @SneakyThrows
+    public void scriptExists() {
+        Script script1 = new Script("return 'Hello'", true);
+        Script script2 = new Script("return 'World'", true);
+        Boolean[] expected = new Boolean[] {true, false, false};
+
+        // Load script1 to all nodes, do not load script2 and load script3 with a SlotKeyRoute
+        regularClient.invokeScript(script1).get();
+
+        // Get the SHA1 digests of the scripts
+        String sha1_1 = script1.getHash();
+        String sha1_2 = script2.getHash();
+        String nonExistentSha1 = "0".repeat(40); // A SHA1 that doesn't exist
+
+        // Check existence of scripts
+        Boolean[] result =
+                regularClient.scriptExists(new String[] {sha1_1, sha1_2, nonExistentSha1}).get();
+        assertArrayEquals(expected, result);
+    }
+
+    @Test
+    @SneakyThrows
+    public void scriptExistsBinary() {
+        Script script1 = new Script(gs("return 'Hello'"), true);
+        Script script2 = new Script(gs("return 'World'"), true);
+        Boolean[] expected = new Boolean[] {true, false, false};
+
+        // Load script1 to all nodes, do not load script2 and load script3 with a SlotKeyRoute
+        regularClient.invokeScript(script1).get();
+
+        // Get the SHA1 digests of the scripts
+        GlideString sha1_1 = gs(script1.getHash());
+        GlideString sha1_2 = gs(script2.getHash());
+        GlideString nonExistentSha1 = gs("0".repeat(40)); // A SHA1 that doesn't exist
+
+        // Check existence of scripts
+        Boolean[] result =
+                regularClient.scriptExists(new GlideString[] {sha1_1, sha1_2, nonExistentSha1}).get();
+        assertArrayEquals(expected, result);
+    }
+
+    @Test
+    @SneakyThrows
+    public void scriptFlush() {
+        Script script = new Script("return 'Hello'", true);
+
+        // Load script
+        regularClient.invokeScript(script).get();
+
+        // Check existence of scripts
+        Boolean[] result = regularClient.scriptExists(new String[] {script.getHash()}).get();
+        assertArrayEquals(new Boolean[] {true}, result);
+
+        // flush the script cache
+        assertEquals(OK, regularClient.scriptFlush().get());
+
+        // check that the script no longer exists
+        result = regularClient.scriptExists(new String[] {script.getHash()}).get();
+        assertArrayEquals(new Boolean[] {false}, result);
+
+        // Test with ASYNC mode
+        regularClient.invokeScript(script).get();
+        assertEquals(OK, regularClient.scriptFlush(FlushMode.ASYNC).get());
+        result = regularClient.scriptExists(new String[] {script.getHash()}).get();
+        assertArrayEquals(new Boolean[] {false}, result);
+    }
+
+    @Test
+    @SneakyThrows
+    public void scriptKill() {
+        // Verify that script_kill raises an error when no script is running
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> regularClient.scriptKill().get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(
+                executionException
+                        .getMessage()
+                        .toLowerCase()
+                        .contains("no scripts in execution right now"));
+
+        CompletableFuture<Object> promise = new CompletableFuture<>();
+        promise.complete(null);
+
+        // create and load a long-running script
+        Script script = new Script(createLongRunningLuaScript(5, true), true);
+
+        try (var testClient =
+                GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
+            try {
+                testClient.invokeScript(script);
+
+                Thread.sleep(1000);
+
+                // Run script kill until it returns OK
+                boolean scriptKilled = false;
+                int timeout = 4000; // ms
+                while (timeout >= 0) {
+                    try {
+                        assertEquals(OK, regularClient.scriptKill().get());
+                        scriptKilled = true;
+                        break;
+                    } catch (RequestException ignored) {
+                    }
+                    Thread.sleep(500);
+                    timeout -= 500;
+                }
+
+                assertTrue(scriptKilled);
+            } finally {
+                waitForNotBusy(regularClient);
+            }
+        }
+
+        // Verify that script_kill raises an error when no script is running
+        executionException =
+                assertThrows(ExecutionException.class, () -> regularClient.scriptKill().get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(
+                executionException
+                        .getMessage()
+                        .toLowerCase()
+                        .contains("no scripts in execution right now"));
+    }
+
+    @SneakyThrows
+    @Test
+    public void scriptKill_unkillable() {
+        String key = UUID.randomUUID().toString();
+        String code = createLongRunningLuaScript(5, false);
+        Script script = new Script(code, false);
+
+        CompletableFuture<Object> promise = new CompletableFuture<>();
+        promise.complete(null);
+
+        try (var testClient =
+                GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
+            try {
+                // run the script without await
+                promise = testClient.invokeScript(script, ScriptOptions.builder().key(key).build());
+
+                Thread.sleep(1000);
+
+                boolean foundUnkillable = false;
+                int timeout = 4000; // ms
+                while (timeout >= 0) {
+                    try {
+                        // valkey kills a script with 5 sec delay
+                        // but this will always throw an error in the test
+                        regularClient.scriptKill().get();
+                    } catch (ExecutionException execException) {
+                        // looking for an error with "unkillable" in the message
+                        // at that point we can break the loop
+                        if (execException.getCause() instanceof RequestException
+                                && execException.getMessage().toLowerCase().contains("unkillable")) {
+                            foundUnkillable = true;
+                            break;
+                        }
+                    }
+                    Thread.sleep(500);
+                    timeout -= 500;
+                }
+                assertTrue(foundUnkillable);
+            } finally {
+                // If script wasn't killed, and it didn't time out - it blocks the server and cause rest
+                // test to fail.
+                // wait for the script to complete (we cannot kill it)
+                try {
+                    promise.get();
+                } catch (Exception ignored) {
+                }
+            }
+        }
     }
 }

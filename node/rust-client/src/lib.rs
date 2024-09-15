@@ -1,3 +1,4 @@
+use redis::GlideConnectionOptions;
 /**
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
@@ -8,7 +9,7 @@ use tikv_jemallocator::Jemalloc;
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
-
+pub const FINISHED_SCAN_CURSOR: &str = "finished";
 use byteorder::{LittleEndian, WriteBytesExt};
 use bytes::Bytes;
 use glide_core::start_socket_listener;
@@ -20,7 +21,7 @@ use napi::bindgen_prelude::Uint8Array;
 use napi::{Env, Error, JsObject, JsUnknown, Result, Status};
 use napi_derive::napi;
 use num_traits::sign::Signed;
-use redis::{aio::MultiplexedConnection, AsyncCommands, FromRedisValue, Value};
+use redis::{aio::MultiplexedConnection, AsyncCommands, Value};
 #[cfg(feature = "testing_utilities")]
 use std::collections::HashMap;
 use std::str;
@@ -69,7 +70,9 @@ impl AsyncClient {
         let _runtime_handle = runtime.enter();
         let client = to_js_result(redis::Client::open(connection_address))?;
         let connection =
-            to_js_result(runtime.block_on(client.get_multiplexed_async_connection(None)))?;
+            to_js_result(runtime.block_on(
+                client.get_multiplexed_async_connection(GlideConnectionOptions::default()),
+            ))?;
         Ok(AsyncClient {
             connection,
             runtime,
@@ -160,7 +163,7 @@ pub fn init(level: Option<Level>, file_name: Option<&str>) -> Level {
     logger_level.into()
 }
 
-fn redis_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<JsUnknown> {
+fn resp_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<JsUnknown> {
     match val {
         Value::Nil => js_env.get_null().map(|val| val.into_unknown()),
         Value::SimpleString(str) => {
@@ -189,19 +192,23 @@ fn redis_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<Js
             for (index, item) in array.into_iter().enumerate() {
                 js_array_view.set_element(
                     index as u32,
-                    redis_value_to_js(item, js_env, string_decoder)?,
+                    resp_value_to_js(item, js_env, string_decoder)?,
                 )?;
             }
             Ok(js_array_view.into_unknown())
         }
         Value::Map(map) => {
-            let mut obj = js_env.create_object()?;
-            for (key, value) in map {
-                let field_name = String::from_owned_redis_value(key).map_err(to_js_error)?;
-                let value = redis_value_to_js(value, js_env, string_decoder)?;
-                obj.set_named_property(&field_name, value)?;
+            // Convert map to array of key-value pairs instead of a `Record` (object),
+            // because `Record` does not support `GlideString` as a key.
+            // The result is in format `GlideRecord<T>`.
+            let mut js_array = js_env.create_array_with_length(map.len())?;
+            for (idx, (key, value)) in (0_u32..).zip(map.into_iter()) {
+                let mut obj = js_env.create_object()?;
+                obj.set_named_property("key", resp_value_to_js(key, js_env, string_decoder)?)?;
+                obj.set_named_property("value", resp_value_to_js(value, js_env, string_decoder)?)?;
+                js_array.set_element(idx, obj)?;
             }
-            Ok(obj.into_unknown())
+            Ok(js_array.into_unknown())
         }
         Value::Double(float) => js_env.create_double(float).map(|val| val.into_unknown()),
         Value::Boolean(bool) => js_env.get_boolean(bool).map(|val| val.into_unknown()),
@@ -234,17 +241,17 @@ fn redis_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<Js
             for (index, item) in array.into_iter().enumerate() {
                 js_array_view.set_element(
                     index as u32,
-                    redis_value_to_js(item, js_env, string_decoder)?,
+                    resp_value_to_js(item, js_env, string_decoder)?,
                 )?;
             }
             Ok(js_array_view.into_unknown())
         }
         Value::Attribute { data, attributes } => {
             let mut obj = js_env.create_object()?;
-            let value = redis_value_to_js(*data, js_env, string_decoder)?;
+            let value = resp_value_to_js(*data, js_env, string_decoder)?;
             obj.set_named_property("value", value)?;
 
-            let value = redis_value_to_js(Value::Map(attributes), js_env, string_decoder)?;
+            let value = resp_value_to_js(Value::Map(attributes), js_env, string_decoder)?;
             obj.set_named_property("attributes", value)?;
 
             Ok(obj.into_unknown())
@@ -254,7 +261,7 @@ fn redis_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<Js
             obj.set_named_property("kind", format!("{kind:?}"))?;
             let js_array_view = data
                 .into_iter()
-                .map(|item| redis_value_to_js(item, js_env, string_decoder))
+                .map(|item| resp_value_to_js(item, js_env, string_decoder))
                 .collect::<Result<Vec<_>, _>>()?;
             obj.set_named_property("values", js_array_view)?;
             Ok(obj.into_unknown())
@@ -280,7 +287,7 @@ pub fn value_from_split_pointer(
         .unwrap();
     let pointer = u64::from_le_bytes(bytes);
     let value = unsafe { Box::from_raw(pointer as *mut Value) };
-    redis_value_to_js(*value, js_env, string_decoder)
+    resp_value_to_js(*value, js_env, string_decoder)
 }
 
 // Pointers are split because JS cannot represent a full usize using its `number` object.
@@ -411,5 +418,63 @@ impl Script {
 impl Drop for Script {
     fn drop(&mut self) {
         glide_core::scripts_container::remove_script(&self.hash);
+    }
+}
+
+/// This struct is used to keep track of the cursor of a cluster scan.
+/// We want to avoid passing the cursor between layers of the application,
+/// So we keep the state in the container and only pass the id of the cursor.
+/// The cursor is stored in the container and can be retrieved using the id.
+/// The cursor is removed from the container when the object is deleted (dropped).
+/// To create a cursor:
+/// ```typescript
+/// // For a new cursor
+/// let cursor = new ClusterScanCursor();
+/// // Using an existing id
+/// let cursor = new ClusterScanCursor("cursor_id");
+/// ```
+/// To get the cursor id:
+/// ```typescript
+/// let cursorId = cursor.getCursor();
+/// ```
+/// To check if the scan is finished:
+/// ```typescript
+/// let isFinished = cursor.isFinished(); // true if the scan is finished
+/// ```
+#[napi]
+#[derive(Default)]
+pub struct ClusterScanCursor {
+    cursor: String,
+}
+
+#[napi]
+impl ClusterScanCursor {
+    #[napi(constructor)]
+    #[allow(dead_code)]
+    pub fn new(new_cursor: Option<String>) -> Self {
+        match new_cursor {
+            Some(cursor) => ClusterScanCursor { cursor },
+            None => ClusterScanCursor::default(),
+        }
+    }
+
+    /// Returns the cursor id.
+    #[napi]
+    #[allow(dead_code)]
+    pub fn get_cursor(&self) -> String {
+        self.cursor.clone()
+    }
+
+    #[napi]
+    #[allow(dead_code)]
+    /// Returns true if the scan is finished.
+    pub fn is_finished(&self) -> bool {
+        self.cursor.eq(FINISHED_SCAN_CURSOR)
+    }
+}
+
+impl Drop for ClusterScanCursor {
+    fn drop(&mut self) {
+        glide_core::cluster_scan_container::remove_scan_state_cursor(self.cursor.clone());
     }
 }

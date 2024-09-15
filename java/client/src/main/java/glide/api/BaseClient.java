@@ -110,6 +110,7 @@ import static command_request.CommandRequestOuterClass.RequestType.SRem;
 import static command_request.CommandRequestOuterClass.RequestType.SScan;
 import static command_request.CommandRequestOuterClass.RequestType.SUnion;
 import static command_request.CommandRequestOuterClass.RequestType.SUnionStore;
+import static command_request.CommandRequestOuterClass.RequestType.ScriptShow;
 import static command_request.CommandRequestOuterClass.RequestType.Set;
 import static command_request.CommandRequestOuterClass.RequestType.SetBit;
 import static command_request.CommandRequestOuterClass.RequestType.SetRange;
@@ -227,6 +228,8 @@ import glide.api.models.commands.ScoreFilter;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.ScriptOptionsGlideString;
 import glide.api.models.commands.SetOptions;
+import glide.api.models.commands.SortOptions;
+import glide.api.models.commands.SortOptionsBinary;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.KeyArrayBinary;
@@ -1869,6 +1872,18 @@ public abstract class BaseClient
             return commandManager.submitScript(
                     script, options.getKeys(), options.getArgs(), this::handleObjectOrNullResponse);
         }
+    }
+
+    @Override
+    public CompletableFuture<String> scriptShow(@NonNull String sha1) {
+        return commandManager.submitNewCommand(
+                ScriptShow, new String[] {sha1}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<GlideString> scriptShow(@NonNull GlideString sha1) {
+        return commandManager.submitNewCommand(
+                ScriptShow, new GlideString[] {sha1}, this::handleGlideStringResponse);
     }
 
     @Override
@@ -3845,6 +3860,18 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> bitcount(@NonNull String key, long start) {
+        return commandManager.submitNewCommand(
+                BitCount, new String[] {key, Long.toString(start)}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> bitcount(@NonNull GlideString key, long start) {
+        return commandManager.submitNewCommand(
+                BitCount, new GlideString[] {key, gs(Long.toString(start))}, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> bitcount(@NonNull String key, long start, long end) {
         return commandManager.submitNewCommand(
                 BitCount,
@@ -4667,6 +4694,23 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<String[]> sort(@NonNull String key, @NonNull SortOptions sortOptions) {
+        String[] arguments = ArrayUtils.addFirst(sortOptions.toArgs(), key);
+        return commandManager.submitNewCommand(
+                Sort, arguments, response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<GlideString[]> sort(
+            @NonNull GlideString key, @NonNull SortOptionsBinary sortOptions) {
+        GlideString[] arguments = new ArgsBuilder().add(key).add(sortOptions.toArgs()).toArray();
+        return commandManager.submitNewCommand(
+                Sort,
+                arguments,
+                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
+    }
+
+    @Override
     public CompletableFuture<String[]> sortReadOnly(@NonNull String key) {
         return commandManager.submitNewCommand(
                 SortReadOnly,
@@ -4683,6 +4727,27 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<String[]> sortReadOnly(
+            @NonNull String key, @NonNull SortOptions sortOptions) {
+        String[] arguments = ArrayUtils.addFirst(sortOptions.toArgs(), key);
+        return commandManager.submitNewCommand(
+                SortReadOnly,
+                arguments,
+                response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<GlideString[]> sortReadOnly(
+            @NonNull GlideString key, @NonNull SortOptionsBinary sortOptions) {
+        GlideString[] arguments = new ArgsBuilder().add(key).add(sortOptions.toArgs()).toArray();
+
+        return commandManager.submitNewCommand(
+                SortReadOnly,
+                arguments,
+                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
+    }
+
+    @Override
     public CompletableFuture<Long> sortStore(@NonNull String key, @NonNull String destination) {
         return commandManager.submitNewCommand(
                 Sort, new String[] {key, STORE_COMMAND_STRING, destination}, this::handleLongResponse);
@@ -4695,6 +4760,32 @@ public abstract class BaseClient
                 Sort,
                 new GlideString[] {key, gs(STORE_COMMAND_STRING), destination},
                 this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> sortStore(
+            @NonNull String key, @NonNull String destination, @NonNull SortOptions sortOptions) {
+        String[] storeArguments = new String[] {STORE_COMMAND_STRING, destination};
+        String[] arguments =
+                concatenateArrays(new String[] {key}, sortOptions.toArgs(), storeArguments);
+        return commandManager.submitNewCommand(Sort, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> sortStore(
+            @NonNull GlideString key,
+            @NonNull GlideString destination,
+            @NonNull SortOptionsBinary sortOptions) {
+
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(key)
+                        .add(sortOptions.toArgs())
+                        .add(STORE_COMMAND_STRING)
+                        .add(destination)
+                        .toArray();
+
+        return commandManager.submitNewCommand(Sort, arguments, this::handleLongResponse);
     }
 
     @Override

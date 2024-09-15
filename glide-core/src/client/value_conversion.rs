@@ -67,23 +67,9 @@ pub(crate) fn convert_to_expected_type(
                 let result = map
                     .into_iter()
                     .map(|(key, inner_value)| {
-                        let key_str = match key {
-                            Value::BulkString(_) => key,
-                            _ => Value::BulkString(from_owned_redis_value::<String>(key)?.into()),
-                        };
-                        match inner_value {
-                            Value::BulkString(_) => Ok((
-                                key_str,
-                                Value::Double(from_owned_redis_value::<f64>(inner_value)?),
-                            )),
-                            Value::Double(_) => Ok((key_str, inner_value)),
-                            _ => Err((
-                                ErrorKind::TypeError,
-                                "Response couldn't be converted to map of {string: double}",
-                                format!("(response was {:?})", get_value_type(&inner_value)),
-                            )
-                                .into()),
-                        }
+                        let key_str = convert_to_expected_type(key, Some(ExpectedReturnType::BulkString)).unwrap();
+                        let value_converted = convert_to_expected_type(inner_value, Some(ExpectedReturnType::Double)).unwrap();
+                        Ok((key_str, value_converted))
                     })
                     .collect::<RedisResult<_>>();
 
@@ -141,9 +127,10 @@ pub(crate) fn convert_to_expected_type(
             )
                 .into()),
         },
-        ExpectedReturnType::BulkString => Ok(Value::BulkString(
-            from_owned_redis_value::<String>(value)?.into(),
-        )),
+        ExpectedReturnType::BulkString => match value {
+            Value::BulkString(_) => Ok(value),
+            _ => Ok(Value::BulkString(from_owned_redis_value::<String>(value)?.into())),
+        },
         ExpectedReturnType::SimpleString => Ok(Value::SimpleString(
             from_owned_redis_value::<String>(value)?,
         )),
@@ -340,7 +327,7 @@ pub(crate) fn convert_to_expected_type(
         //
         // Example:
         // let input = ["key", "val1", "val2"]
-        // let expected =("key", vec!["val1", "val2"])
+        // let output = ("key", vec!["val1", "val2"])
         ExpectedReturnType::ArrayOfStringAndArrays => match value {
             Value::Nil => Ok(value),
             Value::Array(array) if array.len() == 2 && matches!(array[1], Value::Array(_)) => {
@@ -1207,7 +1194,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
         | b"MSETNX"
         | b"XGROUP DESTROY"
         | b"XGROUP CREATECONSUMER" => Some(ExpectedReturnType::Boolean),
-        b"SMISMEMBER" => Some(ExpectedReturnType::ArrayOfBools),
+        b"SMISMEMBER" | b"SCRIPT EXISTS" => Some(ExpectedReturnType::ArrayOfBools),
         b"SMEMBERS" | b"SINTER" | b"SDIFF" | b"SUNION" => Some(ExpectedReturnType::Set),
         b"ZSCORE" | b"GEODIST" => Some(ExpectedReturnType::DoubleOrNull),
         b"ZMSCORE" => Some(ExpectedReturnType::ArrayOfDoubleOrNull),

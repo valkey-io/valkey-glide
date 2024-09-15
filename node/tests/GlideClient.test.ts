@@ -13,25 +13,26 @@ import {
 import { BufferReader, BufferWriter } from "protobufjs";
 import { v4 as uuidv4 } from "uuid";
 import {
+    convertGlideRecordToRecord,
     Decoder,
-    GlideClient,
-    HashDataType,
-    ProtocolVersion,
-    RequestError,
-    Transaction,
-} from "..";
-import { RedisCluster } from "../../utils/TestUtils.js";
-import {
     FlushMode,
     FunctionRestorePolicy,
-    SortOrder,
-} from "../build-ts/src/Commands";
+    GlideClient,
+    GlideRecord,
+    GlideString,
+    ProtocolVersion,
+    RequestError,
+    Script,
+    Transaction,
+} from "..";
+import { ValkeyCluster } from "../../utils/TestUtils.js";
 import { command_request } from "../src/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import {
     checkFunctionListResponse,
     checkFunctionStatsResponse,
     convertStringArrayToBuffer,
+    createLongRunningLuaScript,
     createLuaLibWithLongRunningFunction,
     DumpAndRestureTest,
     encodableTransactionTest,
@@ -39,28 +40,31 @@ import {
     flushAndCloseClient,
     generateLuaLibCode,
     getClientConfigurationOption,
+    getServerVersion,
     parseCommandLineArgs,
     parseEndpoints,
     transactionTest,
     validateTransactionResponse,
     waitForNotBusy,
+    waitForScriptNotBusy,
 } from "./TestUtilities";
 
 const TIMEOUT = 50000;
 
 describe("GlideClient", () => {
     let testsFailed = 0;
-    let cluster: RedisCluster;
+    let cluster: ValkeyCluster;
     let client: GlideClient;
     beforeAll(async () => {
         const standaloneAddresses =
             parseCommandLineArgs()["standalone-endpoints"];
-        // Connect to cluster or create a new one based on the parsed addresses
         cluster = standaloneAddresses
-            ? await RedisCluster.initFromExistingCluster(
+            ? await ValkeyCluster.initFromExistingCluster(
+                  false,
                   parseEndpoints(standaloneAddresses),
+                  getServerVersion,
               )
-            : await RedisCluster.createCluster(false, 1, 1);
+            : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
     }, 20000);
 
     afterEach(async () => {
@@ -372,7 +376,7 @@ describe("GlideClient", () => {
             const key = uuidv4();
             const maxmemoryPolicyKey = "maxmemory-policy";
             const config = await client.configGet([maxmemoryPolicyKey]);
-            const maxmemoryPolicy = String(config[maxmemoryPolicyKey]);
+            const maxmemoryPolicy = config[maxmemoryPolicyKey];
 
             try {
                 const transaction = new Transaction();
@@ -413,7 +417,7 @@ describe("GlideClient", () => {
             const key = uuidv4();
             const maxmemoryPolicyKey = "maxmemory-policy";
             const config = await client.configGet([maxmemoryPolicyKey]);
-            const maxmemoryPolicy = String(config[maxmemoryPolicyKey]);
+            const maxmemoryPolicy = config[maxmemoryPolicyKey];
 
             try {
                 const transaction = new Transaction();
@@ -703,17 +707,18 @@ describe("GlideClient", () => {
 
                 let functionList = await client.functionList({
                     libNamePattern: Buffer.from(libName),
+                    decoder: Decoder.Bytes,
                 });
-                let expectedDescription = new Map<string, string | null>([
+                let expectedDescription = new Map<string, GlideString | null>([
                     [funcName, null],
                 ]);
-                let expectedFlags = new Map<string, string[]>([
-                    [funcName, ["no-writes"]],
+                let expectedFlags = new Map<string, GlideString[]>([
+                    [funcName, [Buffer.from("no-writes")]],
                 ]);
 
                 checkFunctionListResponse(
                     functionList,
-                    libName,
+                    Buffer.from(libName),
                     expectedDescription,
                     expectedFlags,
                 );
@@ -763,7 +768,9 @@ describe("GlideClient", () => {
                     newCode,
                 );
 
-                functionStats = await client.functionStats();
+                functionStats = await client.functionStats({
+                    decoder: Decoder.Bytes,
+                });
 
                 for (const response of Object.values(functionStats)) {
                     checkFunctionStatsResponse(response, [], 1, 2);
@@ -1167,256 +1174,6 @@ describe("GlideClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "sort sortstore sort_store sortro sort_ro sortreadonly test_%p",
-        async (protocol) => {
-            const client = await GlideClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
-            );
-
-            const setPrefix = "setKey" + uuidv4();
-            const hashPrefix = "hashKey" + uuidv4();
-            const list = uuidv4();
-            const store = uuidv4();
-            const names = ["Alice", "Bob", "Charlie", "Dave", "Eve"];
-            const ages = ["30", "25", "35", "20", "40"];
-
-            for (let i = 0; i < ages.length; i++) {
-                const fieldValueList: HashDataType = [
-                    { field: "name", value: names[i] },
-                    { field: "age", value: ages[i] },
-                ];
-                expect(
-                    await client.hset(setPrefix + (i + 1), fieldValueList),
-                ).toEqual(2);
-            }
-
-            expect(await client.rpush(list, ["3", "1", "5", "4", "2"])).toEqual(
-                5,
-            );
-
-            expect(
-                await client.sort(list, {
-                    limit: { offset: 0, count: 2 },
-                    getPatterns: [setPrefix + "*->name"],
-                }),
-            ).toEqual(["Alice", "Bob"]);
-
-            expect(
-                await client.sort(Buffer.from(list), {
-                    limit: { offset: 0, count: 2 },
-                    getPatterns: [setPrefix + "*->name"],
-                    orderBy: SortOrder.DESC,
-                }),
-            ).toEqual(["Eve", "Dave"]);
-
-            expect(
-                await client.sort(list, {
-                    limit: { offset: 0, count: 2 },
-                    byPattern: setPrefix + "*->age",
-                    getPatterns: [setPrefix + "*->name", setPrefix + "*->age"],
-                    orderBy: SortOrder.DESC,
-                }),
-            ).toEqual(["Eve", "40", "Charlie", "35"]);
-
-            // test binary decoder
-            expect(
-                await client.sort(list, {
-                    limit: { offset: 0, count: 2 },
-                    byPattern: setPrefix + "*->age",
-                    getPatterns: [setPrefix + "*->name", setPrefix + "*->age"],
-                    orderBy: SortOrder.DESC,
-                    decoder: Decoder.Bytes,
-                }),
-            ).toEqual([
-                Buffer.from("Eve"),
-                Buffer.from("40"),
-                Buffer.from("Charlie"),
-                Buffer.from("35"),
-            ]);
-
-            // Non-existent key in the BY pattern will result in skipping the sorting operation
-            expect(await client.sort(list, { byPattern: "noSort" })).toEqual([
-                "3",
-                "1",
-                "5",
-                "4",
-                "2",
-            ]);
-
-            // Non-existent key in the GET pattern results in nulls
-            expect(
-                await client.sort(list, {
-                    isAlpha: true,
-                    getPatterns: ["missing"],
-                }),
-            ).toEqual([null, null, null, null, null]);
-
-            // Missing key in the set
-            expect(await client.lpush(list, ["42"])).toEqual(6);
-            expect(
-                await client.sort(list, {
-                    byPattern: setPrefix + "*->age",
-                    getPatterns: [setPrefix + "*->name"],
-                }),
-            ).toEqual([null, "Dave", "Bob", "Alice", "Charlie", "Eve"]);
-            expect(await client.lpop(list)).toEqual("42");
-
-            // sort RO
-            if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
-                expect(
-                    await client.sortReadOnly(list, {
-                        limit: { offset: 0, count: 2 },
-                        getPatterns: [setPrefix + "*->name"],
-                    }),
-                ).toEqual(["Alice", "Bob"]);
-
-                expect(
-                    await client.sortReadOnly(list, {
-                        limit: { offset: 0, count: 2 },
-                        getPatterns: [setPrefix + "*->name"],
-                        orderBy: SortOrder.DESC,
-                        decoder: Decoder.Bytes,
-                    }),
-                ).toEqual([Buffer.from("Eve"), Buffer.from("Dave")]);
-
-                expect(
-                    await client.sortReadOnly(Buffer.from(list), {
-                        limit: { offset: 0, count: 2 },
-                        byPattern: setPrefix + "*->age",
-                        getPatterns: [
-                            setPrefix + "*->name",
-                            setPrefix + "*->age",
-                        ],
-                        orderBy: SortOrder.DESC,
-                    }),
-                ).toEqual(["Eve", "40", "Charlie", "35"]);
-
-                // Non-existent key in the BY pattern will result in skipping the sorting operation
-                expect(
-                    await client.sortReadOnly(list, { byPattern: "noSort" }),
-                ).toEqual(["3", "1", "5", "4", "2"]);
-
-                // Non-existent key in the GET pattern results in nulls
-                expect(
-                    await client.sortReadOnly(list, {
-                        isAlpha: true,
-                        getPatterns: ["missing"],
-                    }),
-                ).toEqual([null, null, null, null, null]);
-
-                // Missing key in the set
-                expect(await client.lpush(list, ["42"])).toEqual(6);
-                expect(
-                    await client.sortReadOnly(list, {
-                        byPattern: setPrefix + "*->age",
-                        getPatterns: [setPrefix + "*->name"],
-                    }),
-                ).toEqual([null, "Dave", "Bob", "Alice", "Charlie", "Eve"]);
-                expect(await client.lpop(list)).toEqual("42");
-            }
-
-            // SORT with STORE
-            expect(
-                await client.sortStore(list, store, {
-                    limit: { offset: 0, count: -1 },
-                    byPattern: setPrefix + "*->age",
-                    getPatterns: [setPrefix + "*->name"],
-                    orderBy: SortOrder.ASC,
-                }),
-            ).toEqual(5);
-            expect(await client.lrange(store, 0, -1)).toEqual([
-                "Dave",
-                "Bob",
-                "Alice",
-                "Charlie",
-                "Eve",
-            ]);
-            expect(
-                await client.sortStore(Buffer.from(list), store, {
-                    byPattern: setPrefix + "*->age",
-                    getPatterns: [setPrefix + "*->name"],
-                }),
-            ).toEqual(5);
-            expect(await client.lrange(store, 0, -1)).toEqual([
-                "Dave",
-                "Bob",
-                "Alice",
-                "Charlie",
-                "Eve",
-            ]);
-
-            // transaction test
-            const transaction = new Transaction()
-                .hset(hashPrefix + 1, [
-                    { field: "name", value: "Alice" },
-                    { field: "age", value: "30" },
-                ])
-                .hset(hashPrefix + 2, {
-                    name: "Bob",
-                    age: "25",
-                })
-                .del([list])
-                .lpush(list, ["2", "1"])
-                .sort(list, {
-                    byPattern: hashPrefix + "*->age",
-                    getPatterns: [hashPrefix + "*->name"],
-                })
-                .sort(list, {
-                    byPattern: hashPrefix + "*->age",
-                    getPatterns: [hashPrefix + "*->name"],
-                    orderBy: SortOrder.DESC,
-                })
-                .sortStore(list, store, {
-                    byPattern: hashPrefix + "*->age",
-                    getPatterns: [hashPrefix + "*->name"],
-                })
-                .lrange(store, 0, -1)
-                .sortStore(list, store, {
-                    byPattern: hashPrefix + "*->age",
-                    getPatterns: [hashPrefix + "*->name"],
-                    orderBy: SortOrder.DESC,
-                })
-                .lrange(store, 0, -1);
-
-            if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
-                transaction
-                    .sortReadOnly(list, {
-                        byPattern: hashPrefix + "*->age",
-                        getPatterns: [hashPrefix + "*->name"],
-                    })
-                    .sortReadOnly(list, {
-                        byPattern: hashPrefix + "*->age",
-                        getPatterns: [hashPrefix + "*->name"],
-                        orderBy: SortOrder.DESC,
-                    });
-            }
-
-            const expectedResult = [
-                2,
-                2,
-                1,
-                2,
-                ["Bob", "Alice"],
-                ["Alice", "Bob"],
-                2,
-                ["Bob", "Alice"],
-                2,
-                ["Alice", "Bob"],
-            ];
-
-            if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
-                expectedResult.push(["Bob", "Alice"], ["Alice", "Bob"]);
-            }
-
-            const result = await client.exec(transaction);
-            expect(result).toEqual(expectedResult);
-
-            client.close();
-        },
-        TIMEOUT,
-    );
-
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "randomKey test_%p",
         async (protocol) => {
             const client = await GlideClient.createClient(
@@ -1602,13 +1359,146 @@ describe("GlideClient", () => {
 
             if (result != null) {
                 expect(result[0]).toEqual("0-1"); // xadd
-                expect(result[1]).toEqual(expectedXinfoStreamResult);
-                expect(result[2]).toEqual(expectedXinfoStreamFullResult);
+                const res1 = convertGlideRecordToRecord(
+                    result[1] as GlideRecord<[GlideString, GlideString][]>,
+                );
+                const res2 = convertGlideRecordToRecord(
+                    result[2] as GlideRecord<[GlideString, GlideString][]>,
+                );
+                expect(res1).toEqual(expectedXinfoStreamResult);
+                expect(res2).toEqual(expectedXinfoStreamFullResult);
             }
 
             client.close();
         },
         TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "script kill unkillable test_%p",
+        async (protocol) => {
+            const config = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+                { requestTimeout: 10000 },
+            );
+            const client1 = await GlideClient.createClient(config);
+            const client2 = await GlideClient.createClient(config);
+
+            // Verify that script kill raises an error when no script is running
+            await expect(client1.scriptKill()).rejects.toThrow(
+                "No scripts in execution right now",
+            );
+
+            // Create a long-running script
+            const longScript = new Script(createLongRunningLuaScript(5, true));
+            let promise = null;
+
+            try {
+                // call the script without await
+                promise = client2.invokeScript(longScript, {
+                    keys: ["{key}-" + uuidv4()],
+                });
+
+                let foundUnkillable = false;
+                let timeout = 4000;
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                while (timeout >= 0) {
+                    try {
+                        // keep trying to kill until we get an "OK"
+                        await client1.scriptKill();
+                    } catch (err) {
+                        // a RequestError may occur if the script is not yet running
+                        // sleep and try again
+                        if (
+                            (err as Error).message
+                                .toLowerCase()
+                                .includes("unkillable")
+                        ) {
+                            foundUnkillable = true;
+                            break;
+                        }
+                    }
+
+                    await new Promise((resolve) => setTimeout(resolve, 500));
+                    timeout -= 500;
+                }
+
+                expect(foundUnkillable).toBeTruthy();
+            } finally {
+                // If script wasn't killed, and it didn't time out - it blocks the server and cause the
+                // test to fail. Wait for the script to complete (we cannot kill it)
+                expect(await promise).toContain("Timed out");
+                client1.close();
+                client2.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "script kill killable test_%p",
+        async (protocol) => {
+            const config = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+                { requestTimeout: 10000 },
+            );
+            const client1 = await GlideClient.createClient(config);
+            const client2 = await GlideClient.createClient(config);
+
+            try {
+                // Verify that script kill raises an error when no script is running
+                await expect(client1.scriptKill()).rejects.toThrow(
+                    "No scripts in execution right now",
+                );
+
+                // Create a long-running script
+                const longScript = new Script(
+                    createLongRunningLuaScript(5, false),
+                );
+
+                try {
+                    // call the script without await
+                    const promise = client2
+                        .invokeScript(longScript)
+                        .catch((e) =>
+                            expect((e as Error).message).toContain(
+                                "Script killed",
+                            ),
+                        );
+
+                    let killed = false;
+                    let timeout = 4000;
+                    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                    while (timeout >= 0) {
+                        try {
+                            expect(await client1.scriptKill()).toEqual("OK");
+                            killed = true;
+                            break;
+                        } catch {
+                            // do nothing
+                        }
+
+                        await new Promise((resolve) =>
+                            setTimeout(resolve, 500),
+                        );
+                        timeout -= 500;
+                    }
+
+                    expect(killed).toBeTruthy();
+                    await promise;
+                } finally {
+                    await waitForScriptNotBusy(client1);
+                }
+            } finally {
+                expect(await client1.scriptFlush()).toEqual("OK");
+                client1.close();
+                client2.close();
+            }
+        },
     );
 
     runBaseTests({

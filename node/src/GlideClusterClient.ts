@@ -2,16 +2,19 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
+import { ClusterScanCursor } from "glide-rs";
+import { Script } from "index";
 import * as net from "net";
 import {
     BaseClient,
     BaseClientConfiguration,
     Decoder,
     DecoderOption,
+    GlideRecord,
+    GlideReturnType,
     GlideString,
     PubSubMsg,
-    ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
-    ReturnType,
+    convertGlideRecordToRecord,
 } from "./BaseClient";
 import {
     FlushMode,
@@ -21,7 +24,7 @@ import {
     FunctionStatsSingleResponse,
     InfoOptions,
     LolwutOptions,
-    SortClusterOptions,
+    ScanOptions,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -52,32 +55,33 @@ import {
     createPublish,
     createPubsubShardChannels,
     createRandomKey,
-    createSort,
-    createSortReadOnly,
+    createScriptExists,
+    createScriptFlush,
+    createScriptKill,
     createTime,
     createUnWatch,
 } from "./Commands";
-import { connection_request } from "./ProtobufMessage";
+import { command_request, connection_request } from "./ProtobufMessage";
 import { ClusterTransaction } from "./Transaction";
 
 /** An extension to command option types with {@link Routes}. */
-export type RouteOption = {
+export interface RouteOption {
     /**
      * Specifies the routing configuration for the command.
      * The client will route the command to the nodes defined by `route`.
      */
     route?: Routes;
-};
+}
 
 /**
  * Represents a manually configured interval for periodic checks.
  */
-export type PeriodicChecksManualInterval = {
+export interface PeriodicChecksManualInterval {
     /**
      * The duration in seconds for the interval between periodic checks.
      */
     duration_in_sec: number;
-};
+}
 
 /**
  * Periodic checks configuration.
@@ -119,7 +123,7 @@ export namespace GlideClusterClientConfiguration {
         Sharded = 2,
     }
 
-    export type PubSubSubscriptions = {
+    export interface PubSubSubscriptions {
         /**
          * Channels and patterns by modes.
          */
@@ -136,7 +140,7 @@ export namespace GlideClusterClientConfiguration {
          */
         /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
         context?: any;
-    };
+    }
 }
 export type GlideClusterClientConfiguration = BaseClientConfiguration & {
     /**
@@ -160,20 +164,52 @@ export type GlideClusterClientConfiguration = BaseClientConfiguration & {
  */
 export type ClusterResponse<T> = T | Record<string, T>;
 
-export type SlotIdTypes = {
+/**
+ * @internal
+ * Type which returns GLIDE core for commands routed to multiple nodes.
+ * Should be converted to {@link ClusterResponse}.
+ */
+type ClusterGlideRecord<T> = GlideRecord<T> | T;
+
+/**
+ * @internal
+ * Convert {@link ClusterGlideRecord} to {@link ClusterResponse}.
+ *
+ * @param res - Value received from Glide core.
+ * @param isRoutedToSingleNodeByDefault - Default routing policy.
+ * @param route - The route.
+ * @returns Converted value.
+ */
+function convertClusterGlideRecord<T>(
+    res: ClusterGlideRecord<T>,
+    isRoutedToSingleNodeByDefault: boolean,
+    route?: Routes,
+): ClusterResponse<T> {
+    const isSingleNodeResponse =
+        // route not given and command is routed by default to a random node
+        (!route && isRoutedToSingleNodeByDefault) ||
+        // or route is given and it is a single node route
+        (Boolean(route) && route !== "allPrimaries" && route !== "allNodes");
+
+    return isSingleNodeResponse
+        ? (res as T)
+        : convertGlideRecordToRecord(res as GlideRecord<T>);
+}
+
+export interface SlotIdTypes {
     /**
      * `replicaSlotId` overrides the `readFrom` configuration. If it's used the request
      * will be routed to a replica, even if the strategy is `alwaysFromPrimary`.
      */
     type: "primarySlotId" | "replicaSlotId";
     /**
-     * Slot number. There are 16384 slots in a redis cluster, and each shard manages a slot range.
+     * Slot number. There are 16384 slots in a Valkey cluster, and each shard manages a slot range.
      * Unless the slot is known, it's better to route using `SlotKeyTypes`
      */
     id: number;
-};
+}
 
-export type SlotKeyTypes = {
+export interface SlotKeyTypes {
     /**
      * `replicaSlotKey` overrides the `readFrom` configuration. If it's used the request
      * will be routed to a replica, even if the strategy is `alwaysFromPrimary`.
@@ -183,10 +219,10 @@ export type SlotKeyTypes = {
      * The request will be sent to nodes managing this key.
      */
     key: string;
-};
+}
 
 /// Route command to specific node.
-export type RouteByAddress = {
+export interface RouteByAddress {
     type: "routeByAddress";
     /**
      *The endpoint of the node. If `port` is not provided, should be in the `${address}:${port}` format, where `address` is the preferred endpoint as shown in the output of the `CLUSTER SLOTS` command.
@@ -196,7 +232,7 @@ export type RouteByAddress = {
      * The port to access on the node. If port is not provided, `host` is assumed to be in the format `${address}:${port}`.
      */
     port?: number;
-};
+}
 
 export type Routes =
     | SingleNodeRoute
@@ -225,7 +261,7 @@ export type SingleNodeRoute =
     | RouteByAddress;
 
 /**
- * Client used for connection to cluster Redis servers.
+ * Client used for connection to cluster servers.
  *
  * @see For full documentation refer to {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#cluster|Valkey Glide Wiki}.
  */
@@ -280,6 +316,111 @@ export class GlideClusterClient extends BaseClient {
         );
     }
 
+    /**
+     * @internal
+     */
+    protected scanOptionsToProto(
+        cursor: string,
+        options?: ScanOptions,
+    ): command_request.ClusterScan {
+        const command = command_request.ClusterScan.create();
+        command.cursor = cursor;
+
+        if (options?.match) {
+            command.matchPattern = Buffer.from(options.match);
+        }
+
+        if (options?.count) {
+            command.count = options.count;
+        }
+
+        if (options?.type) {
+            command.objectType = options.type;
+        }
+
+        return command;
+    }
+
+    /**
+     * @internal
+     */
+    protected createClusterScanPromise(
+        cursor: ClusterScanCursor,
+        options?: ScanOptions & DecoderOption,
+    ): Promise<[ClusterScanCursor, GlideString[]]> {
+        // separate decoder option from scan options
+        const { decoder, ...scanOptions } = options || {};
+        const cursorId = cursor.getCursor();
+        const command = this.scanOptionsToProto(cursorId, scanOptions);
+        return this.createWritePromise(command, { decoder });
+    }
+
+    /**
+     * Incrementally iterates over the keys in the Cluster.
+     *
+     * This command is similar to the `SCAN` command but designed for Cluster environments.
+     * It uses a {@link ClusterScanCursor} object to manage iterations.
+     *
+     * For each iteration, use the new cursor object to continue the scan.
+     * Using the same cursor object for multiple iterations may result in unexpected behavior.
+     *
+     * For more information about the Cluster Scan implementation, see
+     * {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan | Cluster Scan}.
+     *
+     * This method can iterate over all keys in the database from the start of the scan until it ends.
+     * The same key may be returned in multiple scan iterations.
+     * The API does not accept `route` as it go through all slots in the cluster.
+     *
+     * @see {@link https://valkey.io/commands/scan/ | valkey.io} for more details.
+     *
+     * @param cursor - The cursor object that wraps the scan state.
+     *   To start a new scan, create a new empty `ClusterScanCursor` using {@link ClusterScanCursor}.
+     * @param options - (Optional) The scan options, see {@link ScanOptions} and  {@link DecoderOption}.
+     * @returns A Promise resolving to an array containing the next cursor and an array of keys,
+     *   formatted as [`ClusterScanCursor`, `string[]`].
+     *
+     * @example
+     * ```typescript
+     * // Iterate over all keys in the cluster
+     * await client.mset([{key: "key1", value: "value1"}, {key: "key2", value: "value2"}, {key: "key3", value: "value3"}]);
+     * let cursor = new ClusterScanCursor();
+     * const allKeys: GlideString[] = [];
+     * let keys: GlideString[] = [];
+     * while (!cursor.isFinished()) {
+     *   [cursor, keys] = await client.scan(cursor, { count: 10 });
+     *   allKeys.push(...keys);
+     * }
+     * console.log(allKeys); // ["key1", "key2", "key3"]
+     *
+     * // Iterate over keys matching a pattern
+     * await client.mset([{key: "key1", value: "value1"}, {key: "key2", value: "value2"}, {key: "notMykey", value: "value3"}, {key: "somethingElse", value: "value4"}]);
+     * let cursor = new ClusterScanCursor();
+     * const matchedKeys: GlideString[] = [];
+     * while (!cursor.isFinished()) {
+     *   const [cursor, keys] = await client.scan(cursor, { match: "*key*", count: 10 });
+     *   matchedKeys.push(...keys);
+     * }
+     * console.log(matchedKeys); // ["key1", "key2", "notMykey"]
+     *
+     * // Iterate over keys of a specific type
+     * await client.mset([{key: "key1", value: "value1"}, {key: "key2", value: "value2"}, {key: "key3", value: "value3"}]);
+     * await client.sadd("thisIsASet", ["value4"]);
+     * let cursor = new ClusterScanCursor();
+     * const stringKeys: GlideString[] = [];
+     * while (!cursor.isFinished()) {
+     *   const [cursor, keys] = await client.scan(cursor, { type: object.STRING });
+     *   stringKeys.push(...keys);
+     * }
+     * console.log(stringKeys); // ["key1", "key2", "key3"]
+     * ```
+     */
+    public async scan(
+        cursor: ClusterScanCursor,
+        options?: ScanOptions & DecoderOption,
+    ): Promise<[ClusterScanCursor, GlideString[]]> {
+        return this.createClusterScanPromise(cursor, options);
+    }
+
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
      *  should be added as a separate value in args.
      *  The command will be routed automatically based on the passed command's default request policy, unless `route` is provided,
@@ -303,7 +444,7 @@ export class GlideClusterClient extends BaseClient {
     public async customCommand(
         args: GlideString[],
         options?: RouteOption & DecoderOption,
-    ): Promise<ClusterResponse<ReturnType>> {
+    ): Promise<ClusterResponse<GlideReturnType>> {
         const command = createCustomCommand(args);
         return super.createWritePromise(command, options);
     }
@@ -330,8 +471,8 @@ export class GlideClusterClient extends BaseClient {
         options?: {
             route?: SingleNodeRoute;
         } & DecoderOption,
-    ): Promise<ReturnType[] | null> {
-        return this.createWritePromise<ReturnType[] | null>(
+    ): Promise<GlideReturnType[] | null> {
+        return this.createWritePromise<GlideReturnType[] | null>(
             transaction.commands,
             options,
         ).then((result) =>
@@ -398,10 +539,10 @@ export class GlideClusterClient extends BaseClient {
     public async info(
         options?: { sections?: InfoOptions[] } & RouteOption,
     ): Promise<ClusterResponse<string>> {
-        return this.createWritePromise<ClusterResponse<string>>(
+        return this.createWritePromise<ClusterGlideRecord<string>>(
             createInfo(options?.sections),
             { decoder: Decoder.String, ...options },
-        );
+        ).then((res) => convertClusterGlideRecord(res, false, options?.route));
     }
 
     /**
@@ -434,10 +575,10 @@ export class GlideClusterClient extends BaseClient {
     public async clientGetName(
         options?: RouteOption & DecoderOption,
     ): Promise<ClusterResponse<GlideString | null>> {
-        return this.createWritePromise<ClusterResponse<GlideString | null>>(
+        return this.createWritePromise<ClusterGlideRecord<GlideString | null>>(
             createClientGetName(),
             options,
-        );
+        ).then((res) => convertClusterGlideRecord(res, true, options?.route));
     }
 
     /**
@@ -508,10 +649,10 @@ export class GlideClusterClient extends BaseClient {
     public async clientId(
         options?: RouteOption,
     ): Promise<ClusterResponse<number>> {
-        return this.createWritePromise<ClusterResponse<number>>(
+        return this.createWritePromise<ClusterGlideRecord<number>>(
             createClientId(),
             options,
-        );
+        ).then((res) => convertClusterGlideRecord(res, true, options?.route));
     }
 
     /**
@@ -545,7 +686,11 @@ export class GlideClusterClient extends BaseClient {
         parameters: string[],
         options?: RouteOption & DecoderOption,
     ): Promise<ClusterResponse<Record<string, GlideString>>> {
-        return this.createWritePromise(createConfigGet(parameters), options);
+        return this.createWritePromise<
+            ClusterGlideRecord<GlideRecord<GlideString>>
+        >(createConfigGet(parameters), options).then((res) =>
+            convertGlideRecordToRecord(res as GlideRecord<string>),
+        );
     }
 
     /**
@@ -605,7 +750,10 @@ export class GlideClusterClient extends BaseClient {
         message: GlideString,
         options?: RouteOption & DecoderOption,
     ): Promise<ClusterResponse<GlideString>> {
-        return this.createWritePromise(createEcho(message), options);
+        return this.createWritePromise<ClusterGlideRecord<GlideString>>(
+            createEcho(message),
+            options,
+        ).then((res) => convertClusterGlideRecord(res, true, options?.route));
     }
 
     /**
@@ -641,10 +789,10 @@ export class GlideClusterClient extends BaseClient {
     public async time(
         options?: RouteOption,
     ): Promise<ClusterResponse<[string, string]>> {
-        return this.createWritePromise(createTime(), {
-            decoder: Decoder.String,
-            ...options,
-        });
+        return this.createWritePromise<ClusterGlideRecord<[string, string]>>(
+            createTime(),
+            options,
+        ).then((res) => convertClusterGlideRecord(res, true, options?.route));
     }
 
     /**
@@ -657,23 +805,24 @@ export class GlideClusterClient extends BaseClient {
      *
      * @param source - The key to the source value.
      * @param destination - The key where the value should be copied to.
-     * @param replace - (Optional) If `true`, the `destination` key should be removed before copying the
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `replace`: if `true`, the `destination` key should be removed before copying the
      *     value to it. If not provided, no action will be performed if the key already exists.
      * @returns `true` if `source` was copied, `false` if the `source` was not copied.
      *
      * @example
      * ```typescript
-     * const result = await client.copy("set1", "set2", true);
+     * const result = await client.copy("set1", "set2", { replace: true });
      * console.log(result); // Output: true - "set1" was copied to "set2".
      * ```
      */
     public async copy(
         source: GlideString,
         destination: GlideString,
-        replace?: boolean,
+        options?: { replace?: boolean },
     ): Promise<boolean> {
         return this.createWritePromise(
-            createCopy(source, destination, { replace: replace }),
+            createCopy(source, destination, options),
         );
     }
 
@@ -690,20 +839,22 @@ export class GlideClusterClient extends BaseClient {
      * @example
      * ```typescript
      * const response = await client.lolwut({ version: 6, parameters: [40, 20] }, "allNodes");
-     * console.log(response); // Output: "Redis ver. 7.2.3" - Indicates the current server version.
+     * console.log(response); // Output: "Valkey ver. 7.2.3" - Indicates the current server version.
      * ```
      */
     public async lolwut(
         options?: LolwutOptions & RouteOption,
     ): Promise<ClusterResponse<string>> {
-        return this.createWritePromise(createLolwut(options), {
-            decoder: Decoder.String,
-            ...options,
-        });
+        return this.createWritePromise<ClusterGlideRecord<string>>(
+            createLolwut(options),
+            options,
+        ).then((res) => convertClusterGlideRecord(res, true, options?.route));
     }
 
     /**
      * Invokes a previously loaded function.
+     *
+     * The command will be routed to a random node, unless `route` is provided.
      *
      * @see {@link https://valkey.io/commands/fcall/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
@@ -723,12 +874,17 @@ export class GlideClusterClient extends BaseClient {
         func: GlideString,
         args: GlideString[],
         options?: RouteOption & DecoderOption,
-    ): Promise<ClusterResponse<ReturnType>> {
-        return this.createWritePromise(createFCall(func, [], args), options);
+    ): Promise<ClusterResponse<GlideReturnType>> {
+        return this.createWritePromise<ClusterGlideRecord<GlideReturnType>>(
+            createFCall(func, [], args),
+            options,
+        ).then((res) => convertClusterGlideRecord(res, true, options?.route));
     }
 
     /**
      * Invokes a previously loaded read-only function.
+     *
+     * The command will be routed to a random node, unless `route` is provided.
      *
      * @see {@link https://valkey.io/commands/fcall/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
@@ -749,11 +905,11 @@ export class GlideClusterClient extends BaseClient {
         func: GlideString,
         args: GlideString[],
         options?: RouteOption & DecoderOption,
-    ): Promise<ClusterResponse<ReturnType>> {
-        return this.createWritePromise(
+    ): Promise<ClusterResponse<GlideReturnType>> {
+        return this.createWritePromise<ClusterGlideRecord<GlideReturnType>>(
             createFCallReadOnly(func, [], args),
             options,
-        );
+        ).then((res) => convertClusterGlideRecord(res, true, options?.route));
     }
 
     /**
@@ -848,6 +1004,8 @@ export class GlideClusterClient extends BaseClient {
     /**
      * Returns information about the functions and libraries.
      *
+     * The command will be routed to a random node, unless `route` is provided.
+     *
      * @see {@link https://valkey.io/commands/function-list/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
      *
@@ -876,12 +1034,28 @@ export class GlideClusterClient extends BaseClient {
     public async functionList(
         options?: FunctionListOptions & DecoderOption & RouteOption,
     ): Promise<ClusterResponse<FunctionListResponse>> {
-        return this.createWritePromise(createFunctionList(options), options);
+        return this.createWritePromise<
+            GlideRecord<unknown> | GlideRecord<unknown>[]
+        >(createFunctionList(options), options).then((res) =>
+            res.length == 0
+                ? (res as FunctionListResponse) // no libs
+                : ((Array.isArray(res[0])
+                      ? // single node response
+                        ((res as GlideRecord<unknown>[]).map(
+                            convertGlideRecordToRecord,
+                        ) as FunctionListResponse)
+                      : // multi node response
+                        convertGlideRecordToRecord(
+                            res as GlideRecord<unknown>,
+                        )) as ClusterResponse<FunctionListResponse>),
+        );
     }
 
     /**
      * Returns information about the function that's currently running and information about the
      * available execution engines.
+     *
+     * The command will be routed to all primary nodes, unless `route` is provided.
      *
      * @see {@link https://valkey.io/commands/function-stats/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
@@ -929,7 +1103,14 @@ export class GlideClusterClient extends BaseClient {
     public async functionStats(
         options?: RouteOption & DecoderOption,
     ): Promise<ClusterResponse<FunctionStatsSingleResponse>> {
-        return this.createWritePromise(createFunctionStats(), options);
+        return this.createWritePromise<
+            ClusterGlideRecord<GlideRecord<unknown>>
+        >(createFunctionStats(), options).then(
+            (res) =>
+                convertGlideRecordToRecord(
+                    res,
+                ) as ClusterResponse<FunctionStatsSingleResponse>,
+        );
     }
 
     /**
@@ -972,10 +1153,10 @@ export class GlideClusterClient extends BaseClient {
     public async functionDump(
         options?: RouteOption,
     ): Promise<ClusterResponse<Buffer>> {
-        return this.createWritePromise(createFunctionDump(), {
-            decoder: Decoder.Bytes,
-            ...options,
-        });
+        return this.createWritePromise<ClusterGlideRecord<Buffer>>(
+            createFunctionDump(),
+            { decoder: Decoder.Bytes, ...options },
+        ).then((res) => convertClusterGlideRecord(res, true, options?.route));
     }
 
     /**
@@ -1081,10 +1262,8 @@ export class GlideClusterClient extends BaseClient {
      * console.log("Number of keys across all primary nodes: ", numKeys);
      * ```
      */
-    public async dbsize(
-        options?: RouteOption,
-    ): Promise<ClusterResponse<number>> {
-        return this.createWritePromise(createDBSize(), options);
+    public async dbsize(options?: RouteOption): Promise<number> {
+        return this.createWritePromise<number>(createDBSize(), options);
     }
 
     /** Publish a message on pubsub channel.
@@ -1116,7 +1295,7 @@ export class GlideClusterClient extends BaseClient {
     public async publish(
         message: GlideString,
         channel: GlideString,
-        sharded: boolean = false,
+        sharded = false,
     ): Promise<number> {
         return this.createWritePromise(
             createPublish(message, channel, sharded),
@@ -1159,120 +1338,35 @@ export class GlideClusterClient extends BaseClient {
     /**
      * Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified shard channels.
      *
-     * Note that it is valid to call this command without channels. In this case, it will just return an empty map.
-     * The command is routed to all nodes, and aggregates the response to a single map of the channels and their number of subscriptions.
-     *
      * @see {@link https://valkey.io/commands/pubsub-shardnumsub/|valkey.io} for details.
+     * @remarks The command is routed to all nodes, and aggregates the response into a single list.
      *
      * @param channels - The list of shard channels to query for the number of subscribers.
-     *                   If not provided, returns an empty map.
-     * @returns A map where keys are the shard channel names and values are the number of subscribers.
+     * @param options - (Optional) see {@link DecoderOption}.
+     * @returns A list of the shard channel names and their numbers of subscribers.
      *
      * @example
      * ```typescript
      * const result1 = await client.pubsubShardnumsub(["channel1", "channel2"]);
-     * console.log(result1); // Output: { "channel1": 3, "channel2": 5 }
+     * console.log(result1); // Output:
+     * // [{ channel: "channel1", numSub: 3}, { channel: "channel2", numSub: 5 }]
      *
-     * const result2 = await client.pubsubShardnumsub();
-     * console.log(result2); // Output: {}
+     * const result2 = await client.pubsubShardnumsub([]);
+     * console.log(result2); // Output: []
      * ```
      */
     public async pubsubShardNumSub(
-        channels?: string[],
-    ): Promise<Record<string, number>> {
-        return this.createWritePromise(createPubSubShardNumSub(channels));
-    }
-
-    /**
-     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
-     *
-     * The `sort` command can be used to sort elements based on different criteria and
-     * apply transformations on sorted elements.
-     *
-     * To store the result into a new key, see {@link sortStore}.
-     *
-     * @see {@link https://valkey.io/commands/sort/|valkey.io} for details.
-     *
-     * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param options - (Optional) {@link SortClusterOptions} and {@link DecoderOption}.
-     * @returns An `Array` of sorted elements.
-     *
-     * @example
-     * ```typescript
-     * await client.lpush("mylist", ["3", "1", "2", "a"]);
-     * const result = await client.sort("mylist", { alpha: true, orderBy: SortOrder.DESC, limit: { offset: 0, count: 3 } });
-     * console.log(result); // Output: [ 'a', '3', '2' ] - List is sorted in descending order lexicographically
-     * ```
-     */
-    public async sort(
-        key: GlideString,
-        options?: SortClusterOptions & DecoderOption,
-    ): Promise<GlideString[]> {
-        return this.createWritePromise(createSort(key, options), options);
-    }
-
-    /**
-     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
-     *
-     * The `sortReadOnly` command can be used to sort elements based on different criteria and
-     * apply transformations on sorted elements.
-     *
-     * This command is routed depending on the client's {@link ReadFrom} strategy.
-     *
-     * @remarks Since Valkey version 7.0.0.
-     *
-     * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param options - (Optional) See {@link SortClusterOptions} and {@link DecoderOption}.
-     * @returns An `Array` of sorted elements
-     *
-     * @example
-     * ```typescript
-     * await client.lpush("mylist", ["3", "1", "2", "a"]);
-     * const result = await client.sortReadOnly("mylist", { alpha: true, orderBy: SortOrder.DESC, limit: { offset: 0, count: 3 } });
-     * console.log(result); // Output: [ 'a', '3', '2' ] - List is sorted in descending order lexicographically
-     * ```
-     */
-    public async sortReadOnly(
-        key: GlideString,
-        options?: SortClusterOptions & DecoderOption,
-    ): Promise<GlideString[]> {
-        return this.createWritePromise(
-            createSortReadOnly(key, options),
+        channels: GlideString[],
+        options?: DecoderOption,
+    ): Promise<{ channel: GlideString; numSub: number }[]> {
+        return this.createWritePromise<GlideRecord<number>>(
+            createPubSubShardNumSub(channels),
             options,
+        ).then((res) =>
+            res.map((r) => {
+                return { channel: r.key, numSub: r.value };
+            }),
         );
-    }
-
-    /**
-     * Sorts the elements in the list, set, or sorted set at `key` and stores the result in
-     * `destination`.
-     *
-     * The `sort` command can be used to sort elements based on different criteria and
-     * apply transformations on sorted elements, and store the result in a new key.
-     *
-     * To get the sort result without storing it into a key, see {@link sort} or {@link sortReadOnly}.
-     *
-     * @see {@link https://valkey.io/commands/sort/|valkey.io} for details.
-     * @remarks When in cluster mode, `destination` and `key` must map to the same hash slot.
-     *
-     * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param destination - The key where the sorted result will be stored.
-     * @param options - (Optional) See {@link SortClusterOptions}.
-     * @returns The number of elements in the sorted key stored at `destination`.
-     *
-     * @example
-     * ```typescript
-     * await client.lpush("mylist", ["3", "1", "2", "a"]);
-     * const sortedElements = await client.sortReadOnly("mylist", "sortedList", { alpha: true, orderBy: SortOrder.DESC, limit: { offset: 0, count: 3 } });
-     * console.log(sortedElements); // Output: 3 - number of elements sorted and stored
-     * console.log(await client.lrange("sortedList", 0, -1)); // Output: [ 'a', '3', '2' ] - List is sorted in descending order lexicographically and stored in `sortedList`
-     * ```
-     */
-    public async sortStore(
-        key: GlideString,
-        destination: GlideString,
-        options?: SortClusterOptions,
-    ): Promise<number> {
-        return this.createWritePromise(createSort(key, options, destination));
     }
 
     /**
@@ -1295,7 +1389,10 @@ export class GlideClusterClient extends BaseClient {
     public async lastsave(
         options?: RouteOption,
     ): Promise<ClusterResponse<number>> {
-        return this.createWritePromise(createLastSave(), options);
+        return this.createWritePromise<ClusterGlideRecord<number>>(
+            createLastSave(),
+            options,
+        ).then((res) => convertClusterGlideRecord(res, true, options?.route));
     }
 
     /**
@@ -1341,6 +1438,116 @@ export class GlideClusterClient extends BaseClient {
      */
     public async unwatch(options?: RouteOption): Promise<"OK"> {
         return this.createWritePromise(createUnWatch(), {
+            decoder: Decoder.String,
+            ...options,
+        });
+    }
+
+    /**
+     * Invokes a Lua script with arguments.
+     * This method simplifies the process of invoking scripts on a Valkey server by using an object that represents a Lua script.
+     * The script loading, argument preparation, and execution will all be handled internally. If the script has not already been loaded,
+     * it will be loaded automatically using the `SCRIPT LOAD` command. After that, it will be invoked using the `EVALSHA` command.
+     *
+     * The command will be routed to a random node, unless `route` is provided.
+     *
+     * @see {@link https://valkey.io/commands/script-load/|SCRIPT LOAD} and {@link https://valkey.io/commands/evalsha/|EVALSHA} on valkey.io for details.
+     *
+     * @param script - The Lua script to execute.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `args`: the arguments for the script.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
+     * - (Optional) `route`: see {@link RouteOption}.
+     * @returns A value that depends on the script that was executed.
+     *
+     * @example
+     * ```typescript
+     * const luaScript = new Script("return { ARGV[1] }");
+     * const result = await invokeScript(luaScript, { args: ["bar"] });
+     * console.log(result); // Output: ['bar']
+     * ```
+     */
+    public async invokeScriptWithRoute(
+        script: Script,
+        options?: { args?: GlideString[] } & DecoderOption & RouteOption,
+    ): Promise<ClusterResponse<GlideReturnType>> {
+        const scriptInvocation = command_request.ScriptInvocation.create({
+            hash: script.getHash(),
+            keys: [],
+            args: options?.args?.map(Buffer.from),
+        });
+        return this.createWritePromise<ClusterGlideRecord<GlideReturnType>>(
+            scriptInvocation,
+            options,
+        ).then((res) => convertClusterGlideRecord(res, true, options?.route));
+    }
+
+    /**
+     * Checks existence of scripts in the script cache by their SHA1 digest.
+     *
+     * @see {@link https://valkey.io/commands/script-exists/|valkey.io} for more details.
+     *
+     * @param sha1s - List of SHA1 digests of the scripts to check.
+     * @param options - (Optional) See {@link RouteOption}.
+     * @returns A list of boolean values indicating the existence of each script.
+     *
+     * @example
+     * ```typescript
+     * console result = await client.scriptExists(["sha1_digest1", "sha1_digest2"]);
+     * console.log(result); // Output: [true, false]
+     * ```
+     */
+    public async scriptExists(
+        sha1s: GlideString[],
+        options?: RouteOption,
+    ): Promise<ClusterResponse<boolean[]>> {
+        return this.createWritePromise(createScriptExists(sha1s), options);
+    }
+
+    /**
+     * Flushes the Lua scripts cache.
+     *
+     * @see {@link https://valkey.io/commands/script-flush/|valkey.io} for more details.
+     *
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `mode`: the flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * - (Optional) `route`: see {@link RouteOption}.
+     * @returns A simple `"OK"` response.
+     *
+     * @example
+     * ```typescript
+     * console result = await client.scriptFlush(FlushMode.SYNC);
+     * console.log(result); // Output: "OK"
+     * ```
+     */
+    public async scriptFlush(
+        options?: {
+            mode?: FlushMode;
+        } & RouteOption,
+    ): Promise<"OK"> {
+        return this.createWritePromise(createScriptFlush(options?.mode), {
+            decoder: Decoder.String,
+            ...options,
+        });
+    }
+
+    /**
+     * Kills the currently executing Lua script, assuming no write operation was yet performed by the script.
+     *
+     * @see {@link https://valkey.io/commands/script-kill/|valkey.io} for more details.
+     * @remarks The command is routed to all nodes, and aggregates the response to a single array.
+     *
+     * @param options - (Optional) See {@link RouteOption}.
+     * @returns A simple `"OK"` response.
+     *
+     * @example
+     * ```typescript
+     * console result = await client.scriptKill();
+     * console.log(result); // Output: "OK"
+     * ```
+     */
+    public async scriptKill(options?: RouteOption): Promise<"OK"> {
+        return this.createWritePromise(createScriptKill(), {
             decoder: Decoder.String,
             ...options,
         });

@@ -1,6 +1,7 @@
 plugins {
     // Apply the application plugin to add support for building a CLI application in Java.
     id 'application'
+    id "com.google.osdetector" version "1.7.3"
 }
 
 repositories {
@@ -9,7 +10,13 @@ repositories {
 }
 
 dependencies {
-    implementation project(':client')
+    def releaseVersion = System.getenv("GLIDE_RELEASE_VERSION");
+
+    if (releaseVersion) {
+        implementation "io.valkey:valkey-glide:" + releaseVersion + ":${osdetector.classifier}"
+    } else {
+        implementation project(':client')
+    }
 
     // This dependency is used internally, and not exposed to consumers on their own compile classpath.
     implementation 'com.google.guava:guava:32.1.1-jre'
@@ -26,5 +33,9 @@ run.dependsOn ':client:buildRustRelease'
 application {
     // Define the main class for the application.
     mainClass = 'glide.benchmarks.BenchmarkingApp'
-    applicationDefaultJvmArgs = ['-Djava.library.path=../target/release']
+    // Runs for GITHUB_ACTIONS for testing release Maven deployment. Force benchmarks to use glide-rs from Maven Central
+    // deployments.
+    if (!System.getenv("ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderName")) {
+        applicationDefaultJvmArgs = ['-Djava.library.path=../target/release']
+    }
 }

@@ -14,22 +14,37 @@ import { v4 as uuidv4 } from "uuid";
 import {
     BaseClientConfiguration,
     ConfigurationError,
+    Decoder,
     GlideClient,
     GlideClientConfiguration,
     GlideClusterClient,
     GlideClusterClientConfiguration,
+    GlideString,
     ProtocolVersion,
     PubSubMsg,
     TimeoutError,
 } from "..";
-import RedisCluster from "../../utils/TestUtils";
+import ValkeyCluster from "../../utils/TestUtils";
 import {
     flushAndCloseClient,
+    getServerVersion,
     parseCommandLineArgs,
     parseEndpoints,
 } from "./TestUtilities";
 
-export type TGlideClient = GlideClient | GlideClusterClient;
+type TGlideClient = GlideClient | GlideClusterClient;
+
+function convertGlideRecordToRecord(
+    data: { channel: GlideString; numSub: number }[],
+): Record<string, number> {
+    const res: Record<string, number> = {};
+
+    for (const pair of data) {
+        res[pair.channel as string] = pair.numSub;
+    }
+
+    return res;
+}
 
 /**
  * Enumeration for specifying the method of PUBSUB subscription.
@@ -42,23 +57,27 @@ const MethodTesting = {
 
 const TIMEOUT = 120000;
 describe("PubSub", () => {
-    let cmeCluster: RedisCluster;
-    let cmdCluster: RedisCluster;
+    let cmeCluster: ValkeyCluster;
+    let cmdCluster: ValkeyCluster;
     beforeAll(async () => {
         const standaloneAddresses =
             parseCommandLineArgs()["standalone-endpoints"];
         const clusterAddresses = parseCommandLineArgs()["cluster-endpoints"];
         // Connect to cluster or create a new one based on the parsed addresses
         cmdCluster = standaloneAddresses
-            ? await RedisCluster.initFromExistingCluster(
+            ? await ValkeyCluster.initFromExistingCluster(
+                  false,
                   parseEndpoints(standaloneAddresses),
+                  getServerVersion,
               )
-            : await RedisCluster.createCluster(false, 1, 1);
+            : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
         cmeCluster = clusterAddresses
-            ? await RedisCluster.initFromExistingCluster(
+            ? await ValkeyCluster.initFromExistingCluster(
+                  true,
                   parseEndpoints(clusterAddresses),
+                  getServerVersion,
               )
-            : await RedisCluster.createCluster(true, 3, 1);
+            : await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
     }, 40000);
     afterEach(async () => {
         await flushAndCloseClient(false, cmdCluster.getAddresses());
@@ -79,15 +98,22 @@ describe("PubSub", () => {
         pubsubSubscriptions2?:
             | GlideClientConfiguration.PubSubSubscriptions
             | GlideClusterClientConfiguration.PubSubSubscriptions,
+        decoder?: Decoder,
     ): Promise<[TGlideClient, TGlideClient]> {
         let client: TGlideClient | undefined;
 
         if (clusterMode) {
             try {
-                options.pubsubSubscriptions = pubsubSubscriptions;
-                client = await GlideClusterClient.createClient(options);
-                options2.pubsubSubscriptions = pubsubSubscriptions2;
-                const client2 = await GlideClusterClient.createClient(options2);
+                client = await GlideClusterClient.createClient({
+                    pubsubSubscriptions: pubsubSubscriptions,
+                    defaultDecoder: decoder,
+                    ...options,
+                });
+                const client2 = await GlideClusterClient.createClient({
+                    pubsubSubscriptions: pubsubSubscriptions2,
+                    defaultDecoder: decoder,
+                    ...options2,
+                });
                 return [client, client2];
             } catch (error) {
                 if (client) {
@@ -98,10 +124,16 @@ describe("PubSub", () => {
             }
         } else {
             try {
-                options.pubsubSubscriptions = pubsubSubscriptions;
-                client = await GlideClient.createClient(options);
-                options2.pubsubSubscriptions = pubsubSubscriptions2;
-                const client2 = await GlideClient.createClient(options2);
+                client = await GlideClient.createClient({
+                    pubsubSubscriptions: pubsubSubscriptions,
+                    defaultDecoder: decoder,
+                    ...options,
+                });
+                const client2 = await GlideClient.createClient({
+                    pubsubSubscriptions: pubsubSubscriptions2,
+                    defaultDecoder: decoder,
+                    ...options2,
+                });
                 return [client, client2];
             } catch (error) {
                 if (client) {
@@ -136,28 +168,6 @@ describe("PubSub", () => {
         };
     };
 
-    function decodePubSubMsg(msg: PubSubMsg | null = null) {
-        if (!msg) {
-            return {
-                message: "",
-                channel: "",
-                pattern: null,
-            };
-        }
-
-        const stringMsg = Buffer.from(msg.message).toString("utf-8");
-        const stringChannel = Buffer.from(msg.channel).toString("utf-8");
-        const stringPattern = msg.pattern
-            ? Buffer.from(msg.pattern).toString("utf-8")
-            : null;
-
-        return {
-            message: stringMsg,
-            channel: stringChannel,
-            pattern: stringPattern,
-        };
-    }
-
     async function getMessageByMethod(
         method: number,
         client: TGlideClient,
@@ -166,13 +176,13 @@ describe("PubSub", () => {
     ) {
         if (method === MethodTesting.Async) {
             const pubsubMessage = await client.getPubSubMessage();
-            return decodePubSubMsg(pubsubMessage);
+            return pubsubMessage;
         } else if (method === MethodTesting.Sync) {
             const pubsubMessage = client.tryGetPubSubMessage();
-            return decodePubSubMsg(pubsubMessage);
+            return pubsubMessage;
         } else {
             if (messages && index !== null) {
-                return decodePubSubMsg(messages[index!]);
+                return messages[index!];
             }
 
             throw new Error(
@@ -328,8 +338,8 @@ describe("PubSub", () => {
             let publishingClient: TGlideClient;
 
             try {
-                const channel = uuidv4();
-                const message = uuidv4();
+                const channel = uuidv4() as GlideString;
+                const message = uuidv4() as GlideString;
                 const options = getOptions(clusterMode);
                 let context: PubSubMsg[] | null = null;
                 let callback;
@@ -343,11 +353,11 @@ describe("PubSub", () => {
                     clusterMode,
                     {
                         [GlideClusterClientConfiguration.PubSubChannelModes
-                            .Exact]: new Set([channel]),
+                            .Exact]: new Set([channel as string]),
                     },
                     {
                         [GlideClientConfiguration.PubSubChannelModes.Exact]:
-                            new Set([channel]),
+                            new Set([channel as string]),
                     },
                     callback,
                     context,
@@ -374,9 +384,96 @@ describe("PubSub", () => {
                     context,
                     0,
                 );
-                expect(pubsubMessage.message).toEqual(message);
-                expect(pubsubMessage.channel).toEqual(channel);
-                expect(pubsubMessage.pattern).toEqual(null);
+
+                expect(pubsubMessage!.message).toEqual(message);
+                expect(pubsubMessage!.channel).toEqual(channel);
+                expect(pubsubMessage!.pattern).toBeNull();
+
+                await checkNoMessagesLeft(method, listeningClient, context, 1);
+            } finally {
+                await clientCleanup(publishingClient!);
+                await clientCleanup(
+                    listeningClient!,
+                    clusterMode ? pubSub! : undefined,
+                );
+            }
+        },
+        TIMEOUT,
+    );
+
+    /**
+     * Tests the basic happy path for exact PUBSUB functionality with binary.
+     *
+     * This test covers the basic PUBSUB flow using three different methods:
+     * Async, Sync, and Callback. It verifies that a message published to a
+     * specific channel is correctly received by a subscriber.
+     *
+     * @param clusterMode - Indicates if the test should be run in cluster mode.
+     * @param method - Specifies the method of PUBSUB subscription (Async, Sync, Callback).
+     */
+    it.each(testCases)(
+        `pubsub exact happy path binary test_%p%p`,
+        async (clusterMode, method) => {
+            let pubSub:
+                | GlideClusterClientConfiguration.PubSubSubscriptions
+                | GlideClientConfiguration.PubSubSubscriptions
+                | null = null;
+            let listeningClient: TGlideClient;
+            let publishingClient: TGlideClient;
+
+            try {
+                const channel = uuidv4() as GlideString;
+                const message = uuidv4() as GlideString;
+                const options = getOptions(clusterMode);
+                let context: PubSubMsg[] | null = null;
+                let callback;
+
+                if (method === MethodTesting.Callback) {
+                    context = [];
+                    callback = newMessage;
+                }
+
+                pubSub = createPubSubSubscription(
+                    clusterMode,
+                    {
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Exact]: new Set([channel as string]),
+                    },
+                    {
+                        [GlideClientConfiguration.PubSubChannelModes.Exact]:
+                            new Set([channel as string]),
+                    },
+                    callback,
+                    context,
+                );
+                [listeningClient, publishingClient] = await createClients(
+                    clusterMode,
+                    options,
+                    getOptions(clusterMode),
+                    pubSub,
+                    undefined,
+                    Decoder.Bytes,
+                );
+
+                const result = await publishingClient.publish(message, channel);
+
+                if (clusterMode) {
+                    expect(result).toEqual(1);
+                }
+
+                // Allow the message to propagate
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                const pubsubMessage = await getMessageByMethod(
+                    method,
+                    listeningClient,
+                    context,
+                    0,
+                );
+
+                expect(pubsubMessage!.message).toEqual(Buffer.from(message));
+                expect(pubsubMessage!.channel).toEqual(Buffer.from(channel));
+                expect(pubsubMessage!.pattern).toBeNull();
 
                 await checkNoMessagesLeft(method, listeningClient, context, 1);
             } finally {
@@ -410,19 +507,19 @@ describe("PubSub", () => {
             let publishingClient: TGlideClient | null = null;
 
             try {
-                const channel = uuidv4();
-                const message = uuidv4();
-                const message2 = uuidv4();
+                const channel = uuidv4() as GlideString;
+                const message = uuidv4() as GlideString;
+                const message2 = uuidv4() as GlideString;
 
                 pubSub = createPubSubSubscription(
                     clusterMode,
                     {
                         [GlideClusterClientConfiguration.PubSubChannelModes
-                            .Exact]: new Set([channel]),
+                            .Exact]: new Set([channel as string]),
                     },
                     {
                         [GlideClientConfiguration.PubSubChannelModes.Exact]:
-                            new Set([channel]),
+                            new Set([channel as string]),
                     },
                 );
 
@@ -444,12 +541,9 @@ describe("PubSub", () => {
                 // Allow the message to propagate
                 await new Promise((resolve) => setTimeout(resolve, 1000));
 
-                const asyncMsgRes = await listeningClient.getPubSubMessage();
-                const syncMsgRes = listeningClient.tryGetPubSubMessage();
-                expect(syncMsgRes).toBeTruthy();
-
-                const asyncMsg = decodePubSubMsg(asyncMsgRes);
-                const syncMsg = decodePubSubMsg(syncMsgRes);
+                const asyncMsg = await listeningClient.getPubSubMessage();
+                const syncMsg = listeningClient.tryGetPubSubMessage()!;
+                expect(syncMsg).toBeTruthy();
 
                 expect([message, message2]).toContain(asyncMsg.message);
                 expect(asyncMsg.channel).toEqual(channel);
@@ -459,7 +553,7 @@ describe("PubSub", () => {
                 expect(syncMsg.channel).toEqual(channel);
                 expect(syncMsg.pattern).toBeNull();
 
-                expect(asyncMsg.message).not.toEqual(syncMsg.message);
+                expect(asyncMsg.message).not.toEqual(syncMsg!.message);
 
                 // Assert there are no messages to read
                 await checkNoMessagesLeft(MethodTesting.Async, listeningClient);
@@ -499,12 +593,12 @@ describe("PubSub", () => {
 
             try {
                 // Create a map of channels to random messages with shard prefix
-                const channelsAndMessages: Record<string, string> = {};
+                const channelsAndMessages: [GlideString, GlideString][] = [];
 
                 for (let i = 0; i < NUM_CHANNELS; i++) {
                     const channel = `${shardPrefix}${uuidv4()}`;
                     const message = uuidv4();
-                    channelsAndMessages[channel] = message;
+                    channelsAndMessages.push([channel, message]);
                 }
 
                 let context: PubSubMsg[] | null = null;
@@ -520,11 +614,15 @@ describe("PubSub", () => {
                     clusterMode,
                     {
                         [GlideClusterClientConfiguration.PubSubChannelModes
-                            .Exact]: new Set(Object.keys(channelsAndMessages)),
+                            .Exact]: new Set(
+                            channelsAndMessages.map((a) => a[0].toString()),
+                        ),
                     },
                     {
                         [GlideClientConfiguration.PubSubChannelModes.Exact]:
-                            new Set(Object.keys(channelsAndMessages)),
+                            new Set(
+                                channelsAndMessages.map((a) => a[0].toString()),
+                            ),
                     },
                     callback,
                     context,
@@ -539,9 +637,7 @@ describe("PubSub", () => {
                 );
 
                 // Publish messages to each channel
-                for (const [channel, message] of Object.entries(
-                    channelsAndMessages,
-                )) {
+                for (const [channel, message] of channelsAndMessages) {
                     const result = await publishingClient.publish(
                         message,
                         channel,
@@ -557,24 +653,20 @@ describe("PubSub", () => {
 
                 // Check if all messages are received correctly
                 for (let index = 0; index < NUM_CHANNELS; index++) {
-                    const pubsubMsg = await getMessageByMethod(
+                    const pubsubMsg = (await getMessageByMethod(
                         method,
                         listeningClient,
                         context,
                         index,
-                    );
+                    ))!;
                     expect(
-                        pubsubMsg.channel in channelsAndMessages,
-                    ).toBeTruthy();
-                    expect(pubsubMsg.message).toEqual(
-                        channelsAndMessages[pubsubMsg.channel],
-                    );
-                    expect(pubsubMsg.pattern).toBeNull();
-                    delete channelsAndMessages[pubsubMsg.channel];
-                }
+                        channelsAndMessages.find(
+                            ([channel]) => channel === pubsubMsg.channel,
+                        ),
+                    ).toEqual([pubsubMsg.channel, pubsubMsg.message]);
 
-                // Check that we received all messages
-                expect(Object.keys(channelsAndMessages).length).toEqual(0);
+                    expect(pubsubMsg.pattern).toBeNull();
+                }
 
                 // Check no messages left
                 await checkNoMessagesLeft(
@@ -624,12 +716,12 @@ describe("PubSub", () => {
 
             try {
                 // Create a map of channels to random messages with shard prefix
-                const channelsAndMessages: Record<string, string> = {};
+                const channelsAndMessages: [GlideString, GlideString][] = [];
 
                 for (let i = 0; i < NUM_CHANNELS; i++) {
                     const channel = `${shardPrefix}${uuidv4()}`;
                     const message = uuidv4();
-                    channelsAndMessages[channel] = message;
+                    channelsAndMessages.push([channel, message]);
                 }
 
                 // Create PUBSUB subscription for the test
@@ -637,11 +729,15 @@ describe("PubSub", () => {
                     clusterMode,
                     {
                         [GlideClusterClientConfiguration.PubSubChannelModes
-                            .Exact]: new Set(Object.keys(channelsAndMessages)),
+                            .Exact]: new Set(
+                            channelsAndMessages.map((a) => a[0].toString()),
+                        ),
                     },
                     {
                         [GlideClientConfiguration.PubSubChannelModes.Exact]:
-                            new Set(Object.keys(channelsAndMessages)),
+                            new Set(
+                                channelsAndMessages.map((a) => a[0].toString()),
+                            ),
                     },
                 );
 
@@ -654,9 +750,7 @@ describe("PubSub", () => {
                 );
 
                 // Publish messages to each channel
-                for (const [channel, message] of Object.entries(
-                    channelsAndMessages,
-                )) {
+                for (const [channel, message] of channelsAndMessages) {
                     const result = await publishingClient.publish(
                         message,
                         channel,
@@ -682,17 +776,13 @@ describe("PubSub", () => {
                     );
 
                     expect(
-                        pubsubMsg.channel in channelsAndMessages,
-                    ).toBeTruthy();
-                    expect(pubsubMsg.message).toEqual(
-                        channelsAndMessages[pubsubMsg.channel],
-                    );
-                    expect(pubsubMsg.pattern).toBeNull();
-                    delete channelsAndMessages[pubsubMsg.channel];
-                }
+                        channelsAndMessages.find(
+                            ([channel]) => channel === pubsubMsg?.channel,
+                        ),
+                    ).toEqual([pubsubMsg?.channel, pubsubMsg?.message]);
 
-                // Check that we received all messages
-                expect(Object.keys(channelsAndMessages).length).toEqual(0);
+                    expect(pubsubMsg?.pattern).toBeNull();
+                }
 
                 // Assert there are no messages to read
                 await checkNoMessagesLeft(MethodTesting.Async, listeningClient);
@@ -741,8 +831,8 @@ describe("PubSub", () => {
                 | null = null;
             let listeningClient: TGlideClient | null = null;
             let publishingClient: TGlideClient | null = null;
-            const channel = uuidv4();
-            const message = uuidv4();
+            const channel = uuidv4() as GlideString;
+            const message = uuidv4() as GlideString;
             const publishResponse = 1;
 
             try {
@@ -759,7 +849,7 @@ describe("PubSub", () => {
                     clusterMode,
                     {
                         [GlideClusterClientConfiguration.PubSubChannelModes
-                            .Sharded]: new Set([channel]),
+                            .Sharded]: new Set([channel as string]),
                     },
                     {},
                     callback,
@@ -783,12 +873,12 @@ describe("PubSub", () => {
                 // Allow the message to propagate
                 await new Promise((resolve) => setTimeout(resolve, 1000));
 
-                const pubsubMsg = await getMessageByMethod(
+                const pubsubMsg = (await getMessageByMethod(
                     method,
                     listeningClient,
                     context,
                     0,
-                );
+                ))!;
 
                 expect(pubsubMsg.message).toEqual(message);
                 expect(pubsubMsg.channel).toEqual(channel);
@@ -837,9 +927,9 @@ describe("PubSub", () => {
                 | null = null;
             let listeningClient: TGlideClient | null = null;
             let publishingClient: TGlideClient | null = null;
-            const channel = uuidv4();
-            const message = uuidv4();
-            const message2 = uuidv4();
+            const channel = uuidv4() as GlideString;
+            const message = uuidv4() as GlideString;
+            const message2 = uuidv4() as GlideString;
 
             try {
                 // Create PUBSUB subscription for the test
@@ -847,7 +937,7 @@ describe("PubSub", () => {
                     true,
                     {
                         [GlideClusterClientConfiguration.PubSubChannelModes
-                            .Sharded]: new Set([channel]),
+                            .Sharded]: new Set([channel as string]),
                     },
                     {},
                 );
@@ -875,12 +965,9 @@ describe("PubSub", () => {
                 // Allow the messages to propagate
                 await new Promise((resolve) => setTimeout(resolve, 1000));
 
-                const asyncMsgRes = await listeningClient.getPubSubMessage();
-                const syncMsgRes = listeningClient.tryGetPubSubMessage();
-                expect(syncMsgRes).toBeTruthy();
-
-                const asyncMsg = decodePubSubMsg(asyncMsgRes);
-                const syncMsg = decodePubSubMsg(syncMsgRes);
+                const asyncMsg = await listeningClient!.getPubSubMessage();
+                const syncMsg = listeningClient!.tryGetPubSubMessage()!;
+                expect(syncMsg).toBeTruthy();
 
                 expect([message, message2]).toContain(asyncMsg.message);
                 expect(asyncMsg.channel).toEqual(channel);
@@ -894,7 +981,7 @@ describe("PubSub", () => {
 
                 // Assert there are no messages to read
                 await checkNoMessagesLeft(MethodTesting.Async, listeningClient);
-                expect(listeningClient.tryGetPubSubMessage()).toBeNull();
+                expect(listeningClient!.tryGetPubSubMessage()).toBeNull();
             } finally {
                 // Cleanup clients
                 if (listeningClient) {
@@ -941,12 +1028,12 @@ describe("PubSub", () => {
             const publishResponse = 1;
 
             // Create a map of channels to random messages with shard prefix
-            const channelsAndMessages: Record<string, string> = {};
+            const channelsAndMessages: [GlideString, GlideString][] = [];
 
             for (let i = 0; i < NUM_CHANNELS; i++) {
                 const channel = `${shardPrefix}${uuidv4()}`;
                 const message = uuidv4();
-                channelsAndMessages[channel] = message;
+                channelsAndMessages.push([channel, message]);
             }
 
             try {
@@ -964,7 +1051,7 @@ describe("PubSub", () => {
                     {
                         [GlideClusterClientConfiguration.PubSubChannelModes
                             .Sharded]: new Set(
-                            Object.keys(channelsAndMessages),
+                            channelsAndMessages.map((a) => a[0].toString()),
                         ),
                     },
                     {},
@@ -981,9 +1068,7 @@ describe("PubSub", () => {
                 );
 
                 // Publish messages to each channel
-                for (const [channel, message] of Object.entries(
-                    channelsAndMessages,
-                )) {
+                for (const [channel, message] of channelsAndMessages) {
                     const result = await (
                         publishingClient as GlideClusterClient
                     ).publish(message, channel, true);
@@ -995,25 +1080,21 @@ describe("PubSub", () => {
 
                 // Check if all messages are received correctly
                 for (let index = 0; index < NUM_CHANNELS; index++) {
-                    const pubsubMsg = await getMessageByMethod(
+                    const pubsubMsg = (await getMessageByMethod(
                         method,
                         listeningClient,
                         context,
                         index,
-                    );
+                    ))!;
 
                     expect(
-                        pubsubMsg.channel in channelsAndMessages,
-                    ).toBeTruthy();
-                    expect(pubsubMsg.message).toEqual(
-                        channelsAndMessages[pubsubMsg.channel],
-                    );
-                    expect(pubsubMsg.pattern).toBeNull();
-                    delete channelsAndMessages[pubsubMsg.channel];
-                }
+                        channelsAndMessages.find(
+                            ([channel]) => channel === pubsubMsg.channel,
+                        ),
+                    ).toEqual([pubsubMsg.channel, pubsubMsg.message]);
 
-                // Check that we received all messages
-                expect(Object.keys(channelsAndMessages).length).toEqual(0);
+                    expect(pubsubMsg.pattern).toBeNull();
+                }
 
                 // Assert there are no more messages to read
                 await checkNoMessagesLeft(
@@ -1052,10 +1133,10 @@ describe("PubSub", () => {
         "pubsub pattern test_%p_%p",
         async (clusterMode, method) => {
             const PATTERN = `{{channel}}:*`;
-            const channels: Record<string, string> = {
-                [`{{channel}}:${uuidv4()}`]: uuidv4(),
-                [`{{channel}}:${uuidv4()}`]: uuidv4(),
-            };
+            const channels: [GlideString, GlideString][] = [
+                [`{{channel}}:${uuidv4()}`, uuidv4()],
+                [`{{channel}}:${uuidv4()}`, uuidv4()],
+            ];
 
             let pubSub:
                 | GlideClusterClientConfiguration.PubSubSubscriptions
@@ -1097,7 +1178,7 @@ describe("PubSub", () => {
                 );
 
                 // Publish messages to each channel
-                for (const [channel, message] of Object.entries(channels)) {
+                for (const [channel, message] of channels) {
                     const result = await publishingClient.publish(
                         message,
                         channel,
@@ -1113,22 +1194,20 @@ describe("PubSub", () => {
 
                 // Check if all messages are received correctly
                 for (let index = 0; index < 2; index++) {
-                    const pubsubMsg = await getMessageByMethod(
+                    const pubsubMsg = (await getMessageByMethod(
                         method,
                         listeningClient,
                         context,
                         index,
-                    );
-                    expect(pubsubMsg.channel in channels).toBeTruthy();
-                    expect(pubsubMsg.message).toEqual(
-                        channels[pubsubMsg.channel],
-                    );
-                    expect(pubsubMsg.pattern).toEqual(PATTERN);
-                    delete channels[pubsubMsg.channel];
-                }
+                    ))!;
+                    expect(
+                        channels.find(
+                            ([channel]) => channel === pubsubMsg.channel,
+                        ),
+                    ).toEqual([pubsubMsg.channel, pubsubMsg.message]);
 
-                // Check that we received all messages
-                expect(Object.keys(channels).length).toEqual(0);
+                    expect(pubsubMsg.pattern).toEqual(PATTERN);
+                }
 
                 // Assert there are no more messages to read
                 await checkNoMessagesLeft(method, listeningClient, context, 2);
@@ -1162,10 +1241,10 @@ describe("PubSub", () => {
         "pubsub pattern coexistence test_%p",
         async (clusterMode) => {
             const PATTERN = `{{channel}}:*`;
-            const channels: Record<string, string> = {
-                [`{{channel}}:${uuidv4()}`]: uuidv4(),
-                [`{{channel}}:${uuidv4()}`]: uuidv4(),
-            };
+            const channels: [GlideString, GlideString][] = [
+                [`{{channel}}:${uuidv4()}`, uuidv4()],
+                [`{{channel}}:${uuidv4()}`, uuidv4()],
+            ];
 
             let pubSub:
                 | GlideClusterClientConfiguration.PubSubSubscriptions
@@ -1197,7 +1276,7 @@ describe("PubSub", () => {
                 );
 
                 // Publish messages to each channel
-                for (const [channel, message] of Object.entries(channels)) {
+                for (const [channel, message] of channels) {
                     const result = await publishingClient.publish(
                         message,
                         channel,
@@ -1217,21 +1296,19 @@ describe("PubSub", () => {
                         index % 2 === 0
                             ? MethodTesting.Async
                             : MethodTesting.Sync;
-                    const pubsubMsg = await getMessageByMethod(
+                    const pubsubMsg = (await getMessageByMethod(
                         method,
                         listeningClient,
-                    );
+                    ))!;
 
-                    expect(Object.keys(channels)).toContain(pubsubMsg.channel);
-                    expect(pubsubMsg.message).toEqual(
-                        channels[pubsubMsg.channel],
-                    );
+                    expect(
+                        channels.find(
+                            ([channel]) => channel === pubsubMsg.channel,
+                        ),
+                    ).toEqual([pubsubMsg.channel, pubsubMsg.message]);
+
                     expect(pubsubMsg.pattern).toEqual(PATTERN);
-                    delete channels[pubsubMsg.channel];
                 }
-
-                // Check that we received all messages
-                expect(Object.keys(channels).length).toEqual(0);
 
                 // Assert there are no more messages to read
                 await checkNoMessagesLeft(MethodTesting.Async, listeningClient);
@@ -1268,12 +1345,12 @@ describe("PubSub", () => {
         async (clusterMode, method) => {
             const NUM_CHANNELS = 256;
             const PATTERN = "{{channel}}:*";
-            const channels: Record<string, string> = {};
+            const channels: [GlideString, GlideString][] = [];
 
             for (let i = 0; i < NUM_CHANNELS; i++) {
                 const channel = `{{channel}}:${uuidv4()}`;
                 const message = uuidv4();
-                channels[channel] = message;
+                channels.push([channel, message]);
             }
 
             let pubSub:
@@ -1315,7 +1392,7 @@ describe("PubSub", () => {
                 );
 
                 // Publish messages to each channel
-                for (const [channel, message] of Object.entries(channels)) {
+                for (const [channel, message] of channels) {
                     const result = await publishingClient.publish(
                         message,
                         channel,
@@ -1331,22 +1408,21 @@ describe("PubSub", () => {
 
                 // Check if all messages are received correctly
                 for (let index = 0; index < NUM_CHANNELS; index++) {
-                    const pubsubMsg = await getMessageByMethod(
+                    const pubsubMsg = (await getMessageByMethod(
                         method,
                         listeningClient,
                         context,
                         index,
-                    );
-                    expect(pubsubMsg.channel in channels).toBeTruthy();
-                    expect(pubsubMsg.message).toEqual(
-                        channels[pubsubMsg.channel],
-                    );
-                    expect(pubsubMsg.pattern).toEqual(PATTERN);
-                    delete channels[pubsubMsg.channel];
-                }
+                    ))!;
 
-                // Check that we received all messages
-                expect(Object.keys(channels).length).toEqual(0);
+                    expect(
+                        channels.find(
+                            ([channel]) => channel === pubsubMsg.channel,
+                        ),
+                    ).toEqual([pubsubMsg.channel, pubsubMsg.message]);
+
+                    expect(pubsubMsg.pattern).toEqual(PATTERN);
+                }
 
                 // Assert there are no more messages to read
                 await checkNoMessagesLeft(
@@ -1391,20 +1467,26 @@ describe("PubSub", () => {
             const PATTERN = "{{pattern}}:*";
 
             // Create dictionaries of channels and their corresponding messages
-            const exactChannelsAndMessages: Record<string, string> = {};
-            const patternChannelsAndMessages: Record<string, string> = {};
+            const exactChannelsAndMessages: [GlideString, GlideString][] = [];
+            const patternChannelsAndMessages: [GlideString, GlideString][] = [];
 
             for (let i = 0; i < NUM_CHANNELS; i++) {
                 const exactChannel = `{{channel}}:${uuidv4()}`;
                 const patternChannel = `{{pattern}}:${uuidv4()}`;
-                exactChannelsAndMessages[exactChannel] = uuidv4();
-                patternChannelsAndMessages[patternChannel] = uuidv4();
+                const exactMessage = uuidv4();
+                const patternMessage = uuidv4();
+
+                exactChannelsAndMessages.push([exactChannel, exactMessage]);
+                patternChannelsAndMessages.push([
+                    patternChannel,
+                    patternMessage,
+                ]);
             }
 
-            const allChannelsAndMessages: Record<string, string> = {
+            const allChannelsAndMessages: [GlideString, GlideString][] = [
                 ...exactChannelsAndMessages,
                 ...patternChannelsAndMessages,
-            };
+            ];
 
             let pubSub:
                 | GlideClusterClientConfiguration.PubSubSubscriptions
@@ -1427,14 +1509,20 @@ describe("PubSub", () => {
                     {
                         [GlideClusterClientConfiguration.PubSubChannelModes
                             .Exact]: new Set(
-                            Object.keys(exactChannelsAndMessages),
+                            exactChannelsAndMessages.map((a) =>
+                                a[0].toString(),
+                            ),
                         ),
                         [GlideClusterClientConfiguration.PubSubChannelModes
                             .Pattern]: new Set([PATTERN]),
                     },
                     {
                         [GlideClientConfiguration.PubSubChannelModes.Exact]:
-                            new Set(Object.keys(exactChannelsAndMessages)),
+                            new Set(
+                                exactChannelsAndMessages.map((a) =>
+                                    a[0].toString(),
+                                ),
+                            ),
                         [GlideClientConfiguration.PubSubChannelModes.Pattern]:
                             new Set([PATTERN]),
                     },
@@ -1450,9 +1538,7 @@ describe("PubSub", () => {
                 );
 
                 // Publish messages to all channels
-                for (const [channel, message] of Object.entries(
-                    allChannelsAndMessages,
-                )) {
+                for (const [channel, message] of allChannelsAndMessages) {
                     const result = await publishingClient.publish(
                         message,
                         channel,
@@ -1466,32 +1552,29 @@ describe("PubSub", () => {
                 // Allow the messages to propagate
                 await new Promise((resolve) => setTimeout(resolve, 1000));
 
-                const length = Object.keys(allChannelsAndMessages).length;
+                const length = allChannelsAndMessages.length;
 
                 // Check if all messages are received correctly
                 for (let index = 0; index < length; index++) {
-                    const pubsubMsg: PubSubMsg = await getMessageByMethod(
+                    const pubsubMsg: PubSubMsg = (await getMessageByMethod(
                         method,
                         listeningClient,
                         context,
                         index,
-                    );
-                    const pattern =
-                        pubsubMsg.channel in patternChannelsAndMessages
-                            ? PATTERN
-                            : null;
+                    ))!;
+                    const pattern = patternChannelsAndMessages.find(
+                        ([channel]) => channel === pubsubMsg.channel,
+                    )
+                        ? PATTERN
+                        : null;
                     expect(
-                        pubsubMsg.channel in allChannelsAndMessages,
-                    ).toBeTruthy();
-                    expect(pubsubMsg.message).toEqual(
-                        allChannelsAndMessages[pubsubMsg.channel],
-                    );
-                    expect(pubsubMsg.pattern).toEqual(pattern);
-                    delete allChannelsAndMessages[pubsubMsg.channel];
-                }
+                        allChannelsAndMessages.find(
+                            ([channel]) => channel === pubsubMsg.channel,
+                        ),
+                    ).toEqual([pubsubMsg.channel, pubsubMsg.message]);
 
-                // Check that we received all messages
-                expect(Object.keys(allChannelsAndMessages).length).toEqual(0);
+                    expect(pubsubMsg.pattern).toEqual(pattern);
+                }
 
                 await checkNoMessagesLeft(
                     method,
@@ -1537,20 +1620,26 @@ describe("PubSub", () => {
             const PATTERN = "{{pattern}}:*";
 
             // Create dictionaries of channels and their corresponding messages
-            const exactChannelsAndMessages: Record<string, string> = {};
-            const patternChannelsAndMessages: Record<string, string> = {};
+            const exactChannelsAndMessages: [GlideString, GlideString][] = [];
+            const patternChannelsAndMessages: [GlideString, GlideString][] = [];
 
             for (let i = 0; i < NUM_CHANNELS; i++) {
                 const exactChannel = `{{channel}}:${uuidv4()}`;
                 const patternChannel = `{{pattern}}:${uuidv4()}`;
-                exactChannelsAndMessages[exactChannel] = uuidv4();
-                patternChannelsAndMessages[patternChannel] = uuidv4();
+                const exactMessage = uuidv4();
+                const patternMessage = uuidv4();
+
+                exactChannelsAndMessages.push([exactChannel, exactMessage]);
+                patternChannelsAndMessages.push([
+                    patternChannel,
+                    patternMessage,
+                ]);
             }
 
-            const allChannelsAndMessages = {
+            const allChannelsAndMessages: [GlideString, GlideString][] = [
                 ...exactChannelsAndMessages,
                 ...patternChannelsAndMessages,
-            };
+            ];
 
             let pubSubExact:
                 | GlideClusterClientConfiguration.PubSubSubscriptions
@@ -1581,12 +1670,18 @@ describe("PubSub", () => {
                     {
                         [GlideClusterClientConfiguration.PubSubChannelModes
                             .Exact]: new Set(
-                            Object.keys(exactChannelsAndMessages),
+                            exactChannelsAndMessages.map((a) =>
+                                a[0].toString(),
+                            ),
                         ),
                     },
                     {
                         [GlideClientConfiguration.PubSubChannelModes.Exact]:
-                            new Set(Object.keys(exactChannelsAndMessages)),
+                            new Set(
+                                exactChannelsAndMessages.map((a) =>
+                                    a[0].toString(),
+                                ),
+                            ),
                     },
                     callback,
                     contextExact,
@@ -1622,9 +1717,7 @@ describe("PubSub", () => {
                 );
 
                 // Publish messages to all channels
-                for (const [channel, message] of Object.entries(
-                    allChannelsAndMessages,
-                )) {
+                for (const [channel, message] of allChannelsAndMessages) {
                     const result = await publishingClient.publish(
                         message,
                         channel,
@@ -1642,49 +1735,40 @@ describe("PubSub", () => {
 
                 // Verify messages for exact PUBSUB
                 for (let index = 0; index < length; index++) {
-                    const pubsubMsg = await getMessageByMethod(
+                    const pubsubMsg = (await getMessageByMethod(
                         method,
                         listeningClientExact,
                         contextExact,
                         index,
-                    );
+                    ))!;
                     expect(
-                        pubsubMsg.channel in exactChannelsAndMessages,
-                    ).toBeTruthy();
-                    expect(pubsubMsg.message).toEqual(
-                        exactChannelsAndMessages[pubsubMsg.channel],
-                    );
+                        exactChannelsAndMessages.find(
+                            ([channel]) => channel === pubsubMsg.channel,
+                        ),
+                    ).toEqual([pubsubMsg.channel, pubsubMsg.message]);
+
                     expect(pubsubMsg.pattern).toBeNull();
-                    delete exactChannelsAndMessages[pubsubMsg.channel];
                 }
 
-                // Check that we received all exact messages
-                expect(Object.keys(exactChannelsAndMessages).length).toEqual(0);
-
-                length = Object.keys(patternChannelsAndMessages).length;
+                length = patternChannelsAndMessages.length;
 
                 // Verify messages for pattern PUBSUB
                 for (let index = 0; index < length; index++) {
-                    const pubsubMsg = await getMessageByMethod(
+                    const pubsubMsg = (await getMessageByMethod(
                         method,
                         listeningClientPattern,
                         contextPattern,
                         index,
-                    );
-                    expect(
-                        pubsubMsg.channel in patternChannelsAndMessages,
-                    ).toBeTruthy();
-                    expect(pubsubMsg.message).toEqual(
-                        patternChannelsAndMessages[pubsubMsg.channel],
-                    );
-                    expect(pubsubMsg.pattern).toEqual(PATTERN);
-                    delete patternChannelsAndMessages[pubsubMsg.channel];
-                }
+                    ))!;
 
-                // Check that we received all pattern messages
-                expect(Object.keys(patternChannelsAndMessages).length).toEqual(
-                    0,
-                );
+                    expect(
+                        patternChannelsAndMessages.find(
+                            ([channel]) => channel === pubsubMsg.channel,
+                        ),
+                    ).toEqual([pubsubMsg.channel, pubsubMsg.message]);
+
+                    expect(pubsubMsg.pattern).toEqual(PATTERN);
+                }
 
                 // Assert no messages are left unread
                 await checkNoMessagesLeft(
@@ -1756,17 +1840,17 @@ describe("PubSub", () => {
             const SHARD_PREFIX = "{same-shard}";
 
             // Create dictionaries of channels and their corresponding messages
-            const exactChannelsAndMessages: Record<string, string> = {};
-            const patternChannelsAndMessages: Record<string, string> = {};
-            const shardedChannelsAndMessages: Record<string, string> = {};
+            const exactChannelsAndMessages: [GlideString, GlideString][] = [];
+            const patternChannelsAndMessages: [GlideString, GlideString][] = [];
+            const shardedChannelsAndMessages: [GlideString, GlideString][] = [];
 
             for (let i = 0; i < NUM_CHANNELS; i++) {
                 const exactChannel = `{{channel}}:${uuidv4()}`;
                 const patternChannel = `{{pattern}}:${uuidv4()}`;
                 const shardedChannel = `${SHARD_PREFIX}:${uuidv4()}`;
-                exactChannelsAndMessages[exactChannel] = uuidv4();
-                patternChannelsAndMessages[patternChannel] = uuidv4();
-                shardedChannelsAndMessages[shardedChannel] = uuidv4();
+                exactChannelsAndMessages.push([exactChannel, uuidv4()]);
+                patternChannelsAndMessages.push([patternChannel, uuidv4()]);
+                shardedChannelsAndMessages.push([shardedChannel, uuidv4()]);
             }
 
             const publishResponse = 1;
@@ -1791,13 +1875,17 @@ describe("PubSub", () => {
                     {
                         [GlideClusterClientConfiguration.PubSubChannelModes
                             .Exact]: new Set(
-                            Object.keys(exactChannelsAndMessages),
+                            exactChannelsAndMessages.map((a) =>
+                                a[0].toString(),
+                            ),
                         ),
                         [GlideClusterClientConfiguration.PubSubChannelModes
                             .Pattern]: new Set([PATTERN]),
                         [GlideClusterClientConfiguration.PubSubChannelModes
                             .Sharded]: new Set(
-                            Object.keys(shardedChannelsAndMessages),
+                            shardedChannelsAndMessages.map((a) =>
+                                a[0].toString(),
+                            ),
                         ),
                     },
                     {},
@@ -1813,10 +1901,10 @@ describe("PubSub", () => {
                 );
 
                 // Publish messages to exact and pattern channels
-                for (const [channel, message] of Object.entries({
+                for (const [channel, message] of [
                     ...exactChannelsAndMessages,
                     ...patternChannelsAndMessages,
-                })) {
+                ]) {
                     const result = await publishingClient.publish(
                         message,
                         channel,
@@ -1825,9 +1913,7 @@ describe("PubSub", () => {
                 }
 
                 // Publish sharded messages
-                for (const [channel, message] of Object.entries(
-                    shardedChannelsAndMessages,
-                )) {
+                for (const [channel, message] of shardedChannelsAndMessages) {
                     const result = await (
                         publishingClient as GlideClusterClient
                     ).publish(message, channel, true);
@@ -1837,36 +1923,33 @@ describe("PubSub", () => {
                 // Allow messages to propagate
                 await new Promise((resolve) => setTimeout(resolve, 1000));
 
-                const allChannelsAndMessages = {
+                const allChannelsAndMessages: [GlideString, GlideString][] = [
                     ...exactChannelsAndMessages,
                     ...patternChannelsAndMessages,
                     ...shardedChannelsAndMessages,
-                };
+                ];
 
                 // Check if all messages are received correctly
                 for (let index = 0; index < NUM_CHANNELS * 3; index++) {
-                    const pubsubMsg: PubSubMsg = await getMessageByMethod(
+                    const pubsubMsg: PubSubMsg = (await getMessageByMethod(
                         method,
                         listeningClient,
                         context,
                         index,
-                    );
-                    const pattern =
-                        pubsubMsg.channel in patternChannelsAndMessages
-                            ? PATTERN
-                            : null;
+                    ))!;
+                    const pattern = patternChannelsAndMessages.find(
+                        ([channel]) => channel === pubsubMsg.channel,
+                    )
+                        ? PATTERN
+                        : null;
                     expect(
-                        pubsubMsg.channel in allChannelsAndMessages,
-                    ).toBeTruthy();
-                    expect(pubsubMsg.message).toEqual(
-                        allChannelsAndMessages[pubsubMsg.channel],
-                    );
-                    expect(pubsubMsg.pattern).toEqual(pattern);
-                    delete allChannelsAndMessages[pubsubMsg.channel];
-                }
+                        allChannelsAndMessages.find(
+                            ([channel]) => channel === pubsubMsg.channel,
+                        ),
+                    ).toEqual([pubsubMsg.channel, pubsubMsg.message]);
 
-                // Assert we received all messages
-                expect(Object.keys(allChannelsAndMessages).length).toEqual(0);
+                    expect(pubsubMsg.pattern).toEqual(pattern);
+                }
 
                 await checkNoMessagesLeft(
                     method,
@@ -1922,17 +2005,17 @@ describe("PubSub", () => {
             const SHARD_PREFIX = "{same-shard}";
 
             // Create dictionaries of channels and their corresponding messages
-            const exactChannelsAndMessages: Record<string, string> = {};
-            const patternChannelsAndMessages: Record<string, string> = {};
-            const shardedChannelsAndMessages: Record<string, string> = {};
+            const exactChannelsAndMessages: [GlideString, GlideString][] = [];
+            const patternChannelsAndMessages: [GlideString, GlideString][] = [];
+            const shardedChannelsAndMessages: [GlideString, GlideString][] = [];
 
             for (let i = 0; i < NUM_CHANNELS; i++) {
                 const exactChannel = `{{channel}}:${uuidv4()}`;
                 const patternChannel = `{{pattern}}:${uuidv4()}`;
                 const shardedChannel = `${SHARD_PREFIX}:${uuidv4()}`;
-                exactChannelsAndMessages[exactChannel] = uuidv4();
-                patternChannelsAndMessages[patternChannel] = uuidv4();
-                shardedChannelsAndMessages[shardedChannel] = uuidv4();
+                exactChannelsAndMessages.push([exactChannel, uuidv4()]);
+                patternChannelsAndMessages.push([patternChannel, uuidv4()]);
+                shardedChannelsAndMessages.push([shardedChannel, uuidv4()]);
             }
 
             const publishResponse = 1;
@@ -1973,7 +2056,9 @@ describe("PubSub", () => {
                     {
                         [GlideClusterClientConfiguration.PubSubChannelModes
                             .Exact]: new Set(
-                            Object.keys(exactChannelsAndMessages),
+                            exactChannelsAndMessages.map((a) =>
+                                a[0].toString(),
+                            ),
                         ),
                     },
                     {},
@@ -2013,7 +2098,9 @@ describe("PubSub", () => {
                     {
                         [GlideClusterClientConfiguration.PubSubChannelModes
                             .Sharded]: new Set(
-                            Object.keys(shardedChannelsAndMessages),
+                            shardedChannelsAndMessages.map((a) =>
+                                a[0].toString(),
+                            ),
                         ),
                     },
                     {},
@@ -2031,10 +2118,10 @@ describe("PubSub", () => {
                     );
 
                 // Publish messages to exact and pattern channels
-                for (const [channel, message] of Object.entries({
+                for (const [channel, message] of [
                     ...exactChannelsAndMessages,
                     ...patternChannelsAndMessages,
-                })) {
+                ]) {
                     const result = await publishingClient.publish(
                         message,
                         channel,
@@ -2043,9 +2130,7 @@ describe("PubSub", () => {
                 }
 
                 // Publish sharded messages to all channels
-                for (const [channel, message] of Object.entries(
-                    shardedChannelsAndMessages,
-                )) {
+                for (const [channel, message] of shardedChannelsAndMessages) {
                     const result = await (
                         publishingClient as GlideClusterClient
                     ).publish(message, channel, true);
@@ -2057,70 +2142,56 @@ describe("PubSub", () => {
 
                 // Verify messages for exact PUBSUB
                 for (let index = 0; index < NUM_CHANNELS; index++) {
-                    const pubsubMsg = await getMessageByMethod(
+                    const pubsubMsg = (await getMessageByMethod(
                         method,
                         listeningClientExact,
                         callbackMessagesExact,
                         index,
-                    );
+                    ))!;
                     expect(
-                        pubsubMsg.channel in exactChannelsAndMessages,
-                    ).toBeTruthy();
-                    expect(pubsubMsg.message).toEqual(
-                        exactChannelsAndMessages[pubsubMsg.channel],
-                    );
-                    expect(pubsubMsg.pattern).toBeNull();
-                    delete exactChannelsAndMessages[pubsubMsg.channel];
-                }
+                        exactChannelsAndMessages.find(
+                            ([channel]) => channel === pubsubMsg.channel,
+                        ),
+                    ).toEqual([pubsubMsg.channel, pubsubMsg.message]);
 
-                // Check that we received all messages for exact PUBSUB
-                expect(Object.keys(exactChannelsAndMessages).length).toEqual(0);
+                    expect(pubsubMsg.pattern).toBeNull();
+                }
 
                 // Verify messages for pattern PUBSUB
                 for (let index = 0; index < NUM_CHANNELS; index++) {
-                    const pubsubMsg = await getMessageByMethod(
+                    const pubsubMsg = (await getMessageByMethod(
                         method,
                         listeningClientPattern,
                         callbackMessagesPattern,
                         index,
-                    );
-                    expect(
-                        pubsubMsg.channel in patternChannelsAndMessages,
-                    ).toBeTruthy();
-                    expect(pubsubMsg.message).toEqual(
-                        patternChannelsAndMessages[pubsubMsg.channel],
-                    );
-                    expect(pubsubMsg.pattern).toEqual(PATTERN);
-                    delete patternChannelsAndMessages[pubsubMsg.channel];
-                }
+                    ))!;
 
-                // Check that we received all messages for pattern PUBSUB
-                expect(Object.keys(patternChannelsAndMessages).length).toEqual(
-                    0,
-                );
+                    expect(
+                        patternChannelsAndMessages.find(
+                            ([channel]) => channel === pubsubMsg.channel,
+                        ),
+                    ).toEqual([pubsubMsg.channel, pubsubMsg.message]);
+
+                    expect(pubsubMsg.pattern).toEqual(PATTERN);
+                }
 
                 // Verify messages for sharded PUBSUB
                 for (let index = 0; index < NUM_CHANNELS; index++) {
-                    const pubsubMsg = await getMessageByMethod(
+                    const pubsubMsg = (await getMessageByMethod(
                         method,
                         listeningClientSharded,
                         callbackMessagesSharded,
                         index,
-                    );
-                    expect(
-                        pubsubMsg.channel in shardedChannelsAndMessages,
-                    ).toBeTruthy();
-                    expect(pubsubMsg.message).toEqual(
-                        shardedChannelsAndMessages[pubsubMsg.channel],
-                    );
-                    expect(pubsubMsg.pattern).toBeNull();
-                    delete shardedChannelsAndMessages[pubsubMsg.channel];
-                }
+                    ))!;
 
-                // Check that we received all messages for sharded PUBSUB
-                expect(Object.keys(shardedChannelsAndMessages).length).toEqual(
-                    0,
-                );
+                    expect(
+                        shardedChannelsAndMessages.find(
+                            ([channel]) => channel === pubsubMsg.channel,
+                        ),
+                    ).toEqual([pubsubMsg.channel, pubsubMsg.message]);
+
+                    expect(pubsubMsg.pattern).toBeNull();
+                }
 
                 await checkNoMessagesLeft(
                     method,
@@ -2323,20 +2394,20 @@ describe("PubSub", () => {
                         CHANNEL_NAME,
                     ],
                 ] as [TGlideClient, PubSubMsg[], string | null][]) {
-                    const pubsubMsg = await getMessageByMethod(
+                    const pubsubMsg = (await getMessageByMethod(
                         method,
                         client,
                         callback,
                         0,
-                    );
-                    const pubsubMsg2 = await getMessageByMethod(
+                    ))!;
+                    const pubsubMsg2 = (await getMessageByMethod(
                         method,
                         client,
                         callback,
                         1,
-                    );
+                    ))!;
 
-                    expect(pubsubMsg.message).not.toEqual(pubsubMsg2.message);
+                    expect(pubsubMsg.message).not.toEqual(pubsubMsg2!.message);
                     expect([MESSAGE_PATTERN, MESSAGE_EXACT]).toContain(
                         pubsubMsg.message,
                     );
@@ -2350,12 +2421,12 @@ describe("PubSub", () => {
                 }
 
                 // Verify message for sharded PUBSUB
-                const pubsubMsgSharded = await getMessageByMethod(
+                const pubsubMsgSharded = (await getMessageByMethod(
                     method,
                     listeningClientSharded,
                     callbackMessagesSharded,
                     0,
-                );
+                ))!;
                 expect(pubsubMsgSharded.message).toEqual(MESSAGE_SHARDED);
                 expect(pubsubMsgSharded.channel).toEqual(CHANNEL_NAME);
                 expect(pubsubMsgSharded.pattern).toBeNull();
@@ -2516,18 +2587,18 @@ describe("PubSub", () => {
                     [clientExact, callbackMessagesExact, null],
                     [clientPattern, callbackMessagesPattern, CHANNEL_NAME],
                 ] as [TGlideClient, PubSubMsg[], string | null][]) {
-                    const pubsubMsg = await getMessageByMethod(
+                    const pubsubMsg = (await getMessageByMethod(
                         method,
                         client,
                         callback,
                         0,
-                    );
-                    const pubsubMsg2 = await getMessageByMethod(
+                    ))!;
+                    const pubsubMsg2 = (await getMessageByMethod(
                         method,
                         client,
                         callback,
                         1,
-                    );
+                    ))!;
 
                     expect(pubsubMsg.message).not.toEqual(pubsubMsg2.message);
                     expect([MESSAGE_PATTERN, MESSAGE_EXACT]).toContain(
@@ -2719,18 +2790,18 @@ describe("PubSub", () => {
                     [clientExact, callbackMessagesExact, null],
                     [clientPattern, callbackMessagesPattern, CHANNEL_NAME],
                 ] as [TGlideClient, PubSubMsg[], string | null][]) {
-                    const pubsubMsg = await getMessageByMethod(
+                    const pubsubMsg = (await getMessageByMethod(
                         method,
                         client,
                         callback,
                         0,
-                    );
-                    const pubsubMsg2 = await getMessageByMethod(
+                    ))!;
+                    const pubsubMsg2 = (await getMessageByMethod(
                         method,
                         client,
                         callback,
                         1,
-                    );
+                    ))!;
 
                     expect(pubsubMsg.message).not.toEqual(pubsubMsg2.message);
                     expect([MESSAGE_PATTERN, MESSAGE_EXACT]).toContain(
@@ -2745,12 +2816,12 @@ describe("PubSub", () => {
                     expect(pubsubMsg2.pattern).toEqual(pattern);
                 }
 
-                const shardedMsg = await getMessageByMethod(
+                const shardedMsg = (await getMessageByMethod(
                     method,
                     clientSharded,
                     callbackMessagesSharded,
                     0,
-                );
+                ))!;
 
                 expect(shardedMsg.message).toEqual(MESSAGE_SHARDED);
                 expect(shardedMsg.channel).toEqual(CHANNEL_NAME);
@@ -3554,9 +3625,12 @@ describe("PubSub", () => {
                     );
                 }
 
-                expect(
-                    await client.pubsubNumSub([channel1, channel2, channel3]),
-                ).toEqual({
+                let subscribers = await client.pubsubNumSub([
+                    channel1,
+                    channel2,
+                    channel3,
+                ]);
+                expect(convertGlideRecordToRecord(subscribers)).toEqual({
                     [channel1]: 0,
                     [channel2]: 0,
                     [channel3]: 0,
@@ -3577,13 +3651,13 @@ describe("PubSub", () => {
                 );
 
                 // Test pubsubNumsub
-                const subscribers = await client2.pubsubNumSub([
+                subscribers = await client2.pubsubNumSub([
                     channel1,
                     channel2,
                     channel3,
                     channel4,
                 ]);
-                expect(subscribers).toEqual({
+                expect(convertGlideRecordToRecord(subscribers)).toEqual({
                     [channel1]: 1,
                     [channel2]: 2,
                     [channel3]: 3,
@@ -3591,8 +3665,8 @@ describe("PubSub", () => {
                 });
 
                 // Test pubsubNumsub with no channels
-                const emptySubscribers = await client2.pubsubNumSub();
-                expect(emptySubscribers).toEqual({});
+                const emptySubscribers = await client2.pubsubNumSub([]);
+                expect(emptySubscribers).toEqual([]);
             } finally {
                 if (client1) {
                     await clientCleanup(
@@ -3741,6 +3815,12 @@ describe("PubSub", () => {
     it.each([true])(
         "test pubsub shardnumsub_%p",
         async (clusterMode) => {
+            const minVersion = "7.0.0";
+
+            if (cmeCluster.checkIfServerVersionLessThan(minVersion)) {
+                return; // Skip test if server version is less than required
+            }
+
             let pubSub1: GlideClusterClientConfiguration.PubSubSubscriptions | null =
                 null;
             let pubSub2: GlideClusterClientConfiguration.PubSubSubscriptions | null =
@@ -3789,19 +3869,11 @@ describe("PubSub", () => {
                 client = await GlideClusterClient.createClient(
                     getOptions(clusterMode),
                 );
-                const minVersion = "7.0.0";
 
-                if (cmeCluster.checkIfServerVersionLessThan(minVersion)) {
-                    return; // Skip test if server version is less than required
-                }
-
-                expect(
-                    await (client as GlideClusterClient).pubsubShardNumSub([
-                        channel1,
-                        channel2,
-                        channel3,
-                    ]),
-                ).toEqual({
+                let subscribers = await (
+                    client as GlideClusterClient
+                ).pubsubShardNumSub([channel1, channel2, channel3]);
+                expect(convertGlideRecordToRecord(subscribers)).toEqual({
                     [channel1]: 0,
                     [channel2]: 0,
                     [channel3]: 0,
@@ -3822,10 +3894,10 @@ describe("PubSub", () => {
                 );
 
                 // Test pubsubShardnumsub
-                const subscribers = await (
+                subscribers = await (
                     client4 as GlideClusterClient
                 ).pubsubShardNumSub([channel1, channel2, channel3, channel4]);
-                expect(subscribers).toEqual({
+                expect(convertGlideRecordToRecord(subscribers)).toEqual({
                     [channel1]: 1,
                     [channel2]: 2,
                     [channel3]: 3,
@@ -3835,8 +3907,8 @@ describe("PubSub", () => {
                 // Test pubsubShardnumsub with no channels
                 const emptySubscribers = await (
                     client4 as GlideClusterClient
-                ).pubsubShardNumSub();
-                expect(emptySubscribers).toEqual({});
+                ).pubsubShardNumSub([]);
+                expect(emptySubscribers).toEqual([]);
             } finally {
                 if (client1) {
                     await clientCleanup(client1, pubSub1 ? pubSub1 : undefined);
@@ -3946,12 +4018,17 @@ describe("PubSub", () => {
      *
      * @param clusterMode - Indicates if the test should be run in cluster mode.
      */
-    it.each([true])(
+    it.each([true, false])(
         "test pubsub numsub and shardnumsub separation_%p",
         async (clusterMode) => {
-            let pubSub1: GlideClusterClientConfiguration.PubSubSubscriptions | null =
-                null;
-            let pubSub2: GlideClusterClientConfiguration.PubSubSubscriptions | null =
+            //const clusterMode = false;
+            const minVersion = "7.0.0";
+
+            if (cmeCluster.checkIfServerVersionLessThan(minVersion)) {
+                return; // Skip test if server version is less than required
+            }
+
+            let pubSub: GlideClusterClientConfiguration.PubSubSubscriptions | null =
                 null;
             let client1: TGlideClient | null = null;
             let client2: TGlideClient | null = null;
@@ -3960,7 +4037,7 @@ describe("PubSub", () => {
                 const regularChannel = "regular_channel";
                 const shardChannel = "shard_channel";
 
-                pubSub1 = createPubSubSubscription(
+                pubSub = createPubSubSubscription(
                     clusterMode,
                     {
                         [GlideClusterClientConfiguration.PubSubChannelModes
@@ -3968,58 +4045,49 @@ describe("PubSub", () => {
                         [GlideClusterClientConfiguration.PubSubChannelModes
                             .Sharded]: new Set([shardChannel]),
                     },
-                    {},
-                );
-                pubSub2 = createPubSubSubscription(
-                    clusterMode,
                     {
                         [GlideClusterClientConfiguration.PubSubChannelModes
                             .Exact]: new Set([regularChannel]),
-                        [GlideClusterClientConfiguration.PubSubChannelModes
-                            .Sharded]: new Set([shardChannel]),
                     },
-                    {},
                 );
 
                 [client1, client2] = await createClients(
                     clusterMode,
                     getOptions(clusterMode),
                     getOptions(clusterMode),
-                    pubSub1,
-                    pubSub2,
+                    pubSub,
+                    pubSub,
                 );
-
-                const minVersion = "7.0.0";
-
-                if (cmeCluster.checkIfServerVersionLessThan(minVersion)) {
-                    return; // Skip test if server version is less than required
-                }
 
                 // Test pubsubNumsub
                 const regularSubscribers = await client2.pubsubNumSub([
                     regularChannel,
                     shardChannel,
                 ]);
-                expect(regularSubscribers).toEqual({
+                expect(convertGlideRecordToRecord(regularSubscribers)).toEqual({
                     [regularChannel]: 2,
                     [shardChannel]: 0,
                 });
 
                 // Test pubsubShardnumsub
-                const shardSubscribers = await (
-                    client2 as GlideClusterClient
-                ).pubsubShardNumSub([regularChannel, shardChannel]);
-                expect(shardSubscribers).toEqual({
-                    [regularChannel]: 0,
-                    [shardChannel]: 2,
-                });
+                if (clusterMode) {
+                    const shardSubscribers = await (
+                        client2 as GlideClusterClient
+                    ).pubsubShardNumSub([regularChannel, shardChannel]);
+                    expect(
+                        convertGlideRecordToRecord(shardSubscribers),
+                    ).toEqual({
+                        [regularChannel]: 0,
+                        [shardChannel]: 2,
+                    });
+                }
             } finally {
                 if (client1) {
-                    await clientCleanup(client1, pubSub1 ? pubSub1 : undefined);
+                    await clientCleanup(client1, pubSub!);
                 }
 
                 if (client2) {
-                    await clientCleanup(client2, pubSub2 ? pubSub2 : undefined);
+                    await clientCleanup(client2, pubSub!);
                 }
             }
         },

@@ -25,7 +25,7 @@ from glide.constants import (
 from glide.protobuf.command_request_pb2 import RequestType
 from glide.routes import Route
 
-from ..glide import ClusterScanCursor
+from ..glide import ClusterScanCursor, Script
 
 
 class ClusterCommands(CoreCommands):
@@ -755,140 +755,6 @@ class ClusterCommands(CoreCommands):
             await self._execute_command(RequestType.LastSave, [], route),
         )
 
-    async def sort(
-        self,
-        key: TEncodable,
-        limit: Optional[Limit] = None,
-        order: Optional[OrderBy] = None,
-        alpha: Optional[bool] = None,
-    ) -> List[bytes]:
-        """
-        Sorts the elements in the list, set, or sorted set at `key` and returns the result.
-        This command is routed to primary nodes only.
-        To store the result into a new key, see `sort_store`.
-
-        By default, sorting is numeric, and elements are compared by their value interpreted as double precision floating point numbers.
-
-        See https://valkey.io/commands/sort for more details.
-
-        Args:
-            key (TEncodable): The key of the list, set, or sorted set to be sorted.
-            limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for more information.
-            order (Optional[OrderBy]): Specifies the order to sort the elements.
-                Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
-            alpha (Optional[bool]): When `True`, sorts elements lexicographically. When `False` (default), sorts elements numerically.
-                Use this when the list, set, or sorted set contains string values that cannot be converted into double precision floating point numbers.
-
-        Returns:
-            List[bytes]: A list of sorted elements.
-
-        Examples:
-            >>> await client.lpush(b"mylist", [b'3', b'1', b'2'])
-            >>> await client.sort("mylist")
-                [b'1', b'2', b'3']
-
-            >>> await client.sort("mylist", order=OrderBy.DESC)
-                ['3', '2', '1']
-
-            >>> await client.lpush(b"mylist", [b'2', b'1', b'2', b'3', b'3', b'1'])
-            >>> await client.sort("mylist", limit=Limit(2, 3))
-                [b'2', b'2', b'3']
-
-            >>> await client.lpush(b"mylist", [b"a", b"b", b"c", b"d"])
-            >>> await client.sort(b"mylist", limit=Limit(2, 2), order=OrderBy.DESC, alpha=True)
-                [b'b', b'a']
-        """
-        args = _build_sort_args(key, None, limit, None, order, alpha)
-        result = await self._execute_command(RequestType.Sort, args)
-        return cast(List[bytes], result)
-
-    async def sort_ro(
-        self,
-        key: TEncodable,
-        limit: Optional[Limit] = None,
-        order: Optional[OrderBy] = None,
-        alpha: Optional[bool] = None,
-    ) -> List[bytes]:
-        """
-        Sorts the elements in the list, set, or sorted set at `key` and returns the result.
-        The `sort_ro` command can be used to sort elements based on different criteria and apply transformations on sorted elements.
-        This command is routed depending on the client's `ReadFrom` strategy.
-
-        By default, sorting is numeric, and elements are compared by their value interpreted as double precision floating point numbers.
-
-        See https://valkey.io/commands/sort for more details.
-
-        Args:
-            key (TEncodable): The key of the list, set, or sorted set to be sorted.
-            limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for more information.
-            order (Optional[OrderBy]): Specifies the order to sort the elements.
-                Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
-            alpha (Optional[bool]): When `True`, sorts elements lexicographically. When `False` (default), sorts elements numerically.
-                Use this when the list, set, or sorted set contains string values that cannot be converted into double precision floating point numbers.
-
-        Returns:
-            List[bytes]: A list of sorted elements.
-
-        Examples:
-            >>> await client.lpush("mylist", '3', '1', '2')
-            >>> await client.sort_ro("mylist")
-            [b'1', b'2', b'3']
-
-            >>> await client.sort_ro("mylist", order=OrderBy.DESC)
-            [b'3', b'2', b'1']
-
-            >>> await client.lpush("mylist", '2', '1', '2', '3', '3', '1')
-            >>> await client.sort_ro("mylist", limit=Limit(2, 3))
-            [b'1', b'2', b'2']
-
-            >>> await client.lpush("mylist", "a", "b", "c", "d")
-            >>> await client.sort_ro("mylist", limit=Limit(2, 2), order=OrderBy.DESC, alpha=True)
-            [b'b', b'a']
-
-        Since: Valkey version 7.0.0.
-        """
-        args = _build_sort_args(key, None, limit, None, order, alpha)
-        result = await self._execute_command(RequestType.SortReadOnly, args)
-        return cast(List[bytes], result)
-
-    async def sort_store(
-        self,
-        key: TEncodable,
-        destination: TEncodable,
-        limit: Optional[Limit] = None,
-        order: Optional[OrderBy] = None,
-        alpha: Optional[bool] = None,
-    ) -> int:
-        """
-        Sorts the elements in the list, set, or sorted set at `key` and stores the result in `store`.
-        When in cluster mode, `key` and `store` must map to the same hash slot.
-        To get the sort result without storing it into a key, see `sort`.
-
-        See https://valkey.io/commands/sort for more details.
-
-        Args:
-            key (TEncodable): The key of the list, set, or sorted set to be sorted.
-            destination (TEncodable): The key where the sorted result will be stored.
-            limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for more information.
-            order (Optional[OrderBy]): Specifies the order to sort the elements.
-                Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
-            alpha (Optional[bool]): When `True`, sorts elements lexicographically. When `False` (default), sorts elements numerically.
-                Use this when the list, set, or sorted set contains string values that cannot be converted into double precision floating point numbers.
-
-        Returns:
-            int: The number of elements in the sorted key stored at `store`.
-
-        Examples:
-            >>> await client.lpush(b"mylist", [b'3', b'1', b'2'])
-            >>> await client.sort_store("mylist", b"sorted_list")
-                3  # Indicates that the sorted list "sorted_list" contains three elements.
-            >>> await client.lrange("sorted_list", 0, -1)
-                [b'1', b'2', b'3']
-        """
-        args = _build_sort_args(key, None, limit, None, order, alpha, store=destination)
-        result = await self._execute_command(RequestType.Sort, args)
-        return cast(int, result)
-
     async def publish(
         self,
         message: TEncodable,
@@ -1271,4 +1137,145 @@ class ClusterCommands(CoreCommands):
         return cast(
             List[Union[ClusterScanCursor, List[bytes]]],
             await self._cluster_scan(cursor, match, count, type),
+        )
+
+    async def script_exists(
+        self, sha1s: List[TEncodable], route: Optional[Route] = None
+    ) -> TClusterResponse[List[bool]]:
+        """
+        Check existence of scripts in the script cache by their SHA1 digest.
+
+        See https://valkey.io/commands/script-exists for more details.
+
+        Args:
+            sha1s (List[TEncodable]): List of SHA1 digests of the scripts to check.
+            route (Optional[Route]): The command will be routed to all primary nodes, unless `route` is provided, in which
+            case the client will route the command to the nodes defined by `route`. Defaults to None.
+
+        Returns:
+            TClusterResponse[List[bool]]: A list of boolean values indicating the existence of each script.
+
+        Examples:
+            >>> lua_script = Script("return { KEYS[1], ARGV[1] }")
+            >>> await client.script_exists([lua_script.get_hash(), "sha1_digest2"])
+                [True, False]
+        """
+        return cast(
+            TClusterResponse[List[bool]],
+            await self._execute_command(RequestType.ScriptExists, sha1s, route),
+        )
+
+    async def script_flush(
+        self, mode: Optional[FlushMode] = None, route: Optional[Route] = None
+    ) -> TOK:
+        """
+        Flush the Lua scripts cache.
+
+        See https://valkey.io/commands/script-flush for more details.
+
+        Args:
+            mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
+            route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in which
+                case the client will route the command to the nodes defined by `route`. Defaults to None.
+
+        Returns:
+            TOK: A simple `OK` response.
+
+        Examples:
+            >>> await client.script_flush()
+                "OK"
+
+            >>> await client.script_flush(FlushMode.ASYNC)
+                "OK"
+        """
+
+        return cast(
+            TOK,
+            await self._execute_command(
+                RequestType.ScriptFlush, [mode.value] if mode else [], route
+            ),
+        )
+
+    async def script_kill(self, route: Optional[Route] = None) -> TOK:
+        """
+        Kill the currently executing Lua script, assuming no write operation was yet performed by the script.
+        The command is routed to all nodes, and aggregates the response to a single array.
+
+        See https://valkey.io/commands/script-kill for more details.
+
+        Returns:
+            TOK: A simple `OK` response.
+            route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in which
+                case the client will route the command to the nodes defined by `route`. Defaults to None.
+
+        Examples:
+            >>> await client.script_kill()
+                "OK"
+        """
+        return cast(TOK, await self._execute_command(RequestType.ScriptKill, [], route))
+
+    async def invoke_script(
+        self,
+        script: Script,
+        keys: Optional[List[TEncodable]] = None,
+        args: Optional[List[TEncodable]] = None,
+    ) -> TClusterResponse[TResult]:
+        """
+        Invokes a Lua script with its keys and arguments.
+        This method simplifies the process of invoking scripts on a server by using an object that represents a Lua script.
+        The script loading, argument preparation, and execution will all be handled internally.
+        If the script has not already been loaded, it will be loaded automatically using the `SCRIPT LOAD` command.
+        After that, it will be invoked using the `EVALSHA` command.
+
+        When in cluster mode, `key`s must map to the same hash slot.
+
+        See https://valkey.io/commands/script-load/ and https://valkey.io/commands/evalsha/ for more details.
+
+        Args:
+            script (Script): The Lua script to execute.
+            keys (Optional[List[TEncodable]]): The keys that are used in the script. To ensure the correct execution of
+                the script, all names of keys that a script accesses must be explicitly provided as `keys`.
+            args (Optional[List[TEncodable]]): The non-key arguments for the script.
+
+        Returns:
+            TResult: a value that depends on the script that was executed.
+
+        Examples:
+            >>> lua_script = Script("return { KEYS[1], ARGV[1] }")
+            >>> await invoke_script(lua_script, keys=["foo"], args=["bar"] );
+                [b"foo", b"bar"]
+        """
+        return await self._execute_script(script.get_hash(), keys, args)
+
+    async def invoke_script_route(
+        self,
+        script: Script,
+        args: Optional[List[TEncodable]] = None,
+        route: Optional[Route] = None,
+    ) -> TClusterResponse[TResult]:
+        """
+        Invokes a Lua script with its arguments and route.
+        This method simplifies the process of invoking scripts on a server by using an object that represents a Lua script.
+        The script loading, argument preparation, and execution will all be handled internally.
+        If the script has not already been loaded, it will be loaded automatically using the `SCRIPT LOAD` command.
+        After that, it will be invoked using the `EVALSHA` command.
+
+        See https://valkey.io/commands/script-load/ and https://valkey.io/commands/evalsha/ for more details.
+
+        Args:
+            script (Script): The Lua script to execute.
+            args (Optional[List[TEncodable]]): The non-key arguments for the script.
+            route (Optional[Route]): The command will be routed automatically to a random node, unless `route` is provided, in which
+                case the client will route the command to the nodes defined by `route`. Defaults to None.
+
+        Returns:
+            TResult: a value that depends on the script that was executed.
+
+        Examples:
+            >>> lua_script = Script("return { ARGV[1] }")
+            >>> await invoke_script(lua_script, args=["bar"], route=AllPrimaries());
+                [b"bar"]
+        """
+        return await self._execute_script(
+            script.get_hash(), keys=None, args=args, route=route
         )

@@ -6,22 +6,15 @@ import * as net from "net";
 import {
     BaseClient,
     BaseClientConfiguration,
+    convertGlideRecordToRecord,
     Decoder,
     DecoderOption,
+    GlideRecord,
+    GlideReturnType,
     GlideString,
     PubSubMsg,
-    ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
-    ReturnType,
 } from "./BaseClient";
 import {
-    FlushMode,
-    FunctionListOptions,
-    FunctionListResponse,
-    FunctionRestorePolicy,
-    FunctionStatsFullResponse,
-    InfoOptions,
-    LolwutOptions,
-    SortOptions,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -49,11 +42,21 @@ import {
     createPing,
     createPublish,
     createRandomKey,
+    createScan,
+    createScriptExists,
+    createScriptFlush,
+    createScriptKill,
     createSelect,
-    createSort,
-    createSortReadOnly,
     createTime,
     createUnWatch,
+    FlushMode,
+    FunctionListOptions,
+    FunctionListResponse,
+    FunctionRestorePolicy,
+    FunctionStatsFullResponse,
+    InfoOptions,
+    LolwutOptions,
+    ScanOptions,
 } from "./Commands";
 import { connection_request } from "./ProtobufMessage";
 import { Transaction } from "./Transaction";
@@ -76,7 +79,7 @@ export namespace GlideClientConfiguration {
         Pattern = 1,
     }
 
-    export type PubSubSubscriptions = {
+    export interface PubSubSubscriptions {
         /**
          * Channels and patterns by modes.
          */
@@ -93,7 +96,7 @@ export namespace GlideClientConfiguration {
          */
         /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
         context?: any;
-    };
+    }
 }
 
 export type GlideClientConfiguration = BaseClientConfiguration & {
@@ -134,7 +137,7 @@ export type GlideClientConfiguration = BaseClientConfiguration & {
 };
 
 /**
- * Client used for connection to standalone Redis servers.
+ * Client used for connection to standalone servers.
  *
  * @see For full documentation refer to {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#standalone|Valkey Glide Wiki}.
  */
@@ -188,8 +191,8 @@ export class GlideClient extends BaseClient {
     public async exec(
         transaction: Transaction,
         options?: DecoderOption,
-    ): Promise<ReturnType[] | null> {
-        return this.createWritePromise<ReturnType[] | null>(
+    ): Promise<GlideReturnType[] | null> {
+        return this.createWritePromise<GlideReturnType[] | null>(
             transaction.commands,
             options,
         ).then((result) =>
@@ -221,7 +224,7 @@ export class GlideClient extends BaseClient {
     public async customCommand(
         args: GlideString[],
         options?: DecoderOption,
-    ): Promise<ReturnType> {
+    ): Promise<GlideReturnType> {
         return this.createWritePromise(createCustomCommand(args), options);
     }
 
@@ -394,7 +397,10 @@ export class GlideClient extends BaseClient {
         parameters: string[],
         options?: DecoderOption,
     ): Promise<Record<string, GlideString>> {
-        return this.createWritePromise(createConfigGet(parameters), options);
+        return this.createWritePromise<GlideRecord<GlideString>>(
+            createConfigGet(parameters),
+            options,
+        ).then(convertGlideRecordToRecord);
     }
 
     /**
@@ -473,9 +479,10 @@ export class GlideClient extends BaseClient {
      *
      * @param source - The key to the source value.
      * @param destination - The key where the value should be copied to.
-     * @param destinationDB - (Optional) The alternative logical database index for the destination key.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `destinationDB`: the alternative logical database index for the destination key.
      *     If not provided, the current database will be used.
-     * @param replace - (Optional) If `true`, the `destination` key should be removed before copying the
+     * - (Optional) `replace`: if `true`, the `destination` key should be removed before copying the
      *     value to it. If not provided, no action will be performed if the key already exists.
      * @returns `true` if `source` was copied, `false` if the `source` was not copied.
      *
@@ -534,7 +541,7 @@ export class GlideClient extends BaseClient {
      * @example
      * ```typescript
      * const response = await client.lolwut({ version: 6, parameters: [40, 20] });
-     * console.log(response); // Output: "Redis ver. 7.2.3" - Indicates the current server version.
+     * console.log(response); // Output: "Valkey ver. 7.2.3" - Indicates the current server version.
      * ```
      */
     public async lolwut(options?: LolwutOptions): Promise<string> {
@@ -646,7 +653,13 @@ export class GlideClient extends BaseClient {
     public async functionList(
         options?: FunctionListOptions & DecoderOption,
     ): Promise<FunctionListResponse> {
-        return this.createWritePromise(createFunctionList(options), options);
+        return this.createWritePromise<GlideRecord<unknown>[]>(
+            createFunctionList(options),
+            options,
+        ).then(
+            (res) =>
+                res.map(convertGlideRecordToRecord) as FunctionListResponse,
+        );
     }
 
     /**
@@ -697,7 +710,13 @@ export class GlideClient extends BaseClient {
     public async functionStats(
         options?: DecoderOption,
     ): Promise<FunctionStatsFullResponse> {
-        return this.createWritePromise(createFunctionStats(), options);
+        return this.createWritePromise<GlideRecord<unknown>>(
+            createFunctionStats(),
+            options,
+        ).then(
+            (res) =>
+                convertGlideRecordToRecord(res) as FunctionStatsFullResponse,
+        );
     }
 
     /**
@@ -846,106 +865,6 @@ export class GlideClient extends BaseClient {
     }
 
     /**
-     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
-     *
-     * The `sort` command can be used to sort elements based on different criteria and
-     * apply transformations on sorted elements.
-     *
-     * To store the result into a new key, see {@link sortStore}.
-     *
-     * @see {@link https://valkey.io/commands/sort/|valkey.io} for more details.
-     *
-     * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param options - (Optional) The {@link SortOptions} and {@link DecoderOption}.
-     *
-     * @returns An `Array` of sorted elements.
-     *
-     * @example
-     * ```typescript
-     * await client.hset("user:1", new Map([["name", "Alice"], ["age", "30"]]));
-     * await client.hset("user:2", new Map([["name", "Bob"], ["age", "25"]]));
-     * await client.lpush("user_ids", ["2", "1"]);
-     * const result = await client.sort("user_ids", { byPattern: "user:*->age", getPattern: ["user:*->name"] });
-     * console.log(result); // Output: [ 'Bob', 'Alice' ] - Returns a list of the names sorted by age
-     * ```
-     */
-    public async sort(
-        key: GlideString,
-        options?: SortOptions & DecoderOption,
-    ): Promise<(GlideString | null)[]> {
-        return this.createWritePromise(createSort(key, options), options);
-    }
-
-    /**
-     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
-     *
-     * The `sortReadOnly` command can be used to sort elements based on different criteria and
-     * apply transformations on sorted elements.
-     *
-     * This command is routed depending on the client's {@link ReadFrom} strategy.
-     *
-     * @see {@link https://valkey.io/commands/sort/|valkey.io} for more details.
-     * @remarks Since Valkey version 7.0.0.
-     *
-     * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param options - (Optional) The {@link SortOptions} and {@link DecoderOption}.
-     * @returns An `Array` of sorted elements
-     *
-     * @example
-     * ```typescript
-     * await client.hset("user:1", new Map([["name", "Alice"], ["age", "30"]]));
-     * await client.hset("user:2", new Map([["name", "Bob"], ["age", "25"]]));
-     * await client.lpush("user_ids", ["2", "1"]);
-     * const result = await client.sortReadOnly("user_ids", { byPattern: "user:*->age", getPattern: ["user:*->name"] });
-     * console.log(result); // Output: [ 'Bob', 'Alice' ] - Returns a list of the names sorted by age
-     * ```
-     */
-    public async sortReadOnly(
-        key: GlideString,
-        options?: SortOptions & DecoderOption,
-    ): Promise<(GlideString | null)[]> {
-        return this.createWritePromise(
-            createSortReadOnly(key, options),
-            options,
-        );
-    }
-
-    /**
-     * Sorts the elements in the list, set, or sorted set at `key` and stores the result in
-     * `destination`.
-     *
-     * The `sort` command can be used to sort elements based on different criteria and
-     * apply transformations on sorted elements, and store the result in a new key.
-     *
-     * To get the sort result without storing it into a key, see {@link sort} or {@link sortReadOnly}.
-     *
-     * @see {@link https://valkey.io/commands/sort|valkey.io} for more details.
-     * @remarks When in cluster mode, `destination` and `key` must map to the same hash slot.
-     *
-     * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param destination - The key where the sorted result will be stored.
-     * @param options - (Optional) The {@link SortOptions}.
-     * @returns The number of elements in the sorted key stored at `destination`.
-     *
-     * @example
-     * ```typescript
-     * await client.hset("user:1", new Map([["name", "Alice"], ["age", "30"]]));
-     * await client.hset("user:2", new Map([["name", "Bob"], ["age", "25"]]));
-     * await client.lpush("user_ids", ["2", "1"]);
-     * const sortedElements = await client.sortStore("user_ids", "sortedList", { byPattern: "user:*->age", getPattern: ["user:*->name"] });
-     * console.log(sortedElements); // Output: 2 - number of elements sorted and stored
-     * console.log(await client.lrange("sortedList", 0, -1)); // Output: [ 'Bob', 'Alice' ] - Returns a list of the names sorted by age stored in `sortedList`
-     * ```
-     */
-    public async sortStore(
-        key: GlideString,
-        destination: GlideString,
-        options?: SortOptions,
-    ): Promise<number> {
-        return this.createWritePromise(createSort(key, options, destination));
-    }
-
-    /**
      * Returns `UNIX TIME` of the last DB save timestamp or startup timestamp if no save
      * was made since then.
      *
@@ -1002,5 +921,110 @@ export class GlideClient extends BaseClient {
         return this.createWritePromise(createUnWatch(), {
             decoder: Decoder.String,
         });
+    }
+
+    /**
+     * Checks existence of scripts in the script cache by their SHA1 digest.
+     *
+     * @see {@link https://valkey.io/commands/script-exists/|valkey.io} for more details.
+     *
+     * @param sha1s - List of SHA1 digests of the scripts to check.
+     * @returns A list of boolean values indicating the existence of each script.
+     *
+     * @example
+     * ```typescript
+     * console result = await client.scriptExists(["sha1_digest1", "sha1_digest2"]);
+     * console.log(result); // Output: [true, false]
+     * ```
+     */
+    public async scriptExists(sha1s: GlideString[]): Promise<boolean[]> {
+        return this.createWritePromise(createScriptExists(sha1s));
+    }
+
+    /**
+     * Flushes the Lua scripts cache.
+     *
+     * @see {@link https://valkey.io/commands/script-flush/|valkey.io} for more details.
+     *
+     * @param mode - (Optional) The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * @returns A simple `"OK"` response.
+     *
+     * @example
+     * ```typescript
+     * console result = await client.scriptFlush(FlushMode.SYNC);
+     * console.log(result); // Output: "OK"
+     * ```
+     */
+    public async scriptFlush(mode?: FlushMode): Promise<"OK"> {
+        return this.createWritePromise(createScriptFlush(mode), {
+            decoder: Decoder.String,
+        });
+    }
+
+    /**
+     * Kills the currently executing Lua script, assuming no write operation was yet performed by the script.
+     *
+     * @see {@link https://valkey.io/commands/script-kill/|valkey.io} for more details.
+     *
+     * @returns A simple `"OK"` response.
+     *
+     * @example
+     * ```typescript
+     * console result = await client.scriptKill();
+     * console.log(result); // Output: "OK"
+     * ```
+     */
+    public async scriptKill(): Promise<"OK"> {
+        return this.createWritePromise(createScriptKill(), {
+            decoder: Decoder.String,
+        });
+    }
+
+    /**
+     * Incrementally iterate over a collection of keys.
+     * `SCAN` is a cursor based iterator. This means that at every call of the method,
+     * the server returns an updated cursor that the user needs to use as the cursor argument in the next call.
+     * An iteration starts when the cursor is set to "0", and terminates when the cursor returned by the server is "0".
+     *
+     * A full iteration always retrieves all the elements that were present
+     * in the collection from the start to the end of a full iteration.
+     * Elements that were not constantly present in the collection during a full iteration, may be returned or not.
+     *
+     * @see {@link https://valkey.io/commands/scan|valkey.io} for more details.
+     *
+     * @param cursor - The `cursor` used for iteration. For the first iteration, the cursor should be set to "0".
+     * Using a non-zero cursor in the first iteration,
+     * or an invalid cursor at any iteration, will lead to undefined results.
+     * Using the same cursor in multiple iterations will, in case nothing changed between the iterations,
+     * return the same elements multiple times.
+     * If the the db has changed, it may result in undefined behavior.
+     * @param options - (Optional) The options to use for the scan operation, see {@link ScanOptions} and {@link DecoderOption}.
+     * @returns A List containing the next cursor value and a list of keys,
+     * formatted as [cursor, [key1, key2, ...]]
+     *
+     * @example
+     * ```typescript
+     * // Example usage of scan method
+     * let result = await client.scan('0');
+     * console.log(result); // Output: ['17', ['key1', 'key2', 'key3', 'key4', 'key5', 'set1', 'set2', 'set3']]
+     * let firstCursorResult = result[0];
+     * result = await client.scan(firstCursorResult);
+     * console.log(result); // Output: ['349', ['key4', 'key5', 'set1', 'hash1', 'zset1', 'list1', 'list2',
+     * // 'list3', 'zset2', 'zset3', 'zset4', 'zset5', 'zset6']]
+     * result = await client.scan(result[0]);
+     * console.log(result); // Output: ['0', ['key6', 'key7']]
+     *
+     * result = await client.scan(firstCursorResult, {match: 'key*', count: 2});
+     * console.log(result); // Output: ['6', ['key4', 'key5']]
+     *
+     * result = await client.scan("0", {type: ObjectType.Set});
+     * console.log(result); // Output: ['362', ['set1', 'set2', 'set3']]
+     * ```
+     */
+    public async scan(
+        cursor: GlideString,
+        options?: ScanOptions & DecoderOption,
+    ): Promise<[GlideString, GlideString[]]> {
+        return this.createWritePromise(createScan(cursor, options), options);
     }
 }

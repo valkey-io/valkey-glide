@@ -12,12 +12,11 @@ runs:
     steps:
         - uses: actions/checkout@v4
 
-        - run: cp .eslintrc.cjs ${{ inputs.package-folder }}
+        - run: cp eslint.config.mjs ${{ inputs.package-folder }} 
           shell: bash
 
         - run: |
-              npm install @typescript-eslint/parser @typescript-eslint/eslint-plugin eslint-plugin-tsdoc eslint typescript eslint-plugin-import@latest eslint-config-prettier
-              npm i
+              npm install
               npx eslint . --max-warnings=0
           working-directory: ${{ inputs.package-folder }}
           shell: bash

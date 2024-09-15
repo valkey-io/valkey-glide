@@ -1,13 +1,11 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static command_request.CommandRequestOuterClass.RequestType.PubSubSChannels;
+import static command_request.CommandRequestOuterClass.RequestType.PubSubSNumSub;
 import static command_request.CommandRequestOuterClass.RequestType.SPublish;
-import static command_request.CommandRequestOuterClass.RequestType.Sort;
-import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
-import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 
 import glide.api.GlideClusterClient;
-import glide.api.models.commands.SortClusterOptions;
 import lombok.NonNull;
 
 /**
@@ -60,80 +58,46 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
     }
 
     /**
-     * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
-     * <br>
-     * The <code>sort</code> command can be used to sort elements based on different criteria and
-     * apply transformations on sorted elements.<br>
-     * To store the result into a new key, see {@link #sortStore(ArgType, ArgType,
-     * SortClusterOptions)}.
+     * Returns the number of subscribers (exclusive of clients subscribed to patterns) for the
+     * specified shard channels. Note that it is valid to call this command without channels. In this
+     * case, it will just return an empty map.
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
-     * @see <a href="https://valkey.io/commands/sort">valkey.io</a> for details.
-     * @param key The key of the list, set, or sorted set to be sorted.
-     * @param sortClusterOptions The {@link SortClusterOptions}.
-     * @return Command Response - An <code>Array</code> of sorted elements.
+     * @see <a href="https://valkey.io/commands/pubsub-shardnumsub/">valkey.io</a> for details.
+     * @param channels The list of shard channels to query for the number of subscribers.
+     * @return Command response - An <code>Map</code> where keys are the shard channel names and
+     *     values are the number of subscribers.
      */
-    public <ArgType> ClusterTransaction sort(
-            @NonNull ArgType key, @NonNull SortClusterOptions sortClusterOptions) {
-        checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
-                buildCommand(Sort, newArgsBuilder().add(key).add(sortClusterOptions.toArgs())));
-        return this;
+    public <ArgType> ClusterTransaction pubsubShardNumSub(@NonNull ArgType[] channels) {
+        checkTypeOrThrow(channels);
+        protobufTransaction.addCommands(buildCommand(PubSubSNumSub, newArgsBuilder().add(channels)));
+        return getThis();
     }
 
     /**
-     * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
-     * <br>
-     * The <code>sortReadOnly</code> command can be used to sort elements based on different criteria
-     * and apply transformations on sorted elements.<br>
+     * Lists the currently active shard channels.
      *
-     * @since Valkey 7.0 and above.
-     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
-     *     will throw {@link IllegalArgumentException}.
-     * @see <a href="https://valkey.io/commands/sort_ro">valkey.io</a> for details.
-     * @param key The key of the list, set, or sorted set to be sorted.
-     * @param sortClusterOptions The {@link SortClusterOptions}.
-     * @return Command Response - An <code>Array</code> of sorted elements.
+     * @see <a href="https://valkey.io/commands/pubsub-shardchannels/">valkey.io</a> for details.
+     * @return Command response - An <code>Array</code> of all active shard channels.
      */
-    public <ArgType> ClusterTransaction sortReadOnly(
-            @NonNull ArgType key, @NonNull SortClusterOptions sortClusterOptions) {
-        checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
-                buildCommand(SortReadOnly, newArgsBuilder().add(key).add(sortClusterOptions.toArgs())));
-        return this;
+    public ClusterTransaction pubsubShardChannels() {
+        protobufTransaction.addCommands(buildCommand(PubSubSChannels));
+        return getThis();
     }
 
     /**
-     * Sorts the elements in the list, set, or sorted set at <code>key</code> and stores the result in
-     * <code>destination</code>. The <code>sort</code> command can be used to sort elements based on
-     * different criteria, apply transformations on sorted elements, and store the result in a new
-     * key.<br>
-     * To get the sort result without storing it into a key, see {@link #sort(ArgType,
-     * SortClusterOptions)} or {@link #sortReadOnly(ArgType, SortClusterOptions)}.
+     * Lists the currently active shard channels.
      *
-     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type *
      *     will throw {@link IllegalArgumentException}.
-     * @see <a href="https://valkey.io/commands/sort">valkey.io</a> for details.
-     * @param key The key of the list, set, or sorted set to be sorted.
-     * @param destination The key where the sorted result will be stored.
-     * @param sortClusterOptions The {@link SortClusterOptions}.
-     * @return Command Response - The number of elements in the sorted key stored at <code>destination
-     *     </code>.
+     * @see <a href="https://valkey.io/commands/pubsub-shardchannels/">valkey.io</a> for details.
+     * @param pattern A glob-style pattern to match active shard channels.
+     * @return Command response - An <code>Array</code> of all active shard channels.
      */
-    public <ArgType> ClusterTransaction sortStore(
-            @NonNull ArgType key,
-            @NonNull ArgType destination,
-            @NonNull SortClusterOptions sortClusterOptions) {
-        checkTypeOrThrow(key);
-        protobufTransaction.addCommands(
-                buildCommand(
-                        Sort,
-                        newArgsBuilder()
-                                .add(key)
-                                .add(sortClusterOptions.toArgs())
-                                .add(STORE_COMMAND_STRING)
-                                .add(destination)));
-        return this;
+    public <ArgType> ClusterTransaction pubsubShardChannels(@NonNull ArgType pattern) {
+        checkTypeOrThrow(pattern);
+        protobufTransaction.addCommands(buildCommand(PubSubSChannels, newArgsBuilder().add(pattern)));
+        return getThis();
     }
 }

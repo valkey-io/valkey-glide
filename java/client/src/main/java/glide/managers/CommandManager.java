@@ -167,6 +167,24 @@ public class CommandManager {
     }
 
     /**
+     * Build a Script (by hash) request with route to send to Valkey.
+     *
+     * @param script Lua script hash object
+     * @param args The arguments for the script
+     * @param responseHandler The handler for the response object
+     * @return A result promise of type T
+     */
+    public <T> CompletableFuture<T> submitScript(
+            Script script,
+            List<GlideString> args,
+            Route route,
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
+
+        CommandRequest.Builder command = prepareScript(script, args, route);
+        return submitCommandToChannel(command, responseHandler);
+    }
+
+    /**
      * Build a Cluster Transaction and send.
      *
      * @param transaction Transaction request with multiple commands
@@ -320,6 +338,21 @@ public class CommandManager {
                                                 .map(ByteString::copyFrom)
                                                 .collect(Collectors.toList()))
                                 .build());
+    }
+
+    /**
+     * Build a protobuf Script Invoke request with route.
+     *
+     * @param script Valkey Script
+     * @param args args for the Script
+     * @param route route specified for the Script Invoke request
+     * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
+     *     adding a callback id.
+     */
+    protected CommandRequest.Builder prepareScript(
+            Script script, List<GlideString> args, Route route) {
+        CommandRequest.Builder builder = prepareScript(script, List.of(), args);
+        return prepareCommandRequestRoute(builder, route);
     }
 
     /**

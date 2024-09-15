@@ -17,7 +17,7 @@ import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 
-/** Benchmarking app for reporting performance of various Redis Java-clients */
+/** Benchmarking app for reporting performance of various Valkey Java-clients */
 public class BenchmarkingApp {
 
     // main application entrypoint
@@ -55,7 +55,7 @@ public class BenchmarkingApp {
                     testClientSetGet(LettuceAsyncClient::new, runConfiguration, true);
                     break;
                 case GLIDE:
-                    System.out.println("GLIDE for Redis async client");
+                    System.out.println("Valkey-GLIDE async client");
                     testClientSetGet(GlideAsyncClient::new, runConfiguration, true);
                     break;
             }

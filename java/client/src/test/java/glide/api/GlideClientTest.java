@@ -136,6 +136,10 @@ import static command_request.CommandRequestOuterClass.RequestType.SScan;
 import static command_request.CommandRequestOuterClass.RequestType.SUnion;
 import static command_request.CommandRequestOuterClass.RequestType.SUnionStore;
 import static command_request.CommandRequestOuterClass.RequestType.Scan;
+import static command_request.CommandRequestOuterClass.RequestType.ScriptExists;
+import static command_request.CommandRequestOuterClass.RequestType.ScriptFlush;
+import static command_request.CommandRequestOuterClass.RequestType.ScriptKill;
+import static command_request.CommandRequestOuterClass.RequestType.ScriptShow;
 import static command_request.CommandRequestOuterClass.RequestType.Select;
 import static command_request.CommandRequestOuterClass.RequestType.SetBit;
 import static command_request.CommandRequestOuterClass.RequestType.SetRange;
@@ -296,7 +300,7 @@ import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.GetExOptions;
-import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions;
@@ -1583,6 +1587,49 @@ public class GlideClientTest {
 
     @SneakyThrows
     @Test
+    public void scriptShow_returns_script_source() {
+        // setup
+        String scriptSource = "return { KEYS[1], ARGV[1] }";
+        String hash = UUID.randomUUID().toString();
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(scriptSource);
+
+        when(commandManager.<String>submitNewCommand(eq(ScriptShow), eq(new String[] {hash}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.scriptShow(hash);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(scriptSource, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void scriptShow_returns_script_source_glidestring() {
+        // setup
+        GlideString scriptSource = gs("return { KEYS[1], ARGV[1] }");
+        GlideString hash = gs(UUID.randomUUID().toString());
+
+        CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
+        testResponse.complete(scriptSource);
+
+        when(commandManager.<GlideString>submitNewCommand(
+                        eq(ScriptShow), eq(new GlideString[] {hash}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString> response = service.scriptShow(hash);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(scriptSource, response.get());
+    }
+
+    @SneakyThrows
+    @Test
     public void pttl_returns_success() {
         // setup
         String key = "testKey";
@@ -1692,8 +1739,7 @@ public class GlideClientTest {
     @Test
     public void info_with_multiple_InfoOptions_returns_success() {
         // setup
-        String[] arguments =
-                new String[] {InfoOptions.Section.ALL.toString(), InfoOptions.Section.DEFAULT.toString()};
+        String[] arguments = new String[] {Section.ALL.toString(), Section.DEFAULT.toString()};
         String testPayload = "Key: Value";
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(testPayload);
@@ -1701,12 +1747,8 @@ public class GlideClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        InfoOptions options =
-                InfoOptions.builder()
-                        .section(InfoOptions.Section.ALL)
-                        .section(InfoOptions.Section.DEFAULT)
-                        .build();
-        CompletableFuture<String> response = service.info(options);
+        Section[] sections = {Section.ALL, Section.DEFAULT};
+        CompletableFuture<String> response = service.info(sections);
         String payload = response.get();
 
         // verify
@@ -1725,7 +1767,7 @@ public class GlideClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<String> response = service.info(InfoOptions.builder().build());
+        CompletableFuture<String> response = service.info(new Section[0]);
         String payload = response.get();
 
         // verify
@@ -11645,6 +11687,51 @@ public class GlideClientTest {
 
     @SneakyThrows
     @Test
+    public void bitcount_start_returns_success() {
+        // setup
+        String key = "testKey";
+        Long bitcount = 1L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(bitcount);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(BitCount), eq(new String[] {key, "1"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.bitcount(key, 1);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(bitcount, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void bitcount_start_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        Long bitcount = 1L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(bitcount);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(
+                        eq(BitCount), eq(new GlideString[] {key, gs("1")}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.bitcount(key, 1);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(bitcount, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void bitcount_indices_returns_success() {
         // setup
         String key = "testKey";
@@ -15587,5 +15674,114 @@ public class GlideClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(summary, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void scriptExists_returns_success() {
+        // setup
+        String hash = UUID.randomUUID().toString();
+        String[] sha1s = {hash};
+        Boolean[] value = {true};
+
+        CompletableFuture<Boolean[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Boolean[]>submitNewCommand(eq(ScriptExists), eq(sha1s), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean[]> response = service.scriptExists(sha1s);
+        Boolean[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void scriptExists_binary_returns_success() {
+        // setup
+        GlideString hash = gs(UUID.randomUUID().toString());
+        GlideString[] sha1s = {hash};
+        Boolean[] value = {true};
+
+        CompletableFuture<Boolean[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Boolean[]>submitNewCommand(eq(ScriptExists), eq(sha1s), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean[]> response = service.scriptExists(sha1s);
+        Boolean[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void scriptFlush_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(ScriptFlush), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.scriptFlush();
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void scriptFlush_with_mode_returns_success() {
+        // setup
+        String[] args = new String[] {ASYNC.toString()};
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(ScriptFlush), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.scriptFlush(ASYNC);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void scriptKill_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(ScriptKill), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.scriptKill();
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
     }
 }

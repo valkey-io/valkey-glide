@@ -26,15 +26,17 @@ import static command_request.CommandRequestOuterClass.RequestType.Info;
 import static command_request.CommandRequestOuterClass.RequestType.LastSave;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
+import static command_request.CommandRequestOuterClass.RequestType.PubSubSChannels;
+import static command_request.CommandRequestOuterClass.RequestType.PubSubSNumSub;
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
 import static command_request.CommandRequestOuterClass.RequestType.SPublish;
-import static command_request.CommandRequestOuterClass.RequestType.Sort;
-import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
+import static command_request.CommandRequestOuterClass.RequestType.ScriptExists;
+import static command_request.CommandRequestOuterClass.RequestType.ScriptFlush;
+import static command_request.CommandRequestOuterClass.RequestType.ScriptKill;
 import static command_request.CommandRequestOuterClass.RequestType.Time;
 import static command_request.CommandRequestOuterClass.RequestType.UnWatch;
 import static glide.api.commands.ServerManagementCommands.VERSION_VALKEY_API;
 import static glide.api.models.GlideString.gs;
-import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_VALKEY_API;
 import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_VALKEY_API;
 import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
@@ -53,9 +55,11 @@ import glide.api.logging.Logger;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
+import glide.api.models.Script;
 import glide.api.models.commands.FlushMode;
-import glide.api.models.commands.InfoOptions;
-import glide.api.models.commands.SortClusterOptions;
+import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.ScriptArgOptions;
+import glide.api.models.commands.ScriptArgOptionsGlideString;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.scan.ClusterScanCursor;
 import glide.api.models.commands.scan.ScanOptions;
@@ -67,11 +71,13 @@ import glide.managers.CommandManager;
 import glide.utils.ArgsBuilder;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import lombok.NonNull;
-import org.apache.commons.lang3.ArrayUtils;
 import response.ResponseOuterClass.Response;
 
 /** Async (non-blocking) client for Cluster mode. Use {@link #createClient} to request a client. */
@@ -224,17 +230,19 @@ public class GlideClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<ClusterValue<String>> info(@NonNull InfoOptions options) {
+    public CompletableFuture<ClusterValue<String>> info(@NonNull Section[] sections) {
         return commandManager.submitNewCommand(
-                Info, options.toArgs(), response -> ClusterValue.of(handleMapResponse(response)));
+                Info,
+                Stream.of(sections).map(Enum::toString).toArray(String[]::new),
+                response -> ClusterValue.of(handleMapResponse(response)));
     }
 
     @Override
     public CompletableFuture<ClusterValue<String>> info(
-            @NonNull InfoOptions options, @NonNull Route route) {
+            @NonNull Section[] sections, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 Info,
-                options.toArgs(),
+                Stream.of(sections).map(Enum::toString).toArray(String[]::new),
                 route,
                 response ->
                         route instanceof SingleNodeRoute
@@ -947,6 +955,106 @@ public class GlideClusterClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<Object> invokeScript(@NonNull Script script, @NonNull Route route) {
+        if (script.getBinaryOutput()) {
+            return commandManager.submitScript(
+                    script, List.of(), route, this::handleBinaryObjectOrNullResponse);
+        } else {
+            return commandManager.submitScript(
+                    script, List.of(), route, this::handleObjectOrNullResponse);
+        }
+    }
+
+    @Override
+    public CompletableFuture<Object> invokeScript(
+            @NonNull Script script, @NonNull ScriptArgOptions options, @NonNull Route route) {
+        return commandManager.submitScript(
+                script,
+                options.getArgs().stream().map(GlideString::gs).collect(Collectors.toList()),
+                route,
+                script.getBinaryOutput()
+                        ? this::handleBinaryObjectOrNullResponse
+                        : this::handleObjectOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object> invokeScript(
+            @NonNull Script script, @NonNull ScriptArgOptionsGlideString options, @NonNull Route route) {
+        return commandManager.submitScript(
+                script,
+                options.getArgs(),
+                route,
+                script.getBinaryOutput()
+                        ? this::handleBinaryObjectOrNullResponse
+                        : this::handleObjectOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean[]> scriptExists(@NonNull String[] sha1s) {
+        return commandManager.submitNewCommand(
+                ScriptExists, sha1s, response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    @Override
+    public CompletableFuture<Boolean[]> scriptExists(@NonNull GlideString[] sha1s) {
+        return commandManager.submitNewCommand(
+                ScriptExists, sha1s, response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    @Override
+    public CompletableFuture<Boolean[]> scriptExists(@NonNull String[] sha1s, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ScriptExists,
+                sha1s,
+                route,
+                response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    @Override
+    public CompletableFuture<Boolean[]> scriptExists(
+            @NonNull GlideString[] sha1s, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ScriptExists,
+                sha1s,
+                route,
+                response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    @Override
+    public CompletableFuture<String> scriptFlush() {
+        return commandManager.submitNewCommand(ScriptFlush, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> scriptFlush(@NonNull FlushMode flushMode) {
+        return commandManager.submitNewCommand(
+                ScriptFlush, new String[] {flushMode.toString()}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> scriptFlush(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ScriptFlush, new String[0], route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> scriptFlush(@NonNull FlushMode flushMode, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ScriptFlush, new String[] {flushMode.toString()}, route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> scriptKill() {
+        return commandManager.submitNewCommand(ScriptKill, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> scriptKill(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ScriptKill, new String[0], route, this::handleStringResponse);
+    }
+
+    @Override
     public CompletableFuture<ClusterValue<Map<String, Map<String, Object>>>> functionStats() {
         return commandManager.submitNewCommand(
                 FunctionStats, new String[0], response -> handleFunctionStatsResponse(response, false));
@@ -1015,6 +1123,50 @@ public class GlideClusterClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<String[]> pubsubShardChannels() {
+        return commandManager.submitNewCommand(
+                PubSubSChannels,
+                new String[0],
+                response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<GlideString[]> pubsubShardChannelsBinary() {
+        return commandManager.submitNewCommand(
+                PubSubSChannels,
+                new GlideString[0],
+                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
+    }
+
+    @Override
+    public CompletableFuture<String[]> pubsubShardChannels(@NonNull String pattern) {
+        return commandManager.submitNewCommand(
+                PubSubSChannels,
+                new String[] {pattern},
+                response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<GlideString[]> pubsubShardChannels(@NonNull GlideString pattern) {
+        return commandManager.submitNewCommand(
+                PubSubSChannels,
+                new GlideString[] {pattern},
+                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Long>> pubsubShardNumSub(@NonNull String[] channels) {
+        return commandManager.submitNewCommand(PubSubSNumSub, channels, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Long>> pubsubShardNumSub(
+            @NonNull GlideString[] channels) {
+        return commandManager.submitNewCommand(
+                PubSubSNumSub, channels, this::handleBinaryStringMapResponse);
+    }
+
+    @Override
     public CompletableFuture<String> unwatch(@NonNull Route route) {
         return commandManager.submitNewCommand(
                 UnWatch, new String[0], route, this::handleStringResponse);
@@ -1079,72 +1231,6 @@ public class GlideClusterClient extends BaseClient
                 .submitClusterScan(cursor, options, this::handleArrayResponseBinary)
                 .thenApply(
                         result -> new Object[] {new NativeClusterScanCursor(result[0].toString()), result[1]});
-    }
-
-    @Override
-    public CompletableFuture<String[]> sort(
-            @NonNull String key, @NonNull SortClusterOptions sortClusterOptions) {
-        String[] arguments = ArrayUtils.addFirst(sortClusterOptions.toArgs(), key);
-        return commandManager.submitNewCommand(
-                Sort, arguments, response -> castArray(handleArrayResponse(response), String.class));
-    }
-
-    @Override
-    public CompletableFuture<GlideString[]> sort(
-            @NonNull GlideString key, @NonNull SortClusterOptions sortClusterOptions) {
-        GlideString[] arguments = new ArgsBuilder().add(key).add(sortClusterOptions.toArgs()).toArray();
-
-        return commandManager.submitNewCommand(
-                Sort,
-                arguments,
-                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
-    }
-
-    @Override
-    public CompletableFuture<String[]> sortReadOnly(
-            @NonNull String key, @NonNull SortClusterOptions sortClusterOptions) {
-        String[] arguments = ArrayUtils.addFirst(sortClusterOptions.toArgs(), key);
-        return commandManager.submitNewCommand(
-                SortReadOnly,
-                arguments,
-                response -> castArray(handleArrayResponse(response), String.class));
-    }
-
-    @Override
-    public CompletableFuture<GlideString[]> sortReadOnly(
-            @NonNull GlideString key, @NonNull SortClusterOptions sortClusterOptions) {
-        GlideString[] arguments = new ArgsBuilder().add(key).add(sortClusterOptions.toArgs()).toArray();
-        return commandManager.submitNewCommand(
-                SortReadOnly,
-                arguments,
-                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
-    }
-
-    @Override
-    public CompletableFuture<Long> sortStore(
-            @NonNull String key,
-            @NonNull String destination,
-            @NonNull SortClusterOptions sortClusterOptions) {
-        String[] storeArguments = new String[] {STORE_COMMAND_STRING, destination};
-        String[] arguments =
-                concatenateArrays(new String[] {key}, sortClusterOptions.toArgs(), storeArguments);
-        return commandManager.submitNewCommand(Sort, arguments, this::handleLongResponse);
-    }
-
-    @Override
-    public CompletableFuture<Long> sortStore(
-            @NonNull GlideString key,
-            @NonNull GlideString destination,
-            @NonNull SortClusterOptions sortClusterOptions) {
-        GlideString[] arguments =
-                new ArgsBuilder()
-                        .add(key)
-                        .add(sortClusterOptions.toArgs())
-                        .add(STORE_COMMAND_STRING)
-                        .add(destination)
-                        .toArray();
-
-        return commandManager.submitNewCommand(Sort, arguments, this::handleLongResponse);
     }
 
     /** A {@link ClusterScanCursor} implementation for interacting with the Rust layer. */

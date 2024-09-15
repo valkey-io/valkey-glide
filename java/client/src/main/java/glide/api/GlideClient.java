@@ -28,13 +28,13 @@ import static command_request.CommandRequestOuterClass.RequestType.Move;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
 import static command_request.CommandRequestOuterClass.RequestType.Scan;
+import static command_request.CommandRequestOuterClass.RequestType.ScriptExists;
+import static command_request.CommandRequestOuterClass.RequestType.ScriptFlush;
+import static command_request.CommandRequestOuterClass.RequestType.ScriptKill;
 import static command_request.CommandRequestOuterClass.RequestType.Select;
-import static command_request.CommandRequestOuterClass.RequestType.Sort;
-import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
 import static command_request.CommandRequestOuterClass.RequestType.Time;
 import static command_request.CommandRequestOuterClass.RequestType.UnWatch;
 import static glide.api.models.GlideString.gs;
-import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_VALKEY_API;
 import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_VALKEY_API;
 import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
@@ -50,9 +50,7 @@ import glide.api.commands.TransactionsCommands;
 import glide.api.models.GlideString;
 import glide.api.models.Transaction;
 import glide.api.models.commands.FlushMode;
-import glide.api.models.commands.InfoOptions;
-import glide.api.models.commands.SortOptions;
-import glide.api.models.commands.SortOptionsBinary;
+import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.GlideClientConfiguration;
@@ -60,6 +58,7 @@ import glide.utils.ArgsBuilder;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Stream;
 import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
 
@@ -135,8 +134,11 @@ public class GlideClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<String> info(@NonNull InfoOptions options) {
-        return commandManager.submitNewCommand(Info, options.toArgs(), this::handleStringResponse);
+    public CompletableFuture<String> info(@NonNull Section[] sections) {
+        return commandManager.submitNewCommand(
+                Info,
+                Stream.of(sections).map(Enum::toString).toArray(String[]::new),
+                this::handleStringResponse);
     }
 
     @Override
@@ -478,70 +480,6 @@ public class GlideClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<String[]> sort(@NonNull String key, @NonNull SortOptions sortOptions) {
-        String[] arguments = ArrayUtils.addFirst(sortOptions.toArgs(), key);
-        return commandManager.submitNewCommand(
-                Sort, arguments, response -> castArray(handleArrayResponse(response), String.class));
-    }
-
-    @Override
-    public CompletableFuture<GlideString[]> sort(
-            @NonNull GlideString key, @NonNull SortOptionsBinary sortOptions) {
-        GlideString[] arguments = new ArgsBuilder().add(key).add(sortOptions.toArgs()).toArray();
-        return commandManager.submitNewCommand(
-                Sort,
-                arguments,
-                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
-    }
-
-    @Override
-    public CompletableFuture<String[]> sortReadOnly(
-            @NonNull String key, @NonNull SortOptions sortOptions) {
-        String[] arguments = ArrayUtils.addFirst(sortOptions.toArgs(), key);
-        return commandManager.submitNewCommand(
-                SortReadOnly,
-                arguments,
-                response -> castArray(handleArrayResponse(response), String.class));
-    }
-
-    @Override
-    public CompletableFuture<GlideString[]> sortReadOnly(
-            @NonNull GlideString key, @NonNull SortOptionsBinary sortOptions) {
-        GlideString[] arguments = new ArgsBuilder().add(key).add(sortOptions.toArgs()).toArray();
-
-        return commandManager.submitNewCommand(
-                SortReadOnly,
-                arguments,
-                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
-    }
-
-    @Override
-    public CompletableFuture<Long> sortStore(
-            @NonNull String key, @NonNull String destination, @NonNull SortOptions sortOptions) {
-        String[] storeArguments = new String[] {STORE_COMMAND_STRING, destination};
-        String[] arguments =
-                concatenateArrays(new String[] {key}, sortOptions.toArgs(), storeArguments);
-        return commandManager.submitNewCommand(Sort, arguments, this::handleLongResponse);
-    }
-
-    @Override
-    public CompletableFuture<Long> sortStore(
-            @NonNull GlideString key,
-            @NonNull GlideString destination,
-            @NonNull SortOptionsBinary sortOptions) {
-
-        GlideString[] arguments =
-                new ArgsBuilder()
-                        .add(key)
-                        .add(sortOptions.toArgs())
-                        .add(STORE_COMMAND_STRING)
-                        .add(destination)
-                        .toArray();
-
-        return commandManager.submitNewCommand(Sort, arguments, this::handleLongResponse);
-    }
-
-    @Override
     public CompletableFuture<Object[]> scan(@NonNull String cursor) {
         return commandManager.submitNewCommand(Scan, new String[] {cursor}, this::handleArrayResponse);
     }
@@ -563,5 +501,33 @@ public class GlideClient extends BaseClient
             @NonNull GlideString cursor, @NonNull ScanOptions options) {
         GlideString[] arguments = new ArgsBuilder().add(cursor).add(options.toArgs()).toArray();
         return commandManager.submitNewCommand(Scan, arguments, this::handleArrayResponseBinary);
+    }
+
+    @Override
+    public CompletableFuture<Boolean[]> scriptExists(@NonNull String[] sha1s) {
+        return commandManager.submitNewCommand(
+                ScriptExists, sha1s, response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    @Override
+    public CompletableFuture<Boolean[]> scriptExists(@NonNull GlideString[] sha1s) {
+        return commandManager.submitNewCommand(
+                ScriptExists, sha1s, response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    @Override
+    public CompletableFuture<String> scriptFlush() {
+        return commandManager.submitNewCommand(ScriptFlush, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> scriptFlush(@NonNull FlushMode flushMode) {
+        return commandManager.submitNewCommand(
+                ScriptFlush, new String[] {flushMode.toString()}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> scriptKill() {
+        return commandManager.submitNewCommand(ScriptKill, new String[0], this::handleStringResponse);
     }
 }
