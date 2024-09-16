@@ -196,6 +196,7 @@ public class PubSubTests {
         for (var client : senders) {
             client.close();
         }
+        senders.clear();
         pubsubMessageQueue.clear();
     }
 
