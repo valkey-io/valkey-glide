@@ -63,7 +63,7 @@ jobs:
         if: github.repository_owner == 'valkey-io'
         name: Publish packages to PyPi
         runs-on: ${{ matrix.build.RUNNER }}
-        timeout-minutes: 25
+        timeout-minutes: 35
         strategy:
             fail-fast: false
             matrix:
