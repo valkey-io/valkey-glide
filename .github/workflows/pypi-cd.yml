@@ -157,7 +157,7 @@ jobs:
               with:
                   working-directory: ./python
                   target: ${{ matrix.build.TARGET }}
-                  args: --release --strip --out wheels -i ${{ github.event_name != 'pull_request' && 'python3.8 python3.9 python3.10 python3.11 python3.12' || 'python3.10' }}
+                  args: --release --strip --out wheels -i ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12' || 'python3.10' }}
                   manylinux: auto
                   container: ${{ matrix.build.CONTAINER != '' && matrix.build.CONTAINER || '2014' }}
                   before-script-linux: |
@@ -187,7 +187,7 @@ jobs:
               with:
                   working-directory: ./python
                   target: ${{ matrix.build.TARGET }}
-                  args: --release --strip --out wheels -i  ${{ github.event_name != 'pull_request' && 'python3.8 python3.9 python3.10 python3.11 python3.12' || 'python3.10' }}
+                  args: --release --strip --out wheels -i  ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12' || 'python3.10' }}
 
             - name: Upload Python wheels
               if: github.event_name != 'pull_request'
