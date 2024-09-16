@@ -14,7 +14,7 @@ We've made Valkey GLIDE an open-source project, and are releasing it in Preview 
 
 ## System Requirements
 
-In this release, Valkey GLIDE is available for Python, Java and Node, with plans to include more programming languages in the future. We're tracking future features on the [roadmap](https://github.com/orgs/valkey-io/projects/11).
+In this release, Valkey GLIDE is available for Python, Java, and Node, with plans to include more programming languages in the future. We're tracking future features on the [roadmap](https://github.com/orgs/valkey-io/projects/11).
 
 ## NodeJS supported version
 
