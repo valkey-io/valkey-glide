@@ -84,6 +84,8 @@ func executeBenchmarks(runConfig *runConfiguration, connectionSettings *connecti
 	return nil
 }
 
+var key_count int64 = 1
+
 func runSingleBenchmark(config *benchmarkConfig) error {
 	fmt.Printf("Running benchmarking for %s client:\n", config.clientName)
 	fmt.Printf(
@@ -228,13 +230,13 @@ const (
 func getActions(dataSize int) map[string]operations {
 	actions := map[string]operations{
 		getExisting: func(client benchmarkClient) (string, error) {
-			return client.get(keyFromExistingKeyspace())
+			return client.get(keyFromExistingKeyspace(getExisting))
 		},
 		getNonExisting: func(client benchmarkClient) (string, error) {
 			return client.get(keyFromNewKeyspace())
 		},
 		set: func(client benchmarkClient) (string, error) {
-			return client.set(keyFromExistingKeyspace(), strings.Repeat("0", dataSize))
+			return client.set(keyFromExistingKeyspace(set), strings.Repeat("0", dataSize))
 		},
 	}
 
@@ -246,8 +248,15 @@ const (
 	sizeExistingKeyspace = 3000000
 )
 
-func keyFromExistingKeyspace() string {
-	randNum, err := rand.Int(rand.Reader, big.NewInt(sizeExistingKeyspace))
+func keyFromExistingKeyspace(action string) string {
+	if action == set {
+
+		if key_count < sizeNewKeyspace-1 {
+			key_count = key_count + 1
+		}
+		return fmt.Sprint(key_count)
+	}
+	randNum, err := rand.Int(rand.Reader, big.NewInt(key_count))
 	if err != nil {
 		log.Fatal("Error while generating random number for existing keyspace: ", err)
 	}
