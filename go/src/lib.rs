@@ -309,39 +309,34 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<Option<CommandR
     let result: RedisResult<Option<CommandResponse>> = match value {
         Value::Nil => Ok(None),
         Value::SimpleString(text) => {
-            let vec = text.chars().map(|b| b as c_char).collect::<Vec<_>>();
+            let vec = text.into_bytes();
             let (vec_ptr, len) = convert_vec_to_pointer(vec);
-            command_response.string_value = vec_ptr;
+            command_response.string_value = vec_ptr as *mut c_char;
             command_response.string_value_len = len;
             Ok(Some(command_response))
         }
         Value::BulkString(text) => {
-            let vec = text.iter().map(|b| *b as c_char).collect::<Vec<_>>();
-            let (vec_ptr, len) = convert_vec_to_pointer(vec);
-            command_response.string_value = vec_ptr;
+            let (vec_ptr, len) = convert_vec_to_pointer(text);
+            command_response.string_value = vec_ptr as *mut c_char;
             command_response.string_value_len = len;
             Ok(Some(command_response))
         }
         Value::VerbatimString { format: _, text } => {
-            let vec = text.chars().map(|b| b as c_char).collect::<Vec<_>>();
+            let vec = text.into_bytes();
             let (vec_ptr, len) = convert_vec_to_pointer(vec);
-            command_response.string_value = vec_ptr;
+            command_response.string_value = vec_ptr as *mut c_char;
             command_response.string_value_len = len;
             Ok(Some(command_response))
         }
         Value::Okay => {
-            let vec = "OK".chars().map(|b| b as c_char).collect::<Vec<_>>();
+            let vec = String::from("OK").into_bytes();
             let (vec_ptr, len) = convert_vec_to_pointer(vec);
-            command_response.string_value = vec_ptr;
+            command_response.string_value = vec_ptr as *mut c_char;
             command_response.string_value_len = len;
             Ok(Some(command_response))
         }
         Value::Int(num) => {
             command_response.int_value = num;
-            Ok(Some(command_response))
-        }
-        Value::Double(num) => {
-            command_response.float_value = num;
             Ok(Some(command_response))
         }
         Value::Boolean(boolean) => {
