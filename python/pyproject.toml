@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "valkey-glide"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 dependencies = [
     "async-timeout>=4.0.2",
     "typing-extensions>=4.8.0",
@@ -30,7 +30,7 @@ max-line-length = 127
 extend-ignore = ['E203']
 
 [tool.black]
-target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
+target-version = ['py39', 'py310', 'py311', 'py312']
 
 [tool.mypy]
 exclude = [ 'submodules' ]
