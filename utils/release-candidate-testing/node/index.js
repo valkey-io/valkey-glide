@@ -1,4 +1,5 @@
 import { GlideClient, GlideClusterClient } from "@valkey/valkey-glide";
+import { getServerVersion } from "../../TestUtilities.js";
 import { ValkeyCluster } from "../../TestUtils.js";
 
 
@@ -69,6 +70,7 @@ async function clusterTests() {
         let valkeyCluster = await ValkeyCluster.createCluster(true,
             3,
             1,
+            getServerVersion,
         );
         console.log("Cluster created");
 
@@ -99,6 +101,7 @@ async function standaloneTests() {
         let valkeyCluster = await ValkeyCluster.createCluster(false,
             1,
             1,
+            getServerVersion,
         );
         console.log("Cluster created");
 
