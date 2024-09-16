@@ -118,7 +118,6 @@ jobs:
               if: startsWith(matrix.build.NAMED_OS, 'darwin')
               run: |
                   brew update
-                  brew upgrade || true
                   brew install python@3.9
 
             - name: Setup Python for self-hosted Ubuntu runners
