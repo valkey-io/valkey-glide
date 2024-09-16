@@ -156,22 +156,24 @@ public class PubSubTests {
             if (client instanceof GlideClusterClient) {
                 for (var subscription : subscriptionTypes.entrySet()) {
                     var channels = subscription.getValue().toArray(GlideString[]::new);
-                    switch ((PubSubClusterChannelMode) subscription.getKey()) {
-                        case EXACT:
-                            ((GlideClusterClient) client)
-                                    .customCommand(ArrayUtils.addFirst(channels, gs("unsubscribe")))
-                                    .get();
-                            break;
-                        case PATTERN:
-                            ((GlideClusterClient) client)
-                                    .customCommand(ArrayUtils.addFirst(channels, gs("punsubscribe")))
-                                    .get();
-                            break;
-                        case SHARDED:
-                            ((GlideClusterClient) client)
-                                    .customCommand(ArrayUtils.addFirst(channels, gs("sunsubscribe")))
-                                    .get();
-                            break;
+                    for (GlideString channel : channels) {
+                        switch ((PubSubClusterChannelMode) subscription.getKey()) {
+                            case EXACT:
+                                ((GlideClusterClient) client)
+                                        .customCommand(new GlideString[] {gs("unsubscribe"), channel})
+                                        .get();
+                                break;
+                            case PATTERN:
+                                ((GlideClusterClient) client)
+                                        .customCommand(new GlideString[] {gs("punsubscribe"), channel})
+                                        .get();
+                                break;
+                            case SHARDED:
+                                ((GlideClusterClient) client)
+                                        .customCommand(new GlideString[] {gs("sunsubscribe"), channel})
+                                        .get();
+                                break;
+                        }
                     }
                 }
             } else {
