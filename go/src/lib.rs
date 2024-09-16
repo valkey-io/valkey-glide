@@ -35,16 +35,16 @@ pub struct CommandResponse {
     float_value: c_double,
     bool_value: bool,
 
-    // Below two values are related to each other.
-    // `string_value` represents the string.
-    // `string_value_len` represents the length of the string.
+    /// Below two values are related to each other.
+    /// `string_value` represents the string.
+    /// `string_value_len` represents the length of the string.
     #[derivative(Default(value = "std::ptr::null_mut()"))]
     string_value: *mut c_char,
     string_value_len: c_long,
 
-    // Below two values are related to each other.
-    // `array_value` represents the array of CommandResponse.
-    // `array_value_len` represents the length of the array.
+    /// Below two values are related to each other.
+    /// `array_value` represents the array of CommandResponse.
+    /// `array_value_len` represents the length of the array.
     #[derivative(Default(value = "std::ptr::null_mut()"))]
     array_value: *mut CommandResponse,
     array_value_len: c_long,
@@ -309,7 +309,7 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<Option<CommandR
     let result: RedisResult<Option<CommandResponse>> = match value {
         Value::Nil => Ok(None),
         Value::SimpleString(text) => {
-            let vec = text.into_bytes();
+            let vec: Vec<u8> = text.into_bytes();
             let (vec_ptr, len) = convert_vec_to_pointer(vec);
             command_response.string_value = vec_ptr as *mut c_char;
             command_response.string_value_len = len;
@@ -322,14 +322,14 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<Option<CommandR
             Ok(Some(command_response))
         }
         Value::VerbatimString { format: _, text } => {
-            let vec = text.into_bytes();
+            let vec: Vec<u8> = text.into_bytes();
             let (vec_ptr, len) = convert_vec_to_pointer(vec);
             command_response.string_value = vec_ptr as *mut c_char;
             command_response.string_value_len = len;
             Ok(Some(command_response))
         }
         Value::Okay => {
-            let vec = String::from("OK").into_bytes();
+            let vec: Vec<u8> = String::from("OK").into_bytes();
             let (vec_ptr, len) = convert_vec_to_pointer(vec);
             command_response.string_value = vec_ptr as *mut c_char;
             command_response.string_value_len = len;
