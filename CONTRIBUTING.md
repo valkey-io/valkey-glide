@@ -43,9 +43,7 @@ Looking at the existing issues is a great way to find something to contribute on
 -   [Python](./python/DEVELOPER.md)
 
 ## Code of Conduct
-This project has adopted the [Amazon Open Source Code of Conduct](https://aws.github.io/code-of-conduct).
-For more information see the [Code of Conduct FAQ](https://aws.github.io/code-of-conduct-faq) or contact
-opensource-codeofconduct@amazon.com with any additional questions or comments.
+This project has adopted the [Valkey Code of Conduct](https://github.com/valkey-io/valkey/blob/unstable/CODE_OF_CONDUCT.md).
 
 
 ## Security issue notifications
