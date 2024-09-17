@@ -67,7 +67,7 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                build: ${{fromJson( needs.load-platform-matrix.outputs.PLATFORM_MATRIX )}}
+                build: ${{ fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX) }}
         steps:
             - name: Setup self-hosted runner access
               if: ${{ contains(matrix.build.RUNNER, 'self-hosted') }}
@@ -192,7 +192,7 @@ jobs:
               if: github.event_name != 'pull_request'
               uses: actions/upload-artifact@v4
               with:
-                  name: wheels
+                  name: wheels-${{ matrix.host.TARGET }}
                   path: python/wheels
                   if-no-files-found: error
 
@@ -205,7 +205,7 @@ jobs:
             - uses: actions/download-artifact@v4
               with:
                   path: python/wheels
-                  name: wheels
+
             - name: Publish to PyPI
               uses: PyO3/maturin-action@v1
               env:
