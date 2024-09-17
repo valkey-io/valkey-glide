@@ -1,5 +1,4 @@
 async-timeout==4.0.2
-google-api-python-client==2.85.0
 maturin==0.13.0
 protobuf==3.20.*
 pytest==7.1.2
