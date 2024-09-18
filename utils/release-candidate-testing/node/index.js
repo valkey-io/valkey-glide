@@ -63,6 +63,11 @@ async function closeClientAndCluster(client, Cluster) {
     console.log("Clusters closed");
 }
 
+async function getServerVersion(addresses, clusterMode) {
+    // General version for those tests
+    return "255.255.255";
+}
+
 async function clusterTests() {
     try {
         console.log("Testing cluster");
