@@ -220,11 +220,11 @@ jobs:
         if: github.event_name != 'pull_request'
         name: Test the release
         runs-on: ${{ matrix.build.RUNNER }}
-        needs: publish-to-pypi
+        needs: [publish-to-pypi, load-platform-matrix]
         strategy:
             fail-fast: false
             matrix:
-                build: ${{fromJson( needs.load-platform-matrix.outputs.PLATFORM_MATRIX )}}
+                build: ${{ fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX) }}
         steps:
             - name: Setup self-hosted runner access
               if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-gnu' }}
