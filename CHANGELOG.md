@@ -1,4 +1,5 @@
 #### Changes
+* Node: Fix binary variant for xinfogroups and lrem ([#2324](https://github.com/valkey-io/valkey-glide/pull/2324))
 * Node: Use `options` struct for all optional arguments ([#2287](https://github.com/valkey-io/valkey-glide/pull/2287))
 * Node: Added `invokeScript` API with routing for cluster client ([#2284](https://github.com/valkey-io/valkey-glide/pull/2284))
 * Java: Expanded tests for converting non UTF-8 bytes to Strings ([#2286](https://github.com/valkey-io/valkey-glide/pull/2286))
