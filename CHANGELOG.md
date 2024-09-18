@@ -141,7 +141,7 @@
 * Python: Add missing exports ([2321](https://github.com/valkey-io/valkey-glide/pull/2321))
 
 ### Operational Enhancements
-* CI/CD: Create Workflow to deploy artifacts for all platforms ([#2285](https://github.com/valkey-io/valkey-glide/pull/2285)
+* CI/CD: Create Workflow to deploy artifacts for all platforms ([#2285](https://github.com/valkey-io/valkey-glide/pull/2285))
 * Node: Get valkey/redis version using client's info command ([#2276](https://github.com/valkey-io/valkey-glide/pull/2276))
 * Java: Fetch server version using client's info command ([#2258](https://github.com/valkey-io/valkey-glide/pull/2258))
 * CI/CD: Add workflow for automating Maven release ([#2128](https://github.com/valkey-io/valkey-glide/pull/2128))
@@ -302,7 +302,7 @@
 * Python: Added SETRANGE command ([#1453](https://github.com/valkey-io/valkey-glide/pull/1453))
 
 #### Fixes
-* Python: Fix typing error "‘type’ object is not subscriptable" ([#1203](https://github.com/valkey-io/valkey-glide/pull/1203))
+* Python: Fix typing error "'type' object is not subscriptable" ([#1203](https://github.com/valkey-io/valkey-glide/pull/1203))
 * Core: Fixed blocking commands to use the specified timeout from the command argument ([#1283](https://github.com/valkey-io/valkey-glide/pull/1283))
 
 ### Breaking Changes
