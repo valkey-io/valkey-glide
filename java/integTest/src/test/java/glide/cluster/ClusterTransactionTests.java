@@ -311,7 +311,7 @@ public class ClusterTransactionTests {
             transaction.sortReadOnly(key1, SortOptions.builder().orderBy(DESC).build());
         }
 
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             transaction
                     .hset(key3, Map.of("name", "Alice", "age", "30"))
                     .hset(key4, Map.of("name", "Bob", "age", "25"))
@@ -358,7 +358,7 @@ public class ClusterTransactionTests {
                             );
         }
 
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             expectedResult =
                     concatenateArrays(
                             expectedResult,
