@@ -710,7 +710,7 @@ export async function transactionTest(
     );
 
     const fieldStr = uuidv4();
-    const [field, field1, field2, field3, field4, value1, value2, value3, foo, bar, baz, test, num0, num1, num2, one, two, three, underscore, non_existing_member, member1, member2, member3, member4, member5, member6, member7, palermo, catania] = [
+    const [field, field1, field2, field3, field4, value1, value2, value3, foo, bar, baz, test, one, two, three, underscore, non_existing_member, member1, member2, member3, member4, member5, member6, member7, palermo, catania] = [
         decodeString(fieldStr, decoder),
         decodeString(fieldStr + 1, decoder),
         decodeString(fieldStr + 2, decoder),
@@ -723,9 +723,6 @@ export async function transactionTest(
         decodeString("bar", decoder),
         decodeString("baz", decoder),
         decodeString("test_message", decoder),
-        decodeString("0", decoder),
-        decodeString("1", decoder),
-        decodeString("2", decoder),
         decodeString("one", decoder),
         decodeString("two", decoder),
         decodeString("three", decoder),
