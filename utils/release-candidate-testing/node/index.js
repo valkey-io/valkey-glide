@@ -68,7 +68,10 @@ async function getServerVersion(addresses, clusterMode) {
 }
 
 async function clusterTests() {
-    const getServerVersion = new Promise((resolve)=>resolve("255.255.255"));
+    const getServerVersion = async (addresses, clusterMode) => {
+        // General version for those tests
+        return "255.255.255";
+    };
     try {
         console.log("Testing cluster");
         console.log("Creating cluster");
@@ -100,7 +103,10 @@ async function clusterTests() {
 }
 
 async function standaloneTests() {
-    const getServerVersion = new Promise((resolve)=>resolve("255.255.255"));
+    const getServerVersion = async (addresses, clusterMode) => {
+        // General version for those tests
+        return "255.255.255";
+    };
     try {
         console.log("Testing standalone Cluster")
         console.log("Creating Cluster");
