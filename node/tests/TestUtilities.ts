@@ -710,18 +710,42 @@ export async function transactionTest(
     );
 
     const fieldStr = uuidv4();
-    const [field, field1, field2, field3, field4] = [
+    const [field, field1, field2, field3, field4, value1, value2, value3, foo, bar, baz, test, num0, num1, num2, one, two, three, underscore, non_existing_member, member1, member2, member3, member4, member5, member6, member7, palermo, catania] = [
         decodeString(fieldStr, decoder),
         decodeString(fieldStr + 1, decoder),
         decodeString(fieldStr + 2, decoder),
         decodeString(fieldStr + 3, decoder),
         decodeString(fieldStr + 4, decoder),
+        decodeString("value1", decoder),
+        decodeString("value2", decoder),
+        decodeString("value3", decoder),
+        decodeString("foo", decoder),
+        decodeString("bar", decoder),
+        decodeString("baz", decoder),
+        decodeString("test_message", decoder),
+        decodeString("0", decoder),
+        decodeString("1", decoder),
+        decodeString("2", decoder),
+        decodeString("one", decoder),
+        decodeString("two", decoder),
+        decodeString("three", decoder),
+        decodeString("_", decoder),
+        decodeString("non_existing_member", decoder),
+        decodeString("member1", decoder),
+        decodeString("member2", decoder),
+        decodeString("member3", decoder),
+        decodeString("member4", decoder),
+        decodeString("member5", decoder),
+        decodeString("member6", decoder),
+        decodeString("member7", decoder),
+        decodeString("Palermo", decoder),
+        decodeString("Catania", decoder),
     ];
 
     // array of tuples - first element is test name/description, second - expected return value
     const responseData: [string, GlideReturnType][] = [];
 
-    baseTransaction.publish("test_message", key1);
+    baseTransaction.publish(test, key1);
     responseData.push(['publish("test_message", key1)', 0]);
     baseTransaction.pubsubChannels();
     responseData.push(["pubsubChannels()", []]);
@@ -740,9 +764,9 @@ export async function transactionTest(
     responseData.push(["flushdb(FlushMode.SYNC)", "OK"]);
     baseTransaction.dbsize();
     responseData.push(["dbsize()", 0]);
-    baseTransaction.set(key1, "foo");
+    baseTransaction.set(key1, foo);
     responseData.push(['set(key1, "foo")', "OK"]);
-    baseTransaction.set(key1, "bar", { returnOldValue: true });
+    baseTransaction.set(key1, bar, { returnOldValue: true });
     responseData.push(['set(key1, "bar", {returnOldValue: true})', "foo"]);
 
     if (gte(version, "6.2.0")) {
@@ -761,7 +785,7 @@ export async function transactionTest(
     responseData.push(["getrange(key1, 0, -1)", "bar"]);
     baseTransaction.getdel(key1);
     responseData.push(["getdel(key1)", "bar"]);
-    baseTransaction.set(key1, "bar");
+    baseTransaction.set(key1, bar);
     responseData.push(['set(key1, "bar")', "OK"]);
     baseTransaction.objectEncoding(key1);
     responseData.push(["objectEncoding(key1)", "embstr"]);
@@ -780,7 +804,7 @@ export async function transactionTest(
         responseData.push(["pexpiretime(key1)", -1]);
     }
 
-    baseTransaction.set(key2, "baz", { returnOldValue: true });
+    baseTransaction.set(key2, baz, { returnOldValue: true });
     responseData.push(['set(key2, "baz", { returnOldValue: true })', null]);
     baseTransaction.customCommand(["MGET", key1, key2]);
     responseData.push(['customCommand(["MGET", key1, key2])', ["bar", "baz"]]);
@@ -943,9 +967,9 @@ export async function transactionTest(
     );
     responseData.push(["linsert", 0]);
     baseTransaction.rpush(key6, [
-        field1.toString(),
-        field2.toString(),
-        field3.toString(),
+        field1,
+        field2,
+        field3,
     ]);
     responseData.push([
         'rpush(key6, [field + "1", field + "2", field + "3"])',
@@ -960,23 +984,23 @@ export async function transactionTest(
         "rpopCount(key6, 2)",
         [field2.toString(), field1.toString()],
     ]);
-    baseTransaction.rpushx(key15, ["_"]); // key15 is empty
+    baseTransaction.rpushx(key15, [underscore]); // key15 is empty
     responseData.push(['rpushx(key15, ["_"])', 0]);
-    baseTransaction.lpushx(key15, ["_"]);
+    baseTransaction.lpushx(key15, [underscore]);
     responseData.push(['lpushx(key15, ["_"])', 0]);
     baseTransaction.rpush(key16, [
-        field1.toString(),
-        field1.toString(),
-        field2.toString(),
-        field3.toString(),
-        field3.toString(),
+        field1,
+        field1,
+        field2,
+        field3,
+        field3,
     ]);
     responseData.push(["rpush(key16, [1, 1, 2, 3, 3,])", 5]);
     baseTransaction.lpos(key16, field1, { rank: 2 });
     responseData.push(["lpos(key16, field1, { rank: 2 })", 1]);
     baseTransaction.lpos(key16, field1, { rank: 2, count: 0 });
     responseData.push(["lpos(key16, field1, { rank: 2, count: 0 })", [1]]);
-    baseTransaction.sadd(key7, ["bar", "foo"]);
+    baseTransaction.sadd(key7, [bar, foo]);
     responseData.push(['sadd(key7, ["bar", "foo"])', 2]);
     baseTransaction.sunionstore(key7, [key7, key7]);
     responseData.push(["sunionstore(key7, [key7, key7])", 2]);
@@ -998,7 +1022,7 @@ export async function transactionTest(
     responseData.push(["sdiff([key7, key7])", new Set()]);
     baseTransaction.sdiffstore(key7, [key7]);
     responseData.push(["sdiffstore(key7, [key7])", 2]);
-    baseTransaction.srem(key7, ["foo"]);
+    baseTransaction.srem(key7, [foo]);
     responseData.push(['srem(key7, ["foo"])', 1]);
     baseTransaction.sscan(key7, "0");
     responseData.push(['sscan(key7, "0")', ["0", ["bar"]]]);
@@ -1009,11 +1033,11 @@ export async function transactionTest(
     ]);
     baseTransaction.scard(key7);
     responseData.push(["scard(key7)", 1]);
-    baseTransaction.sismember(key7, "bar");
+    baseTransaction.sismember(key7, bar);
     responseData.push(['sismember(key7, "bar")', true]);
 
     if (gte(version, "6.2.0")) {
-        baseTransaction.smismember(key7, ["bar", "foo", "baz"]);
+        baseTransaction.smismember(key7, [bar, foo, baz]);
         responseData.push([
             'smismember(key7, ["bar", "foo", "baz"])',
             [true, false, false],
@@ -1032,23 +1056,24 @@ export async function transactionTest(
     responseData.push(["spop(key7)", "bar"]);
     baseTransaction.spopCount(key7, 2);
     responseData.push(["spopCount(key7, 2)", new Set()]);
-    baseTransaction.smove(key7, key7, "non_existing_member");
+    baseTransaction.smove(key7, key7, non_existing_member);
     responseData.push(['smove(key7, key7, "non_existing_member")', false]);
     baseTransaction.scard(key7);
     responseData.push(["scard(key7)", 0]);
-    baseTransaction.zadd(key8, {
-        member1: 1,
-        member2: 2,
-        member3: 3.5,
-        member4: 4,
-        member5: 5,
-    });
+    baseTransaction.zadd(key8, [
+        { element: member1, score: 1 },
+        { element: member2, score: 2, },
+        { element: member3, score: 3.5, },
+        { element: member4, score: 4, },
+        { element: member5, score: 5, },
+
+    ]);
     responseData.push(["zadd(key8, { ... } ", 5]);
-    baseTransaction.zrank(key8, "member1");
+    baseTransaction.zrank(key8, member1);
     responseData.push(['zrank(key8, "member1")', 0]);
 
     if (gte(version, "7.2.0")) {
-        baseTransaction.zrankWithScore(key8, "member1");
+        baseTransaction.zrankWithScore(key8, member1);
         responseData.push(['zrankWithScore(key8, "member1")', [0, 1]]);
     }
 
@@ -1060,21 +1085,21 @@ export async function transactionTest(
         responseData.push(['zrevrankWithScore(key8, "member5")', [0, 5]]);
     }
 
-    baseTransaction.zaddIncr(key8, "member2", 1);
+    baseTransaction.zaddIncr(key8, member2, 1);
     responseData.push(['zaddIncr(key8, "member2", 1)', 3]);
-    baseTransaction.zincrby(key8, 0.3, "member1");
+    baseTransaction.zincrby(key8, 0.3, member1);
     responseData.push(['zincrby(key8, 0.3, "member1")', 1.3]);
-    baseTransaction.zrem(key8, ["member1"]);
+    baseTransaction.zrem(key8, [member1]);
     responseData.push(['zrem(key8, ["member1"])', 1]);
     baseTransaction.zcard(key8);
     responseData.push(["zcard(key8)", 4]);
 
-    baseTransaction.zscore(key8, "member2");
+    baseTransaction.zscore(key8, member2);
     responseData.push(['zscore(key8, "member2")', 3.0]);
     baseTransaction.zrange(key8, { start: 0, end: -1 });
     responseData.push([
         "zrange(key8, { start: 0, end: -1 })",
-        ["member2", "member3", "member4", "member5"],
+        [member2.toString(), member3.toString(), member4.toString(), member5.toString()],
     ]);
     baseTransaction.zrangeWithScores(key8, { start: 0, end: -1 });
     responseData.push([
@@ -1086,7 +1111,7 @@ export async function transactionTest(
             member5: 5,
         }),
     ]);
-    baseTransaction.zadd(key12, { one: 1, two: 2 });
+    baseTransaction.zadd(key12, [{ element: one, score: 1}, {element: two, score: 2 }]);
     responseData.push(["zadd(key12, { one: 1, two: 2 })", 2]);
     baseTransaction.zscan(key12, "0");
     responseData.push(['zscan(key12, "0")', ["0", ["one", "1", "two", "2"]]]);
@@ -1095,7 +1120,7 @@ export async function transactionTest(
         baseTransaction.zscan(key12, "0", { noScores: false });
         responseData.push([
             'zscan(key12, "0", {noScores: false})',
-            ["0", ["one", "1", "two", "2"]],
+            ["0", [one.toString(), "1", two.toString(), "2"]],
         ]);
 
         baseTransaction.zscan(key12, "0", {
@@ -1105,7 +1130,7 @@ export async function transactionTest(
         });
         responseData.push([
             'zscan(key12, "0", {match: "*", count: 20, noScores:true})',
-            ["0", ["one", "two"]],
+            ["0", [one.toString(), two.toString()]],
         ]);
     }
 
@@ -1140,9 +1165,9 @@ export async function transactionTest(
         responseData.push(["zinterstore(key12, [key12, key13])", 0]);
 
         if (gte(version, "6.2.0")) {
-            baseTransaction.zadd(key26, { one: 1, two: 2 });
+            baseTransaction.zadd(key26, [{ element: one, score: 1}, {element: two, score: 2 }]);
             responseData.push(["zadd(key26, { one: 1, two: 2 })", 2]);
-            baseTransaction.zadd(key27, { one: 1, two: 2, three: 3.5 });
+            baseTransaction.zadd(key27, [{ element: one, score: 1}, {element: two, score: 2}, {element: three, score: 3.5}]);
             responseData.push([
                 "zadd(key27, { one: 1, two: 2, three: 3.5 })",
                 3,
@@ -1191,14 +1216,14 @@ export async function transactionTest(
         "zpopmax(key8)",
         convertRecordToGlideRecord({ member5: 5 }),
     ]);
-    baseTransaction.zadd(key8, { member6: 6 });
+    baseTransaction.zadd(key8, [{ element: member6, score: 6 }]);
     responseData.push(["zadd(key8, {member6: 6})", 1]);
     baseTransaction.bzpopmax([key8], 0.5);
     responseData.push([
         "bzpopmax([key8], 0.5)",
         [key8.toString(), "member6", 6],
     ]);
-    baseTransaction.zadd(key8, { member7: 1 });
+    baseTransaction.zadd(key8, [{ element: member7, score: 1 }]);
     responseData.push(["zadd(key8, {member7: 1})", 1]);
     baseTransaction.bzpopmin([key8], 0.5);
     responseData.push([
@@ -1222,8 +1247,8 @@ export async function transactionTest(
 
     if (gte(version, "7.0.0")) {
         baseTransaction.zadd(key14, [
-            { element: "one", score: 1.0 },
-            { element: "two", score: 2.0 },
+            { element: one, score: 1.0 },
+            { element: two, score: 2.0 },
         ]);
         responseData.push(["zadd(key14, { one: 1.0, two: 2.0 })", 2]);
         baseTransaction.zintercard([key8, key14]);
@@ -1241,8 +1266,8 @@ export async function transactionTest(
             [key14.toString(), [{ key: "one", value: 1.0 }]],
         ]);
         baseTransaction.zadd(key14, [
-            { element: "one", score: 1.0 },
-            { element: "two", score: 2.0 },
+            { element: one, score: 1.0 },
+            { element: two, score: 2.0 },
         ]);
         responseData.push(["zadd(key14, { one: 1.0, two: 2.0 })", 2]);
         baseTransaction.bzmpop([key14], ScoreFilter.MAX, 0.1);
@@ -1257,17 +1282,17 @@ export async function transactionTest(
         ]);
     }
 
-    baseTransaction.xadd(key9, [["field", "value1"]], { id: "0-1" });
+    baseTransaction.xadd(key9, [[field, value1]], { id: "0-1" });
     responseData.push([
         'xadd(key9, [["field", "value1"]], { id: "0-1" })',
         "0-1",
     ]);
-    baseTransaction.xadd(key9, [["field", "value2"]], { id: "0-2" });
+    baseTransaction.xadd(key9, [[field, value2]], { id: "0-2" });
     responseData.push([
         'xadd(key9, [["field", "value2"]], { id: "0-2" })',
         "0-2",
     ]);
-    baseTransaction.xadd(key9, [["field", "value3"]], { id: "0-3" });
+    baseTransaction.xadd(key9, [[field, value3]], { id: "0-3" });
     responseData.push([
         'xadd(key9, [["field", "value3"]], { id: "0-3" })',
         "0-3",
@@ -1277,12 +1302,12 @@ export async function transactionTest(
     baseTransaction.xrange(key9, { value: "0-1" }, { value: "0-1" });
     responseData.push([
         "xrange(key9)",
-        convertRecordToGlideRecord({ "0-1": [["field", "value1"]] }),
+        convertRecordToGlideRecord({ "0-1": [[field.toString(), value1.toString()]] }),
     ]);
     baseTransaction.xrevrange(key9, { value: "0-1" }, { value: "0-1" });
     responseData.push([
         "xrevrange(key9)",
-        convertRecordToGlideRecord({ "0-1": [["field", "value1"]] }),
+        convertRecordToGlideRecord({ "0-1": [[field.toString(), value1.toString()]] }),
     ]);
     baseTransaction.xread([{ key: key9, value: "0-1" }]);
     responseData.push([
@@ -1291,8 +1316,8 @@ export async function transactionTest(
             {
                 key: key9.toString(),
                 value: [
-                    { key: "0-2", value: [["field", "value2"]] },
-                    { key: "0-3", value: [["field", "value3"]] },
+                    { key: "0-2", value: [[field.toString(), value2.toString()]] },
+                    { key: "0-3", value: [[field.toString(), value3.toString()]] },
                 ],
             },
         ],
@@ -1338,13 +1363,13 @@ export async function transactionTest(
                 value: [
                     {
                         key: "0-2",
-                        value: [["field", "value2"]],
+                        value: [[field.toString(), value2.toString()]],
                     },
                 ],
             },
         ],
     ]);
-    baseTransaction.xpending(key9.toString(), groupName1.toString());
+    baseTransaction.xpending(key9, groupName1);
     responseData.push([
         "xpending(key9, groupName1)",
         [1, "0-2", "0-2", [[consumer.toString(), "1"]]],
@@ -1361,7 +1386,7 @@ export async function transactionTest(
     baseTransaction.xclaim(key9, groupName1, consumer, 0, ["0-2"]);
     responseData.push([
         'xclaim(key9, groupName1, consumer, 0, ["0-2"])',
-        convertRecordToGlideRecord({ "0-2": [["field", "value2"]] }),
+        convertRecordToGlideRecord({ "0-2": [[field.toString(), value2.toString()]] }),
     ]);
     baseTransaction.xclaim(key9, groupName1, consumer, 0, ["0-2"], {
         isForce: true,
@@ -1370,7 +1395,7 @@ export async function transactionTest(
     });
     responseData.push([
         'xclaim(key9, groupName1, consumer, 0, ["0-2"], { isForce: true, retryCount: 0, idle: 0})',
-        convertRecordToGlideRecord({ "0-2": [["field", "value2"]] }),
+        convertRecordToGlideRecord({ "0-2": [[field.toString(), value2.toString()]] }),
     ]);
     baseTransaction.xclaimJustId(key9, groupName1, consumer, 0, ["0-2"]);
     responseData.push([
@@ -1397,14 +1422,14 @@ export async function transactionTest(
                 ? [
                       "0-0",
                       convertRecordToGlideRecord({
-                          "0-2": [["field", "value2"]],
+                          "0-2": [[field.toString(), value2.toString()]],
                       }),
                       [],
                   ]
                 : [
                       "0-0",
                       convertRecordToGlideRecord({
-                          "0-2": [["field", "value2"]],
+                          "0-2": [[field.toString(), value2.toString()]],
                       }),
                   ],
         ]);
@@ -1435,7 +1460,7 @@ export async function transactionTest(
     responseData.push(["renamenx(key10, key9)", true]);
     baseTransaction.exists([key9, key10]);
     responseData.push(["exists([key9, key10])", 1]);
-    baseTransaction.rpush(key6, [field + "1", field + "2", field + "3"]);
+    baseTransaction.rpush(key6, [field1, field2, field3]);
     responseData.push([
         'rpush(key6, [field + "1", field + "2", field + "3"])',
         3,
@@ -1523,21 +1548,21 @@ export async function transactionTest(
     ]);
     responseData.push(["bitfield(key17, [new BitFieldSet(...)])", [609]]);
 
-    baseTransaction.pfadd(key11, ["a", "b", "c"]);
-    responseData.push(['pfadd(key11, ["a", "b", "c"])', 1]);
+    baseTransaction.pfadd(key11, [one, two, three]);
+    responseData.push(['pfadd(key11, [one, two, three])', 1]);
     baseTransaction.pfmerge(key11, []);
     responseData.push(["pfmerge(key11, [])", "OK"]);
     baseTransaction.pfcount([key11]);
     responseData.push(["pfcount([key11])", 3]);
     baseTransaction.geoadd(
         key18,
-        new Map<string, GeospatialData>([
-            ["palermo", { longitude: 13.361389, latitude: 38.115556 }],
-            ["catania", { longitude: 15.087269, latitude: 37.502669 }],
+        new Map<GlideString, GeospatialData>([
+            [palermo, { longitude: 13.361389, latitude: 38.115556 }],
+            [catania, { longitude: 15.087269, latitude: 37.502669 }],
         ]),
     );
-    responseData.push(["geoadd(key18, { palermo: ..., catania: ... })", 2]);
-    baseTransaction.geopos(key18, ["palermo", "catania"]);
+    responseData.push(["geoadd(key18, { Palermo: ..., Catania: ... })", 2]);
+    baseTransaction.geopos(key18, [palermo, catania]);
     responseData.push([
         'geopos(key18, ["palermo", "catania"])',
         [
@@ -1545,16 +1570,16 @@ export async function transactionTest(
             [15.08726745843887329, 37.50266842333162032],
         ],
     ]);
-    baseTransaction.geodist(key18, "palermo", "catania");
-    responseData.push(['geodist(key18, "palermo", "catania")', 166274.1516]);
-    baseTransaction.geodist(key18, "palermo", "catania", {
+    baseTransaction.geodist(key18, palermo, catania);
+    responseData.push(['geodist(key18, "Palermo", "Catania")', 166274.1516]);
+    baseTransaction.geodist(key18, palermo, catania, {
         unit: GeoUnit.KILOMETERS,
     });
     responseData.push([
         'geodist(key18, "palermo", "catania", { unit: GeoUnit.KILOMETERS })',
         166.2742,
     ]);
-    baseTransaction.geohash(key18, ["palermo", "catania", "NonExisting"]);
+    baseTransaction.geohash(key18, [palermo, catania, non_existing_member]);
     responseData.push([
         'geohash(key18, ["palermo", "catania", "NonExisting"])',
         ["sqc8b49rny0", "sqdtr74hyu0", null],
@@ -1575,7 +1600,7 @@ export async function transactionTest(
         baseTransaction
             .geosearch(
                 key18,
-                { member: "palermo" },
+                { member: palermo },
                 { radius: 200, unit: GeoUnit.KILOMETERS },
                 { sortOrder: SortOrder.ASC },
             )
@@ -1586,7 +1611,7 @@ export async function transactionTest(
             )
             .geosearch(
                 key18,
-                { member: "palermo" },
+                { member: palermo },
                 { radius: 200, unit: GeoUnit.KILOMETERS },
                 {
                     sortOrder: SortOrder.ASC,
@@ -1609,18 +1634,18 @@ export async function transactionTest(
                 },
             );
         responseData.push([
-            'geosearch(key18, "palermo", R200 KM, ASC)',
-            ["palermo", "catania"],
+            'geosearch(key18, "Palermo", R200 KM, ASC)',
+            [palermo.toString(), catania.toString()],
         ]);
         responseData.push([
             "geosearch(key18, (15, 37), 400x400 KM, ASC)",
-            ["palermo", "catania"],
+            [palermo.toString(), catania.toString()],
         ]);
         responseData.push([
             'geosearch(key18, "palermo", R200 KM, ASC 2 3x true)',
             [
                 [
-                    "palermo",
+                    palermo.toString(),
                     [
                         0.0,
                         3479099956230698,
@@ -1628,7 +1653,7 @@ export async function transactionTest(
                     ],
                 ],
                 [
-                    "catania",
+                    catania.toString(),
                     [
                         166.2742,
                         3479447370796909,
@@ -1641,7 +1666,7 @@ export async function transactionTest(
             "geosearch(key18, (15, 37), 400x400 KM, ASC 2 3x true)",
             [
                 [
-                    "catania",
+                    catania.toString(),
                     [
                         56.4413,
                         3479447370796909,
@@ -1649,7 +1674,7 @@ export async function transactionTest(
                     ],
                 ],
                 [
-                    "palermo",
+                    palermo.toString(),
                     [
                         190.4424,
                         3479099956230698,
