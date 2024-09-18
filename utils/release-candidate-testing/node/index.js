@@ -1,5 +1,4 @@
 import { GlideClient, GlideClusterClient } from "@valkey/valkey-glide";
-import { getServerVersion } from "../../TestUtilities.js";
 import { ValkeyCluster } from "../../TestUtils.js";
 
 
