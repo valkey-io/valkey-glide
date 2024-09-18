@@ -10757,7 +10757,7 @@ export function runBaseTests(config: {
                 ).toEqual("OK");
 
                 // one empty group exists
-                expect(await client.xinfoGroups(key)).toEqual(
+                expect(await client.xinfoGroups(Buffer.from(key))).toEqual(
                     cluster.checkIfServerVersionLessThan("7.0.0")
                         ? [
                               {
