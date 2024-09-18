@@ -358,6 +358,6 @@ jobs:
             continue-on-error: true
             uses: actions/upload-artifact@v4
             with:
-                name: smoke-test-report-amazon-linux
+                name: modules-test-report-${{ matrix.host.TARGET }}-python-${{ matrix.python }}-server-${{ matrix.engine.version }}
                 path: |
                     python/python/tests/pytest_report.html
