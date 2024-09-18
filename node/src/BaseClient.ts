@@ -5832,7 +5832,7 @@ export class BaseClient {
         group: GlideString,
         consumer: GlideString,
         minIdleTime: number,
-        ids: GlideString[],
+        ids: string[],
         options?: StreamClaimOptions,
     ): Promise<string[]> {
         return this.createWritePromise(
