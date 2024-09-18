@@ -39,5 +39,5 @@ func (client *GlideClient) CustomCommand(args []string) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	return handleStringOrNullResponse(res), nil
+	return handleStringOrNullResponse(res)
 }

@@ -140,7 +140,7 @@ func (client *baseClient) Set(key string, value string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return handleStringResponse(result), nil
+	return handleStringResponse(result)
 }
 
 func (client *baseClient) SetWithOptions(key string, value string, options *SetOptions) (string, error) {
@@ -148,7 +148,7 @@ func (client *baseClient) SetWithOptions(key string, value string, options *SetO
 	if err != nil {
 		return "", err
 	}
-	return handleStringOrNullResponse(result), nil
+	return handleStringOrNullResponse(result)
 }
 
 func (client *baseClient) Get(key string) (string, error) {
@@ -156,7 +156,7 @@ func (client *baseClient) Get(key string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return handleStringOrNullResponse(result), nil
+	return handleStringOrNullResponse(result)
 }
 
 func (client *baseClient) MSet(keyValueMap map[string]string) (string, error) {
@@ -168,7 +168,7 @@ func (client *baseClient) MSet(keyValueMap map[string]string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return handleStringResponse(result), nil
+	return handleStringResponse(result)
 }
 
 func (client *baseClient) MSetNX(keyValueMap map[string]string) (bool, error) {
@@ -180,7 +180,7 @@ func (client *baseClient) MSetNX(keyValueMap map[string]string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return handleBooleanResponse(result), nil
+	return handleBooleanResponse(result)
 }
 
 func (client *baseClient) MGet(keys []string) ([]string, error) {
@@ -188,7 +188,7 @@ func (client *baseClient) MGet(keys []string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return handleStringArrayResponse(result), nil
+	return handleStringArrayResponse(result)
 }
 
 func (client *baseClient) Incr(key string) (int64, error) {
@@ -196,7 +196,7 @@ func (client *baseClient) Incr(key string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return handleLongResponse(result), nil
+	return handleLongResponse(result)
 }
 
 func (client *baseClient) IncrBy(key string, amount int64) (int64, error) {
@@ -204,7 +204,7 @@ func (client *baseClient) IncrBy(key string, amount int64) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return handleLongResponse(result), nil
+	return handleLongResponse(result)
 }
 
 func (client *baseClient) IncrByFloat(key string, amount float64) (float64, error) {
@@ -215,7 +215,7 @@ func (client *baseClient) IncrByFloat(key string, amount float64) (float64, erro
 	if err != nil {
 		return 0, err
 	}
-	return handleDoubleResponse(result), nil
+	return handleDoubleResponse(result)
 }
 
 func (client *baseClient) Decr(key string) (int64, error) {
@@ -223,7 +223,7 @@ func (client *baseClient) Decr(key string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return handleLongResponse(result), nil
+	return handleLongResponse(result)
 }
 
 func (client *baseClient) DecrBy(key string, amount int64) (int64, error) {
@@ -231,7 +231,7 @@ func (client *baseClient) DecrBy(key string, amount int64) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return handleLongResponse(result), nil
+	return handleLongResponse(result)
 }
 
 func (client *baseClient) Strlen(key string) (int64, error) {
@@ -239,7 +239,7 @@ func (client *baseClient) Strlen(key string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return handleLongResponse(result), nil
+	return handleLongResponse(result)
 }
 
 func (client *baseClient) SetRange(key string, offset int, value string) (int64, error) {
@@ -247,7 +247,7 @@ func (client *baseClient) SetRange(key string, offset int, value string) (int64,
 	if err != nil {
 		return 0, err
 	}
-	return handleLongResponse(result), nil
+	return handleLongResponse(result)
 }
 
 func (client *baseClient) GetRange(key string, start int, end int) (string, error) {
@@ -255,7 +255,7 @@ func (client *baseClient) GetRange(key string, start int, end int) (string, erro
 	if err != nil {
 		return "", err
 	}
-	return handleStringResponse(result), nil
+	return handleStringResponse(result)
 }
 
 func (client *baseClient) Append(key string, value string) (int64, error) {
@@ -263,7 +263,7 @@ func (client *baseClient) Append(key string, value string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return handleLongResponse(result), nil
+	return handleLongResponse(result)
 }
 
 func (client *baseClient) LCS(key1 string, key2 string) (string, error) {
@@ -271,7 +271,7 @@ func (client *baseClient) LCS(key1 string, key2 string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return handleStringResponse(result), nil
+	return handleStringResponse(result)
 }
 
 func (client *baseClient) GetDel(key string) (string, error) {
@@ -284,5 +284,5 @@ func (client *baseClient) GetDel(key string) (string, error) {
 		return "", err
 	}
 
-	return handleStringOrNullResponse(result), nil
+	return handleStringOrNullResponse(result)
 }

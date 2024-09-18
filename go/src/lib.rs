@@ -26,11 +26,11 @@ use tokio::runtime::Runtime;
 /// It will have one of the value populated depending on the return type of the command.
 ///
 /// The struct is freed by the external caller by using `free_command_response` to avoid memory leaks.
-/// TODO: Add a type enum to validate what type of response is being sent in the CommandResponse.
 #[repr(C)]
 #[derive(Derivative)]
 #[derivative(Debug, Default)]
 pub struct CommandResponse {
+    response_type: ResponseType,
     int_value: c_long,
     float_value: c_double,
     bool_value: bool,
@@ -48,6 +48,19 @@ pub struct CommandResponse {
     #[derivative(Default(value = "std::ptr::null_mut()"))]
     array_value: *mut CommandResponse,
     array_value_len: c_long,
+}
+
+#[repr(C)]
+#[derive(Debug, Default)]
+pub enum ResponseType {
+    #[default]
+    Null = 0,
+    Int = 1,
+    Float = 2,
+    Bool = 3,
+    String = 4,
+    Array = 5,
+    Map = 6,
 }
 
 /// Success callback that is called when a command succeeds.
@@ -211,13 +224,36 @@ pub unsafe extern "C" fn free_connection_response(
     }
 }
 
+/// Provides the string mapping for the ResponseType enum.
+#[no_mangle]
+pub extern "C" fn get_response_type_string(response_type: ResponseType) -> *mut c_char {
+    let s = match response_type {
+        ResponseType::Null => "Null",
+        ResponseType::Int => "Int",
+        ResponseType::Float => "Float",
+        ResponseType::Bool => "Bool",
+        ResponseType::String => "String",
+        ResponseType::Array => "Array",
+        ResponseType::Map => "Map",
+    };
+    let c_str = CString::new(s).unwrap_or_default();
+    c_str.into_raw()
+}
+
+/// Deallocates a string generated via get_response_type_string.
+///
+/// # Safety
+/// free_response_type_string can be called only once per response_string.
+#[no_mangle]
+pub extern "C" fn free_response_type_string(response_string: *mut c_char) {
+    if !response_string.is_null() {
+        drop(unsafe { CString::from_raw(response_string as *mut c_char) });
+    }
+}
+
 /// Deallocates a `CommandResponse`.
 ///
 /// This function also frees the contained string_value and array_value. If the string_value and array_value are null pointers, the function returns and only the `CommandResponse` is freed.
-///
-/// # Panics
-///
-/// This function panics when called with a null `CommandResponse` pointer.
 ///
 /// # Safety
 ///
@@ -226,9 +262,10 @@ pub unsafe extern "C" fn free_connection_response(
 /// * `command_response_ptr` must be valid until `free_command_response` is called.
 #[no_mangle]
 pub unsafe extern "C" fn free_command_response(command_response_ptr: *mut CommandResponse) {
-    assert!(!command_response_ptr.is_null());
-    let command_response = unsafe { Box::from_raw(command_response_ptr) };
-    free_command_response_elements(*command_response);
+    if !command_response_ptr.is_null() {
+        let command_response = unsafe { Box::from_raw(command_response_ptr) };
+        free_command_response_elements(*command_response);
+    }
 }
 
 /// Frees the nested elements of `CommandResponse`.
@@ -306,48 +343,55 @@ fn convert_vec_to_pointer<T>(mut vec: Vec<T>) -> (*mut T, c_long) {
 }
 
 /// TODO: Avoid the use of expect and unwrap in the code and add a common error handling mechanism.
-fn valkey_value_to_command_response(value: Value) -> RedisResult<Option<CommandResponse>> {
+fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse> {
     let mut command_response = CommandResponse::default();
-    let result: RedisResult<Option<CommandResponse>> = match value {
-        Value::Nil => Ok(None),
+    let result: RedisResult<CommandResponse> = match value {
+        Value::Nil => Ok(command_response),
         Value::SimpleString(text) => {
             let vec: Vec<u8> = text.into_bytes();
             let (vec_ptr, len) = convert_vec_to_pointer(vec);
             command_response.string_value = vec_ptr as *mut c_char;
             command_response.string_value_len = len;
-            Ok(Some(command_response))
+            command_response.response_type = ResponseType::String;
+            Ok(command_response)
         }
         Value::BulkString(text) => {
             let (vec_ptr, len) = convert_vec_to_pointer(text);
             command_response.string_value = vec_ptr as *mut c_char;
             command_response.string_value_len = len;
-            Ok(Some(command_response))
+            command_response.response_type = ResponseType::String;
+            Ok(command_response)
         }
         Value::VerbatimString { format: _, text } => {
             let vec: Vec<u8> = text.into_bytes();
             let (vec_ptr, len) = convert_vec_to_pointer(vec);
             command_response.string_value = vec_ptr as *mut c_char;
             command_response.string_value_len = len;
-            Ok(Some(command_response))
+            command_response.response_type = ResponseType::String;
+            Ok(command_response)
         }
         Value::Okay => {
             let vec: Vec<u8> = String::from("OK").into_bytes();
             let (vec_ptr, len) = convert_vec_to_pointer(vec);
             command_response.string_value = vec_ptr as *mut c_char;
             command_response.string_value_len = len;
-            Ok(Some(command_response))
+            command_response.response_type = ResponseType::String;
+            Ok(command_response)
         }
         Value::Int(num) => {
             command_response.int_value = num;
-            Ok(Some(command_response))
+            command_response.response_type = ResponseType::Int;
+            Ok(command_response)
         }
         Value::Double(num) => {
             command_response.float_value = num;
-            Ok(Some(command_response))
+            command_response.response_type = ResponseType::Float;
+            Ok(command_response)
         }
         Value::Boolean(boolean) => {
             command_response.bool_value = boolean;
-            Ok(Some(command_response))
+            command_response.response_type = ResponseType::Bool;
+            Ok(command_response)
         }
         Value::Array(array) => {
             let vec: Vec<CommandResponse> = array
@@ -355,13 +399,13 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<Option<CommandR
                 .map(|v| {
                     valkey_value_to_command_response(v)
                         .expect("Value couldn't be converted to CommandResponse")
-                        .unwrap_or_default()
                 })
                 .collect();
             let (vec_ptr, len) = convert_vec_to_pointer(vec);
             command_response.array_value = vec_ptr;
             command_response.array_value_len = len;
-            Ok(Some(command_response))
+            command_response.response_type = ResponseType::Array;
+            Ok(command_response)
         }
         // TODO: Add support for other return types.
         _ => todo!(),
@@ -421,12 +465,11 @@ pub unsafe extern "C" fn command(
             }
         };
 
-        let result: RedisResult<Option<CommandResponse>> = valkey_value_to_command_response(value);
+        let result: RedisResult<CommandResponse> = valkey_value_to_command_response(value);
 
         unsafe {
             match result {
-                Ok(None) => (client_adapter.success_callback)(channel, std::ptr::null()),
-                Ok(Some(message)) => {
+                Ok(message) => {
                     (client_adapter.success_callback)(channel, Box::into_raw(Box::new(message)))
                 }
                 Err(err) => {
