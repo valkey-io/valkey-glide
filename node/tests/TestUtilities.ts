@@ -710,7 +710,34 @@ export async function transactionTest(
     );
 
     const fieldStr = uuidv4();
-    const [field, field1, field2, field3, field4, value1, value2, value3, foo, bar, baz, test, one, two, three, underscore, non_existing_member, member1, member2, member3, member4, member5, member6, member7, palermo, catania] = [
+    const [
+        field,
+        field1,
+        field2,
+        field3,
+        field4,
+        value1,
+        value2,
+        value3,
+        foo,
+        bar,
+        baz,
+        test,
+        one,
+        two,
+        three,
+        underscore,
+        non_existing_member,
+        member1,
+        member2,
+        member3,
+        member4,
+        member5,
+        member6,
+        member7,
+        palermo,
+        catania,
+    ] = [
         decodeString(fieldStr, decoder),
         decodeString(fieldStr + 1, decoder),
         decodeString(fieldStr + 2, decoder),
@@ -963,11 +990,7 @@ export async function transactionTest(
         "element",
     );
     responseData.push(["linsert", 0]);
-    baseTransaction.rpush(key6, [
-        field1,
-        field2,
-        field3,
-    ]);
+    baseTransaction.rpush(key6, [field1, field2, field3]);
     responseData.push([
         'rpush(key6, [field + "1", field + "2", field + "3"])',
         3,
@@ -985,13 +1008,7 @@ export async function transactionTest(
     responseData.push(['rpushx(key15, ["_"])', 0]);
     baseTransaction.lpushx(key15, [underscore]);
     responseData.push(['lpushx(key15, ["_"])', 0]);
-    baseTransaction.rpush(key16, [
-        field1,
-        field1,
-        field2,
-        field3,
-        field3,
-    ]);
+    baseTransaction.rpush(key16, [field1, field1, field2, field3, field3]);
     responseData.push(["rpush(key16, [1, 1, 2, 3, 3,])", 5]);
     baseTransaction.lpos(key16, field1, { rank: 2 });
     responseData.push(["lpos(key16, field1, { rank: 2 })", 1]);
@@ -1059,11 +1076,10 @@ export async function transactionTest(
     responseData.push(["scard(key7)", 0]);
     baseTransaction.zadd(key8, [
         { element: member1, score: 1 },
-        { element: member2, score: 2, },
-        { element: member3, score: 3.5, },
-        { element: member4, score: 4, },
-        { element: member5, score: 5, },
-
+        { element: member2, score: 2 },
+        { element: member3, score: 3.5 },
+        { element: member4, score: 4 },
+        { element: member5, score: 5 },
     ]);
     responseData.push(["zadd(key8, { ... } ", 5]);
     baseTransaction.zrank(key8, member1);
@@ -1096,7 +1112,12 @@ export async function transactionTest(
     baseTransaction.zrange(key8, { start: 0, end: -1 });
     responseData.push([
         "zrange(key8, { start: 0, end: -1 })",
-        [member2.toString(), member3.toString(), member4.toString(), member5.toString()],
+        [
+            member2.toString(),
+            member3.toString(),
+            member4.toString(),
+            member5.toString(),
+        ],
     ]);
     baseTransaction.zrangeWithScores(key8, { start: 0, end: -1 });
     responseData.push([
@@ -1108,7 +1129,10 @@ export async function transactionTest(
             member5: 5,
         }),
     ]);
-    baseTransaction.zadd(key12, [{ element: one, score: 1}, {element: two, score: 2 }]);
+    baseTransaction.zadd(key12, [
+        { element: one, score: 1 },
+        { element: two, score: 2 },
+    ]);
     responseData.push(["zadd(key12, { one: 1, two: 2 })", 2]);
     baseTransaction.zscan(key12, "0");
     responseData.push(['zscan(key12, "0")', ["0", ["one", "1", "two", "2"]]]);
@@ -1162,9 +1186,16 @@ export async function transactionTest(
         responseData.push(["zinterstore(key12, [key12, key13])", 0]);
 
         if (gte(version, "6.2.0")) {
-            baseTransaction.zadd(key26, [{ element: one, score: 1}, {element: two, score: 2 }]);
+            baseTransaction.zadd(key26, [
+                { element: one, score: 1 },
+                { element: two, score: 2 },
+            ]);
             responseData.push(["zadd(key26, { one: 1, two: 2 })", 2]);
-            baseTransaction.zadd(key27, [{ element: one, score: 1}, {element: two, score: 2}, {element: three, score: 3.5}]);
+            baseTransaction.zadd(key27, [
+                { element: one, score: 1 },
+                { element: two, score: 2 },
+                { element: three, score: 3.5 },
+            ]);
             responseData.push([
                 "zadd(key27, { one: 1, two: 2, three: 3.5 })",
                 3,
@@ -1299,12 +1330,16 @@ export async function transactionTest(
     baseTransaction.xrange(key9, { value: "0-1" }, { value: "0-1" });
     responseData.push([
         "xrange(key9)",
-        convertRecordToGlideRecord({ "0-1": [[field.toString(), value1.toString()]] }),
+        convertRecordToGlideRecord({
+            "0-1": [[field.toString(), value1.toString()]],
+        }),
     ]);
     baseTransaction.xrevrange(key9, { value: "0-1" }, { value: "0-1" });
     responseData.push([
         "xrevrange(key9)",
-        convertRecordToGlideRecord({ "0-1": [[field.toString(), value1.toString()]] }),
+        convertRecordToGlideRecord({
+            "0-1": [[field.toString(), value1.toString()]],
+        }),
     ]);
     baseTransaction.xread([{ key: key9, value: "0-1" }]);
     responseData.push([
@@ -1313,8 +1348,14 @@ export async function transactionTest(
             {
                 key: key9.toString(),
                 value: [
-                    { key: "0-2", value: [[field.toString(), value2.toString()]] },
-                    { key: "0-3", value: [[field.toString(), value3.toString()]] },
+                    {
+                        key: "0-2",
+                        value: [[field.toString(), value2.toString()]],
+                    },
+                    {
+                        key: "0-3",
+                        value: [[field.toString(), value3.toString()]],
+                    },
                 ],
             },
         ],
@@ -1383,7 +1424,9 @@ export async function transactionTest(
     baseTransaction.xclaim(key9, groupName1, consumer, 0, ["0-2"]);
     responseData.push([
         'xclaim(key9, groupName1, consumer, 0, ["0-2"])',
-        convertRecordToGlideRecord({ "0-2": [[field.toString(), value2.toString()]] }),
+        convertRecordToGlideRecord({
+            "0-2": [[field.toString(), value2.toString()]],
+        }),
     ]);
     baseTransaction.xclaim(key9, groupName1, consumer, 0, ["0-2"], {
         isForce: true,
@@ -1392,7 +1435,9 @@ export async function transactionTest(
     });
     responseData.push([
         'xclaim(key9, groupName1, consumer, 0, ["0-2"], { isForce: true, retryCount: 0, idle: 0})',
-        convertRecordToGlideRecord({ "0-2": [[field.toString(), value2.toString()]] }),
+        convertRecordToGlideRecord({
+            "0-2": [[field.toString(), value2.toString()]],
+        }),
     ]);
     baseTransaction.xclaimJustId(key9, groupName1, consumer, 0, ["0-2"]);
     responseData.push([
@@ -1546,7 +1591,7 @@ export async function transactionTest(
     responseData.push(["bitfield(key17, [new BitFieldSet(...)])", [609]]);
 
     baseTransaction.pfadd(key11, [one, two, three]);
-    responseData.push(['pfadd(key11, [one, two, three])', 1]);
+    responseData.push(["pfadd(key11, [one, two, three])", 1]);
     baseTransaction.pfmerge(key11, []);
     responseData.push(["pfmerge(key11, [])", "OK"]);
     baseTransaction.pfcount([key11]);
