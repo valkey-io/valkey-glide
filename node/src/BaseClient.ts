@@ -5523,7 +5523,7 @@ export class BaseClient {
      * ```
      */
     public async xinfoGroups(
-        key: string,
+        key: GlideString,
         options?: DecoderOption,
     ): Promise<Record<string, GlideString | number | null>[]> {
         return this.createWritePromise<
