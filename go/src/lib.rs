@@ -240,6 +240,7 @@ pub unsafe extern "C" fn free_command_response(command_response_ptr: *mut Comman
 }
 
 /// Frees the nested elements of `CommandResponse`.
+/// TODO: Add a test case to check for memory leak.
 ///
 /// # Safety
 ///

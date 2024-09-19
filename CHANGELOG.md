@@ -125,6 +125,7 @@
 * Java, Node, Python: Add NOSCORES option to ZSCAN & NOVALUES option to HSCAN (Valkey-8) ([#2174](https://github.com/valkey-io/valkey-glide/pull/2174))
 * Node: Add SCAN command ([#2257](https://github.com/valkey-io/valkey-glide/pull/2257))
 * Java: Add Script commands ([#2261](https://github.com/valkey-io/valkey-glide/pull/2261))
+* Python: Replace google-api-python-client with protobuf ([#2304](https://github.com/valkey-io/valkey-glide/pull/2304))
 
 #### Breaking Changes
 * Java: Update INFO command ([#2274](https://github.com/valkey-io/valkey-glide/pull/2274))
