@@ -49,7 +49,7 @@ async function sendPingToRandomNodeInCluster() {
         clientName: "test_cluster_client",
     });
     // The empty array signifies that there are no additional arguments.
-    const pong = await client.customCommand(["PING"], "randomNode");
+    const pong = await client.customCommand(["PING"], { route: "randomNode" });
     console.log(pong);
     await send_set_and_get(client);
     client.close();
