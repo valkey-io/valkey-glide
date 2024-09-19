@@ -128,10 +128,11 @@ jobs:
               with:
                   submodules: recursive
 
-            - uses: ./.github/workflows/lint-rust
+            - name: lint node rust
+              uses: ./.github/workflows/lint-rust
               with:
                   cargo-toml-folder: ./node/rust-client
-              name: lint node rust
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
 
     # build-macos-latest:
     #     runs-on: macos-latest
