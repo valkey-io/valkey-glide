@@ -102,7 +102,13 @@ func (client *baseClient) executeCommand(requestType C.RequestType, args []strin
 		return nil, &ClosingError{"ExecuteCommand failed. The client is closed."}
 	}
 
-	cArgs, argLengths := toCStrings(args)
+	var cArgsPtr *C.uintptr_t = nil
+	var argLengthsPtr *C.ulong = nil
+	if len(args) > 0 {
+		cArgs, argLengths := toCStrings(args)
+		cArgsPtr = &cArgs[0]
+		argLengthsPtr = &argLengths[0]
+	}
 
 	resultChannel := make(chan payload)
 	resultChannelPtr := uintptr(unsafe.Pointer(&resultChannel))
@@ -112,8 +118,8 @@ func (client *baseClient) executeCommand(requestType C.RequestType, args []strin
 		C.uintptr_t(resultChannelPtr),
 		uint32(requestType),
 		C.size_t(len(args)),
-		&cArgs[0],
-		&argLengths[0],
+		cArgsPtr,
+		argLengthsPtr,
 	)
 	payload := <-resultChannel
 	if payload.error != nil {
@@ -160,11 +166,7 @@ func (client *baseClient) Get(key string) (string, error) {
 }
 
 func (client *baseClient) MSet(keyValueMap map[string]string) (string, error) {
-	flat := []string{}
-	for key, value := range keyValueMap {
-		flat = append(flat, key, value)
-	}
-	result, err := client.executeCommand(C.MSet, flat)
+	result, err := client.executeCommand(C.MSet, utils.MapToString(keyValueMap))
 	if err != nil {
 		return "", err
 	}
@@ -172,11 +174,7 @@ func (client *baseClient) MSet(keyValueMap map[string]string) (string, error) {
 }
 
 func (client *baseClient) MSetNX(keyValueMap map[string]string) (bool, error) {
-	flat := []string{}
-	for key, value := range keyValueMap {
-		flat = append(flat, key, value)
-	}
-	result, err := client.executeCommand(C.MSetNX, flat)
+	result, err := client.executeCommand(C.MSetNX, utils.MapToString(keyValueMap))
 	if err != nil {
 		return false, err
 	}
