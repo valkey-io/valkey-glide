@@ -48,6 +48,14 @@ pub struct CommandResponse {
     #[derivative(Default(value = "std::ptr::null_mut()"))]
     array_value: *mut CommandResponse,
     array_value_len: c_long,
+
+    /// Below two values represent the Map structure inside CommandResponse.
+    /// The map is transformed into an array of (map_key: CommandResponse, map_value: CommandResponse) and passed to Go.
+    /// These are represented as pointers as the map can be null (optionally present).
+    #[derivative(Default(value = "std::ptr::null_mut()"))]
+    map_key: *mut CommandResponse,
+    #[derivative(Default(value = "std::ptr::null_mut()"))]
+    map_value: *mut CommandResponse,
 }
 
 /// Success callback that is called when a command succeeds.
@@ -241,11 +249,17 @@ pub unsafe extern "C" fn free_command_response(command_response_ptr: *mut Comman
 /// * The contained `string_value` must be valid until `free_command_response` is called and it must outlive the `CommandResponse` that contains it.
 /// * The contained `array_value` must be obtained from the `CommandResponse` returned in [`SuccessCallback`] from [`command`].
 /// * The contained `array_value` must be valid until `free_command_response` is called and it must outlive the `CommandResponse` that contains it.
+/// * The contained `map_key` must be obtained from the `CommandResponse` returned in [`SuccessCallback`] from [`command`].
+/// * The contained `map_key` must be valid until `free_command_response` is called and it must outlive the `CommandResponse` that contains it.
+/// * The contained `map_value` must be obtained from the `CommandResponse` returned in [`SuccessCallback`] from [`command`].
+/// * The contained `map_value` must be valid until `free_command_response` is called and it must outlive the `CommandResponse` that contains it.
 fn free_command_response_elements(command_response: CommandResponse) {
     let string_value = command_response.string_value;
     let string_value_len = command_response.string_value_len;
     let array_value = command_response.array_value;
     let array_value_len = command_response.array_value_len;
+    let map_key = command_response.map_key;
+    let map_value = command_response.map_value;
     if !string_value.is_null() {
         let len = string_value_len as usize;
         unsafe { Vec::from_raw_parts(string_value, len, len) };
@@ -257,9 +271,16 @@ fn free_command_response_elements(command_response: CommandResponse) {
             free_command_response_elements(element);
         }
     }
+    if !map_key.is_null() {
+        unsafe { free_command_response(map_key) };
+    }
+    if !map_value.is_null() {
+        unsafe { free_command_response(map_value) };
+    }
 }
 
 /// Frees the error_message received on a command failure.
+/// TODO: Add a test case to check for memory leak.
 ///
 /// # Panics
 ///
@@ -359,6 +380,31 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<Option<CommandR
                 })
                 .collect();
             let (vec_ptr, len) = convert_vec_to_pointer(vec);
+            command_response.array_value = vec_ptr;
+            command_response.array_value_len = len;
+            Ok(Some(command_response))
+        }
+        Value::Map(map) => {
+            let result: Vec<CommandResponse> = map
+                .into_iter()
+                .map(|(key, val)| {
+                    let mut map_response = CommandResponse::default();
+
+                    let map_key = valkey_value_to_command_response(key)
+                        .expect("Value couldn't be converted to CommandResponse")
+                        .unwrap_or_default();
+                    map_response.map_key = Box::into_raw(Box::new(map_key));
+
+                    let map_val = valkey_value_to_command_response(val)
+                        .expect("Value couldn't be converted to CommandResponse")
+                        .unwrap_or_default();
+                    map_response.map_value = Box::into_raw(Box::new(map_val));
+
+                    map_response
+                })
+                .collect::<Vec<_>>();
+
+            let (vec_ptr, len) = convert_vec_to_pointer(result);
             command_response.array_value = vec_ptr;
             command_response.array_value_len = len;
             Ok(Some(command_response))

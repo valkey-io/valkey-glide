@@ -21,3 +21,12 @@ func IntToString(value int64) string {
 func FloatToString(value float64) string {
 	return strconv.FormatFloat(value, 'g', -1 /*precision*/, 64 /*bit*/)
 }
+
+// Flattens the Map: { (key1, value1), (key2, value2), ..} to a slice { key1, value1, key2, value2, ..}
+func MapToString(parameter map[string]string) []string {
+	flat := make([]string, 0, len(parameter)*2)
+	for key, value := range parameter {
+		flat = append(flat, key, value)
+	}
+	return flat
+}
