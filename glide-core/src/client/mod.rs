@@ -23,7 +23,11 @@ mod value_conversion;
 use tokio::sync::mpsc;
 
 pub const HEARTBEAT_SLEEP_DURATION: Duration = Duration::from_secs(1);
-pub const DEFAULT_RETRIES: u32 = 3;
+
+// Dont use retries because we do not expose this configuration to the user,
+// making it is unexpected to have command retries
+pub const DEFAULT_RETRIES: u32 = 0;
+
 pub const DEFAULT_RESPONSE_TIMEOUT: Duration = Duration::from_millis(250);
 pub const DEFAULT_CONNECTION_ATTEMPT_TIMEOUT: Duration = Duration::from_millis(250);
 pub const DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL: Duration = Duration::from_secs(60);
