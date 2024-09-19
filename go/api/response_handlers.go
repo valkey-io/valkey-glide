@@ -54,3 +54,14 @@ func handleBooleanResponse(response *C.struct_CommandResponse) bool {
 	defer C.free_command_response(response)
 	return bool(response.bool_value)
 }
+
+func handleStringToStringMapResponse(response *C.struct_CommandResponse) map[string]string {
+	defer C.free_command_response(response)
+	m := make(map[string]string, response.array_value_len)
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		key := convertCharArrayToString(v.map_key.string_value, v.map_key.string_value_len)
+		value := convertCharArrayToString(v.map_value.string_value, v.map_value.string_value_len)
+		m[key] = value
+	}
+	return m
+}
