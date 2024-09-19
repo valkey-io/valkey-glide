@@ -18,10 +18,11 @@ type SetOptions struct {
 	// Equivalent to GET in the valkey API.
 	ReturnOldValue bool
 	// If not set, no expiry time will be set for the value.
+	// Supported ExpiryTypes ("EX", "PX", "EXAT", "PXAT", "KEEPTTL")
 	Expiry *Expiry
 }
 
-func (opts *SetOptions) toArgs() []string {
+func (opts *SetOptions) setOptionsToArgs() []string {
 	args := []string{}
 	if opts.ConditionalSet != "" {
 		args = append(args, string(opts.ConditionalSet))
@@ -34,6 +35,30 @@ func (opts *SetOptions) toArgs() []string {
 	if opts.Expiry != nil {
 		args = append(args, string(opts.Expiry.Type))
 		if opts.Expiry.Type != KeepExisting {
+			args = append(args, strconv.FormatUint(opts.Expiry.Count, 10))
+		}
+	}
+
+	return args
+}
+
+// GetExOptions represents optional arguments for the [api.StringCommands.GetExWithOptions] command.
+//
+// See [valkey.io]
+//
+// [valkey.io]: https://valkey.io/commands/getex/
+type GetExOptions struct {
+	// If not set, no expiry time will be set for the value.
+	// Supported ExpiryTypes ("EX", "PX", "EXAT", "PXAT", "PERSIST")
+	Expiry *Expiry
+}
+
+func (opts *GetExOptions) getExOptionsToArgs() []string {
+	args := []string{}
+
+	if opts.Expiry != nil {
+		args = append(args, string(opts.Expiry.Type))
+		if opts.Expiry.Type != Persist {
 			args = append(args, strconv.FormatUint(opts.Expiry.Count, 10))
 		}
 	}
@@ -68,4 +93,5 @@ const (
 	Milliseconds     ExpiryType = "PX"      // expire the value after [api.Expiry.Count] milliseconds
 	UnixSeconds      ExpiryType = "EXAT"    // expire the value after the Unix time specified by [api.Expiry.Count], in seconds
 	UnixMilliseconds ExpiryType = "PXAT"    // expire the value after the Unix time specified by [api.Expiry.Count], in milliseconds
+	Persist          ExpiryType = "PERSIST" // Remove the expiry associated with the key
 )

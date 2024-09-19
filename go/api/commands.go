@@ -77,6 +77,50 @@ type StringCommands interface {
 	// [valkey.io]: https://valkey.io/commands/get/
 	Get(key string) (string, error)
 
+	// Get string value associated with the given key, or an empty string is returned ("") if no such value exists.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//  key - The key to be retrieved from the database.
+	//
+	// Return value:
+	//  If key exists, returns the value of key as a String. Otherwise, return ("").
+	//
+	// For example:
+	//  1. key: value
+	//	   result, err := client.GetEx("key")
+	//     result: "value"
+	//  2. result, err := client.GetEx("nonExistentKey")
+	//     result: ""
+	//
+	// [valkey.io]: https://valkey.io/commands/getex/
+	GetEx(key string) (string, error)
+
+	// Get string value associated with the given key and optionally sets the expiration of the key.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//  key - The key to be retrieved from the database.
+	//  options - The GetEx options.
+	//
+	// Return value:
+	//  If key exists, returns the value of key as a String. Otherwise, return ("").
+	//
+	// For example:
+	//  key: initialValue
+	//  result, err := client.GetExWithOptions("key", &api.GetExOptions{
+	//      Expiry: &api.Expiry{
+	//          Type: api.Seconds,
+	//          Count: uint64(5),
+	//      },
+	//  })
+	//  result: "OK"
+	//
+	// [valkey.io]: https://valkey.io/commands/getex/
+	GetExWithOptions(key string, options *GetExOptions) (string, error)
+
 	// Sets multiple keys to multiple values in a single operation.
 	//
 	// Note:
@@ -357,6 +401,7 @@ type StringCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/lcs/
 	LCS(key1 string, key2 string) (string, error)
+
 	// GetDel gets the value associated with the given key and deletes the key.
 	//
 	// Parameters:
