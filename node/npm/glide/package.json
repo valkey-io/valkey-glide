@@ -26,7 +26,7 @@
         "client",
         "valkey-glide"
     ],
-    "author": "Valkey contributors",
+    "author": "Valkey GLIDE Maintainers",
     "license": "Apache-2.0",
     "bugs": {
         "url": "https://github.com/valkey-io/valkey-glide/issues"
