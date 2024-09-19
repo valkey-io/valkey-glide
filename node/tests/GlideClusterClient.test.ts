@@ -328,41 +328,55 @@ describe("GlideClusterClient", () => {
         TIMEOUT,
     );
 
-    it.each([
-        { protocol: ProtocolVersion.RESP2, decoder: Decoder.String },
-        { protocol: ProtocolVersion.RESP2, decoder: Decoder.Bytes },
-        { protocol: ProtocolVersion.RESP3, decoder: Decoder.String },
-        { protocol: ProtocolVersion.RESP3, decoder: Decoder.Bytes },
-    ])(
-        `can send transactions_%p`,
-        async ({ protocol, decoder }) => {
-            client = await GlideClusterClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
+    describe.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "Protocol is RESP2 = %s",
+        (protocol) => {
+            describe.each([Decoder.String, Decoder.Bytes])(
+                "Decoder String = %s",
+                (decoder) => {
+                    it(
+                        "can send transactions",
+                        async () => {
+                            client = await GlideClusterClient.createClient(
+                                getClientConfigurationOption(
+                                    cluster.getAddresses(),
+                                    protocol,
+                                ),
+                            );
+
+                            const transaction = new ClusterTransaction();
+
+                            const expectedRes = await transactionTest(
+                                transaction,
+                                cluster.getVersion(),
+                                decoder,
+                            );
+
+                            if (
+                                !cluster.checkIfServerVersionLessThan("7.0.0")
+                            ) {
+                                transaction.publish("message", "key", true);
+                                expectedRes.push([
+                                    'publish("message", "key", true)',
+                                    0,
+                                ]);
+
+                                transaction.pubsubShardChannels();
+                                expectedRes.push(["pubsubShardChannels()", []]);
+                                transaction.pubsubShardNumSub([]);
+                                expectedRes.push(["pubsubShardNumSub()", []]);
+                            }
+
+                            const result = await client.exec(transaction, {
+                                decoder: Decoder.String,
+                            });
+                            validateTransactionResponse(result, expectedRes);
+                        },
+                        TIMEOUT,
+                    );
+                },
             );
-            const transaction = new ClusterTransaction();
-
-            const expectedRes = await transactionTest(
-                transaction,
-                cluster.getVersion(),
-                decoder,
-            );
-
-            if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
-                transaction.publish("message", "key", true);
-                expectedRes.push(['publish("message", "key", true)', 0]);
-
-                transaction.pubsubShardChannels();
-                expectedRes.push(["pubsubShardChannels()", []]);
-                transaction.pubsubShardNumSub([]);
-                expectedRes.push(["pubsubShardNumSub()", []]);
-            }
-
-            const result = await client.exec(transaction, {
-                decoder: Decoder.String,
-            });
-            validateTransactionResponse(result, expectedRes);
         },
-        TIMEOUT,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
