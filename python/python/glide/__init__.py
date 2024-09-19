@@ -65,13 +65,11 @@ from glide.async_commands.stream import (
     TrimByMinId,
 )
 from glide.async_commands.transaction import (
-    BaseTransaction,
     ClusterTransaction,
     Transaction,
 )
 from glide.config import (
     BackoffStrategy,
-    BaseClientConfiguration,
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
     NodeAddress,
@@ -102,7 +100,7 @@ from glide.exceptions import (
     RequestError,
     TimeoutError,
 )
-from glide.glide_client import BaseClient, GlideClient, GlideClusterClient, TGlideClient
+from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.logger import Level as LogLevel
 from glide.logger import Logger
 from glide.routes import (
@@ -122,15 +120,12 @@ PubSubMsg = CoreCommands.PubSubMsg
 
 __all__ = [
     # Client
-    "BaseClient",
     "GlideClient",
     "GlideClusterClient",
-    "BaseTransaction",
     "Transaction",
     "ClusterTransaction",
     "TGlideClient"
     # Config
-    "BaseClientConfiguration",
     "GlideClientConfiguration",
     "GlideClusterClientConfiguration",
     "BackoffStrategy",
