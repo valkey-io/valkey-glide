@@ -9,3 +9,4 @@ lib.h
 # benchmarking results
 benchmarks/results/**
 benchmarks/gobenchmarks.json
+benchmarks/benchmarks

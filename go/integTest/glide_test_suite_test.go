@@ -21,7 +21,7 @@ type GlideTestSuite struct {
 	suite.Suite
 	standalonePorts []int
 	clusterPorts    []int
-	redisVersion    string
+	serverVersion   string
 	clients         []*api.GlideClient
 	clusterClients  []*api.GlideClusterClient
 }
@@ -55,8 +55,8 @@ func (suite *GlideTestSuite) SetupSuite() {
 		suite.T().Fatal(err.Error())
 	}
 
-	suite.redisVersion = extractServerVersion(string(byteOutput))
-	suite.T().Logf("Redis version = %s", suite.redisVersion)
+	suite.serverVersion = extractServerVersion(string(byteOutput))
+	suite.T().Logf("Detected server version = %s", suite.serverVersion)
 }
 
 func extractPorts(suite *GlideTestSuite, output string) []int {
