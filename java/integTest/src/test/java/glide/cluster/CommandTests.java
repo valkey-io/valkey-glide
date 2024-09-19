@@ -1055,7 +1055,7 @@ public class CommandTests {
         assertEquals(OK, clusterClient.flushall(ASYNC, route).get());
 
         var replicaRoute = new SlotKeyRoute("key", REPLICA);
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             // Since Valkey 8.0.0 flushall can run on replicas
             assertEquals(OK, clusterClient.flushall(route).get());
         } else {
@@ -1650,7 +1650,7 @@ public class CommandTests {
     public void fcall_readonly_function() {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         assumeTrue(
-                !SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0"),
+                !SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0"),
                 "Temporary disabeling this test on valkey 8");
 
         String libName = "fcall_readonly_function";
@@ -1708,7 +1708,7 @@ public class CommandTests {
     public void fcall_readonly_binary_function() {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         assumeTrue(
-                !SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0"),
+                !SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0"),
                 "Temporary disabeling this test on valkey 8");
 
         String libName = "fcall_readonly_function";
