@@ -33,11 +33,9 @@ func handleStringOrNullResponse(response *C.struct_CommandResponse) string {
 
 func handleStringArrayResponse(response *C.struct_CommandResponse) []string {
 	defer C.free_command_response(response)
-	var len []C.long
-	len = append(len, unsafe.Slice(response.array_elements_len, response.array_value_len)...)
 	var slice []string
-	for k, v := range unsafe.Slice(response.array_value, response.array_value_len) {
-		slice = append(slice, convertCharArrayToString(v, len[k]))
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		slice = append(slice, convertCharArrayToString(v.string_value, v.string_value_len))
 	}
 	return slice
 }
@@ -55,4 +53,15 @@ func handleDoubleResponse(response *C.struct_CommandResponse) float64 {
 func handleBooleanResponse(response *C.struct_CommandResponse) bool {
 	defer C.free_command_response(response)
 	return bool(response.bool_value)
+}
+
+func handleStringToStringMapResponse(response *C.struct_CommandResponse) map[string]string {
+	defer C.free_command_response(response)
+	m := make(map[string]string, response.array_value_len)
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		key := convertCharArrayToString(v.map_key.string_value, v.map_key.string_value_len)
+		value := convertCharArrayToString(v.map_value.string_value, v.map_value.string_value_len)
+		m[key] = value
+	}
+	return m
 }
