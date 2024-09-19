@@ -39,7 +39,7 @@ jobs:
     load-engine-matrix:
       runs-on: ubuntu-latest
       outputs:
-        matrix: ${{ steps.load-engine-matrix.outputs.matrix }}
+          matrix: ${{ steps.load-engine-matrix.outputs.matrix }}
       steps:
           - name: Checkout
             uses: actions/checkout@v4
@@ -69,6 +69,7 @@ jobs:
                   os: "ubuntu"
                   target: "x86_64-unknown-linux-gnu"
                   engine-version: ${{ matrix.engine.version }}
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - uses: Swatinem/rust-cache@v2
 
