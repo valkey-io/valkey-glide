@@ -1297,7 +1297,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `getrange test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster) => {
+            await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 const nonStringKey = uuidv4();
                 const valueEncoded = Buffer.from("This is a string");
@@ -1337,15 +1337,10 @@ export function runBaseTests(config: {
                 // incorrect range
                 expect(await client.getrange(key, -1, -3)).toEqual("");
 
-                // a bug fixed in version 8: https://github.com/redis/redis/issues/13207
-                expect(await client.getrange(key, -200, -100)).toEqual(
-                    cluster.checkIfServerVersionLessThan("8.0.0") ? "T" : "",
-                );
+                expect(await client.getrange(key, -200, -100)).toEqual("T");
 
                 // empty key (returning null isn't implemented)
-                expect(await client.getrange(nonStringKey, 0, -1)).toEqual(
-                    cluster.checkIfServerVersionLessThan("8.0.0") ? "" : null,
-                );
+                expect(await client.getrange(nonStringKey, 0, -1)).toEqual("");
 
                 // non-string key
                 expect(await client.lpush(nonStringKey, ["_"])).toEqual(1);
@@ -1604,7 +1599,7 @@ export function runBaseTests(config: {
                 expect(result[resultCursorIndex]).not.toEqual(initialCursor);
                 expect(result[resultCollectionIndex].length).toBeGreaterThan(0);
 
-                if (!cluster.checkIfServerVersionLessThan("7.9.0")) {
+                if (!cluster.checkIfServerVersionLessThan("8.0.0")) {
                     const result = await client.hscan(key1, initialCursor, {
                         noValues: true,
                     });
@@ -1645,7 +1640,7 @@ export function runBaseTests(config: {
                     expect(result2[resultCollectionIndex]).toEqual([]);
 
                     // Negative cursor
-                    if (cluster.checkIfServerVersionLessThan("7.9.0")) {
+                    if (cluster.checkIfServerVersionLessThan("8.0.0")) {
                         result = await client.hscan(key1, "-1");
                         expect(result[resultCursorIndex]).toEqual(
                             initialCursor,
@@ -4194,7 +4189,7 @@ export function runBaseTests(config: {
         `script show test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {
-                if (cluster.checkIfServerVersionLessThan("7.9.0")) {
+                if (cluster.checkIfServerVersionLessThan("8.0.0")) {
                     return;
                 }
 
@@ -8921,7 +8916,7 @@ export function runBaseTests(config: {
                     ).rejects.toThrow(RequestError);
                 }
 
-                if (cluster.checkIfServerVersionLessThan("7.9.0")) {
+                if (cluster.checkIfServerVersionLessThan("8.0.0")) {
                     await expect(
                         client.bitcount(key1, {
                             start: 2,
@@ -9755,7 +9750,7 @@ export function runBaseTests(config: {
                     expect(result[resultCollectionIndex]).toEqual([]);
 
                     // Negative cursor
-                    if (cluster.checkIfServerVersionLessThan("7.9.0")) {
+                    if (cluster.checkIfServerVersionLessThan("8.0.0")) {
                         result = await client.zscan(key1, "-1");
                         expect(result[resultCursorIndex]).toEqual(
                             initialCursor,
@@ -9869,7 +9864,7 @@ export function runBaseTests(config: {
                         result[resultCollectionIndex].length,
                     ).toBeGreaterThan(0);
 
-                    if (!cluster.checkIfServerVersionLessThan("7.9.0")) {
+                    if (!cluster.checkIfServerVersionLessThan("8.0.0")) {
                         const result = await client.zscan(key1, initialCursor, {
                             noScores: true,
                         });
@@ -12079,7 +12074,7 @@ export function runBaseTests(config: {
             await runTest(
                 async (client: BaseClient, cluster: ValkeyCluster) => {
                     if (
-                        cluster.checkIfServerVersionLessThan("7.9.0") &&
+                        cluster.checkIfServerVersionLessThan("8.0.0") &&
                         client instanceof GlideClusterClient
                     ) {
                         return;
