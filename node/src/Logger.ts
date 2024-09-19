@@ -12,7 +12,7 @@ const LEVEL = new Map<LevelOptions | undefined, Level | undefined>([
     ["trace", Level.Trace],
     [undefined, undefined],
 ]);
-type LevelOptions = "error" | "warn" | "info" | "debug" | "trace";
+export type LevelOptions = "error" | "warn" | "info" | "debug" | "trace";
 
 /*
  * A singleton class that allows logging which is consistent with logs from the internal rust core.

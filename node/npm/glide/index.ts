@@ -192,6 +192,12 @@ function initialize() {
         createLeakedMap,
         createLeakedString,
         parseInfoResponse,
+        Script,
+        ObjectType,
+        ClusterScanCursor,
+        BaseClientConfiguration,
+        GlideClusterClientConfiguration,
+        LevelOptions,
     } = nativeBinding;
 
     module.exports = {
@@ -305,6 +311,12 @@ function initialize() {
         createLeakedMap,
         createLeakedString,
         parseInfoResponse,
+        Script,
+        ObjectType,
+        ClusterScanCursor,
+        BaseClientConfiguration,
+        GlideClusterClientConfiguration,
+        LevelOptions,
     };
 
     globalObject = Object.assign(global, nativeBinding);
