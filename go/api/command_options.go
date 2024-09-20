@@ -22,8 +22,9 @@ type SetOptions struct {
 	Expiry *Expiry
 }
 
-func (opts *SetOptions) setOptionsToArgs() []string {
+func (opts *SetOptions) toArgs() ([]string, error) {
 	args := []string{}
+	var err error
 	if opts.ConditionalSet != "" {
 		args = append(args, string(opts.ConditionalSet))
 	}
@@ -33,13 +34,17 @@ func (opts *SetOptions) setOptionsToArgs() []string {
 	}
 
 	if opts.Expiry != nil {
-		args = append(args, string(opts.Expiry.Type))
-		if opts.Expiry.Type != KeepExisting {
-			args = append(args, strconv.FormatUint(opts.Expiry.Count, 10))
+		switch opts.Expiry.Type {
+		case Seconds, Milliseconds, UnixSeconds, UnixMilliseconds:
+			args = append(args, string(opts.Expiry.Type), strconv.FormatUint(opts.Expiry.Count, 10))
+		case KeepExisting:
+			args = append(args, string(opts.Expiry.Type))
+		default:
+			err = &RequestError{"Invalid expiry type"}
 		}
 	}
 
-	return args
+	return args, err
 }
 
 // GetExOptions represents optional arguments for the [api.StringCommands.GetExWithOptions] command.
@@ -53,17 +58,22 @@ type GetExOptions struct {
 	Expiry *Expiry
 }
 
-func (opts *GetExOptions) getExOptionsToArgs() []string {
+func (opts *GetExOptions) toArgs() ([]string, error) {
 	args := []string{}
+	var err error
 
 	if opts.Expiry != nil {
-		args = append(args, string(opts.Expiry.Type))
-		if opts.Expiry.Type != Persist {
-			args = append(args, strconv.FormatUint(opts.Expiry.Count, 10))
+		switch opts.Expiry.Type {
+		case Seconds, Milliseconds, UnixSeconds, UnixMilliseconds:
+			args = append(args, string(opts.Expiry.Type), strconv.FormatUint(opts.Expiry.Count, 10))
+		case Persist:
+			args = append(args, string(opts.Expiry.Type))
+		default:
+			err = &RequestError{"Invalid expiry type"}
 		}
 	}
 
-	return args
+	return args, err
 }
 
 const returnOldValue = "GET"

@@ -36,7 +36,7 @@ type StringCommands interface {
 	// Parameters:
 	//  key     - The key to store.
 	//  value   - The value to store with the given key.
-	//  options - The Set options.
+	//  options - The [api.SetOptions].
 	//
 	// Return value:
 	//  If the value is successfully set, return "OK".
@@ -103,7 +103,7 @@ type StringCommands interface {
 	//
 	// Parameters:
 	//  key - The key to be retrieved from the database.
-	//  options - The GetEx options.
+	//  options - The [api.GetExOptions].
 	//
 	// Return value:
 	//  If key exists, returns the value of key as a String. Otherwise, return ("").

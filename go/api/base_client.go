@@ -150,7 +150,12 @@ func (client *baseClient) Set(key string, value string) (string, error) {
 }
 
 func (client *baseClient) SetWithOptions(key string, value string, options *SetOptions) (string, error) {
-	result, err := client.executeCommand(C.Set, append([]string{key, value}, options.setOptionsToArgs()...))
+	optionArgs, err := options.toArgs()
+	if err != nil {
+		return "", err
+	}
+
+	result, err := client.executeCommand(C.Set, append([]string{key, value}, optionArgs...))
 	if err != nil {
 		return "", err
 	}
@@ -174,7 +179,12 @@ func (client *baseClient) GetEx(key string) (string, error) {
 }
 
 func (client *baseClient) GetExWithOptions(key string, options *GetExOptions) (string, error) {
-	result, err := client.executeCommand(C.GetEx, append([]string{key}, options.getExOptionsToArgs()...))
+	optionArgs, err := options.toArgs()
+	if err != nil {
+		return "", err
+	}
+
+	result, err := client.executeCommand(C.GetEx, append([]string{key}, optionArgs...))
 	if err != nil {
 		return "", err
 	}
