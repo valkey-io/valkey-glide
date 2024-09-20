@@ -392,9 +392,10 @@ type HashCommands interface {
 	//  The value associated with field, or an empty string when field is not present in the hash or key does not exist.
 	//
 	// For example:
+	//  Assume we have the following hash:
+	//  my_hash := map[string]string{"field1": "value", "field2": "another_value"}
 	//  payload, err := client.HGet("my_hash", "field1")
 	//  // payload equals "value"
-	//
 	//  payload, err = client.HGet("my_hash", "nonexistent_field")
 	//  // payload equals ""
 	//
@@ -429,7 +430,7 @@ type HashCommands interface {
 	// Return value:
 	//  An array of values associated with the given fields, in the same order as they are requested.
 	//  For every field that does not exist in the hash, a null value is returned.
-	//  If key does not exist, it is treated as an empty hash, and it returns an array of null values.
+	//  If key does not exist, returns an empty string array.
 	//
 	// For example:
 	//  values, err := client.HMGet("my_hash", []string{"field1", "field2"})
@@ -476,7 +477,6 @@ type HashCommands interface {
 	// For example:
 	//  payload1, err := client.HSetNX("myHash", "field", "value")
 	//  // payload1 equals true
-	//
 	//  payload2, err := client.HSetNX("myHash", "field", "newValue")
 	//  // payload2 equals false
 	//
@@ -517,7 +517,6 @@ type HashCommands interface {
 	// For example:
 	//  num1, err := client.HLen("myHash")
 	//  // num1 equals 3
-	//
 	//  num2, err := client.HLen("nonExistingKey")
 	//  // num2 equals 0
 	//
@@ -556,7 +555,6 @@ type HashCommands interface {
 	// For example:
 	//  exists, err := client.HExists("my_hash", "field1")
 	//  // exists equals true
-	//
 	//  exists, err = client.HExists("my_hash", "non_existent_field")
 	//  // exists equals false
 	//

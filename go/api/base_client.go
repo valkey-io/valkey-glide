@@ -174,6 +174,7 @@ func (client *baseClient) MSet(keyValueMap map[string]string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	return handleStringResponse(result)
 }
 
@@ -200,6 +201,7 @@ func (client *baseClient) Incr(key string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	return handleLongResponse(result)
 }
 
@@ -208,6 +210,7 @@ func (client *baseClient) IncrBy(key string, amount int64) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	return handleLongResponse(result)
 }
 
@@ -228,6 +231,7 @@ func (client *baseClient) Decr(key string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	return handleLongResponse(result)
 }
 
@@ -236,6 +240,7 @@ func (client *baseClient) DecrBy(key string, amount int64) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	return handleLongResponse(result)
 }
 
@@ -244,6 +249,7 @@ func (client *baseClient) Strlen(key string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	return handleLongResponse(result)
 }
 
@@ -252,6 +258,7 @@ func (client *baseClient) SetRange(key string, offset int, value string) (int64,
 	if err != nil {
 		return 0, err
 	}
+
 	return handleLongResponse(result)
 }
 
@@ -310,18 +317,13 @@ func (client *baseClient) HGetAll(key string) (map[string]string, error) {
 		return nil, err
 	}
 
-	res, err := handleStringToStringMapResponse(result)
-	if err != nil {
-		return nil, err
-	}
-
-	return res, nil
+	return handleStringToStringMapResponse(result)
 }
 
 func (client *baseClient) HMGet(key string, fields []string) ([]string, error) {
 	result, err := client.executeCommand(C.HMGet, append([]string{key}, fields...))
 	if err != nil {
-		return []string{}, err
+		return nil, err
 	}
 
 	return handleStringArrayResponse(result)

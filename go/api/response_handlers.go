@@ -85,15 +85,12 @@ func handleStringToStringMapResponse(response *C.struct_CommandResponse) (map[st
 	}
 
 	defer C.free_command_response(response)
-
-	result := make(map[string]string, response.array_value_len)
-	values := unsafe.Slice(response.array_value, response.array_value_len)
-
-	for _, v := range values {
+	m := make(map[string]string, response.array_value_len)
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
 		key := convertCharArrayToString(v.map_key.string_value, v.map_key.string_value_len)
 		value := convertCharArrayToString(v.map_value.string_value, v.map_value.string_value_len)
-		result[key] = value
+		m[key] = value
 	}
 
-	return result, nil
+	return m, nil
 }
