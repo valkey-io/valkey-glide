@@ -33,6 +33,7 @@ from glide.async_commands.core import (
     UpdateOptions,
 )
 from glide.async_commands.server_modules import json
+from glide.async_commands.server_modules.json import JsonGetOptions
 from glide.async_commands.sorted_set import (
     AggregationType,
     GeoSearchByBox,
@@ -67,6 +68,7 @@ from glide.async_commands.stream import (
 from glide.async_commands.transaction import (
     ClusterTransaction,
     Transaction,
+    TTransaction,
 )
 from glide.config import (
     BackoffStrategy,
@@ -81,11 +83,13 @@ from glide.config import (
 )
 from glide.constants import (
     OK,
+    TOK,
     TClusterResponse,
     TEncodable,
     TFunctionListResponse,
     TFunctionStatsFullResponse,
     TFunctionStatsSingleNodeResponse,
+    TJsonResponse,
     TResult,
     TSingleNodeRoute,
     TXInfoStreamFullResponse,
@@ -124,7 +128,8 @@ __all__ = [
     "GlideClusterClient",
     "Transaction",
     "ClusterTransaction",
-    "TGlideClient"
+    "TGlideClient",
+    "TTransaction",
     # Config
     "GlideClientConfiguration",
     "GlideClusterClientConfiguration",
@@ -142,6 +147,8 @@ __all__ = [
     "TFunctionListResponse",
     "TFunctionStatsFullResponse",
     "TFunctionStatsSingleNodeResponse",
+    "TJsonResponse",
+    "TOK",
     "TResult",
     "TXInfoStreamFullResponse",
     "TXInfoStreamResponse",
@@ -206,6 +213,8 @@ __all__ = [
     "TrimByMinId",
     "UpdateOptions",
     "ClusterScanCursor"
+    # Server modules
+    "JsonGetOptions",
     # PubSub
     "PubSubMsg",
     # Logger
