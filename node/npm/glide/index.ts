@@ -195,7 +195,6 @@ function initialize() {
         ReturnTypeMap,
         ClusterResponse,
         ReturnTypeAttribute,
-        PubSubSubscriptions,
     } = nativeBinding;
 
     module.exports = {
@@ -312,7 +311,6 @@ function initialize() {
         ReturnTypeMap,
         ClusterResponse,
         ReturnTypeAttribute,
-        PubSubSubscriptions,
     };
 
     globalObject = Object.assign(global, nativeBinding);
