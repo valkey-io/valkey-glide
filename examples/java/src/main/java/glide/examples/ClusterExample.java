@@ -10,7 +10,7 @@ import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleM
 import glide.api.GlideClusterClient;
 import glide.api.logging.Logger;
 import glide.api.models.ClusterValue;
-import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.exceptions.ClosingException;
@@ -76,7 +76,7 @@ public class ClusterExample {
         // Send INFO REPLICATION with routing option to all nodes
         ClusterValue<String> infoResponse =
                 client
-                        .info(InfoOptions.builder().section(InfoOptions.Section.REPLICATION).build(), ALL_NODES)
+                        .info(new Section[] {Section.REPLICATION}, ALL_NODES)
                         .get();
         log(
                 INFO,
