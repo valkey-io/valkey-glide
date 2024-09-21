@@ -16,8 +16,7 @@ from typing import List
 import numpy as np
 import redis.asyncio as redispy  # type: ignore
 from glide import (
-    GlideClientConfiguration,
-    GlideClusterClientConfiguration,
+    BaseClientConfiguration,
     GlideClient,
     GlideClusterClient,
     Logger,
@@ -290,9 +289,7 @@ async def main(
     if clients_to_run == "all" or clients_to_run == "glide":
         # Glide Socket
         client_class = GlideClusterClient if is_cluster else GlideClient
-        config = GlideClusterClientConfiguration(
-            [NodeAddress(host=host, port=port)], use_tls=use_tls
-        ) if is_cluster else GlideClientConfiguration(
+        config = BaseClientConfiguration(
             [NodeAddress(host=host, port=port)], use_tls=use_tls
         )
         clients = await create_clients(
