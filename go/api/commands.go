@@ -372,3 +372,228 @@ type StringCommands interface {
 	//[valkey.io]: https://valkey.io/commands/getdel/
 	GetDel(key string) (string, error)
 }
+
+// HashCommands supports commands and transactions for the "Hash Commands" group for standalone and cluster
+// clients.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/?group=hash
+type HashCommands interface {
+	// HGet returns the value associated with field in the hash stored at key.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//  key   - The key of the hash.
+	//  field - The field in the hash stored at key to retrieve from the database.
+	//
+	// Return value:
+	//  The value associated with field, or an empty string when field is not present in the hash or key does not exist.
+	//
+	// For example:
+	//  Assume we have the following hash:
+	//  my_hash := map[string]string{"field1": "value", "field2": "another_value"}
+	//  payload, err := client.HGet("my_hash", "field1")
+	//  // payload equals "value"
+	//  payload, err = client.HGet("my_hash", "nonexistent_field")
+	//  // payload equals ""
+	//
+	// [valkey.io]: https://valkey.io/commands/hget/
+	HGet(key string, field string) (string, error)
+
+	// HGetAll returns all fields and values of the hash stored at key.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//  key - The key of the hash.
+	//
+	// Return value:
+	//  A map of all fields and their values in the hash, or an empty map when key does not exist.
+	//
+	// For example:
+	//  fieldValueMap, err := client.HGetAll("my_hash")
+	//  // fieldValueMap equals map[string]string{"field1": "value1", "field2": "value2"}
+	//
+	// [valkey.io]: https://valkey.io/commands/hgetall/
+	HGetAll(key string) (map[string]string, error)
+
+	// HMGet returns the values associated with the specified fields in the hash stored at key.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//  key    - The key of the hash.
+	//  fields - The fields in the hash stored at key to retrieve from the database.
+	//
+	// Return value:
+	//  An array of values associated with the given fields, in the same order as they are requested.
+	//  For every field that does not exist in the hash, a null value is returned.
+	//  If key does not exist, returns an empty string array.
+	//
+	// For example:
+	//  values, err := client.HMGet("my_hash", []string{"field1", "field2"})
+	//  // values equals []string{"value1", "value2"}
+	//
+	// [valkey.io]: https://valkey.io/commands/hmget/
+	HMGet(key string, fields []string) ([]string, error)
+
+	// HSet sets the specified fields to their respective values in the hash stored at key.
+	// This command overwrites the values of specified fields that exist in the hash.
+	// If key doesn't exist, a new key holding a hash is created.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//  key    - The key of the hash.
+	//  values - A map of field-value pairs to set in the hash.
+	//
+	// Return value:
+	//  The number of fields that were added or updated.
+	//
+	// For example:
+	//  num, err := client.HSet("my_hash", map[string]string{"field": "value", "field2": "value2"})
+	//  // num equals 2
+	//
+	// [valkey.io]: https://valkey.io/commands/hset/
+	HSet(key string, values map[string]string) (int64, error)
+
+	// HSetNX sets field in the hash stored at key to value, only if field does not yet exist.
+	// If key does not exist, a new key holding a hash is created.
+	// If field already exists, this operation has no effect.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//  key   - The key of the hash.
+	//  field - The field to set.
+	//  value - The value to set.
+	//
+	// Return value:
+	//  true if field is a new field in the hash and value was set.
+	//  false if field already exists in the hash and no operation was performed.
+	//
+	// For example:
+	//  payload1, err := client.HSetNX("myHash", "field", "value")
+	//  // payload1 equals true
+	//  payload2, err := client.HSetNX("myHash", "field", "newValue")
+	//  // payload2 equals false
+	//
+	// [valkey.io]: https://valkey.io/commands/hsetnx/
+	HSetNX(key string, field string, value string) (bool, error)
+
+	// HDel removes the specified fields from the hash stored at key.
+	// Specified fields that do not exist within this hash are ignored.
+	// If key does not exist, it is treated as an empty hash and this command returns 0.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//  key    - The key of the hash.
+	//  fields - The fields to remove from the hash stored at key.
+	//
+	// Return value:
+	//  The number of fields that were removed from the hash, not including specified but non-existing fields.
+	//
+	// For example:
+	//  num, err := client.HDel("my_hash", []string{"field_1", "field_2"})
+	//  // num equals 2
+	//
+	// [valkey.io]: https://valkey.io/commands/hdel/
+	HDel(key string, fields []string) (int64, error)
+
+	// HLen returns the number of fields contained in the hash stored at key.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//  key - The key of the hash.
+	//
+	// Return value:
+	//  The number of fields in the hash, or 0 when key does not exist.
+	//  If key holds a value that is not a hash, an error is returned.
+	//
+	// For example:
+	//  num1, err := client.HLen("myHash")
+	//  // num1 equals 3
+	//  num2, err := client.HLen("nonExistingKey")
+	//  // num2 equals 0
+	//
+	// [valkey.io]: https://valkey.io/commands/hlen/
+	HLen(key string) (int64, error)
+
+	// HVals returns all values in the hash stored at key.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//  key - The key of the hash.
+	//
+	// Return value:
+	//  A slice of strings containing all the values in the hash, or an empty slice when key does not exist.
+	//
+	// For example:
+	//  values, err := client.HVals("myHash")
+	//  // values equals []string{"value1", "value2", "value3"}
+	//
+	// [valkey.io]: https://valkey.io/commands/hvals/
+	HVals(key string) ([]string, error)
+
+	// HExists returns if field is an existing field in the hash stored at key.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//  key   - The key of the hash.
+	//  field - The field to check in the hash stored at key.
+	//
+	// Return value:
+	//  true if the hash contains the specified field.
+	//  false if the hash does not contain the field, or if the key does not exist.
+	//
+	// For example:
+	//  exists, err := client.HExists("my_hash", "field1")
+	//  // exists equals true
+	//  exists, err = client.HExists("my_hash", "non_existent_field")
+	//  // exists equals false
+	//
+	// [valkey.io]: https://valkey.io/commands/hexists/
+	HExists(key string, field string) (bool, error)
+
+	// HKeys returns all field names in the hash stored at key.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//  key - The key of the hash.
+	//
+	// Return value:
+	//  A slice of strings containing all the field names in the hash, or an empty slice when key does not exist.
+	//
+	// For example:
+	//  names, err := client.HKeys("my_hash")
+	//  // names equals []string{"field_1", "field_2"}
+	//
+	// [valkey.io]: https://valkey.io/commands/hkeys/
+	HKeys(key string) ([]string, error)
+
+	// HStrLen returns the string length of the value associated with field in the hash stored at key.
+	// If the key or the field do not exist, 0 is returned.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//  key   - The key of the hash.
+	//  field - The field to get the string length of its value.
+	//
+	// Return value:
+	//  The length of the string value associated with field, or 0 when field or key do not exist.
+	//
+	// For example:
+	//  strlen, err := client.HStrLen("my_hash", "my_field")
+	//  // strlen equals 10
+	//
+	// [valkey.io]: https://valkey.io/commands/hstrlen/
+	HStrLen(key string, field string) (int64, error)
+}
