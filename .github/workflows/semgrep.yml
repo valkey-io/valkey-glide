@@ -9,10 +9,11 @@ on:
             branch:
                 description: "The branch to run against the semgrep tool"
                 required: true
-            branches:
-                - main
-                - "v[0-9]+.[0-9]+*"
-                - "release-[0-9]+.[0-9]+*"
+    push:
+        branches:
+            - main
+            - "v[0-9]+.[0-9]+*"
+            - "release-[0-9]+.[0-9]+*"
     # Schedule the CI job (this method uses cron syntax):
     schedule:
         - cron: "0 8 * * *" # Sets Semgrep to scan every day at 08:00 UTC.
