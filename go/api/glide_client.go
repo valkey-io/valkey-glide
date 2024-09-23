@@ -40,7 +40,8 @@ func (client *GlideClient) CustomCommand(args []string) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	return handleStringOrNullResponse(res), nil
+
+	return handleStringOrNullResponse(res)
 }
 
 // Sets configuration parameters to the specified values.
@@ -66,7 +67,7 @@ func (client *GlideClient) ConfigSet(parameters map[string]string) (string, erro
 	if err != nil {
 		return "", err
 	}
-	return handleStringResponse(result), nil
+	return handleStringResponse(result)
 }
 
 // Gets the values of configuration parameters.
@@ -93,5 +94,5 @@ func (client *GlideClient) ConfigGet(args []string) (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return handleStringToStringMapResponse(res), nil
+	return handleStringToStringMapResponse(res)
 }

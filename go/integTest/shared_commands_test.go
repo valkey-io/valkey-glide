@@ -521,3 +521,409 @@ func (suite *GlideTestSuite) TestGetDel_EmptyKey() {
 		assert.Equal(suite.T(), "key is required", err.Error())
 	})
 }
+
+func (suite *GlideTestSuite) TestHSet_WithExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		fields := map[string]string{"field1": "value1", "field2": "value2"}
+		key := uuid.New().String()
+
+		res1, err := client.HSet(key, fields)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res1)
+
+		res2, err := client.HSet(key, fields)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res2)
+	})
+}
+
+func (suite *GlideTestSuite) TestHSet_byteString() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		fields := map[string]string{
+			string([]byte{0xFF, 0x00, 0xAA}):       string([]byte{0xDE, 0xAD, 0xBE, 0xEF}),
+			string([]byte{0x01, 0x02, 0x03, 0xFE}): string([]byte{0xCA, 0xFE, 0xBA, 0xBE}),
+		}
+		key := string([]byte{0x01, 0x02, 0x03, 0xFE})
+
+		res1, err := client.HSet(key, fields)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res1)
+
+		res2, err := client.HGetAll(key)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), fields, res2)
+	})
+}
+
+func (suite *GlideTestSuite) TestHSet_WithAddNewField() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		fields := map[string]string{"field1": "value1", "field2": "value2"}
+		key := uuid.New().String()
+
+		res1, err := client.HSet(key, fields)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res1)
+
+		res2, err := client.HSet(key, fields)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res2)
+
+		fields["field3"] = "value3"
+		res3, err := client.HSet(key, fields)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res3)
+	})
+}
+
+func (suite *GlideTestSuite) TestHGet_WithExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		fields := map[string]string{"field1": "value1", "field2": "value2"}
+		key := uuid.NewString()
+
+		res1, err := client.HSet(key, fields)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res1)
+
+		res2, err := client.HGet(key, "field1")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "value1", res2)
+	})
+}
+
+func (suite *GlideTestSuite) TestHGet_WithNotExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+
+		res1, err := client.HGet(key, "field1")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "", res1)
+	})
+}
+
+func (suite *GlideTestSuite) TestHGet_WithNotExistingField() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		fields := map[string]string{"field1": "value1", "field2": "value2"}
+		key := uuid.NewString()
+
+		res1, err := client.HSet(key, fields)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res1)
+
+		res2, err := client.HGet(key, "foo")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "", res2)
+	})
+}
+
+func (suite *GlideTestSuite) TestHGetAll_WithExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		fields := map[string]string{"field1": "value1", "field2": "value2"}
+		key := uuid.NewString()
+
+		res1, err := client.HSet(key, fields)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res1)
+
+		res2, err := client.HGetAll(key)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), fields, res2)
+	})
+}
+
+func (suite *GlideTestSuite) TestHGetAll_WithNotExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+
+		res, err := client.HGetAll(key)
+		assert.Nil(suite.T(), err)
+		assert.Empty(suite.T(), res)
+	})
+}
+
+func (suite *GlideTestSuite) TestHMGet() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		fields := map[string]string{"field1": "value1", "field2": "value2"}
+		key := uuid.NewString()
+
+		res1, err := client.HSet(key, fields)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res1)
+
+		res2, err := client.HMGet(key, []string{"field1", "field2", "field3"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), []string{"value1", "value2", ""}, res2)
+	})
+}
+
+func (suite *GlideTestSuite) TestHMGet_WithNotExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+
+		res, err := client.HMGet(key, []string{"field1", "field2", "field3"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), []string{"", "", ""}, res)
+	})
+}
+
+func (suite *GlideTestSuite) TestHMGet_WithNotExistingField() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		fields := map[string]string{"field1": "value1", "field2": "value2"}
+		key := uuid.NewString()
+
+		res1, err := client.HSet(key, fields)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res1)
+
+		res2, err := client.HMGet(key, []string{"field3", "field4"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), []string{"", ""}, res2)
+	})
+}
+
+func (suite *GlideTestSuite) TestHSetNX_WithExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		fields := map[string]string{"field1": "value1", "field2": "value2"}
+		key := uuid.NewString()
+
+		res1, err := client.HSet(key, fields)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res1)
+
+		res2, err := client.HSetNX(key, "field1", "value1")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), false, res2)
+	})
+}
+
+func (suite *GlideTestSuite) TestHSetNX_WithNotExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+
+		res1, err := client.HSetNX(key, "field1", "value1")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), true, res1)
+
+		res2, err := client.HGetAll(key)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), map[string]string{"field1": "value1"}, res2)
+	})
+}
+
+func (suite *GlideTestSuite) TestHSetNX_WithExistingField() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		fields := map[string]string{"field1": "value1", "field2": "value2"}
+		key := uuid.NewString()
+
+		res1, err := client.HSet(key, fields)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res1)
+
+		res2, err := client.HSetNX(key, "field1", "value1")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), false, res2)
+	})
+}
+
+func (suite *GlideTestSuite) TestHDel() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		fields := map[string]string{"field1": "value1", "field2": "value2"}
+		key := uuid.NewString()
+
+		res1, err := client.HSet(key, fields)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res1)
+
+		res2, err := client.HDel(key, []string{"field1", "field2"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res2)
+
+		res3, err := client.HGetAll(key)
+		assert.Nil(suite.T(), err)
+		assert.Empty(suite.T(), res3)
+
+		res4, err := client.HDel(key, []string{"field1", "field2"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res4)
+	})
+}
+
+func (suite *GlideTestSuite) TestHDel_WithNotExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		res, err := client.HDel(key, []string{"field1", "field2"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res)
+	})
+}
+
+func (suite *GlideTestSuite) TestHDel_WithNotExistingField() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		fields := map[string]string{"field1": "value1", "field2": "value2"}
+		key := uuid.NewString()
+
+		res1, err := client.HSet(key, fields)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res1)
+
+		res2, err := client.HDel(key, []string{"field3", "field4"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res2)
+	})
+}
+
+func (suite *GlideTestSuite) TestHLen() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		fields := map[string]string{"field1": "value1", "field2": "value2"}
+		key := uuid.NewString()
+
+		res1, err := client.HSet(key, fields)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res1)
+
+		res2, err := client.HLen(key)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res2)
+	})
+}
+
+func (suite *GlideTestSuite) TestHLen_WithNotExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		res, err := client.HLen(key)
+
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res)
+	})
+}
+
+func (suite *GlideTestSuite) TestHVals_WithExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		fields := map[string]string{"field1": "value1", "field2": "value2"}
+		key := uuid.NewString()
+
+		res1, err := client.HSet(key, fields)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res1)
+
+		res2, err := client.HVals(key)
+		assert.Nil(suite.T(), err)
+		assert.Contains(suite.T(), res2, "value1")
+		assert.Contains(suite.T(), res2, "value2")
+	})
+}
+
+func (suite *GlideTestSuite) TestHVals_WithNotExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+
+		res, err := client.HVals(key)
+		assert.Nil(suite.T(), err)
+		assert.Nil(suite.T(), res)
+	})
+}
+
+func (suite *GlideTestSuite) TestHExists_WithExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		fields := map[string]string{"field1": "value1", "field2": "value2"}
+		key := uuid.NewString()
+
+		res1, err := client.HSet(key, fields)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res1)
+
+		res2, err := client.HExists(key, "field1")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), true, res2)
+	})
+}
+
+func (suite *GlideTestSuite) TestHExists_WithNotExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+
+		res, err := client.HExists(key, "field1")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), false, res)
+	})
+}
+
+func (suite *GlideTestSuite) TestHExists_WithNotExistingField() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		fields := map[string]string{"field1": "value1", "field2": "value2"}
+		key := uuid.NewString()
+
+		res1, err := client.HSet(key, fields)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res1)
+
+		res2, err := client.HExists(key, "field3")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), false, res2)
+	})
+}
+
+func (suite *GlideTestSuite) TestHKeys_WithExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		fields := map[string]string{"field1": "value1", "field2": "value2"}
+		key := uuid.NewString()
+
+		res1, err := client.HSet(key, fields)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res1)
+
+		res2, err := client.HKeys(key)
+		assert.Nil(suite.T(), err)
+		assert.Contains(suite.T(), res2, "field1")
+		assert.Contains(suite.T(), res2, "field2")
+	})
+}
+
+func (suite *GlideTestSuite) TestHKeys_WithNotExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+
+		res, err := client.HKeys(key)
+		assert.Nil(suite.T(), err)
+		assert.Nil(suite.T(), res)
+	})
+}
+
+func (suite *GlideTestSuite) TestHStrLen_WithExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		fields := map[string]string{"field1": "value1", "field2": "value2"}
+		key := uuid.NewString()
+
+		res1, err := client.HSet(key, fields)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res1)
+
+		res2, err := client.HStrLen(key, "field1")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(6), res2)
+	})
+}
+
+func (suite *GlideTestSuite) TestHStrLen_WithNotExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+
+		res, err := client.HStrLen(key, "field1")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res)
+	})
+}
+
+func (suite *GlideTestSuite) TestHStrLen_WithNotExistingField() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		fields := map[string]string{"field1": "value1", "field2": "value2"}
+		key := uuid.NewString()
+
+		res1, err := client.HSet(key, fields)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res1)
+
+		res2, err := client.HStrLen(key, "field3")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res2)
+	})
+}
