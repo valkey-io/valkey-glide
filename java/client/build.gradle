@@ -209,7 +209,7 @@ publishing {
                 }
                 developers {
                     developer {
-                        name = 'valkey-glide'
+                        name = 'Valkey GLIDE Maintainers'
                         url = 'https://github.com/valkey-io/valkey-glide.git'
                     }
                 }
