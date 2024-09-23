@@ -2,7 +2,10 @@ name: Rust tests
 
 on:
     push:
-        branches: [main]
+        branches:
+            - main
+            - "v[0-9]+.[0-9]+*"
+            - "release-[0-9]+.[0-9]+*"
         paths:
             - logger_core/**
             - glide-core/**
