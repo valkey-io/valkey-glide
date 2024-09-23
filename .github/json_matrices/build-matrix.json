@@ -15,7 +15,7 @@
                         "node",
                         "java",
                         "go",
-                        "csharp"
+                        "dotnet"
                 ]
         },
         {
@@ -38,7 +38,7 @@
                         "node",
                         "java",
                         "go",
-                        "csharp"
+                        "dotnet"
                 ]
         },
         {
@@ -56,7 +56,7 @@
                         "node",
                         "java",
                         "go",
-                        "csharp"
+                        "dotnet"
                 ]
         },
         {
@@ -74,7 +74,7 @@
                         "node",
                         "java",
                         "go",
-                        "csharp"
+                        "dotnet"
                 ]
         },
         {
@@ -109,6 +109,21 @@
                 ],
                 "languages": [
                         "node"
+                ]
+        },
+        {
+                "OS": "amazon-linux",
+                "NAMED_OS": "linux",
+                "RUNNER": "ubuntu-latest",
+                "ARCH": "x64",
+                "TARGET": "x86_64-unknown-linux-gnu",
+                "IMAGE": "amazonlinux:latest",
+                "languages": [
+                        "python",
+                        "node",
+                        "java",
+                        "go",
+                        "dotnet"
                 ]
         }
 ]

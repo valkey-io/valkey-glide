@@ -15,7 +15,7 @@
         "always-run-versions": ["16.x", "20.x"]
     },
     {
-        "language": "csharp",
+        "language": "dotnet",
         "versions": ["8.0", "6.0"],
         "always-run-versions": ["8.0"]
     },

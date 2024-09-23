@@ -13,6 +13,11 @@ inputs:
         description: "Run the full matrix"
         required: true
         type: boolean
+    containers:
+    # if set to `true`, "load-host-matrix" step selects blocks with "IMAGE" only from `build-matrix` file, otherwise they are ignored
+        description: "`true` to pick containers to the host list instead of runners"
+        default: false
+        type: boolean
 
 outputs:
     engine-matrix-output:
@@ -46,13 +51,14 @@ runs:
           id: load-host-matrix
           shell: bash
           run: |
+              [[ ${{ inputs.containers }} == true ]] && CONDITION=".IMAGE?" || CONDITION=".IMAGE == null"
               echo 'Select runners (VMs) to run tests on'
               if [[ "${{ github.event_name }}" == "pull_request" || "${{ github.event_name }}" == "push" || "${{ inputs.run-full-matrix }}" == "false" ]]; then
                   echo 'Pick runners marked as '"run": "always"' only - on PR, push or manually triggered job which does not require full matrix'
                   echo host-matrix=$(jq -c '[.[] | select(.run == "always")]' < .github/json_matrices/build-matrix.json) >> $GITHUB_OUTPUT
               else
                   echo 'Pick all runners assigned for the chosen client (language) - on cron (schedule) or if manually triggered job requires a full matrix'
-                  echo host-matrix=$(jq -c '[.[] | select(.languages | type == "array" and contains(["${{ inputs.language-name }}"]))]' < .github/json_matrices/build-matrix.json) >> $GITHUB_OUTPUT
+                  echo host-matrix=$(jq -c "[.[] | select(.languages? and any(.languages[] == \"${{ inputs.language-name }}\"; .) and $CONDITION)]" < .github/json_matrices/build-matrix.json) >> $GITHUB_OUTPUT
               fi
               cat $GITHUB_OUTPUT
 
