@@ -198,6 +198,10 @@ function initialize() {
         BaseClientConfiguration,
         GlideClusterClientConfiguration,
         LevelOptions,
+        ReturnTypeRecord,
+        ReturnTypeMap,
+        ClusterResponse,
+        ReturnTypeAttribute,
     } = nativeBinding;
 
     module.exports = {
@@ -317,6 +321,10 @@ function initialize() {
         BaseClientConfiguration,
         GlideClusterClientConfiguration,
         LevelOptions,
+        ReturnTypeRecord,
+        ReturnTypeMap,
+        ClusterResponse,
+        ReturnTypeAttribute,
     };
 
     globalObject = Object.assign(global, nativeBinding);
