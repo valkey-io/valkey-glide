@@ -33,7 +33,6 @@ from glide.async_commands.core import (
     UpdateOptions,
 )
 from glide.async_commands.server_modules import json
-from glide.async_commands.server_modules.json import JsonGetOptions
 from glide.async_commands.sorted_set import (
     AggregationType,
     GeoSearchByBox,
@@ -89,7 +88,6 @@ from glide.constants import (
     TFunctionListResponse,
     TFunctionStatsFullResponse,
     TFunctionStatsSingleNodeResponse,
-    TJsonResponse,
     TResult,
     TSingleNodeRoute,
     TXInfoStreamFullResponse,
@@ -147,7 +145,6 @@ __all__ = [
     "TFunctionListResponse",
     "TFunctionStatsFullResponse",
     "TFunctionStatsSingleNodeResponse",
-    "TJsonResponse",
     "TOK",
     "TResult",
     "TXInfoStreamFullResponse",
@@ -213,8 +210,6 @@ __all__ = [
     "TrimByMinId",
     "UpdateOptions",
     "ClusterScanCursor"
-    # Server modules
-    "JsonGetOptions",
     # PubSub
     "PubSubMsg",
     # Logger
