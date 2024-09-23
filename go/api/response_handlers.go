@@ -22,6 +22,7 @@ func convertCharArrayToString(arr *C.char, length C.long) StringValue {
 
 func checkResponseType(response *C.struct_CommandResponse, expectedType C.ResponseType, isNilable bool) error {
 	expectedTypeInt := uint32(expectedType)
+	// TODO: Handle nil response
 	if response.response_type == expectedTypeInt {
 		return nil
 	}
@@ -109,4 +110,22 @@ func handleBooleanResponse(response *C.struct_CommandResponse) (BoolValue, error
 	}
 
 	return BoolValue{Val: bool(response.bool_value), IsNil: false}, nil
+}
+
+func handleStringToStringMapResponse(response *C.struct_CommandResponse) (map[StringValue]StringValue, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	m := make(map[StringValue]StringValue, response.array_value_len)
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		key := convertCharArrayToString(v.map_key.string_value, v.map_key.string_value_len)
+		value := convertCharArrayToString(v.map_value.string_value, v.map_value.string_value_len)
+		m[key] = value
+	}
+
+	return m, nil
 }

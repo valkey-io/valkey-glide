@@ -72,3 +72,51 @@ func (suite *GlideTestSuite) TestCustomCommand_closedClient() {
 	assert.NotNil(suite.T(), err)
 	assert.IsType(suite.T(), &api.ClosingError{}, err)
 }
+
+func (suite *GlideTestSuite) TestConfigSetAndGet_multipleArgs() {
+	client := suite.defaultClient()
+
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+	configMap := map[string]string{"timeout": "1000", "maxmemory": "1GB"}
+	resultConfigMap := map[string]string{"timeout": "1000", "maxmemory": "1073741824"}
+	result, err := client.ConfigSet(configMap)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), result, "OK")
+
+	result2, err := client.ConfigGet([]string{"timeout", "maxmemory"})
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), resultConfigMap, result2)
+}
+
+func (suite *GlideTestSuite) TestConfigSetAndGet_noArgs() {
+	client := suite.defaultClient()
+
+	configMap := map[string]string{}
+
+	result, err := client.ConfigSet(configMap)
+	assert.Equal(suite.T(), "", result)
+	assert.NotNil(suite.T(), err)
+	assert.IsType(suite.T(), &api.RequestError{}, err)
+
+	result2, err := client.ConfigGet([]string{})
+	assert.Nil(suite.T(), result2)
+	assert.NotNil(suite.T(), err)
+	assert.IsType(suite.T(), &api.RequestError{}, err)
+}
+
+func (suite *GlideTestSuite) TestConfigSetAndGet_invalidArgs() {
+	client := suite.defaultClient()
+
+	configMap := map[string]string{"time": "1000"}
+
+	result, err := client.ConfigSet(configMap)
+	assert.Equal(suite.T(), "", result)
+	assert.NotNil(suite.T(), err)
+	assert.IsType(suite.T(), &api.RequestError{}, err)
+
+	result2, err := client.ConfigGet([]string{"time"})
+	assert.Equal(suite.T(), map[string]string{}, result2)
+	assert.Nil(suite.T(), err)
+}

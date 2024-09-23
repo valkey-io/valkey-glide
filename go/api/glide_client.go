@@ -5,6 +5,7 @@ package api
 // #cgo LDFLAGS: -L../target/release -lglide_rs
 // #include "../lib.h"
 import "C"
+import "github.com/valkey-io/valkey-glide/go/glide/utils"
 
 // GlideClient is a client used for connection in Standalone mode.
 type GlideClient struct {
@@ -44,4 +45,57 @@ func (client *GlideClient) CustomCommand(args []string) (interface{}, error) {
 		return nil, err
 	}
 	return resString.Val, err
+}
+
+// Sets configuration parameters to the specified values.
+//
+// Note: Prior to Version 7.0.0, only one parameter can be send.
+//
+// Parameters:
+//
+//	parameters - A map consisting of configuration parameters and their respective values to set.
+//
+// Return value:
+//
+//	"OK" if all configurations have been successfully set. Otherwise, raises an error.
+//
+// For example:
+//
+//	result, err := client.ConfigSet(map[string]string{"timeout": "1000", "maxmemory": "1GB"})
+//	result: "OK"
+//
+// [valkey.io]: https://valkey.io/commands/config-set/
+func (client *GlideClient) ConfigSet(parameters map[string]string) (StringValue, error) {
+	result, err := client.executeCommand(C.ConfigSet, utils.MapToString(parameters))
+	if err != nil {
+		return "", err
+	}
+	return handleStringResponse(result)
+}
+
+// Gets the values of configuration parameters.
+//
+// Note: Prior to Version 7.0.0, only one parameter can be send.
+//
+// Parameters:
+//
+//	args - A slice of configuration parameter names to retrieve values for.
+//
+// Return value:
+//
+//	A map of values corresponding to the configuration parameters.
+//
+// For example:
+//
+//	result, err := client.ConfigGet([]string{"timeout" , "maxmemory"})
+//	result["timeout"] = "1000"
+//	result["maxmemory"] = "1GB"
+//
+// [valkey.io]: https://valkey.io/commands/config-get/
+func (client *GlideClient) ConfigGet(args []string) (map[StringValue]StringValue, error) {
+	res, err := client.executeCommand(C.ConfigGet, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleStringToStringMapResponse(res)
 }
