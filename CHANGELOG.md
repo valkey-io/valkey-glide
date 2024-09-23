@@ -140,7 +140,8 @@
 * Node: Fix ZADD bug where command could not be called with only the `changed` optional parameter ([#1995](https://github.com/valkey-io/valkey-glide/pull/1995))
 * Java: `XRange`/`XRevRange` should return `null` instead of `GlideException` when given a negative count ([#1920](https://github.com/valkey-io/valkey-glide/pull/1920))
 * Python: Fix `XClaim` return type to `List[bytes]` instead of `List[TEncodable]` ([#2075](https://github.com/valkey-io/valkey-glide/pull/2075))
-* Python: Add missing exports ([2321](https://github.com/valkey-io/valkey-glide/pull/2321))
+* Python: Add missing exports ([#2341](https://github.com/valkey-io/valkey-glide/pull/2341))
+* Node: Add missing exports ([#2342](https://github.com/valkey-io/valkey-glide/pull/2342))
 
 ### Operational Enhancements
 * CI/CD: Create Workflow to deploy artifacts for all platforms ([#2285](https://github.com/valkey-io/valkey-glide/pull/2285))
