@@ -6,15 +6,20 @@ Valkey General Language Independent Driver for the Enterprise (GLIDE), is an ope
 
 Refer to the [Supported Engine Versions table](https://github.com/valkey-io/valkey-glide/blob/main/README.md#supported-engine-versions) for details.
 
-## Current Status
-
-We've made Valkey GLIDE an open-source project, and are releasing it in Preview to the community to gather feedback, and actively collaborate on the project [roadmap](https://github.com/orgs/valkey-io/projects/11). We welcome questions and contributions from all Valkey stakeholders.
-
 # Getting Started - Node Wrapper
 
 ## System Requirements
 
-In this release, Valkey GLIDE is available for Python, Java and Node. Support for GO is actively under development, with plans to include more programming languages in the future. We're tracking future features on the [roadmap](https://github.com/orgs/valkey-io/projects/11).
+The release of Valkey GLIDE was tested on the following platforms:
+
+Linux:
+
+-   Ubuntu 22.04.1 (x86_64)
+-   Amazon Linux 2023 (AL2023) (x86_64)
+
+macOS:
+
+-   macOS 12.7 (Apple silicon/aarch_64 and Intel/x86_64)
 
 ## NodeJS supported version
 
