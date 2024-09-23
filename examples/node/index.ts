@@ -5,7 +5,7 @@
 import { GlideClient, GlideClusterClient, Logger } from "@valkey/valkey-glide";
 
 async function sendPingToStandAloneNode() {
-    // When in Redis is in standalone mode, add address of the primary node, and any replicas you'd like to be able to read from.
+    // When Valkey is in standalone mode, add address of the primary node, and any replicas you'd like to be able to read from.
     const addresses = [
         {
             host: "localhost",
@@ -34,7 +34,7 @@ async function send_set_and_get(client: GlideClient | GlideClusterClient) {
 }
 
 async function sendPingToRandomNodeInCluster() {
-    // When in Redis is cluster mode, add address of any nodes, and the client will find all nodes in the cluster.
+    // When Valkey is in cluster mode, add address of any nodes, and the client will find all nodes in the cluster.
     const addresses = [
         {
             host: "localhost",
