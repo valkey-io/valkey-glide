@@ -33,4 +33,4 @@ extend-ignore = ['E203']
 target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
 
 [tool.mypy]
-exclude = [ 'submodules' ]
+exclude = [ 'submodules', 'utils/release-candidate-testing' ]
