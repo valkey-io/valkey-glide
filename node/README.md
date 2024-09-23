@@ -8,14 +8,13 @@ Refer to the [Supported Engine Versions table](https://github.com/valkey-io/valk
 
 ## Current Status
 
-We've made Valkey GLIDE an open-source project, and are releasing it in Preview to the community to gather feedback, and actively collaborate on the project roadmap. We welcome questions and contributions from all Redis stakeholders.
-This preview release is recommended for testing purposes only.
+We've made Valkey GLIDE an open-source project, and are releasing it in Preview to the community to gather feedback, and actively collaborate on the project [roadmap](https://github.com/orgs/valkey-io/projects/11). We welcome questions and contributions from all Valkey stakeholders.
 
 # Getting Started - Node Wrapper
 
 ## System Requirements
 
-In this release, Valkey GLIDE is available for Python and Java. Support for Node.js is actively under development, with plans to include more programming languages in the future. We're tracking future features on the [roadmap](https://github.com/orgs/aws/projects/187/).
+In this release, Valkey GLIDE is available for Python, Java and Node. Support for GO is actively under development, with plans to include more programming languages in the future. We're tracking future features on the [roadmap](https://github.com/orgs/valkey-io/projects/11).
 
 ## NodeJS supported version
 
