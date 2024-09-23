@@ -33,6 +33,63 @@ Visit our [wiki](https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper) 
 
 Development instructions for local building & testing the package are in the [DEVELOPER.md](https://github.com/valkey-io/valkey-glide/blob/main/node/DEVELOPER.md#build-from-source) file.
 
+## Basic Examples
+
+#### Standalone Mode:
+
+```typescript
+import { GlideClient, GlideClusterClient, Logger } from "@valkey/valkey-glide";
+// When Valkey is in standalone mode, add address of the primary node, and any replicas you'd like to be able to read from.
+const addresses = [
+    {
+        host: "localhost",
+        port: 6379,
+    },
+];
+// Check `GlideClientConfiguration/GlideClusterClientConfiguration` for additional options.
+const client = await GlideClient.createClient({
+    addresses: addresses,
+    // if the server uses TLS, you'll need to enable it. Otherwise, the connection attempt will time out silently.
+    // useTLS: true,
+    clientName: "test_standalone_client",
+});
+// The empty array signifies that there are no additional arguments.
+const pong = await client.customCommand(["PING"]);
+console.log(pong);
+const set_response = await client.set("foo", "bar");
+console.log(`Set response is = ${set_response}`);
+const get_response = await client.get("foo");
+console.log(`Get response is = ${get_response}`);
+```
+
+#### Cluster Mode:
+
+```typescript
+import { GlideClient, GlideClusterClient, Logger } from "@valkey/valkey-glide";
+// When Valkey is in cluster mode, add address of any nodes, and the client will find all nodes in the cluster.
+const addresses = [
+    {
+        host: "localhost",
+        port: 6379,
+    },
+];
+// Check `GlideClientConfiguration/GlideClusterClientConfiguration` for additional options.
+const client = await GlideClusterClient.createClient({
+    addresses: addresses,
+    // if the cluster nodes use TLS, you'll need to enable it. Otherwise the connection attempt will time out silently.
+    // useTLS: true,
+    clientName: "test_cluster_client",
+});
+// The empty array signifies that there are no additional arguments.
+const pong = await client.customCommand(["PING"], { route: "randomNode" });
+console.log(pong);
+const set_response = await client.set("foo", "bar");
+console.log(`Set response is = ${set_response}`);
+const get_response = await client.get("foo");
+console.log(`Get response is = ${get_response}`);
+client.close();
+```
+
 ### Supported platforms
 
 Currentlly the package is supported on:
