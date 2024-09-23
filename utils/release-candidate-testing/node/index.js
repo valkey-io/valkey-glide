@@ -2,7 +2,6 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 import { GlideClient, GlideClusterClient } from "@valkey/valkey-glide";
-import { getServerVersion } from "../../../node/tests/TestUtilities.js";
 import { ValkeyCluster } from "../../TestUtils.js";
 
 
