@@ -4,7 +4,7 @@
 
 import { GlideClient, GlideClusterClient, Logger } from "@valkey/valkey-glide";
 
-async function sendPingToNode() {
+async function sendPingToStandAloneNode() {
     // When in Redis is in standalone mode, add address of the primary node, and any replicas you'd like to be able to read from.
     const addresses = [
         {
@@ -49,7 +49,7 @@ async function sendPingToRandomNodeInCluster() {
         clientName: "test_cluster_client",
     });
     // The empty array signifies that there are no additional arguments.
-    const pong = await client.customCommand(["PING"], "randomNode");
+    const pong = await client.customCommand(["PING"], { route: "randomNode" });
     console.log(pong);
     await send_set_and_get(client);
     client.close();
@@ -64,6 +64,9 @@ function setConsoleLogger() {
 }
 
 setFileLogger();
-await sendPingToNode();
 setConsoleLogger();
-await sendPingToRandomNodeInCluster();
+// Enable for standalone mode
+await sendPingToStandAloneNode();
+
+// Enable for cluster mode
+// await sendPingToRandomNodeInCluster();
