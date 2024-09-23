@@ -39,5 +39,9 @@ func (client *GlideClient) CustomCommand(args []string) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	return handleStringOrNullResponse(res)
+	resString, err := handleStringOrNullResponse(res)
+	if err != nil {
+		return nil, err
+	}
+	return resString.Val, err
 }

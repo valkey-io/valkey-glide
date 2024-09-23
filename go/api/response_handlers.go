@@ -11,13 +11,13 @@ import (
 	"unsafe"
 )
 
-func convertCharArrayToString(arr *C.char, length C.long) string {
+func convertCharArrayToString(arr *C.char, length C.long) StringValue {
 	if arr == nil {
-		return ""
+		return StringValue{Val: "", IsNil: true}
 	}
 	byteSlice := C.GoBytes(unsafe.Pointer(arr), C.int(int64(length)))
 	// Create Go string from byte slice (preserving null characters)
-	return string(byteSlice)
+	return StringValue{Val: string(byteSlice), IsNil: false}
 }
 
 func checkResponseType(response *C.struct_CommandResponse, expectedType C.ResponseType, isNilable bool) error {
@@ -41,29 +41,29 @@ func checkResponseType(response *C.struct_CommandResponse, expectedType C.Respon
 	}
 }
 
-func handleStringResponse(response *C.struct_CommandResponse) (string, error) {
+func handleStringResponse(response *C.struct_CommandResponse) (StringValue, error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.String, false)
 	if typeErr != nil {
-		return "", typeErr
+		return StringValue{Val: "", IsNil: true}, typeErr
 	}
 
 	return convertCharArrayToString(response.string_value, response.string_value_len), nil
 }
 
-func handleStringOrNullResponse(response *C.struct_CommandResponse) (string, error) {
+func handleStringOrNullResponse(response *C.struct_CommandResponse) (StringValue, error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.String, true)
 	if typeErr != nil {
-		return "", typeErr
+		return StringValue{Val: "", IsNil: true}, typeErr
 	}
 
 	return convertCharArrayToString(response.string_value, response.string_value_len), nil
 }
 
-func handleStringArrayResponse(response *C.struct_CommandResponse) ([]string, error) {
+func handleStringArrayResponse(response *C.struct_CommandResponse) ([]StringValue, error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Array, false)
@@ -71,42 +71,42 @@ func handleStringArrayResponse(response *C.struct_CommandResponse) ([]string, er
 		return nil, typeErr
 	}
 
-	var slice []string
+	var slice []StringValue
 	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
 		slice = append(slice, convertCharArrayToString(v.string_value, v.string_value_len))
 	}
 	return slice, nil
 }
 
-func handleLongResponse(response *C.struct_CommandResponse) (int64, error) {
+func handleLongResponse(response *C.struct_CommandResponse) (Int64Value, error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Int, false)
 	if typeErr != nil {
-		return 0, typeErr
+		return Int64Value{Val: 0, IsNil: true}, typeErr
 	}
 
-	return int64(response.int_value), nil
+	return Int64Value{Val: int64(response.int_value), IsNil: false}, nil
 }
 
-func handleDoubleResponse(response *C.struct_CommandResponse) (float64, error) {
+func handleDoubleResponse(response *C.struct_CommandResponse) (Float64Value, error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Float, false)
 	if typeErr != nil {
-		return 0, typeErr
+		return Float64Value{Val: 0, IsNil: true}, typeErr
 	}
 
-	return float64(response.float_value), nil
+	return Float64Value{Val: float64(response.float_value), IsNil: false}, nil
 }
 
-func handleBooleanResponse(response *C.struct_CommandResponse) (bool, error) {
+func handleBooleanResponse(response *C.struct_CommandResponse) (BoolValue, error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Bool, false)
 	if typeErr != nil {
-		return false, typeErr
+		return BoolValue{Val: false, IsNil: true}, typeErr
 	}
 
-	return bool(response.bool_value), nil
+	return BoolValue{Val: bool(response.bool_value), IsNil: false}, nil
 }

@@ -24,7 +24,7 @@ type StringCommands interface {
 	//  result : "OK"
 	//
 	// [valkey.io]: https://valkey.io/commands/set/
-	Set(key string, value string) (string, error)
+	Set(key string, value string) (StringValue, error)
 
 	// SetWithOptions sets the given key with the given value using the given options. The return value is dependent on the
 	// passed options. If the value is successfully set, "OK" is returned. If value isn't set because of [OnlyIfExists] or
@@ -55,7 +55,7 @@ type StringCommands interface {
 	//  result: "OK"
 	//
 	// [valkey.io]: https://valkey.io/commands/set/
-	SetWithOptions(key string, value string, options *SetOptions) (string, error)
+	SetWithOptions(key string, value string, options *SetOptions) (StringValue, error)
 
 	// Get string value associated with the given key, or an empty string is returned ("") if no such value exists.
 	//
@@ -75,7 +75,7 @@ type StringCommands interface {
 	//     result: ""
 	//
 	// [valkey.io]: https://valkey.io/commands/get/
-	Get(key string) (string, error)
+	Get(key string) (StringValue, error)
 
 	// Sets multiple keys to multiple values in a single operation.
 	//
@@ -95,7 +95,7 @@ type StringCommands interface {
 	//  result: "OK"
 	//
 	// [valkey.io]: https://valkey.io/commands/mset/
-	MSet(keyValueMap map[string]string) (string, error)
+	MSet(keyValueMap map[string]string) (StringValue, error)
 
 	// Retrieves the values of multiple keys.
 	//
@@ -117,7 +117,7 @@ type StringCommands interface {
 	//  result : {"value1", "value2", ""}
 	//
 	// [valkey.io]: https://valkey.io/commands/mget/
-	MGet(keys []string) ([]string, error)
+	MGet(keys []string) ([]StringValue, error)
 
 	// Sets multiple keys to values if the key does not exist. The operation is atomic, and if one or more keys already exist,
 	// the entire operation fails.
@@ -141,7 +141,7 @@ type StringCommands interface {
 	//     result: false
 	//
 	// [valkey.io]: https://valkey.io/commands/msetnx/
-	MSetNX(keyValueMap map[string]string) (bool, error)
+	MSetNX(keyValueMap map[string]string) (BoolValue, error)
 
 	// Increments the number stored at key by one. If key does not exist, it is set to 0 before performing the operation.
 	//
@@ -159,7 +159,7 @@ type StringCommands interface {
 	//  result: 2
 	//
 	// [valkey.io]: https://valkey.io/commands/incr/
-	Incr(key string) (int64, error)
+	Incr(key string) (Int64Value, error)
 
 	// Increments the number stored at key by amount. If key does not exist, it is set to 0 before performing the operation.
 	//
@@ -178,7 +178,7 @@ type StringCommands interface {
 	//  result: 3
 	//
 	// [valkey.io]: https://valkey.io/commands/incrby/
-	IncrBy(key string, amount int64) (int64, error)
+	IncrBy(key string, amount int64) (Int64Value, error)
 
 	// Increments the string representing a floating point number stored at key by amount. By using a negative increment value,
 	// the result is that the value stored at key is decremented. If key does not exist, it is set to 0 before performing the
@@ -199,7 +199,7 @@ type StringCommands interface {
 	//  result: 1.5
 	//
 	// [valkey.io]: https://valkey.io/commands/incrbyfloat/
-	IncrByFloat(key string, amount float64) (float64, error)
+	IncrByFloat(key string, amount float64) (Float64Value, error)
 
 	// Decrements the number stored at key by one. If key does not exist, it is set to 0 before performing the operation.
 	//
@@ -217,7 +217,7 @@ type StringCommands interface {
 	//  result: 0
 	//
 	// [valkey.io]: https://valkey.io/commands/decr/
-	Decr(key string) (int64, error)
+	Decr(key string) (Int64Value, error)
 
 	// Decrements the number stored at code by amount. If key does not exist, it is set to 0 before performing the operation.
 	//
@@ -236,7 +236,7 @@ type StringCommands interface {
 	//  result: -1
 	//
 	// [valkey.io]: https://valkey.io/commands/decrby/
-	DecrBy(key string, amount int64) (int64, error)
+	DecrBy(key string, amount int64) (Int64Value, error)
 
 	// Returns the length of the string value stored at key.
 	//
@@ -255,7 +255,7 @@ type StringCommands interface {
 	//  result: 5
 	//
 	// [valkey.io]: https://valkey.io/commands/strlen/
-	Strlen(key string) (int64, error)
+	Strlen(key string) (Int64Value, error)
 
 	// Overwrites part of the string stored at key, starting at the specified byte's offset, for the entire length of value.
 	// If the offset is larger than the current length of the string at key, the string is padded with zero bytes to make
@@ -282,7 +282,7 @@ type StringCommands interface {
 	//     "key": �a� // (becomes an invalid UTF-8 string)
 	//
 	// [valkey.io]: https://valkey.io/commands/setrange/
-	SetRange(key string, offset int, value string) (int64, error)
+	SetRange(key string, offset int, value string) (Int64Value, error)
 
 	// Returns the substring of the string value stored at key, determined by the byte's offsets start and end (both are
 	// inclusive).
@@ -311,7 +311,7 @@ type StringCommands interface {
 	//     result: � // (returns an invalid UTF-8 string)
 	//
 	// [valkey.io]: https://valkey.io/commands/getrange/
-	GetRange(key string, start int, end int) (string, error)
+	GetRange(key string, start int, end int) (StringValue, error)
 
 	// Appends a value to a key. If key does not exist it is created and set as an empty string, so APPEND will be similar to
 	// SET in this special case.
@@ -330,7 +330,7 @@ type StringCommands interface {
 	//  result: 5
 	//
 	// [valkey.io]: https://valkey.io/commands/append/
-	Append(key string, value string) (int64, error)
+	Append(key string, value string) (Int64Value, error)
 
 	// Returns the longest common subsequence between strings stored at key1 and key2.
 	//
@@ -356,7 +356,7 @@ type StringCommands interface {
 	//  result: "fo"
 	//
 	// [valkey.io]: https://valkey.io/commands/lcs/
-	LCS(key1 string, key2 string) (string, error)
+	LCS(key1 string, key2 string) (StringValue, error)
 	// GetDel gets the value associated with the given key and deletes the key.
 	//
 	// Parameters:
@@ -370,5 +370,5 @@ type StringCommands interface {
 	//	result, err := client.GetDel("key")
 	//
 	//[valkey.io]: https://valkey.io/commands/getdel/
-	GetDel(key string) (string, error)
+	GetDel(key string) (StringValue, error)
 }

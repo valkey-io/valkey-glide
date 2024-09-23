@@ -135,55 +135,55 @@ func toCStrings(args []string) ([]C.uintptr_t, []C.ulong) {
 	return cStrings, stringLengths
 }
 
-func (client *baseClient) Set(key string, value string) (string, error) {
+func (client *baseClient) Set(key string, value string) (StringValue, error) {
 	result, err := client.executeCommand(C.Set, []string{key, value})
 	if err != nil {
-		return "", err
+		return StringValue{Val: "", IsNil: true}, err
 	}
 	return handleStringResponse(result)
 }
 
-func (client *baseClient) SetWithOptions(key string, value string, options *SetOptions) (string, error) {
+func (client *baseClient) SetWithOptions(key string, value string, options *SetOptions) (StringValue, error) {
 	result, err := client.executeCommand(C.Set, append([]string{key, value}, options.toArgs()...))
 	if err != nil {
-		return "", err
+		return StringValue{Val: "", IsNil: true}, err
 	}
 	return handleStringOrNullResponse(result)
 }
 
-func (client *baseClient) Get(key string) (string, error) {
+func (client *baseClient) Get(key string) (StringValue, error) {
 	result, err := client.executeCommand(C.Get, []string{key})
 	if err != nil {
-		return "", err
+		return StringValue{Val: "", IsNil: true}, err
 	}
 	return handleStringOrNullResponse(result)
 }
 
-func (client *baseClient) MSet(keyValueMap map[string]string) (string, error) {
+func (client *baseClient) MSet(keyValueMap map[string]string) (StringValue, error) {
 	flat := []string{}
 	for key, value := range keyValueMap {
 		flat = append(flat, key, value)
 	}
 	result, err := client.executeCommand(C.MSet, flat)
 	if err != nil {
-		return "", err
+		return StringValue{Val: "", IsNil: true}, err
 	}
 	return handleStringResponse(result)
 }
 
-func (client *baseClient) MSetNX(keyValueMap map[string]string) (bool, error) {
+func (client *baseClient) MSetNX(keyValueMap map[string]string) (BoolValue, error) {
 	flat := []string{}
 	for key, value := range keyValueMap {
 		flat = append(flat, key, value)
 	}
 	result, err := client.executeCommand(C.MSetNX, flat)
 	if err != nil {
-		return false, err
+		return BoolValue{Val: false, IsNil: true}, err
 	}
 	return handleBooleanResponse(result)
 }
 
-func (client *baseClient) MGet(keys []string) ([]string, error) {
+func (client *baseClient) MGet(keys []string) ([]StringValue, error) {
 	result, err := client.executeCommand(C.MGet, keys)
 	if err != nil {
 		return nil, err
@@ -191,97 +191,97 @@ func (client *baseClient) MGet(keys []string) ([]string, error) {
 	return handleStringArrayResponse(result)
 }
 
-func (client *baseClient) Incr(key string) (int64, error) {
+func (client *baseClient) Incr(key string) (Int64Value, error) {
 	result, err := client.executeCommand(C.Incr, []string{key})
 	if err != nil {
-		return 0, err
+		return Int64Value{Val: 0, IsNil: true}, err
 	}
 	return handleLongResponse(result)
 }
 
-func (client *baseClient) IncrBy(key string, amount int64) (int64, error) {
+func (client *baseClient) IncrBy(key string, amount int64) (Int64Value, error) {
 	result, err := client.executeCommand(C.IncrBy, []string{key, utils.IntToString(amount)})
 	if err != nil {
-		return 0, err
+		return Int64Value{Val: 0, IsNil: true}, err
 	}
 	return handleLongResponse(result)
 }
 
-func (client *baseClient) IncrByFloat(key string, amount float64) (float64, error) {
+func (client *baseClient) IncrByFloat(key string, amount float64) (Float64Value, error) {
 	result, err := client.executeCommand(
 		C.IncrByFloat,
 		[]string{key, utils.FloatToString(amount)},
 	)
 	if err != nil {
-		return 0, err
+		return Float64Value{Val: 0, IsNil: true}, err
 	}
 	return handleDoubleResponse(result)
 }
 
-func (client *baseClient) Decr(key string) (int64, error) {
+func (client *baseClient) Decr(key string) (Int64Value, error) {
 	result, err := client.executeCommand(C.Decr, []string{key})
 	if err != nil {
-		return 0, err
+		return Int64Value{Val: 0, IsNil: true}, err
 	}
 	return handleLongResponse(result)
 }
 
-func (client *baseClient) DecrBy(key string, amount int64) (int64, error) {
+func (client *baseClient) DecrBy(key string, amount int64) (Int64Value, error) {
 	result, err := client.executeCommand(C.DecrBy, []string{key, utils.IntToString(amount)})
 	if err != nil {
-		return 0, err
+		return Int64Value{Val: 0, IsNil: true}, err
 	}
 	return handleLongResponse(result)
 }
 
-func (client *baseClient) Strlen(key string) (int64, error) {
+func (client *baseClient) Strlen(key string) (Int64Value, error) {
 	result, err := client.executeCommand(C.Strlen, []string{key})
 	if err != nil {
-		return 0, err
+		return Int64Value{Val: 0, IsNil: true}, err
 	}
 	return handleLongResponse(result)
 }
 
-func (client *baseClient) SetRange(key string, offset int, value string) (int64, error) {
+func (client *baseClient) SetRange(key string, offset int, value string) (Int64Value, error) {
 	result, err := client.executeCommand(C.SetRange, []string{key, strconv.Itoa(offset), value})
 	if err != nil {
-		return 0, err
+		return Int64Value{Val: 0, IsNil: true}, err
 	}
 	return handleLongResponse(result)
 }
 
-func (client *baseClient) GetRange(key string, start int, end int) (string, error) {
+func (client *baseClient) GetRange(key string, start int, end int) (StringValue, error) {
 	result, err := client.executeCommand(C.GetRange, []string{key, strconv.Itoa(start), strconv.Itoa(end)})
 	if err != nil {
-		return "", err
+		return StringValue{Val: "", IsNil: true}, err
 	}
 	return handleStringResponse(result)
 }
 
-func (client *baseClient) Append(key string, value string) (int64, error) {
+func (client *baseClient) Append(key string, value string) (Int64Value, error) {
 	result, err := client.executeCommand(C.Append, []string{key, value})
 	if err != nil {
-		return 0, err
+		return Int64Value{Val: 0, IsNil: true}, err
 	}
 	return handleLongResponse(result)
 }
 
-func (client *baseClient) LCS(key1 string, key2 string) (string, error) {
+func (client *baseClient) LCS(key1 string, key2 string) (StringValue, error) {
 	result, err := client.executeCommand(C.LCS, []string{key1, key2})
 	if err != nil {
-		return "", err
+		return StringValue{Val: "", IsNil: true}, err
 	}
 	return handleStringResponse(result)
 }
 
-func (client *baseClient) GetDel(key string) (string, error) {
+func (client *baseClient) GetDel(key string) (StringValue, error) {
 	if key == "" {
-		return "", errors.New("key is required")
+		return StringValue{Val: "", IsNil: true}, errors.New("key is required")
 	}
 
 	result, err := client.executeCommand(C.GetDel, []string{key})
 	if err != nil {
-		return "", err
+		return StringValue{Val: "", IsNil: true}, err
 	}
 
 	return handleStringOrNullResponse(result)
