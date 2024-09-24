@@ -812,7 +812,7 @@ export async function transactionTest(
     baseTransaction.hscan(key4, "0");
     responseData.push(['hscan(key4, "0")', ["0", [field, value]]]);
 
-    if (gte(version, "7.9.0")) {
+    if (gte(version, "8.0.0")) {
         baseTransaction.hscan(key4, "0", { noValues: false });
         responseData.push([
             'hscan(key4, "0", {noValues: false})',
@@ -1081,7 +1081,7 @@ export async function transactionTest(
     baseTransaction.zscan(key12, "0");
     responseData.push(['zscan(key12, "0")', ["0", ["one", "1", "two", "2"]]]);
 
-    if (gte(version, "7.9.0")) {
+    if (gte(version, "8.0.0")) {
         baseTransaction.zscan(key12, "0", { noScores: false });
         responseData.push([
             'zscan(key12, "0", {noScores: false})',
@@ -1463,7 +1463,7 @@ export async function transactionTest(
         ]);
     }
 
-    if (gte(version, "7.9.0")) {
+    if (gte(version, "8.0.0")) {
         baseTransaction.set(key17, "foobar");
         responseData.push(['set(key17, "foobar")', "OK"]);
         baseTransaction.bitcount(key17, {
