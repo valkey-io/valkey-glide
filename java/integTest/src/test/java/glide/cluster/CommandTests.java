@@ -1607,8 +1607,8 @@ public class CommandTests {
         GlideString binaryString =
                 gs(new byte[] {(byte) 0xFE, (byte) 0xEE, (byte) 0xEF, (byte) 252, (byte) 0});
         SingleNodeRoute route = new SlotKeyRoute(key, PRIMARY);
-        String libName = "mylib_with_keys-" + prefix;
-        GlideString funcName = gs("myfunc_with_keys-" + prefix);
+        String libName = "mylib_with_keys_" + prefix;
+        GlideString funcName = gs("myfunc_with_keys_" + prefix);
         // function $funcName returns array with first two arguments
         String code =
                 generateLuaLibCode(libName, Map.of(funcName.toString(), "return {args[1]}"), true);
