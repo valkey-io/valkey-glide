@@ -100,6 +100,7 @@ import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -1646,12 +1647,13 @@ public class CommandTests {
     }
 
     @SneakyThrows
-    @Test
+    // @Test
+    @RepeatedTest(1000)
     public void fcall_readonly_function() {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
-        assumeTrue(
-                !SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0"),
-                "Temporary disabeling this test on valkey 8");
+        //        assumeTrue(
+        //                !SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0"),
+        //                "Temporary disabeling this test on valkey 8");
 
         String libName = "fcall_readonly_function";
         // intentionally using a REPLICA route
@@ -1663,6 +1665,7 @@ public class CommandTests {
         String code = generateLuaLibCode(libName, Map.of(funcName, "return 42"), false);
 
         assertEquals(libName, clusterClient.functionLoad(code, false).get());
+        Thread.sleep(1000);
 
         // fcall on a replica node should fail, because a function isn't guaranteed to be RO
         var executionException =
