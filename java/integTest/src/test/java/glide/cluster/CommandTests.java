@@ -1607,8 +1607,8 @@ public class CommandTests {
         GlideString binaryString =
                 gs(new byte[] {(byte) 0xFE, (byte) 0xEE, (byte) 0xEF, (byte) 252, (byte) 0});
         SingleNodeRoute route = new SlotKeyRoute(key, PRIMARY);
-        String libName = "mylib_with_keys";
-        GlideString funcName = gs("myfunc_with_keys");
+        String libName = "mylib_with_keys-" + prefix;
+        GlideString funcName = gs("myfunc_with_keys-" + prefix);
         // function $funcName returns array with first two arguments
         String code =
                 generateLuaLibCode(libName, Map.of(funcName.toString(), "return {args[1]}"), true);
@@ -1634,9 +1634,12 @@ public class CommandTests {
                         .fcallReadOnly(funcName, new GlideString[] {gs(key)}, new GlideString[] {binaryString});
 
         // check response from a routed transaction request
-        assertDeepEquals(new Object[][] {{binaryString}}, clusterClient.exec(transaction, route).get());
+        assertDeepEquals(
+                new Object[][] {{binaryString}, {binaryString}},
+                clusterClient.exec(transaction, route).get());
         // if no route given, GLIDE should detect it automatically
-        assertDeepEquals(new Object[][] {{binaryString}}, clusterClient.exec(transaction).get());
+        assertDeepEquals(
+                new Object[][] {{binaryString}, {binaryString}}, clusterClient.exec(transaction).get());
 
         assertEquals(OK, clusterClient.functionDelete(libName, route).get());
     }
