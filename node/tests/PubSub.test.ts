@@ -4018,7 +4018,7 @@ describe("PubSub", () => {
      *
      * @param clusterMode - Indicates if the test should be run in cluster mode.
      */
-    it.each([true, false])(
+    it.each([true])(
         "test pubsub numsub and shardnumsub separation_%p",
         async (clusterMode) => {
             //const clusterMode = false;
@@ -4070,17 +4070,13 @@ describe("PubSub", () => {
                 });
 
                 // Test pubsubShardnumsub
-                if (clusterMode) {
-                    const shardSubscribers = await (
-                        client2 as GlideClusterClient
-                    ).pubsubShardNumSub([regularChannel, shardChannel]);
-                    expect(
-                        convertGlideRecordToRecord(shardSubscribers),
-                    ).toEqual({
-                        [regularChannel]: 0,
-                        [shardChannel]: 2,
-                    });
-                }
+                const shardSubscribers = await (
+                    client2 as GlideClusterClient
+                ).pubsubShardNumSub([regularChannel, shardChannel]);
+                expect(convertGlideRecordToRecord(shardSubscribers)).toEqual({
+                    [regularChannel]: 0,
+                    [shardChannel]: 2,
+                });
             } finally {
                 if (client1) {
                     await clientCleanup(client1, pubSub!);

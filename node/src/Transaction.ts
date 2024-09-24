@@ -1252,7 +1252,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - the number of the removed elements.
      * If `key` does not exist, 0 is returned.
      */
-    public lrem(key: GlideString, count: number, element: string): T {
+    public lrem(key: GlideString, count: number, element: GlideString): T {
         return this.addAndReturn(createLRem(key, count, element));
     }
 
@@ -2651,7 +2651,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     attributes of a consumer group for the stream at `key`.
      *     The response comes in format `GlideRecord<GlideString | number | null>[]`, see {@link GlideRecord}.
      */
-    public xinfoGroups(key: string): T {
+    public xinfoGroups(key: GlideString): T {
         return this.addAndReturn(createXInfoGroups(key));
     }
 

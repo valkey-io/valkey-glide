@@ -2,7 +2,7 @@
     "name": "${scope}${pkg_name}",
     "types": "build-ts/index.d.ts",
     "version": "${package_version}",
-    "description": "An AWS-sponsored, open-source Redis client.",
+    "description": "General Language Independent Driver for the Enterprise (GLIDE) for Valkey",
     "main": "build-ts/index.js",
     "module": "build-ts/index.js",
     "type": "commonjs",
@@ -26,7 +26,7 @@
         "client",
         "valkey-glide"
     ],
-    "author": "Amazon Web Services",
+    "author": "Valkey GLIDE Maintainers",
     "license": "Apache-2.0",
     "bugs": {
         "url": "https://github.com/valkey-io/valkey-glide/issues"

@@ -17,7 +17,7 @@ from glide.async_commands.bitmap import (
     SignedEncoding,
     UnsignedEncoding,
 )
-from glide.async_commands.command_args import Limit, ListDirection, OrderBy
+from glide.async_commands.command_args import Limit, ListDirection, ObjectType, OrderBy
 from glide.async_commands.core import (
     ConditionalChange,
     CoreCommands,
@@ -64,10 +64,13 @@ from glide.async_commands.stream import (
     TrimByMaxLen,
     TrimByMinId,
 )
-from glide.async_commands.transaction import ClusterTransaction, Transaction
+from glide.async_commands.transaction import (
+    ClusterTransaction,
+    Transaction,
+    TTransaction,
+)
 from glide.config import (
     BackoffStrategy,
-    BaseClientConfiguration,
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
     NodeAddress,
@@ -77,7 +80,19 @@ from glide.config import (
     ReadFrom,
     ServerCredentials,
 )
-from glide.constants import OK
+from glide.constants import (
+    OK,
+    TOK,
+    TClusterResponse,
+    TEncodable,
+    TFunctionListResponse,
+    TFunctionStatsFullResponse,
+    TFunctionStatsSingleNodeResponse,
+    TResult,
+    TSingleNodeRoute,
+    TXInfoStreamFullResponse,
+    TXInfoStreamResponse,
+)
 from glide.exceptions import (
     ClosingError,
     ConfigurationError,
@@ -87,7 +102,7 @@ from glide.exceptions import (
     RequestError,
     TimeoutError,
 )
-from glide.glide_client import GlideClient, GlideClusterClient
+from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.logger import Level as LogLevel
 from glide.logger import Logger
 from glide.routes import (
@@ -95,6 +110,7 @@ from glide.routes import (
     AllPrimaries,
     ByAddressRoute,
     RandomNode,
+    Route,
     SlotIdRoute,
     SlotKeyRoute,
     SlotType,
@@ -110,8 +126,9 @@ __all__ = [
     "GlideClusterClient",
     "Transaction",
     "ClusterTransaction",
+    "TGlideClient",
+    "TTransaction",
     # Config
-    "BaseClientConfiguration",
     "GlideClientConfiguration",
     "GlideClusterClientConfiguration",
     "BackoffStrategy",
@@ -123,6 +140,15 @@ __all__ = [
     "PeriodicChecksStatus",
     # Response
     "OK",
+    "TClusterResponse",
+    "TEncodable",
+    "TFunctionListResponse",
+    "TFunctionStatsFullResponse",
+    "TFunctionStatsSingleNodeResponse",
+    "TOK",
+    "TResult",
+    "TXInfoStreamFullResponse",
+    "TXInfoStreamResponse",
     # Commands
     "BitEncoding",
     "BitFieldGet",
@@ -166,6 +192,7 @@ __all__ = [
     "RangeByLex",
     "RangeByScore",
     "ScoreFilter",
+    "ObjectType",
     "OrderBy",
     "ExclusiveIdBound",
     "IdBound",
@@ -189,6 +216,7 @@ __all__ = [
     "Logger",
     "LogLevel",
     # Routes
+    "Route",
     "SlotType",
     "AllNodes",
     "AllPrimaries",
@@ -196,6 +224,7 @@ __all__ = [
     "RandomNode",
     "SlotKeyRoute",
     "SlotIdRoute",
+    "TSingleNodeRoute",
     # Exceptions
     "ClosingError",
     "ConfigurationError",

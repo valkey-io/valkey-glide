@@ -40,7 +40,6 @@ runs:
           if: "${{ inputs.os == 'macos' }}"
           run: |
               brew update
-              brew upgrade || true
               brew install git gcc pkgconfig openssl coreutils
 
         - name: Install software dependencies for Ubuntu GNU
