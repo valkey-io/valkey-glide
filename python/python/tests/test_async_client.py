@@ -7,7 +7,7 @@ import copy
 import math
 import time
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Mapping, Tuple, Union, cast
+from typing import Any, Dict, List, Mapping, Optional, Tuple, Union, cast
 
 import pytest
 from glide import ClosingError, RequestError, Script
@@ -76,7 +76,7 @@ from glide.config import (
     ProtocolVersion,
     ServerCredentials,
 )
-from glide.constants import OK, TEncodable, TFunctionStatsResponse, TResult
+from glide.constants import OK, TEncodable, TFunctionStatsSingleNodeResponse, TResult
 from glide.exceptions import TimeoutError as GlideTimeoutError
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.routes import (
@@ -97,6 +97,7 @@ from tests.utils.utils import (
     compare_maps,
     convert_bytes_to_string_object,
     convert_string_to_bytes_object,
+    create_long_running_lua_script,
     create_lua_lib_with_long_running_function,
     generate_lua_lib_code,
     get_first_result,
@@ -412,9 +413,6 @@ class TestCommands:
         info_res = get_first_result(await glide_client.info([InfoSection.SERVER]))
         info = info_res.decode()
         assert "# Server" in info
-        cluster_mode = parse_info_response(info_res)["redis_mode"]
-        expected_cluster_mode = isinstance(glide_client, GlideClusterClient)
-        assert cluster_mode == "cluster" if expected_cluster_mode else "standalone"
         info = get_first_result(
             await glide_client.info([InfoSection.REPLICATION])
         ).decode()
@@ -541,14 +539,9 @@ class TestCommands:
         # incorrect range
         assert await glide_client.getrange(key, -1, -3) == b""
 
-        # a redis bug, fixed in version 8: https://github.com/redis/redis/issues/13207
-        if await check_if_server_version_lt(glide_client, "8.0.0"):
-            assert await glide_client.getrange(key, -200, -100) == value[0].encode()
-        else:
-            assert await glide_client.getrange(key, -200, -100) == b""
+        assert await glide_client.getrange(key, -200, -100) == value[0].encode()
 
-        if await check_if_server_version_lt(glide_client, "8.0.0"):
-            assert await glide_client.getrange(non_string_key, 0, -1) == b""
+        assert await glide_client.getrange(non_string_key, 0, -1) == b""
 
         # non-string key
         assert await glide_client.lpush(non_string_key, ["_"]) == 1
@@ -580,7 +573,7 @@ class TestCommands:
         if len(info_server["config_file"]) > 0:
             assert await glide_client.config_rewrite() == OK
         else:
-            # We expect Redis to return an error since the test cluster doesn't use redis.conf file
+            # We expect Valkey to return an error since the test cluster doesn't use valkey.conf file
             with pytest.raises(RequestError) as e:
                 await glide_client.config_rewrite()
             assert "The server is running without a config file" in str(e)
@@ -3828,29 +3821,22 @@ class TestCommands:
         members_scores: Mapping[TEncodable, float] = {"one": 1, "two": 2, "three": 3}
         assert await glide_client.zadd(key, members_scores=members_scores) == 3
 
-        assert await glide_client.zrange(key, RangeByIndex(start=0, stop=1)) == [
+        assert await glide_client.zrange(key, RangeByIndex(0, 1)) == [
             b"one",
             b"two",
         ]
 
-        zrange_map = await glide_client.zrange_withscores(
-            key, RangeByIndex(start=0, stop=-1)
-        )
+        zrange_map = await glide_client.zrange_withscores(key, RangeByIndex(0, -1))
         expected_map = {b"one": 1.0, b"two": 2.0, b"three": 3.0}
         assert compare_maps(zrange_map, expected_map) is True
 
-        assert await glide_client.zrange(
-            key, RangeByIndex(start=0, stop=1), reverse=True
-        ) == [
+        assert await glide_client.zrange(key, RangeByIndex(0, 1), reverse=True) == [
             b"three",
             b"two",
         ]
 
-        assert await glide_client.zrange(key, RangeByIndex(start=3, stop=1)) == []
-        assert (
-            await glide_client.zrange_withscores(key, RangeByIndex(start=3, stop=1))
-            == {}
-        )
+        assert await glide_client.zrange(key, RangeByIndex(3, 1)) == []
+        assert await glide_client.zrange_withscores(key, RangeByIndex(3, 1)) == {}
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -3861,23 +3847,19 @@ class TestCommands:
 
         assert await glide_client.zrange(
             key,
-            RangeByScore(
-                start=InfBound.NEG_INF, stop=ScoreBoundary(3, is_inclusive=False)
-            ),
+            RangeByScore(InfBound.NEG_INF, ScoreBoundary(3, is_inclusive=False)),
         ) == [b"one", b"two"]
 
         zrange_map = await glide_client.zrange_withscores(
             key,
-            RangeByScore(start=InfBound.NEG_INF, stop=InfBound.POS_INF),
+            RangeByScore(InfBound.NEG_INF, InfBound.POS_INF),
         )
         expected_map = {b"one": 1.0, b"two": 2.0, b"three": 3.0}
         assert compare_maps(zrange_map, expected_map) is True
 
         assert await glide_client.zrange(
             key,
-            RangeByScore(
-                start=ScoreBoundary(3, is_inclusive=False), stop=InfBound.NEG_INF
-            ),
+            RangeByScore(ScoreBoundary(3, is_inclusive=False), InfBound.NEG_INF),
             reverse=True,
         ) == [b"two", b"one"]
 
@@ -3885,9 +3867,9 @@ class TestCommands:
             await glide_client.zrange(
                 key,
                 RangeByScore(
-                    start=InfBound.NEG_INF,
-                    stop=InfBound.POS_INF,
-                    limit=Limit(offset=1, count=2),
+                    InfBound.NEG_INF,
+                    InfBound.POS_INF,
+                    Limit(offset=1, count=2),
                 ),
             )
         ) == [b"two", b"three"]
@@ -3895,44 +3877,36 @@ class TestCommands:
         assert (
             await glide_client.zrange(
                 key,
-                RangeByScore(
-                    start=InfBound.NEG_INF, stop=ScoreBoundary(3, is_inclusive=False)
-                ),
+                RangeByScore(InfBound.NEG_INF, ScoreBoundary(3, is_inclusive=False)),
                 reverse=True,
             )
             == []
-        )  # stop is greater than start with reverse set to True
+        )  # end is greater than start with reverse set to True
 
         assert (
             await glide_client.zrange(
                 key,
-                RangeByScore(
-                    start=InfBound.POS_INF, stop=ScoreBoundary(3, is_inclusive=False)
-                ),
+                RangeByScore(InfBound.POS_INF, ScoreBoundary(3, is_inclusive=False)),
             )
             == []
-        )  # start is greater than stop
+        )  # start is greater than end
 
         assert (
             await glide_client.zrange_withscores(
                 key,
-                RangeByScore(
-                    start=InfBound.POS_INF, stop=ScoreBoundary(3, is_inclusive=False)
-                ),
+                RangeByScore(InfBound.POS_INF, ScoreBoundary(3, is_inclusive=False)),
             )
             == {}
-        )  # start is greater than stop
+        )  # start is greater than end
 
         assert (
             await glide_client.zrange_withscores(
                 key,
-                RangeByScore(
-                    start=InfBound.NEG_INF, stop=ScoreBoundary(3, is_inclusive=False)
-                ),
+                RangeByScore(InfBound.NEG_INF, ScoreBoundary(3, is_inclusive=False)),
                 reverse=True,
             )
             == {}
-        )  # stop is greater than start with reverse set to True
+        )  # end is greater than start with reverse set to True
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -3944,7 +3918,7 @@ class TestCommands:
         assert await glide_client.zrange(
             key,
             RangeByLex(
-                start=InfBound.NEG_INF, stop=LexBoundary("c", is_inclusive=False)
+                start=InfBound.NEG_INF, end=LexBoundary("c", is_inclusive=False)
             ),
         ) == [b"a", b"b"]
 
@@ -3953,7 +3927,7 @@ class TestCommands:
                 key,
                 RangeByLex(
                     start=InfBound.NEG_INF,
-                    stop=InfBound.POS_INF,
+                    end=InfBound.POS_INF,
                     limit=Limit(offset=1, count=2),
                 ),
             )
@@ -3962,7 +3936,7 @@ class TestCommands:
         assert await glide_client.zrange(
             key,
             RangeByLex(
-                start=LexBoundary("c", is_inclusive=False), stop=InfBound.NEG_INF
+                start=LexBoundary("c", is_inclusive=False), end=InfBound.NEG_INF
             ),
             reverse=True,
         ) == [b"b", b"a"]
@@ -3971,45 +3945,42 @@ class TestCommands:
             await glide_client.zrange(
                 key,
                 RangeByLex(
-                    start=InfBound.NEG_INF, stop=LexBoundary("c", is_inclusive=False)
+                    start=InfBound.NEG_INF, end=LexBoundary("c", is_inclusive=False)
                 ),
                 reverse=True,
             )
             == []
-        )  # stop is greater than start with reverse set to True
+        )  # end is greater than start with reverse set to True
 
         assert (
             await glide_client.zrange(
                 key,
                 RangeByLex(
-                    start=InfBound.POS_INF, stop=LexBoundary("c", is_inclusive=False)
+                    start=InfBound.POS_INF, end=LexBoundary("c", is_inclusive=False)
                 ),
             )
             == []
-        )  # start is greater than stop
+        )  # start is greater than end
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zrange_different_types_of_keys(self, glide_client: TGlideClient):
         key = get_random_string(10)
 
-        assert (
-            await glide_client.zrange("non_existing_key", RangeByIndex(start=0, stop=1))
-            == []
-        )
+        assert await glide_client.zrange("non_existing_key", RangeByIndex(0, 1)) == []
 
         assert (
             await glide_client.zrange_withscores(
-                "non_existing_key", RangeByIndex(start=0, stop=-1)
+                "non_existing_key", RangeByIndex(0, -1)
             )
         ) == {}
 
         assert await glide_client.set(key, "value") == OK
         with pytest.raises(RequestError):
-            await glide_client.zrange(key, RangeByIndex(start=0, stop=1))
+            await glide_client.zrange(key, RangeByIndex(0, 1))
 
         with pytest.raises(RequestError):
-            await glide_client.zrange_withscores(key, RangeByIndex(start=0, stop=1))
+            await glide_client.zrange_withscores(key, RangeByIndex(0, 1))
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -4049,7 +4020,7 @@ class TestCommands:
         )
         assert compare_maps(zrange_res, {"two": 2.0, "three": 3.0}) is True
 
-        # incorrect range, as start > stop
+        # incorrect range, as start > end
         assert (
             await glide_client.zrangestore(destination, source, RangeByIndex(3, 1)) == 0
         )
@@ -4145,7 +4116,7 @@ class TestCommands:
         )
         assert compare_maps(zrange_res, {"one": 1.0, "two": 2.0}) is True
 
-        # incorrect range as start > stop
+        # incorrect range as start > end
         assert (
             await glide_client.zrangestore(
                 destination,
@@ -4250,7 +4221,7 @@ class TestCommands:
         )
         assert compare_maps(zrange_res, {"a": 1.0, "b": 2.0}) is True
 
-        # incorrect range as start > stop
+        # incorrect range as start > end
         assert (
             await glide_client.zrangestore(
                 destination,
@@ -4737,19 +4708,25 @@ class TestCommands:
 
         assert (await glide_client.type(key)).lower() == b"none"
 
-    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_sort_and_sort_store_with_get_or_by_args(
-        self, glide_client: GlideClient
+        self, glide_client: TGlideClient
     ):
-        key = "{SameSlotKey}" + get_random_string(10)
-        store = "{SameSlotKey}" + get_random_string(10)
+        if isinstance(
+            glide_client, GlideClusterClient
+        ) and await check_if_server_version_lt(glide_client, "8.0.0"):
+            return pytest.mark.skip(
+                reason=f"Valkey version required in cluster mode>= 8.0.0"
+            )
+        key = "{user}" + get_random_string(10)
+        store = "{user}" + get_random_string(10)
         user_key1, user_key2, user_key3, user_key4, user_key5 = (
-            "user:1",
-            "user:2",
-            "user:3",
-            "user:4",
-            "user:5",
+            "{user}:1",
+            "{user}:2",
+            "{user}:3",
+            "{user}:4",
+            "{user}:5",
         )
 
         # Prepare some data. Some keys and values randomaly encoded
@@ -4767,7 +4744,7 @@ class TestCommands:
             await glide_client.hset(user_key5, {"name": "Eve", "age": "40".encode()})
             == 2
         )
-        assert await glide_client.lpush("user_ids", ["5", "4", "3", "2", "1"]) == 5
+        assert await glide_client.lpush("{user}_ids", ["5", "4", "3", "2", "1"]) == 5
 
         # SORT_RO Available since: 7.0.0
         skip_sort_ro_test = False
@@ -4780,7 +4757,7 @@ class TestCommands:
         result = await glide_client.sort(
             key,
             limit=Limit(0, 2),
-            get_patterns=["user:*->name"],
+            get_patterns=["{user}:*->name"],
             order=OrderBy.ASC,
             alpha=True,
         )
@@ -4790,7 +4767,7 @@ class TestCommands:
             result_ro = await glide_client.sort_ro(
                 key,
                 limit=Limit(0, 2),
-                get_patterns=[b"user:*->name"],
+                get_patterns=[b"{user}:*->name"],
                 order=OrderBy.ASC,
                 alpha=True,
             )
@@ -4801,7 +4778,7 @@ class TestCommands:
             key,
             store,
             limit=Limit(0, 2),
-            get_patterns=["user:*->name"],
+            get_patterns=["{user}:*->name"],
             order=OrderBy.ASC,
             alpha=True,
         )
@@ -4811,28 +4788,28 @@ class TestCommands:
 
         # Test sort with `by` argument
         result = await glide_client.sort(
-            "user_ids",
-            by_pattern="user:*->age",
-            get_patterns=["user:*->name"],
+            "{user}_ids",
+            by_pattern="{user}:*->age",
+            get_patterns=["{user}:*->name"],
             alpha=True,
         )
         assert result == [b"Dave", b"Bob", b"Alice", b"Charlie", b"Eve"]
 
         if not skip_sort_ro_test:
             result_ro = await glide_client.sort_ro(
-                b"user_ids",
-                by_pattern=b"user:*->age",
-                get_patterns=["user:*->name"],
+                "{user}_ids",
+                by_pattern=b"{user}:*->age",
+                get_patterns=["{user}:*->name"],
                 alpha=True,
             )
             assert result_ro == [b"Dave", b"Bob", b"Alice", b"Charlie", b"Eve"]
 
         # Test sort with `by` argument with missing keys to sort by
-        assert await glide_client.lpush("user_ids", ["a"]) == 6
+        assert await glide_client.lpush("{user}_ids", ["a"]) == 6
         result = await glide_client.sort(
-            "user_ids",
-            by_pattern="user:*->age",
-            get_patterns=["user:*->name"],
+            "{user}_ids",
+            by_pattern="{user}:*->age",
+            get_patterns=["{user}:*->name"],
             alpha=True,
         )
         assert result == convert_string_to_bytes_object(
@@ -4841,18 +4818,18 @@ class TestCommands:
 
         if not skip_sort_ro_test:
             result_ro = await glide_client.sort_ro(
-                "user_ids",
-                by_pattern=b"user:*->age",
-                get_patterns=["user:*->name"],
+                "{user}_ids",
+                by_pattern="{user}:*->age",
+                get_patterns=["{user}:*->name"],
                 alpha=True,
             )
             assert result_ro == [None, b"Dave", b"Bob", b"Alice", b"Charlie", b"Eve"]
 
         # Test sort with `by` argument with missing keys to sort by
         result = await glide_client.sort(
-            "user_ids",
-            by_pattern="user:*->name",
-            get_patterns=["user:*->age"],
+            "{user}_ids",
+            by_pattern="{user}:*->name",
+            get_patterns=["{user}:*->age"],
             alpha=True,
         )
         assert result == convert_string_to_bytes_object(
@@ -4861,16 +4838,16 @@ class TestCommands:
 
         if not skip_sort_ro_test:
             result_ro = await glide_client.sort_ro(
-                "user_ids",
-                by_pattern=b"user:*->name",
-                get_patterns=[b"user:*->age"],
+                "{user}_ids",
+                by_pattern="{user}:*->name",
+                get_patterns=["{user}:*->age"],
                 alpha=True,
             )
             assert result_ro == [None, b"30", b"25", b"35", b"20", b"40"]
 
         # Test Limit with count 0
         result = await glide_client.sort(
-            "user_ids",
+            "{user}_ids",
             limit=Limit(0, 0),
             alpha=True,
         )
@@ -4878,7 +4855,7 @@ class TestCommands:
 
         if not skip_sort_ro_test:
             result_ro = await glide_client.sort_ro(
-                "user_ids",
+                "{user}_ids",
                 limit=Limit(0, 0),
                 alpha=True,
             )
@@ -6975,7 +6952,7 @@ class TestCommands:
         )
 
         # reset the last delivered ID for the consumer group to "1-1"
-        # ENTRIESREAD is only supported in Redis version 7.0.0 and above
+        # ENTRIESREAD is only supported in Valkey version 7.0.0 and above
         if await check_if_server_version_lt(glide_client, "7.0.0"):
             assert await glide_client.xgroup_set_id(key, group_name, stream_id1_1) == OK
         else:
@@ -7150,6 +7127,25 @@ class TestCommands:
                 await glide_client.bitcount(
                     set_key, OffsetOptions(1, 1, BitmapIndexType.BIT)
                 )
+
+        if await check_if_server_version_lt(glide_client, "8.0.0"):
+            # exception thrown optional end was implemented after 8.0.0
+            with pytest.raises(RequestError):
+                await glide_client.bitcount(
+                    key1,
+                    OffsetOptions(
+                        2,
+                    ),
+                )
+        else:
+            assert await glide_client.bitcount(key1, OffsetOptions(0)) == 26
+            assert await glide_client.bitcount(key1, OffsetOptions(5)) == 4
+            assert await glide_client.bitcount(key1, OffsetOptions(80)) == 0
+            assert await glide_client.bitcount(non_existing_key, OffsetOptions(5)) == 0
+
+            # key exists but it is not a string
+            with pytest.raises(RequestError):
+                await glide_client.bitcount(set_key, OffsetOptions(1))
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -8206,47 +8202,12 @@ class TestCommands:
             await glide_client.function_delete(lib_name)
         assert "Library not found" in str(e)
 
-    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_function_stats(self, glide_client: GlideClient):
+    async def test_function_stats(self, glide_client: TGlideClient):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
-
-        lib_name = "functionStats"
-        func_name = lib_name
-        assert await glide_client.function_flush(FlushMode.SYNC) == OK
-
-        # function $funcName returns first argument
-        code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, False)
-        assert await glide_client.function_load(code, True) == lib_name.encode()
-
-        response = await glide_client.function_stats()
-        check_function_stats_response(response, [], 1, 1)
-
-        code = generate_lua_lib_code(
-            lib_name + "_2",
-            {func_name + "_2": "return 'OK'", func_name + "_3": "return 42"},
-            False,
-        )
-        assert (
-            await glide_client.function_load(code, True) == (lib_name + "_2").encode()
-        )
-
-        response = await glide_client.function_stats()
-        check_function_stats_response(response, [], 2, 3)
-
-        assert await glide_client.function_flush(FlushMode.SYNC) == OK
-
-        response = await glide_client.function_stats()
-        check_function_stats_response(response, [], 0, 0)
-
-    @pytest.mark.parametrize("cluster_mode", [True])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_function_stats_cluster(self, glide_client: GlideClusterClient):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         lib_name = "functionStats_without_route"
         func_name = lib_name
@@ -8259,7 +8220,7 @@ class TestCommands:
         response = await glide_client.function_stats()
         for node_response in response.values():
             check_function_stats_response(
-                cast(TFunctionStatsResponse, node_response), [], 1, 1
+                cast(TFunctionStatsSingleNodeResponse, node_response), [], 1, 1
             )
 
         code = generate_lua_lib_code(
@@ -8274,7 +8235,7 @@ class TestCommands:
         response = await glide_client.function_stats()
         for node_response in response.values():
             check_function_stats_response(
-                cast(TFunctionStatsResponse, node_response), [], 2, 3
+                cast(TFunctionStatsSingleNodeResponse, node_response), [], 2, 3
             )
 
         assert await glide_client.function_flush(FlushMode.SYNC) == OK
@@ -8282,8 +8243,64 @@ class TestCommands:
         response = await glide_client.function_stats()
         for node_response in response.values():
             check_function_stats_response(
-                cast(TFunctionStatsResponse, node_response), [], 0, 0
+                cast(TFunctionStatsSingleNodeResponse, node_response), [], 0, 0
             )
+
+    @pytest.mark.parametrize("cluster_mode", [False, True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_function_stats_running_script(
+        self, request, cluster_mode, protocol, glide_client: TGlideClient
+    ):
+        min_version = "7.0.0"
+        if await check_if_server_version_lt(glide_client, min_version):
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
+
+        lib_name = f"mylib1C{get_random_string(5)}"
+        func_name = f"myfunc1c{get_random_string(5)}"
+        code = create_lua_lib_with_long_running_function(lib_name, func_name, 10, True)
+
+        # load the library
+        assert await glide_client.function_load(code, replace=True) == lib_name.encode()
+
+        # create a second client to run fcall
+        test_client = await create_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, timeout=30000
+        )
+
+        test_client2 = await create_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, timeout=30000
+        )
+
+        async def endless_fcall_route_call():
+            await test_client.fcall_ro(func_name, arguments=[])
+
+        async def wait_and_function_stats():
+            # it can take a few seconds for FCALL to register as running
+            await asyncio.sleep(3)
+            result = await test_client2.function_stats()
+            running_scripts = False
+            for res in result.values():
+                if res.get(b"running_script"):
+                    if running_scripts:
+                        raise Exception("Already running script on a different node")
+                    running_scripts = True
+                    assert res.get(b"running_script").get(b"name") == func_name.encode()
+                    assert res.get(b"running_script").get(b"command") == [
+                        b"FCALL_RO",
+                        func_name.encode(),
+                        b"0",
+                    ]
+                    assert res.get(b"running_script").get(b"duration_ms") > 0
+
+            assert running_scripts
+
+        await asyncio.gather(
+            endless_fcall_route_call(),
+            wait_and_function_stats(),
+        )
+
+        await test_client.close()
+        await test_client2.close()
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -8293,7 +8310,7 @@ class TestCommands:
     ):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         route = (
             SlotKeyRoute(SlotType.PRIMARY, get_random_string(10))
@@ -8311,12 +8328,12 @@ class TestCommands:
         response = await glide_client.function_stats(route)
         if single_route:
             check_function_stats_response(
-                cast(TFunctionStatsResponse, response), [], 1, 1
+                cast(TFunctionStatsSingleNodeResponse, response), [], 1, 1
             )
         else:
             for node_response in response.values():
                 check_function_stats_response(
-                    cast(TFunctionStatsResponse, node_response), [], 1, 1
+                    cast(TFunctionStatsSingleNodeResponse, node_response), [], 1, 1
                 )
 
         code = generate_lua_lib_code(
@@ -8332,12 +8349,12 @@ class TestCommands:
         response = await glide_client.function_stats(route)
         if single_route:
             check_function_stats_response(
-                cast(TFunctionStatsResponse, response), [], 2, 3
+                cast(TFunctionStatsSingleNodeResponse, response), [], 2, 3
             )
         else:
             for node_response in response.values():
                 check_function_stats_response(
-                    cast(TFunctionStatsResponse, node_response), [], 2, 3
+                    cast(TFunctionStatsSingleNodeResponse, node_response), [], 2, 3
                 )
 
         assert await glide_client.function_flush(FlushMode.SYNC, route) == OK
@@ -8345,12 +8362,12 @@ class TestCommands:
         response = await glide_client.function_stats(route)
         if single_route:
             check_function_stats_response(
-                cast(TFunctionStatsResponse, response), [], 0, 0
+                cast(TFunctionStatsSingleNodeResponse, response), [], 0, 0
             )
         else:
             for node_response in response.values():
                 check_function_stats_response(
-                    cast(TFunctionStatsResponse, node_response), [], 0, 0
+                    cast(TFunctionStatsSingleNodeResponse, node_response), [], 0, 0
                 )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -8360,7 +8377,7 @@ class TestCommands:
     ):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
@@ -8379,20 +8396,10 @@ class TestCommands:
             request, cluster_mode=cluster_mode, protocol=protocol, timeout=15000
         )
 
-        # call fcall to run the function
-        # make sure that fcall routes to a primary node, and not a replica
-        # if this happens, function_kill and function_stats won't find the function and will fail
-        primaryRoute = SlotKeyRoute(SlotType.PRIMARY, lib_name)
-
         async def endless_fcall_route_call():
             # fcall is supposed to be killed, and will return a RequestError
             with pytest.raises(RequestError) as e:
-                if cluster_mode:
-                    await test_client.fcall_ro_route(
-                        func_name, arguments=[], route=primaryRoute
-                    )
-                else:
-                    await test_client.fcall_ro(func_name, arguments=[])
+                await test_client.fcall_ro(func_name, arguments=[])
             assert "Script killed by user" in str(e)
 
         async def wait_and_function_kill():
@@ -8429,7 +8436,7 @@ class TestCommands:
     ):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
@@ -9823,9 +9830,13 @@ class TestClusterRoutes:
         assert result[result_collection_index] == []
 
         # Negative cursor
-        result = await glide_client.sscan(key1, "-1")
-        assert result[result_cursor_index] == initial_cursor.encode()
-        assert result[result_collection_index] == []
+        if await check_if_server_version_lt(glide_client, "8.0.0"):
+            result = await glide_client.sscan(key1, "-1")
+            assert result[result_cursor_index] == initial_cursor.encode()
+            assert result[result_collection_index] == []
+        else:
+            with pytest.raises(RequestError):
+                await glide_client.sscan(key2, "-1")
 
         # Result contains the whole set
         assert await glide_client.sadd(key1, char_members) == len(char_members)
@@ -9933,9 +9944,13 @@ class TestClusterRoutes:
         assert result[result_collection_index] == []
 
         # Negative cursor
-        result = await glide_client.zscan(key1, "-1")
-        assert result[result_cursor_index] == initial_cursor.encode()
-        assert result[result_collection_index] == []
+        if await check_if_server_version_lt(glide_client, "8.0.0"):
+            result = await glide_client.zscan(key1, "-1")
+            assert result[result_cursor_index] == initial_cursor.encode()
+            assert result[result_collection_index] == []
+        else:
+            with pytest.raises(RequestError):
+                await glide_client.zscan(key2, "-1")
 
         # Result contains the whole set
         assert await glide_client.zadd(key1, char_map) == len(char_map)
@@ -10004,6 +10019,16 @@ class TestClusterRoutes:
         assert result[result_cursor_index] != b"0"
         assert len(result[result_collection_index]) >= 0
 
+        # Test no_scores option
+        if not await check_if_server_version_lt(glide_client, "8.0.0"):
+            result = await glide_client.zscan(key1, initial_cursor, no_scores=True)
+            assert result[result_cursor_index] != b"0"
+            values_array = cast(List[bytes], result[result_collection_index])
+            # Verify that scores are not included
+            assert all(
+                item.startswith(b"value") and item.isascii() for item in values_array
+            )
+
         # Exceptions
         # Non-set key
         assert await glide_client.set(key2, "test") == OK
@@ -10046,9 +10071,13 @@ class TestClusterRoutes:
         assert result[result_collection_index] == []
 
         # Negative cursor
-        result = await glide_client.hscan(key1, "-1")
-        assert result[result_cursor_index] == initial_cursor.encode()
-        assert result[result_collection_index] == []
+        if await check_if_server_version_lt(glide_client, "8.0.0"):
+            result = await glide_client.hscan(key1, "-1")
+            assert result[result_cursor_index] == initial_cursor.encode()
+            assert result[result_collection_index] == []
+        else:
+            with pytest.raises(RequestError):
+                await glide_client.hscan(key2, "-1")
 
         # Result contains the whole set
         assert await glide_client.hset(key1, char_map) == len(char_map)
@@ -10117,6 +10146,16 @@ class TestClusterRoutes:
         assert result[result_cursor_index] != b"0"
         assert len(result[result_collection_index]) >= 0
 
+        # Test no_values option
+        if not await check_if_server_version_lt(glide_client, "8.0.0"):
+            result = await glide_client.hscan(key1, initial_cursor, no_values=True)
+            assert result[result_cursor_index] != b"0"
+            values_array = cast(List[bytes], result[result_collection_index])
+            # Verify that values are not included
+            assert all(
+                item.startswith(b"field") and item.isascii() for item in values_array
+            )
+
         # Exceptions
         # Non-hash key
         assert await glide_client.set(key2, "test") == OK
@@ -10128,6 +10167,67 @@ class TestClusterRoutes:
         # Negative count
         with pytest.raises(RequestError):
             await glide_client.hscan(key2, initial_cursor, count=-1)
+
+
+async def script_kill_tests(
+    glide_client: TGlideClient, test_client: TGlideClient, route: Optional[Route] = None
+):
+    """
+    shared tests for SCRIPT KILL used in routed and non-routed variants, clients are created in
+    respective tests with different test matrices.
+    """
+    # Verify that script_kill raises an error when no script is running
+    with pytest.raises(RequestError) as e:
+        await glide_client.script_kill()
+    assert "No scripts in execution right now" in str(e)
+
+    # Create a long-running script
+    long_script = Script(create_long_running_lua_script(10))
+
+    async def run_long_script():
+        with pytest.raises(RequestError) as e:
+            if route is not None:
+                await test_client.invoke_script_route(long_script, route=route)
+            else:
+                await test_client.invoke_script(long_script)
+        assert "Script killed by user" in str(e)
+
+    async def wait_and_kill_script():
+        await asyncio.sleep(3)  # Give some time for the script to start
+        timeout = 0
+        while timeout <= 5:
+            # keep trying to kill until we get an "OK"
+            try:
+                if route is not None:
+                    result = await cast(GlideClusterClient, glide_client).script_kill(
+                        route=route
+                    )
+                else:
+                    result = await glide_client.script_kill()
+                #  we expect to get success
+                assert result == "OK"
+                break
+            except RequestError:
+                # a RequestError may occur if the script is not yet running
+                # sleep and try again
+                timeout += 0.5
+                await asyncio.sleep(0.5)
+
+    # Run the long script and kill it
+    await asyncio.gather(
+        run_long_script(),
+        wait_and_kill_script(),
+    )
+
+    # Verify that script_kill raises an error when no script is running
+    with pytest.raises(RequestError) as e:
+        if route is not None:
+            await cast(GlideClusterClient, glide_client).script_kill(route=route)
+        else:
+            await glide_client.script_kill()
+    assert "No scripts in execution right now" in str(e)
+
+    await test_client.close()
 
 
 @pytest.mark.asyncio
@@ -10234,3 +10334,168 @@ class TestScripts:
             == key.encode()
         )
         await glide_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_script_exists(self, glide_client: TGlideClient, cluster_mode: bool):
+        cluster_mode = isinstance(glide_client, GlideClusterClient)
+        script1 = Script("return 'Hello'")
+        script2 = Script("return 'World'")
+        script3 = Script("return 'Hello World'")
+
+        # Load script1 to all nodes, do not load script2 and load script3 with a SlotKeyRoute
+        await glide_client.invoke_script(script1)
+
+        if cluster_mode:
+            await cast(GlideClusterClient, glide_client).invoke_script_route(
+                script3, route=SlotKeyRoute(SlotType.PRIMARY, "1")
+            )
+        else:
+            await glide_client.invoke_script(script3)
+
+        # Get the SHA1 digests of the scripts
+        sha1_1 = script1.get_hash()
+        sha1_2 = script2.get_hash()
+        sha1_3 = script3.get_hash()
+        non_existent_sha1 = "0" * 40  # A SHA1 that doesn't exist
+        # Check existence of scripts
+        result = await glide_client.script_exists(
+            [sha1_1, sha1_2, sha1_3, non_existent_sha1]
+        )
+
+        # script1 is loaded and returns true.
+        # script2 is only cached and not loaded, returns false.
+        # script3 is invoked with a SlotKeyRoute. Despite SCRIPT EXIST uses LogicalAggregate AND on the results,
+        #   SCRIPT LOAD during internal execution so the script still gets loaded on all nodes, returns true.
+        # non-existing sha1 returns false.
+        assert result == [True, False, True, False]
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_script_flush(self, glide_client: TGlideClient):
+        # Load a script
+        script = Script("return 'Hello'")
+        await glide_client.invoke_script(script)
+
+        # Check that the script exists
+        assert await glide_client.script_exists([script.get_hash()]) == [True]
+
+        # Flush the script cache
+        assert await glide_client.script_flush() == OK
+
+        # Check that the script no longer exists
+        assert await glide_client.script_exists([script.get_hash()]) == [False]
+
+        # Test with ASYNC mode
+        await glide_client.invoke_script(script)
+        assert await glide_client.script_flush(FlushMode.ASYNC) == OK
+        assert await glide_client.script_exists([script.get_hash()]) == [False]
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("single_route", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_script_kill_route(
+        self,
+        request,
+        cluster_mode,
+        protocol,
+        glide_client: TGlideClient,
+        single_route: bool,
+    ):
+        route = SlotKeyRoute(SlotType.PRIMARY, "1") if single_route else AllPrimaries()
+
+        # Create a second client to run the script
+        test_client = await create_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, timeout=30000
+        )
+
+        await script_kill_tests(glide_client, test_client, route)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_script_kill_no_route(
+        self,
+        request,
+        cluster_mode,
+        protocol,
+        glide_client: TGlideClient,
+    ):
+        # Create a second client to run the script
+        test_client = await create_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, timeout=30000
+        )
+
+        await script_kill_tests(glide_client, test_client)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_script_kill_unkillable(
+        self, request, cluster_mode, protocol, glide_client: TGlideClient
+    ):
+        # Create a second client to run the script
+        test_client = await create_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, timeout=30000
+        )
+
+        # Create a second client to kill the script
+        test_client2 = await create_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, timeout=15000
+        )
+
+        # Add test for script_kill with writing script
+        writing_script = Script(
+            """
+            redis.call('SET', KEYS[1], 'value')
+            local start = redis.call('TIME')[1]
+            while redis.call('TIME')[1] - start < 15 do
+                redis.call('SET', KEYS[1], 'value')
+            end
+        """
+        )
+
+        async def run_writing_script():
+            await test_client.invoke_script(writing_script, keys=[get_random_string(5)])
+
+        async def attempt_kill_writing_script():
+            await asyncio.sleep(3)  # Give some time for the script to start
+            foundUnkillable = False
+            while True:
+                try:
+                    await test_client2.script_kill()
+                except RequestError as e:
+                    if "UNKILLABLE" in str(e):
+                        foundUnkillable = True
+                        break
+                    await asyncio.sleep(0.5)
+
+            assert foundUnkillable
+
+        # Run the writing script and attempt to kill it
+        await asyncio.gather(
+            run_writing_script(),
+            attempt_kill_writing_script(),
+        )
+
+        await test_client.close()
+        await test_client2.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_script_show(self, glide_client: TGlideClient):
+        min_version = "8.0.0"
+        if await check_if_server_version_lt(glide_client, min_version):
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
+
+        code = f"return '{get_random_string(5)}'"
+        script = Script(code)
+
+        # Load the scripts
+        await glide_client.invoke_script(script)
+
+        # Get the SHA1 digests of the script
+        sha1 = script.get_hash()
+
+        assert await glide_client.script_show(sha1) == code.encode()
+
+        with pytest.raises(RequestError):
+            await glide_client.script_show("non existing sha1")

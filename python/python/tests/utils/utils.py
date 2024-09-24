@@ -8,7 +8,7 @@ from glide.async_commands.core import InfoSection
 from glide.constants import (
     TClusterResponse,
     TFunctionListResponse,
-    TFunctionStatsResponse,
+    TFunctionStatsSingleNodeResponse,
     TResult,
 )
 from glide.glide_client import TGlideClient
@@ -77,11 +77,11 @@ def get_random_string(length):
 
 
 async def check_if_server_version_lt(client: TGlideClient, min_version: str) -> bool:
-    # TODO: change it to pytest fixture after we'll implement a sync client
-    info_str = await client.info([InfoSection.SERVER])
-    server_version = parse_info_response(info_str).get("redis_version")
-    assert server_version is not None
-    return version.parse(server_version) < version.parse(min_version)
+    # TODO: change to pytest fixture after sync client is implemented
+    info = parse_info_response(await client.info([InfoSection.SERVER]))
+    version_str = info.get("valkey_version") or info.get("redis_version")
+    assert version_str is not None, "Server version not found in INFO response"
+    return version.parse(version_str) < version.parse(min_version)
 
 
 def compare_maps(
@@ -264,6 +264,23 @@ def create_lua_lib_with_long_running_function(
     return code
 
 
+def create_long_running_lua_script(timeout: int) -> str:
+    """
+    Create a lua script which runs an endless loop up to timeout sec.
+    Execution takes at least 5 sec regardless of the timeout configured.
+    """
+    script = (
+        "  local started = tonumber(redis.pcall('time')[1])\n"
+        "  while (true) do\n"
+        "    local now = tonumber(redis.pcall('time')[1])\n"
+        f"    if now > started + {timeout} then\n"
+        f"      return 'Timed out {timeout} sec'\n"
+        "    end\n"
+        "  end\n"
+    )
+    return script
+
+
 def check_function_list_response(
     response: TClusterResponse[TFunctionListResponse],
     lib_name: str,
@@ -309,7 +326,7 @@ def check_function_list_response(
 
 
 def check_function_stats_response(
-    response: TFunctionStatsResponse,
+    response: TFunctionStatsSingleNodeResponse,
     running_function: List[bytes],
     lib_count: int,
     function_count: int,
@@ -318,7 +335,7 @@ def check_function_stats_response(
     Validate whether `FUNCTION STATS` response contains required info.
 
     Args:
-        response (TFunctionStatsResponse): The response from server.
+        response (TFunctionStatsSingleNodeResponse): The response from server.
         running_function (List[bytes]): Command line of running function expected. Empty, if nothing expected.
         lib_count (int): Expected libraries count.
         function_count (int): Expected functions count.

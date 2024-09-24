@@ -229,7 +229,6 @@ import glide.api.commands.StringBaseCommands;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.GetExOptions;
-import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
@@ -251,6 +250,7 @@ import glide.api.models.commands.ScoreFilter;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
+import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.WeightAggregateOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
@@ -282,8 +282,10 @@ import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.scan.HScanOptions;
+import glide.api.models.commands.scan.HScanOptions.HScanOptionsBuilder;
 import glide.api.models.commands.scan.SScanOptions;
 import glide.api.models.commands.scan.ZScanOptions;
+import glide.api.models.commands.scan.ZScanOptions.ZScanOptionsBuilder;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamAddOptions.StreamAddOptionsBuilder;
 import glide.api.models.commands.stream.StreamClaimOptions;
@@ -404,15 +406,16 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Gets information and statistics about the server.
+     * Gets information and statistics about the server.<br>
+     * Starting from server version 7, command supports multiple section arguments.
      *
      * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
-     * @param options A list of {@link Section} values specifying which sections of information to
+     * @param sections A list of {@link Section} values specifying which sections of information to
      *     retrieve. When no parameter is provided, the {@link Section#DEFAULT} option is assumed.
      * @return Command Response - A <code>String</code> containing the requested {@link Section}s.
      */
-    public T info(@NonNull InfoOptions options) {
-        protobufTransaction.addCommands(buildCommand(Info, newArgsBuilder().add(options.toArgs())));
+    public T info(@NonNull Section[] sections) {
+        protobufTransaction.addCommands(buildCommand(Info, newArgsBuilder().add(sections)));
         return getThis();
     }
 
@@ -3442,13 +3445,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/xread/">valkey.io</a> for details.
-     * @param keysAndIds An array of <code>Pair</code>s of keys and entry ids to read from. A <code>
-     *      pair</code> is composed of a stream's key and the id of the entry after which the stream
-     *     will be read.
+     * @param keysAndIds A <code>Map</code> of keys and entry IDs to read from.
      * @return Command Response - A <code>{@literal Map<String, Map<String,
-     *     String[][]>>}</code> with stream keys, to <code>Map</code> of stream-ids, to an array of
-     *     pairings with format <code>[[field, entry],
-     *     [field, entry], ...]</code>.
+     *     String[][]>>}</code> with stream keys, to <code>Map</code> of stream entry IDs, to an array
+     *     of pairings with format <code>[[field, entry], [field, entry], ...]</code>.
      */
     public <ArgType> T xread(@NonNull Map<ArgType, ArgType> keysAndIds) {
         return xread(keysAndIds, StreamReadOptions.builder().build());
@@ -3460,14 +3460,11 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/xread/">valkey.io</a> for details.
-     * @param keysAndIds An array of <code>Pair</code>s of keys and entry ids to read from. A <code>
-     *      pair</code> is composed of a stream's key and the id of the entry after which the stream
-     *     will be read.
+     * @param keysAndIds A <code>Map</code> of keys and entry IDs to read from.
      * @param options options detailing how to read the stream {@link StreamReadOptions}.
      * @return Command Response - A <code>{@literal Map<String, Map<String,
-     *     String[][]>>}</code> with stream keys, to <code>Map</code> of stream-ids, to an array of
-     *     pairings with format <code>[[field, entry],
-     *     [field, entry], ...]</code>.
+     *     String[][]>>}</code> with stream keys, to <code>Map</code> of stream entry IDs, to an array
+     *     of pairings with format <code>[[field, entry], [field, entry], ...]</code>.
      */
     public <ArgType> T xread(
             @NonNull Map<ArgType, ArgType> keysAndIds, @NonNull StreamReadOptions options) {
@@ -3539,25 +3536,25 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/xrange/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param start Starting stream ID bound for range.
+     * @param start Starting stream entry IDs bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
      *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
      *           ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
-     * @param end Ending stream ID bound for range.
+     * @param end Ending stream entry IDs bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
      *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
      *           ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
      * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is
-     *     an array of pairings with format <code>[[field,
-     *     entry], [field, entry], ...]</code>.
+     *     an array of pairings with format <code>[[field, entry], [field, entry], ...]</code>.
+     *     Returns or <code>null</code> if <code>count</code> is non-positive.
      */
     public <ArgType> T xrange(
             @NonNull ArgType key, @NonNull StreamRange start, @NonNull StreamRange end) {
@@ -3574,17 +3571,17 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/xrange/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param start Starting stream ID bound for range.
+     * @param start Starting stream entry IDs bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
      *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
      *           ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
-     * @param end Ending stream ID bound for range.
+     * @param end Ending stream entry IDs bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
      *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
      *           ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
@@ -3592,8 +3589,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param count Maximum count of stream entries to return.
      * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is
-     *     an array of pairings with format <code>[[field,
-     *     entry], [field, entry], ...]</code>.
+     *     an array of pairings with format <code>[[field, entry], [field, entry], ...]</code>.
+     *     Returns or <code>null</code> if <code>count</code> is non-positive.
      */
     public <ArgType> T xrange(
             @NonNull ArgType key, @NonNull StreamRange start, @NonNull StreamRange end, long count) {
@@ -3612,25 +3609,25 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/xrevrange/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param end Ending stream ID bound for range.
+     * @param end Ending stream entry IDs bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
      *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
      *           ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
-     * @param start Starting stream ID bound for range.
+     * @param start Starting stream entry IDs bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
      *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
      *           ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
      * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is
-     *     an array of pairings with format <code>[[field,
-     *     entry], [field, entry], ...]</code>.
+     *     an array of pairings with format <code>[[field, entry], [field, entry], ...]</code>.
+     *     Returns or <code>null</code> if <code>count</code> is non-positive.
      */
     public <ArgType> T xrevrange(
             @NonNull ArgType key, @NonNull StreamRange end, @NonNull StreamRange start) {
@@ -3649,17 +3646,17 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/xrevrange/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param start Starting stream ID bound for range.
+     * @param start Starting stream entry IDs bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
      *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
      *           ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
-     * @param end Ending stream ID bound for range.
+     * @param end Ending stream entry IDs bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
      *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
      *           ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
@@ -3668,6 +3665,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param count Maximum count of stream entries to return.
      * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is
      *     an array of pairings with format <code>[[field, entry], [field, entry], ...]</code>.
+     *     Returns or <code>null</code> if <code>count</code> is non-positive.
      */
     public <ArgType> T xrevrange(
             @NonNull ArgType key, @NonNull StreamRange end, @NonNull StreamRange start, long count) {
@@ -3841,17 +3839,15 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a> for details.
-     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code> Map</code>
-     *     is composed of a stream's key and the id of the entry after which the stream will be read.
-     *     Use the special id of <code>{@literal Map<String, Map<String, String[][]>>}
-     *     </code> to receive only new messages.
+     * @param keysAndIds A <code>Map</code> of keys and entry IDs to read from.<br>
+     *     Use the special ID of <code>{@literal ">"}</code> to receive only new messages.
      * @param group The consumer group name.
      * @param consumer The newly created consumer.
      * @return Command Response - A <code>{@literal Map<String, Map<String, String[][]>>}</code> with
-     *     stream keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>
-     *     [[field, entry], [field, entry], ...]</code>. Returns <code>null</code> if the consumer
-     *     group does not exist. Returns a <code>Map</code> with a value of code>null</code> if the
-     *     stream is empty.
+     *     stream keys, to <code>Map</code> of stream entry IDs, to an array of pairings with format
+     *     <code>
+     *     [[field, entry], [field, entry], ...]</code>. Returns <code>null</code> if there is no
+     *     stream that can be served.
      */
     public <ArgType> T xreadgroup(
             @NonNull Map<ArgType, ArgType> keysAndIds,
@@ -3867,18 +3863,16 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a> for details.
-     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>Map</code>
-     *     is composed of a stream's key and the id of the entry after which the stream will be read.
-     *     Use the special id of <code>{@literal Map<String, Map<String, String[][]>>}</code> to
-     *     receive only new messages.
+     * @param keysAndIds A <code>Map</code> of keys and entry IDs to read from.<br>
+     *     Use the special ID of <code>{@literal ">"}</code> to receive only new messages.
      * @param group The consumer group name.
      * @param consumer The newly created consumer.
      * @param options Options detailing how to read the stream {@link StreamReadGroupOptions}.
      * @return Command Response - A <code>{@literal Map<String, Map<String, String[][]>>}</code> with
-     *     stream keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>
-     *      [[field, entry], [field, entry], ...]</code>. Returns <code>null</code> if the consumer
-     *     group does not exist. Returns a <code>Map</code> with a value of code>null</code> if the
-     *     stream is empty.
+     *     stream keys, to <code>Map</code> of stream entry IDs, to an array of pairings with format
+     *     <code>
+     *      [[field, entry], [field, entry], ...]</code>. Returns <code>null</code> if there is no
+     *     stream that can be served.
      */
     public <ArgType> T xreadgroup(
             @NonNull Map<ArgType, ArgType> keysAndIds,
@@ -3950,17 +3944,17 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://valkey.io/commands/xpending/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param group The consumer group name.
-     * @param start Starting stream ID bound for range.
+     * @param start Starting stream entry IDs bound for range.
      *     <ul>
-     *       <li>Use {@link IdBound#of} to specify a stream ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link IdBound#of} to specify a stream entry IDs.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry IDs.
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
-     * @param end Ending stream ID bound for range.
+     * @param end Ending stream entry IDs bound for range.
      *     <ul>
-     *       <li>Use {@link IdBound#of} to specify a stream ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link IdBound#of} to specify a stream entry IDs.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry IDs.
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
@@ -3996,17 +3990,17 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://valkey.io/commands/xpending/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param group The consumer group name.
-     * @param start Starting stream ID bound for range.
+     * @param start Starting stream entry IDs bound for range.
      *     <ul>
-     *       <li>Use {@link IdBound#of} to specify a stream ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link IdBound#of} to specify a stream entry IDs.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry IDs.
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
-     * @param end Ending stream ID bound for range.
+     * @param end Ending stream entry IDs bound for range.
      *     <ul>
-     *       <li>Use {@link IdBound#of} to specify a stream ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link IdBound#of} to specify a stream entry IDs.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry IDs.
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
@@ -4270,7 +4264,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     specified value.
      * @return Command Response - An <code>array</code> containing the following elements:
      *     <ul>
-     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *       <li>A stream entry IDs to be used as the start argument for the next call to <code>
+     *           XAUTOCLAIM
      *           </code>. This ID is equivalent to the next ID in the stream after the entries that
      *           were scanned, or "0-0" if the entire stream was scanned.
      *       <li>A mapping of the claimed entries, with the keys being the claimed entry IDs and the
@@ -4309,7 +4304,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param count Limits the number of claimed entries to the specified value.
      * @return Command Response - An <code>array</code> containing the following elements:
      *     <ul>
-     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *       <li>A stream entry IDs to be used as the start argument for the next call to <code>
+     *           XAUTOCLAIM
      *           </code>. This ID is equivalent to the next ID in the stream after the entries that
      *           were scanned, or "0-0" if the entire stream was scanned.
      *       <li>A mapping of the claimed entries, with the keys being the claimed entry IDs and the
@@ -4357,7 +4353,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     specified value.
      * @return Command Response - An <code>array</code> containing the following elements:
      *     <ul>
-     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *       <li>A stream entry IDs to be used as the start argument for the next call to <code>
+     *           XAUTOCLAIM
      *           </code>. This ID is equivalent to the next ID in the stream after the entries that
      *           were scanned, or "0-0" if the entire stream was scanned.
      *       <li>A list of the IDs for the claimed entries.
@@ -4402,7 +4399,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param count Limits the number of claimed entries to the specified value.
      * @return Command Response - An <code>array</code> containing the following elements:
      *     <ul>
-     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *       <li>A stream entry IDs to be used as the start argument for the next call to <code>
+     *           XAUTOCLAIM
      *           </code>. This ID is equivalent to the next ID in the stream after the entries that
      *           were scanned, or "0-0" if the entire stream was scanned.
      *       <li>A list of the IDs for the claimed entries.
@@ -5301,6 +5299,26 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T bitcount(@NonNull ArgType key) {
         checkTypeOrThrow(key);
         protobufTransaction.addCommands(buildCommand(BitCount, newArgsBuilder().add(key)));
+        return getThis();
+    }
+
+    /**
+     * Counts the number of set bits (population counting) in a string stored at <code>key</code>. The
+     * offset <code>start</code> is a zero-based index, with <code>0</code> being the first byte of
+     * the list, <code>1</code> being the next byte and so on. This offset can also be a negative
+     * number indicating offsets starting at the end of the list, with <code>-1</code> being the last
+     * byte of the list, <code>-2</code> being the penultimate, and so on.
+     *
+     * @see <a href="https://valkey.io/commands/bitcount/">valkey.io</a> for details.
+     * @param key The key for the string to count the set bits of.
+     * @param start The starting offset byte index.
+     * @return Command Response - The number of set bits in the string byte interval specified by
+     *     <code>start</code> to the last byte. Returns zero if the key is missing as it is treated as
+     *     an empty string.
+     */
+    public <ArgType> T bitcount(@NonNull ArgType key, long start) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(buildCommand(BitCount, newArgsBuilder().add(key).add(start)));
         return getThis();
     }
 
@@ -6550,6 +6568,30 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
+     * The <code>sort</code> command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements.<br>
+     * To store the result into a new key, see {@link #sortStore(ArgType, ArgType, SortOptions)}.
+     *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @apiNote When in cluster mode, both <code>key</code> and the patterns specified in {@link
+     *     SortOptions#byPattern} and {@link SortOptions#getPatterns} must hash to the same slot. The
+     *     use of {@link SortOptions#byPattern} and {@link SortOptions#getPatterns} in cluster mode is
+     *     supported since Valkey version 8.0.
+     * @see <a href="https://valkey.io/commands/sort">valkey.io</a> for details.
+     * @param key The key of the list, set, or sorted set to be sorted.
+     * @param sortOptions The {@link SortOptions}.
+     * @return Command Response - An <code>Array</code> of sorted elements.
+     */
+    public <ArgType> T sort(@NonNull ArgType key, @NonNull SortOptions sortOptions) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(Sort, newArgsBuilder().add(key).add(sortOptions.toArgs())));
+        return getThis();
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
      * <br>
      * The <code>sortReadOnly</code> command can be used to sort elements based on different criteria
      * and apply transformations on sorted elements.
@@ -6557,13 +6599,37 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @since Valkey 7.0 and above.
-     * @see <a href="https://valkey.io/commands/sort_ro">valkey.io</a> for details.
+     * @see <a href="https://valkey.io/commands/sort">valkey.io</a> for details.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @return Command Response - An <code>Array</code> of sorted elements.
      */
     public <ArgType> T sortReadOnly(@NonNull ArgType key) {
         checkTypeOrThrow(key);
         protobufTransaction.addCommands(buildCommand(SortReadOnly, newArgsBuilder().add(key)));
+        return getThis();
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
+     * The <code>sortReadOnly</code> command can be used to sort elements based on different criteria
+     * and apply transformations on sorted elements.<br>
+     *
+     * @since Valkey 7.0 and above.
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @apiNote When in cluster mode, both <code>key</code> and the patterns specified in {@link
+     *     SortOptions#byPattern} and {@link SortOptions#getPatterns} must hash to the same slot. The
+     *     use of {@link SortOptions#byPattern} and {@link SortOptions#getPatterns} in cluster mode is
+     *     supported since Valkey version 8.0.
+     * @see <a href="https://valkey.io/commands/sort">valkey.io</a> for details.
+     * @param key The key of the list, set, or sorted set to be sorted.
+     * @param sortOptions The {@link SortOptions}.
+     * @return Command Response - An <code>Array</code> of sorted elements.
+     */
+    public <ArgType> T sortReadOnly(@NonNull ArgType key, @NonNull SortOptions sortOptions) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(SortReadOnly, newArgsBuilder().add(key).add(sortOptions.toArgs())));
         return getThis();
     }
 
@@ -6587,6 +6653,45 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         checkTypeOrThrow(key);
         protobufTransaction.addCommands(
                 buildCommand(Sort, newArgsBuilder().add(key).add(STORE_COMMAND_STRING).add(destination)));
+        return getThis();
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at <code>key</code> and stores the result in
+     * <code>destination</code>. The <code>sort</code> command can be used to sort elements based on
+     * different criteria, apply transformations on sorted elements, and store the result in a new
+     * key.<br>
+     * To get the sort result without storing it into a key, see {@link #sort(ArgType, SortOptions)}.
+     *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @apiNote In cluster mode:
+     *     <ul>
+     *       <li><code>key</code>, <code>destination</code>, and the patterns specified in {@link
+     *           SortOptions#byPattern} and {@link SortOptions#getPatterns} must hash to the same
+     *           slot.
+     *       <li>The use of {@link SortOptions#byPattern} and {@link SortOptions#getPatterns} in
+     *           cluster mode is supported since Valkey version 8.0.
+     *     </ul>
+     *
+     * @see <a href="https://valkey.io/commands/sort">valkey.io</a> for details.
+     * @param key The key of the list, set, or sorted set to be sorted.
+     * @param sortOptions The {@link SortOptions}.
+     * @param destination The key where the sorted result will be stored.
+     * @return Command Response - The number of elements in the sorted key stored at <code>destination
+     *     </code>.
+     */
+    public <ArgType> T sortStore(
+            @NonNull ArgType key, @NonNull ArgType destination, @NonNull SortOptions sortOptions) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        Sort,
+                        newArgsBuilder()
+                                .add(key)
+                                .add(sortOptions.toArgs())
+                                .add(STORE_COMMAND_STRING)
+                                .add(destination)));
         return getThis();
     }
 
@@ -7059,8 +7164,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     always the <code>cursor</code> for the next iteration of results. <code>"0"</code> will be
      *     the <code>cursor</code> returned on the last iteration of the sorted set. The second
      *     element is always an <code>Array</code> of the subset of the sorted set held in <code>key
-     *     </code>. The array in the second element is always a flattened series of <code>String
-     *     </code> pairs, where the value is at even indices and the score is at odd indices.
+     *     </code>. The array in the second element is a flattened series of <code>String
+     *     </code> pairs, where the value is at even indices and the score is at odd indices. If
+     *     {@link ZScanOptionsBuilder#noScores} is to <code>true</code>, the second element will only
+     *     contain the members without scores.
      */
     public <ArgType> T zscan(
             @NonNull ArgType key, @NonNull ArgType cursor, @NonNull ZScanOptions zScanOptions) {
@@ -7106,8 +7213,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     always the <code>cursor</code> for the next iteration of results. <code>"0"</code> will be
      *     the <code>cursor</code> returned on the last iteration of the result. The second element is
      *     always an <code>Array</code> of the subset of the hash held in <code>key</code>. The array
-     *     in the second element is always a flattened series of <code>String</code> pairs, where the
-     *     key is at even indices and the value is at odd indices.
+     *     in the second element is a flattened series of <code>String</code> pairs, where the key is
+     *     at even indices and the value is at odd indices. If {@link HScanOptionsBuilder#noValues} is
+     *     set to <code>true</code>, the second element will only contain the fields without the
+     *     values.
      */
     public <ArgType> T hscan(
             @NonNull ArgType key, @NonNull ArgType cursor, @NonNull HScanOptions hScanOptions) {

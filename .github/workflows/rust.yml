@@ -11,7 +11,9 @@ on:
             - .github/workflows/rust.yml
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/install-valkey/action.yml
+            - .github/workflows/lint-rust/action.yml
             - .github/json_matrices/build-matrix.json
+            - deny.toml
     pull_request:
         paths:
             - logger_core/**
@@ -21,7 +23,9 @@ on:
             - .github/workflows/rust.yml
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/install-valkey/action.yml
+            - .github/workflows/lint-rust/action.yml
             - .github/json_matrices/build-matrix.json
+            - deny.toml
     workflow_dispatch:
 
 concurrency:
@@ -65,6 +69,7 @@ jobs:
                   os: "ubuntu"
                   target: "x86_64-unknown-linux-gnu"
                   engine-version: ${{ matrix.engine.version }}
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - uses: Swatinem/rust-cache@v2
 

@@ -62,6 +62,7 @@ runs:
             echo 'export PATH=/usr/local/bin:$PATH' >>~/.bash_profile
 
         - name: Verify Valkey installation and symlinks
+          if: ${{ !contains(inputs.engine-version, '-rc') }}
           shell: bash
           run: | 
             # In Valkey releases, the engine is built with symlinks from valkey-server and valkey-cli

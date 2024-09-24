@@ -12,6 +12,7 @@ let globalObject = global as unknown;
 /* eslint-disable @typescript-eslint/no-require-imports */
 function loadNativeBinding() {
     let nativeBinding = null;
+
     switch (platform) {
         case "linux":
             switch (arch) {
@@ -27,6 +28,7 @@ function loadNativeBinding() {
                             nativeBinding = require("@scope/valkey-glide-linux-x64");
                             break;
                     }
+
                     break;
                 case "arm64":
                     switch (familySync()) {
@@ -40,12 +42,14 @@ function loadNativeBinding() {
                             nativeBinding = require("@scope/valkey-glide-linux-arm64");
                             break;
                     }
+
                     break;
                 default:
                     throw new Error(
                         `Unsupported OS: ${platform}, architecture: ${arch}`,
                     );
             }
+
             break;
         case "darwin":
             switch (arch) {
@@ -60,22 +64,28 @@ function loadNativeBinding() {
                         `Unsupported OS: ${platform}, architecture: ${arch}`,
                     );
             }
+
             break;
         default:
             throw new Error(
                 `Unsupported OS: ${platform}, architecture: ${arch}`,
             );
     }
+
     if (!nativeBinding) {
         throw new Error(`Failed to load native binding`);
     }
+
     return nativeBinding;
 }
 
 function initialize() {
     const nativeBinding = loadNativeBinding();
     const {
+        AggregationType,
         BaseScanOptions,
+        ZScanOptions,
+        HScanOptions,
         BitEncoding,
         BitFieldGet,
         BitFieldIncrBy,
@@ -90,6 +100,8 @@ function initialize() {
         BitmapIndexType,
         BitwiseOperation,
         ConditionalChange,
+        Decoder,
+        DecoderOption,
         GeoAddOptions,
         CoordOrigin,
         MemberOrigin,
@@ -98,26 +110,36 @@ function initialize() {
         GeoCircleShape,
         GeoSearchShape,
         GeoSearchResultOptions,
+        GeoSearchStoreResultOptions,
         SortOrder,
         GeoUnit,
         GeospatialData,
         GlideClient,
         GlideClusterClient,
         GlideClientConfiguration,
+        GlideRecord,
         GlideString,
+        SortedSetDataType,
+        StreamEntryDataType,
+        HashDataType,
         FunctionListOptions,
         FunctionListResponse,
-        FunctionStatsResponse,
+        FunctionStatsSingleResponse,
+        FunctionStatsFullResponse,
+        FunctionRestorePolicy,
         SlotIdTypes,
         SlotKeyTypes,
         TimeUnit,
         RouteByAddress,
+        RouteOption,
         Routes,
         RestoreOptions,
         SingleNodeRoute,
         PeriodicChecksManualInterval,
         PeriodicChecks,
         Logger,
+        Limit,
+        LolwutOptions,
         LPosOptions,
         ListDirection,
         ExpireOptions,
@@ -125,8 +147,9 @@ function initialize() {
         InfoOptions,
         InsertPosition,
         SetOptions,
-        ZaddOptions,
+        ZAddOptions,
         InfBoundary,
+        KeyWeight,
         Boundary,
         UpdateOptions,
         ProtocolVersion,
@@ -134,22 +157,22 @@ function initialize() {
         RangeByScore,
         RangeByLex,
         ReadFrom,
-        RedisCredentials,
+        ServerCredentials,
         SortClusterOptions,
         SortOptions,
         SortedSetRange,
         StreamGroupOptions,
         StreamTrimOptions,
         StreamAddOptions,
+        StreamReadGroupOptions,
         StreamReadOptions,
         StreamClaimOptions,
         StreamPendingOptions,
-        ScriptOptions,
         ClosingError,
         ConfigurationError,
         ExecAbortError,
-        RedisError,
-        ReturnType,
+        ValkeyError,
+        GlideReturnType,
         StreamEntries,
         ReturnTypeXinfoStream,
         RequestError,
@@ -161,6 +184,7 @@ function initialize() {
         ScoreFilter,
         SignedEncoding,
         UnsignedEncoding,
+        UpdateByScore,
         createLeakedArray,
         createLeakedAttribute,
         createLeakedBigint,
@@ -168,10 +192,23 @@ function initialize() {
         createLeakedMap,
         createLeakedString,
         parseInfoResponse,
+        Script,
+        ObjectType,
+        ClusterScanCursor,
+        BaseClientConfiguration,
+        GlideClusterClientConfiguration,
+        LevelOptions,
+        ReturnTypeRecord,
+        ReturnTypeMap,
+        ClusterResponse,
+        ReturnTypeAttribute,
     } = nativeBinding;
 
     module.exports = {
+        AggregationType,
         BaseScanOptions,
+        HScanOptions,
+        ZScanOptions,
         BitEncoding,
         BitFieldGet,
         BitFieldIncrBy,
@@ -186,8 +223,14 @@ function initialize() {
         BitmapIndexType,
         BitwiseOperation,
         ConditionalChange,
+        Decoder,
+        DecoderOption,
         GeoAddOptions,
+        GlideRecord,
         GlideString,
+        SortedSetDataType,
+        StreamEntryDataType,
+        HashDataType,
         CoordOrigin,
         MemberOrigin,
         SearchOrigin,
@@ -195,6 +238,7 @@ function initialize() {
         GeoCircleShape,
         GeoSearchShape,
         GeoSearchResultOptions,
+        GeoSearchStoreResultOptions,
         SortOrder,
         GeoUnit,
         GeospatialData,
@@ -203,19 +247,24 @@ function initialize() {
         GlideClientConfiguration,
         FunctionListOptions,
         FunctionListResponse,
-        FunctionStatsResponse,
+        FunctionStatsSingleResponse,
+        FunctionStatsFullResponse,
+        FunctionRestorePolicy,
         SlotIdTypes,
         SlotKeyTypes,
         StreamEntries,
         TimeUnit,
         ReturnTypeXinfoStream,
         RouteByAddress,
+        RouteOption,
         Routes,
         RestoreOptions,
         SingleNodeRoute,
         PeriodicChecksManualInterval,
         PeriodicChecks,
         Logger,
+        LolwutOptions,
+        Limit,
         LPosOptions,
         ListDirection,
         ExpireOptions,
@@ -223,8 +272,9 @@ function initialize() {
         InfoOptions,
         InsertPosition,
         SetOptions,
-        ZaddOptions,
+        ZAddOptions,
         InfBoundary,
+        KeyWeight,
         Boundary,
         UpdateOptions,
         ProtocolVersion,
@@ -232,7 +282,7 @@ function initialize() {
         RangeByScore,
         RangeByLex,
         ReadFrom,
-        RedisCredentials,
+        ServerCredentials,
         SortClusterOptions,
         SortOptions,
         SortedSetRange,
@@ -240,14 +290,14 @@ function initialize() {
         StreamTrimOptions,
         StreamAddOptions,
         StreamClaimOptions,
+        StreamReadGroupOptions,
         StreamReadOptions,
         StreamPendingOptions,
-        ScriptOptions,
         ClosingError,
         ConfigurationError,
         ExecAbortError,
-        RedisError,
-        ReturnType,
+        ValkeyError,
+        GlideReturnType,
         RequestError,
         TimeoutError,
         ConnectionError,
@@ -257,6 +307,7 @@ function initialize() {
         ScoreFilter,
         SignedEncoding,
         UnsignedEncoding,
+        UpdateByScore,
         createLeakedArray,
         createLeakedAttribute,
         createLeakedBigint,
@@ -264,6 +315,16 @@ function initialize() {
         createLeakedMap,
         createLeakedString,
         parseInfoResponse,
+        Script,
+        ObjectType,
+        ClusterScanCursor,
+        BaseClientConfiguration,
+        GlideClusterClientConfiguration,
+        LevelOptions,
+        ReturnTypeRecord,
+        ReturnTypeMap,
+        ClusterResponse,
+        ReturnTypeAttribute,
     };
 
     globalObject = Object.assign(global, nativeBinding);

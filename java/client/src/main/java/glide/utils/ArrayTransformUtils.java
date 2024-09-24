@@ -32,15 +32,15 @@ public class ArrayTransformUtils {
     }
 
     /**
-     * Converts a map of GlideString keys and values of any type in to an array of GlideStrings with
-     * alternating keys and values.
+     * Converts a map of GlideString keys and values to an array of GlideStrings.
      *
-     * @param args Map of GlideString keys to values of any type to convert.
+     * @param args Map of GlideString keys to values of GlideString.
      * @return Array of strings [key1, gs(value1.toString()), key2, gs(value2.toString()), ...].
      */
-    public static GlideString[] convertMapToKeyValueGlideStringArray(Map<GlideString, ?> args) {
+    public static GlideString[] convertMapToKeyValueGlideStringArray(
+            Map<GlideString, GlideString> args) {
         return args.entrySet().stream()
-                .flatMap(entry -> Stream.of(entry.getKey(), GlideString.gs(entry.getValue().toString())))
+                .flatMap(entry -> Stream.of(entry.getKey(), entry.getValue()))
                 .toArray(GlideString[]::new);
     }
 
@@ -64,10 +64,10 @@ public class ArrayTransformUtils {
     }
 
     /**
-     * Converts a nested array of GlideString keys and values of any type in to an array of
-     * GlideStrings with alternating keys and values.
+     * Converts a nested array of GlideString keys and values in to an array of GlideStrings with
+     * alternating keys and values.
      *
-     * @param args Nested array of GlideString keys to values of any type to convert.
+     * @param args Nested array of GlideString keys and values to convert.
      * @return Array of strings [key1, gs(value1.toString()), key2, gs(value2.toString()), ...].
      */
     public static GlideString[] convertNestedArrayToKeyValueGlideStringArray(GlideString[][] args) {
@@ -78,7 +78,7 @@ public class ArrayTransformUtils {
             }
         }
         return Arrays.stream(args)
-                .flatMap(entry -> Stream.of(entry[0], GlideString.gs(entry[1].toString())))
+                .flatMap(entry -> Stream.of(entry[0], entry[1]))
                 .toArray(GlideString[]::new);
     }
 
@@ -86,10 +86,10 @@ public class ArrayTransformUtils {
      * Converts a map of string keys and values of any type into an array of strings with alternating
      * values and keys.
      *
-     * @param args Map of string keys to values of any type to convert.
+     * @param args Map of string keys to values of Double type to convert.
      * @return Array of strings [value1.toString(), key1, value2.toString(), key2, ...].
      */
-    public static String[] convertMapToValueKeyStringArray(Map<String, ?> args) {
+    public static String[] convertMapToValueKeyStringArray(Map<String, Double> args) {
         return args.entrySet().stream()
                 .flatMap(entry -> Stream.of(entry.getValue().toString(), entry.getKey()))
                 .toArray(String[]::new);
@@ -99,10 +99,10 @@ public class ArrayTransformUtils {
      * Converts a map of GlideString keys and values of any type into an array of GlideStrings with
      * alternating values and keys.
      *
-     * @param args Map of GlideString keys to values of any type to convert.
+     * @param args Map of GlideString keys to values of Double type to convert.
      * @return Array of GlideStrings [gs(value1.toString()), key1, gs(value2.toString()), key2, ...].
      */
-    public static GlideString[] convertMapToValueKeyStringArrayBinary(Map<GlideString, ?> args) {
+    public static GlideString[] convertMapToValueKeyStringArrayBinary(Map<GlideString, Double> args) {
         return args.entrySet().stream()
                 .flatMap(entry -> Stream.of(gs(entry.getValue().toString()), entry.getKey()))
                 .toArray(GlideString[]::new);

@@ -12,7 +12,7 @@ use once_cell::sync::Lazy;
 use rand::{distributions::Alphanumeric, Rng};
 use redis::{
     cluster_routing::{MultipleNodeRoutingInfo, RoutingInfo},
-    ConnectionAddr, PushInfo, RedisConnectionInfo, RedisResult, Value,
+    ConnectionAddr, GlideConnectionOptions, PushInfo, RedisConnectionInfo, RedisResult, Value,
 };
 use socket2::{Domain, Socket, Type};
 use std::{
@@ -358,7 +358,7 @@ pub fn build_keys_and_certs_for_tls(tempdir: &TempDir) -> TlsFilePaths {
             .arg("genrsa")
             .arg("-out")
             .arg(name)
-            .arg(&format!("{size}"))
+            .arg(format!("{size}"))
             .stdout(process::Stdio::null())
             .stderr(process::Stdio::null())
             .spawn()
@@ -457,7 +457,10 @@ pub async fn wait_for_server_to_become_ready(server_address: &ConnectionAddr) {
     })
     .unwrap();
     loop {
-        match client.get_multiplexed_async_connection(None).await {
+        match client
+            .get_multiplexed_async_connection(GlideConnectionOptions::default())
+            .await
+        {
             Err(err) => {
                 if err.is_connection_refusal() {
                     tokio::time::sleep(millisecond).await;
@@ -593,9 +596,13 @@ pub async fn setup_acl(addr: &ConnectionAddr, connection_info: &RedisConnectionI
         redis: RedisConnectionInfo::default(),
     })
     .unwrap();
-    let mut connection =
-        repeat_try_create(|| async { client.get_multiplexed_async_connection(None).await.ok() })
-            .await;
+    let mut connection = repeat_try_create(|| async {
+        client
+            .get_multiplexed_async_connection(GlideConnectionOptions::default())
+            .await
+            .ok()
+    })
+    .await;
 
     let password = connection_info.password.clone().unwrap();
     let username = connection_info

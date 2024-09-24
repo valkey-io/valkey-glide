@@ -382,33 +382,54 @@ public class TransactionTestUtilities {
                 .hscan(hashKey2, "0")
                 .hscan(hashKey2, "0", HScanOptions.builder().count(20L).build());
 
-        return new Object[] {
-            2L, // hset(hashKey1, Map.of(field1, value1, field2, value2))
-            value1, // hget(hashKey1, field1)
-            2L, // hlen(hashKey1)
-            true, // hexists(hashKey1, field2)
-            false, // hsetnx(hashKey1, field1, value1)
-            new String[] {value1, null, value2}, // hmget(hashKey1, new String[] {...})
-            Map.of(field1, value1, field2, value2), // hgetall(hashKey1)
-            1L, // hdel(hashKey1, new String[] {field1})
-            new String[] {value2}, // hvals(hashKey1)
-            field2, // hrandfield(hashKey1)
-            new String[] {field2}, // hrandfieldWithCount(hashKey1, 2)
-            new String[] {field2, field2}, // hrandfieldWithCount(hashKey1, -2)
-            new String[][] {{field2, value2}}, // hrandfieldWithCountWithValues(hashKey1, 2)
-            new String[][] {
-                {field2, value2}, {field2, value2}
-            }, // hrandfieldWithCountWithValues(hashKey1, -2)
-            5L, // hincrBy(hashKey1, field3, 5)
-            10.5, // hincrByFloat(hashKey1, field3, 5.5)
-            new String[] {field2, field3}, // hkeys(hashKey1)
-            (long) value2.length(), // hstrlen(hashKey1, field2)
-            1L, // hset(hashKey2, Map.of(field1, value1))
-            new Object[] {"0", new Object[] {field1, value1}}, // hscan(hashKey2, "0")
-            new Object[] {
-                "0", new Object[] {field1, value1}
-            }, // hscan(hashKey2, "0", HScanOptions.builder().count(20L).build());
-        };
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
+            transaction
+                    .hscan(hashKey2, "0", HScanOptions.builder().count(20L).noValues(false).build())
+                    .hscan(hashKey2, "0", HScanOptions.builder().count(20L).noValues(true).build());
+        }
+
+        var result =
+                new Object[] {
+                    2L, // hset(hashKey1, Map.of(field1, value1, field2, value2))
+                    value1, // hget(hashKey1, field1)
+                    2L, // hlen(hashKey1)
+                    true, // hexists(hashKey1, field2)
+                    false, // hsetnx(hashKey1, field1, value1)
+                    new String[] {value1, null, value2}, // hmget(hashKey1, new String[] {...})
+                    Map.of(field1, value1, field2, value2), // hgetall(hashKey1)
+                    1L, // hdel(hashKey1, new String[] {field1})
+                    new String[] {value2}, // hvals(hashKey1)
+                    field2, // hrandfield(hashKey1)
+                    new String[] {field2}, // hrandfieldWithCount(hashKey1, 2)
+                    new String[] {field2, field2}, // hrandfieldWithCount(hashKey1, -2)
+                    new String[][] {{field2, value2}}, // hrandfieldWithCountWithValues(hashKey1, 2)
+                    new String[][] {
+                        {field2, value2}, {field2, value2}
+                    }, // hrandfieldWithCountWithValues(hashKey1, -2)
+                    5L, // hincrBy(hashKey1, field3, 5)
+                    10.5, // hincrByFloat(hashKey1, field3, 5.5)
+                    new String[] {field2, field3}, // hkeys(hashKey1)
+                    (long) value2.length(), // hstrlen(hashKey1, field2)
+                    1L, // hset(hashKey2, Map.of(field1, value1))
+                    new Object[] {"0", new Object[] {field1, value1}}, // hscan(hashKey2, "0")
+                    new Object[] {
+                        "0", new Object[] {field1, value1}
+                    }, // hscan(hashKey2, "0", HScanOptions.builder().count(20L).build());
+                };
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
+            result =
+                    concatenateArrays(
+                            result,
+                            new Object[] {
+                                new Object[] {"0", new Object[] {field1, value1}}, // hscan(hashKey2, "0",
+                                // HScanOptions.builder().count(20L).noValues(false).build());
+                                new Object[] {"0", new Object[] {field1}}, // hscan(hashKey2, "0",
+                                // HScanOptions.builder().count(20L).noValues(true).build());
+                            });
+        }
+
+        return result;
     }
 
     private static Object[] listCommands(BaseTransaction<?> transaction) {
@@ -648,8 +669,14 @@ public class TransactionTestUtilities {
                 .zrandmemberWithCount(zSetKey2, 1)
                 .zrandmemberWithCountWithScores(zSetKey2, 1)
                 .zscan(zSetKey2, "0")
-                .zscan(zSetKey2, "0", ZScanOptions.builder().count(20L).build())
-                .bzpopmin(new String[] {zSetKey2}, .1);
+                .zscan(zSetKey2, "0", ZScanOptions.builder().count(20L).build());
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
+            transaction
+                    .zscan(zSetKey2, 0, ZScanOptions.builder().count(20L).noScores(false).build())
+                    .zscan(zSetKey2, 0, ZScanOptions.builder().count(20L).noScores(true).build());
+        }
+
+        transaction.bzpopmin(new String[] {zSetKey2}, .1);
         // zSetKey2 is now empty
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
@@ -712,9 +739,28 @@ public class TransactionTestUtilities {
                     new Object[] {
                         "0", new String[] {"one", "1"}
                     }, // zscan(zSetKey2, 0, ZScanOptions.builder().count(20L).build())
-                    new Object[] {zSetKey2, "one", 1.0}, // bzpopmin(new String[] { zsetKey2 }, .1)
                 };
 
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                new Object[] {
+                                    "0", new String[] {"one", "1"}
+                                }, // zscan(zSetKey2, 0, ZScanOptions.builder().count(20L).noScores(false).build())
+                                new Object[] {
+                                    "0", new String[] {"one"}
+                                }, // zscan(zSetKey2, 0, ZScanOptions.builder().count(20L).noScores(true).build())
+                            });
+        }
+
+        expectedResults =
+                concatenateArrays(
+                        expectedResults,
+                        new Object[] {
+                            new Object[] {zSetKey2, "one", 1.0}, // bzpopmin(new String[] { zsetKey2 }, .1)
+                        });
         if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
             expectedResults =
                     concatenateArrays(
@@ -751,6 +797,7 @@ public class TransactionTestUtilities {
                                 2L, // zintercard(new String[] {zSetKey4, zSetKey3}, 2)
                             });
         }
+
         return expectedResults;
     }
 
@@ -1241,6 +1288,10 @@ public class TransactionTestUtilities {
                     .bitpos(key3, 1, 44, 50, BitmapIndexType.BIT);
         }
 
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
+            transaction.set(key4, "foobar").bitcount(key4, 0);
+        }
+
         var expectedResults =
                 new Object[] {
                     OK, // set(key1, "foobar")
@@ -1260,13 +1311,24 @@ public class TransactionTestUtilities {
                 };
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            return concatenateArrays(
-                    expectedResults,
-                    new Object[] {
-                        OK, // set(key1, "foobar")
-                        17L, // bitcount(key, 5, 30, BitmapIndexType.BIT)
-                        46L, // bitpos(key, 1, 44, 50, BitmapIndexType.BIT)
-                    });
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                OK, // set(key3, "foobar")
+                                17L, // bitcount(key3, 5, 30, BitmapIndexType.BIT)
+                                46L, // bitpos(key3, 1, 44, 50, BitmapIndexType.BIT)
+                            });
+        }
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                OK, // set(key4, "foobar")
+                                26L, // bitcount(key4, 0)
+                            });
         }
         return expectedResults;
     }

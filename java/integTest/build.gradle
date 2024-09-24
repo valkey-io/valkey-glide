@@ -32,7 +32,6 @@ dependencies {
 
 def standaloneHosts = ''
 def clusterHosts = ''
-def serverVersion = ""
 
 ext {
     extractAddressesFromClusterManagerOutput = { String output ->
@@ -43,13 +42,6 @@ ext {
             return line.split("=")[1]
         }
         return ''
-    }
-    extractServerVersion = { String output ->
-        // Redis response:
-        // Redis server v=7.2.3 sha=00000000:0 malloc=jemalloc-5.3.0 bits=64 build=7504b1fedf883f2
-        // Valkey response:
-        // Server v=7.2.5 sha=26388270:0 malloc=jemalloc-5.3.0 bits=64 build=ea40bb1576e402d6
-        return output.split("v=")[1].split(" ")[0]
     }
 }
 
@@ -106,20 +98,8 @@ tasks.register('startStandalone') {
     }
 }
 
-tasks.register('getServerVersion') {
-    doLast {
-        new ByteArrayOutputStream().withStream { os ->
-            exec {
-                commandLine 'redis-server', '-v'
-                standardOutput = os
-            }
-            serverVersion = extractServerVersion(os.toString())
-        }
-    }
-}
 
 test.dependsOn 'stopAllBeforeTests'
-test.dependsOn 'getServerVersion'
 stopAllBeforeTests.finalizedBy 'clearDirs'
 clearDirs.finalizedBy 'startStandalone'
 clearDirs.finalizedBy 'startCluster'
@@ -130,10 +110,8 @@ tasks.withType(Test) {
     doFirst {
         println "Cluster hosts = ${clusterHosts}"
         println "Standalone hosts = ${standaloneHosts}"
-        println "Server version = ${serverVersion}"
         systemProperty 'test.server.standalone', standaloneHosts
         systemProperty 'test.server.cluster', clusterHosts
-        systemProperty 'test.server.version', serverVersion
     }
 
     testLogging {

@@ -4,7 +4,7 @@
 
 import { InitInternalLogger, Level, log } from "glide-rs";
 
-const LEVEL: Map<LevelOptions | undefined, Level | undefined> = new Map([
+const LEVEL = new Map<LevelOptions | undefined, Level | undefined>([
     ["error", Level.Error],
     ["warn", Level.Warn],
     ["info", Level.Info],
@@ -12,7 +12,7 @@ const LEVEL: Map<LevelOptions | undefined, Level | undefined> = new Map([
     ["trace", Level.Trace],
     [undefined, undefined],
 ]);
-type LevelOptions = "error" | "warn" | "info" | "debug" | "trace";
+export type LevelOptions = "error" | "warn" | "info" | "debug" | "trace";
 
 /*
  * A singleton class that allows logging which is consistent with logs from the internal rust core.

@@ -4,28 +4,28 @@ name: PyPI - Continuous Deployment
 
 on:
     pull_request:
-      paths:
-        - .github/workflows/pypi-cd.yml
-        - .github/workflows/build-python-wrapper/action.yml
-        - .github/workflows/start-self-hosted-runner/action.yml
-        - .github/workflows/install-shared-dependencies/action.yml
-        - .github/workflows/install-valkey/action.yml
-        - .github/json_matrices/build-matrix.json
+        paths:
+            - .github/workflows/pypi-cd.yml
+            - .github/workflows/build-python-wrapper/action.yml
+            - .github/workflows/start-self-hosted-runner/action.yml
+            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/workflows/install-valkey/action.yml
+            - .github/json_matrices/build-matrix.json
     push:
         tags:
             - "v*.*"
     workflow_dispatch:
-      inputs:
-        version:
-          description: 'The release version of GLIDE, formatted as *.*.* or *.*.*-rc*'
-          required: true
+        inputs:
+            version:
+                description: "The release version of GLIDE, formatted as *.*.* or *.*.*-rc*"
+                required: true
 
 concurrency:
     group: pypi-${{ github.head_ref || github.ref }}
     cancel-in-progress: true
 
 permissions:
-      id-token: write
+    id-token: write
 
 jobs:
     load-platform-matrix:
@@ -40,36 +40,34 @@ jobs:
               id: load-platform-matrix
               shell: bash
               run: |
-                # Get the matrix from the matrix.json file, without the object that has the IMAGE key
-                export "PLATFORM_MATRIX=$(jq 'map(select(.PACKAGE_MANAGERS | contains(["pypi"])))' < .github/json_matrices/build-matrix.json | jq -c .)"
-                echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
-                
+                  # Get the matrix from the matrix.json file, without the object that has the IMAGE key
+                  export "PLATFORM_MATRIX=$(jq 'map(select(.PACKAGE_MANAGERS | contains(["pypi"])))' < .github/json_matrices/build-matrix.json | jq -c .)"
+                  echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
 
     start-self-hosted-runner:
         if: github.repository_owner == 'valkey-io'
         runs-on: ubuntu-latest
         environment: AWS_ACTIONS
         steps:
-          - name: Checkout
-            uses: actions/checkout@v4
-          - name: Start self hosted EC2 runner
-            uses: ./.github/workflows/start-self-hosted-runner
-            with:
-                role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
-                aws-region: ${{ secrets.AWS_REGION }}
-                ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
+            - name: Checkout
+              uses: actions/checkout@v4
+            - name: Start self hosted EC2 runner
+              uses: ./.github/workflows/start-self-hosted-runner
+              with:
+                  role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
+                  aws-region: ${{ secrets.AWS_REGION }}
+                  ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
 
     publish-binaries:
         needs: [start-self-hosted-runner, load-platform-matrix]
         if: github.repository_owner == 'valkey-io'
         name: Publish packages to PyPi
         runs-on: ${{ matrix.build.RUNNER }}
-        timeout-minutes: 25
+        timeout-minutes: 35
         strategy:
             fail-fast: false
             matrix:
-                build:
-                    ${{fromJson( needs.load-platform-matrix.outputs.PLATFORM_MATRIX )}}
+                build: ${{ fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX) }}
         steps:
             - name: Setup self-hosted runner access
               if: ${{ contains(matrix.build.RUNNER, 'self-hosted') }}
@@ -92,15 +90,15 @@ jobs:
                   fi
                   echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
               env:
-                EVENT_NAME: ${{ github.event_name }}
-                INPUT_VERSION: ${{ github.event.inputs.version }}
+                  EVENT_NAME: ${{ github.event_name }}
+                  INPUT_VERSION: ${{ github.event.inputs.version }}
 
             - name: Check that the release version dont have typo init
               if: ${{ github.event_name != 'pull_request' && contains(env.RELEASE_VERSION, '-') && !contains(env.RELEASE_VERSION, 'rc') }}
               run: |
-                echo "The release version "${{ env.RELEASE_VERSION }}" contains a typo, please fix it"
-                echo "The release version should be in the format v{major-version}.{minor-version}.{patch-version}-rc{release-candidate-number} when it a release candidate or v{major-version}.{minor-version}.{patch-version} in a stable release."
-                exit 1
+                  echo "The release version "${{ env.RELEASE_VERSION }}" contains a typo, please fix it"
+                  echo "The release version should be in the format v{major-version}.{minor-version}.{patch-version}-rc{release-candidate-number} when it a release candidate or v{major-version}.{minor-version}.{patch-version} in a stable release."
+                  exit 1
 
             - name: Set the package version for Python
               working-directory: ./python
@@ -112,16 +110,15 @@ jobs:
 
             - name: Set up Python
               if: ${{ !contains(matrix.build.RUNNER, 'self-hosted') }}
-              uses: actions/setup-python@v4
+              uses: actions/setup-python@v5
               with:
                   python-version: "3.10"
 
             - name: Set up Python older versions for MacOS
               if: startsWith(matrix.build.NAMED_OS, 'darwin')
               run: |
-                brew update
-                brew upgrade || true
-                brew install python@3.8 python@3.9
+                  brew update
+                  brew install python@3.8 python@3.9
 
             - name: Setup Python for self-hosted Ubuntu runners
               if: contains(matrix.build.OS, 'ubuntu') && contains(matrix.build.RUNNER, 'self-hosted')
@@ -193,9 +190,9 @@ jobs:
 
             - name: Upload Python wheels
               if: github.event_name != 'pull_request'
-              uses: actions/upload-artifact@v3
+              uses: actions/upload-artifact@v4
               with:
-                  name: wheels
+                  name: wheels-${{ matrix.build.TARGET }}
                   path: python/wheels
                   if-no-files-found: error
 
@@ -205,10 +202,11 @@ jobs:
         runs-on: ubuntu-latest
         needs: publish-binaries
         steps:
-            - uses: actions/download-artifact@v3
+            - uses: actions/download-artifact@v4
               with:
                   path: python/wheels
-                  name: wheels
+                  merge-multiple: true
+
             - name: Publish to PyPI
               uses: PyO3/maturin-action@v1
               env:
@@ -217,3 +215,62 @@ jobs:
               with:
                   command: upload
                   args: --skip-existing python/wheels/*
+
+    test-release:
+        if: github.event_name != 'pull_request'
+        name: Test the release
+        runs-on: ${{ matrix.build.RUNNER }}
+        needs: [publish-to-pypi, load-platform-matrix]
+        strategy:
+            fail-fast: false
+            matrix:
+                build: ${{ fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX) }}
+        steps:
+            - name: Setup self-hosted runner access
+              if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-gnu' }}
+              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
+
+            - name: checkout
+              uses: actions/checkout@v4
+
+            - name: Set up Python
+              uses: actions/setup-python@v4
+              with:
+                  python-version: 3.12
+
+            - name: Install ValKey
+              uses: ./.github/workflows/install-valkey
+              with:
+                  version: "8.0.0"
+
+            - name: Check if RC and set a distribution tag for the package
+              shell: bash
+              run: |
+                  if [[ "${GITHUB_REF:11}" == *"rc"* ]]
+                  then
+                    echo "This is a release candidate"
+                    export pip_pre="--pre"
+                  else
+                    echo "This is a stable release"
+                    export pip_pre=""
+                  fi
+                  echo "PIP_PRE=${pip_pre}" >> $GITHUB_ENV
+
+            - name: Run the tests
+              shell: bash
+              working-directory: ./utils/release-candidate-testing/python
+              run: |
+                  python -m venv venv
+                  source venv/bin/activate
+                  pip install -U pip
+                  pip install ${PIP_PRE} valkey-glide
+                  python rc_test.py
+
+            # Reset the repository to make sure we get the clean checkout of the action later in other actions.
+            # It is not required since in other actions we are cleaning before the action, but it is a good practice to do it here as well.
+            - name: Reset repository
+              if: ${{ contains(matrix.build.RUNNER, 'self-hosted') }}
+              shell: bash
+              run: |
+                  git reset --hard
+                  git clean -xdf

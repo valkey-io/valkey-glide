@@ -6,20 +6,15 @@ import * as net from "net";
 import {
     BaseClient,
     BaseClientConfiguration,
+    convertGlideRecordToRecord,
     Decoder,
+    DecoderOption,
+    GlideRecord,
+    GlideReturnType,
     GlideString,
     PubSubMsg,
-    ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
-    ReturnType,
 } from "./BaseClient";
 import {
-    FlushMode,
-    FunctionListOptions,
-    FunctionListResponse,
-    FunctionStatsResponse,
-    InfoOptions,
-    LolwutOptions,
-    SortOptions,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -33,10 +28,12 @@ import {
     createFlushAll,
     createFlushDB,
     createFunctionDelete,
+    createFunctionDump,
     createFunctionFlush,
     createFunctionKill,
     createFunctionList,
     createFunctionLoad,
+    createFunctionRestore,
     createFunctionStats,
     createInfo,
     createLastSave,
@@ -45,11 +42,21 @@ import {
     createPing,
     createPublish,
     createRandomKey,
+    createScan,
+    createScriptExists,
+    createScriptFlush,
+    createScriptKill,
     createSelect,
-    createSort,
-    createSortReadOnly,
     createTime,
     createUnWatch,
+    FlushMode,
+    FunctionListOptions,
+    FunctionListResponse,
+    FunctionRestorePolicy,
+    FunctionStatsFullResponse,
+    InfoOptions,
+    LolwutOptions,
+    ScanOptions,
 } from "./Commands";
 import { connection_request } from "./ProtobufMessage";
 import { Transaction } from "./Transaction";
@@ -72,7 +79,7 @@ export namespace GlideClientConfiguration {
         Pattern = 1,
     }
 
-    export type PubSubSubscriptions = {
+    export interface PubSubSubscriptions {
         /**
          * Channels and patterns by modes.
          */
@@ -89,7 +96,7 @@ export namespace GlideClientConfiguration {
          */
         /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
         context?: any;
-    };
+    }
 }
 
 export type GlideClientConfiguration = BaseClientConfiguration & {
@@ -130,7 +137,7 @@ export type GlideClientConfiguration = BaseClientConfiguration & {
 };
 
 /**
- * Client used for connection to standalone Redis servers.
+ * Client used for connection to standalone servers.
  *
  * @see For full documentation refer to {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#standalone|Valkey Glide Wiki}.
  */
@@ -174,26 +181,26 @@ export class GlideClient extends BaseClient {
      *
      * @see {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#transaction|Valkey Glide Wiki} for details on Valkey Transactions.
      *
-     * @param transaction - A Transaction object containing a list of commands to be executed.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the responses. If not set, the default decoder from the client config will be used.
+     * @param transaction - A {@link Transaction} object containing a list of commands to be executed.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A list of results corresponding to the execution of each command in the transaction.
-     *      If a command returns a value, it will be included in the list. If a command doesn't return a value,
-     *      the list entry will be null.
-     *      If the transaction failed due to a WATCH command, `exec` will return `null`.
+     *     If a command returns a value, it will be included in the list. If a command doesn't return a value,
+     *     the list entry will be `null`.
+     *     If the transaction failed due to a `WATCH` command, `exec` will return `null`.
      */
     public async exec(
         transaction: Transaction,
-        decoder: Decoder = this.defaultDecoder,
-    ): Promise<ReturnType[] | null> {
-        return this.createWritePromise<ReturnType[] | null>(
+        options?: DecoderOption,
+    ): Promise<GlideReturnType[] | null> {
+        return this.createWritePromise<GlideReturnType[] | null>(
             transaction.commands,
-            { decoder: decoder },
-        ).then((result: ReturnType[] | null) => {
-            return this.processResultWithSetCommands(
+            options,
+        ).then((result) =>
+            this.processResultWithSetCommands(
                 result,
                 transaction.setCommandsIndexes,
-            );
-        });
+            ),
+        );
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
@@ -202,6 +209,10 @@ export class GlideClient extends BaseClient {
      * Note: An error will occur if the string decoder is used with commands that return only bytes as a response.
      *
      * @see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command|Valkey Glide Wiki} for details on the restrictions and limitations of the custom command API.
+     *
+     * @param args - A list including the command name and arguments for the custom command.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns The executed custom command return value.
      *
      * @example
      * ```typescript
@@ -212,21 +223,22 @@ export class GlideClient extends BaseClient {
      */
     public async customCommand(
         args: GlideString[],
-        decoder?: Decoder,
-    ): Promise<ReturnType> {
-        return this.createWritePromise(createCustomCommand(args), {
-            decoder: decoder,
-        });
+        options?: DecoderOption,
+    ): Promise<GlideReturnType> {
+        return this.createWritePromise(createCustomCommand(args), options);
     }
 
-    /** Ping the Redis server.
+    /**
+     * Pings the server.
+     *
      * @see {@link https://valkey.io/commands/ping/|valkey.io} for details.
      *
-     * @param message - An optional message to include in the PING command.
-     * If not provided, the server will respond with "PONG".
-     * If provided, the server will respond with a copy of the message.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
-     * @returns - "PONG" if `message` is not provided, otherwise return a copy of `message`.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `message` : a message to include in the `PING` command.
+     *   + If not provided, the server will respond with `"PONG"`.
+     *   + If provided, the server will respond with a copy of the message.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
+     * @returns `"PONG"` if `message` is not provided, otherwise return a copy of `message`.
      *
      * @example
      * ```typescript
@@ -242,31 +254,36 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 'Hello'
      * ```
      */
-    public async ping(options?: {
-        message?: GlideString;
-        decoder?: Decoder;
-    }): Promise<GlideString> {
-        return this.createWritePromise(createPing(options?.message), {
-            decoder: options?.decoder,
+    public async ping(
+        options?: {
+            message?: GlideString;
+        } & DecoderOption,
+    ): Promise<GlideString> {
+        return this.createWritePromise(createPing(options?.message), options);
+    }
+
+    /**
+     * Gets information and statistics about the server.
+     *
+     * @see {@link https://valkey.io/commands/info/|valkey.io} for details.
+     *
+     * @param sections - (Optional) A list of {@link InfoOptions} values specifying which sections of information to retrieve.
+     *     When no parameter is provided, {@link InfoOptions.Default|Default} is assumed.
+     * @returns A string containing the information for the sections requested.
+     */
+    public async info(sections?: InfoOptions[]): Promise<string> {
+        return this.createWritePromise(createInfo(sections), {
+            decoder: Decoder.String,
         });
     }
 
-    /** Get information and statistics about the Redis server.
-     * @see {@link https://valkey.io/commands/info/|valkey.io} for details.
+    /**
+     * Changes the currently selected database.
      *
-     * @param options - A list of InfoSection values specifying which sections of information to retrieve.
-     *  When no parameter is provided, the default option is assumed.
-     * @returns a string containing the information for the sections requested.
-     */
-    public async info(options?: InfoOptions[]): Promise<string> {
-        return this.createWritePromise(createInfo(options));
-    }
-
-    /** Change the currently selected Redis database.
      * @see {@link https://valkey.io/commands/select/|valkey.io} for details.
      *
      * @param index - The index of the database to select.
-     * @returns A simple OK response.
+     * @returns A simple `"OK"` response.
      *
      * @example
      * ```typescript
@@ -276,13 +293,18 @@ export class GlideClient extends BaseClient {
      * ```
      */
     public async select(index: number): Promise<"OK"> {
-        return this.createWritePromise(createSelect(index));
+        return this.createWritePromise(createSelect(index), {
+            decoder: Decoder.String,
+        });
     }
 
-    /** Get the name of the primary's connection.
+    /**
+     * Gets the name of the primary's connection.
+     *
      * @see {@link https://valkey.io/commands/client-getname/|valkey.io} for more details.
      *
-     * @returns the name of the client connection as a string if a name is set, or null if no name is assigned.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns The name of the client connection as a string if a name is set, or `null` if no name is assigned.
      *
      * @example
      * ```typescript
@@ -291,11 +313,15 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 'Client Name'
      * ```
      */
-    public async clientGetName(): Promise<string | null> {
-        return this.createWritePromise(createClientGetName());
+    public async clientGetName(
+        options?: DecoderOption,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createClientGetName(), options);
     }
 
-    /** Rewrite the configuration file with the current configuration.
+    /**
+     * Rewrites the configuration file with the current configuration.
+     *
      * @see {@link https://valkey.io/commands/config-rewrite/|valkey.io} for details.
      *
      * @returns "OK" when the configuration was rewritten properly. Otherwise, an error is thrown.
@@ -308,10 +334,13 @@ export class GlideClient extends BaseClient {
      * ```
      */
     public async configRewrite(): Promise<"OK"> {
-        return this.createWritePromise(createConfigRewrite());
+        return this.createWritePromise(createConfigRewrite(), {
+            decoder: Decoder.String,
+        });
     }
 
-    /** Resets the statistics reported by Redis using the INFO and LATENCY HISTOGRAM commands.
+    /**
+     * Resets the statistics reported by the server using the `INFO` and `LATENCY HISTOGRAM` commands.
      *
      * @see {@link https://valkey.io/commands/config-resetstat/|valkey.io} for details.
      *
@@ -325,23 +354,35 @@ export class GlideClient extends BaseClient {
      * ```
      */
     public async configResetStat(): Promise<"OK"> {
-        return this.createWritePromise(createConfigResetStat());
+        return this.createWritePromise(createConfigResetStat(), {
+            decoder: Decoder.String,
+        });
     }
 
-    /** Returns the current connection id.
+    /**
+     * Returns the current connection ID.
+     *
      * @see {@link https://valkey.io/commands/client-id/|valkey.io} for details.
      *
-     * @returns the id of the client.
+     * @returns The ID of the connection.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.clientId();
+     * console.log("Connection id: " + result);
+     * ```
      */
     public async clientId(): Promise<number> {
         return this.createWritePromise(createClientId());
     }
 
-    /** Reads the configuration parameters of a running Redis server.
+    /**
+     * Reads the configuration parameters of the running server.
      *
      * @see {@link https://valkey.io/commands/config-get/|valkey.io} for details.
      *
      * @param parameters - A list of configuration parameter names to retrieve values for.
+     * @param options - (Optional) See {@link DecoderOption}.
      *
      * @returns A map of values corresponding to the configuration parameters.
      *
@@ -354,16 +395,20 @@ export class GlideClient extends BaseClient {
      */
     public async configGet(
         parameters: string[],
-    ): Promise<Record<string, string>> {
-        return this.createWritePromise(createConfigGet(parameters));
+        options?: DecoderOption,
+    ): Promise<Record<string, GlideString>> {
+        return this.createWritePromise<GlideRecord<GlideString>>(
+            createConfigGet(parameters),
+            options,
+        ).then(convertGlideRecordToRecord);
     }
 
     /**
-     * Set configuration parameters to the specified values.
+     * Sets configuration parameters to the specified values.
      *
      * @see {@link  https://valkey.io/commands/config-set/|valkey.io} for details.
-     * @param parameters - A List of keyValuePairs consisting of configuration parameters and their respective values to set.
-     * @returns "OK" when the configuration was set properly. Otherwise an error is thrown.
+     * @param parameters - A map consisting of configuration parameters and their respective values to set.
+     * @returns `"OK"` when the configuration was set properly. Otherwise an error is thrown.
      *
      * @example
      * ```typescript
@@ -372,14 +417,21 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public async configSet(parameters: Record<string, string>): Promise<"OK"> {
-        return this.createWritePromise(createConfigSet(parameters));
+    public async configSet(
+        parameters: Record<string, GlideString>,
+    ): Promise<"OK"> {
+        return this.createWritePromise(createConfigSet(parameters), {
+            decoder: Decoder.String,
+        });
     }
 
-    /** Echoes the provided `message` back.
+    /**
+     * Echoes the provided `message` back.
+     *
      * @see {@link https://valkey.io/commands/echo|valkey.io} for more details.
      *
      * @param message - The message to be echoed back.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns The provided `message`.
      *
      * @example
@@ -389,26 +441,31 @@ export class GlideClient extends BaseClient {
      * console.log(echoedMessage); // Output: 'valkey-glide'
      * ```
      */
-    public async echo(message: string): Promise<string> {
-        return this.createWritePromise(createEcho(message));
+    public async echo(
+        message: GlideString,
+        options?: DecoderOption,
+    ): Promise<GlideString> {
+        return this.createWritePromise(createEcho(message), options);
     }
 
-    /** Returns the server time
+    /**
+     * Returns the server time.
+     *
      * @see {@link https://valkey.io/commands/time/|valkey.io} for details.
      *
-     * @returns - The current server time as a two items `array`:
-     * A Unix timestamp and the amount of microseconds already elapsed in the current second.
-     * The returned `array` is in a [Unix timestamp, Microseconds already elapsed] format.
+     * @returns The current server time as an `array` with two items:
+     * - A Unix timestamp,
+     * - The amount of microseconds already elapsed in the current second.
      *
      * @example
      * ```typescript
-     * // Example usage of time command
-     * const result = await client.time();
-     * console.log(result); // Output: ['1710925775', '913580']
+     * console.log(await client.time()); // Output: ['1710925775', '913580']
      * ```
      */
     public async time(): Promise<[string, string]> {
-        return this.createWritePromise(createTime());
+        return this.createWritePromise(createTime(), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
@@ -422,9 +479,10 @@ export class GlideClient extends BaseClient {
      *
      * @param source - The key to the source value.
      * @param destination - The key where the value should be copied to.
-     * @param destinationDB - (Optional) The alternative logical database index for the destination key.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `destinationDB`: the alternative logical database index for the destination key.
      *     If not provided, the current database will be used.
-     * @param replace - (Optional) If `true`, the `destination` key should be removed before copying the
+     * - (Optional) `replace`: if `true`, the `destination` key should be removed before copying the
      *     value to it. If not provided, no action will be performed if the key already exists.
      * @returns `true` if `source` was copied, `false` if the `source` was not copied.
      *
@@ -443,8 +501,8 @@ export class GlideClient extends BaseClient {
      * ```
      */
     public async copy(
-        source: string,
-        destination: string,
+        source: GlideString,
+        destination: GlideString,
         options?: { destinationDB?: number; replace?: boolean },
     ): Promise<boolean> {
         return this.createWritePromise(
@@ -468,7 +526,7 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: true
      * ```
      */
-    public async move(key: string, dbIndex: number): Promise<boolean> {
+    public async move(key: GlideString, dbIndex: number): Promise<boolean> {
         return this.createWritePromise(createMove(key, dbIndex));
     }
 
@@ -477,17 +535,19 @@ export class GlideClient extends BaseClient {
      *
      * @see {@link https://valkey.io/commands/lolwut/|valkey.io} for more details.
      *
-     * @param options - The LOLWUT options
+     * @param options - (Optional) The LOLWUT options - see {@link LolwutOptions}.
      * @returns A piece of generative computer art along with the current server version.
      *
      * @example
      * ```typescript
      * const response = await client.lolwut({ version: 6, parameters: [40, 20] });
-     * console.log(response); // Output: "Redis ver. 7.2.3" - Indicates the current server version.
+     * console.log(response); // Output: "Valkey ver. 7.2.3" - Indicates the current server version.
      * ```
      */
     public async lolwut(options?: LolwutOptions): Promise<string> {
-        return this.createWritePromise(createLolwut(options));
+        return this.createWritePromise(createLolwut(options), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
@@ -497,7 +557,7 @@ export class GlideClient extends BaseClient {
      * @remarks Since Valkey version 7.0.0.
      *
      * @param libraryCode - The library name to delete.
-     * @returns A simple OK response.
+     * @returns A simple `"OK"` response.
      *
      * @example
      * ```typescript
@@ -505,8 +565,10 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public async functionDelete(libraryCode: string): Promise<string> {
-        return this.createWritePromise(createFunctionDelete(libraryCode));
+    public async functionDelete(libraryCode: GlideString): Promise<"OK"> {
+        return this.createWritePromise(createFunctionDelete(libraryCode), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
@@ -516,8 +578,10 @@ export class GlideClient extends BaseClient {
      * @remarks Since Valkey version 7.0.0.
      *
      * @param libraryCode - The source code that implements the library.
-     * @param replace - Whether the given library should overwrite a library with the same name if it
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `replace`: Whether the given library should overwrite a library with the same name if it
      *     already exists.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns The library name that was loaded.
      *
      * @example
@@ -528,11 +592,12 @@ export class GlideClient extends BaseClient {
      * ```
      */
     public async functionLoad(
-        libraryCode: string,
-        replace?: boolean,
-    ): Promise<string> {
+        libraryCode: GlideString,
+        options?: { replace?: boolean } & DecoderOption,
+    ): Promise<GlideString> {
         return this.createWritePromise(
-            createFunctionLoad(libraryCode, replace),
+            createFunctionLoad(libraryCode, options?.replace),
+            options,
         );
     }
 
@@ -542,8 +607,8 @@ export class GlideClient extends BaseClient {
      * @see {@link https://valkey.io/commands/function-flush/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
      *
-     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
-     * @returns A simple OK response.
+     * @param mode - (Optional) The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * @returns A simple `"OK"` response.
      *
      * @example
      * ```typescript
@@ -551,8 +616,10 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public async functionFlush(mode?: FlushMode): Promise<string> {
-        return this.createWritePromise(createFunctionFlush(mode));
+    public async functionFlush(mode?: FlushMode): Promise<"OK"> {
+        return this.createWritePromise(createFunctionFlush(mode), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
@@ -561,7 +628,7 @@ export class GlideClient extends BaseClient {
      * @see {@link https://valkey.io/commands/function-list/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
      *
-     * @param options - Parameters to filter and request additional info.
+     * @param options - (Optional) See {@link FunctionListOptions} and {@link DecoderOption}.
      * @returns Info about all or selected libraries and their functions in {@link FunctionListResponse} format.
      *
      * @example
@@ -584,77 +651,137 @@ export class GlideClient extends BaseClient {
      * ```
      */
     public async functionList(
-        options?: FunctionListOptions,
+        options?: FunctionListOptions & DecoderOption,
     ): Promise<FunctionListResponse> {
-        return this.createWritePromise(createFunctionList(options));
+        return this.createWritePromise<GlideRecord<unknown>[]>(
+            createFunctionList(options),
+            options,
+        ).then(
+            (res) =>
+                res.map(convertGlideRecordToRecord) as FunctionListResponse,
+        );
     }
 
     /**
      * Returns information about the function that's currently running and information about the
      * available execution engines.
      *
+     * FUNCTION STATS runs on all nodes of the server, including primary and replicas.
+     * The response includes a mapping from node address to the command response for that node.
+     *
      * @see {@link https://valkey.io/commands/function-stats/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
      *
-     * @returns A `Record` with two keys:
-     *     - `"running_script"` with information about the running script.
-     *     - `"engines"` with information about available engines and their stats.
-     *     - see example for more details.
-     *
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns A Record where the key is the node address and the value is a Record with two keys:
+     *          - `"running_script"`: Information about the running script, or `null` if no script is running.
+     *          - `"engines"`: Information about available engines and their stats.
+     *          - see example for more details.
      * @example
      * ```typescript
      * const response = await client.functionStats();
-     * console.log(response); // Output:
+     * console.log(response); // Example output:
      * // {
-     * //     "running_script":
-     * //     {
-     * //         "name": "deep_thought",
-     * //         "command": ["fcall", "deep_thought", "0"],
-     * //         "duration_ms": 5008
-     * //     },
-     * //     "engines":
-     * //     {
-     * //         "LUA":
-     * //         {
-     * //             "libraries_count": 2,
-     * //             "functions_count": 3
+     * //     "127.0.0.1:6379": {                // Response from the primary node
+     * //         "running_script": {
+     * //             "name": "foo",
+     * //             "command": ["FCALL", "foo", "0", "hello"],
+     * //             "duration_ms": 7758
+     * //         },
+     * //         "engines": {
+     * //             "LUA": {
+     * //                 "libraries_count": 1,
+     * //                 "functions_count": 1
+     * //             }
      * //         }
-     * //     }
-     * // }
-     * // Output if no scripts running:
-     * // {
-     * //     "running_script": null
-     * //     "engines":
-     * //     {
-     * //         "LUA":
-     * //         {
-     * //             "libraries_count": 2,
-     * //             "functions_count": 3
+     * //     },
+     * //     "127.0.0.1:6380": {                // Response from a replica node
+     * //         "running_script": null,
+     * //         "engines": {
+     * //             "LUA": {
+     * //                 "libraries_count": 1,
+     * //                 "functions_count": 1
+     * //             }
      * //         }
      * //     }
      * // }
      * ```
      */
-    public async functionStats(): Promise<FunctionStatsResponse> {
-        return this.createWritePromise(createFunctionStats());
+    public async functionStats(
+        options?: DecoderOption,
+    ): Promise<FunctionStatsFullResponse> {
+        return this.createWritePromise<GlideRecord<unknown>>(
+            createFunctionStats(),
+            options,
+        ).then(
+            (res) =>
+                convertGlideRecordToRecord(res) as FunctionStatsFullResponse,
+        );
     }
 
     /**
      * Kills a function that is currently executing.
      * `FUNCTION KILL` terminates read-only functions only.
+     * `FUNCTION KILL` runs on all nodes of the server, including primary and replicas.
      *
-     * See https://valkey.io/commands/function-kill/ for details.
+     * @see {@link https://valkey.io/commands/function-kill/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
      *
-     * since Valkey version 7.0.0.
-     *
-     * @returns `OK` if function is terminated. Otherwise, throws an error.
+     * @returns `"OK"` if function is terminated. Otherwise, throws an error.
      * @example
      * ```typescript
      * await client.functionKill();
      * ```
      */
     public async functionKill(): Promise<"OK"> {
-        return this.createWritePromise(createFunctionKill());
+        return this.createWritePromise(createFunctionKill(), {
+            decoder: Decoder.String,
+        });
+    }
+
+    /**
+     * Returns the serialized payload of all loaded libraries.
+     *
+     * @see {@link https://valkey.io/commands/function-dump/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
+     *
+     * @returns The serialized payload of all loaded libraries.
+     *
+     * @example
+     * ```typescript
+     * const data = await client.functionDump();
+     * // data can be used to restore loaded functions on any Valkey instance
+     * ```
+     */
+    public async functionDump(): Promise<Buffer> {
+        return this.createWritePromise(createFunctionDump(), {
+            decoder: Decoder.Bytes,
+        });
+    }
+
+    /**
+     * Restores libraries from the serialized payload returned by {@link functionDump}.
+     *
+     * @see {@link https://valkey.io/commands/function-restore/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
+     *
+     * @param payload - The serialized data from {@link functionDump}.
+     * @param policy - (Optional) A policy for handling existing libraries, see {@link FunctionRestorePolicy}.
+     *     {@link FunctionRestorePolicy.APPEND} is used by default.
+     * @returns `"OK"`.
+     *
+     * @example
+     * ```typescript
+     * await client.functionRestore(data, FunctionRestorePolicy.FLUSH);
+     * ```
+     */
+    public async functionRestore(
+        payload: Buffer,
+        policy?: FunctionRestorePolicy,
+    ): Promise<"OK"> {
+        return this.createWritePromise(createFunctionRestore(payload, policy), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
@@ -662,8 +789,8 @@ export class GlideClient extends BaseClient {
      *
      * @see {@link https://valkey.io/commands/flushall/|valkey.io} for more details.
      *
-     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
-     * @returns `OK`.
+     * @param mode - (Optional) The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * @returns `"OK"`.
      *
      * @example
      * ```typescript
@@ -671,8 +798,10 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public async flushall(mode?: FlushMode): Promise<string> {
-        return this.createWritePromise(createFlushAll(mode));
+    public async flushall(mode?: FlushMode): Promise<"OK"> {
+        return this.createWritePromise(createFlushAll(mode), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
@@ -680,8 +809,8 @@ export class GlideClient extends BaseClient {
      *
      * @see {@link https://valkey.io/commands/flushdb/|valkey.io} for more details.
      *
-     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
-     * @returns `OK`.
+     * @param mode - (Optional) The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * @returns `"OK"`.
      *
      * @example
      * ```typescript
@@ -689,8 +818,10 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public async flushdb(mode?: FlushMode): Promise<string> {
-        return this.createWritePromise(createFlushDB(mode));
+    public async flushdb(mode?: FlushMode): Promise<"OK"> {
+        return this.createWritePromise(createFlushDB(mode), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
@@ -726,104 +857,11 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 1 - This message was posted to 1 subscription which is configured on primary node
      * ```
      */
-    public async publish(message: string, channel: string): Promise<number> {
-        return this.createWritePromise(createPublish(message, channel));
-    }
-
-    /**
-     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
-     *
-     * The `sort` command can be used to sort elements based on different criteria and
-     * apply transformations on sorted elements.
-     *
-     * To store the result into a new key, see {@link sortStore}.
-     *
-     * @see {@link https://valkey.io/commands/sort/|valkey.io} for more details.
-     *
-     * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param options - The {@link SortOptions}.
-     * @returns An `Array` of sorted elements.
-     *
-     * @example
-     * ```typescript
-     * await client.hset("user:1", new Map([["name", "Alice"], ["age", "30"]]));
-     * await client.hset("user:2", new Map([["name", "Bob"], ["age", "25"]]));
-     * await client.lpush("user_ids", ["2", "1"]);
-     * const result = await client.sort("user_ids", { byPattern: "user:*->age", getPattern: ["user:*->name"] });
-     * console.log(result); // Output: [ 'Bob', 'Alice' ] - Returns a list of the names sorted by age
-     * ```
-     */
-    public async sort(
-        key: string,
-        options?: SortOptions,
-    ): Promise<(string | null)[]> {
-        return this.createWritePromise(createSort(key, options));
-    }
-
-    /**
-     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
-     *
-     * The `sortReadOnly` command can be used to sort elements based on different criteria and
-     * apply transformations on sorted elements.
-     *
-     * This command is routed depending on the client's {@link ReadFrom} strategy.
-     *
-     * @see {@link https://valkey.io/commands/sort/|valkey.io} for more details.
-     * @remarks Since Valkey version 7.0.0.
-     *
-     * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param options - The {@link SortOptions}.
-     * @returns An `Array` of sorted elements
-     *
-     * @example
-     * ```typescript
-     * await client.hset("user:1", new Map([["name", "Alice"], ["age", "30"]]));
-     * await client.hset("user:2", new Map([["name", "Bob"], ["age", "25"]]));
-     * await client.lpush("user_ids", ["2", "1"]);
-     * const result = await client.sortReadOnly("user_ids", { byPattern: "user:*->age", getPattern: ["user:*->name"] });
-     * console.log(result); // Output: [ 'Bob', 'Alice' ] - Returns a list of the names sorted by age
-     * ```
-     */
-    public async sortReadOnly(
-        key: string,
-        options?: SortOptions,
-    ): Promise<(string | null)[]> {
-        return this.createWritePromise(createSortReadOnly(key, options));
-    }
-
-    /**
-     * Sorts the elements in the list, set, or sorted set at `key` and stores the result in
-     * `destination`.
-     *
-     * The `sort` command can be used to sort elements based on different criteria and
-     * apply transformations on sorted elements, and store the result in a new key.
-     *
-     * To get the sort result without storing it into a key, see {@link sort} or {@link sortReadOnly}.
-     *
-     * @see {@link https://valkey.io/commands/sort|valkey.io} for more details.
-     * @remarks When in cluster mode, `destination` and `key` must map to the same hash slot.
-     *
-     * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param destination - The key where the sorted result will be stored.
-     * @param options - The {@link SortOptions}.
-     * @returns The number of elements in the sorted key stored at `destination`.
-     *
-     * @example
-     * ```typescript
-     * await client.hset("user:1", new Map([["name", "Alice"], ["age", "30"]]));
-     * await client.hset("user:2", new Map([["name", "Bob"], ["age", "25"]]));
-     * await client.lpush("user_ids", ["2", "1"]);
-     * const sortedElements = await client.sortStore("user_ids", "sortedList", { byPattern: "user:*->age", getPattern: ["user:*->name"] });
-     * console.log(sortedElements); // Output: 2 - number of elements sorted and stored
-     * console.log(await client.lrange("sortedList", 0, -1)); // Output: [ 'Bob', 'Alice' ] - Returns a list of the names sorted by age stored in `sortedList`
-     * ```
-     */
-    public async sortStore(
-        key: string,
-        destination: string,
-        options?: SortOptions,
+    public async publish(
+        message: GlideString,
+        channel: GlideString,
     ): Promise<number> {
-        return this.createWritePromise(createSort(key, options, destination));
+        return this.createWritePromise(createPublish(message, channel));
     }
 
     /**
@@ -833,6 +871,7 @@ export class GlideClient extends BaseClient {
      * @see {@link https://valkey.io/commands/lastsave/|valkey.io} for more details.
      *
      * @returns `UNIX TIME` of the last DB save executed with success.
+     *
      * @example
      * ```typescript
      * const timestamp = await client.lastsave();
@@ -847,7 +886,7 @@ export class GlideClient extends BaseClient {
      * Returns a random existing key name from the currently selected database.
      *
      * @see {@link https://valkey.io/commands/randomkey/|valkey.io} for more details.
-     *
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A random existing key name from the currently selected database.
      *
      * @example
@@ -856,8 +895,10 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: "key12" - "key12" is a random existing key name from the currently selected database.
      * ```
      */
-    public async randomKey(): Promise<string | null> {
-        return this.createWritePromise(createRandomKey());
+    public async randomKey(
+        options?: DecoderOption,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createRandomKey(), options);
     }
 
     /**
@@ -866,7 +907,7 @@ export class GlideClient extends BaseClient {
      *
      * @see {@link https://valkey.io/commands/unwatch/|valkey.io} and {@link https://valkey.io/topics/transactions/#cas|Valkey Glide Wiki} for more details.
      *
-     * @returns A simple "OK" response.
+     * @returns A simple `"OK"` response.
      *
      * @example
      * ```typescript
@@ -877,6 +918,113 @@ export class GlideClient extends BaseClient {
      * ```
      */
     public async unwatch(): Promise<"OK"> {
-        return this.createWritePromise(createUnWatch());
+        return this.createWritePromise(createUnWatch(), {
+            decoder: Decoder.String,
+        });
+    }
+
+    /**
+     * Checks existence of scripts in the script cache by their SHA1 digest.
+     *
+     * @see {@link https://valkey.io/commands/script-exists/|valkey.io} for more details.
+     *
+     * @param sha1s - List of SHA1 digests of the scripts to check.
+     * @returns A list of boolean values indicating the existence of each script.
+     *
+     * @example
+     * ```typescript
+     * console result = await client.scriptExists(["sha1_digest1", "sha1_digest2"]);
+     * console.log(result); // Output: [true, false]
+     * ```
+     */
+    public async scriptExists(sha1s: GlideString[]): Promise<boolean[]> {
+        return this.createWritePromise(createScriptExists(sha1s));
+    }
+
+    /**
+     * Flushes the Lua scripts cache.
+     *
+     * @see {@link https://valkey.io/commands/script-flush/|valkey.io} for more details.
+     *
+     * @param mode - (Optional) The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * @returns A simple `"OK"` response.
+     *
+     * @example
+     * ```typescript
+     * console result = await client.scriptFlush(FlushMode.SYNC);
+     * console.log(result); // Output: "OK"
+     * ```
+     */
+    public async scriptFlush(mode?: FlushMode): Promise<"OK"> {
+        return this.createWritePromise(createScriptFlush(mode), {
+            decoder: Decoder.String,
+        });
+    }
+
+    /**
+     * Kills the currently executing Lua script, assuming no write operation was yet performed by the script.
+     *
+     * @see {@link https://valkey.io/commands/script-kill/|valkey.io} for more details.
+     *
+     * @returns A simple `"OK"` response.
+     *
+     * @example
+     * ```typescript
+     * console result = await client.scriptKill();
+     * console.log(result); // Output: "OK"
+     * ```
+     */
+    public async scriptKill(): Promise<"OK"> {
+        return this.createWritePromise(createScriptKill(), {
+            decoder: Decoder.String,
+        });
+    }
+
+    /**
+     * Incrementally iterate over a collection of keys.
+     * `SCAN` is a cursor based iterator. This means that at every call of the method,
+     * the server returns an updated cursor that the user needs to use as the cursor argument in the next call.
+     * An iteration starts when the cursor is set to "0", and terminates when the cursor returned by the server is "0".
+     *
+     * A full iteration always retrieves all the elements that were present
+     * in the collection from the start to the end of a full iteration.
+     * Elements that were not constantly present in the collection during a full iteration, may be returned or not.
+     *
+     * @see {@link https://valkey.io/commands/scan|valkey.io} for more details.
+     *
+     * @param cursor - The `cursor` used for iteration. For the first iteration, the cursor should be set to "0".
+     * Using a non-zero cursor in the first iteration,
+     * or an invalid cursor at any iteration, will lead to undefined results.
+     * Using the same cursor in multiple iterations will, in case nothing changed between the iterations,
+     * return the same elements multiple times.
+     * If the the db has changed, it may result in undefined behavior.
+     * @param options - (Optional) The options to use for the scan operation, see {@link ScanOptions} and {@link DecoderOption}.
+     * @returns A List containing the next cursor value and a list of keys,
+     * formatted as [cursor, [key1, key2, ...]]
+     *
+     * @example
+     * ```typescript
+     * // Example usage of scan method
+     * let result = await client.scan('0');
+     * console.log(result); // Output: ['17', ['key1', 'key2', 'key3', 'key4', 'key5', 'set1', 'set2', 'set3']]
+     * let firstCursorResult = result[0];
+     * result = await client.scan(firstCursorResult);
+     * console.log(result); // Output: ['349', ['key4', 'key5', 'set1', 'hash1', 'zset1', 'list1', 'list2',
+     * // 'list3', 'zset2', 'zset3', 'zset4', 'zset5', 'zset6']]
+     * result = await client.scan(result[0]);
+     * console.log(result); // Output: ['0', ['key6', 'key7']]
+     *
+     * result = await client.scan(firstCursorResult, {match: 'key*', count: 2});
+     * console.log(result); // Output: ['6', ['key4', 'key5']]
+     *
+     * result = await client.scan("0", {type: ObjectType.Set});
+     * console.log(result); // Output: ['362', ['set1', 'set2', 'set3']]
+     * ```
+     */
+    public async scan(
+        cursor: GlideString,
+        options?: ScanOptions & DecoderOption,
+    ): Promise<[GlideString, GlideString[]]> {
+        return this.createWritePromise(createScan(cursor, options), options);
     }
 }
