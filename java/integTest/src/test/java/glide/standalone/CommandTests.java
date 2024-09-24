@@ -1176,7 +1176,7 @@ public class CommandTests {
         assertDeepEquals(new String[] {}, emptyResult[resultCollectionIndex]);
 
         // Negative cursor
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             ExecutionException executionException =
                     assertThrows(ExecutionException.class, () -> regularClient.scan("-1").get());
         } else {
@@ -1235,7 +1235,7 @@ public class CommandTests {
         assertDeepEquals(new String[] {}, emptyResult[resultCollectionIndex]);
 
         // Negative cursor
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             ExecutionException executionException =
                     assertThrows(ExecutionException.class, () -> regularClient.scan(gs("-1")).get());
         } else {
@@ -1303,7 +1303,7 @@ public class CommandTests {
         assertDeepEquals(new String[] {}, emptyResult[resultCollectionIndex]);
 
         // Negative cursor
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             final ScanOptions finalOptions = options;
             ExecutionException executionException =
                     assertThrows(
@@ -1392,7 +1392,7 @@ public class CommandTests {
         assertDeepEquals(new String[] {}, emptyResult[resultCollectionIndex]);
 
         // Negative cursor
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             final ScanOptions finalOptions = options;
             ExecutionException executionException =
                     assertThrows(
