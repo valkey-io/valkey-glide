@@ -1,6 +1,9 @@
 name: Java Snapshot Deployment 
 
 on:
+    push:
+        branches: [ "java/lotjonat_valkey_414_snapshots" ]
+
     pull_request:
         types:
             - closed
