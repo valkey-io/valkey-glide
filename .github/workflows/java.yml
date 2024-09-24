@@ -98,7 +98,7 @@ jobs:
 
             - name: Build java client
               working-directory: java
-              run: ./gradlew :integTest:test --tests '*.fcall_readonly_function'
+              run: ./gradlew --continue build -x javadoc
 
             - name: Ensure no skipped files by linter
               working-directory: java
