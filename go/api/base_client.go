@@ -30,6 +30,13 @@ type BaseClient interface {
 
 const OK = "OK"
 
+var (
+	NilStringValue  = StringValue{Val: "", IsNil: true}
+	NilInt64Value   = Int64Value{Val: 0, IsNil: true}
+	NilFloat64Value = Float64Value{Val: 0, IsNil: true}
+	NilBoolValue    = BoolValue{Val: false, IsNil: true}
+)
+
 type payload struct {
 	value *C.struct_CommandResponse
 	error error
@@ -145,42 +152,45 @@ func toCStrings(args []string) ([]C.uintptr_t, []C.ulong) {
 func (client *baseClient) Set(key string, value string) (StringValue, error) {
 	result, err := client.executeCommand(C.Set, []string{key, value})
 	if err != nil {
-		return StringValue{Val: "", IsNil: true}, err
+		return NilStringValue, err
 	}
+
 	return handleStringResponse(result)
 }
 
 func (client *baseClient) SetWithOptions(key string, value string, options *SetOptions) (StringValue, error) {
 	result, err := client.executeCommand(C.Set, append([]string{key, value}, options.toArgs()...))
 	if err != nil {
-		return StringValue{Val: "", IsNil: true}, err
+		return NilStringValue, err
 	}
+
 	return handleStringOrNullResponse(result)
 }
 
 func (client *baseClient) Get(key string) (StringValue, error) {
 	result, err := client.executeCommand(C.Get, []string{key})
 	if err != nil {
-		return StringValue{Val: "", IsNil: true}, err
+		return NilStringValue, err
 	}
 
 	return handleStringOrNullResponse(result)
 }
 
-func (client *baseClient) MSet(keyValueMap map[string]string) (string, error) {
+func (client *baseClient) MSet(keyValueMap map[string]string) (StringValue, error) {
 	result, err := client.executeCommand(C.MSet, utils.MapToString(keyValueMap))
 	if err != nil {
-		return StringValue{Val: "", IsNil: true}, err
+		return NilStringValue, err
 	}
 
 	return handleStringResponse(result)
 }
 
-func (client *baseClient) MSetNX(keyValueMap map[string]string) (bool, error) {
+func (client *baseClient) MSetNX(keyValueMap map[string]string) (BoolValue, error) {
 	result, err := client.executeCommand(C.MSetNX, utils.MapToString(keyValueMap))
 	if err != nil {
-		return BoolValue{Val: false, IsNil: true}, err
+		return NilBoolValue, err
 	}
+
 	return handleBooleanResponse(result)
 }
 
@@ -189,22 +199,25 @@ func (client *baseClient) MGet(keys []string) ([]StringValue, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return handleStringArrayResponse(result)
 }
 
 func (client *baseClient) Incr(key string) (Int64Value, error) {
 	result, err := client.executeCommand(C.Incr, []string{key})
 	if err != nil {
-		return Int64Value{Val: 0, IsNil: true}, err
+		return NilInt64Value, err
 	}
+
 	return handleLongResponse(result)
 }
 
 func (client *baseClient) IncrBy(key string, amount int64) (Int64Value, error) {
 	result, err := client.executeCommand(C.IncrBy, []string{key, utils.IntToString(amount)})
 	if err != nil {
-		return Int64Value{Val: 0, IsNil: true}, err
+		return NilInt64Value, err
 	}
+
 	return handleLongResponse(result)
 }
 
@@ -214,75 +227,83 @@ func (client *baseClient) IncrByFloat(key string, amount float64) (Float64Value,
 		[]string{key, utils.FloatToString(amount)},
 	)
 	if err != nil {
-		return Float64Value{Val: 0, IsNil: true}, err
+		return NilFloat64Value, err
 	}
+
 	return handleDoubleResponse(result)
 }
 
 func (client *baseClient) Decr(key string) (Int64Value, error) {
 	result, err := client.executeCommand(C.Decr, []string{key})
 	if err != nil {
-		return Int64Value{Val: 0, IsNil: true}, err
+		return NilInt64Value, err
 	}
+
 	return handleLongResponse(result)
 }
 
 func (client *baseClient) DecrBy(key string, amount int64) (Int64Value, error) {
 	result, err := client.executeCommand(C.DecrBy, []string{key, utils.IntToString(amount)})
 	if err != nil {
-		return Int64Value{Val: 0, IsNil: true}, err
+		return NilInt64Value, err
 	}
+
 	return handleLongResponse(result)
 }
 
 func (client *baseClient) Strlen(key string) (Int64Value, error) {
 	result, err := client.executeCommand(C.Strlen, []string{key})
 	if err != nil {
-		return Int64Value{Val: 0, IsNil: true}, err
+		return NilInt64Value, err
 	}
+
 	return handleLongResponse(result)
 }
 
 func (client *baseClient) SetRange(key string, offset int, value string) (Int64Value, error) {
 	result, err := client.executeCommand(C.SetRange, []string{key, strconv.Itoa(offset), value})
 	if err != nil {
-		return Int64Value{Val: 0, IsNil: true}, err
+		return NilInt64Value, err
 	}
+
 	return handleLongResponse(result)
 }
 
 func (client *baseClient) GetRange(key string, start int, end int) (StringValue, error) {
 	result, err := client.executeCommand(C.GetRange, []string{key, strconv.Itoa(start), strconv.Itoa(end)})
 	if err != nil {
-		return StringValue{Val: "", IsNil: true}, err
+		return NilStringValue, err
 	}
+
 	return handleStringResponse(result)
 }
 
 func (client *baseClient) Append(key string, value string) (Int64Value, error) {
 	result, err := client.executeCommand(C.Append, []string{key, value})
 	if err != nil {
-		return Int64Value{Val: 0, IsNil: true}, err
+		return NilInt64Value, err
 	}
+
 	return handleLongResponse(result)
 }
 
 func (client *baseClient) LCS(key1 string, key2 string) (StringValue, error) {
 	result, err := client.executeCommand(C.LCS, []string{key1, key2})
 	if err != nil {
-		return StringValue{Val: "", IsNil: true}, err
+		return NilStringValue, err
 	}
+
 	return handleStringResponse(result)
 }
 
 func (client *baseClient) GetDel(key string) (StringValue, error) {
 	if key == "" {
-		return StringValue{Val: "", IsNil: true}, errors.New("key is required")
+		return NilStringValue, errors.New("key is required")
 	}
 
 	result, err := client.executeCommand(C.GetDel, []string{key})
 	if err != nil {
-		return StringValue{Val: "", IsNil: true}, err
+		return NilStringValue, err
 	}
 
 	return handleStringOrNullResponse(result)
@@ -291,7 +312,7 @@ func (client *baseClient) GetDel(key string) (StringValue, error) {
 func (client *baseClient) HGet(key string, field string) (StringValue, error) {
 	result, err := client.executeCommand(C.HGet, []string{key, field})
 	if err != nil {
-		return StringValue{Val: "", IsNil: true}, err
+		return NilStringValue, err
 	}
 
 	return handleStringOrNullResponse(result)
@@ -318,7 +339,7 @@ func (client *baseClient) HMGet(key string, fields []string) ([]StringValue, err
 func (client *baseClient) HSet(key string, values map[string]string) (Int64Value, error) {
 	result, err := client.executeCommand(C.HSet, utils.ConvertMapToKeyValueStringArray(key, values))
 	if err != nil {
-		return Int64Value{Val: 0, IsNil: true}, err
+		return NilInt64Value, err
 	}
 
 	return handleLongResponse(result)
@@ -327,7 +348,7 @@ func (client *baseClient) HSet(key string, values map[string]string) (Int64Value
 func (client *baseClient) HSetNX(key string, field string, value string) (BoolValue, error) {
 	result, err := client.executeCommand(C.HSetNX, []string{key, field, value})
 	if err != nil {
-		return BoolValue{Val: false, IsNil: true}, err
+		return NilBoolValue, err
 	}
 
 	return handleBooleanResponse(result)
@@ -336,7 +357,7 @@ func (client *baseClient) HSetNX(key string, field string, value string) (BoolVa
 func (client *baseClient) HDel(key string, fields []string) (Int64Value, error) {
 	result, err := client.executeCommand(C.HDel, append([]string{key}, fields...))
 	if err != nil {
-		return Int64Value{Val: 0, IsNil: true}, err
+		return NilInt64Value, err
 	}
 
 	return handleLongResponse(result)
@@ -345,7 +366,7 @@ func (client *baseClient) HDel(key string, fields []string) (Int64Value, error) 
 func (client *baseClient) HLen(key string) (Int64Value, error) {
 	result, err := client.executeCommand(C.HLen, []string{key})
 	if err != nil {
-		return Int64Value{Val: 0, IsNil: true}, err
+		return NilInt64Value, err
 	}
 
 	return handleLongResponse(result)
@@ -363,7 +384,7 @@ func (client *baseClient) HVals(key string) ([]StringValue, error) {
 func (client *baseClient) HExists(key string, field string) (BoolValue, error) {
 	result, err := client.executeCommand(C.HExists, []string{key, field})
 	if err != nil {
-		return BoolValue{Val: false, IsNil: true}, err
+		return NilBoolValue, err
 	}
 
 	return handleBooleanResponse(result)
@@ -381,7 +402,7 @@ func (client *baseClient) HKeys(key string) ([]StringValue, error) {
 func (client *baseClient) HStrLen(key string, field string) (Int64Value, error) {
 	result, err := client.executeCommand(C.HStrlen, []string{key, field})
 	if err != nil {
-		return Int64Value{Val: 0, IsNil: true}, err
+		return NilInt64Value, err
 	}
 
 	return handleLongResponse(result)

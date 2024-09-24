@@ -13,7 +13,7 @@ import (
 
 func convertCharArrayToString(arr *C.char, length C.long) StringValue {
 	if arr == nil {
-		return StringValue{Val: "", IsNil: true}
+		return NilStringValue
 	}
 	byteSlice := C.GoBytes(unsafe.Pointer(arr), C.int(int64(length)))
 	// Create Go string from byte slice (preserving null characters)
@@ -22,17 +22,28 @@ func convertCharArrayToString(arr *C.char, length C.long) StringValue {
 
 func checkResponseType(response *C.struct_CommandResponse, expectedType C.ResponseType, isNilable bool) error {
 	expectedTypeInt := uint32(expectedType)
-	// TODO: Handle nil response
-	if response.response_type == expectedTypeInt {
-		return nil
+	expectedTypeStr := C.get_response_type_string(expectedTypeInt)
+	defer C.free_response_type_string(expectedTypeStr)
+
+	if !isNilable && response == nil {
+		return &RequestError{
+			fmt.Sprintf(
+				"Unexpected return type from Valkey: got nil, expected %s",
+				C.GoString(expectedTypeStr),
+			),
+		}
 	}
+
 	if isNilable && (response == nil || response.response_type == uint32(C.Null)) {
 		return nil
 	}
+
+	if response.response_type == expectedTypeInt {
+		return nil
+	}
+
 	actualTypeStr := C.get_response_type_string(response.response_type)
-	expectedTypeStr := C.get_response_type_string(expectedTypeInt)
 	defer C.free_response_type_string(actualTypeStr)
-	defer C.free_response_type_string(expectedTypeStr)
 	return &RequestError{
 		fmt.Sprintf(
 			"Unexpected return type from Valkey: got %s, expected %s",
@@ -47,7 +58,7 @@ func handleStringResponse(response *C.struct_CommandResponse) (StringValue, erro
 
 	typeErr := checkResponseType(response, C.String, false)
 	if typeErr != nil {
-		return StringValue{Val: "", IsNil: true}, typeErr
+		return NilStringValue, typeErr
 	}
 
 	return convertCharArrayToString(response.string_value, response.string_value_len), nil
@@ -58,7 +69,7 @@ func handleStringOrNullResponse(response *C.struct_CommandResponse) (StringValue
 
 	typeErr := checkResponseType(response, C.String, true)
 	if typeErr != nil {
-		return StringValue{Val: "", IsNil: true}, typeErr
+		return NilStringValue, typeErr
 	}
 
 	return convertCharArrayToString(response.string_value, response.string_value_len), nil
@@ -84,7 +95,7 @@ func handleLongResponse(response *C.struct_CommandResponse) (Int64Value, error) 
 
 	typeErr := checkResponseType(response, C.Int, false)
 	if typeErr != nil {
-		return Int64Value{Val: 0, IsNil: true}, typeErr
+		return NilInt64Value, typeErr
 	}
 
 	return Int64Value{Val: int64(response.int_value), IsNil: false}, nil
@@ -95,7 +106,7 @@ func handleDoubleResponse(response *C.struct_CommandResponse) (Float64Value, err
 
 	typeErr := checkResponseType(response, C.Float, false)
 	if typeErr != nil {
-		return Float64Value{Val: 0, IsNil: true}, typeErr
+		return NilFloat64Value, typeErr
 	}
 
 	return Float64Value{Val: float64(response.float_value), IsNil: false}, nil
@@ -106,7 +117,7 @@ func handleBooleanResponse(response *C.struct_CommandResponse) (BoolValue, error
 
 	typeErr := checkResponseType(response, C.Bool, false)
 	if typeErr != nil {
-		return BoolValue{Val: false, IsNil: true}, typeErr
+		return NilBoolValue, typeErr
 	}
 
 	return BoolValue{Val: bool(response.bool_value), IsNil: false}, nil

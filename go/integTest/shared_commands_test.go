@@ -534,11 +534,11 @@ func (suite *GlideTestSuite) TestHSet_WithExistingKey() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1)
+		assert.Equal(suite.T(), int64(2), res1.Val)
 
 		res2, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res2)
+		assert.Equal(suite.T(), int64(0), res2.Val)
 	})
 }
 
@@ -552,11 +552,19 @@ func (suite *GlideTestSuite) TestHSet_byteString() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1)
+		assert.Equal(suite.T(), int64(2), res1.Val)
 
 		res2, err := client.HGetAll(key)
+		key1 := api.StringValue{Val: string([]byte{0xFF, 0x00, 0xAA}), IsNil: false}
+		value1 := api.StringValue{Val: string([]byte{0xDE, 0xAD, 0xBE, 0xEF}), IsNil: false}
+		key2 := api.StringValue{Val: string([]byte{0x01, 0x02, 0x03, 0xFE}), IsNil: false}
+		value2 := api.StringValue{Val: string([]byte{0xCA, 0xFE, 0xBA, 0xBE}), IsNil: false}
+		fieldsResult := map[api.StringValue]api.StringValue{
+			key1: value1,
+			key2: value2,
+		}
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), fields, res2)
+		assert.Equal(suite.T(), fieldsResult, res2)
 	})
 }
 
@@ -567,16 +575,16 @@ func (suite *GlideTestSuite) TestHSet_WithAddNewField() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1)
+		assert.Equal(suite.T(), int64(2), res1.Val)
 
 		res2, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res2)
+		assert.Equal(suite.T(), int64(0), res2.Val)
 
 		fields["field3"] = "value3"
 		res3, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), res3)
+		assert.Equal(suite.T(), int64(1), res3.Val)
 	})
 }
 
@@ -587,11 +595,11 @@ func (suite *GlideTestSuite) TestHGet_WithExistingKey() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1)
+		assert.Equal(suite.T(), int64(2), res1.Val)
 
 		res2, err := client.HGet(key, "field1")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), "value1", res2)
+		assert.Equal(suite.T(), "value1", res2.Val)
 	})
 }
 
@@ -601,7 +609,7 @@ func (suite *GlideTestSuite) TestHGet_WithNotExistingKey() {
 
 		res1, err := client.HGet(key, "field1")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), "", res1)
+		assert.Equal(suite.T(), api.StringValue{Val: "", IsNil: true}, res1)
 	})
 }
 
@@ -612,11 +620,11 @@ func (suite *GlideTestSuite) TestHGet_WithNotExistingField() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1)
+		assert.Equal(suite.T(), int64(2), res1.Val)
 
 		res2, err := client.HGet(key, "foo")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), "", res2)
+		assert.Equal(suite.T(), api.StringValue{Val: "", IsNil: true}, res2)
 	})
 }
 
@@ -627,11 +635,16 @@ func (suite *GlideTestSuite) TestHGetAll_WithExistingKey() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1)
+		assert.Equal(suite.T(), int64(2), res1.Val)
 
+		field1 := api.StringValue{Val: "field1", IsNil: false}
+		value1 := api.StringValue{Val: "value1", IsNil: false}
+		field2 := api.StringValue{Val: "field2", IsNil: false}
+		value2 := api.StringValue{Val: "value2", IsNil: false}
+		fieldsResult := map[api.StringValue]api.StringValue{field1: value1, field2: value2}
 		res2, err := client.HGetAll(key)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), fields, res2)
+		assert.Equal(suite.T(), fieldsResult, res2)
 	})
 }
 
@@ -652,11 +665,14 @@ func (suite *GlideTestSuite) TestHMGet() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1)
+		assert.Equal(suite.T(), int64(2), res1.Val)
 
 		res2, err := client.HMGet(key, []string{"field1", "field2", "field3"})
+		value1 := api.StringValue{Val: "value1", IsNil: false}
+		value2 := api.StringValue{Val: "value2", IsNil: false}
+		nullValue := api.StringValue{Val: "", IsNil: true}
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), []string{"value1", "value2", ""}, res2)
+		assert.Equal(suite.T(), []api.StringValue{value1, value2, nullValue}, res2)
 	})
 }
 
@@ -665,8 +681,9 @@ func (suite *GlideTestSuite) TestHMGet_WithNotExistingKey() {
 		key := uuid.NewString()
 
 		res, err := client.HMGet(key, []string{"field1", "field2", "field3"})
+		nullValue := api.StringValue{Val: "", IsNil: true}
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), []string{"", "", ""}, res)
+		assert.Equal(suite.T(), []api.StringValue{nullValue, nullValue, nullValue}, res)
 	})
 }
 
@@ -677,11 +694,12 @@ func (suite *GlideTestSuite) TestHMGet_WithNotExistingField() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1)
+		assert.Equal(suite.T(), int64(2), res1.Val)
 
 		res2, err := client.HMGet(key, []string{"field3", "field4"})
+		nullValue := api.StringValue{Val: "", IsNil: true}
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), []string{"", ""}, res2)
+		assert.Equal(suite.T(), []api.StringValue{nullValue, nullValue}, res2)
 	})
 }
 
@@ -692,11 +710,11 @@ func (suite *GlideTestSuite) TestHSetNX_WithExistingKey() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1)
+		assert.Equal(suite.T(), int64(2), res1.Val)
 
 		res2, err := client.HSetNX(key, "field1", "value1")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), false, res2)
+		assert.Equal(suite.T(), false, res2.Val)
 	})
 }
 
@@ -706,11 +724,13 @@ func (suite *GlideTestSuite) TestHSetNX_WithNotExistingKey() {
 
 		res1, err := client.HSetNX(key, "field1", "value1")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), true, res1)
+		assert.Equal(suite.T(), true, res1.Val)
 
 		res2, err := client.HGetAll(key)
+		field1 := api.StringValue{Val: "field1", IsNil: false}
+		value1 := api.StringValue{Val: "value1", IsNil: false}
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), map[string]string{"field1": "value1"}, res2)
+		assert.Equal(suite.T(), map[api.StringValue]api.StringValue{field1: value1}, res2)
 	})
 }
 
@@ -721,11 +741,11 @@ func (suite *GlideTestSuite) TestHSetNX_WithExistingField() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1)
+		assert.Equal(suite.T(), int64(2), res1.Val)
 
 		res2, err := client.HSetNX(key, "field1", "value1")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), false, res2)
+		assert.Equal(suite.T(), false, res2.Val)
 	})
 }
 
@@ -736,11 +756,11 @@ func (suite *GlideTestSuite) TestHDel() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1)
+		assert.Equal(suite.T(), int64(2), res1.Val)
 
 		res2, err := client.HDel(key, []string{"field1", "field2"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res2)
+		assert.Equal(suite.T(), int64(2), res2.Val)
 
 		res3, err := client.HGetAll(key)
 		assert.Nil(suite.T(), err)
@@ -748,7 +768,7 @@ func (suite *GlideTestSuite) TestHDel() {
 
 		res4, err := client.HDel(key, []string{"field1", "field2"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res4)
+		assert.Equal(suite.T(), int64(0), res4.Val)
 	})
 }
 
@@ -757,7 +777,7 @@ func (suite *GlideTestSuite) TestHDel_WithNotExistingKey() {
 		key := uuid.NewString()
 		res, err := client.HDel(key, []string{"field1", "field2"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res)
+		assert.Equal(suite.T(), int64(0), res.Val)
 	})
 }
 
@@ -768,11 +788,11 @@ func (suite *GlideTestSuite) TestHDel_WithNotExistingField() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1)
+		assert.Equal(suite.T(), int64(2), res1.Val)
 
 		res2, err := client.HDel(key, []string{"field3", "field4"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res2)
+		assert.Equal(suite.T(), int64(0), res2.Val)
 	})
 }
 
@@ -783,11 +803,11 @@ func (suite *GlideTestSuite) TestHLen() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1)
+		assert.Equal(suite.T(), int64(2), res1.Val)
 
 		res2, err := client.HLen(key)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res2)
+		assert.Equal(suite.T(), int64(2), res2.Val)
 	})
 }
 
@@ -797,7 +817,7 @@ func (suite *GlideTestSuite) TestHLen_WithNotExistingKey() {
 		res, err := client.HLen(key)
 
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res)
+		assert.Equal(suite.T(), int64(0), res.Val)
 	})
 }
 
@@ -808,12 +828,14 @@ func (suite *GlideTestSuite) TestHVals_WithExistingKey() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1)
+		assert.Equal(suite.T(), int64(2), res1.Val)
 
 		res2, err := client.HVals(key)
+		value1 := api.StringValue{Val: "value1", IsNil: false}
+		value2 := api.StringValue{Val: "value2", IsNil: false}
 		assert.Nil(suite.T(), err)
-		assert.Contains(suite.T(), res2, "value1")
-		assert.Contains(suite.T(), res2, "value2")
+		assert.Contains(suite.T(), res2, value1)
+		assert.Contains(suite.T(), res2, value2)
 	})
 }
 
@@ -834,11 +856,11 @@ func (suite *GlideTestSuite) TestHExists_WithExistingKey() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1)
+		assert.Equal(suite.T(), int64(2), res1.Val)
 
 		res2, err := client.HExists(key, "field1")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), true, res2)
+		assert.Equal(suite.T(), true, res2.Val)
 	})
 }
 
@@ -848,7 +870,7 @@ func (suite *GlideTestSuite) TestHExists_WithNotExistingKey() {
 
 		res, err := client.HExists(key, "field1")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), false, res)
+		assert.Equal(suite.T(), false, res.Val)
 	})
 }
 
@@ -859,11 +881,11 @@ func (suite *GlideTestSuite) TestHExists_WithNotExistingField() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1)
+		assert.Equal(suite.T(), int64(2), res1.Val)
 
 		res2, err := client.HExists(key, "field3")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), false, res2)
+		assert.Equal(suite.T(), false, res2.Val)
 	})
 }
 
@@ -874,12 +896,14 @@ func (suite *GlideTestSuite) TestHKeys_WithExistingKey() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1)
+		assert.Equal(suite.T(), int64(2), res1.Val)
 
 		res2, err := client.HKeys(key)
+		field1 := api.StringValue{Val: "field1", IsNil: false}
+		field2 := api.StringValue{Val: "field2", IsNil: false}
 		assert.Nil(suite.T(), err)
-		assert.Contains(suite.T(), res2, "field1")
-		assert.Contains(suite.T(), res2, "field2")
+		assert.Contains(suite.T(), res2, field1)
+		assert.Contains(suite.T(), res2, field2)
 	})
 }
 
@@ -900,11 +924,11 @@ func (suite *GlideTestSuite) TestHStrLen_WithExistingKey() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1)
+		assert.Equal(suite.T(), int64(2), res1.Val)
 
 		res2, err := client.HStrLen(key, "field1")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(6), res2)
+		assert.Equal(suite.T(), int64(6), res2.Val)
 	})
 }
 
@@ -914,7 +938,7 @@ func (suite *GlideTestSuite) TestHStrLen_WithNotExistingKey() {
 
 		res, err := client.HStrLen(key, "field1")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res)
+		assert.Equal(suite.T(), int64(0), res.Val)
 	})
 }
 
@@ -925,10 +949,10 @@ func (suite *GlideTestSuite) TestHStrLen_WithNotExistingField() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1)
+		assert.Equal(suite.T(), int64(2), res1.Val)
 
 		res2, err := client.HStrLen(key, "field3")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res2)
+		assert.Equal(suite.T(), int64(0), res2.Val)
 	})
 }

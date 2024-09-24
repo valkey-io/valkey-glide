@@ -428,7 +428,6 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
             command_response.array_value_len = len;
             command_response.response_type = ResponseType::Array;
             Ok(command_response)
-            Ok(Some(command_response))
         }
         Value::Map(map) => {
             let result: Vec<CommandResponse> = map
