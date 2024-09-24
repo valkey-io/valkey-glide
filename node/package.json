@@ -58,7 +58,7 @@
         "typescript": "^5.5.4",
         "uuid": "^10.0.0"
     },
-    "author": "Valkey contributors",
+    "author": "Valkey GLIDE Maintainers",
     "license": "Apache-2.0",
     "publishConfig": {
         "${registry_scope}registry": "https://registry.npmjs.org/",
