@@ -69,6 +69,7 @@ jobs:
                   os: "ubuntu"
                   target: "x86_64-unknown-linux-gnu"
                   engine-version: ${{ matrix.engine.version }}
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - uses: Swatinem/rust-cache@v2
 

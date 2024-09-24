@@ -63,11 +63,11 @@ jobs:
         if: github.repository_owner == 'valkey-io'
         name: Publish packages to PyPi
         runs-on: ${{ matrix.build.RUNNER }}
-        timeout-minutes: 25
+        timeout-minutes: 35
         strategy:
             fail-fast: false
             matrix:
-                build: ${{fromJson( needs.load-platform-matrix.outputs.PLATFORM_MATRIX )}}
+                build: ${{ fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX) }}
         steps:
             - name: Setup self-hosted runner access
               if: ${{ contains(matrix.build.RUNNER, 'self-hosted') }}
@@ -118,8 +118,7 @@ jobs:
               if: startsWith(matrix.build.NAMED_OS, 'darwin')
               run: |
                   brew update
-                  brew upgrade || true
-                  brew install python@3.9
+                  brew install python@3.8 python@3.9
 
             - name: Setup Python for self-hosted Ubuntu runners
               if: contains(matrix.build.OS, 'ubuntu') && contains(matrix.build.RUNNER, 'self-hosted')
@@ -191,9 +190,9 @@ jobs:
 
             - name: Upload Python wheels
               if: github.event_name != 'pull_request'
-              uses: actions/upload-artifact@v3
+              uses: actions/upload-artifact@v4
               with:
-                  name: wheels
+                  name: wheels-${{ matrix.build.TARGET }}
                   path: python/wheels
                   if-no-files-found: error
 
@@ -206,7 +205,8 @@ jobs:
             - uses: actions/download-artifact@v4
               with:
                   path: python/wheels
-                  name: wheels
+                  merge-multiple: true
+
             - name: Publish to PyPI
               uses: PyO3/maturin-action@v1
               env:
@@ -215,3 +215,62 @@ jobs:
               with:
                   command: upload
                   args: --skip-existing python/wheels/*
+
+    test-release:
+        if: github.event_name != 'pull_request'
+        name: Test the release
+        runs-on: ${{ matrix.build.RUNNER }}
+        needs: [publish-to-pypi, load-platform-matrix]
+        strategy:
+            fail-fast: false
+            matrix:
+                build: ${{ fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX) }}
+        steps:
+            - name: Setup self-hosted runner access
+              if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-gnu' }}
+              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
+
+            - name: checkout
+              uses: actions/checkout@v4
+
+            - name: Set up Python
+              uses: actions/setup-python@v4
+              with:
+                  python-version: 3.12
+
+            - name: Install ValKey
+              uses: ./.github/workflows/install-valkey
+              with:
+                  version: "8.0.0"
+
+            - name: Check if RC and set a distribution tag for the package
+              shell: bash
+              run: |
+                  if [[ "${GITHUB_REF:11}" == *"rc"* ]]
+                  then
+                    echo "This is a release candidate"
+                    export pip_pre="--pre"
+                  else
+                    echo "This is a stable release"
+                    export pip_pre=""
+                  fi
+                  echo "PIP_PRE=${pip_pre}" >> $GITHUB_ENV
+
+            - name: Run the tests
+              shell: bash
+              working-directory: ./utils/release-candidate-testing/python
+              run: |
+                  python -m venv venv
+                  source venv/bin/activate
+                  pip install -U pip
+                  pip install ${PIP_PRE} valkey-glide
+                  python rc_test.py
+
+            # Reset the repository to make sure we get the clean checkout of the action later in other actions.
+            # It is not required since in other actions we are cleaning before the action, but it is a good practice to do it here as well.
+            - name: Reset repository
+              if: ${{ contains(matrix.build.RUNNER, 'self-hosted') }}
+              shell: bash
+              run: |
+                  git reset --hard
+                  git clean -xdf

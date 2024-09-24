@@ -382,7 +382,7 @@ public class TransactionTestUtilities {
                 .hscan(hashKey2, "0")
                 .hscan(hashKey2, "0", HScanOptions.builder().count(20L).build());
 
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             transaction
                     .hscan(hashKey2, "0", HScanOptions.builder().count(20L).noValues(false).build())
                     .hscan(hashKey2, "0", HScanOptions.builder().count(20L).noValues(true).build());
@@ -417,7 +417,7 @@ public class TransactionTestUtilities {
                     }, // hscan(hashKey2, "0", HScanOptions.builder().count(20L).build());
                 };
 
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             result =
                     concatenateArrays(
                             result,
@@ -670,7 +670,7 @@ public class TransactionTestUtilities {
                 .zrandmemberWithCountWithScores(zSetKey2, 1)
                 .zscan(zSetKey2, "0")
                 .zscan(zSetKey2, "0", ZScanOptions.builder().count(20L).build());
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             transaction
                     .zscan(zSetKey2, 0, ZScanOptions.builder().count(20L).noScores(false).build())
                     .zscan(zSetKey2, 0, ZScanOptions.builder().count(20L).noScores(true).build());
@@ -741,7 +741,7 @@ public class TransactionTestUtilities {
                     }, // zscan(zSetKey2, 0, ZScanOptions.builder().count(20L).build())
                 };
 
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             expectedResults =
                     concatenateArrays(
                             expectedResults,
@@ -1288,7 +1288,7 @@ public class TransactionTestUtilities {
                     .bitpos(key3, 1, 44, 50, BitmapIndexType.BIT);
         }
 
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             transaction.set(key4, "foobar").bitcount(key4, 0);
         }
 
@@ -1321,7 +1321,7 @@ public class TransactionTestUtilities {
                             });
         }
 
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             expectedResults =
                     concatenateArrays(
                             expectedResults,
