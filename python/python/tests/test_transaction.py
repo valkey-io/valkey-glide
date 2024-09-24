@@ -308,7 +308,7 @@ async def transaction_test(
     args.append([b"0", [key3.encode(), b"10.5"]])
     transaction.hscan(key4, "0", match="*", count=10)
     args.append([b"0", [key3.encode(), b"10.5"]])
-    if not await check_if_server_version_lt(glide_client, "7.9.0"):
+    if not await check_if_server_version_lt(glide_client, "8.0.0"):
         transaction.hscan(key4, "0", match="*", count=10, no_values=True)
         args.append([b"0", [key3.encode()]])
     transaction.hrandfield(key4)
@@ -463,7 +463,7 @@ async def transaction_test(
     args.append([b"0", [b"three", b"3"]])
     transaction.zscan(key8, "0", match="*", count=20)
     args.append([b"0", [b"three", b"3"]])
-    if not await check_if_server_version_lt(glide_client, "7.9.0"):
+    if not await check_if_server_version_lt(glide_client, "8.0.0"):
         transaction.zscan(key8, "0", match="*", count=20, no_scores=True)
         args.append([b"0", [b"three"]])
     transaction.zpopmax(key8)
@@ -561,7 +561,7 @@ async def transaction_test(
         transaction.bitpos_interval(key20, 1, 44, 50, BitmapIndexType.BIT)
         args.append(46)
 
-    if not await check_if_server_version_lt(glide_client, "7.9.0"):
+    if not await check_if_server_version_lt(glide_client, "8.0.0"):
         transaction.set(key20, "foobar")
         args.append(OK)
         transaction.bitcount(key20, OffsetOptions(0))
@@ -720,7 +720,7 @@ async def transaction_test(
         alpha=True,
     )
     args.append(4)
-    if not await check_if_server_version_lt(glide_client, "7.9.0"):
+    if not await check_if_server_version_lt(glide_client, "8.0.0"):
         transaction.hset(f"{{{keyslot}}}:1", {"name": "Alice", "age": "30"})
         args.append(2)
         transaction.hset(f"{{{keyslot}}}:2", {"name": "Bob", "age": "25"})
