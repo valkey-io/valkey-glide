@@ -140,6 +140,7 @@ To run the integration tests with existing servers, run the following command:
 ```bash
 npm run test -- --cluster-endpoints=localhost:7000 --standalone-endpoints=localhost:6379
 ```
+
 You can use test filter there as well.
 
 ### Submodules
