@@ -69,6 +69,7 @@ message ConnectionRequest {
         PeriodicChecksDisabled periodic_checks_disabled = 12;
     }
     PubSubSubscriptions pubsub_subscriptions = 13;
+    uint32 inflight_requests_limit = 14;
 }
 
 message ConnectionRetryStrategy {

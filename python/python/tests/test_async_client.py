@@ -310,6 +310,37 @@ class TestCommands:
 
         assert int(result[b"proto"]) == 2
 
+    # Testing the inflight_requests_limit parameter in glide. Sending the allowed amount + 1 of requests
+    # to glide, using blocking commands, and checking the N+1 request returns immediately with error. 
+    @pytest.mark.parametrize("cluster_mode", [False, True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.parametrize("inflight_requests_limit", [5, 100, 1500])
+    async def test_inflight_request_limit(
+        self, cluster_mode, protocol, inflight_requests_limit, request
+    ):
+        key1 = f"{{nonexistinglist}}:1-{get_random_string(10)}"
+        test_client = await create_client(
+            request=request, protocol=protocol, cluster_mode=cluster_mode, inflight_requests_limit=inflight_requests_limit
+        )
+        
+        tasks = []
+        for i in range(inflight_requests_limit + 1):
+            tasks.append(test_client.blpop([key1], 0))
+
+        done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
+
+        for task in done:
+            try:
+                result = await task
+                print(f"Completed task: {result}")
+            except Exception as e:
+                assert isinstance(e, RequestError)
+                print(f"Error in task: {e}")
+                break
+
+        for task in pending:
+            task.cancel()
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_conditional_set(self, glide_client: TGlideClient):

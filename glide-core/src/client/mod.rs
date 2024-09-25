@@ -29,6 +29,7 @@ pub const DEFAULT_CONNECTION_ATTEMPT_TIMEOUT: Duration = Duration::from_millis(2
 pub const DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL: Duration = Duration::from_secs(60);
 pub const INTERNAL_CONNECTION_TIMEOUT: Duration = Duration::from_millis(250);
 pub const FINISHED_SCAN_CURSOR: &str = "finished";
+pub const DEFAULT_MAX_INFLIGHT_REQUESTS: u32 = 1000;
 
 // The connection check interval is currently not exposed to the user via ConnectionRequest,
 // as improper configuration could negatively impact performance or pub/sub resiliency.
@@ -102,6 +103,7 @@ pub enum ClientWrapper {
 pub struct Client {
     internal_client: ClientWrapper,
     request_timeout: Duration,
+    inflight_requests_limit: u32,
 }
 
 async fn run_with_timeout<T>(
@@ -409,6 +411,10 @@ impl Client {
             Err(err)
         }
     }
+
+    pub fn get_inflight_requests_limit(&self) -> u32 {
+        self.inflight_requests_limit
+    }
 }
 
 fn load_cmd(code: &[u8]) -> Cmd {
@@ -599,8 +605,13 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
         .map(|pubsub_subscriptions| format!("\nPubsub subscriptions: {pubsub_subscriptions:?}"))
         .unwrap_or_default();
 
+    let inflight_requests_limit = format_optional_value(
+        "\nInflight requests limit: {}",
+        request.inflight_requests_limit,
+    );
+
     format!(
-        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}{periodic_checks}{pubsub_subscriptions}",
+        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}{periodic_checks}{pubsub_subscriptions}{inflight_requests_limit}",
     )
 }
 
@@ -616,6 +627,9 @@ impl Client {
             sanitized_request_string(&request),
         );
         let request_timeout = to_duration(request.request_timeout, DEFAULT_RESPONSE_TIMEOUT);
+        let inflight_requests_limit = request
+            .inflight_requests_limit
+            .unwrap_or(DEFAULT_MAX_INFLIGHT_REQUESTS);
         tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
             let internal_client = if request.cluster_mode_enabled {
                 let client = create_cluster_client(request, push_sender)
@@ -633,6 +647,7 @@ impl Client {
             Ok(Self {
                 internal_client,
                 request_timeout,
+                inflight_requests_limit,
             })
         })
         .await

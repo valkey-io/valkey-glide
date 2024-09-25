@@ -24,6 +24,8 @@ use redis::cluster_routing::{ResponsePolicy, Routable};
 use redis::{Cmd, PushInfo, RedisError, ScanStateRC, Value};
 use std::cell::Cell;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::{env, str};
 use std::{io, thread};
 use thiserror::Error;
@@ -476,71 +478,111 @@ fn get_route(
     }
 }
 
-fn handle_request(request: CommandRequest, client: Client, writer: Rc<Writer>) {
+fn handle_request(
+    request: CommandRequest,
+    client: Client,
+    writer: Rc<Writer>,
+    inflight_counter: Arc<AtomicUsize>,
+) {
+    let inflight_requests_clone = inflight_counter.clone();
     task::spawn_local(async move {
-        let result = match request.command {
-            Some(action) => match action {
-                command_request::Command::ClusterScan(cluster_scan_command) => {
-                    cluster_scan(cluster_scan_command, client).await
-                }
-                command_request::Command::SingleCommand(command) => {
-                    match get_redis_command(&command) {
-                        Ok(cmd) => match get_route(request.route.0, Some(&cmd)) {
-                            Ok(routes) => send_command(cmd, client, routes).await,
-                            Err(e) => Err(e),
-                        },
-                        Err(e) => Err(e),
-                    }
-                }
-                command_request::Command::Transaction(transaction) => {
-                    match get_route(request.route.0, None) {
-                        Ok(routes) => send_transaction(transaction, client, routes).await,
-                        Err(e) => Err(e),
-                    }
-                }
-                command_request::Command::ScriptInvocation(script) => {
-                    match get_route(request.route.0, None) {
-                        Ok(routes) => {
-                            invoke_script(
-                                script.hash,
-                                Some(script.keys),
-                                Some(script.args),
-                                client,
-                                routes,
-                            )
-                            .await
-                        }
-                        Err(e) => Err(e),
-                    }
-                }
-                command_request::Command::ScriptInvocationPointers(script) => {
-                    let keys = script
-                        .keys_pointer
-                        .map(|pointer| *unsafe { Box::from_raw(pointer as *mut Vec<Bytes>) });
-                    let args = script
-                        .args_pointer
-                        .map(|pointer| *unsafe { Box::from_raw(pointer as *mut Vec<Bytes>) });
-                    match get_route(request.route.0, None) {
-                        Ok(routes) => invoke_script(script.hash, keys, args, client, routes).await,
-                        Err(e) => Err(e),
-                    }
+        let result;
+        let updated_inflight_counter: bool;
+
+        // Check if already reached inflight request limit
+        let fetched_inflight = inflight_requests_clone.fetch_update(
+            Ordering::AcqRel,
+            Ordering::Acquire,
+            |current_inflight| {
+                if current_inflight as u32 >= client.get_inflight_requests_limit() {
+                    // In case counter reached the limit, don't update and return Err.
+                    return None;
+                } else {
+                    Some(current_inflight + 1)
                 }
             },
-            None => {
-                log_debug(
-                    "received error",
-                    format!(
-                        "Received empty request for callback {}",
-                        request.callback_idx
-                    ),
-                );
-                Err(ClientUsageError::Internal(
-                    "Received empty request".to_string(),
-                ))
+        );
+
+        match fetched_inflight {
+            Err(_) => {
+                updated_inflight_counter = false;
+                result = Err(ClientUsageError::User(
+                    "Reached maximum inflight requests".to_string(),
+                ));
             }
-        };
+            Ok(_) => {
+                updated_inflight_counter = true;
+                result = match request.command {
+                    Some(action) => match action {
+                        command_request::Command::ClusterScan(cluster_scan_command) => {
+                            cluster_scan(cluster_scan_command, client).await
+                        }
+                        command_request::Command::SingleCommand(command) => {
+                            match get_redis_command(&command) {
+                                Ok(cmd) => match get_route(request.route.0, Some(&cmd)) {
+                                    Ok(routes) => send_command(cmd, client, routes).await,
+                                    Err(e) => Err(e),
+                                },
+                                Err(e) => Err(e),
+                            }
+                        }
+                        command_request::Command::Transaction(transaction) => {
+                            match get_route(request.route.0, None) {
+                                Ok(routes) => send_transaction(transaction, client, routes).await,
+                                Err(e) => Err(e),
+                            }
+                        }
+                        command_request::Command::ScriptInvocation(script) => {
+                            match get_route(request.route.0, None) {
+                                Ok(routes) => {
+                                    invoke_script(
+                                        script.hash,
+                                        Some(script.keys),
+                                        Some(script.args),
+                                        client,
+                                        routes,
+                                    )
+                                    .await
+                                }
+                                Err(e) => Err(e),
+                            }
+                        }
+                        command_request::Command::ScriptInvocationPointers(script) => {
+                            let keys = script.keys_pointer.map(|pointer| *unsafe {
+                                Box::from_raw(pointer as *mut Vec<Bytes>)
+                            });
+                            let args = script.args_pointer.map(|pointer| *unsafe {
+                                Box::from_raw(pointer as *mut Vec<Bytes>)
+                            });
+                            match get_route(request.route.0, None) {
+                                Ok(routes) => {
+                                    invoke_script(script.hash, keys, args, client, routes).await
+                                }
+                                Err(e) => Err(e),
+                            }
+                        }
+                    },
+                    None => {
+                        log_debug(
+                            "received error",
+                            format!(
+                                "Received empty request for callback {}",
+                                request.callback_idx
+                            ),
+                        );
+                        Err(ClientUsageError::Internal(
+                            "Received empty request".to_string(),
+                        ))
+                    }
+                };
+            }
+        }
 
         let _res = write_result(result, request.callback_idx, &writer).await;
+
+        if updated_inflight_counter {
+            inflight_requests_clone.fetch_sub(1, Ordering::Release);
+        }
     });
 }
 
@@ -548,9 +590,15 @@ async fn handle_requests(
     received_requests: Vec<CommandRequest>,
     client: &Client,
     writer: &Rc<Writer>,
+    inflight_counter: Arc<AtomicUsize>,
 ) {
     for request in received_requests {
-        handle_request(request, client.clone(), writer.clone())
+        handle_request(
+            request,
+            client.clone(),
+            writer.clone(),
+            inflight_counter.clone(),
+        );
     }
     // Yield to ensure that the subtasks aren't starved.
     task::yield_now().await;
@@ -599,13 +647,23 @@ async fn read_values_loop(
     client: &Client,
     writer: Rc<Writer>,
 ) -> ClosingReason {
+    // Setting this counter to limit the inflight requests, in case of any queue is blocked, so we return error
+    // to the customer.
+    let inflight_requests_counter = Arc::new(AtomicUsize::new(0));
+
     loop {
         match client_listener.next_values().await {
             Closed(reason) => {
                 return reason;
             }
             ReceivedValues(received_requests) => {
-                handle_requests(received_requests, client, &writer).await;
+                handle_requests(
+                    received_requests,
+                    client,
+                    &writer,
+                    inflight_requests_counter.clone(),
+                )
+                .await;
             }
         }
     }
