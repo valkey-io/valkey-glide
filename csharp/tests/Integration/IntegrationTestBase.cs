@@ -73,7 +73,7 @@ public class IntegrationTestBase : IDisposable
     /// </summary>
     internal void StopRedis(bool keepLogs, string? name = null)
     {
-        string cmd = $"stop --prefix {name ?? "redis-cluster"} {(keepLogs ? "--keep-folder" : "")}";
+        string cmd = $"stop --prefix {name ?? "cluster"} {(keepLogs ? "--keep-folder" : "")}";
         _ = RunClusterManager(cmd, true);
     }
 
