@@ -42,7 +42,7 @@ func (glideBenchmarkClient *glideBenchmarkClient) get(key string) (string, error
 		return "", err
 	}
 
-	return result.Val, nil
+	return result.Value(), nil
 }
 
 func (glideBenchmarkClient *glideBenchmarkClient) set(key string, value string) (string, error) {
@@ -51,7 +51,7 @@ func (glideBenchmarkClient *glideBenchmarkClient) set(key string, value string) 
 		return "", err
 	}
 
-	return result.Val, nil
+	return result.Value(), nil
 }
 
 func (glideBenchmarkClient *glideBenchmarkClient) close() error {

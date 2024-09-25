@@ -186,7 +186,7 @@ func (suite *GlideTestSuite) runWithClients(clients []api.BaseClient, test func(
 	}
 }
 
-func (suite *GlideTestSuite) verifyOK(result api.StringValue, err error) {
+func (suite *GlideTestSuite) verifyOK(result api.Result[string], err error) {
 	assert.Nil(suite.T(), err)
-	assert.Equal(suite.T(), api.OK, result.Val)
+	assert.Equal(suite.T(), api.OK, result.Value())
 }

@@ -44,7 +44,7 @@ func (client *GlideClient) CustomCommand(args []string) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	return resString.Val, err
+	return resString.Value(), err
 }
 
 // Sets configuration parameters to the specified values.
@@ -57,18 +57,18 @@ func (client *GlideClient) CustomCommand(args []string) (interface{}, error) {
 //
 // Return value:
 //
-//	A StringValue containing "OK" if all configurations have been successfully set. Otherwise, raises an error.
+//	A api.Result[string] containing "OK" if all configurations have been successfully set. Otherwise, raises an error.
 //
 // For example:
 //
 //	result, err := client.ConfigSet(map[string]string{"timeout": "1000", "maxmemory": "1GB"})
-//	result: api.StringValue{Val: "OK", IsNil: false}
+//	result.Value(): "OK"
 //
 // [valkey.io]: https://valkey.io/commands/config-set/
-func (client *GlideClient) ConfigSet(parameters map[string]string) (StringValue, error) {
+func (client *GlideClient) ConfigSet(parameters map[string]string) (Result[string], error) {
 	result, err := client.executeCommand(C.ConfigSet, utils.MapToString(parameters))
 	if err != nil {
-		return NilStringValue, err
+		return CreateNilStringResult(), err
 	}
 	return handleStringResponse(result)
 }
@@ -83,16 +83,16 @@ func (client *GlideClient) ConfigSet(parameters map[string]string) (StringValue,
 //
 // Return value:
 //
-//	A map of StringValues corresponding to the configuration parameters.
+//	A map of api.Result[string] corresponding to the configuration parameters.
 //
 // For example:
 //
 //	result, err := client.ConfigGet([]string{"timeout" , "maxmemory"})
-//	result[api.StringValue{Val: "timeout", IsNil: false}] = api.StringValue{Val: "1000", IsNil: false}
-//	result[api.StringValue{Val: "maxmemory", IsNil: false}] = api.StringValue{Val: "1GB", IsNil: false}
+//	result[api.CreateStringResult("timeout")] = api.CreateStringResult("1000")
+//	result[api.CreateStringResult"maxmemory")] = api.CreateStringResult("1GB")
 //
 // [valkey.io]: https://valkey.io/commands/config-get/
-func (client *GlideClient) ConfigGet(args []string) (map[StringValue]StringValue, error) {
+func (client *GlideClient) ConfigGet(args []string) (map[Result[string]]Result[string], error) {
 	res, err := client.executeCommand(C.ConfigGet, args)
 	if err != nil {
 		return nil, err

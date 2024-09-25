@@ -44,34 +44,34 @@ func checkResponseType(response *C.struct_CommandResponse, expectedType C.Respon
 	}
 }
 
-func convertCharArrayToString(response *C.struct_CommandResponse, isNilable bool) (StringValue, error) {
+func convertCharArrayToString(response *C.struct_CommandResponse, isNilable bool) (Result[string], error) {
 	typeErr := checkResponseType(response, C.String, isNilable)
 	if typeErr != nil {
-		return NilStringValue, typeErr
+		return CreateNilStringResult(), typeErr
 	}
 
 	if response.string_value == nil {
-		return NilStringValue, nil
+		return CreateNilStringResult(), nil
 	}
 	byteSlice := C.GoBytes(unsafe.Pointer(response.string_value), C.int(int64(response.string_value_len)))
 
 	// Create Go string from byte slice (preserving null characters)
-	return StringValue{Val: string(byteSlice), IsNil: false}, nil
+	return CreateStringResult(string(byteSlice)), nil
 }
 
-func handleStringResponse(response *C.struct_CommandResponse) (StringValue, error) {
+func handleStringResponse(response *C.struct_CommandResponse) (Result[string], error) {
 	defer C.free_command_response(response)
 
 	return convertCharArrayToString(response, false)
 }
 
-func handleStringOrNullResponse(response *C.struct_CommandResponse) (StringValue, error) {
+func handleStringOrNullResponse(response *C.struct_CommandResponse) (Result[string], error) {
 	defer C.free_command_response(response)
 
 	return convertCharArrayToString(response, true)
 }
 
-func handleStringArrayResponse(response *C.struct_CommandResponse) ([]StringValue, error) {
+func handleStringArrayResponse(response *C.struct_CommandResponse) ([]Result[string], error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Array, false)
@@ -79,7 +79,7 @@ func handleStringArrayResponse(response *C.struct_CommandResponse) ([]StringValu
 		return nil, typeErr
 	}
 
-	var slice []StringValue
+	var slice []Result[string]
 	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
 		res, err := convertCharArrayToString(&v, true)
 		if err != nil {
@@ -90,40 +90,40 @@ func handleStringArrayResponse(response *C.struct_CommandResponse) ([]StringValu
 	return slice, nil
 }
 
-func handleLongResponse(response *C.struct_CommandResponse) (Int64Value, error) {
+func handleLongResponse(response *C.struct_CommandResponse) (Result[int64], error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Int, false)
 	if typeErr != nil {
-		return NilInt64Value, typeErr
+		return CreateNilInt64Result(), typeErr
 	}
 
-	return Int64Value{Val: int64(response.int_value), IsNil: false}, nil
+	return CreateInt64Result(int64(response.int_value)), nil
 }
 
-func handleDoubleResponse(response *C.struct_CommandResponse) (Float64Value, error) {
+func handleDoubleResponse(response *C.struct_CommandResponse) (Result[float64], error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Float, false)
 	if typeErr != nil {
-		return NilFloat64Value, typeErr
+		return CreateNilFloat64Result(), typeErr
 	}
 
-	return Float64Value{Val: float64(response.float_value), IsNil: false}, nil
+	return CreateFloat64Result(float64(response.float_value)), nil
 }
 
-func handleBooleanResponse(response *C.struct_CommandResponse) (BoolValue, error) {
+func handleBooleanResponse(response *C.struct_CommandResponse) (Result[bool], error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Bool, false)
 	if typeErr != nil {
-		return NilBoolValue, typeErr
+		return CreateNilBoolResult(), typeErr
 	}
 
-	return BoolValue{Val: bool(response.bool_value), IsNil: false}, nil
+	return CreateBoolResult(bool(response.bool_value)), nil
 }
 
-func handleStringToStringMapResponse(response *C.struct_CommandResponse) (map[StringValue]StringValue, error) {
+func handleStringToStringMapResponse(response *C.struct_CommandResponse) (map[Result[string]]Result[string], error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Map, false)
@@ -131,7 +131,7 @@ func handleStringToStringMapResponse(response *C.struct_CommandResponse) (map[St
 		return nil, typeErr
 	}
 
-	m := make(map[StringValue]StringValue, response.array_value_len)
+	m := make(map[Result[string]]Result[string], response.array_value_len)
 	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
 		key, err := convertCharArrayToString(v.map_key, true)
 		if err != nil {
