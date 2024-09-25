@@ -389,7 +389,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             This limit is used to control the memory usage and prevent the client from overwhelming the server or getting stuck in case of a queue backlog.
             If not set, a default value will be used.
 
-            
+
 
     Notes:
         Currently, the reconnection strategy in cluster mode is not configurable, and exponential backoff

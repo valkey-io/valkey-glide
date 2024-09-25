@@ -246,7 +246,7 @@ async def create_client(
             protocol=protocol,
             request_timeout=timeout,
             pubsub_subscriptions=cluster_mode_pubsub,
-            inflight_requests_limit=inflight_requests_limit
+            inflight_requests_limit=inflight_requests_limit,
         )
         return await GlideClusterClient.create(cluster_config)
     else:

@@ -496,7 +496,7 @@ fn handle_request(
             |current_inflight| {
                 if current_inflight as u32 >= client.get_inflight_requests_limit() {
                     // In case counter reached the limit, don't update and return Err.
-                    return None;
+                    None
                 } else {
                     Some(current_inflight + 1)
                 }

@@ -1069,7 +1069,7 @@ mod socket_listener {
             write_blpop(
                 &mut buffer,
                 &mut write_blpop_socket,
-                i as u32,
+                i,
                 "nonexistingkeylist",
                 0,
             );
