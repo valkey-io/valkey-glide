@@ -128,11 +128,19 @@ To run tests, use the following command:
 npm test
 ```
 
+To execute a specific test, include the [`testNamePattern`](https://jestjs.io/docs/cli#--testnamepatternregex) option. For example:
+
+```bash
+npm run test -- --testNamePattern="transaction"
+```
+
+IT suite starts the server for testing - standalone and cluster installation using `cluster_manager` script.
 To run the integration tests with existing servers, run the following command:
 
 ```bash
 npm run test -- --cluster-endpoints=localhost:7000 --standalone-endpoints=localhost:6379
 ```
+You can use test filter there as well.
 
 ### Submodules
 
