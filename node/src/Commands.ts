@@ -2502,23 +2502,21 @@ export interface BitOffsetOptions {
      * If no index type is provided, the indexes will be assumed to be byte indexes.
      */
     indexType?: BitmapIndexType;
-};
+}
 
 /**
  * @internal
  */
-function joinBitOptions(options: BitOffsetOptions): GlideString[] {
+function convertBitOptionsToArgs(options?: BitOffsetOptions): GlideString[] {
     const args: GlideString[] = [];
     if (!options) return args;
 
-    if (options.start !== undefined) {
-        args.push(options.start.toString());
+    args.push(options.start.toString());
 
-        if (options.end !== undefined) {
-            args.push(options.end.toString());
+    if (options.end !== undefined) {
+        args.push(options.end.toString());
 
-            if (options.indexType) args.push(options.indexType);
-        }
+        if (options.indexType) args.push(options.indexType);
     }
 
     return args;
@@ -2534,7 +2532,7 @@ export function createBitCount(
     let args: GlideString[] = [key];
 
     if (options) {
-        const optionResults: GlideString[] = joinBitOptions(options);
+        const optionResults: GlideString[] = convertBitOptionsToArgs(options);
         args = args.concat(optionResults);
     }
 
