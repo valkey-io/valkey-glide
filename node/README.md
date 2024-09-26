@@ -6,16 +6,20 @@ Valkey General Language Independent Driver for the Enterprise (GLIDE), is an ope
 
 Refer to the [Supported Engine Versions table](https://github.com/valkey-io/valkey-glide/blob/main/README.md#supported-engine-versions) for details.
 
-## Current Status
-
-We've made Valkey GLIDE an open-source project, and are releasing it in Preview to the community to gather feedback, and actively collaborate on the project roadmap. We welcome questions and contributions from all Redis stakeholders.
-This preview release is recommended for testing purposes only.
-
 # Getting Started - Node Wrapper
 
 ## System Requirements
 
-In this release, Valkey GLIDE is available for Python and Java. Support for Node.js is actively under development, with plans to include more programming languages in the future. We're tracking future features on the [roadmap](https://github.com/orgs/aws/projects/187/).
+The release of Valkey GLIDE was tested on the following platforms:
+
+Linux:
+
+-   Ubuntu 22.04.1 (x86_64)
+-   Amazon Linux 2023 (AL2023) (x86_64)
+
+macOS:
+
+-   macOS 12.7 (Apple silicon/aarch_64 and Intel/x86_64)
 
 ## NodeJS supported version
 
@@ -28,6 +32,63 @@ Visit our [wiki](https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper) 
 ### Building & Testing
 
 Development instructions for local building & testing the package are in the [DEVELOPER.md](https://github.com/valkey-io/valkey-glide/blob/main/node/DEVELOPER.md#build-from-source) file.
+
+## Basic Examples
+
+#### Standalone Mode:
+
+```typescript
+import { GlideClient, GlideClusterClient, Logger } from "@valkey/valkey-glide";
+// When Valkey is in standalone mode, add address of the primary node, and any replicas you'd like to be able to read from.
+const addresses = [
+    {
+        host: "localhost",
+        port: 6379,
+    },
+];
+// Check `GlideClientConfiguration/GlideClusterClientConfiguration` for additional options.
+const client = await GlideClient.createClient({
+    addresses: addresses,
+    // if the server uses TLS, you'll need to enable it. Otherwise, the connection attempt will time out silently.
+    // useTLS: true,
+    clientName: "test_standalone_client",
+});
+// The empty array signifies that there are no additional arguments.
+const pong = await client.customCommand(["PING"]);
+console.log(pong);
+const set_response = await client.set("foo", "bar");
+console.log(`Set response is = ${set_response}`);
+const get_response = await client.get("foo");
+console.log(`Get response is = ${get_response}`);
+```
+
+#### Cluster Mode:
+
+```typescript
+import { GlideClient, GlideClusterClient, Logger } from "@valkey/valkey-glide";
+// When Valkey is in cluster mode, add address of any nodes, and the client will find all nodes in the cluster.
+const addresses = [
+    {
+        host: "localhost",
+        port: 6379,
+    },
+];
+// Check `GlideClientConfiguration/GlideClusterClientConfiguration` for additional options.
+const client = await GlideClusterClient.createClient({
+    addresses: addresses,
+    // if the cluster nodes use TLS, you'll need to enable it. Otherwise the connection attempt will time out silently.
+    // useTLS: true,
+    clientName: "test_cluster_client",
+});
+// The empty array signifies that there are no additional arguments.
+const pong = await client.customCommand(["PING"], { route: "randomNode" });
+console.log(pong);
+const set_response = await client.set("foo", "bar");
+console.log(`Set response is = ${set_response}`);
+const get_response = await client.get("foo");
+console.log(`Get response is = ${get_response}`);
+client.close();
+```
 
 ### Supported platforms
 

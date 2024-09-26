@@ -2694,7 +2694,7 @@ export function createXInfoStream(
 }
 
 /** @internal */
-export function createXInfoGroups(key: string): command_request.Command {
+export function createXInfoGroups(key: GlideString): command_request.Command {
     return createCommand(RequestType.XInfoGroups, [key]);
 }
 
