@@ -2490,8 +2490,10 @@ export function createFunctionRestore(
 export interface BitOffsetOptions {
     /** The starting offset index. */
     start: number;
-    /** The ending offset index. Optional since Valkey version 8.0 and above.
-     * If not provided, it will default to the end of the string
+    /**
+     * The ending offset index. Optional since Valkey version 8.0 and above for the BITCOUNT command.
+     * If not provided, it will default to the end of the string.
+     * Could be defined only if `start` is defined.
      */
     end?: number;
     /**
