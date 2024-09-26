@@ -80,10 +80,14 @@ func (suite *GlideTestSuite) TestConfigSetAndGet_multipleArgs() {
 		suite.T().Skip("This feature is added in version 7")
 	}
 	configMap := map[string]string{"timeout": "1000", "maxmemory": "1GB"}
-	resultConfigMap := map[string]string{"timeout": "1000", "maxmemory": "1073741824"}
+	key1 := api.CreateStringResult("timeout")
+	value1 := api.CreateStringResult("1000")
+	key2 := api.CreateStringResult("maxmemory")
+	value2 := api.CreateStringResult("1073741824")
+	resultConfigMap := map[api.Result[string]]api.Result[string]{key1: value1, key2: value2}
 	result, err := client.ConfigSet(configMap)
 	assert.Nil(suite.T(), err)
-	assert.Equal(suite.T(), result, "OK")
+	assert.Equal(suite.T(), "OK", result.Value())
 
 	result2, err := client.ConfigGet([]string{"timeout", "maxmemory"})
 	assert.Nil(suite.T(), err)
@@ -96,7 +100,7 @@ func (suite *GlideTestSuite) TestConfigSetAndGet_noArgs() {
 	configMap := map[string]string{}
 
 	result, err := client.ConfigSet(configMap)
-	assert.Equal(suite.T(), "", result)
+	assert.Equal(suite.T(), api.CreateNilStringResult(), result)
 	assert.NotNil(suite.T(), err)
 	assert.IsType(suite.T(), &api.RequestError{}, err)
 
@@ -112,11 +116,11 @@ func (suite *GlideTestSuite) TestConfigSetAndGet_invalidArgs() {
 	configMap := map[string]string{"time": "1000"}
 
 	result, err := client.ConfigSet(configMap)
-	assert.Equal(suite.T(), "", result)
+	assert.Equal(suite.T(), api.CreateNilStringResult(), result)
 	assert.NotNil(suite.T(), err)
 	assert.IsType(suite.T(), &api.RequestError{}, err)
 
 	result2, err := client.ConfigGet([]string{"time"})
-	assert.Equal(suite.T(), map[string]string{}, result2)
+	assert.Equal(suite.T(), map[api.Result[string]]api.Result[string]{}, result2)
 	assert.Nil(suite.T(), err)
 }
