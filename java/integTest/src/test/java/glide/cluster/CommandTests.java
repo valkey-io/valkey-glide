@@ -1609,7 +1609,7 @@ public class CommandTests {
         SingleNodeRoute route = new SlotKeyRoute(key, PRIMARY);
         String libName = "mylib_with_keys_" + prefix;
         GlideString funcName = gs("myfunc_with_keys_" + prefix);
-        // function $funcName returns array with first two arguments
+        // function $funcName returns array with first argument
         String code =
                 generateLuaLibCode(libName, Map.of(funcName.toString(), "return {args[1]}"), true);
 
