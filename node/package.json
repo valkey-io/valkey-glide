@@ -56,7 +56,8 @@
         "semver": "^7.6.3",
         "ts-jest": "^29.2.5",
         "typescript": "^5.5.4",
-        "uuid": "^10.0.0"
+        "uuid": "^10.0.0",
+        "ts-node": "^10.9.2"
     },
     "author": "Valkey GLIDE Maintainers",
     "license": "Apache-2.0",

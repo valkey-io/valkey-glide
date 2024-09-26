@@ -134,6 +134,33 @@ To run the integration tests with existing servers, run the following command:
 npm run test -- --cluster-endpoints=localhost:7000 --standalone-endpoints=localhost:6379
 ```
 
+### REPL (interactive shell)
+
+It is possible to run an interactive shell synced with the currect client code to test and debug it:
+
+```bash
+npx ts-node --project tsconfig.json
+```
+
+This shell allows executing node code line by line:
+
+```typescript
+import { GlideClient, GlideClusterClient } from ".";
+let client = await GlideClient.createClient({
+    addresses: [{ host: "localhost", port: 6379 }],
+});
+let clusterClient = await GlideClusterClient.createClient({
+    addresses: [{ host: "localhost", port: 7000 }],
+});
+await client.ping();
+```
+
+After applying changes in client code you need to restart the shell.
+
+It has command history and bash-like search (`Ctrl+R`).
+
+Shell hangs on exit (`Ctrl+D`) if you don't close the clients. Use `Ctrl+C` to kill it and/or close clients before exit.
+
 ### Submodules
 
 After pulling new changes, ensure that you update the submodules by running the following command:
