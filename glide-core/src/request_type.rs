@@ -227,6 +227,8 @@ pub enum RequestType {
     ScriptFlush = 216,
     ScriptKill = 217,
     ScriptShow = 218,
+    FtInfo = 219,
+    FtCreate = 220
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -457,6 +459,8 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::ScriptFlush => RequestType::ScriptFlush,
             ProtobufRequestType::ScriptKill => RequestType::ScriptKill,
             ProtobufRequestType::ScriptShow => RequestType::ScriptShow,
+            ProtobufRequestType::FtInfo => RequestType::FtInfo,
+            ProtobufRequestType::FtCreate => RequestType::FtCreate
         }
     }
 }
@@ -685,6 +689,8 @@ impl RequestType {
             RequestType::ScriptExists => Some(get_two_word_command("SCRIPT", "EXISTS")),
             RequestType::ScriptFlush => Some(get_two_word_command("SCRIPT", "FLUSH")),
             RequestType::ScriptKill => Some(get_two_word_command("SCRIPT", "KILL")),
+            RequestType::FtInfo => Some(cmd("FT.INFO")),
+            RequestType::FtCreate => Some(cmd("FT.CREATE"))
         }
     }
 }
