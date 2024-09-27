@@ -1,4 +1,15 @@
 #### Changes
+
+#### Breaking Changes
+
+#### Fixes
+
+#### Operational Enhancements
+
+## 1.1.0 (2024-09-24)
+
+#### Changes
+
 * Node: Fix binary variant for xinfogroups and lrem ([#2324](https://github.com/valkey-io/valkey-glide/pull/2324))
 * Node: Fixed missing exports ([#2301](https://github.com/valkey-io/valkey-glide/pull/2301))
 * Node: Use `options` struct for all optional arguments ([#2287](https://github.com/valkey-io/valkey-glide/pull/2287))
@@ -129,12 +140,14 @@
 * Java: Add Script commands ([#2261](https://github.com/valkey-io/valkey-glide/pull/2261))
 
 #### Breaking Changes
+
 * Java: Update INFO command ([#2274](https://github.com/valkey-io/valkey-glide/pull/2274))
 * Node: (Refactor) Convert types to interfaces ([#2263](https://github.com/valkey-io/valkey-glide/pull/2263))
 * Node: (Refactor) Convert classes to types ([#2005](https://github.com/valkey-io/valkey-glide/pull/2005))
 * Core: Change FUNCTION STATS command to return multi node response for standalone mode ([#2117](https://github.com/valkey-io/valkey-glide/pull/2117))
 
 #### Fixes
+
 * Java: Fix GlideString conversion from byte to String ([#2271](https://github.com/valkey-io/valkey-glide/pull/2271))
 * Java: Add overloads for XADD to allow duplicate entry keys ([#1970](https://github.com/valkey-io/valkey-glide/pull/1970))
 * Node: Fix ZADD bug where command could not be called with only the `changed` optional parameter ([#1995](https://github.com/valkey-io/valkey-glide/pull/1995))
@@ -143,7 +156,8 @@
 * Python: Add missing exports ([#2341](https://github.com/valkey-io/valkey-glide/pull/2341))
 * Node: Add missing exports ([#2342](https://github.com/valkey-io/valkey-glide/pull/2342))
 
-### Operational Enhancements
+#### Operational Enhancements
+
 * CI/CD: Create Workflow to deploy artifacts for all platforms ([#2285](https://github.com/valkey-io/valkey-glide/pull/2285))
 * Node: Get valkey/redis version using client's info command ([#2276](https://github.com/valkey-io/valkey-glide/pull/2276))
 * Java: Fetch server version using client's info command ([#2258](https://github.com/valkey-io/valkey-glide/pull/2258))
@@ -152,6 +166,7 @@
 ## 1.0.0 (2024-07-09)
 
 #### Changes
+
 * Node: Added ZINTERSTORE command ([#1513](https://github.com/valkey-io/valkey-glide/pull/1513))
 * Python: Added OBJECT ENCODING command ([#1471](https://github.com/valkey-io/valkey-glide/pull/1471))
 * Python: Added OBJECT FREQ command ([#1472](https://github.com/valkey-io/valkey-glide/pull/1472))
@@ -247,23 +262,27 @@
 * Node: Added ZRandMember command ([#2013](https://github.com/valkey-io/valkey-glide/pull/2013))
 
 #### Breaking Changes
+
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/valkey-io/valkey-glide/pull/1494))
 * Node: Rename RedisClient to GlideClient and RedisClusterClient to GlideClusterClient ([#1670](https://github.com/valkey-io/valkey-glide/pull/1670))
 * Python: Rename RedisClient to GlideClient, RedisClusterClient to GlideClusterClient and BaseRedisClient to BaseClient([#1669](https://github.com/valkey-io/valkey-glide/pull/1669))
 * Python: Rename ClusterClientConfiguration to GlideClusterClientConfiguration ([#1806](https://github.com/valkey-io/valkey-glide/pull/1806))
 
 #### Fixes
+
 * Python: fixing a bug with transaction exec ([#1796](https://github.com/valkey-io/valkey-glide/pull/1796))
 
 ## 0.4.1 (2024-06-02)
 
 #### Fixes
+
 * Node: Fix set command bug with expiry option ([#1508](https://github.com/valkey-io/valkey-glide/pull/1508))
 
 ## 0.4.0 (2024-05-26)
 
 #### Changes
-* Python: Added JSON.DEL JSON.FORGET commands  ([#1146](https://github.com/valkey-io/valkey-glide/pull/1146))
+
+* Python: Added JSON.DEL JSON.FORGET commands ([#1146](https://github.com/valkey-io/valkey-glide/pull/1146))
 * Python: Added STRLEN command ([#1230](https://github.com/valkey-io/valkey-glide/pull/1230))
 * Python: Added HKEYS command ([#1228](https://github.com/valkey-io/valkey-glide/pull/1228))
 * Python: Added RPUSHX and LPUSHX commands ([#1239](https://github.com/valkey-io/valkey-glide/pull/1239))
@@ -305,13 +324,16 @@
 * Python: Added SETRANGE command ([#1453](https://github.com/valkey-io/valkey-glide/pull/1453))
 
 #### Fixes
+
 * Python: Fix typing error "'type' object is not subscriptable" ([#1203](https://github.com/valkey-io/valkey-glide/pull/1203))
 * Core: Fixed blocking commands to use the specified timeout from the command argument ([#1283](https://github.com/valkey-io/valkey-glide/pull/1283))
 
 ### Breaking Changes
+
 * Node: Changed `smembers` and `spopCount` functions to return Set instead of string[] ([#1299](https://github.com/valkey-io/valkey-glide/pull/1299))
 
 #### Features
+
 * Node: Added support for alpine based platform (Or any x64-musl or arm64-musl based platforms) ([#1379](https://github.com/valkey-io/valkey-glide/pull/1379))
 
 ## 0.3.3 (2024-03-28)
@@ -342,7 +364,7 @@
 * Node: Added ZREMRANGEBYSCORE command ([#926](https://github.com/valkey-io/valkey-glide/pull/926))
 * Node: Added ZREMRANGEBYRANK command ([#924](https://github.com/valkey-io/valkey-glide/pull/924))
 * Node: Added Xadd, Xtrim commands. ([#1057](https://github.com/valkey-io/valkey-glide/pull/1057))
-* Python: Added json module and JSON.SET JSON.GET commands  ([#1056](https://github.com/valkey-io/valkey-glide/pull/1056))
+* Python: Added json module and JSON.SET JSON.GET commands ([#1056](https://github.com/valkey-io/valkey-glide/pull/1056))
 * Python, Node: Added Time command ([#1147](https://github.com/valkey-io/valkey-glide/pull/1147)), ([#1114](https://github.com/valkey-io/valkey-glide/pull/1114))
 * Python, Node: Added LINDEX command ([#1058](https://github.com/valkey-io/valkey-glide/pull/1058), [#999](https://github.com/valkey-io/valkey-glide/pull/999))
 * Python, Node: Added ZRANK command ([#1065](https://github.com/valkey-io/valkey-glide/pull/1065), [#1149](https://github.com/valkey-io/valkey-glide/pull/1149))
@@ -359,6 +381,7 @@
 ## 0.2.0 (2024-02-11)
 
 #### Changes
+
 * Python, Node: Added ZCARD command ([#871](https://github.com/valkey-io/valkey-glide/pull/871), [#885](https://github.com/valkey-io/valkey-glide/pull/885))
 * Python, Node: Added ZADD and ZADDINCR commands ([#814](https://github.com/valkey-io/valkey-glide/pull/814), [#830](https://github.com/valkey-io/valkey-glide/pull/830))
 * Python, Node: Added ZREM command ([#834](https://github.com/valkey-io/valkey-glide/pull/834), [#831](https://github.com/valkey-io/valkey-glide/pull/831))
@@ -378,10 +401,12 @@
 * Python: Added DBSIZE command ([#1040](https://github.com/valkey-io/valkey-glide/pull/1040))
 
 #### Features
+
 * Python, Node: Added support in Lua Scripts ([#775](https://github.com/valkey-io/valkey-glide/pull/775), [#860](https://github.com/valkey-io/valkey-glide/pull/860))
 * Node: Allow chaining function calls on transaction. ([#902](https://github.com/valkey-io/valkey-glide/pull/902))
 
 #### Fixes
+
 * Core: Fixed `Connection Refused` error not to close the client ([#872](https://github.com/valkey-io/valkey-glide/pull/872))
 * Socket listener: fix identifier for closed reader error. ([#853](https://github.com/valkey-io/valkey-glide/pull/853))
 * Node: Fix issues with type import & exports ([#767](https://github.com/valkey-io/valkey-glide/pull/767))
