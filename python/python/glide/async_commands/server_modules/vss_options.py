@@ -52,9 +52,11 @@ class FtCreateOptions:
     def __init__(
         self,
         dataType: Optional[DataType],
+        prefixes: Optional[List[str]],
         fields: List[FieldInfo],
     ):
         self.dataType = dataType
+        self.prefixes = prefixes
         self.fields = fields
 
     def getCreateOptions(self) -> List[str]:
@@ -62,6 +64,11 @@ class FtCreateOptions:
         if self.dataType:
             args.append("ON")
             args.append(self.dataType.name)
+        if self.prefixes:
+            args.append("PREFIX")
+            args.append(str(len(self.prefixes)))
+            for prefix in self.prefixes:
+                args.append(prefix)
         if self.fields:
             args.append("SCHEMA")
             for fieldInfo in self.fields:

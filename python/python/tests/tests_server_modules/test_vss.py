@@ -19,9 +19,12 @@ class TestVss:
         fields.append(fieldInfo1)
         fields.append(fieldInfo2)
         fields.append(fieldInfo3)
-        options: FtCreateOptions = FtCreateOptions(DataType.HASH, fields)
+
+        prefixes: List[str] = []
+        prefixes.append("blog:post:")
+        options: FtCreateOptions = FtCreateOptions(DataType.HASH, prefixes, fields)
         result = await vss.create(glide_client, index, options)
         assert result == OK
-        
+
         # print info command result
         print(await vss.info(glide_client, index))
