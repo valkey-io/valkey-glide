@@ -12,18 +12,8 @@ from glide.exceptions import RequestError
 from glide.glide_client import TGlideClient
 from tests.test_async_client import get_random_string, parse_info_response
 
-from glide.async_commands.server_modules import vss
-
 @pytest.mark.asyncio
 class TestJson:
-
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_vss_info(self, glide_client: TGlideClient):
-        
-        index = "idx"
-        print("---------"+await vss.info(glide_client, index))
-
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_json_set_get(self, glide_client: TGlideClient):
