@@ -74,3 +74,8 @@ class FtCreateOptions:
             for fieldInfo in self.fields:
                 args = args + fieldInfo.getFieldInfo()
         return args
+
+
+class FtSearchOptions:
+    def __init__(self) -> None:
+        pass
