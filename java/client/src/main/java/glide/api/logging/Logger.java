@@ -33,8 +33,8 @@ public final class Logger {
         WARN(1),
         INFO(2),
         DEBUG(3),
-        TRACE(4);
-        OFF(5)
+        TRACE(4),
+        OFF(5);
 
         private final int level;
 
@@ -232,8 +232,7 @@ public final class Logger {
 
     /**
      * Creates a new logger instance and configure it with the provided log level. The logs will be
-     * written to stdout.
-     * To turn off the logger, use <code>setLoggerConfig(Level.OFF)</code>.
+     * written to stdout. To turn off the logger, use <code>setLoggerConfig(Level.OFF)</code>.
      *
      * @param level Set the logger level to one of <code>
      *     [DEFAULT, ERROR, WARN, INFO, DEBUG, TRACE, OFF]
@@ -249,7 +248,6 @@ public final class Logger {
      * level. The logger will filter all logs with a level lower than the default level decided by the
      * Glide core.
      *
-     *
      * @param fileName If provided, the target of the logs will be the file mentioned. Otherwise, logs
      *     will be printed to stdout.
      */
@@ -260,7 +258,6 @@ public final class Logger {
     /**
      * Creates a new logger instance. The logger will filter all logs with a level lower than the
      * default level decided by Glide core. The logs will be written to stdout.
-     *
      */
     public static void setLoggerConfig() {
         setLoggerConfig(Level.DEFAULT, null);
