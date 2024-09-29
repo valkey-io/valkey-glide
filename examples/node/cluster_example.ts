@@ -51,7 +51,7 @@ async function appLogic(client: GlideClusterClient) {
     const pong = await client.ping();
     Logger.log("info", "app", `PING response: ${pong}`);
 
-    // Send INFO REPLICATION with routing option to all nodes
+    // Send INFO REPLICATION to all nodes
     const infoReplResps = await client.info({
         sections: [InfoOptions.Replication],
     });
@@ -90,14 +90,14 @@ async function execAppLogic() {
                             "glide",
                             `Authentication error encountered: ${error}`,
                         );
-                        throw error;
+                    } else {
+                        Logger.log(
+                            "warn",
+                            "glide",
+                            `Client has closed and needs to be re-created: ${error}`,
+                        );
                     }
-                    
-                    Logger.log(
-                        "warn",
-                        "glide",
-                        `Client has closed and needs to be re-created: ${error}`,
-                    );
+
                     throw error;
                 case error instanceof TimeoutError:
                     // A request timed out. You may choose to retry the execution based on your application's logic

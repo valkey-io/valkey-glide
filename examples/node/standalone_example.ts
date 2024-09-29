@@ -26,7 +26,7 @@ async function createClient(nodesList = [{ host: "localhost", port: 6379 }]) {
         port: node.port,
     }));
 
-    // Check `GlideClusterClientConfiguration` for additional options.
+    // Check `GlideClientConfiguration` for additional options.
     return await GlideClient.createClient({
         addresses: addresses,
         // if the server uses TLS, you'll need to enable it. Otherwise the connection attempt will time out silently.
@@ -36,8 +36,8 @@ async function createClient(nodesList = [{ host: "localhost", port: 6379 }]) {
 
 /**
  * Executes the main logic of the application, performing basic operations
- * such as SET, GET, PING, and INFO REPLICATION using the provided GlideClusterClient.
- * @param client An instance of GlideClusterClient.
+ * such as SET, GET, PING, and INFO REPLICATION using the provided GlideClient.
+ * @param client An instance of GlideClient.
  */
 async function appLogic(client: GlideClient) {
     // Send SET and GET
@@ -47,7 +47,7 @@ async function appLogic(client: GlideClient) {
     const getResponse = await client.get("foo");
     Logger.log("info", "app", `Get response is: ${getResponse?.toString()}`);
 
-    // Send PING to all primaries (according to Redis's PING request_policy)
+    // Send PING to primary
     const pong = await client.ping();
     Logger.log("info", "app", `PING response: ${pong}`);
 }
@@ -74,13 +74,14 @@ async function execAppLogic() {
                             "glide",
                             `Authentication error encountered: ${error}`,
                         );
-                        throw error;
+                    } else {
+                        Logger.log(
+                            "warn",
+                            "glide",
+                            `Client has closed and needs to be re-created: ${error}`,
+                        );
                     }
-                    Logger.log(
-                        "warn",
-                        "glide",
-                        `Client has closed and needs to be re-created: ${error}`,
-                    );
+
                     throw error;
                 case error instanceof TimeoutError:
                     // A request timed out. You may choose to retry the execution based on your application's logic
