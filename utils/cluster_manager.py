@@ -21,6 +21,7 @@ LOG_LEVELS = {
     "warning": logging.WARNING,
     "info": logging.INFO,
     "debug": logging.DEBUG,
+    "off": logging.OFF,
 }
 
 GLIDE_HOME_DIR = os.getenv("GLIDE_HOME_DIR") or f"{__file__}/../.."
