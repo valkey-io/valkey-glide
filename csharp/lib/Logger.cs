@@ -14,7 +14,8 @@ public enum Level
     Warn = 1,
     Info = 2,
     Debug = 3,
-    Trace = 4
+    Trace = 4,
+    Off = 5,
 }
 
 /*

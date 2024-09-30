@@ -13,6 +13,7 @@ class Level(Enum):
     Info = 2
     Debug = 3
     Trace = 4
+    Off = 5
 
     def is_lower(self, level: Level) -> bool: ...
 

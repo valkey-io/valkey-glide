@@ -341,7 +341,6 @@ pub extern "system" fn Java_glide_ffi_resolvers_ScriptResolver_dropScript<'local
     .unwrap_or(())
 }
 
-// TODO: Add DISABLED level here once it is added to logger-core
 impl From<logger_core::Level> for Level {
     fn from(level: logger_core::Level) -> Self {
         match level {
@@ -350,6 +349,7 @@ impl From<logger_core::Level> for Level {
             logger_core::Level::Info => Level(2),
             logger_core::Level::Debug => Level(3),
             logger_core::Level::Trace => Level(4),
+            logger_core::Level::Off => Level(5),
         }
     }
 }
@@ -357,13 +357,13 @@ impl From<logger_core::Level> for Level {
 impl TryFrom<Level> for logger_core::Level {
     type Error = FFIError;
     fn try_from(level: Level) -> Result<Self, <logger_core::Level as TryFrom<Level>>::Error> {
-        // TODO: Add DISABLED level here once it is added to logger-core
         match level.0 {
             0 => Ok(logger_core::Level::Error),
             1 => Ok(logger_core::Level::Warn),
             2 => Ok(logger_core::Level::Info),
             3 => Ok(logger_core::Level::Debug),
             4 => Ok(logger_core::Level::Trace),
+            5 => Ok(logger_core::Level::Off),
             _ => Err(FFIError::Logger(format!(
                 "Invalid log level: {:?}",
                 level.0
