@@ -11,6 +11,7 @@ import "C"
 
 import (
 	"errors"
+	"slices"
 	"strconv"
 	"unsafe"
 
@@ -24,6 +25,7 @@ type BaseClient interface {
 	StringCommands
 	HashCommands
 	ListCommands
+	SetCommands
 	ConnectionManagementCommands
 	// Close terminates the client by closing all associated resources.
 	Close()
@@ -512,6 +514,118 @@ func (client *baseClient) RPush(key string, elements []string) (Result[int64], e
 
 	return handleLongResponse(result)
 }
+
+func (client *baseClient) SAdd(key string, members []string) (Result[int64], error) {
+	result, err := client.executeCommand(C.SAdd, append([]string{key}, members...))
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) SRem(key string, members []string) (Result[int64], error) {
+	result, err := client.executeCommand(C.SRem, append([]string{key}, members...))
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) SMembers(key string) (map[Result[string]]struct{}, error) {
+	result, err := client.executeCommand(C.SMembers, []string{key})
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringSetResponse(result)
+}
+
+func (client *baseClient) SCard(key string) (Result[int64], error) {
+	result, err := client.executeCommand(C.SCard, []string{key})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) SIsMember(key string, member string) (Result[bool], error) {
+	result, err := client.executeCommand(C.SIsMember, []string{key, member})
+	if err != nil {
+		return CreateNilBoolResult(), err
+	}
+
+	return handleBooleanResponse(result)
+}
+
+func (client *baseClient) SDiff(keys []string) (map[Result[string]]struct{}, error) {
+	result, err := client.executeCommand(C.SDiff, keys)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringSetResponse(result)
+}
+
+func (client *baseClient) SDiffStore(destination string, keys []string) (Result[int64], error) {
+	result, err := client.executeCommand(C.SDiffStore, append([]string{destination}, keys...))
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) SInter(keys []string) (map[Result[string]]struct{}, error) {
+	result, err := client.executeCommand(C.SInter, keys)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringSetResponse(result)
+}
+
+func (client *baseClient) SInterCard(keys []string) (Result[int64], error) {
+	result, err := client.executeCommand(C.SInterCard, append([]string{strconv.Itoa(len(keys))}, keys...))
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) SInterCardLimit(keys []string, limit int64) (Result[int64], error) {
+	args := slices.Concat([]string{strconv.Itoa(len(keys))}, keys, []string{"LIMIT", strconv.FormatInt(limit, 10)})
+
+	result, err := client.executeCommand(C.SInterCard, args)
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) SRandMember(key string) (Result[string], error) {
+	result, err := client.executeCommand(C.SRandMember, []string{key})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+
+	return handleStringResponse(result)
+}
+
+func (client *baseClient) SPop(key string) (Result[string], error) {
+	result, err := client.executeCommand(C.SPop, []string{key})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+
+	return handleStringResponse(result)
+}
+
+
 
 func (client *baseClient) LRange(key string, start int64, end int64) ([]Result[string], error) {
 	result, err := client.executeCommand(C.LRange, []string{key, utils.IntToString(start), utils.IntToString(end)})
