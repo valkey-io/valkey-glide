@@ -55,6 +55,7 @@ pub enum Level {
     Info = 2,
     Debug = 3,
     Trace = 4,
+    Off = 5,
 }
 impl Level {
     fn to_filter(&self) -> filter::LevelFilter {
@@ -64,6 +65,7 @@ impl Level {
             Level::Info => LevelFilter::INFO,
             Level::Warn => LevelFilter::WARN,
             Level::Error => LevelFilter::ERROR,
+            Level::Off => LevelFilter::OFF,
         }
     }
 }
@@ -187,5 +189,6 @@ pub fn log<Message: AsRef<str>, Identifier: AsRef<str>>(
         Level::Info => log_info(log_identifier, message),
         Level::Warn => log_warn(log_identifier, message),
         Level::Error => log_error(log_identifier, message),
+        Level::Off => (),
     }
 }
