@@ -18,11 +18,32 @@ type SetOptions struct {
 	// Equivalent to GET in the valkey API.
 	ReturnOldValue bool
 	// If not set, no expiry time will be set for the value.
+	// Supported ExpiryTypes ("EX", "PX", "EXAT", "PXAT", "KEEPTTL")
 	Expiry *Expiry
 }
 
-func (opts *SetOptions) toArgs() []string {
+func NewSetOptionsBuilder() *SetOptions {
+	return &SetOptions{}
+}
+
+func (setOptions *SetOptions) SetConditionalSet(conditionalSet ConditionalSet) *SetOptions {
+	setOptions.ConditionalSet = conditionalSet
+	return setOptions
+}
+
+func (setOptions *SetOptions) SetReturnOldValue(returnOldValue bool) *SetOptions {
+	setOptions.ReturnOldValue = returnOldValue
+	return setOptions
+}
+
+func (setOptions *SetOptions) SetExpiry(expiry *Expiry) *SetOptions {
+	setOptions.Expiry = expiry
+	return setOptions
+}
+
+func (opts *SetOptions) toArgs() ([]string, error) {
 	args := []string{}
+	var err error
 	if opts.ConditionalSet != "" {
 		args = append(args, string(opts.ConditionalSet))
 	}
@@ -32,13 +53,55 @@ func (opts *SetOptions) toArgs() []string {
 	}
 
 	if opts.Expiry != nil {
-		args = append(args, string(opts.Expiry.Type))
-		if opts.Expiry.Type != KeepExisting {
-			args = append(args, strconv.FormatUint(opts.Expiry.Count, 10))
+		switch opts.Expiry.Type {
+		case Seconds, Milliseconds, UnixSeconds, UnixMilliseconds:
+			args = append(args, string(opts.Expiry.Type), strconv.FormatUint(opts.Expiry.Count, 10))
+		case KeepExisting:
+			args = append(args, string(opts.Expiry.Type))
+		default:
+			err = &RequestError{"Invalid expiry type"}
 		}
 	}
 
-	return args
+	return args, err
+}
+
+// GetExOptions represents optional arguments for the [api.StringCommands.GetExWithOptions] command.
+//
+// See [valkey.io]
+//
+// [valkey.io]: https://valkey.io/commands/getex/
+type GetExOptions struct {
+	// If not set, no expiry time will be set for the value.
+	// Supported ExpiryTypes ("EX", "PX", "EXAT", "PXAT", "PERSIST")
+	Expiry *Expiry
+}
+
+func NewGetExOptionsBuilder() *GetExOptions {
+	return &GetExOptions{}
+}
+
+func (getExOptions *GetExOptions) SetExpiry(expiry *Expiry) *GetExOptions {
+	getExOptions.Expiry = expiry
+	return getExOptions
+}
+
+func (opts *GetExOptions) toArgs() ([]string, error) {
+	args := []string{}
+	var err error
+
+	if opts.Expiry != nil {
+		switch opts.Expiry.Type {
+		case Seconds, Milliseconds, UnixSeconds, UnixMilliseconds:
+			args = append(args, string(opts.Expiry.Type), strconv.FormatUint(opts.Expiry.Count, 10))
+		case Persist:
+			args = append(args, string(opts.Expiry.Type))
+		default:
+			err = &RequestError{"Invalid expiry type"}
+		}
+	}
+
+	return args, err
 }
 
 const returnOldValue = "GET"
@@ -59,6 +122,20 @@ type Expiry struct {
 	Count uint64
 }
 
+func NewExpiryBuilder() *Expiry {
+	return &Expiry{}
+}
+
+func (ex *Expiry) SetType(expiryType ExpiryType) *Expiry {
+	ex.Type = expiryType
+	return ex
+}
+
+func (ex *Expiry) SetCount(count uint64) *Expiry {
+	ex.Count = count
+	return ex
+}
+
 // An ExpiryType is used to configure the type of expiration for a value.
 type ExpiryType string
 
@@ -68,4 +145,5 @@ const (
 	Milliseconds     ExpiryType = "PX"      // expire the value after [api.Expiry.Count] milliseconds
 	UnixSeconds      ExpiryType = "EXAT"    // expire the value after the Unix time specified by [api.Expiry.Count], in seconds
 	UnixMilliseconds ExpiryType = "PXAT"    // expire the value after the Unix time specified by [api.Expiry.Count], in milliseconds
+	Persist          ExpiryType = "PERSIST" // Remove the expiry associated with the key
 )
