@@ -22,6 +22,25 @@ type SetOptions struct {
 	Expiry *Expiry
 }
 
+func NewSetOptionsBuilder() *SetOptions {
+	return &SetOptions{}
+}
+
+func (setOptions *SetOptions) SetConditionalSet(conditionalSet ConditionalSet) *SetOptions {
+	setOptions.ConditionalSet = conditionalSet
+	return setOptions
+}
+
+func (setOptions *SetOptions) SetReturnOldValue(returnOldValue bool) *SetOptions {
+	setOptions.ReturnOldValue = returnOldValue
+	return setOptions
+}
+
+func (setOptions *SetOptions) SetExpiry(expiry *Expiry) *SetOptions {
+	setOptions.Expiry = expiry
+	return setOptions
+}
+
 func (opts *SetOptions) toArgs() ([]string, error) {
 	args := []string{}
 	var err error
@@ -58,6 +77,15 @@ type GetExOptions struct {
 	Expiry *Expiry
 }
 
+func NewGetExOptionsBuilder() *GetExOptions {
+	return &GetExOptions{}
+}
+
+func (getExOptions *GetExOptions) SetExpiry(expiry *Expiry) *GetExOptions {
+	getExOptions.Expiry = expiry
+	return getExOptions
+}
+
 func (opts *GetExOptions) toArgs() ([]string, error) {
 	args := []string{}
 	var err error
@@ -92,6 +120,20 @@ const (
 type Expiry struct {
 	Type  ExpiryType
 	Count uint64
+}
+
+func NewExpiryBuilder() *Expiry {
+	return &Expiry{}
+}
+
+func (ex *Expiry) SetType(expiryType ExpiryType) *Expiry {
+	ex.Type = expiryType
+	return ex
+}
+
+func (ex *Expiry) SetCount(count uint64) *Expiry {
+	ex.Count = count
+	return ex
 }
 
 // An ExpiryType is used to configure the type of expiration for a value.

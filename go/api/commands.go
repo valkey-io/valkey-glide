@@ -48,13 +48,11 @@ type StringCommands interface {
 	//
 	// For example:
 	//  key: initialValue
-	//  result, err := client.SetWithOptions("key", "value", &api.SetOptions{
-	//      ConditionalSet: api.OnlyIfExists,
-	//      Expiry: &api.Expiry{
-	//          Type: api.Seconds,
-	//          Count: uint64(5),
-	//      },
-	//  })
+	//  result, err := client.SetWithOptions("key", "value", api.NewSetOptionsBuilder()
+	//			.SetExpiry(api.NewExpiryBuilder()
+	//			.SetType(api.Seconds)
+	//			.SetCount(uint64(5)
+	//		))
 	//  result.Value(): "OK"
 	//  result.IsNil(): false
 	//
@@ -120,12 +118,11 @@ type StringCommands interface {
 	//
 	// For example:
 	//  key: initialValue
-	//  result, err := client.GetExWithOptions("key", &api.GetExOptions{
-	//      Expiry: &api.Expiry{
-	//          Type: api.Seconds,
-	//          Count: uint64(5),
-	//      },
-	//  })
+	//  result, err := client.GetExWithOptions("key", api.NewGetExOptionsBuilder()
+	//			.SetExpiry(api.NewExpiryBuilder()
+	//			.SetType(api.Seconds)
+	//			.SetCount(uint64(5)
+	//		))
 	//  result.Value(): "initialValue"
 	//  result.IsNil(): false
 	//
