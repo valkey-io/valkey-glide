@@ -42,7 +42,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_ReturnOldValue() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		suite.verifyOK(client.Set(keyName, initialValue))
 
-		opts := &api.SetOptions{ReturnOldValue: true}
+		opts := api.NewSetOptionsBuilder().SetReturnOldValue(true)
 		result, err := client.SetWithOptions(keyName, anotherValue, opts)
 
 		assert.Nil(suite.T(), err)
@@ -55,7 +55,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfExists_overwrite() {
 		key := "TestSetWithOptions_OnlyIfExists_overwrite"
 		suite.verifyOK(client.Set(key, initialValue))
 
-		opts := &api.SetOptions{ConditionalSet: api.OnlyIfExists}
+		opts := api.NewSetOptionsBuilder().SetConditionalSet(api.OnlyIfExists)
 		suite.verifyOK(client.SetWithOptions(key, anotherValue, opts))
 
 		result, err := client.Get(key)
@@ -68,7 +68,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfExists_overwrite() {
 func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfExists_missingKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := "TestSetWithOptions_OnlyIfExists_missingKey"
-		opts := &api.SetOptions{ConditionalSet: api.OnlyIfExists}
+		opts := api.NewSetOptionsBuilder().SetConditionalSet(api.OnlyIfExists)
 		result, err := client.SetWithOptions(key, anotherValue, opts)
 
 		assert.Nil(suite.T(), err)
@@ -79,7 +79,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfExists_missingKey() {
 func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfDoesNotExist_missingKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := "TestSetWithOptions_OnlyIfDoesNotExist_missingKey"
-		opts := &api.SetOptions{ConditionalSet: api.OnlyIfDoesNotExist}
+		opts := api.NewSetOptionsBuilder().SetConditionalSet(api.OnlyIfDoesNotExist)
 		suite.verifyOK(client.SetWithOptions(key, anotherValue, opts))
 
 		result, err := client.Get(key)
@@ -92,7 +92,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfDoesNotExist_missingKey() 
 func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfDoesNotExist_existingKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := "TestSetWithOptions_OnlyIfDoesNotExist_existingKey"
-		opts := &api.SetOptions{ConditionalSet: api.OnlyIfDoesNotExist}
+		opts := api.NewSetOptionsBuilder().SetConditionalSet(api.OnlyIfDoesNotExist)
 		suite.verifyOK(client.Set(key, initialValue))
 
 		result, err := client.SetWithOptions(key, anotherValue, opts)
@@ -110,7 +110,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfDoesNotExist_existingKey()
 func (suite *GlideTestSuite) TestSetWithOptions_KeepExistingExpiry() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := "TestSetWithOptions_KeepExistingExpiry"
-		opts := &api.SetOptions{Expiry: &api.Expiry{Type: api.Milliseconds, Count: uint64(2000)}}
+		opts := api.NewSetOptionsBuilder().SetExpiry(api.NewExpiryBuilder().SetType(api.Milliseconds).SetCount(uint64(2000)))
 		suite.verifyOK(client.SetWithOptions(key, initialValue, opts))
 
 		result, err := client.Get(key)
@@ -118,7 +118,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_KeepExistingExpiry() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), initialValue, result.Value())
 
-		opts = &api.SetOptions{Expiry: &api.Expiry{Type: api.KeepExisting}}
+		opts = api.NewSetOptionsBuilder().SetExpiry(api.NewExpiryBuilder().SetType(api.KeepExisting))
 		suite.verifyOK(client.SetWithOptions(key, anotherValue, opts))
 
 		result, err = client.Get(key)
@@ -137,7 +137,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_KeepExistingExpiry() {
 func (suite *GlideTestSuite) TestSetWithOptions_UpdateExistingExpiry() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := "TestSetWithOptions_UpdateExistingExpiry"
-		opts := &api.SetOptions{Expiry: &api.Expiry{Type: api.Milliseconds, Count: uint64(100500)}}
+		opts := api.NewSetOptionsBuilder().SetExpiry(api.NewExpiryBuilder().SetType(api.Milliseconds).SetCount(uint64(100500)))
 		suite.verifyOK(client.SetWithOptions(key, initialValue, opts))
 
 		result, err := client.Get(key)
@@ -145,7 +145,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_UpdateExistingExpiry() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), initialValue, result.Value())
 
-		opts = &api.SetOptions{Expiry: &api.Expiry{Type: api.Milliseconds, Count: uint64(2000)}}
+		opts = api.NewSetOptionsBuilder().SetExpiry(api.NewExpiryBuilder().SetType(api.Milliseconds).SetCount(uint64(2000)))
 		suite.verifyOK(client.SetWithOptions(key, anotherValue, opts))
 
 		result, err = client.Get(key)
@@ -161,10 +161,71 @@ func (suite *GlideTestSuite) TestSetWithOptions_UpdateExistingExpiry() {
 	})
 }
 
+func (suite *GlideTestSuite) TestGetEx_existingAndNonExistingKeys() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := "TestGetEx_ExisitingKey"
+		suite.verifyOK(client.Set(key, initialValue))
+
+		result, err := client.GetEx(key)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), initialValue, result.Value())
+
+		key = "TestGetEx_NonExisitingKey"
+		result, err = client.Get(key)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "", result.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestGetExWithOptions_PersistKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := "TestGetExWithOptions_PersistKey"
+		suite.verifyOK(client.Set(key, initialValue))
+
+		opts := api.NewGetExOptionsBuilder().SetExpiry(api.NewExpiryBuilder().SetType(api.Milliseconds).SetCount(uint64(2000)))
+		result, err := client.GetExWithOptions(key, opts)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), initialValue, result.Value())
+
+		result, err = client.Get(key)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), initialValue, result.Value())
+
+		time.Sleep(1000 * time.Millisecond)
+
+		opts = api.NewGetExOptionsBuilder().SetExpiry(api.NewExpiryBuilder().SetType(api.Persist))
+		result, err = client.GetExWithOptions(key, opts)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), initialValue, result.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestGetExWithOptions_UpdateExpiry() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := "TestGetExWithOptions_UpdateExpiry"
+		suite.verifyOK(client.Set(key, initialValue))
+
+		opts := api.NewGetExOptionsBuilder().SetExpiry(api.NewExpiryBuilder().SetType(api.Milliseconds).SetCount(uint64(2000)))
+		result, err := client.GetExWithOptions(key, opts)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), initialValue, result.Value())
+
+		result, err = client.Get(key)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), initialValue, result.Value())
+
+		time.Sleep(2222 * time.Millisecond)
+
+		result, err = client.Get(key)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "", result.Value())
+	})
+}
+
 func (suite *GlideTestSuite) TestSetWithOptions_ReturnOldValue_nonExistentKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := "TestSetWithOptions_ReturnOldValue_nonExistentKey"
-		opts := &api.SetOptions{ReturnOldValue: true}
+		opts := api.NewSetOptionsBuilder().SetReturnOldValue(true)
 
 		result, err := client.SetWithOptions(key, anotherValue, opts)
 

@@ -38,7 +38,7 @@ type StringCommands interface {
 	// Parameters:
 	//  key     - The key to store.
 	//  value   - The value to store with the given key.
-	//  options - The Set options.
+	//  options - The [api.SetOptions].
 	//
 	// Return value:
 	//  If the value is successfully set, return api.Result[string] containing "OK".
@@ -48,13 +48,11 @@ type StringCommands interface {
 	//
 	// For example:
 	//  key: initialValue
-	//  result, err := client.SetWithOptions("key", "value", &api.SetOptions{
-	//      ConditionalSet: api.OnlyIfExists,
-	//      Expiry: &api.Expiry{
-	//          Type: api.Seconds,
-	//          Count: uint64(5),
-	//      },
-	//  })
+	//  result, err := client.SetWithOptions("key", "value", api.NewSetOptionsBuilder()
+	//			.SetExpiry(api.NewExpiryBuilder()
+	//			.SetType(api.Seconds)
+	//			.SetCount(uint64(5)
+	//		))
 	//  result.Value(): "OK"
 	//  result.IsNil(): false
 	//
@@ -83,6 +81,53 @@ type StringCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/get/
 	Get(key string) (Result[string], error)
+
+	// Get string value associated with the given key, or an empty string is returned [api.CreateNilStringResult()] if no such
+	// value exists.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//  key - The key to be retrieved from the database.
+	//
+	// Return value:
+	//  If key exists, returns the value of key as a Result[string]. Otherwise, return [api.CreateNilStringResult()].
+	//
+	// For example:
+	//  1. key: value
+	//	   result, err := client.GetEx("key")
+	//     result.Value(): "value"
+	//     result.IsNil(): false
+	//  2. result, err := client.GetEx("nonExistentKey")
+	//     result.Value(): ""
+	//     result.IsNil(): true
+	//
+	// [valkey.io]: https://valkey.io/commands/getex/
+	GetEx(key string) (Result[string], error)
+
+	// Get string value associated with the given key and optionally sets the expiration of the key.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//  key - The key to be retrieved from the database.
+	//  options - The [api.GetExOptions].
+	//
+	// Return value:
+	//  If key exists, returns the value of key as a Result[string]. Otherwise, return [api.CreateNilStringResult()].
+	//
+	// For example:
+	//  key: initialValue
+	//  result, err := client.GetExWithOptions("key", api.NewGetExOptionsBuilder()
+	//			.SetExpiry(api.NewExpiryBuilder()
+	//			.SetType(api.Seconds)
+	//			.SetCount(uint64(5)
+	//		))
+	//  result.Value(): "initialValue"
+	//  result.IsNil(): false
+	//
+	// [valkey.io]: https://valkey.io/commands/getex/
+	GetExWithOptions(key string, options *GetExOptions) (Result[string], error)
 
 	// Sets multiple keys to multiple values in a single operation.
 	//
