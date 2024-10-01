@@ -13,6 +13,8 @@ use redis::cluster_routing::{Routable, RoutingInfo, SingleNodeRoutingInfo};
 use redis::{Cmd, ErrorKind, ObjectType, PushInfo, RedisError, RedisResult, ScanStateRC, Value};
 pub use standalone_client::StandaloneClient;
 use std::io;
+use std::sync::atomic::{AtomicIsize, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 pub use types::*;
 
@@ -29,6 +31,15 @@ pub const DEFAULT_CONNECTION_ATTEMPT_TIMEOUT: Duration = Duration::from_millis(2
 pub const DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL: Duration = Duration::from_secs(60);
 pub const INTERNAL_CONNECTION_TIMEOUT: Duration = Duration::from_millis(250);
 pub const FINISHED_SCAN_CURSOR: &str = "finished";
+// The value of 1000 for the maximum number of inflight requests is determined based on Little's Law in queuing theory:
+//
+// Expected maximum request rate: 50,000 requests/second
+// Expected response time: 1 millisecond
+//
+// According to Little's Law, the maximum number of inflight requests required to fully utilize the maximum request rate is:
+//   (50,000 requests/second) × (1 millisecond / 1000 milliseconds) = 50 requests
+//
+// The value of 1000 provides a buffer for bursts while still allowing full utilization of the maximum request rate.
 pub const DEFAULT_MAX_INFLIGHT_REQUESTS: u32 = 1000;
 
 // The connection check interval is currently not exposed to the user via ConnectionRequest,
@@ -103,7 +114,8 @@ pub enum ClientWrapper {
 pub struct Client {
     internal_client: ClientWrapper,
     request_timeout: Duration,
-    inflight_requests_limit: u32,
+    // Setting this counter to limit the inflight requests, in case of any queue is blocked, so we return error to the customer.
+    inflight_requests_allowed: Arc<AtomicIsize>,
 }
 
 async fn run_with_timeout<T>(
@@ -412,8 +424,33 @@ impl Client {
         }
     }
 
-    pub fn get_inflight_requests_limit(&self) -> u32 {
-        self.inflight_requests_limit
+    pub fn reserve_inflight_request(&self) -> bool {
+        // We use this approach of checking the `inflight_requests_allowed` value
+        // twice, before and after decrementing, to prevent it from reaching negative
+        // values. Allowing the `inflight_requests_allowed` value to go below zero
+        // could lead to a race condition where tasks might not be able to run even
+        // when there are available slots.
+        if self.inflight_requests_allowed.load(Ordering::SeqCst) <= 0 {
+            false
+        } else {
+            // The value is being checked again because it might have changed
+            // during the intervening period since the load by other tasks.
+            if self
+                .inflight_requests_allowed
+                .fetch_sub(1, Ordering::SeqCst)
+                <= 0
+            {
+                self.inflight_requests_allowed
+                    .fetch_add(1, Ordering::SeqCst);
+                return false;
+            }
+            true
+        }
+    }
+
+    pub fn release_inflight_request(&self) -> isize {
+        self.inflight_requests_allowed
+            .fetch_add(1, Ordering::SeqCst)
     }
 }
 
@@ -630,6 +667,9 @@ impl Client {
         let inflight_requests_limit = request
             .inflight_requests_limit
             .unwrap_or(DEFAULT_MAX_INFLIGHT_REQUESTS);
+        let inflight_requests_allowed = Arc::new(AtomicIsize::new(
+            inflight_requests_limit.try_into().unwrap(),
+        ));
         tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
             let internal_client = if request.cluster_mode_enabled {
                 let client = create_cluster_client(request, push_sender)
@@ -647,7 +687,7 @@ impl Client {
             Ok(Self {
                 internal_client,
                 request_timeout,
-                inflight_requests_limit,
+                inflight_requests_allowed,
             })
         })
         .await
