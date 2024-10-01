@@ -209,7 +209,7 @@ b. Use a separate [granular access token](https://docs.npmjs.com/about-access-to
 For example, if you have CD automation publishing to npm on two projects, you should have two separate granular tokens, each of which only has permissions on a single project.
 This reduces impact when you rotate these tokens and reduces risk if there is ever a security issue with a token.
 
-c. **Use an Automation token so it could be used in CD workflow:**:
+c. **Use an Automation token so it could be used in CD workflow:**
 An automation token will bypass two-factor authentication (2FA) when publishing.
 If you have 2FA enabled, you will not be prompted when using an automation token, making it suitable for CI/CD workflows.
 
