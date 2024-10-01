@@ -193,8 +193,9 @@ To manually start the self-hosted runner or to log into it for debugging purpose
 
     d. Once your package is created, you'll need to do some set-up online to ensure it's properly linked to company resources. Add the user "amzn-oss" to your package's owner list.
     This helps out with a couple of things:
-        i. If your somehow lose access to your own account, we can help recover your package
-        ii. If everyone loses access, the "amzn-oss" account is on record to prove ownership
+
+    i. If your somehow lose access to your own account, we can help recover your package. <br>
+    ii. If everyone loses access, the "amzn-oss" account is on record to prove ownership.
 
     e. We used to have instructions here to have you "register" your package with the aws/amzn/etc orgs.
     We no longer recommend this as it requires manual action with npm support for very little operational gain.
