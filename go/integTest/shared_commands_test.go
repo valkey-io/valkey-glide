@@ -1570,6 +1570,8 @@ func (suite *GlideTestSuite) TestSinter_WithNotExistingKeys() {
 }
 
 func (suite *GlideTestSuite) TestSInterCard() {
+	suite.SkipIfServerVersionLowerThan7()
+
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key1 := "{key}-1-" + uuid.NewString()
 		key2 := "{key}-2-" + uuid.NewString()
