@@ -158,6 +158,7 @@ class BaseClientConfiguration:
                 This duration encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries.
                 If the specified timeout is exceeded for a pending request, it will result in a timeout error. If not set, a default value will be used.
             client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during connection establishment.
+            protocol (ProtocolVersion): Serialization protocol to be used. If not set, `RESP3` will be used.
         """
         self.addresses = addresses
         self.use_tls = use_tls

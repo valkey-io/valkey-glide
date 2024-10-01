@@ -1,38 +1,36 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
+import static glide.TestUtilities.commonClientConfig;
+import static glide.TestUtilities.commonClusterClientConfig;
+
 import glide.api.GlideClient;
-import glide.api.models.configuration.GlideClientConfiguration;
-import glide.api.models.configuration.NodeAddress;
+import glide.api.GlideClusterClient;
+import glide.api.models.configuration.ProtocolVersion;
 import lombok.SneakyThrows;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 @Timeout(10) // seconds
 public class ConnectionTests {
 
-    @Test
+    @ParameterizedTest
+    @EnumSource(ProtocolVersion.class)
     @SneakyThrows
-    public void basic_client() {
+    public void basic_client(ProtocolVersion protocol) {
         var regularClient =
-                GlideClient.createClient(
-                                GlideClientConfiguration.builder()
-                                        .address(
-                                                NodeAddress.builder().port(TestConfiguration.STANDALONE_PORTS[0]).build())
-                                        .build())
-                        .get();
+                GlideClient.createClient(commonClientConfig().protocol(protocol).build()).get();
         regularClient.close();
     }
 
-    @Test
+    @ParameterizedTest
+    @EnumSource(ProtocolVersion.class)
     @SneakyThrows
-    public void cluster_client() {
-        var regularClient =
-                GlideClient.createClient(
-                                GlideClientConfiguration.builder()
-                                        .address(NodeAddress.builder().port(TestConfiguration.CLUSTER_PORTS[0]).build())
-                                        .build())
+    public void cluster_client(ProtocolVersion protocol) {
+        var clusterClient =
+                GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
                         .get();
-        regularClient.close();
+        clusterClient.close();
     }
 }

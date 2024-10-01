@@ -27,6 +27,7 @@ import glide.api.models.configuration.BaseSubscriptionConfiguration.ChannelMode;
 import glide.api.models.configuration.BaseSubscriptionConfiguration.MessageCallback;
 import glide.api.models.configuration.ClusterSubscriptionConfiguration;
 import glide.api.models.configuration.ClusterSubscriptionConfiguration.PubSubClusterChannelMode;
+import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotType;
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration;
@@ -278,6 +279,32 @@ public class PubSubTests {
         assumeFalse(
                 System.getProperty("os.name").toLowerCase().contains("mac"),
                 "PubSub doesn't work on mac OS");
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "standalone = {0}")
+    @ValueSource(booleans = {true, false})
+    public void config_error_on_resp2(boolean standalone) {
+        final GlideString channel = gs(UUID.randomUUID().toString());
+
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions =
+                standalone
+                        ? Map.of(PubSubChannelMode.EXACT, Set.of(channel))
+                        : Map.of(PubSubClusterChannelMode.EXACT, Set.of(channel));
+
+        var exception =
+                assertThrows(
+                        ConfigurationError.class,
+                        () ->
+                                GlideClient.createClient(
+                                        commonClientConfig()
+                                                .subscriptionConfiguration(
+                                                        StandaloneSubscriptionConfiguration
+                                                                .builder() /*.subscriptions(subscriptions)*/
+                                                                .build())
+                                                .protocol(ProtocolVersion.RESP2)
+                                                .build()));
+        assertTrue(exception.getMessage().contains("PubSub subscriptions require RESP3 protocol"));
     }
 
     /** Similar to `test_pubsub_exact_happy_path` in python client tests. */
