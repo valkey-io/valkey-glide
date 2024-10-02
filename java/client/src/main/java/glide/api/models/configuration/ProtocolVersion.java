@@ -3,8 +3,8 @@ package glide.api.models.configuration;
 
 /** Represents the communication protocol with the server. */
 public enum ProtocolVersion {
-    /** Use RESP2 to communicate with the server nodes. */
-    RESP3,
     /** Use RESP3 to communicate with the server nodes. */
+    RESP3,
+    /** Use RESP2 to communicate with the server nodes. */
     RESP2
 }
