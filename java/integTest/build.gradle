@@ -112,6 +112,7 @@ tasks.withType(Test) {
         println "Standalone hosts = ${standaloneHosts}"
         systemProperty 'test.server.standalone', standaloneHosts
         systemProperty 'test.server.cluster', clusterHosts
+        systemProperty 'test.server.tls', System.getProperty("tls")
     }
 
     testLogging {
