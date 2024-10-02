@@ -107,8 +107,6 @@ test.dependsOn ':client:buildRustRelease'
 
 tasks.withType(Test) {
     doFirst {
-        println "Cluster hosts = ${clusterHosts}"
-        println "Standalone hosts = ${standaloneHosts}"
         systemProperty 'test.server.standalone', standaloneHosts
         systemProperty 'test.server.cluster', clusterHosts
     }
@@ -134,10 +132,8 @@ test {
 }
 
 tasks.register('modulesTest', Test) {
-//    doFirst {
-//        clusterPorts = [7000]
-//        standalonePorts = [6379]
-//    }
+    dependsOn 'startStandalone'
+    dependsOn 'startCluster'
 
     filter {
         includeTestsMatching 'glide.modules.*'

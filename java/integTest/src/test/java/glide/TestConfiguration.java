@@ -2,9 +2,12 @@
 package glide;
 
 import static glide.TestUtilities.commonClientConfig;
+import static glide.TestUtilities.commonClusterClientConfig;
 
 import com.vdurmont.semver4j.Semver;
+import glide.api.BaseClient;
 import glide.api.GlideClient;
+import glide.api.GlideClusterClient;
 
 public final class TestConfiguration {
     // All servers are hosted on localhost
@@ -16,9 +19,12 @@ public final class TestConfiguration {
 
     static {
         try {
-            String serverVersion =
-                    TestUtilities.getServerVersion(
-                            GlideClient.createClient(commonClientConfig().build()).get());
+            BaseClient client =
+                    !STANDALONE_HOSTS[0].isEmpty()
+                            ? GlideClient.createClient(commonClientConfig().build()).get()
+                            : GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
+
+            String serverVersion = TestUtilities.getServerVersion(client);
             if (serverVersion != null) {
                 SERVER_VERSION = new Semver(serverVersion);
             } else {
