@@ -39,7 +39,7 @@ async def search(
     if query:
         args.append(query)
     if options:
-        args.append(options)
+        args.extend(options.getSearchOptions())
     return cast(TOK, await client.custom_command(args))
 
 async def dropIndex(
@@ -49,6 +49,5 @@ async def dropIndex(
 ) -> TOK:
     args: List[TEncodable] = [CommandNames.FT_DROPINDEX, indexName]
     if options:
-        args.extend(options.get())
-
+        args.extend(options.getDropIndexOptions())
     return cast(TOK, await client.custom_command(args))
