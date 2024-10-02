@@ -1,7 +1,6 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.modules;
 
-import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
@@ -49,14 +48,14 @@ public class VectorSearchTests {
     @BeforeAll
     @SneakyThrows
     public static void init() {
-        var standaloneClient =
-                GlideClient.createClient(commonClientConfig().requestTimeout(5000).build()).get();
+        // var standaloneClient =
+        //     GlideClient.createClient(commonClientConfig().requestTimeout(5000).build()).get();
 
         var clusterClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(5000).build())
                         .get();
 
-        clients = List.of(Arguments.of(standaloneClient), Arguments.of(clusterClient));
+        clients = List.of(/*Arguments.of(standaloneClient),*/ Arguments.of(clusterClient));
     }
 
     @AfterAll

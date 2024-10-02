@@ -5,12 +5,13 @@ import static glide.TestUtilities.commonClientConfig;
 
 import com.vdurmont.semver4j.Semver;
 import glide.api.GlideClient;
-import java.util.Arrays;
 
 public final class TestConfiguration {
     // All servers are hosted on localhost
-    public static final int[] STANDALONE_PORTS = getPortsFromProperty("test.server.standalone.ports");
-    public static final int[] CLUSTER_PORTS = getPortsFromProperty("test.server.cluster.ports");
+    public static final String[] STANDALONE_HOSTS =
+            System.getProperty("test.server.standalone", "").split(",");
+    public static final String[] CLUSTER_HOSTS =
+            System.getProperty("test.server.cluster", "").split(",");
     public static final Semver SERVER_VERSION;
 
     static {
@@ -27,11 +28,5 @@ public final class TestConfiguration {
         } catch (Exception e) {
             throw new RuntimeException("Failed to get server version", e);
         }
-    }
-
-    private static int[] getPortsFromProperty(String propName) {
-        return Arrays.stream(System.getProperty(propName).split(","))
-                .mapToInt(Integer::parseInt)
-                .toArray();
     }
 }
