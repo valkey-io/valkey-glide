@@ -13,5 +13,13 @@ class FtCreateKeywords:
     ON = "ON"
     PREFIX = "PREFIX"
 
+class FtSearchKeywords:
+    RETURN = "RETURN"
+    AS = "AS"
+    LIMIT = "LIMIT"
+    TIMEOUT = "TIMEOUT"
+    PARAMS = "PARAMS"
+    COUNT = "COUNT"
+
 class FtDropIndexKeywords:
     DELETE_DOCUMENT = "dd"
