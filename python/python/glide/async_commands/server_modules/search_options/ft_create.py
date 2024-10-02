@@ -33,16 +33,16 @@ class FieldInfo:
         identifier: str,
         type: FieldType,
         alias: Optional[str] = None,
-        isSortable: SORTABLE = SORTABLE.NOT_SORTABLE,
-        isUnnormalized: UNNORMALIZED = UNNORMALIZED.NOT_UNNORMALIZED,
-        isNoIndex: NO_INDEX = NO_INDEX.NOT_NO_INDEX
+        sortable: SORTABLE = SORTABLE.NOT_SORTABLE,
+        unnormalized: UNNORMALIZED = UNNORMALIZED.NOT_UNNORMALIZED,
+        noIndex: NO_INDEX = NO_INDEX.NOT_NO_INDEX
     ):
         self.identifier = identifier
         self.alias = alias
         self.type = type
-        self.isSortable = isSortable
-        self.isUnnormalized = isUnnormalized
-        self.isNoIndex = isNoIndex
+        self.sortable = sortable
+        self.unnormalized = unnormalized
+        self.noIndex = noIndex
 
     def getFieldInfo(self) -> List[str]:
         args = []
@@ -53,11 +53,11 @@ class FieldInfo:
             args.append(self.alias)
         if self.type:
             args.append(self.type.name)
-        if self.isSortable:
+        if self.sortable == SORTABLE.IS_SORTABLE:
             args.append(FtCreateKeywords.SORTABLE)
-            if self.isUnnormalized:
+            if self.unnormalized == UNNORMALIZED.IS_UNNORMALIZED:
                 args.append(FtCreateKeywords.UNF)
-        if self.isNoIndex:
+        if self.noIndex == NO_INDEX.IS_NO_INDEX:
             args.append(FtCreateKeywords.NO_INDEX)
         return args
 

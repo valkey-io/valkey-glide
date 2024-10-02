@@ -33,13 +33,15 @@ async def search(
     client: TGlideClient,
     indexName: TEncodable,
     query: TEncodable,
-    options: Optional[FtSearchOptions]
+    options: Optional[FtSearchOptions] = None
 ):
     print("ft search")
 
 async def dropIndex(
     client: TGlideClient,
     indexName: TEncodable,
-    options: Optional[FtDropIndexOptions]
+    options: Optional[FtDropIndexOptions] = None
 ):
-    print("ft drop index")
+    args: List[TEncodable] = [CommandNames.FT_DROPINDEX, indexName]
+    if options:
+        args.extend(options.get())
