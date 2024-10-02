@@ -285,26 +285,25 @@ public class PubSubTests {
     @ParameterizedTest(name = "standalone = {0}")
     @ValueSource(booleans = {true, false})
     public void config_error_on_resp2(boolean standalone) {
-        final GlideString channel = gs(UUID.randomUUID().toString());
-
-        Map<? extends ChannelMode, Set<GlideString>> subscriptions =
-                standalone
-                        ? Map.of(PubSubChannelMode.EXACT, Set.of(channel))
-                        : Map.of(PubSubClusterChannelMode.EXACT, Set.of(channel));
-
-        var exception =
-                assertThrows(
-                        ConfigurationError.class,
-                        () ->
-                                GlideClient.createClient(
-                                        commonClientConfig()
-                                                .subscriptionConfiguration(
-                                                        StandaloneSubscriptionConfiguration
-                                                                .builder() /*.subscriptions(subscriptions)*/
-                                                                .build())
-                                                .protocol(ProtocolVersion.RESP2)
-                                                .build()));
-        assertTrue(exception.getMessage().contains("PubSub subscriptions require RESP3 protocol"));
+        if (standalone) {
+            var config =
+                    commonClientConfig()
+                            .subscriptionConfiguration(StandaloneSubscriptionConfiguration.builder().build())
+                            .protocol(ProtocolVersion.RESP2)
+                            .build();
+            var exception =
+                    assertThrows(ConfigurationError.class, () -> GlideClient.createClient(config));
+            assertTrue(exception.getMessage().contains("PubSub subscriptions require RESP3 protocol"));
+        } else {
+            var config =
+                    commonClusterClientConfig()
+                            .subscriptionConfiguration(ClusterSubscriptionConfiguration.builder().build())
+                            .protocol(ProtocolVersion.RESP2)
+                            .build();
+            var exception =
+                    assertThrows(ConfigurationError.class, () -> GlideClusterClient.createClient(config));
+            assertTrue(exception.getMessage().contains("PubSub subscriptions require RESP3 protocol"));
+        }
     }
 
     /** Similar to `test_pubsub_exact_happy_path` in python client tests. */
