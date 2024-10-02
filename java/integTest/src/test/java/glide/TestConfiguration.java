@@ -16,6 +16,7 @@ public final class TestConfiguration {
     public static final String[] CLUSTER_HOSTS =
             System.getProperty("test.server.cluster", "").split(",");
     public static final Semver SERVER_VERSION;
+    public static final boolean TLS = Boolean.parseBoolean(System.getProperty("test.server.tls", ""));
 
     static {
         try {

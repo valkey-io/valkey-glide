@@ -245,7 +245,7 @@ jobs:
 
             - name: Test java wrapper
               working-directory: java
-              run: ./gradlew :integTest:modulesTest -Dcluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }}
+              run: ./gradlew :integTest:modulesTest -Dcluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -Dstandalone-endpoints= -Dtls=true
 
             - name: Upload test reports
               if: always()

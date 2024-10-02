@@ -3,6 +3,7 @@ package glide;
 
 import static glide.TestConfiguration.CLUSTER_HOSTS;
 import static glide.TestConfiguration.STANDALONE_HOSTS;
+import static glide.TestConfiguration.TLS;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -94,7 +95,7 @@ public class TestUtilities {
             builder.address(
                     NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
         }
-        return builder;
+        return builder.useTLS(TLS);
     }
 
     public static GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder<?, ?>
@@ -105,7 +106,7 @@ public class TestUtilities {
             builder.address(
                     NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
         }
-        return builder;
+        return builder.useTLS(TLS);
     }
 
     /**
