@@ -191,8 +191,8 @@ func (suite *GlideTestSuite) verifyOK(result api.Result[string], err error) {
 	assert.Equal(suite.T(), api.OK, result.Value())
 }
 
-func (suite *GlideTestSuite) SkipIfServerVersionLowerThan7() {
-	if suite.serverVersion < "7.0.0" {
-		suite.T().Skip("This feature is added in version 7")
+func (suite *GlideTestSuite) SkipIfServerVersionLowerThanBy(version string) {
+	if suite.serverVersion < version {
+		suite.T().Skipf("This feature is added in version %s", version)
 	}
 }
