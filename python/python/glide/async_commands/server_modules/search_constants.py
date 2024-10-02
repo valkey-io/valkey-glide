@@ -3,5 +3,11 @@ class CommandNames:
     FT_SEARCH = "FT.SEARCH"
     INFO = "INFO"
 
-class CreateParameters:
+class FtCreateKeywords:
     SCHEMA = "SCHEMA"
+    AS = "AS"
+    SORTABLE = "SORTABLE"
+    UNF = "UNF"
+    NO_INDEX = "NOINDEX"
+    ON = "ON"
+    PREFIX = "PREFIX"

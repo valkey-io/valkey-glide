@@ -1,9 +1,10 @@
 from typing import Optional, List, cast
 from glide.glide_client import TGlideClient
 from glide.constants import TOK, TEncodable
-from glide.protobuf.command_request_pb2 import RequestType
-from glide.async_commands.server_modules.search_options import FtCreateOptions, FtSearchOptions, FieldInfo
-from glide.async_commands.server_modules.search_constants import CommandNames, CreateParameters
+from glide.async_commands.server_modules.search_options.ft_create import FtCreateOptions , FieldInfo
+from glide.async_commands.server_modules.search_constants import CommandNames, FtCreateKeywords
+from glide.async_commands.server_modules.search_options.ft_search import FtSearchOptions
+from glide.async_commands.server_modules.search_options.ft_dropindex import FtDropIndexOptions
 
 
 async def create(
@@ -14,7 +15,7 @@ async def create(
 ) -> TOK:
     args: List[TEncodable] = [CommandNames.FT_CREATE, indexName]
     if fields and len(fields) > 0:
-        args.append(CreateParameters.SCHEMA)
+        args.append(FtCreateKeywords.SCHEMA)
         for fieldInfo in fields:
             args = args + fieldInfo.getFieldInfo()
     if options:
@@ -29,9 +30,16 @@ async def info(
     return cast(List[TEncodable], await client.custom_command(args))
 
 async def search(
-        client: TGlideClient,
-        indexName: TEncodable,
-        query: TEncodable,
-        options: Optional[FtSearchOptions]
+    client: TGlideClient,
+    indexName: TEncodable,
+    query: TEncodable,
+    options: Optional[FtSearchOptions]
 ):
     print("ft search")
+
+async def dropIndex(
+    client: TGlideClient,
+    indexName: TEncodable,
+    options: Optional[FtDropIndexOptions]
+):
+    print("ft drop index")

@@ -1,6 +1,7 @@
-from typing import Optional, List, Mapping
+from typing import Optional, List
 from enum import Enum
-from glide.constants import TEncodable
+from glide.async_commands.server_modules.search_constants import FtCreateKeywords
+
 
 class FieldType(Enum):
     TEXT = 1
@@ -14,15 +15,27 @@ class DataType(Enum):
     HASH = 1
     JSON = 2
 
+class SORTABLE(Enum):
+    NOT_SORTABLE = 1
+    IS_SORTABLE = 2
+
+class UNNORMALIZED(Enum):
+    NOT_UNNORMALIZED = 1
+    IS_UNNORMALIZED = 2
+
+class NO_INDEX(Enum):
+    NOT_NO_INDEX = 1
+    IS_NO_INDEX = 2
+
 class FieldInfo:
     def __init__(
         self,
         identifier: str,
         type: FieldType,
         alias: Optional[str] = None,
-        isSortable: Optional[bool] = None,
-        isUnnormalized: Optional[bool] = None,
-        isNoIndex: Optional[bool] = None
+        isSortable: SORTABLE = SORTABLE.NOT_SORTABLE,
+        isUnnormalized: UNNORMALIZED = UNNORMALIZED.NOT_UNNORMALIZED,
+        isNoIndex: NO_INDEX = NO_INDEX.NOT_NO_INDEX
     ):
         self.identifier = identifier
         self.alias = alias
@@ -36,16 +49,16 @@ class FieldInfo:
         if self.identifier:
             args.append(self.identifier)
         if self.alias:
-            args.append("AS")
+            args.append(FtCreateKeywords.AS)
             args.append(self.alias)
         if self.type:
             args.append(self.type.name)
         if self.isSortable:
-            args.append("SORTABLE")
+            args.append(FtCreateKeywords.SORTABLE)
             if self.isUnnormalized:
-                args.append("UNF")
+                args.append(FtCreateKeywords.UNF)
         if self.isNoIndex:
-            args.append("NOINDEX")
+            args.append(FtCreateKeywords.NO_INDEX)
         return args
 
         
@@ -61,44 +74,11 @@ class FtCreateOptions:
     def getCreateOptions(self) -> List[str]:
         args = []
         if self.dataType:
-            args.append("ON")
+            args.append(FtCreateKeywords.ON)
             args.append(self.dataType.name)
         if self.prefixes:
-            args.append("PREFIX")
+            args.append(FtCreateKeywords.PREFIX)
             args.append(str(len(self.prefixes)))
             for prefix in self.prefixes:
                 args.append(prefix)
         return args
-
-class ReturnFieldInfo:
-    def __init__(
-        self,
-        identifier: str,
-        alias: Optional[str]
-    ):
-        self.identifier = identifier
-        self.alias = alias
-
-class LimitInfo:
-    def __init__(
-        self,
-        offset: int,
-        count: int 
-    ):
-        self.offset = offset
-        self.cout = count
-
-class FtSearchOptions:
-    def __init__(
-        self,
-        returnFields: List[ReturnFieldInfo] = [],
-        timeout: Optional[int] = None,
-        params: Mapping[TEncodable, TEncodable] = {},
-        limit: Optional[LimitInfo] = None,
-        count: Optional[bool] = None
-    ):
-        self.returnFields = returnFields
-        self.timeout = timeout
-        self.params = params
-        self.limit = limit
-        self.count = count
