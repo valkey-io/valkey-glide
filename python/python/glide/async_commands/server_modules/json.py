@@ -460,6 +460,55 @@ async def debug_memory(
     return cast(Optional[Union[int, List[int]]], await client.custom_command(args))
 
 
+async def arrappend(
+    client: TGlideClient,
+    key: TEncodable,
+    values: List[TEncodable],
+    path: Optional[TEncodable] = None,
+) -> TJsonResponse[int]:
+    """Appends one or more `values` to the JSON array at the specified `path` within the JSON document stored at `key`.
+
+    See https://valkey.io/commands/json.append/ for more details.
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+        key (TEncodable): The key of the JSON document.
+        values (TEncodable): The values to append to the JSON array at the specified path.
+        path (Optional[TEncodable]): Represents the path within the JSON document where the `values` will be appended.
+            Defaults to None.
+
+    Returns:
+        TJsonResponse[int]:
+            For JSONPath (`path` starts with `$`):
+                Returns a list of integer replies for every possible path, indicating the new length of the new array after appending `values`,
+                or None for JSON values matching the path that are not an array.
+                If `key` doesn't exist, an error is raised.
+            For legacy path (`path` doesn't start with `$`):
+                Returns the length of the new array after appending `values` to the array at `path`.
+                If multiple paths match, the length of the last updated array is returned.
+                If the JSON value at `path` is not a array of if `path` doesn't exist, an error is raised.
+                If `key` doesn't exist, an error is raised.
+        For more information about the returned type, see `TJsonResponse`.
+
+    Examples:
+        >>> from glide import json as valkeyJson
+        >>> import json
+        >>> await redisJson.set(client, "doc", "$", '{"a": 1, "b": ["one", "two"]}')
+            'OK'  # Indicates successful setting of the value at path '$' in the key stored at `doc`.
+        >>> await valkeyJson.arrappend(client, "doc", "$.b", ["three"])
+            [3]  # Returns the new length of the array at path '$.b' after appending the value.
+        >>> await valkeyJson.arrappend(client, "doc", ".b", ["four"])
+            4 # Returns the new length of the array at path '.b' after appending the value.
+        >>> json.loads(await valkeyJson.get(client, "doc", "$"))
+            b'{"a": 1, "b": ["one", "two", "three", "four"]}'  # Returns the updated JSON document
+    """
+    args = ["JSON.ARRAPPEND", key]
+    if path:
+        args.append(path)
+    args.extend(values)
+    return cast(TJsonResponse[int], await client.custom_command(args))
+
+
 async def delete(
     client: TGlideClient,
     key: TEncodable,
