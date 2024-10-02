@@ -79,7 +79,7 @@ public class VectorSearchTests {
                                 IndexType.HASH,
                                 new String[0],
                                 new FieldInfo[] {
-                                    new FieldInfo("vec", "vec", VectorFieldHnsw.builder(DistanceMetric.L2, 2).build())
+                                    new FieldInfo("vec", "VEC", VectorFieldHnsw.builder(DistanceMetric.L2, 2).build())
                                 })
                         .get());
         assertEquals(
@@ -305,14 +305,14 @@ public class VectorSearchTests {
         var before =
                 client instanceof GlideClient
                         ? Set.of(
-                                (String[]) ((GlideClient) client).customCommand(new String[] {"FT._LIST"}).get())
+                                (Object[]) ((GlideClient) client).customCommand(new String[] {"FT._LIST"}).get())
                         : ((GlideClusterClient) client)
                                         .customCommand(new String[] {"FT._LIST"}, ALL_PRIMARIES)
                                         .get()
                                         .getMultiValue()
                                         .values()
                                         .stream()
-                                        .flatMap(s -> Arrays.stream((String[]) s))
+                                        .flatMap(s -> Arrays.stream((Object[]) s))
                                         .collect(Collectors.toSet());
 
         assertEquals(OK, client.ftdrop(index).get());
@@ -321,7 +321,7 @@ public class VectorSearchTests {
                 client instanceof GlideClient
                         ? new HashSet<>(
                                 Set.of(
-                                        (String[])
+                                        (Object[])
                                                 ((GlideClient) client).customCommand(new String[] {"FT._LIST"}).get()))
                         : ((GlideClusterClient) client)
                                         .customCommand(new String[] {"FT._LIST"}, ALL_PRIMARIES)
@@ -329,7 +329,7 @@ public class VectorSearchTests {
                                         .getMultiValue()
                                         .values()
                                         .stream()
-                                        .flatMap(s -> Arrays.stream((String[]) s))
+                                        .flatMap(s -> Arrays.stream((Object[]) s))
                                         .collect(Collectors.toSet());
 
         assertFalse(after.contains(index));

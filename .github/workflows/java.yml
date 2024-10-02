@@ -197,26 +197,17 @@ jobs:
               name: lint java rust
 
     test-modules:
-        needs: [load-engine-matrix]
+        if: github.event.pull_request.head.repo.owner.login == 'valkey-io'
         name: Running Module Tests
-        runs-on: ${{ matrix.host.RUNNER }}
+        runs-on: arm64-linux
         timeout-minutes: 35
         strategy:
             fail-fast: false
             matrix:
-                engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
                 java: [ 17 ]
-                host:
-                    - {
-                          OS: "ubuntu",
-                          NAMED_OS: "linux",
-                          RUNNER: ["self-hosted", "Linux", "ARM64"],
-                          TARGET: "aarch64-unknown-linux-gnu",
-                      }
 
         steps:
             - name: Setup self-hosted runner access
-              if: ${{ contains(matrix.host.RUNNER, 'self-hosted') }}
               run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
 
             - uses: actions/checkout@v4
@@ -228,14 +219,6 @@ jobs:
               with:
                   distribution: "temurin"
                   java-version: ${{ matrix.java }}
-
-            - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
-              with:
-                  os: ${{ matrix.host.OS }}
-                  target: ${{ matrix.host.TARGET }}
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-                  engine-version: ${{ matrix.engine.version }}
 
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
@@ -252,6 +235,6 @@ jobs:
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: test-reports-java-${{ matrix.java }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-modules
+                  name: test-reports-java-${{ matrix.java }}-modules
                   path: |
                       java/integTest/build/reports/**
