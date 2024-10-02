@@ -57,13 +57,6 @@ pub struct CommandResponse {
     map_key: *mut CommandResponse,
     #[derivative(Default(value = "std::ptr::null_mut()"))]
     map_value: *mut CommandResponse,
-
-    /// Below two values are related to each other.
-    /// `sets_value` represents the set of CommandResponse.
-    /// `sets_value_len` represents the length of the set.
-    #[derivative(Default(value = "std::ptr::null_mut()"))]
-    sets_value: *mut CommandResponse,
-    sets_value_len: c_long,
 }
 
 #[repr(C)]
@@ -77,7 +70,6 @@ pub enum ResponseType {
     String = 4,
     Array = 5,
     Map = 6,
-    Sets = 7,
 }
 
 /// Success callback that is called when a command succeeds.
@@ -252,7 +244,6 @@ pub extern "C" fn get_response_type_string(response_type: ResponseType) -> *mut 
         ResponseType::String => "String",
         ResponseType::Array => "Array",
         ResponseType::Map => "Map",
-        ResponseType::Sets => "Sets",
     };
     let c_str = CString::new(s).unwrap_or_default();
     c_str.into_raw()
@@ -300,8 +291,6 @@ pub unsafe extern "C" fn free_command_response(command_response_ptr: *mut Comman
 /// * The contained `map_key` must be valid until `free_command_response` is called and it must outlive the `CommandResponse` that contains it.
 /// * The contained `map_value` must be obtained from the `CommandResponse` returned in [`SuccessCallback`] from [`command`].
 /// * The contained `map_value` must be valid until `free_command_response` is called and it must outlive the `CommandResponse` that contains it.
-/// * The contained `sets_value` must be obtained from the `CommandResponse` returned in [`SuccessCallback`] from [`command`].
-/// * The contained `sets_value` must be valid until `free_command_response` is called and it must outlive the `CommandResponse` that contains it.
 fn free_command_response_elements(command_response: CommandResponse) {
     let string_value = command_response.string_value;
     let string_value_len = command_response.string_value_len;
@@ -309,8 +298,6 @@ fn free_command_response_elements(command_response: CommandResponse) {
     let array_value_len = command_response.array_value_len;
     let map_key = command_response.map_key;
     let map_value = command_response.map_value;
-    let sets_value = command_response.sets_value;
-    let sets_value_len = command_response.sets_value_len;
     if !string_value.is_null() {
         let len = string_value_len as usize;
         unsafe { Vec::from_raw_parts(string_value, len, len) };
@@ -327,13 +314,6 @@ fn free_command_response_elements(command_response: CommandResponse) {
     }
     if !map_value.is_null() {
         unsafe { free_command_response(map_value) };
-    }
-    if !sets_value.is_null() {
-        let len = sets_value_len as usize;
-        let vec = unsafe { Vec::from_raw_parts(sets_value, len, len) };
-        for element in vec.into_iter() {
-            free_command_response_elements(element);
-        }
     }
 }
 
@@ -482,9 +462,9 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
                 })
                 .collect();
             let (vec_ptr, len) = convert_vec_to_pointer(vec);
-            command_response.sets_value = vec_ptr;
-            command_response.sets_value_len = len;
-            command_response.response_type = ResponseType::Sets;
+            command_response.array_value = vec_ptr;
+            command_response.array_value_len = len;
+            command_response.response_type = ResponseType::Array;
             Ok(command_response)
         }
         // TODO: Add support for other return types.
