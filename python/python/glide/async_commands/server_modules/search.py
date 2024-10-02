@@ -41,7 +41,9 @@ async def dropIndex(
     client: TGlideClient,
     indexName: TEncodable,
     options: Optional[FtDropIndexOptions] = None
-):
+) -> TOK:
     args: List[TEncodable] = [CommandNames.FT_DROPINDEX, indexName]
     if options:
         args.extend(options.get())
+
+    return cast(TOK, await client.custom_command(args))

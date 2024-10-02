@@ -11,9 +11,9 @@ class FtDropIndexOptions:
         deleteDocument: DeleteDocument = DeleteDocument.DELETE
     ):
         self.deleteDocument = deleteDocument
+
     def getDropIndexOptions(self) -> List[str]:
         args = []
         if self.deleteDocument == DeleteDocument.DELETE:
             args.append(FtDropIndexKeywords.DELETE_DOCUMENT)
-
         return args    
