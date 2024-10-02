@@ -122,3 +122,20 @@ tasks.withType(Test) {
         logger.quiet "${desc.className}.${desc.name}: ${result.resultType} ${(result.getEndTime() - result.getStartTime())/1000}s"
     }
 }
+
+test {
+    filter {
+        excludeTestsMatching 'glide.modules.*'
+    }
+}
+
+tasks.register('modulesTest', Test) {
+    doFirst {
+        clusterPorts = [7000]
+        standalonePorts = [6379]
+    }
+
+    filter {
+        includeTestsMatching 'glide.modules.*'
+    }
+}

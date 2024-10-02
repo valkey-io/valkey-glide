@@ -25,6 +25,9 @@ import static command_request.CommandRequestOuterClass.RequestType.ExpireAt;
 import static command_request.CommandRequestOuterClass.RequestType.ExpireTime;
 import static command_request.CommandRequestOuterClass.RequestType.FCall;
 import static command_request.CommandRequestOuterClass.RequestType.FCallReadOnly;
+import static command_request.CommandRequestOuterClass.RequestType.FtCreate;
+import static command_request.CommandRequestOuterClass.RequestType.FtDrop;
+import static command_request.CommandRequestOuterClass.RequestType.FtSearch;
 import static command_request.CommandRequestOuterClass.RequestType.GeoAdd;
 import static command_request.CommandRequestOuterClass.RequestType.GeoDist;
 import static command_request.CommandRequestOuterClass.RequestType.GeoHash;
@@ -209,6 +212,7 @@ import glide.api.commands.SortedSetBaseCommands;
 import glide.api.commands.StreamBaseCommands;
 import glide.api.commands.StringBaseCommands;
 import glide.api.commands.TransactionsBaseCommands;
+import glide.api.commands.VectorSearchBaseCommands;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.PubSubMessage;
@@ -264,6 +268,9 @@ import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
+import glide.api.models.commands.vss.FTCreateOptions.FieldInfo;
+import glide.api.models.commands.vss.FTCreateOptions.IndexType;
+import glide.api.models.commands.vss.FTSearchOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.BaseSubscriptionConfiguration;
 import glide.api.models.exceptions.ConfigurationError;
@@ -279,6 +286,7 @@ import glide.managers.BaseResponseResolver;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import glide.utils.ArgsBuilder;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -310,6 +318,7 @@ public abstract class BaseClient
                 HyperLogLogBaseCommands,
                 GeospatialIndicesBaseCommands,
                 ScriptingAndFunctionsBaseCommands,
+                VectorSearchBaseCommands,
                 TransactionsBaseCommands,
                 PubSubBaseCommands {
 
@@ -5141,5 +5150,41 @@ public abstract class BaseClient
                 Wait,
                 new String[] {Long.toString(numreplicas), Long.toString(timeout)},
                 this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> ftcreate(
+            @NonNull String indexName,
+            @NonNull IndexType indexType,
+            @NonNull String[] prefixes,
+            @NonNull FieldInfo[] fields) {
+        var args = new ArrayList<>(List.of(indexName, "ON", indexType.toString()));
+        if (prefixes.length > 0) {
+            args.add("PREFIX");
+            args.add(Integer.toString(prefixes.length));
+            args.addAll(List.of(prefixes));
+        }
+        args.add("SCHEMA");
+        Arrays.stream(fields).forEach(f -> args.addAll(List.of(f.toArgs())));
+
+        return commandManager.submitNewCommand(
+                FtCreate, args.toArray(String[]::new), this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> ftsearch(
+            @NonNull String indexName, @NonNull String query, @NonNull FTSearchOptions options) {
+        var args =
+                concatenateArrays(
+                        new GlideString[] {gs(indexName), gs(query)},
+                        options.toArgs(),
+                        new GlideString[] {gs("DIALECT"), gs("2")});
+        return commandManager.submitNewCommand(FtSearch, args, this::handleArrayResponseBinary);
+    }
+
+    @Override
+    public CompletableFuture<String> ftdrop(@NonNull String indexName) {
+        return commandManager.submitNewCommand(
+                FtDrop, new String[] {indexName}, this::handleStringResponse);
     }
 }

@@ -9,6 +9,7 @@ module glide.api {
     exports glide.api.models.commands.function;
     exports glide.api.models.commands.scan;
     exports glide.api.models.commands.stream;
+    exports glide.api.models.commands.vss;
     exports glide.api.models.configuration;
     exports glide.api.models.exceptions;
 
