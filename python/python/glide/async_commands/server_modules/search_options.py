@@ -1,5 +1,6 @@
-from typing import Optional, List
+from typing import Optional, List, Mapping
 from enum import Enum
+from glide.constants import TEncodable
 
 class FieldType(Enum):
     TEXT = 1
@@ -17,8 +18,8 @@ class FieldInfo:
     def __init__(
         self,
         identifier: str,
-        alias: Optional[str],
         type: FieldType,
+        alias: Optional[str] = None,
         isSortable: Optional[bool] = None,
         isUnnormalized: Optional[bool] = None,
         isNoIndex: Optional[bool] = None
@@ -51,13 +52,11 @@ class FieldInfo:
 class FtCreateOptions:
     def __init__(
         self,
-        dataType: Optional[DataType],
-        prefixes: Optional[List[str]],
-        fields: List[FieldInfo],
+        dataType: Optional[DataType] = None,
+        prefixes: Optional[List[str]] = None,
     ):
         self.dataType = dataType
         self.prefixes = prefixes
-        self.fields = fields
 
     def getCreateOptions(self) -> List[str]:
         args = []
@@ -69,13 +68,37 @@ class FtCreateOptions:
             args.append(str(len(self.prefixes)))
             for prefix in self.prefixes:
                 args.append(prefix)
-        if self.fields:
-            args.append("SCHEMA")
-            for fieldInfo in self.fields:
-                args = args + fieldInfo.getFieldInfo()
         return args
 
+class ReturnFieldInfo:
+    def __init__(
+        self,
+        identifier: str,
+        alias: Optional[str]
+    ):
+        self.identifier = identifier
+        self.alias = alias
+
+class LimitInfo:
+    def __init__(
+        self,
+        offset: int,
+        count: int 
+    ):
+        self.offset = offset
+        self.cout = count
 
 class FtSearchOptions:
-    def __init__(self) -> None:
-        pass
+    def __init__(
+        self,
+        returnFields: List[ReturnFieldInfo] = [],
+        timeout: Optional[int] = None,
+        params: Mapping[TEncodable, TEncodable] = {},
+        limit: Optional[LimitInfo] = None,
+        count: Optional[bool] = None
+    ):
+        self.returnFields = returnFields
+        self.timeout = timeout
+        self.params = params
+        self.limit = limit
+        self.count = count
