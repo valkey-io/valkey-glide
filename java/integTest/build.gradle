@@ -107,8 +107,8 @@ test.dependsOn ':client:buildRustRelease'
 
 tasks.withType(Test) {
     doFirst {
-        println "Cluster ports = ${clusterHosts}"
-        println "Standalone ports = ${standaloneHosts}"
+        println "Cluster hosts = ${clusterHosts}"
+        println "Standalone hosts = ${standaloneHosts}"
         systemProperty 'test.server.standalone', standaloneHosts
         systemProperty 'test.server.cluster', clusterHosts
     }

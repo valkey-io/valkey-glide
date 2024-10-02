@@ -245,9 +245,9 @@ jobs:
 
             - name: Test java wrapper
               working-directory: java
-              run: ./gradlew :integTest:modulesTest
+              run: ./gradlew :integTest:modulesTest -Dcluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }}
 
-            - name: Upload test & spotbugs reports
+            - name: Upload test reports
               if: always()
               continue-on-error: true
               uses: actions/upload-artifact@v4
