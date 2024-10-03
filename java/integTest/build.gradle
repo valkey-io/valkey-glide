@@ -70,7 +70,9 @@ tasks.register('startCluster') {
             new ByteArrayOutputStream().withStream { os ->
                 exec {
                     workingDir "${project.rootDir}/../utils"
-                    commandLine 'python3', 'cluster_manager.py', 'start', '--cluster-mode'
+                    def args = ['python3', 'cluster_manager.py', 'start', '--cluster-mode']
+                    if (System.getProperty("tls") == 'true') args.add(2, '--tls')
+                    commandLine args
                     standardOutput = os
                 }
                 clusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
@@ -87,7 +89,9 @@ tasks.register('startStandalone') {
             new ByteArrayOutputStream().withStream { os ->
                 exec {
                     workingDir "${project.rootDir}/../utils"
-                    commandLine 'python3', 'cluster_manager.py', 'start', '-r', '0'
+                    def args = ['python3', 'cluster_manager.py', 'start', '-r', '0']
+                    if (System.getProperty("tls") == 'true') args.add(2, '--tls')
+                    commandLine args
                     standardOutput = os
                 }
                 standaloneHosts = extractAddressesFromClusterManagerOutput(os.toString())
@@ -133,8 +137,11 @@ test {
 }
 
 tasks.register('modulesTest', Test) {
-    dependsOn 'startStandalone'
-    dependsOn 'startCluster'
+    doFirst {
+        //systemProperty 'test.server.standalone', System.getProperty("standalone-endpoints")
+        systemProperty 'test.server.cluster', System.getProperty("cluster-endpoints")
+        systemProperty 'test.server.tls', System.getProperty("tls")
+    }
 
     filter {
         includeTestsMatching 'glide.modules.*'

@@ -201,24 +201,8 @@ jobs:
                   cargo-toml-folder: ./java
               name: lint java rust
 
-#    start-self-hosted-runner:
-#        if: github.repository_owner == 'valkey-io'
-#        runs-on: ubuntu-latest
-#        environment: AWS_ACTIONS
-#        steps:
-#            - name: Checkout
-#              uses: actions/checkout@v4
-#
-#            - name: Start self hosted EC2 runner
-#              uses: ./.github/workflows/start-self-hosted-runner
-#              with:
-#                  role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
-#                  aws-region: ${{ secrets.AWS_REGION }}
-#                  ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
-
     test-modules:
         if: github.repository_owner == 'valkey-io'
-#        needs: [start-self-hosted-runner]
         name: Running Module Tests
         runs-on: [self-hosted, linux, ARM64]
         timeout-minutes: 15

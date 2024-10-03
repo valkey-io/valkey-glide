@@ -10,7 +10,6 @@ import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 
 public final class TestConfiguration {
-    // All servers are hosted on localhost
     public static final String[] STANDALONE_HOSTS =
             System.getProperty("test.server.standalone", "").split(",");
     public static final String[] CLUSTER_HOSTS =
