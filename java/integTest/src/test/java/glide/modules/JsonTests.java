@@ -10,8 +10,7 @@ import glide.api.models.commands.InfoOptions.Section;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
 
-public class VectorSearchTests {
-
+public class JsonTests {
     @Test
     @SneakyThrows
     public void check_module_loaded() {
@@ -19,6 +18,6 @@ public class VectorSearchTests {
                 GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(5000).build())
                         .get();
         var info = client.info(new Section[] {Section.MODULES}, RANDOM).get().getSingleValue();
-        assertTrue(info.contains("# search_index_stats"));
+        assertTrue(info.contains("# json_core_metrics"));
     }
 }
