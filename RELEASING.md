@@ -112,8 +112,6 @@ The CD workflow can be triggered in several ways.
 1. **By pushing a Version Tag**: Trigger the CD workflow by pushing a version tag in the format "v*.*." or "v.*.*-rc".
 For example, v1.0.0-rc1. When triggered by a push event with a version tag, all package manager CD workflows (e.g., pypi-cd.yml, npm-cd.yml, java-cd.yml) will be initiated.
 The version will be extracted from the tag.
-
-    a.
     ```
     [13:39:23] ubuntu $ git remote -vv
     origin  https://github.com/your-repo/valkey-glide (fetch)
@@ -127,9 +125,7 @@ The version will be extracted from the tag.
 This is done on a specific CD workflow by passing the required version as an input parameter in the format "*.*.*" or "*.*.*-rc*".
 This method will not trigger deployments for other package managers and will not create a tag in the repository.
 
-    a. <br>
     ![pypi CD](docs/images/releasing/pypi-CD.png)
-
 
 3. **Pull Requests:** Pull requests will trigger the CD workflows as "dry runs" without actually publishing to the package managers.
 This ensures that changes do not break the CD logic. Note that PRs affecting the CD workflows (e.g., introducing changes in the CD paths) can only be opened from branches on the
