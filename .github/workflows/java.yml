@@ -30,6 +30,11 @@ concurrency:
     group: java-${{ github.head_ref || github.ref }}
     cancel-in-progress: true
 
+permissions:
+    contents: read
+    # Allows the GITHUB_TOKEN to make an API call to generate an OIDC token.
+    id-token: write
+
 jobs:
     load-engine-matrix:
         runs-on: ubuntu-latest
@@ -196,16 +201,27 @@ jobs:
                   cargo-toml-folder: ./java
               name: lint java rust
 
+    start-self-hosted-runner:
+        if: github.event.pull_request.head.repo.owner.login == 'valkey-io'
+        runs-on: ubuntu-latest
+        environment: AWS_ACTIONS
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+        
+            - name: Start self hosted EC2 runner
+              uses: ./.github/workflows/start-self-hosted-runner
+              with:
+                  role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
+                  aws-region: ${{ secrets.AWS_REGION }}
+                  ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
+
     test-modules:
         if: github.event.pull_request.head.repo.owner.login == 'valkey-io'
+        needs: [start-self-hosted-runner]
         name: Running Module Tests
         runs-on: arm64-linux
-        timeout-minutes: 35
-        strategy:
-            fail-fast: false
-            matrix:
-                java: [ 17 ]
-
+        timeout-minutes: 15
         steps:
             - name: Setup self-hosted runner access
               run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
@@ -214,11 +230,11 @@ jobs:
               with:
                   submodules: recursive
 
-            - name: Set up JDK ${{ matrix.java }}
+            - name: Set up JDK
               uses: actions/setup-java@v4
               with:
                   distribution: "temurin"
-                  java-version: ${{ matrix.java }}
+                  java-version: 17
 
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
@@ -235,6 +251,6 @@ jobs:
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: test-reports-java-${{ matrix.java }}-modules
+                  name: test-reports-modules
                   path: |
                       java/integTest/build/reports/**
