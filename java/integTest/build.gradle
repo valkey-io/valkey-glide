@@ -138,9 +138,7 @@ test {
 
 tasks.register('modulesTest', Test) {
     doFirst {
-        //systemProperty 'test.server.standalone', System.getProperty("standalone-endpoints")
-        systemProperty 'test.server.cluster', System.getProperty("cluster-endpoints")
-        systemProperty 'test.server.tls', System.getProperty("tls")
+        clusterHosts = System.getProperty("cluster-endpoints")
     }
 
     filter {
