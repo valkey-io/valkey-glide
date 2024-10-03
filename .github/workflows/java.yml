@@ -202,7 +202,7 @@ jobs:
               name: lint java rust
 
     start-self-hosted-runner:
-        if: github.event.pull_request.head.repo.owner.login == 'valkey-io'
+        if: github.repository_owner == 'valkey-io'
         runs-on: ubuntu-latest
         environment: AWS_ACTIONS
         steps:
@@ -217,10 +217,10 @@ jobs:
                   ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
 
     test-modules:
-        if: github.event.pull_request.head.repo.owner.login == 'valkey-io'
+        if: github.repository_owner == 'valkey-io'
         needs: [start-self-hosted-runner]
         name: Running Module Tests
-        runs-on: arm64-linux
+        runs-on: [self-hosted, linux, ARM64]
         timeout-minutes: 15
         steps:
             - name: Setup self-hosted runner access
