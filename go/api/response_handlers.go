@@ -79,7 +79,30 @@ func handleStringArrayResponse(response *C.struct_CommandResponse) ([]Result[str
 		return nil, typeErr
 	}
 
-	var slice []Result[string]
+	slice := make([]Result[string], 0, response.array_value_len)
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		res, err := convertCharArrayToString(&v, true)
+		if err != nil {
+			return nil, err
+		}
+		slice = append(slice, res)
+	}
+	return slice, nil
+}
+
+func handleStringArrayOrNullResponse(response *C.struct_CommandResponse) ([]Result[string], error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Array, true)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	if response.response_type == C.Null {
+		return nil, nil
+	}
+
+	slice := make([]Result[string], 0, response.array_value_len)
 	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
 		res, err := convertCharArrayToString(&v, true)
 		if err != nil {
@@ -99,6 +122,40 @@ func handleLongResponse(response *C.struct_CommandResponse) (Result[int64], erro
 	}
 
 	return CreateInt64Result(int64(response.int_value)), nil
+}
+
+func handleLongOrNullResponse(response *C.struct_CommandResponse) (Result[int64], error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Int, true)
+	if typeErr != nil {
+		return CreateNilInt64Result(), typeErr
+	}
+
+	if response.response_type == C.Null {
+		return CreateNilInt64Result(), nil
+	}
+
+	return CreateInt64Result(int64(response.int_value)), nil
+}
+
+func handleLongArrayResponse(response *C.struct_CommandResponse) ([]Result[int64], error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Array, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	slice := make([]Result[int64], 0, response.array_value_len)
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		err := checkResponseType(&v, C.Int, false)
+		if err != nil {
+			return nil, err
+		}
+		slice = append(slice, CreateInt64Result(int64(v.int_value)))
+	}
+	return slice, nil
 }
 
 func handleDoubleResponse(response *C.struct_CommandResponse) (Result[float64], error) {
