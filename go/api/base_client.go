@@ -156,7 +156,12 @@ func (client *baseClient) Set(key string, value string) (Result[string], error) 
 }
 
 func (client *baseClient) SetWithOptions(key string, value string, options *SetOptions) (Result[string], error) {
-	result, err := client.executeCommand(C.Set, append([]string{key, value}, options.toArgs()...))
+	optionArgs, err := options.toArgs()
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+
+	result, err := client.executeCommand(C.Set, append([]string{key, value}, optionArgs...))
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
@@ -166,6 +171,29 @@ func (client *baseClient) SetWithOptions(key string, value string, options *SetO
 
 func (client *baseClient) Get(key string) (Result[string], error) {
 	result, err := client.executeCommand(C.Get, []string{key})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+
+	return handleStringOrNullResponse(result)
+}
+
+func (client *baseClient) GetEx(key string) (Result[string], error) {
+	result, err := client.executeCommand(C.GetEx, []string{key})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+
+	return handleStringOrNullResponse(result)
+}
+
+func (client *baseClient) GetExWithOptions(key string, options *GetExOptions) (Result[string], error) {
+	optionArgs, err := options.toArgs()
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+
+	result, err := client.executeCommand(C.GetEx, append([]string{key}, optionArgs...))
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
