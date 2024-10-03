@@ -2,7 +2,11 @@
 
 package api
 
-import "strconv"
+import (
+	"strconv"
+
+	"github.com/valkey-io/valkey-glide/go/glide/utils"
+)
 
 // SetOptions represents optional arguments for the [api.StringCommands.SetWithOptions] command.
 //
@@ -146,4 +150,56 @@ const (
 	UnixSeconds      ExpiryType = "EXAT"    // expire the value after the Unix time specified by [api.Expiry.Count], in seconds
 	UnixMilliseconds ExpiryType = "PXAT"    // expire the value after the Unix time specified by [api.Expiry.Count], in milliseconds
 	Persist          ExpiryType = "PERSIST" // Remove the expiry associated with the key
+)
+
+// LPosOptions represents optional arguments for the [api.ListCommands.LPosWithOptions] and
+// [api.ListCommands.LPosCountWithOptions] commands.
+//
+// See [valkey.io]
+//
+// [valkey.io]: https://valkey.io/commands/lpos/
+type LPosOptions struct {
+	// Represents if the rank option is set.
+	IsRankSet bool
+	// The rank of the match to return.
+	Rank int64
+	// Represents if the max length parameter is set.
+	IsMaxLenSet bool
+	// The maximum number of comparisons to make between the element and the items in the list.
+	MaxLen int64
+}
+
+func NewLPosOptionsBuilder() *LPosOptions {
+	return &LPosOptions{}
+}
+
+func (lposOptions *LPosOptions) SetRank(rank int64) *LPosOptions {
+	lposOptions.IsRankSet = true
+	lposOptions.Rank = rank
+	return lposOptions
+}
+
+func (lposOptions *LPosOptions) SetMaxLen(maxLen int64) *LPosOptions {
+	lposOptions.IsMaxLenSet = true
+	lposOptions.MaxLen = maxLen
+	return lposOptions
+}
+
+func (opts *LPosOptions) toArgs() []string {
+	args := []string{}
+	if opts.IsRankSet {
+		args = append(args, RankKeyword, utils.IntToString(opts.Rank))
+	}
+
+	if opts.IsMaxLenSet {
+		args = append(args, MaxLenKeyword, utils.IntToString(opts.MaxLen))
+	}
+
+	return args
+}
+
+const (
+	CountKeyword  string = "COUNT"  // Valkey API keyword used to extract specific number of matching indices from a list.
+	RankKeyword   string = "RANK"   // Valkey API keyword use to determine the rank of the match to return.
+	MaxLenKeyword string = "MAXLEN" // Valkey API keyword used to determine the maximum number of list items to compare.
 )

@@ -23,6 +23,7 @@ import (
 type BaseClient interface {
 	StringCommands
 	HashCommands
+	ListCommands
 
 	// Close terminates the client by closing all associated resources.
 	Close()
@@ -135,7 +136,10 @@ func toCStrings(args []string) ([]C.uintptr_t, []C.ulong) {
 	stringLengths := make([]C.ulong, len(args))
 	for i, str := range args {
 		bytes := utils.StringToBytes(str)
-		ptr := uintptr(unsafe.Pointer(&bytes[0]))
+		var ptr uintptr
+		if len(str) > 0 {
+			ptr = uintptr(unsafe.Pointer(&bytes[0]))
+		}
 		cStrings[i] = C.uintptr_t(ptr)
 		stringLengths[i] = C.size_t(len(str))
 	}
@@ -422,6 +426,86 @@ func (client *baseClient) HKeys(key string) ([]Result[string], error) {
 
 func (client *baseClient) HStrLen(key string, field string) (Result[int64], error) {
 	result, err := client.executeCommand(C.HStrlen, []string{key, field})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) LPush(key string, elements []string) (Result[int64], error) {
+	result, err := client.executeCommand(C.LPush, append([]string{key}, elements...))
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) LPop(key string) (Result[string], error) {
+	result, err := client.executeCommand(C.LPop, []string{key})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+
+	return handleStringOrNullResponse(result)
+}
+
+func (client *baseClient) LPopCount(key string, count int64) ([]Result[string], error) {
+	result, err := client.executeCommand(C.LPop, []string{key, utils.IntToString(count)})
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayOrNullResponse(result)
+}
+
+func (client *baseClient) LPos(key string, element string) (Result[int64], error) {
+	result, err := client.executeCommand(C.LPos, []string{key, element})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongOrNullResponse(result)
+}
+
+func (client *baseClient) LPosWithOptions(key string, element string, options *LPosOptions) (Result[int64], error) {
+	result, err := client.executeCommand(C.LPos, append([]string{key, element}, options.toArgs()...))
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongOrNullResponse(result)
+}
+
+func (client *baseClient) LPosCount(key string, element string, count int64) ([]Result[int64], error) {
+	result, err := client.executeCommand(C.LPos, []string{key, element, CountKeyword, utils.IntToString(count)})
+	if err != nil {
+		return nil, err
+	}
+
+	return handleLongArrayResponse(result)
+}
+
+func (client *baseClient) LPosCountWithOptions(
+	key string,
+	element string,
+	count int64,
+	options *LPosOptions,
+) ([]Result[int64], error) {
+	result, err := client.executeCommand(
+		C.LPos,
+		append([]string{key, element, CountKeyword, utils.IntToString(count)}, options.toArgs()...),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleLongArrayResponse(result)
+}
+
+func (client *baseClient) RPush(key string, elements []string) (Result[int64], error) {
+	result, err := client.executeCommand(C.RPush, append([]string{key}, elements...))
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}

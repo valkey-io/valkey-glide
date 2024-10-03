@@ -906,7 +906,7 @@ func (suite *GlideTestSuite) TestHVals_WithNotExistingKey() {
 
 		res, err := client.HVals(key)
 		assert.Nil(suite.T(), err)
-		assert.Nil(suite.T(), res)
+		assert.Equal(suite.T(), []api.Result[string]{}, res)
 	})
 }
 
@@ -974,7 +974,7 @@ func (suite *GlideTestSuite) TestHKeys_WithNotExistingKey() {
 
 		res, err := client.HKeys(key)
 		assert.Nil(suite.T(), err)
-		assert.Nil(suite.T(), res)
+		assert.Equal(suite.T(), []api.Result[string]{}, res)
 	})
 }
 
@@ -1015,5 +1015,217 @@ func (suite *GlideTestSuite) TestHStrLen_WithNotExistingField() {
 		res2, err := client.HStrLen(key, "field3")
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(0), res2.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestLPushLPop_WithExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		list := []string{"value4", "value3", "value2", "value1"}
+		key := uuid.NewString()
+
+		res1, err := client.LPush(key, list)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), res1.Value())
+
+		res2, err := client.LPop(key)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "value1", res2.Value())
+
+		resultList := []api.Result[string]{api.CreateStringResult("value2"), api.CreateStringResult("value3")}
+		res3, err := client.LPopCount(key, 2)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), resultList, res3)
+	})
+}
+
+func (suite *GlideTestSuite) TestLPop_nonExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+
+		res1, err := client.LPop(key)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), api.CreateNilStringResult(), res1)
+
+		res2, err := client.LPopCount(key, 2)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), ([]api.Result[string])(nil), res2)
+	})
+}
+
+func (suite *GlideTestSuite) TestLPushLPop_typeError() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		suite.verifyOK(client.Set(key, "value"))
+
+		res1, err := client.LPush(key, []string{"value1"})
+		assert.Equal(suite.T(), api.CreateNilInt64Result(), res1)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		res2, err := client.LPopCount(key, 2)
+		assert.Equal(suite.T(), ([]api.Result[string])(nil), res2)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestLPos_withAndWithoutOptions() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		res1, err := client.RPush(key, []string{"a", "a", "b", "c", "a", "b"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(6), res1.Value())
+
+		res2, err := client.LPos(key, "a")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res2.Value())
+
+		res3, err := client.LPosWithOptions(key, "b", api.NewLPosOptionsBuilder().SetRank(2))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(5), res3.Value())
+
+		// element doesn't exist
+		res4, err := client.LPos(key, "e")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), api.CreateNilInt64Result(), res4)
+
+		// reverse traversal
+		res5, err := client.LPosWithOptions(key, "b", api.NewLPosOptionsBuilder().SetRank(-2))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res5.Value())
+
+		// unlimited comparisons
+		res6, err := client.LPosWithOptions(
+			key,
+			"a",
+			api.NewLPosOptionsBuilder().SetRank(1).SetMaxLen(0),
+		)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res6.Value())
+
+		// limited comparisons
+		res7, err := client.LPosWithOptions(
+			key,
+			"c",
+			api.NewLPosOptionsBuilder().SetRank(1).SetMaxLen(2),
+		)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), api.CreateNilInt64Result(), res7)
+
+		// invalid rank value
+		res8, err := client.LPosWithOptions(key, "a", api.NewLPosOptionsBuilder().SetRank(0))
+		assert.Equal(suite.T(), api.CreateNilInt64Result(), res8)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		// invalid maxlen value
+		res9, err := client.LPosWithOptions(key, "a", api.NewLPosOptionsBuilder().SetMaxLen(-1))
+		assert.Equal(suite.T(), api.CreateNilInt64Result(), res9)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		// non-existent key
+		res10, err := client.LPos("non_existent_key", "a")
+		assert.Equal(suite.T(), api.CreateNilInt64Result(), res10)
+		assert.Nil(suite.T(), err)
+
+		// wrong key data type
+		keyString := uuid.NewString()
+		suite.verifyOK(client.Set(keyString, "value"))
+		res11, err := client.LPos(keyString, "a")
+		assert.Equal(suite.T(), api.CreateNilInt64Result(), res11)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestLPosCount() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+
+		res1, err := client.RPush(key, []string{"a", "a", "b", "c", "a", "b"})
+		assert.Equal(suite.T(), int64(6), res1.Value())
+		assert.Nil(suite.T(), err)
+
+		res2, err := client.LPosCount(key, "a", int64(2))
+		assert.Equal(suite.T(), []api.Result[int64]{api.CreateInt64Result(0), api.CreateInt64Result(1)}, res2)
+		assert.Nil(suite.T(), err)
+
+		res3, err := client.LPosCount(key, "a", int64(0))
+		assert.Equal(
+			suite.T(),
+			[]api.Result[int64]{api.CreateInt64Result(0), api.CreateInt64Result(1), api.CreateInt64Result(4)},
+			res3,
+		)
+		assert.Nil(suite.T(), err)
+
+		// invalid count value
+		res4, err := client.LPosCount(key, "a", int64(-1))
+		assert.Equal(suite.T(), ([]api.Result[int64])(nil), res4)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		// non-existent key
+		res5, err := client.LPosCount("non_existent_key", "a", int64(1))
+		assert.Equal(suite.T(), []api.Result[int64]{}, res5)
+		assert.Nil(suite.T(), err)
+
+		// wrong key data type
+		keyString := uuid.NewString()
+		suite.verifyOK(client.Set(keyString, "value"))
+		res6, err := client.LPosCount(keyString, "a", int64(1))
+		assert.Equal(suite.T(), ([]api.Result[int64])(nil), res6)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestLPosCount_withOptions() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+
+		res1, err := client.RPush(key, []string{"a", "a", "b", "c", "a", "b"})
+		assert.Equal(suite.T(), int64(6), res1.Value())
+		assert.Nil(suite.T(), err)
+
+		res2, err := client.LPosCountWithOptions(key, "a", int64(0), api.NewLPosOptionsBuilder().SetRank(1))
+		assert.Equal(
+			suite.T(),
+			[]api.Result[int64]{api.CreateInt64Result(0), api.CreateInt64Result(1), api.CreateInt64Result(4)},
+			res2,
+		)
+		assert.Nil(suite.T(), err)
+
+		res3, err := client.LPosCountWithOptions(key, "a", int64(0), api.NewLPosOptionsBuilder().SetRank(2))
+		assert.Equal(suite.T(), []api.Result[int64]{api.CreateInt64Result(1), api.CreateInt64Result(4)}, res3)
+		assert.Nil(suite.T(), err)
+
+		// reverse traversal
+		res4, err := client.LPosCountWithOptions(key, "a", int64(0), api.NewLPosOptionsBuilder().SetRank(-1))
+		assert.Equal(
+			suite.T(),
+			[]api.Result[int64]{api.CreateInt64Result(4), api.CreateInt64Result(1), api.CreateInt64Result(0)},
+			res4,
+		)
+		assert.Nil(suite.T(), err)
+	})
+}
+
+func (suite *GlideTestSuite) TestRPush() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		list := []string{"value1", "value2", "value3", "value4"}
+		key := uuid.NewString()
+
+		res1, err := client.RPush(key, list)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), res1.Value())
+
+		key2 := uuid.NewString()
+		suite.verifyOK(client.Set(key2, "value"))
+
+		res2, err := client.LPush(key2, []string{"value1"})
+		assert.Equal(suite.T(), api.CreateNilInt64Result(), res2)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
 }
