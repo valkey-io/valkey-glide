@@ -92,12 +92,13 @@ async def exec_app_logic():
                     "glide",
                     f"Authentication error encountered: {e}",
                 )
-                raise e
-            Logger.log(
-                LogLevel.WARN,
-                "glide",
-                f"Client has closed and needs to be re-created: {e}",
-            )
+            else:
+                Logger.log(
+                    LogLevel.WARN,
+                    "glide",
+                    f"Client has closed and needs to be re-created: {e}",
+                )
+            raise e
         except TimeoutError as e:
             # A request timed out. You may choose to retry the execution based on your application's logic
             Logger.log(LogLevel.ERROR, "glide", f"TimeoutError encountered: {e}")
