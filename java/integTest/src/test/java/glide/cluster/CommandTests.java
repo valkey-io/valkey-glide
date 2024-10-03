@@ -1659,7 +1659,8 @@ public class CommandTests {
         String code = generateLuaLibCode(libName, Map.of(funcName, "return 42"), false);
 
         assertEquals(libName, clusterClient.functionLoad(code, false).get());
-        Thread.sleep(1000); // let replica sync with the primary node
+        // let replica sync with the primary node
+        assertEquals(1L, clusterClient.wait(1L, 1000L).get());
 
         // fcall on a replica node should fail, because a function isn't guaranteed to be RO
         var executionException =
