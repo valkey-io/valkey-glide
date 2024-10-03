@@ -58,7 +58,7 @@ e. `git push origin-valkey v1.x.x-rc0`
 f. For each time your release fails all you need to do is create new tag in which the next rc version (e.g. v0.5.0-rc3 → v0.5.0-rc4).
 
 g.
-There is a different procedure for each client once the release candidate is deployed.
+Each client has its own release procedure once the release candidate is deployed.
 
 **Node:** all the test will automatically run and once the release candidate CD workflow is done successfully, we can immediately release the final version.
 
