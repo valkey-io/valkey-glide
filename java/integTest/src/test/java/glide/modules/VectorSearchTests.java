@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
+import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.vss.FTCreateOptions.DistanceMetric;
 import glide.api.models.commands.vss.FTCreateOptions.FieldInfo;
 import glide.api.models.commands.vss.FTCreateOptions.IndexType;
@@ -54,6 +55,7 @@ public class VectorSearchTests {
         var clusterClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(5000).build())
                         .get();
+        clusterClient.flushall(FlushMode.SYNC, ALL_PRIMARIES).get();
 
         clients = List.of(/*Arguments.of(standaloneClient),*/ Arguments.of(clusterClient));
     }
@@ -174,7 +176,7 @@ public class VectorSearchTests {
                                                 new FieldInfo[0])
                                         .get());
         assertInstanceOf(RequestException.class, exception.getCause());
-        assertTrue(exception.getMessage().contains("arguments are missing"));
+        assertTrue(exception.getMessage().contains("wrong number of arguments"));
     }
 
     @SneakyThrows
@@ -282,7 +284,7 @@ public class VectorSearchTests {
                                         .ftsearch(UUID.randomUUID().toString(), "*", FTSearchOptions.builder().build())
                                         .get());
         assertInstanceOf(RequestException.class, exception.getCause());
-        assertTrue(exception.getMessage().contains("no such index"));
+        assertTrue(exception.getMessage().contains("Index not found"));
     }
 
     @SneakyThrows
@@ -338,6 +340,6 @@ public class VectorSearchTests {
 
         var exception = assertThrows(ExecutionException.class, () -> client.ftdrop(index).get());
         assertInstanceOf(RequestException.class, exception.getCause());
-        assertTrue(exception.getMessage().contains("Unknown: Index name"));
+        assertTrue(exception.getMessage().contains("Index does not exist"));
     }
 }
