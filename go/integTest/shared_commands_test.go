@@ -1080,7 +1080,7 @@ func (suite *GlideTestSuite) TestLPos_withAndWithoutOptions() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(0), res2.Value())
 
-		res3, err := client.LPosWithOptions(key, "b", &api.LPosOptions{IsRankSet: true, Rank: int64(2)})
+		res3, err := client.LPosWithOptions(key, "b", api.NewLPosOptionsBuilder().SetRank(2))
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(5), res3.Value())
 
@@ -1090,7 +1090,7 @@ func (suite *GlideTestSuite) TestLPos_withAndWithoutOptions() {
 		assert.Equal(suite.T(), api.CreateNilInt64Result(), res4)
 
 		// reverse traversal
-		res5, err := client.LPosWithOptions(key, "b", &api.LPosOptions{IsRankSet: true, Rank: int64(-2)})
+		res5, err := client.LPosWithOptions(key, "b", api.NewLPosOptionsBuilder().SetRank(-2))
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(2), res5.Value())
 
@@ -1098,7 +1098,7 @@ func (suite *GlideTestSuite) TestLPos_withAndWithoutOptions() {
 		res6, err := client.LPosWithOptions(
 			key,
 			"a",
-			&api.LPosOptions{IsRankSet: true, Rank: int64(1), IsMaxLenSet: true, MaxLen: int64(0)},
+			api.NewLPosOptionsBuilder().SetRank(1).SetMaxLen(0),
 		)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(0), res6.Value())
@@ -1107,19 +1107,19 @@ func (suite *GlideTestSuite) TestLPos_withAndWithoutOptions() {
 		res7, err := client.LPosWithOptions(
 			key,
 			"c",
-			&api.LPosOptions{IsRankSet: true, Rank: int64(1), IsMaxLenSet: true, MaxLen: int64(2)},
+			api.NewLPosOptionsBuilder().SetRank(1).SetMaxLen(2),
 		)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), api.CreateNilInt64Result(), res7)
 
 		// invalid rank value
-		res8, err := client.LPosWithOptions(key, "a", &api.LPosOptions{IsRankSet: true, Rank: int64(0)})
+		res8, err := client.LPosWithOptions(key, "a", api.NewLPosOptionsBuilder().SetRank(0))
 		assert.Equal(suite.T(), api.CreateNilInt64Result(), res8)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 
 		// invalid maxlen value
-		res9, err := client.LPosWithOptions(key, "a", &api.LPosOptions{IsMaxLenSet: true, MaxLen: int64(-1)})
+		res9, err := client.LPosWithOptions(key, "a", api.NewLPosOptionsBuilder().SetMaxLen(-1))
 		assert.Equal(suite.T(), api.CreateNilInt64Result(), res9)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
@@ -1188,7 +1188,7 @@ func (suite *GlideTestSuite) TestLPosCount_withOptions() {
 		assert.Equal(suite.T(), int64(6), res1.Value())
 		assert.Nil(suite.T(), err)
 
-		res2, err := client.LPosCountWithOptions(key, "a", int64(0), &api.LPosOptions{IsRankSet: true, Rank: int64(1)})
+		res2, err := client.LPosCountWithOptions(key, "a", int64(0), api.NewLPosOptionsBuilder().SetRank(1))
 		assert.Equal(
 			suite.T(),
 			[]api.Result[int64]{api.CreateInt64Result(0), api.CreateInt64Result(1), api.CreateInt64Result(4)},
@@ -1196,12 +1196,12 @@ func (suite *GlideTestSuite) TestLPosCount_withOptions() {
 		)
 		assert.Nil(suite.T(), err)
 
-		res3, err := client.LPosCountWithOptions(key, "a", int64(0), &api.LPosOptions{IsRankSet: true, Rank: int64(2)})
+		res3, err := client.LPosCountWithOptions(key, "a", int64(0), api.NewLPosOptionsBuilder().SetRank(2))
 		assert.Equal(suite.T(), []api.Result[int64]{api.CreateInt64Result(1), api.CreateInt64Result(4)}, res3)
 		assert.Nil(suite.T(), err)
 
 		// reverse traversal
-		res4, err := client.LPosCountWithOptions(key, "a", int64(0), &api.LPosOptions{IsRankSet: true, Rank: int64(-1)})
+		res4, err := client.LPosCountWithOptions(key, "a", int64(0), api.NewLPosOptionsBuilder().SetRank(-1))
 		assert.Equal(
 			suite.T(),
 			[]api.Result[int64]{api.CreateInt64Result(4), api.CreateInt64Result(1), api.CreateInt64Result(0)},

@@ -169,6 +169,22 @@ type LPosOptions struct {
 	MaxLen int64
 }
 
+func NewLPosOptionsBuilder() *LPosOptions {
+	return &LPosOptions{}
+}
+
+func (lposOptions *LPosOptions) SetRank(rank int64) *LPosOptions {
+	lposOptions.IsRankSet = true
+	lposOptions.Rank = rank
+	return lposOptions
+}
+
+func (lposOptions *LPosOptions) SetMaxLen(maxLen int64) *LPosOptions {
+	lposOptions.IsMaxLenSet = true
+	lposOptions.MaxLen = maxLen
+	return lposOptions
+}
+
 func (opts *LPosOptions) toArgs() []string {
 	args := []string{}
 	if opts.IsRankSet {

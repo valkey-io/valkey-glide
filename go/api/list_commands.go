@@ -111,18 +111,10 @@ type ListCommands interface {
 	//
 	// For example:
 	//  1. result, err := client.RPush("my_list", []string{"a", "b", "c", "d", "e", "e"})
-	//     result, err := client.LPosWithOptions("my_list", "e", &api.LPosOptions{
-	//         IsRankSet: true,
-	//         Rank:      int64(2),
-	//     })
+	//     result, err := client.LPosWithOptions("my_list", "e", api.NewLPosOptionsBuilder().SetRank(2))
 	//     result.Value(): 5 (Returns the second occurrence of the element "e")
 	//  2. result, err := client.RPush("my_list", []string{"a", "b", "c", "d", "e", "e"})
-	//     result, err := client.LPosWithOptions("my_list", "e", &api.LPosOptions{
-	//         IsRankSet:   true,
-	//         Rank:        int64(1),
-	//         IsMaxLenSet: true,
-	//         MaxLen:      int64(1000),
-	//     })
+	//     result, err := client.LPosWithOptions("my_list", "e", api.NewLPosOptionsBuilder().SetRank(1).SetMaxLen(1000))
 	//     result.Value(): 4
 	//
 	// [valkey.io]: https://valkey.io/commands/lpos/
@@ -165,18 +157,15 @@ type ListCommands interface {
 	//
 	// For example:
 	//  1. result, err := client.RPush("my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
-	//     result, err := client.LPosWithOptions("my_list", "e", int64(1), &api.LPosOptions{
-	//         IsRankSet: true,
-	//         Rank: 	  int64(2),
-	//     })
+	//     result, err := client.LPosWithOptions("my_list", "e", int64(1), api.NewLPosOptionsBuilder().SetRank(2))
 	//     result: []api.Result[int64]{api.CreateInt64Result(5)}
 	//  2. result, err := client.RPush("my_list", []string{"a", "b", "c", "d", "e", "e", "e"})
-	//     result, err := client.LPosWithOptions("my_list", "e", int64(3), &api.LPosOptions{
-	//         IsRankSet:   true,
-	//         Rank:        int64(2),
-	//         IsMaxLenSet: true,
-	//         MaxLen:      int64(1000),
-	//     })
+	//     result, err := client.LPosWithOptions(
+	//             "my_list",
+	//             "e",
+	//             int64(3),
+	//             api.NewLPosOptionsBuilder().SetRank(2).SetMaxLen(1000),
+	//            )
 	//     result: []api.Result[int64]{api.CreateInt64Result(5), api.CreateInt64Result(6)}
 	//
 	//
