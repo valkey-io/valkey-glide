@@ -9,8 +9,9 @@ import glide.api.models.commands.InfoOptions.Section;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
 
-// TODO: remove when real tests added
-public class BasicTests {
+public class VectorSearchTests {
+
+    // TODO: remove when real tests added
     @Test
     @SneakyThrows
     public void connection_check() {
