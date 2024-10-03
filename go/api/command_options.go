@@ -204,38 +204,27 @@ const (
 	MaxLenKeyword string = "MAXLEN" // Valkey API keyword used to determine the maximum number of list items to compare.
 )
 
-// LPosOptions represents optional arguments for the [api.ListCommands.LPosWithOptions] and
-// [api.ListCommands.LPosCountWithOptions] commands.
+// A InsertPosition defines where to insert new elements into a list.
 //
 // See [valkey.io]
 //
-// [valkey.io]: https://valkey.io/commands/lpos/
-type LPosOptions struct {
-	// Represents if the rank option is set.
-	IsRankSet bool
-	// The rank of the match to return.
-	Rank int64
-	// Represents if the max length parameter is set.
-	IsMaxLenSet bool
-	// The maximum number of comparisons to make between the element and the items in the list.
-	MaxLen int64
-}
-
-func (opts *LPosOptions) toArgs() []string {
-	args := []string{}
-	if opts.IsRankSet {
-		args = append(args, RankKeyword, utils.IntToString(opts.Rank))
-	}
-
-	if opts.IsMaxLenSet {
-		args = append(args, MaxLenKeyword, utils.IntToString(opts.MaxLen))
-	}
-
-	return args
-}
+// [valkey.io]: https://valkey.io/commands/linsert/
+type InsertPosition string
 
 const (
-	CountKeyword  string = "COUNT"  // Valkey API keyword used to extract specific number of matching indices from a list.
-	RankKeyword   string = "RANK"   // Valkey API keyword use to determine the rank of the match to return.
-	MaxLenKeyword string = "MAXLEN" // Valkey API keyword used to determine the maximum number of list items to compare.
+	// Insert new element before the pivot.
+	Before InsertPosition = "BEFORE"
+	// Insert new element after the pivot.
+	After InsertPosition = "AFTER"
 )
+
+func (insertPosition InsertPosition) toString() (string, error) {
+	switch insertPosition {
+	case Before:
+		return string(Before), nil
+	case After:
+		return string(After), nil
+	default:
+		return "", &RequestError{"Invalid insert position"}
+	}
+}

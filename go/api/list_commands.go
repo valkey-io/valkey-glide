@@ -194,7 +194,9 @@ type ListCommands interface {
 	RPush(key string, elements []string) (Result[int64], error)
 
 	// Returns the specified elements of the list stored at key.
-	// The offsets start and end are zero-based indexes, with 0 being the first element of the list, 1 being the next element and so on. These offsets can also be negative numbers indicating offsets starting at the end of the list, with -1 being the last element of the list, <code>-2</code> being the penultimate, and so on.
+	// The offsets start and end are zero-based indexes, with 0 being the first element of the list, 1 being the next element
+	// and so on. These offsets can also be negative numbers indicating offsets starting at the end of the list, with -1 being
+	// the last element of the list, -2 being the penultimate, and so on.
 	//
 	// See [valkey.io] for details.
 	//
@@ -211,7 +213,8 @@ type ListCommands interface {
 	//
 	// For example:
 	//  1. result, err := client.LRange("my_list", 0, 2)
-	//     result: []api.Result[string]{api.CreateStringResult("value1"), api.CreateStringResult("value2"), api.CreateStringResult("value3")}
+	// result: []api.Result[string]{api.CreateStringResult("value1"), api.CreateStringResult("value2"),
+	// api.CreateStringResult("value3")}
 	//  2. result, err := client.LRange("my_list", -2, -1)
 	//     result: []api.Result[string]{api.CreateStringResult("value2"), api.CreateStringResult("value3")}
 	//  3. result, err := client.LRange("non_existent_key", 0, 2)
@@ -221,7 +224,9 @@ type ListCommands interface {
 	LRange(key string, start int64, end int64) ([]Result[string], error)
 
 	// Returns the element at index from the list stored at key.
-	// The index is zero-based, so 0 means the first element, 1 the second element and so on. Negative indices can be used to designate elements starting at the tail of the list. Here, -1 means the last element, -2 means the penultimate and so forth.
+	// The index is zero-based, so 0 means the first element, 1 the second element and so on. Negative indices can be used to
+	// designate elements starting at the tail of the list. Here, -1 means the last element, -2 means the penultimate and so
+	// forth.
 	//
 	// See [valkey.io] for details.
 	//
@@ -245,8 +250,9 @@ type ListCommands interface {
 	LIndex(key string, index int64) (Result[string], error)
 
 	// Trims an existing list so that it will contain only the specified range of elements specified.
-	// The offsets start and end are zero-based indexes, with 0 being the first element of the list, 1 being the next element and so on.
-	// These offsets can also be negative numbers indicating offsets starting at the end of the list, with -1 being the last element of the list, -2 being the penultimate, and so on.
+	// The offsets start and end are zero-based indexes, with 0 being the first element of the list, 1 being the next element
+	// and so on. These offsets can also be negative numbers indicating offsets starting at the end of the list, with -1 being
+	// the last element of the list, -2 being the penultimate, and so on.
 	//
 	// See [valkey.io] for details.
 	//
@@ -257,7 +263,8 @@ type ListCommands interface {
 	//
 	// Return value:
 	//  The Result[string] containing always "OK".
-	//  If start exceeds the end of the list, or if start is greater than end, the result will be an empty list (which causes key to be removed).
+	// If start exceeds the end of the list, or if start is greater than end, the result will be an empty list (which causes
+	// key to be removed).
 	//  If end exceeds the actual end of the list, it will be treated like the last element of the list.
 	//  If key does not exist, OK will be returned without changes to the database.
 	//
@@ -291,7 +298,8 @@ type ListCommands interface {
 	// Removes the first count occurrences of elements equal to element from the list stored at key.
 	// If count is positive: Removes elements equal to element moving from head to tail.
 	// If count is negative: Removes elements equal to element moving from tail to head.
-	// If count is 0 or count is greater than the occurrences of elements equal to element, it removes all elements equal to element.
+	// If count is 0 or count is greater than the occurrences of elements equal to element, it removes all elements equal to
+	// element.
 	//
 	// See [valkey.io] for details.
 	//
@@ -361,10 +369,10 @@ type ListCommands interface {
 	// See [valkey.io] for details.
 	//
 	// Parameters:
-	//  key      - The key of the list.
-	//  position - The relative position to insert into - either {@link InsertPosition#BEFORE} or {@link InsertPosition#AFTER} the pivot.
-	//  pivot    - An element of the list.
-	//  element  - The new element to insert.
+	//  key            - The key of the list.
+	//  insertPosition - The relative position to insert into - either api.Before or api.After the pivot.
+	//  pivot          - An element of the list.
+	//  element        - The new element to insert.
 	//
 	// Return value:
 	//  The Result[int64] containing the list length after a successful insert operation.
@@ -372,9 +380,10 @@ type ListCommands interface {
 	//  If the pivot wasn't found, returns 0.
 	//
 	// For example:
-	//  result, err := client.LInsert("my_list", BEFORE, "World", "There")
-	//  result.Value() > 0L;
+	//  "my_list": {"Hello", "Wprld"}
+	//  result, err := client.LInsert("my_list", api.Before, "World", "There")
+	//  result.Value(): 3
 	//
-	// [valkey.io]: https://valkey.io/commands/rpop/
-	LInsert(key string, position *InsertPosition, pivot string, element string) (Result[int64], error)
+	// [valkey.io]: https://valkey.io/commands/linsert/
+	LInsert(key string, insertPosition InsertPosition, pivot string, element string) (Result[int64], error)
 }
