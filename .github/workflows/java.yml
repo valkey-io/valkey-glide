@@ -30,11 +30,6 @@ concurrency:
     group: java-${{ github.head_ref || github.ref }}
     cancel-in-progress: true
 
-permissions:
-    contents: read
-    # Allows the GITHUB_TOKEN to make an API call to generate an OIDC token.
-    id-token: write
-
 jobs:
     load-engine-matrix:
         runs-on: ubuntu-latest
