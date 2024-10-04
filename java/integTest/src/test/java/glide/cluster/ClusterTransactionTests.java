@@ -274,7 +274,7 @@ public class ClusterTransactionTests {
         assertEquals(helloString, clusterClient.get(key2).get());
         assertEquals(helloString, clusterClient.get(key3).get());
 
-        // https://github.com/valkey-io/valkey-glide/issues/2380
+        // TODO activate test when https://github.com/valkey-io/valkey-glide/issues/2380 fixed
         // ExecutionException executionException =
         //         assertThrows(ExecutionException.class, () -> clusterClient.watch(new String[]
         // {}).get());
