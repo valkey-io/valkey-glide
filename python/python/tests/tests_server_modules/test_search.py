@@ -3,7 +3,7 @@ from typing import List
 from glide.async_commands.server_modules import search
 from glide.config import ProtocolVersion
 from glide.glide_client import TGlideClient
-from glide.async_commands.server_modules.search_options.ft_create import FtCreateOptions, DataType, FieldInfo, FieldType
+from glide.async_commands.server_modules.search_options.ft_create_options import FtCreateOptions, DataType, FieldInfo, FieldType
 from glide.constants import OK
 
 @pytest.mark.asyncio

@@ -2,7 +2,6 @@
 """module for `RedisJSON` commands.
 
     Examples:
-
         >>> from glide import json as redisJson
         >>> import json
         >>> value = {'a': 1.0, 'b': 2}
