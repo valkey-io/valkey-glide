@@ -2,13 +2,34 @@
 
 This document describes the process on how to release a new version of Valkey-GLIDE, how to use the GLIDE's CD workflows, and how to release a new wrapper.
 
+Below is the table of contents.
+
+- [Release Documentation](#release-documentation)
+    - [Release Schedule](#release-schedule)
+  - [GLIDE - How to release a new version](#glide---how-to-release-a-new-version)
+    - [Update changelog](#update-changelog)
+    - [Create release branch](#create-release-branch)
+    - [Trigger the CD workflow and create a release candidate](#trigger-the-cd-workflow-and-create-a-release-candidate)
+    - [Trigger the CD workflow for release](#trigger-the-cd-workflow-for-release)
+  - [How to use GLIDE's CD workflows](#how-to-use-glides-cd-workflows)
+    - [**How to trigger the CD workflow for Development**](#how-to-trigger-the-cd-workflow-for-development)
+      - [**Self-hosted runner**](#self-hosted-runner)
+    - [**PyPi**](#pypi)
+    - [**NPM**](#npm)
+      - [1. Create an account.](#1-create-an-account)
+      - [2. Create an access tokens](#2-create-an-access-tokens)
+    - [**Maven Central**](#maven-central)
+  - [**GLIDE - How to release a new wrapper**](#glide---how-to-release-a-new-wrapper)
+
+### Release Schedule
+
+This section is currently under review.
+
 ## GLIDE - How to release a new version
 
-**Contact a Valkey-GLIDE maintainer** on how to trigger the CD workflows.
+### Update changelog
 
-## Deployment Guide
-
-1. CHANGELOG: Go through the CHANGELOG.md file found in the root folder and verify all required changes / bug fixes / features for this release are found in the file. Add a header with of the version and the release date above the described  changes. For example for releasing version 0.3.0:
+1. CHANGELOG: Go through the CHANGELOG.md file found in the root folder and verify all required changes / bug fixes / features for this release are found in the file. Add a header with of the version and the release date above the described  changes. E.G. for releasing version 1.0.0 from version 0.4.0:
 
 ```
 1.0.0 (2024-07-09)
@@ -20,6 +41,8 @@ Changes
 Changes
 * Python: Added STRLEN command ([#1230](https://github.com/valkey-io/valkey-glide/pull/1230))
 ```
+
+### Create release branch
 
 Open a PR to the main branch with the missing changes and the new version header, and continue after it’s merged.
 
@@ -34,14 +57,14 @@ Open a PR to the main branch with the missing changes and the new version header
 
     a. Go to: https://github.com/valkey-io/valkey-glide/actions/workflows/ort.yml <br>
 
-    b. On the right corner, click on "Run workflow" and set the branch to run against the ORT tool to your newly created branch name (e.g. v0.3), and the exact release version (e.g. 0.3.0) <br>
+    b. **(Maintainer Only)** On the right corner, click on "Run workflow" and set the branch to run against the ORT tool to your newly created branch name (e.g. v0.3), and the exact release version (e.g. 0.3.0) <br>
 
     c. <br>
     ![OSS Review Toolkit](docs/images/oss-review-toolkit.png)
 
     d. If diff is found the workflow will open a PR in the release branch with the required changes. Make sure that all dependencies are approved by a Valkey-GLIDE maintainer. Merge the PR once it is ready.
 
-### Trigger the CD workflow for Release
+### Trigger the CD workflow and create a release candidate
 
 a. The CD workflow will deploy the code into the package managers of the different wrappers. If there is any issue with the CD, **contact a Valkey-GLIDE maintainer**. There are multiple CD jobs, specifically one per client. All [CD files](https://github.com/valkey-io/valkey-glide/tree/main/.github/workflows) can be found in the workflows section. Refer to Java CD as an [example](https://github.com/valkey-io/valkey-glide/blob/main/.github/workflows/java-cd.yml). <br>
 
@@ -86,13 +109,17 @@ l. run `python3 ../../utils/cluster_manager.py -r 1 -n 3 --cluster-mode`
     and
     `python3 ../../utils/cluster_manager.py -r 1 -n 1`
 
-m. Edit the file [standalone_example.py](https://github.com/valkey-io/valkey-glide/blob/main/examples/python/standalone_example.py) or [cluster_example.py](https://github.com/valkey-io/valkey-glide/blob/main/examples/python/standalone_example.py) to have the right port in the different functions and run python3.
+### Trigger the CD workflow for release
 
-n. Once the CD workflow and all test have passed, you can release a real version such as `git tag v1.3.0`.
+Example below is done in python.
 
-o. Push the tag to the valkey/glide repo so it will trigger the CD action:
+a. Edit the file [standalone_example.py](https://github.com/valkey-io/valkey-glide/blob/main/examples/python/standalone_example.py) or [cluster_example.py](https://github.com/valkey-io/valkey-glide/blob/main/examples/python/standalone_example.py) to have the right port in the different functions and run python3.
 
-p. `git push origin-valkey v1.x.x`
+b. Once the CD workflow and all test have passed, you can release a real version such as `git tag v1.3.0`.
+
+c. Push the tag to the valkey/glide repo so it will trigger the CD action:
+
+d. `git push origin-valkey v1.x.x`
 
 
 2. Update the release notes in Github
@@ -103,7 +130,7 @@ b. Click on "Draft a new release"
 
 ## How to use GLIDE's CD workflows
 
-For deployment guide, see the above section **`GLIDE - How to release a new version`**.
+For deployment guide, see the above section [GLIDE - How to release a new version](#glide---how-to-release-a-new-version).
 
 ### **How to trigger the CD workflow for Development**
 
@@ -132,7 +159,7 @@ This ensures that changes do not break the CD logic. Note that PRs affecting the
 valkey-io/valkey-glide main repo (rather than from forks) since running the CD, even without publishing, requires access to the repository's secrets.
 
 
-### **Self-hosted runner**
+#### **Self-hosted runner**
 
 We use a self-hosted runner for Linux-arm64.
 We have an automated action to start the self-hosted runner, detailed here: [automatic action to start the self-hosted runner.](https://github.com/valkey-io/valkey-glide/pull/1128)
@@ -143,7 +170,7 @@ We have an automated action to start the self-hosted runner, detailed here: [aut
 
 ### **NPM**
 
-**Contact a Valkey-GLIDE maintainer** to create a Valkey-GLIDE npm account.
+**Contact a Valkey-GLIDE maintainer** to access the Valkey-GLIDE npm account.
 
 #### 1. Create an account.
 
@@ -153,7 +180,7 @@ Then use npm login in your shell to sign in with it. Do not share a team account
 b. When you're ready to make your first release (including checking that things are OK with npm pack), you can run npm publish.
 Your artifacts will be uploaded to the registry, and your package will be live. You can view it at https://npmjs.com/package/package-name-here.
 
-### 2. Create an access tokens
+#### 2. Create an access tokens
 
 a. Access Tokens → Generate new token → classic token
 
