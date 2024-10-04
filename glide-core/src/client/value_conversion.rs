@@ -22,6 +22,7 @@ pub(crate) enum ExpectedReturnType<'a> {
     ArrayOfStrings,
     ArrayOfBools,
     ArrayOfDoubleOrNull,
+    FTInfoReturnType,
     Lolwut,
     ArrayOfStringAndArrays,
     ArrayOfArraysOfDoubleOrNull,
@@ -891,7 +892,115 @@ pub(crate) fn convert_to_expected_type(
                 format!("(response was {:?})", get_value_type(&value)),
             )
                 .into()),
-        }
+        },
+        ExpectedReturnType::FTInfoReturnType => match value {
+            /*
+            Example of the response
+                 1) index_name
+                 2) "957fa3ca-2280-467d-873f-8763a36fbd5a"
+                 3) creation_timestamp
+                 4) (integer) 1728348101740745
+                 5) key_type
+                 6) HASH
+                 7) key_prefixes
+                 8) 1) "blog:post:"
+                 9) fields
+                10) 1) 1) identifier
+                       2) category
+                       3) field_name
+                       4) category
+                       5) type
+                       6) TAG
+                       7) option
+                       8)
+                    2) 1) identifier
+                       2) vec
+                       3) field_name
+                       4) VEC
+                       5) type
+                       6) VECTOR
+                       7) option
+                       8)
+                       9) vector_params
+                      10)  1) algorithm
+                           2) HNSW
+                           3) data_type
+                           4) FLOAT32
+                           5) dimension
+                           6) (integer) 2
+                ...
+
+            Converting response to
+                1# "index_name" => "957fa3ca-2280-467d-873f-8763a36fbd5a"
+                2# "creation_timestamp" => 1728348101740745
+                3# "key_type" => "HASH"
+                4# "key_prefixes" =>
+                   1) "blog:post:"
+                5# "fields" =>
+                   1) 1# "identifier" => "category"
+                      2# "field_name" => "category"
+                      3# "type" => "TAG"
+                      4# "option" => ""
+                   2) 1# "identifier" => "vec"
+                      2# "field_name" => "VEC"
+                      3# "type" => "TAVECTORG"
+                      4# "option" => ""
+                      5# "vector_params" =>
+                         1# "algorithm" => "HNSW"
+                         2# "data_type" => "FLOAT32"
+                         3# "dimension" => 2
+                ...
+
+            Map keys (odd array elements) are simple strings, not bulk strings.
+            */
+            Value::Array(_) => {
+                let Value::Map(mut map) = convert_to_expected_type(value, Some(ExpectedReturnType::Map {
+                    key_type: &None,
+                    value_type: &None,
+                }))? else { unreachable!() };
+                for pair in map.iter_mut() {
+                    if pair.0 == Value::SimpleString("fields".into()) {
+                        let Value::Array(mut fields) = pair.1.clone() else {
+                            return Err((
+                                ErrorKind::TypeError,
+                                "Response couldn't be converted for FT.INFO",
+                                format!("(`fields` was {:?})", get_value_type(&pair.1.clone())),
+                            )
+                                .into());
+                        };
+
+                        for field in fields.iter_mut() {
+                            let Value::Map(mut field_params) = convert_to_expected_type(field.clone(), Some(ExpectedReturnType::Map {
+                                key_type: &None,
+                                value_type: &None,
+                            })).unwrap() else { unreachable!() };
+
+                            for pair in field_params.iter_mut() {
+                                if pair.0 == Value::SimpleString("vector_params".into()) {
+                                    *pair = (pair.0.clone(), convert_to_expected_type(pair.1.clone(), Some(ExpectedReturnType::Map {
+                                        key_type: &None,
+                                        value_type: &None,
+                                    }))?);
+                                    break;
+                                }
+                            }
+
+                            *field = Value::Map(field_params);
+                        }
+
+                        *pair = (pair.0.clone(), Value::Array(fields));
+                        break;
+                    }
+                }
+                Ok(Value::Map(map))
+            },
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted to Pair",
+                format!("(response was {:?})", get_value_type(&value)),
+            )
+                .into())
+        },
     }
 }
 
@@ -1256,6 +1365,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
             key_type: &None,
             value_type: &None,
         }),
+        b"FT.INFO" => Some(ExpectedReturnType::FTInfoReturnType),
         _ => None,
     }
 }

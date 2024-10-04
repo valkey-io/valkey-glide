@@ -11,6 +11,7 @@ import glide.api.models.GlideString;
 import glide.api.models.commands.FT.FTCreateOptions;
 import glide.api.models.commands.FT.FTCreateOptions.FieldInfo;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 import lombok.NonNull;
@@ -138,6 +139,114 @@ public class FT {
                         .flatMap(Arrays::stream)
                         .toArray(GlideString[]::new);
         return executeCommand(client, args, false);
+    }
+
+    /**
+     * Returns information about a given index.
+     *
+     * @param indexName The index name.
+     * @return Nested maps with info about the index. See example for more details.
+     * @example
+     *     <pre>{@code
+     * // example of using the API:
+     * Map<String, Object> response = client.ftinfo("myIndex").get();
+     * // the response contains data in the following format:
+     * Map<String, Object> data = Map.of(
+     *     "index_name", "bcd97d68-4180-4bc5-98fe-5125d0abbcb8",
+     *     "index_status", "AVAILABLE",
+     *     "key_type", "JSON",
+     *     "creation_timestamp", 1728348101728771L,
+     *     "key_prefixes", new String[] { "json:" },
+     *     "num_indexed_vectors", 0L,
+     *     "space_usage", 653471L,
+     *     "num_docs", 0L,
+     *     "vector_space_usage", 653471L,
+     *     "index_degradation_percentage", 0L,
+     *     "fulltext_space_usage", 0L,
+     *     "current_lag", 0L,
+     *     "fields", new Object [] {
+     *         Map.of(
+     *             "identifier", "$.vec",
+     *             "type", "VECTOR",
+     *             "field_name", "VEC",
+     *             "option", ""
+     *             "vector_params", Map.of(
+     *                 "data_type", "FLOAT32",
+     *                 "initial_capacity", 1000L,
+     *                 "current_capacity", 1000L,
+     *                 "distance_metric", "L2",
+     *                 "dimension", 6L,
+     *                 "block_size", 1024L,
+     *                 "algorithm", "FLAT"
+     *           )
+     *         ),
+     *         Map.of(
+     *             "identifier", "name",
+     *             "type", "TEXT",
+     *             "field_name", "name",
+     *             "option", ""
+     *         ),
+     *     }
+     * );
+     * }</pre>
+     */
+    public static CompletableFuture<Map<String, Object>> info(
+            @NonNull BaseClient client, @NonNull String indexName) {
+        return executeCommand(client, new GlideString[] {gs("FT.INFO"), gs(indexName)}, true);
+    }
+
+    /**
+     * Returns information about a given index.
+     *
+     * @param indexName The index name.
+     * @return Nested maps with info about the index. See example for more details.
+     * @example
+     *     <pre>{@code
+     * // example of using the API:
+     * Map<String, Object> response = client.ftinfo("myIndex").get();
+     * // the response contains data in the following format:
+     * Map<String, Object> data = Map.of(
+     *     "index_name", "bcd97d68-4180-4bc5-98fe-5125d0abbcb8",
+     *     "index_status", "AVAILABLE",
+     *     "key_type", "JSON",
+     *     "creation_timestamp", 1728348101728771L,
+     *     "key_prefixes", new String[] { "json:" },
+     *     "num_indexed_vectors", 0L,
+     *     "space_usage", 653471L,
+     *     "num_docs", 0L,
+     *     "vector_space_usage", 653471L,
+     *     "index_degradation_percentage", 0L,
+     *     "fulltext_space_usage", 0L,
+     *     "current_lag", 0L,
+     *     "fields", new Object [] {
+     *         Map.of(
+     *             "identifier", "$.vec",
+     *             "type", "VECTOR",
+     *             "field_name", "VEC",
+     *             "option", ""
+     *             "vector_params", Map.of(
+     *                 "data_type", "FLOAT32",
+     *                 "initial_capacity", 1000L,
+     *                 "current_capacity", 1000L,
+     *                 "distance_metric", "L2",
+     *                 "dimension", 6L,
+     *                 "block_size", 1024L,
+     *                 "algorithm", "FLAT"
+     *           )
+     *         ),
+     *         Map.of(
+     *             "identifier", "name",
+     *             "type", "TEXT",
+     *             "field_name", "name",
+     *             "option", ""
+     *         ),
+     *     }
+     * );
+     * }</pre>
+     */
+    public static CompletableFuture<Map<String, Object>> info(
+            @NonNull BaseClient client, @NonNull GlideString indexName) {
+        return executeCommand(client, new GlideString[] {gs("FT.INFO"), indexName}, true);
     }
 
     /**

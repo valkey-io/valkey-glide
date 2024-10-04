@@ -5,6 +5,7 @@ import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -24,8 +25,11 @@ import glide.api.models.commands.FT.FTCreateOptions.VectorFieldHnsw;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.exceptions.RequestException;
+import java.util.Arrays;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -124,12 +128,12 @@ public class VectorSearchTests {
                         .get());
 
         // create an index with multiple prefixes
-        var name = UUID.randomUUID().toString();
+        var index = UUID.randomUUID().toString();
         assertEquals(
                 OK,
                 FT.create(
                                 client,
-                                name,
+                                index,
                                 new FieldInfo[] {
                                     new FieldInfo("author_id", new TagField()),
                                     new FieldInfo("author_ids", new TagField()),
@@ -149,7 +153,7 @@ public class VectorSearchTests {
                         () ->
                                 FT.create(
                                                 client,
-                                                name,
+                                                index,
                                                 new FieldInfo[] {
                                                     new FieldInfo("title", new TextField()),
                                                     new FieldInfo("name", new TextField())
@@ -181,5 +185,65 @@ public class VectorSearchTests {
                                         .get());
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getMessage().contains("already exists"));
+    }
+
+    @SneakyThrows
+    @Test
+    @SuppressWarnings("unchecked")
+    public void ft_info() {
+        var indices =
+                client
+                        .customCommand(new String[] {"FT._LIST"}, ALL_PRIMARIES)
+                        .get()
+                        .getMultiValue()
+                        .values()
+                        .stream()
+                        .flatMap(s -> Arrays.stream((Object[]) s))
+                        .collect(Collectors.toSet());
+
+        // check that we can get a response for all existing indices (no crashes on value conversion or
+        // so)
+        for (var idx : indices) {
+            FT.info(client, (String) idx).get();
+        }
+
+        var index = UUID.randomUUID().toString();
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {
+                                    new FieldInfo(
+                                            "$.vec", "VEC", VectorFieldHnsw.builder(DistanceMetric.COSINE, 42).build()),
+                                    new FieldInfo("name", new TextField()),
+                                },
+                                FTCreateOptions.builder()
+                                        .indexType(IndexType.JSON)
+                                        .prefixes(new String[] {"123"})
+                                        .build())
+                        .get());
+
+        var response = FT.info(client, index).get();
+        assertEquals(index, response.get("index_name"));
+        assertEquals("JSON", response.get("key_type"));
+        assertArrayEquals(new String[] {"123"}, (Object[]) response.get("key_prefixes"));
+        var fields = (Object[]) response.get("fields");
+        assertEquals(2, fields.length);
+        var f1 = (Map<String, Object>) fields[1];
+        assertEquals("$.vec", f1.get("identifier"));
+        assertEquals("VECTOR", f1.get("type"));
+        assertEquals("VEC", f1.get("field_name"));
+        var f1params = (Map<String, Object>) f1.get("vector_params");
+        assertEquals("COSINE", f1params.get("distance_metric"));
+        assertEquals(42L, f1params.get("dimension"));
+
+        assertEquals(
+                Map.of("identifier", "$.name", "type", "TEXT", "field_name", "$.name", "option", ""),
+                fields[0]);
+
+        var exception = assertThrows(ExecutionException.class, () -> FT.info(client, index).get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(exception.getMessage().contains("Index not found"));
     }
 }
