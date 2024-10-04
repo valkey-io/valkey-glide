@@ -23,7 +23,7 @@ Below is the table of contents.
 
 ### Release Schedule
 
-This section is currently under review.
+This section is currently under review. The release schedule will be soon published on the [wiki](https://github.com/valkey-io/valkey-glide/wiki).
 
 ## GLIDE - How to release a new version
 
