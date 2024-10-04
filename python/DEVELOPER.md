@@ -153,7 +153,6 @@ If you want IT to use already started servers, use the following command line fr
 ```bash
 pytest --asyncio-mode=auto --cluster-endpoints=localhost:7000 --standalone-endpoints=localhost:6379
 ```
-You can use test filter there as well.
 
 ### Submodules
 
