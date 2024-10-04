@@ -32,7 +32,7 @@ class FieldType(Enum):
 
 class DataType(Enum):
     """
-    The type of data for which the index is being created.
+    Options for the type of data for which the index is being created.
     """
 
     HASH = 1
