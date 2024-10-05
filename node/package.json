@@ -20,7 +20,7 @@
         "glide-rs"
     ],
     "scripts": {
-        "build": "npm run build-internal && npm run build-protobuf && npm run build-external",
+        "build": "npm run prereq && npm run build-internal && npm run build-protobuf && npm run build-external",
         "build:release": "npm run build-internal:release && npm run build-protobuf && npm run build-external:release",
         "build:benchmark": "npm run build-internal:benchmark && npm run build-protobuf && npm run build-external",
         "build-internal": "cd rust-client && npm run build",
@@ -37,6 +37,7 @@
         "lint": "npm run install-linting && npx eslint -c ../eslint.config.mjs && npm run prettier:check:ci",
         "install-linting": "cd ../ & npm install",
         "prepack": "npmignore --auto",
+        "prereq": "git submodule update --init --recursive && npm install",
         "prettier:check:ci": "npx prettier --check . --ignore-unknown '!**/*.{js,d.ts}'",
         "prettier:format": "npx prettier --write . --ignore-unknown '!**/*.{js,d.ts}'"
     },
