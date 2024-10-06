@@ -2,8 +2,7 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { ClusterScanCursor } from "glide-rs";
-import { Script } from "index";
+import { ClusterScanCursor, Script } from "glide-rs";
 import * as net from "net";
 import {
     BaseClient,
