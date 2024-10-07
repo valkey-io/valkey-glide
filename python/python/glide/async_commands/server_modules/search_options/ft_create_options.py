@@ -10,7 +10,7 @@ class FieldType(Enum):
 
     TEXT = 1
     """
-    If the field contains a blob of data.
+    If the field contains any blob of data.
     """
     TAG = 2
     """
@@ -26,9 +26,277 @@ class FieldType(Enum):
     """
     VECTOR = 5
     """
-    If the field contains the values of either SPHERICAL or FLAT coordinate system.
+    If the field is a vector field that supports vector search.
     """
     GEOSHAPE = 6
+    """
+    If the field contains the values of either SPHERICAL or FLAT coordinate system.
+    """
+
+class CaseSensitive(Enum):
+    """
+    The option to select if case sensitive or not case sensitive. Used only in TAG type in [FT.CREATE].
+    """
+
+    IS_CASE_SENSITIVE = 1,
+    """
+    This option will select case sensitive option for the TAG type field options.
+    """
+
+    NOT_CASE_SENSITIVE = 2
+    """
+    This option will not select case sensitive option for TAG type field options.
+    """
+
+class VectorTypeAlgorithm(Enum):
+    """
+    Algorithm for vector type fields stored in the index.
+    """
+
+    HNSW = 1,
+    """
+    Hierarchical Navigable Small World algorithm.
+    """
+    FLAT = 2
+    """
+    Flat algorithm or the brute force algorithm.
+    """
+
+class DistanceMetricType(Enum):
+    """
+    The metric options for the distance in vector type field.
+    """
+
+    L2 = 1
+    """
+    Euclidean distance
+    """
+    IP = 2
+    """
+    Inner product
+    """
+    COSINE = 3
+    """
+    Cosine distance
+    """
+
+class VectorType(Enum):
+    """
+    Vector type for the vector field type.
+    """
+
+    FLOAT32 = 1
+    """
+    FLOAT32 type of vector. The only supported type.
+    """
+
+class VectorTypeFlatAttributes:
+    """
+    This class represents the additional attributes for the vector type field with FLAT algorithm.
+    """
+
+    def __init__(
+        self,
+        dim: str,
+        distanceMetric: DistanceMetricType,
+        type: VectorType,
+        initialCap: Optional[str]
+    ):
+        """
+        Initialize the attributes for the vector field type with FLAT algorithm.
+        """
+        self.dim = dim
+        self.distanceMetric = distanceMetric
+        self.type = type
+        self.initialCap = initialCap
+
+    def getVectorTypeFlatAttributes(self):
+        """
+        Get the additional arguments for vector field type with FLAT algorithm.
+
+        Returns:
+            List[str]:
+                List of additional arguments.
+        """
+        args = []
+        if self.dim:
+            args.append(FtCreateKeywords.DIM)
+            args.append(self.dim)
+        if self.distanceMetric:
+            args.append(FtCreateKeywords.DISTANCE_METRIC)
+            args.append(self.distanceMetric.name)
+        if self.type:
+            args.append(FtCreateKeywords.TYPE)
+            args.append(self.type.name)
+        if self.initialCap:
+            args.append(FtCreateKeywords.INITIAL_CAP)
+            args.append(self.initialCap)
+        return args
+    
+class VectorTypeHnswAttributes:
+    """
+    This class represents the additional attributes for the vector type field with HSWN algorithm.
+    """
+    def __init__(
+        self,
+        dim: str,
+        distanceMetric: DistanceMetricType,
+        type: VectorType,
+        initialCap: Optional[str],
+        m: Optional[str],
+        efContruction: Optional[str],
+        efRuntime: Optional[str]
+
+    ):
+        """
+        Initialize the attributes for the vector field type with HNSW algorithm.
+        """
+        self.dim = dim
+        self.distanceMetric = distanceMetric
+        self.type = type
+        self.initialCap = initialCap
+        self.m = m
+        self.efContruction = efContruction
+        self.efRuntime = efRuntime
+    
+    def getVectorTypeHnswAttributes(self):
+        """
+        Get the additional arguments for vector field type with HSWN algorithm.
+
+        Returns:
+            List[str]:
+                List of additional arguments.
+        """
+        args = []
+        if self.dim:
+            args.append(FtCreateKeywords.DIM)
+            args.append(self.dim)
+        if self.distanceMetric:
+            args.append(FtCreateKeywords.DISTANCE_METRIC)
+            args.append(self.distanceMetric.name)
+        if self.type:
+            args.append(FtCreateKeywords.TYPE)
+            args.append(self.type.name)
+        if self.initialCap:
+            args.append(FtCreateKeywords.INITIAL_CAP)
+            args.append(self.initialCap)
+        if self.m:
+            args.append(FtCreateKeywords.M)
+            args.append(self.m)
+        if self.efContruction:
+            args.append(FtCreateKeywords.EF_CONSTRUCTION)
+            args.append(self.efContruction)
+        if self.efRuntime:
+            args.append(FtCreateKeywords.EF_RUNTIME)
+            args.append(self.efRuntime)
+        return args
+        
+
+class TagTypeOptions:
+    """
+    This class represents the additional arguments to be passed after the TAG type in the [FT.CREATE] command.
+    """
+    def __init__(
+        self,
+        separator: Optional[str],
+        caseSensitive: CaseSensitive = CaseSensitive.NOT_CASE_SENSITIVE
+    ):
+        """
+        Initialize the arguments for the vector field type with HNSW algorithm.
+        """
+        self.separator = separator
+        self.caseSensitive = caseSensitive
+
+    def getTagTypeOptions(self) -> List[str]:
+        """
+        Get the additional arguments for TAG type.
+
+        Returns:
+            List[str]:
+                List of additional arguments.
+        """
+        args = []
+        if self.separator:
+            args.append(FtCreateKeywords.SEPARATOR)
+            args.append(self.separator)
+        if self.caseSensitive:
+            args.append(FtCreateKeywords.CASESENSITIVE)
+        return args
+
+class VectorTypeOptions:
+    """
+    This class represents the additional arguments to be passed after the VECTOR type in the [FT.CREATE] command.
+    """
+
+    def __init__(
+        self,
+        algorithm: Optional[VectorTypeAlgorithm],
+        vectorTypeFlatAttributes: Optional[VectorTypeFlatAttributes],
+        vectorTypeHnswAttributes: Optional[VectorTypeHnswAttributes]
+        
+    ):
+        """
+        Initialize the additional arguments.
+        """
+        self.algorithm = algorithm
+        self.vectorTypeFlatAttributes = vectorTypeFlatAttributes
+        self.vectorTypeHnswAttributes = vectorTypeHnswAttributes
+     
+    def getVectorTypeOptions(self) -> List[str]:
+        """
+        Get the additional arguments for VECTOR type.
+
+        Returns:
+            List[str]:
+                List of additional arguments.
+        """
+        args = []
+        if self.algorithm:
+            args.append(self.algorithm.name)
+        if self.algorithm == VectorTypeAlgorithm.FLAT and self.vectorTypeFlatAttributes:
+            flatArgs = self.vectorTypeFlatAttributes.getVectorTypeFlatAttributes()
+            args.append(len(flatArgs))
+            args = args + flatArgs
+        if self.algorithm == VectorTypeAlgorithm.HNSW and self.vectorTypeHnswAttributes:
+            hnswArgs = self.vectorTypeHnswAttributes.getVectorTypeHnswAttributes()
+            args.append(len(hnswArgs))
+            args = args + hnswArgs
+        return args
+
+class FieldTypeInfo:
+    """
+    This class represents a field type for [FT.CREATE] and the optional arguments associated with the field type.
+    """
+    def __init__(
+        self,
+        fieldType: FieldType,
+        tagTypeOptions: Optional[TagTypeOptions],
+        vectorTypeOptions: Optional[VectorTypeOptions]
+    ):
+        """
+        Initialize the field type and the optional arguments.
+        """
+        self.fieldType = fieldType
+        self.tagTypeOptions = tagTypeOptions
+        self.vectorTypeOptions = vectorTypeOptions
+
+    def getFieldTypeInfo(self) -> List[str]:
+        """
+        Get the arguments with the field type and optional arguments for the field type.
+
+        Returns:
+            List[str]:
+                List of additional arguments.
+        """
+        args = []
+        if self.fieldType:
+            args.append(self.fieldType.name)
+        if self.fieldType == FieldType.TAG and self.tagTypeOptions:
+            args = args + self.tagTypeOptions.getTagTypeOptions()
+        if self.fieldType == FieldType.VECTOR and self.vectorTypeOptions:
+            args = args + self.vectorTypeOptions.getVectorTypeOptions()
+        return args
+
 
 class DataType(Enum):
     """
@@ -105,7 +373,7 @@ class FieldInfo:
     def __init__(
         self,
         identifier: str,
-        type: FieldType,
+        fieldTypeInfo: FieldTypeInfo,
         alias: Optional[str] = None,
         sortable: SORTABLE = SORTABLE.NOT_SORTABLE,
         unnormalized: UNNORMALIZED = UNNORMALIZED.NOT_UNNORMALIZED,
@@ -116,7 +384,7 @@ class FieldInfo:
         """
         self.identifier = identifier
         self.alias = alias
-        self.type = type
+        self.fieldTypeInfo = fieldTypeInfo
         self.sortable = sortable
         self.unnormalized = unnormalized
         self.noIndex = noIndex
@@ -135,8 +403,8 @@ class FieldInfo:
         if self.alias:
             args.append(FtCreateKeywords.AS)
             args.append(self.alias)
-        if self.type:
-            args.append(self.type.name)
+        if self.fieldTypeInfo:
+            args.append(self.fieldTypeInfo.getFieldTypeInfo())
         if self.sortable == SORTABLE.IS_SORTABLE:
             args.append(FtCreateKeywords.SORTABLE)
             if self.unnormalized == UNNORMALIZED.IS_UNNORMALIZED:
@@ -152,8 +420,8 @@ class FtCreateOptions:
     All fields in this class are optional inputs for [FT.CREATE].
 
     Args:
-        dataType (Optional[DataType]): The type of data to be indexed using the index created using [FT.CREATE]. If not specfied, the default data type is HASH.
-        prefixes (Optional[List[str]]): The prefix of the key to be indexed. If not specified, all keys created in the data base will be indexed.
+        dataType (Optional[DataType]): The type of data to be indexed using [FT.CREATE].
+        prefixes (Optional[List[str]]): The prefix of the key to be indexed.
     """
     def __init__(
         self,
