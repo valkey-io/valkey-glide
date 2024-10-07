@@ -263,6 +263,11 @@ You can combine this with test filter as well:
 ./gradlew :integTest:test -Dcluster-endpoints=localhost:7000 -Dstandalone-endpoints=localhost:6379 --tests 'TransactionTests' -Dtls=true
 ```
 
+To run server modules test (it doesn't start servers):
+```bash
+./gradlew :integTest:modulesTest -Dcluster-endpoints=localhost:7000 -Dtls=true
+```
+
 ### Generate files
 To (re)generate protobuf code, use the following command:
 
