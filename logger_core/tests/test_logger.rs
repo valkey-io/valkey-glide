@@ -9,7 +9,10 @@ use test_env_helpers::*;
 mod tests {
     use logger_core::{init, log_debug, log_trace};
     use rand::{distributions::Alphanumeric, Rng};
-    use std::fs::{read_dir, read_to_string, remove_dir_all};
+    use std::{
+        fs::{read_dir, read_to_string, remove_dir_all},
+        path::Path,
+    };
     const FILE_DIRECTORY: &str = "glide-logs";
 
     fn generate_random_string(length: usize) -> String {
@@ -39,6 +42,13 @@ mod tests {
     }
 
     #[test]
+    fn init_does_not_create_log_directory_when_console_init() {
+        init(Some(logger_core::Level::Trace), None);
+        let dir_exists = Path::new(FILE_DIRECTORY).is_dir();
+        assert!(!dir_exists);
+    }
+
+    #[test]
     fn log_to_console_works_after_multiple_inits_diff_log_level() {
         let identifier = generate_random_string(10);
         init(Some(logger_core::Level::Trace), None);
@@ -47,6 +57,16 @@ mod tests {
         log_debug(identifier.clone(), "foo");
         // make sure that something like '2023-07-07T06:57:54.446236Z DEBUG logger_core: e49NaJ5J41 - boo' does not appear
         log_trace(identifier, "boo");
+    }
+
+    #[test]
+    fn log_to_console_does_not_create_log_directory_when_console_init() {
+        let identifier = generate_random_string(10);
+        init(Some(logger_core::Level::Trace), None);
+        // you should see in the console something like '2023-07-07T06:57:54.446236Z TRACE logger_core: e49NaJ5J41 - foo'
+        log_trace(identifier.clone(), "foo");
+        let dir_exists = Path::new(FILE_DIRECTORY).is_dir();
+        assert!(!dir_exists);
     }
 
     #[test]
@@ -84,14 +104,20 @@ mod tests {
     }
 
     #[test]
-    fn log_to_file_disabled_when_console_init() {
+    fn log_to_file_disabled_after_console_init() {
         let identifier = generate_random_string(10);
         init(Some(logger_core::Level::Trace), Some(identifier.as_str()));
-        init(Some(logger_core::Level::Trace), None);
-        // you should see in the console something like '2023-07-07T06:57:54.446236Z TRACE logger_core: e49NaJ5J41 - foo'
         log_trace(identifier.clone(), "foo");
+        init(Some(logger_core::Level::Trace), None);
+        log_trace(identifier.clone(), "boo");
         let contents = get_file_contents(identifier.as_str());
-        assert!(contents.is_empty());
+        assert!(
+            contents.contains(identifier.as_str()),
+            "Contents: {}",
+            contents
+        );
+        assert!(contents.contains("foo"), "Contents: {}", contents);
+        assert!(!contents.contains("boo"), "Contents: {}", contents);
     }
 
     fn clean() -> Result<(), std::io::Error> {

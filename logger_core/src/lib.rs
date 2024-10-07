@@ -2,9 +2,12 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 use once_cell::sync::OnceCell;
-use std::sync::RwLock;
+use std::{
+    path::{Path, PathBuf},
+    sync::RwLock,
+};
 use tracing::{self, event};
-use tracing_appender::rolling::{RollingFileAppender, Rotation};
+use tracing_appender::rolling::{RollingFileAppender, RollingWriter, Rotation};
 use tracing_subscriber::{
     filter::Filtered,
     fmt::{
@@ -28,7 +31,7 @@ type InnerLayered = Layered<reload::Layer<InnerFiltered, Registry>, Registry>;
 // A reloadable layer of subscriber to a rolling file
 type FileReload = Handle<
     Filtered<
-        Layer<InnerLayered, DefaultFields, Format, RollingFileAppender>,
+        Layer<InnerLayered, DefaultFields, Format, LazyRollingFileAppender>,
         LevelFilter,
         InnerLayered,
     >,
@@ -47,6 +50,47 @@ pub struct InitiateOnce {
 pub static INITIATE_ONCE: InitiateOnce = InitiateOnce {
     init_once: OnceCell::new(),
 };
+
+const FILE_DIRECTORY: &str = "glide-logs";
+
+/// Wraps [RollingFileAppender] to defer initialization until logging is required,
+/// allowing [init] to disable file logging on read-only filesystems.
+/// This is needed because [RollingFileAppender] tries to create the log directory on initialization.
+struct LazyRollingFileAppender {
+    file_appender: OnceCell<RollingFileAppender>,
+    rotation: Rotation,
+    directory: PathBuf,
+    filename_prefix: PathBuf,
+}
+
+impl LazyRollingFileAppender {
+    fn new(
+        rotation: Rotation,
+        directory: impl AsRef<Path>,
+        filename_prefix: impl AsRef<Path>,
+    ) -> LazyRollingFileAppender {
+        LazyRollingFileAppender {
+            file_appender: OnceCell::new(),
+            rotation,
+            directory: directory.as_ref().to_path_buf(),
+            filename_prefix: filename_prefix.as_ref().to_path_buf(),
+        }
+    }
+}
+
+impl<'a> tracing_subscriber::fmt::writer::MakeWriter<'a> for LazyRollingFileAppender {
+    type Writer = RollingWriter<'a>;
+    fn make_writer(&'a self) -> Self::Writer {
+        let file_appender = self.file_appender.get_or_init(|| {
+            RollingFileAppender::new(
+                self.rotation.clone(),
+                self.directory.clone(),
+                self.filename_prefix.clone(),
+            )
+        });
+        file_appender.make_writer()
+    }
+}
 
 #[derive(Debug)]
 pub enum Level {
@@ -84,9 +128,9 @@ pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
 
         let (stdout_layer, stdout_reload) = reload::Layer::new(stdout_fmt);
 
-        let file_appender = RollingFileAppender::new(
+        let file_appender = LazyRollingFileAppender::new(
             Rotation::HOURLY,
-            "glide-logs",
+            FILE_DIRECTORY,
             file_name.unwrap_or("output.log"),
         );
         let file_fmt = tracing_subscriber::fmt::layer()
@@ -130,7 +174,8 @@ pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
                 });
         }
         Some(file) => {
-            let file_appender = RollingFileAppender::new(Rotation::HOURLY, "glide-logs", file);
+            let file_appender =
+                LazyRollingFileAppender::new(Rotation::HOURLY, FILE_DIRECTORY, file);
             let _ = reloads
                 .file_reload
                 .write()
