@@ -132,3 +132,19 @@ tasks.withType(Test) {
         logger.quiet "${desc.className}.${desc.name}: ${result.resultType} ${(result.getEndTime() - result.getStartTime())/1000}s"
     }
 }
+
+test {
+    filter {
+        excludeTestsMatching 'glide.modules.*'
+    }
+}
+
+tasks.register('modulesTest', Test) {
+    doFirst {
+        clusterHosts = System.getProperty("cluster-endpoints")
+    }
+
+    filter {
+        includeTestsMatching 'glide.modules.*'
+    }
+}
