@@ -78,7 +78,7 @@ d. Push the tag to the valkey/glide repo to trigger the CD action
 
 e. `git push origin-valkey v1.x.x-rc0`
 
-f. For each time your release fails all you need to do is create new tag in which the next rc version (e.g. v0.5.0-rc3 → v0.5.0-rc4).
+f. If your release is unsuccessful, all you need to do is create new tag for the next RC version (e.g. v0.5.0-rc3 → v0.5.0-rc4).
 
 g.
 Each client has its own release procedure once the release candidate is deployed.
@@ -87,6 +87,7 @@ Each client has its own release procedure once the release candidate is deployed
 
 **Python:** there’s no such support currently, so you'll first need to test the RC version you deployed on the different supported platform.You can do so by cloning the repo into each machine, go to [examples/python/requirements.txt](https://github.com/valkey-io/valkey-glide/blob/main/examples/python/requirements.txt).
 
+**Java:** is similar to the Node client. Additionally, the owner shouldn't be able to set the RC version created as the latest release.
 
 h. and change the version to the version you just released.
 
@@ -122,7 +123,7 @@ c. Push the tag to the valkey/glide repo so it will trigger the CD action:
 d. `git push origin-valkey v1.x.x`
 
 
-2. Update the release notes in Github
+2. Update the release notes in Github (**maintainer rights are required**)
 
 a. Go to: https://github.com/valkey-io/valkey-glide/releases
 
@@ -161,8 +162,7 @@ valkey-io/valkey-glide main repo (rather than from forks) since running the CD, 
 
 #### **Self-hosted runner**
 
-We use a self-hosted runner for Linux-arm64.
-We have an automated action to start the self-hosted runner, detailed here: [automatic action to start the self-hosted runner.](https://github.com/valkey-io/valkey-glide/pull/1128)
+We use a self-hosted runner for Linux-arm64. We have an automated action to start the self-hosted runner, detailed here: [automatic action to start the self-hosted runner.](https://github.com/valkey-io/valkey-glide/pull/1128)
 
 ### **PyPi**
 
