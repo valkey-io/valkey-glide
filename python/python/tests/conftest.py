@@ -229,6 +229,7 @@ async def create_client(
     standalone_mode_pubsub: Optional[
         GlideClientConfiguration.PubSubSubscriptions
     ] = None,
+    inflight_requests_limit: Optional[int] = None,
 ) -> Union[GlideClient, GlideClusterClient]:
     # Create async socket client
     use_tls = request.config.getoption("--tls")
@@ -245,6 +246,7 @@ async def create_client(
             protocol=protocol,
             request_timeout=timeout,
             pubsub_subscriptions=cluster_mode_pubsub,
+            inflight_requests_limit=inflight_requests_limit,
         )
         return await GlideClusterClient.create(cluster_config)
     else:
@@ -260,6 +262,7 @@ async def create_client(
             protocol=protocol,
             request_timeout=timeout,
             pubsub_subscriptions=standalone_mode_pubsub,
+            inflight_requests_limit=inflight_requests_limit,
         )
         return await GlideClient.create(config)
 

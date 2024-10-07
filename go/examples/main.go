@@ -28,29 +28,29 @@ func main() {
 	}
 	fmt.Println("PING:", res)
 
-	res, err = client.Set("apples", "oran\x00ges")
+	result, err := client.Set("apples", "oran\x00ges")
 	if err != nil {
 		log.Fatal("Glide example failed with an error: ", err)
 	}
-	fmt.Println("SET(apples, oranges):", res)
+	fmt.Println("SET(apples, oranges):", result.Value())
 
-	res, err = client.Get("invalidKey")
+	result, err = client.Get("invalidKey")
 	if err != nil {
 		log.Fatal("Glide example failed with an error: ", err)
 	}
-	fmt.Println("GET(invalidKey):", res)
+	fmt.Println("GET(invalidKey):", result.Value())
 
-	res, err = client.Get("apples")
+	result, err = client.Get("apples")
 	if err != nil {
 		log.Fatal("Glide example failed with an error: ", err)
 	}
-	fmt.Println("GET(apples):", res)
+	fmt.Println("GET(apples):", result.Value())
 
-	res, err = client.Get("app\x00les")
+	result, err = client.Get("app\x00les")
 	if err != nil {
 		log.Fatal("Glide example failed with an error: ", err)
 	}
-	fmt.Println("GET(app\x00les):", res)
+	fmt.Println("GET(app\x00les):", result.Value())
 
 	client.Close()
 }

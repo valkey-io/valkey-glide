@@ -28,13 +28,13 @@ import lombok.NonNull;
 public final class Logger {
     @Getter
     public enum Level {
-        DISABLED(-2),
         DEFAULT(-1),
         ERROR(0),
         WARN(1),
         INFO(2),
         DEBUG(3),
-        TRACE(4);
+        TRACE(4),
+        OFF(5);
 
         private final int level;
 
@@ -54,6 +54,8 @@ public final class Logger {
                     return DEBUG;
                 case 4:
                     return TRACE;
+                case 5:
+                    return OFF;
                 default:
                     return DEFAULT;
             }
@@ -63,10 +65,6 @@ public final class Logger {
     @Getter private static Level loggerLevel;
 
     private static void initLogger(@NonNull Level level, String fileName) {
-        if (level == Level.DISABLED) {
-            loggerLevel = level;
-            return;
-        }
         loggerLevel = Level.fromInt(initInternal(level.getLevel(), fileName));
     }
 
@@ -78,7 +76,7 @@ public final class Logger {
      * the logs will be written to the console.
      *
      * @param level Set the logger level to one of <code>
-     *     [DISABLED, DEFAULT, ERROR, WARN, INFO, DEBUG, TRACE]
+     *     [DEFAULT, ERROR, WARN, INFO, DEBUG, TRACE, OFF]
      *     </code>. If log level isn't provided, the logger will be configured with default
      *     configuration decided by Glide core.
      * @param fileName If provided, the target of the logs will be the file mentioned. Otherwise, logs
@@ -140,7 +138,7 @@ public final class Logger {
             initLogger(Level.DEFAULT, null);
         }
 
-        if (level == Level.DISABLED) {
+        if (level == Level.OFF) {
             return;
         }
 
@@ -163,7 +161,7 @@ public final class Logger {
             initLogger(Level.DEFAULT, null);
         }
 
-        if (level == Level.DISABLED) {
+        if (level == Level.OFF) {
             return;
         }
 
@@ -222,7 +220,7 @@ public final class Logger {
      * Creates a new logger instance and configure it with the provided log level and file name.
      *
      * @param level Set the logger level to one of <code>
-     *     [DISABLED, DEFAULT, ERROR, WARN, INFO, DEBUG, TRACE]
+     *     [DEFAULT, ERROR, WARN, INFO, DEBUG, TRACE, OFF]
      *     </code>. If log level isn't provided, the logger will be configured with default
      *     configuration decided by Glide core.
      * @param fileName If provided, the target of the logs will be the file mentioned. Otherwise, logs
@@ -234,10 +232,10 @@ public final class Logger {
 
     /**
      * Creates a new logger instance and configure it with the provided log level. The logs will be
-     * written to stdout.
+     * written to stdout. To turn off the logger, use <code>setLoggerConfig(Level.OFF)</code>.
      *
      * @param level Set the logger level to one of <code>
-     *     [DISABLED, DEFAULT, ERROR, WARN, INFO, DEBUG, TRACE]
+     *     [DEFAULT, ERROR, WARN, INFO, DEBUG, TRACE, OFF]
      *     </code>. If log level isn't provided, the logger will be configured with default
      *     configuration decided by Glide core.
      */

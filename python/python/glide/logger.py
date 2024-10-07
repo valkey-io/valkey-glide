@@ -15,6 +15,7 @@ class Level(Enum):
     INFO = internalLevel.Info
     DEBUG = internalLevel.Debug
     TRACE = internalLevel.Trace
+    OFF = internalLevel.Off
 
 
 class Logger:
@@ -44,10 +45,11 @@ class Logger:
         If given a fileName argument, will write the logs to files postfixed with fileName. If fileName isn't provided,
         the logs will be written to the console.
         Args:
-            level (Optional[Level]): Set the logger level to one of [ERROR, WARN, INFO, DEBUG, TRACE].
+            level (Optional[Level]): Set the logger level to one of [ERROR, WARN, INFO, DEBUG, TRACE, OFF].
             If log level isn't provided, the logger will be configured with default configuration decided by the Rust core.
-            file_name (Optional[str]):  If providedv the target of the logs will be the file mentioned.
+            file_name (Optional[str]):  If provided the target of the logs will be the file mentioned.
             Otherwise, logs will be printed to the console.
+            To turn off logging completely, set the level to Level.OFF.
         """
         if cls._instance is None:
             cls._instance = cls(level, file_name)
@@ -74,9 +76,10 @@ class Logger:
         """Creates a new logger instance and configure it with the provided log level and file name.
 
         Args:
-            level (Optional[Level]): Set the logger level to one of [ERROR, WARN, INFO, DEBUG, TRACE].
+            level (Optional[Level]): Set the logger level to one of [ERROR, WARN, INFO, DEBUG, TRACE, OFF].
             If log level isn't provided, the logger will be configured with default configuration decided by the Rust core.
-            file_name (Optional[str]):  If providedv the target of the logs will be the file mentioned.
+            file_name (Optional[str]):  If provided the target of the logs will be the file mentioned.
             Otherwise, logs will be printed to the console.
+            To turn off logging completely, set the level to OFF.
         """
         Logger._instance = Logger(level, file_name)
