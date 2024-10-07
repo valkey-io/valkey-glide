@@ -93,7 +93,6 @@ public class LoggerTests {
             assertTrue(errorLineLazy.contains(errorIdentifier + " - " + errorMessage));
         } finally {
             logFile.delete();
-            dummyLogFile.delete();
             logFolder.delete();
         }
     }
