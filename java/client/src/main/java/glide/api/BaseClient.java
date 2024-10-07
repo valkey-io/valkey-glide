@@ -268,8 +268,8 @@ import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
+import glide.api.models.commands.vss.FTCreateOptions;
 import glide.api.models.commands.vss.FTCreateOptions.FieldInfo;
-import glide.api.models.commands.vss.FTCreateOptions.IndexType;
 import glide.api.models.commands.vss.FTSearchOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.BaseSubscriptionConfiguration;
@@ -286,7 +286,6 @@ import glide.managers.BaseResponseResolver;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import glide.utils.ArgsBuilder;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -5154,21 +5153,18 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String> ftcreate(
-            @NonNull String indexName,
-            @NonNull IndexType indexType,
-            @NonNull String[] prefixes,
-            @NonNull FieldInfo[] fields) {
-        var args = new ArrayList<>(List.of(indexName, "ON", indexType.toString()));
-        if (prefixes.length > 0) {
-            args.add("PREFIX");
-            args.add(Integer.toString(prefixes.length));
-            args.addAll(List.of(prefixes));
-        }
-        args.add("SCHEMA");
-        Arrays.stream(fields).forEach(f -> args.addAll(List.of(f.toArgs())));
+            @NonNull String indexName, @NonNull FTCreateOptions options, @NonNull FieldInfo[] fields) {
+        var args =
+                concatenateArrays(
+                        new String[] {indexName},
+                        options.toArgs(),
+                        new String[] {"SCHEMA"},
+                        Arrays.stream(fields)
+                                .map(FieldInfo::toArgs)
+                                .flatMap(Arrays::stream)
+                                .toArray(String[]::new));
 
-        return commandManager.submitNewCommand(
-                FtCreate, args.toArray(String[]::new), this::handleStringResponse);
+        return commandManager.submitNewCommand(FtCreate, args, this::handleStringResponse);
     }
 
     @Override

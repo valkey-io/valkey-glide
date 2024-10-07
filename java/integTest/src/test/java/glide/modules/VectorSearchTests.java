@@ -16,6 +16,7 @@ import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.models.commands.FlushMode;
+import glide.api.models.commands.vss.FTCreateOptions;
 import glide.api.models.commands.vss.FTCreateOptions.DistanceMetric;
 import glide.api.models.commands.vss.FTCreateOptions.FieldInfo;
 import glide.api.models.commands.vss.FTCreateOptions.IndexType;
@@ -78,8 +79,7 @@ public class VectorSearchTests {
                 client
                         .ftcreate(
                                 UUID.randomUUID().toString(),
-                                IndexType.HASH,
-                                new String[0],
+                                FTCreateOptions.empty(),
                                 new FieldInfo[] {
                                     new FieldInfo("vec", "VEC", VectorFieldHnsw.builder(DistanceMetric.L2, 2).build())
                                 })
@@ -89,8 +89,10 @@ public class VectorSearchTests {
                 client
                         .ftcreate(
                                 UUID.randomUUID().toString(),
-                                IndexType.JSON,
-                                new String[] {"json:"},
+                                FTCreateOptions.builder()
+                                        .indexType(IndexType.JSON)
+                                        .prefixes(new String[] {"json:"})
+                                        .build(),
                                 new FieldInfo[] {
                                     new FieldInfo(
                                             "$.vec", "VEC", VectorFieldFlat.builder(DistanceMetric.L2, 6).build())
@@ -103,8 +105,10 @@ public class VectorSearchTests {
                 client
                         .ftcreate(
                                 UUID.randomUUID().toString(),
-                                IndexType.HASH,
-                                new String[] {"docs:"},
+                                FTCreateOptions.builder()
+                                        .indexType(IndexType.HASH)
+                                        .prefixes(new String[] {"docs:"})
+                                        .build(),
                                 new FieldInfo[] {
                                     new FieldInfo(
                                             "doc_embedding",
@@ -122,8 +126,10 @@ public class VectorSearchTests {
                 client
                         .ftcreate(
                                 UUID.randomUUID().toString(),
-                                IndexType.HASH,
-                                new String[] {"blog:post:"},
+                                FTCreateOptions.builder()
+                                        .indexType(IndexType.HASH)
+                                        .prefixes(new String[] {"blog:post:"})
+                                        .build(),
                                 new FieldInfo[] {
                                     new FieldInfo("title", new TextField()),
                                     new FieldInfo("published_at", new NumericField()),
@@ -138,8 +144,10 @@ public class VectorSearchTests {
                 client
                         .ftcreate(
                                 name,
-                                IndexType.HASH,
-                                new String[] {"author:details:", "book:details:"},
+                                FTCreateOptions.builder()
+                                        .indexType(IndexType.HASH)
+                                        .prefixes(new String[] {"author:details:", "book:details:"})
+                                        .build(),
                                 new FieldInfo[] {
                                     new FieldInfo("author_id", new TagField()),
                                     new FieldInfo("author_ids", new TagField()),
@@ -156,8 +164,7 @@ public class VectorSearchTests {
                                 client
                                         .ftcreate(
                                                 name,
-                                                IndexType.HASH,
-                                                new String[0],
+                                                FTCreateOptions.empty(),
                                                 new FieldInfo[] {new FieldInfo("title", new TextField())})
                                         .get());
         assertInstanceOf(RequestException.class, exception.getCause());
@@ -170,10 +177,7 @@ public class VectorSearchTests {
                         () ->
                                 client
                                         .ftcreate(
-                                                UUID.randomUUID().toString(),
-                                                IndexType.HASH,
-                                                new String[0],
-                                                new FieldInfo[0])
+                                                UUID.randomUUID().toString(), FTCreateOptions.empty(), new FieldInfo[0])
                                         .get());
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getMessage().contains("wrong number of arguments"));
@@ -191,8 +195,10 @@ public class VectorSearchTests {
                 client
                         .ftcreate(
                                 index,
-                                IndexType.HASH,
-                                new String[] {prefix},
+                                FTCreateOptions.builder()
+                                        .indexType(IndexType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build(),
                                 new FieldInfo[] {
                                     new FieldInfo("vec", "VEC", VectorFieldHnsw.builder(DistanceMetric.L2, 2).build())
                                 })
@@ -297,8 +303,7 @@ public class VectorSearchTests {
                 client
                         .ftcreate(
                                 index,
-                                IndexType.HASH,
-                                new String[0],
+                                FTCreateOptions.empty(),
                                 new FieldInfo[] {
                                     new FieldInfo("vec", VectorFieldHnsw.builder(DistanceMetric.L2, 2).build())
                                 })

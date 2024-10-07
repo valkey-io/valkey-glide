@@ -1,8 +1,8 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
+import glide.api.models.commands.vss.FTCreateOptions;
 import glide.api.models.commands.vss.FTCreateOptions.FieldInfo;
-import glide.api.models.commands.vss.FTCreateOptions.IndexType;
 import glide.api.models.commands.vss.FTSearchOptions;
 import glide.api.models.commands.vss.FTSearchOptions.FTSearchOptionsBuilder;
 import java.util.concurrent.CompletableFuture;
@@ -14,24 +14,27 @@ public interface VectorSearchBaseCommands {
      *
      * @see TODO
      * @param indexName The index name.
-     * @param indexType The index type.
-     * @param prefixes (Optional) A list of prefixes of index definitions
+     * @param options Additional parameters for the command - see {@link FTCreateOptions}.
      * @param fields Fields to populate into the index.
      * @return <code>OK</code>.
      * @example
      *     <pre>{@code
      * // Create an index for vectors of size 2:
-     * client.ftcreate("hash_idx1", IndexType.HASH, new String[] {"hash:"}, new FieldInfo[] {
-     *     new FieldInfo("vec", "VEC", VectorFieldFlat.builder(DistanceMetric.L2, 2).build())
+     * client.ftcreate("hash_idx1", FTCreateOptions.empty(), new FieldInfo[] {
+     *     new FieldInfo("vec", VectorFieldFlat.builder(DistanceMetric.L2, 2).build())
      * }).get();
      * // Create a 6-dimensional JSON index using the HNSW algorithm:
-     * client.ftcreate("json_idx1", IndexType.JSON, new String[] {"json:"}, new FieldInfo[] {
-     *     new FieldInfo("$.vec", "VEC", VectorFieldHnsw.builder(DistanceMetric.L2, 6).numberOfEdges(32).build())
+     * client.ftcreate(
+     *     "json_idx1",
+     *     FTCreateOptions.builder().indexType(JSON).prefixes(new String[] {"json:"}).build(),
+     *     new FieldInfo[] { new FieldInfo(
+     *         "$.vec",
+     *         "VEC",
+     *         VectorFieldHnsw.builder(DistanceMetric.L2, 6).numberOfEdges(32).build())
      * }).get();
      * }</pre>
      */
-    CompletableFuture<String> ftcreate(
-            String indexName, IndexType indexType, String[] prefixes, FieldInfo[] fields);
+    CompletableFuture<String> ftcreate(String indexName, FTCreateOptions options, FieldInfo[] fields);
 
     /**
      * Uses the provided query expression to locate keys within an index. Once located, the count

@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands.vss;
 
+import glide.api.commands.VectorSearchBaseCommands;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -8,9 +9,36 @@ import java.util.Map;
 import java.util.Optional;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 
-// TODO examples
+/** Optional parameters for {@link VectorSearchBaseCommands#ftcreate} command. */
+@Builder
 public class FTCreateOptions {
+    /** The index type. If not given a {@link IndexType#HASH} index is created. */
+    private final IndexType indexType;
+
+    /** A list of prefixes of index definitions. */
+    private final String[] prefixes;
+
+    /** Create an empty options if parametrization is not needed. */
+    public static FTCreateOptions empty() {
+        return builder().build();
+    }
+
+    public String[] toArgs() {
+        var args = new ArrayList<String>();
+        if (indexType != null) {
+            args.add("ON");
+            args.add(indexType.toString());
+        }
+        if (prefixes != null && prefixes.length > 0) {
+            args.add("PREFIX");
+            args.add(Integer.toString(prefixes.length));
+            args.addAll(List.of(prefixes));
+        }
+        return args.toArray(String[]::new);
+    }
+
     /** Type of the index dataset. */
     public enum IndexType {
         /** Data stored in hashes, so field identifiers are field names within the hashes. */
