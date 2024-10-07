@@ -10,7 +10,10 @@ from glide.constants import OK
 class TestVss:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_vss_create(self, glide_client: TGlideClient):        
+    async def test_vss_create(self, glide_client: TGlideClient):
+        """
+        Create an index with multiple fields with Hash data type.
+        """
         index = "idx"
         fields: List[FieldInfo] = []
         fieldInfo1: FieldInfo = FieldInfo("title", FieldType.TEXT, isSortable=True)
@@ -22,9 +25,18 @@ class TestVss:
 
         prefixes: List[str] = []
         prefixes.append("blog:post:")
-        options: FtCreateOptions = FtCreateOptions(DataType.HASH, prefixes, fields)
-        result = await search.create(glide_client, index, options)
+        options: FtCreateOptions = FtCreateOptions(DataType.HASH, prefixes)
+
+        result = await search.create(glide_client, index, fields, options)
         assert result == OK
+
+        """
+        Create an index with multiple fields with JSON data type.
+        """
+
+        """
+        Create an index with
+        """
 
         # print info command result
         print(await search.info(glide_client, index))
