@@ -5,6 +5,7 @@ import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
+import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -16,6 +17,7 @@ import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.models.commands.FlushMode;
+import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.vss.FTCreateOptions;
 import glide.api.models.commands.vss.FTCreateOptions.DistanceMetric;
 import glide.api.models.commands.vss.FTCreateOptions.FieldInfo;
@@ -67,6 +69,17 @@ public class VectorSearchTests {
         for (var client : clients) {
             ((BaseClient) client.get()[0]).close();
         }
+    }
+  
+    @Test
+    @SneakyThrows
+    public void check_module_loaded() {
+        var client =
+                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(5000).build())
+                        .get();
+        var info = client.info(new Section[] {Section.MODULES}, RANDOM).get().getSingleValue();
+        assertTrue(info.contains("# search_index_stats"));
+        client.close();
     }
 
     @SneakyThrows
