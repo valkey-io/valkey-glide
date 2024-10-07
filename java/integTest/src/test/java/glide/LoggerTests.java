@@ -72,9 +72,6 @@ public class LoggerTests {
         // Initialize a new logger to force closing of existing files
         String dummyFilename = "dummy.txt";
         Logger.setLoggerConfig(Logger.Level.DEFAULT, dummyFilename);
-        File[] dummyLogFiles = logFolder.listFiles((dir, name) -> name.startsWith(dummyFilename + "."));
-        assertNotNull(dummyLogFiles);
-        File dummyLogFile = dummyLogFiles[0];
 
         File[] logFiles = logFolder.listFiles((dir, name) -> name.startsWith(filename + "."));
         assertNotNull(logFiles);
@@ -96,7 +93,6 @@ public class LoggerTests {
             assertTrue(errorLineLazy.contains(errorIdentifier + " - " + errorMessage));
         } finally {
             logFile.delete();
-            dummyLogFile.delete();
             logFolder.delete();
         }
     }
