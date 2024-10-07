@@ -1,9 +1,11 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
+import static glide.TestUtilities.commonClientConfig;
+import static glide.TestUtilities.commonClusterClientConfig;
+
 import glide.api.GlideClient;
-import glide.api.models.configuration.GlideClientConfiguration;
-import glide.api.models.configuration.NodeAddress;
+import glide.api.GlideClusterClient;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -14,25 +16,14 @@ public class ConnectionTests {
     @Test
     @SneakyThrows
     public void basic_client() {
-        var regularClient =
-                GlideClient.createClient(
-                                GlideClientConfiguration.builder()
-                                        .address(
-                                                NodeAddress.builder().port(TestConfiguration.STANDALONE_PORTS[0]).build())
-                                        .build())
-                        .get();
+        var regularClient = GlideClient.createClient(commonClientConfig().build()).get();
         regularClient.close();
     }
 
     @Test
     @SneakyThrows
     public void cluster_client() {
-        var regularClient =
-                GlideClient.createClient(
-                                GlideClientConfiguration.builder()
-                                        .address(NodeAddress.builder().port(TestConfiguration.CLUSTER_PORTS[0]).build())
-                                        .build())
-                        .get();
-        regularClient.close();
+        var clusterClient = GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
+        clusterClient.close();
     }
 }
