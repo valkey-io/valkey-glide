@@ -13,8 +13,6 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import glide.api.BaseClient;
-import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
@@ -30,47 +28,34 @@ import glide.api.models.commands.vss.FTCreateOptions.VectorFieldHnsw;
 import glide.api.models.commands.vss.FTSearchOptions;
 import glide.api.models.exceptions.RequestException;
 import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
-import lombok.Getter;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.api.Test;
 
 public class VectorSearchTests {
 
-    @Getter private static List<Arguments> clients;
+    private static GlideClusterClient client;
 
     @BeforeAll
     @SneakyThrows
     public static void init() {
-        // var standaloneClient =
-        //     GlideClient.createClient(commonClientConfig().requestTimeout(5000).build()).get();
-
-        var clusterClient =
+        client =
                 GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(5000).build())
                         .get();
-        clusterClient.flushall(FlushMode.SYNC, ALL_PRIMARIES).get();
-
-        clients = List.of(/*Arguments.of(standaloneClient),*/ Arguments.of(clusterClient));
+        client.flushall(FlushMode.SYNC, ALL_PRIMARIES).get();
     }
 
     @AfterAll
     @SneakyThrows
     public static void teardown() {
-        for (var client : clients) {
-            ((BaseClient) client.get()[0]).close();
-        }
+        client.close();
     }
-  
+
     @Test
     @SneakyThrows
     public void check_module_loaded() {
@@ -83,9 +68,8 @@ public class VectorSearchTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    public void ft_create(BaseClient client) {
+    @Test
+    public void ft_create() {
         // create few simple indices
         assertEquals(
                 OK,
@@ -197,9 +181,8 @@ public class VectorSearchTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    public void ft_search(BaseClient client) {
+    @Test
+    public void ft_search() {
         String index = UUID.randomUUID().toString();
         String prefix = "{" + UUID.randomUUID() + "}:";
 
@@ -307,9 +290,8 @@ public class VectorSearchTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    public void ft_drop(BaseClient client) {
+    @Test
+    public void ft_drop() {
         var index = UUID.randomUUID().toString();
         assertEquals(
                 OK,
@@ -323,34 +305,26 @@ public class VectorSearchTests {
                         .get());
 
         var before =
-                client instanceof GlideClient
-                        ? Set.of(
-                                (Object[]) ((GlideClient) client).customCommand(new String[] {"FT._LIST"}).get())
-                        : ((GlideClusterClient) client)
-                                        .customCommand(new String[] {"FT._LIST"}, ALL_PRIMARIES)
-                                        .get()
-                                        .getMultiValue()
-                                        .values()
-                                        .stream()
-                                        .flatMap(s -> Arrays.stream((Object[]) s))
-                                        .collect(Collectors.toSet());
+                client
+                        .customCommand(new String[] {"FT._LIST"}, ALL_PRIMARIES)
+                        .get()
+                        .getMultiValue()
+                        .values()
+                        .stream()
+                        .flatMap(s -> Arrays.stream((Object[]) s))
+                        .collect(Collectors.toSet());
 
         assertEquals(OK, client.ftdrop(index).get());
 
         var after =
-                client instanceof GlideClient
-                        ? new HashSet<>(
-                                Set.of(
-                                        (Object[])
-                                                ((GlideClient) client).customCommand(new String[] {"FT._LIST"}).get()))
-                        : ((GlideClusterClient) client)
-                                        .customCommand(new String[] {"FT._LIST"}, ALL_PRIMARIES)
-                                        .get()
-                                        .getMultiValue()
-                                        .values()
-                                        .stream()
-                                        .flatMap(s -> Arrays.stream((Object[]) s))
-                                        .collect(Collectors.toSet());
+                client
+                        .customCommand(new String[] {"FT._LIST"}, ALL_PRIMARIES)
+                        .get()
+                        .getMultiValue()
+                        .values()
+                        .stream()
+                        .flatMap(s -> Arrays.stream((Object[]) s))
+                        .collect(Collectors.toSet());
 
         assertFalse(after.contains(index));
         after.add(index);
