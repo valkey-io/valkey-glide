@@ -142,7 +142,7 @@ It is possible to run an interactive shell synced with the currect client code t
 npx ts-node --project tsconfig.json
 ```
 
-This shell allows executing node code line by line:
+This shell allows executing typescript and javascript code line by line:
 
 ```typescript
 import { GlideClient, GlideClusterClient } from ".";
@@ -193,7 +193,7 @@ Development on the Node wrapper may involve changes in either the TypeScript or 
     # Run from the node folder
     npm run lint
     # To automatically apply ESLint and/or prettier recommendations
-    npx run lint:fix
+    npm run lint:fix
     ```
 
 2. Rust
