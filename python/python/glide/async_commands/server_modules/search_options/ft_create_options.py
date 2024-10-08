@@ -97,10 +97,10 @@ class VectorTypeFlatAttributes:
 
     def __init__(
         self,
-        dim: str,
+        dim: int,
         distanceMetric: DistanceMetricType,
         type: VectorType,
-        initialCap: Optional[str]
+        initialCap: Optional[int]
     ):
         """
         Initialize the attributes for the vector field type with FLAT algorithm.
@@ -121,7 +121,7 @@ class VectorTypeFlatAttributes:
         args = []
         if self.dim:
             args.append(FtCreateKeywords.DIM)
-            args.append(self.dim)
+            args.append(str(self.dim))
         if self.distanceMetric:
             args.append(FtCreateKeywords.DISTANCE_METRIC)
             args.append(self.distanceMetric.name)
@@ -130,7 +130,7 @@ class VectorTypeFlatAttributes:
             args.append(self.type.name)
         if self.initialCap:
             args.append(FtCreateKeywords.INITIAL_CAP)
-            args.append(self.initialCap)
+            args.append(str(self.initialCap))
         return args
     
 class VectorTypeHnswAttributes:
@@ -139,13 +139,13 @@ class VectorTypeHnswAttributes:
     """
     def __init__(
         self,
-        dim: str,
+        dim: int,
         distanceMetric: DistanceMetricType,
         type: VectorType,
-        initialCap: Optional[str],
-        m: Optional[str],
-        efContruction: Optional[str],
-        efRuntime: Optional[str]
+        initialCap: Optional[int] = None,
+        m: Optional[int] = None,
+        efContruction: Optional[int] = None,
+        efRuntime: Optional[int] = None
 
     ):
         """
@@ -170,7 +170,7 @@ class VectorTypeHnswAttributes:
         args = []
         if self.dim:
             args.append(FtCreateKeywords.DIM)
-            args.append(self.dim)
+            args.append(str(self.dim))
         if self.distanceMetric:
             args.append(FtCreateKeywords.DISTANCE_METRIC)
             args.append(self.distanceMetric.name)
@@ -179,16 +179,16 @@ class VectorTypeHnswAttributes:
             args.append(self.type.name)
         if self.initialCap:
             args.append(FtCreateKeywords.INITIAL_CAP)
-            args.append(self.initialCap)
+            args.append(str(self.initialCap))
         if self.m:
             args.append(FtCreateKeywords.M)
-            args.append(self.m)
+            args.append(str(self.m))
         if self.efContruction:
             args.append(FtCreateKeywords.EF_CONSTRUCTION)
-            args.append(self.efContruction)
+            args.append(str(self.efContruction))
         if self.efRuntime:
             args.append(FtCreateKeywords.EF_RUNTIME)
-            args.append(self.efRuntime)
+            args.append(str(self.efRuntime))
         return args
         
 
@@ -231,8 +231,8 @@ class VectorTypeOptions:
     def __init__(
         self,
         algorithm: Optional[VectorTypeAlgorithm],
-        vectorTypeFlatAttributes: Optional[VectorTypeFlatAttributes],
-        vectorTypeHnswAttributes: Optional[VectorTypeHnswAttributes]
+        vectorTypeFlatAttributes: Optional[VectorTypeFlatAttributes] = None,
+        vectorTypeHnswAttributes: Optional[VectorTypeHnswAttributes] = None
         
     ):
         """
@@ -255,11 +255,11 @@ class VectorTypeOptions:
             args.append(self.algorithm.name)
         if self.algorithm == VectorTypeAlgorithm.FLAT and self.vectorTypeFlatAttributes:
             flatArgs = self.vectorTypeFlatAttributes.getVectorTypeFlatAttributes()
-            args.append(len(flatArgs))
+            args.append(str(len(flatArgs)))
             args = args + flatArgs
         if self.algorithm == VectorTypeAlgorithm.HNSW and self.vectorTypeHnswAttributes:
             hnswArgs = self.vectorTypeHnswAttributes.getVectorTypeHnswAttributes()
-            args.append(len(hnswArgs))
+            args.append(str(len(hnswArgs)))
             args = args + hnswArgs
         return args
 
@@ -270,8 +270,8 @@ class FieldTypeInfo:
     def __init__(
         self,
         fieldType: FieldType,
-        tagTypeOptions: Optional[TagTypeOptions],
-        vectorTypeOptions: Optional[VectorTypeOptions]
+        tagTypeOptions: Optional[TagTypeOptions] = None,
+        vectorTypeOptions: Optional[VectorTypeOptions] = None
     ):
         """
         Initialize the field type and the optional arguments.
@@ -295,6 +295,8 @@ class FieldTypeInfo:
             args = args + self.tagTypeOptions.getTagTypeOptions()
         if self.fieldType == FieldType.VECTOR and self.vectorTypeOptions:
             args = args + self.vectorTypeOptions.getVectorTypeOptions()
+        print("+++++++++++++")
+        print(args)
         return args
 
 
@@ -404,13 +406,15 @@ class FieldInfo:
             args.append(FtCreateKeywords.AS)
             args.append(self.alias)
         if self.fieldTypeInfo:
-            args.append(self.fieldTypeInfo.getFieldTypeInfo())
+            args = args + self.fieldTypeInfo.getFieldTypeInfo()
         if self.sortable == SORTABLE.IS_SORTABLE:
             args.append(FtCreateKeywords.SORTABLE)
             if self.unnormalized == UNNORMALIZED.IS_UNNORMALIZED:
                 args.append(FtCreateKeywords.UNF)
         if self.noIndex == NO_INDEX.IS_NO_INDEX:
             args.append(FtCreateKeywords.NO_INDEX)
+        print("args in field info+++++++")
+        print(args)
         return args
 
         

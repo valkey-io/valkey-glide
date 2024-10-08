@@ -34,9 +34,6 @@ from glide.glide_client import TGlideClient
 from glide.constants import TOK, TEncodable
 from glide.async_commands.server_modules.search_options.ft_create_options import FtCreateOptions , FieldInfo
 from glide.async_commands.server_modules.search_constants import CommandNames, FtCreateKeywords
-from glide.async_commands.server_modules.search_options.ft_search_options import FtSearchOptions
-from glide.async_commands.server_modules.search_options.ft_dropindex_options import FtDropIndexOptions
-
 
 async def create(
     client: TGlideClient,
@@ -45,10 +42,13 @@ async def create(
     options: Optional[FtCreateOptions] = None
 ) -> TOK:
     args: List[TEncodable] = [CommandNames.FT_CREATE, indexName]
+
+    if options:
+        args = args + options.getCreateOptions()
     if fields and len(fields) > 0:
         args.append(FtCreateKeywords.SCHEMA)
         for fieldInfo in fields:
             args = args + fieldInfo.getFieldInfo()
-    if options:
-        args.extend(options.getCreateOptions())
+    print("here=======")
+    print(args)
     return cast(TOK, await client.custom_command(args))
