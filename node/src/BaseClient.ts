@@ -24,6 +24,7 @@ import {
     BitmapIndexType,
     BitwiseOperation,
     Boundary,
+    ConditionalChange,
     CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     ExpireOptions,
     GeoAddOptions,
@@ -36,6 +37,7 @@ import {
     GeospatialData,
     HScanOptions,
     InsertPosition,
+    JsonGetOptions,
     KeyWeight,
     LPosOptions,
     ListDirection,
@@ -112,6 +114,8 @@ import {
     createIncr,
     createIncrBy,
     createIncrByFloat,
+    createJsonGet,
+    createJsonSet,
     createLCS,
     createLIndex,
     createLInsert,
@@ -259,6 +263,7 @@ type ErrorFunction = (error: ValkeyError) => void;
 /* eslint @typescript-eslint/consistent-indexed-object-style: off,  @typescript-eslint/consistent-type-definitions: off */
 export type ReturnTypeRecord = { [key: string]: GlideReturnType };
 export type ReturnTypeMap = Map<string, GlideReturnType>;
+export type ReturnTypeJson = GlideString | GlideString[];
 export interface ReturnTypeAttribute {
     value: GlideReturnType;
     attributes: ReturnTypeRecord;
@@ -7472,6 +7477,24 @@ export class BaseClient {
         options?: SortOptions,
     ): Promise<number> {
         return this.createWritePromise(createSort(key, options, destination));
+    }
+
+    public async jsonGet(
+        key: GlideString,
+        options?: JsonGetOptions,
+    ): Promise<ReturnTypeJson> {
+        return this.createWritePromise(createJsonGet(key, options));
+    }
+
+    public async jsonSet(
+        key: GlideString,
+        path: GlideString,
+        value: GlideString,
+        conditionalChange?: ConditionalChange,
+    ): Promise<ReturnTypeJson> {
+        return this.createWritePromise(
+            createJsonSet(key, path, value, conditionalChange),
+        );
     }
 
     /**

@@ -4141,3 +4141,73 @@ export function createScriptFlush(mode?: FlushMode): command_request.Command {
 export function createScriptKill(): command_request.Command {
     return createCommand(RequestType.ScriptKill, []);
 }
+
+/** Represents options for formatting JSON data, to be used in  the [JSON.GET](https://redis.io/commands/json.get/) command.
+    Args:
+        paths
+        indent: Sets an indentation string for nested levels. Defaults to None.
+        newline: Sets a string that's printed at the end of each line. Defaults to None.
+        space: Sets a string that's put between a key and a value. Defaults to None. */
+export interface JsonGetOptions {
+    paths?: GlideString[];
+    indent?: GlideString;
+    newline?: GlideString;
+    space?: GlideString;
+}
+
+function jsonGetOptionsToArgs(options: JsonGetOptions): GlideString[] {
+    const result: GlideString[] = [];
+
+    if (options.paths !== undefined) {
+        result.push(...options.paths);
+    }
+
+    if (options.indent !== undefined) {
+        result.push("INDENT", options.indent);
+    }
+
+    if (options.newline !== undefined) {
+        result.push("NEWLINE", options.newline);
+    }
+
+    if (options.space !== undefined) {
+        result.push("SPACE", options.space);
+    }
+
+    return result;
+}
+
+/**
+ * @internal
+ */
+export function createJsonGet(
+    key: GlideString,
+    options?: JsonGetOptions,
+): command_request.Command {
+    const args = ["JSON.GET", key];
+
+    if (options) {
+        const optionArgs = jsonGetOptionsToArgs(options);
+        args.push(...optionArgs);
+    }
+
+    return createCustomCommand(args);
+}
+
+/**
+ * @internal
+ */
+export function createJsonSet(
+    key: GlideString,
+    path: GlideString,
+    value: GlideString,
+    conditionalChange?: ConditionalChange,
+): command_request.Command {
+    const args = ["JSON.SET", key, path, value];
+
+    if (conditionalChange) {
+        args.push(conditionalChange);
+    }
+
+    return createCustomCommand(args);
+}
