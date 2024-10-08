@@ -42,13 +42,10 @@ async def create(
     options: Optional[FtCreateOptions] = None
 ) -> TOK:
     args: List[TEncodable] = [CommandNames.FT_CREATE, indexName]
-
     if options:
         args = args + options.getCreateOptions()
     if fields and len(fields) > 0:
         args.append(FtCreateKeywords.SCHEMA)
         for fieldInfo in fields:
             args = args + fieldInfo.getFieldInfo()
-    print("here=======")
-    print(args)
     return cast(TOK, await client.custom_command(args))

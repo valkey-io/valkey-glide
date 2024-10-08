@@ -39,7 +39,6 @@ class TestVss:
         """
         index = "idx"
         result = await search.create(glide_client, index, fields, FtCreateOptions(DataType.HASH, prefixes))
-        print(result)
         assert result == OK
 
         """
