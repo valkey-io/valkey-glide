@@ -1,33 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-"""module for `RedisJSON` commands.
-
-    Examples:
-
-        >>> from glide import json as redisJson
-        >>> import json
-        >>> value = {'a': 1.0, 'b': 2}
-        >>> json_str = json.dumps(value) # Convert Python dictionary to JSON string using json.dumps()
-        >>> await redisJson.set(client, "doc", "$", json_str)
-            'OK'  # Indicates successful setting of the value at path '$' in the key stored at `doc`.
-        >>> json_get = await redisJson.get(client, "doc", "$") # Returns the value at path '$' in the JSON document stored at `doc` as JSON string.
-        >>> print(json_get)
-            b"[{\"a\":1.0,\"b\":2}]" 
-        >>> json.loads(str(json_get))
-            [{"a": 1.0, "b" :2}] # JSON object retrieved from the key `doc` using json.loads()
-
-
-        >>> from glide.async_commands.server_modules import search
-        >>> from glide.glide_client import TGlideClient
-        >>> value = {'a': 1.0, 'b': 2}
-        >>> json_str = json.dumps(value) # Convert Python dictionary to JSON string using json.dumps()
-        >>> await redisJson.set(client, "doc", "$", json_str)
-            'OK'  # Indicates successful setting of the value at path '$' in the key stored at `doc`.
-        >>> json_get = await redisJson.get(client, "doc", "$") # Returns the value at path '$' in the JSON document stored at `doc` as JSON string.
-        >>> print(json_get)
-            b"[{\"a\":1.0,\"b\":2}]" 
-        >>> json.loads(str(json_get))
-            [{"a": 1.0, "b" :2}] # JSON object retrieved from the key `doc` using json.loads()
-        """
+"""
+module for `vector search` commands.
+"""
 
 from typing import Optional, List, cast
 from glide.glide_client import TGlideClient
@@ -41,6 +15,31 @@ async def create(
     fields: List[FieldInfo] = [],
     options: Optional[FtCreateOptions] = None
 ) -> TOK:
+    """
+    Creates an index and initiates a backfill of that index.
+
+    See https://valkey.io/commands/ft.create/ for more details.
+
+        Args:
+        client (TGlideClient): The client to execute the command.
+        indexName (TEncodable): The index name for the index to be created
+        fields (List[FieldInfo]): The fields for the index schema.
+        options (Optional[FtCreateOptions]): Optional arguments for the [FT.CREATE] command.
+
+    Returns:
+        TOK: If the index is successfully created, returns OK.
+
+    Examples:
+        >>> from glide.async_commands.server_modules import search
+        >>> fields: List[FieldInfo] = []
+        >>> fieldInfo1: FieldInfo = FieldInfo("title", fieldTypeInfo=FieldTypeInfo(fieldType=FieldType.TEXT), sortable = SORTABLE.IS_SORTABLE)
+        >>> fields.append(fieldInfo1)
+        >>> prefixes: List[str] = []
+        >>> prefixes.append("blog:post:")
+        >>> index = "idx"
+        >>> result = await search.create(glide_client, index, fields, FtCreateOptions(DataType.HASH, prefixes))
+            'OK'  # Indicates successful creation of index named 'idx'
+    """
     args: List[TEncodable] = [CommandNames.FT_CREATE, indexName]
     if options:
         args = args + options.getCreateOptions()
