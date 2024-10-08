@@ -6,7 +6,7 @@ mod types;
 use crate::cluster_scan_container::insert_cluster_scan_cursor;
 use crate::scripts_container::get_script;
 use futures::FutureExt;
-use logger_core::log_info;
+use logger_core::{log_info, log_warn};
 use redis::aio::ConnectionLike;
 use redis::cluster_async::ClusterConnection;
 use redis::cluster_routing::{Routable, RoutingInfo, SingleNodeRoutingInfo};
@@ -253,11 +253,32 @@ impl Client {
         run_with_timeout(request_timeout, async move {
             match self.internal_client {
                 ClientWrapper::Standalone(ref mut client) => client.send_command(cmd).await,
-
                 ClientWrapper::Cluster { ref mut client } => {
-                    let routing = routing
-                        .or_else(|| RoutingInfo::for_routable(cmd))
-                        .unwrap_or(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random));
+                    let routing =
+                        if let Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)) =
+                            routing
+                        {
+                            let cmdname = cmd.command().unwrap_or_default();
+                            let cmdname = String::from_utf8_lossy(&cmdname);
+                            if redis::cluster_routing::is_readonly_cmd(cmdname.as_bytes()) {
+                                // A read-only command, go ahead and send it to a random node
+                                RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)
+                            } else {
+                                // A "Random" node was selected, but the command is a "@write" command
+                                // change the routing to "RandomPrimary"
+                                log_warn(
+                                    "send_command",
+                                    format!(
+                                        "User provided 'Random' routing which is not suitable for the writeable command '{cmdname}'. Changing it to 'RandomPrimary'"
+                                    ),
+                                );
+                                RoutingInfo::SingleNode(SingleNodeRoutingInfo::RandomPrimary)
+                            }
+                        } else {
+                            routing
+                                .or_else(|| RoutingInfo::for_routable(cmd))
+                                .unwrap_or(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random))
+                        };
                     client.route_command(cmd, routing).await
                 }
             }
