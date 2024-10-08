@@ -22,8 +22,9 @@ macOS:
 -   macOS (12.7 and latest) (Apple silicon/aarch_64 and Intel/x86_64)
 
 Alpine:
+
 -   node:alpine (default on aarch64 and x86_64)
-  
+
 ## NodeJS supported version
 
 Node.js 16.20 or higher.
