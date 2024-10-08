@@ -22,6 +22,9 @@ public class FTCreateOptions {
 
     /** Create an empty options if parametrization is not needed. */
     public static FTCreateOptions empty() {
+        // Node: bug in memDB - command fails if cmd is too short even though all mandatory args are
+        // present
+        // TODO confirm is it fixed or not and update docs if needed
         return builder().build();
     }
 

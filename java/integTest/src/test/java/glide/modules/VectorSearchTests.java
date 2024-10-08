@@ -162,7 +162,10 @@ public class VectorSearchTests {
                                         .ftcreate(
                                                 name,
                                                 FTCreateOptions.empty(),
-                                                new FieldInfo[] {new FieldInfo("title", new TextField())})
+                                                new FieldInfo[] {
+                                                    new FieldInfo("title", new TextField()),
+                                                    new FieldInfo("name", new TextField())
+                                                })
                                         .get());
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getMessage().contains("already exists"));
@@ -178,6 +181,23 @@ public class VectorSearchTests {
                                         .get());
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getMessage().contains("wrong number of arguments"));
+
+        // duplicated field name
+        exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .ftcreate(
+                                                UUID.randomUUID().toString(),
+                                                FTCreateOptions.empty(),
+                                                new FieldInfo[] {
+                                                    new FieldInfo("name", new TextField()),
+                                                    new FieldInfo("name", new TextField())
+                                                })
+                                        .get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(exception.getMessage().contains("already exists"));
     }
 
     @SneakyThrows
