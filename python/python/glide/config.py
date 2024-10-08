@@ -134,6 +134,7 @@ class BaseClientConfiguration:
         request_timeout: Optional[int] = None,
         client_name: Optional[str] = None,
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
+        inflight_requests_limit: Optional[int] = None,
     ):
         """
         Represents the configuration settings for a Glide client.
@@ -158,6 +159,10 @@ class BaseClientConfiguration:
                 This duration encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries.
                 If the specified timeout is exceeded for a pending request, it will result in a timeout error. If not set, a default value will be used.
             client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during connection establishment.
+            inflight_requests_limit (Optional[int]): The maximum number of concurrent requests allowed to be in-flight (sent but not yet completed).
+                This limit is used to control the memory usage and prevent the client from overwhelming the server or getting stuck in case of a queue backlog.
+                If not set, a default value will be used.
+
         """
         self.addresses = addresses
         self.use_tls = use_tls
@@ -166,6 +171,7 @@ class BaseClientConfiguration:
         self.request_timeout = request_timeout
         self.client_name = client_name
         self.protocol = protocol
+        self.inflight_requests_limit = inflight_requests_limit
 
     def _create_a_protobuf_conn_request(
         self, cluster_mode: bool = False
@@ -196,6 +202,8 @@ class BaseClientConfiguration:
         if self.client_name:
             request.client_name = self.client_name
         request.protocol = self.protocol.value
+        if self.inflight_requests_limit:
+            request.inflight_requests_limit = self.inflight_requests_limit
 
         return request
 
@@ -236,6 +244,10 @@ class GlideClientConfiguration(BaseClientConfiguration):
         protocol (ProtocolVersion): The version of the RESP protocol to communicate with the server.
         pubsub_subscriptions (Optional[GlideClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used for the client.
                 Will be applied via SUBSCRIBE/PSUBSCRIBE commands during connection establishment.
+        inflight_requests_limit (Optional[int]): The maximum number of concurrent requests allowed to be in-flight (sent but not yet completed).
+            This limit is used to control the memory usage and prevent the client from overwhelming the server or getting stuck in case of a queue backlog.
+            If not set, a default value will be used.
+
     """
 
     class PubSubChannelModes(IntEnum):
@@ -280,6 +292,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
         client_name: Optional[str] = None,
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
         pubsub_subscriptions: Optional[PubSubSubscriptions] = None,
+        inflight_requests_limit: Optional[int] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -289,6 +302,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
             request_timeout=request_timeout,
             client_name=client_name,
             protocol=protocol,
+            inflight_requests_limit=inflight_requests_limit,
         )
         self.reconnect_strategy = reconnect_strategy
         self.database_id = database_id
@@ -371,6 +385,11 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             Defaults to PeriodicChecksStatus.ENABLED_DEFAULT_CONFIGS.
         pubsub_subscriptions (Optional[GlideClusterClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used for the client.
             Will be applied via SUBSCRIBE/PSUBSCRIBE/SSUBSCRIBE commands during connection establishment.
+        inflight_requests_limit (Optional[int]): The maximum number of concurrent requests allowed to be in-flight (sent but not yet completed).
+            This limit is used to control the memory usage and prevent the client from overwhelming the server or getting stuck in case of a queue backlog.
+            If not set, a default value will be used.
+
+
 
     Notes:
         Currently, the reconnection strategy in cluster mode is not configurable, and exponential backoff
@@ -422,6 +441,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             PeriodicChecksStatus, PeriodicChecksManualInterval
         ] = PeriodicChecksStatus.ENABLED_DEFAULT_CONFIGS,
         pubsub_subscriptions: Optional[PubSubSubscriptions] = None,
+        inflight_requests_limit: Optional[int] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -431,6 +451,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             request_timeout=request_timeout,
             client_name=client_name,
             protocol=protocol,
+            inflight_requests_limit=inflight_requests_limit,
         )
         self.periodic_checks = periodic_checks
         self.pubsub_subscriptions = pubsub_subscriptions

@@ -40,6 +40,24 @@ subprojects {
         // TODO: add jacoco with code coverage
         // finalizedBy jacocoTestReport, jacocoTestCoverageVerification
     }
+
+    ext.failedTests = []
+
+    tasks.withType(Test) {
+        afterTest { TestDescriptor descriptor, TestResult result ->
+            if (result.resultType == TestResult.ResultType.FAILURE) {
+                failedTests << "${descriptor.className}.${descriptor.name}"
+            }
+        }
+    }
+
+    gradle.buildFinished {
+        if (!failedTests.empty) {
+            println "\nFailed tests for `:${project.name}`:"
+            failedTests.each { failedTest -> println failedTest }
+            println ""
+        }
+    }
 }
 
 // JaCoCo section (code coverage by unit tests)

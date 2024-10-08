@@ -3,9 +3,9 @@
  */
 
 import { afterAll, afterEach, beforeAll, describe } from "@jest/globals";
-import { ClusterScanCursor } from "glide-rs";
 import { v4 as uuidv4 } from "uuid";
 import {
+    ClusterScanCursor,
     Decoder,
     GlideClient,
     GlideClusterClient,
