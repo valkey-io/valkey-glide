@@ -7,52 +7,199 @@ package api
 import "C"
 
 import (
+	"fmt"
 	"unsafe"
 )
 
-func convertCharArrayToString(arr *C.char, length C.long) string {
-	if arr == nil {
-		return ""
+func checkResponseType(response *C.struct_CommandResponse, expectedType C.ResponseType, isNilable bool) error {
+	expectedTypeInt := uint32(expectedType)
+	expectedTypeStr := C.get_response_type_string(expectedTypeInt)
+	defer C.free_response_type_string(expectedTypeStr)
+
+	if !isNilable && response == nil {
+		return &RequestError{
+			fmt.Sprintf(
+				"Unexpected return type from Valkey: got nil, expected %s",
+				C.GoString(expectedTypeStr),
+			),
+		}
 	}
-	byteSlice := C.GoBytes(unsafe.Pointer(arr), C.int(int64(length)))
+
+	if isNilable && (response == nil || response.response_type == uint32(C.Null)) {
+		return nil
+	}
+
+	if response.response_type == expectedTypeInt {
+		return nil
+	}
+
+	actualTypeStr := C.get_response_type_string(response.response_type)
+	defer C.free_response_type_string(actualTypeStr)
+	return &RequestError{
+		fmt.Sprintf(
+			"Unexpected return type from Valkey: got %s, expected %s",
+			C.GoString(actualTypeStr),
+			C.GoString(expectedTypeStr),
+		),
+	}
+}
+
+func convertCharArrayToString(response *C.struct_CommandResponse, isNilable bool) (Result[string], error) {
+	typeErr := checkResponseType(response, C.String, isNilable)
+	if typeErr != nil {
+		return CreateNilStringResult(), typeErr
+	}
+
+	if response.string_value == nil {
+		return CreateNilStringResult(), nil
+	}
+	byteSlice := C.GoBytes(unsafe.Pointer(response.string_value), C.int(int64(response.string_value_len)))
+
 	// Create Go string from byte slice (preserving null characters)
-	return string(byteSlice)
+	return CreateStringResult(string(byteSlice)), nil
 }
 
-func handleStringResponse(response *C.struct_CommandResponse) string {
+func handleStringResponse(response *C.struct_CommandResponse) (Result[string], error) {
 	defer C.free_command_response(response)
-	return convertCharArrayToString(response.string_value, response.string_value_len)
+
+	return convertCharArrayToString(response, false)
 }
 
-func handleStringOrNullResponse(response *C.struct_CommandResponse) string {
-	if response == nil {
-		return ""
+func handleStringOrNullResponse(response *C.struct_CommandResponse) (Result[string], error) {
+	defer C.free_command_response(response)
+
+	return convertCharArrayToString(response, true)
+}
+
+func handleStringArrayResponse(response *C.struct_CommandResponse) ([]Result[string], error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Array, false)
+	if typeErr != nil {
+		return nil, typeErr
 	}
-	return handleStringResponse(response)
-}
 
-func handleStringArrayResponse(response *C.struct_CommandResponse) []string {
-	defer C.free_command_response(response)
-	var len []C.long
-	len = append(len, unsafe.Slice(response.array_elements_len, response.array_value_len)...)
-	var slice []string
-	for k, v := range unsafe.Slice(response.array_value, response.array_value_len) {
-		slice = append(slice, convertCharArrayToString(v, len[k]))
+	slice := make([]Result[string], 0, response.array_value_len)
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		res, err := convertCharArrayToString(&v, true)
+		if err != nil {
+			return nil, err
+		}
+		slice = append(slice, res)
 	}
-	return slice
+	return slice, nil
 }
 
-func handleLongResponse(response *C.struct_CommandResponse) int64 {
+func handleStringArrayOrNullResponse(response *C.struct_CommandResponse) ([]Result[string], error) {
 	defer C.free_command_response(response)
-	return int64(response.int_value)
+
+	typeErr := checkResponseType(response, C.Array, true)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	if response.response_type == C.Null {
+		return nil, nil
+	}
+
+	slice := make([]Result[string], 0, response.array_value_len)
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		res, err := convertCharArrayToString(&v, true)
+		if err != nil {
+			return nil, err
+		}
+		slice = append(slice, res)
+	}
+	return slice, nil
 }
 
-func handleDoubleResponse(response *C.struct_CommandResponse) float64 {
+func handleLongResponse(response *C.struct_CommandResponse) (Result[int64], error) {
 	defer C.free_command_response(response)
-	return float64(response.float_value)
+
+	typeErr := checkResponseType(response, C.Int, false)
+	if typeErr != nil {
+		return CreateNilInt64Result(), typeErr
+	}
+
+	return CreateInt64Result(int64(response.int_value)), nil
 }
 
-func handleBooleanResponse(response *C.struct_CommandResponse) bool {
+func handleLongOrNullResponse(response *C.struct_CommandResponse) (Result[int64], error) {
 	defer C.free_command_response(response)
-	return bool(response.bool_value)
+
+	typeErr := checkResponseType(response, C.Int, true)
+	if typeErr != nil {
+		return CreateNilInt64Result(), typeErr
+	}
+
+	if response.response_type == C.Null {
+		return CreateNilInt64Result(), nil
+	}
+
+	return CreateInt64Result(int64(response.int_value)), nil
+}
+
+func handleLongArrayResponse(response *C.struct_CommandResponse) ([]Result[int64], error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Array, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	slice := make([]Result[int64], 0, response.array_value_len)
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		err := checkResponseType(&v, C.Int, false)
+		if err != nil {
+			return nil, err
+		}
+		slice = append(slice, CreateInt64Result(int64(v.int_value)))
+	}
+	return slice, nil
+}
+
+func handleDoubleResponse(response *C.struct_CommandResponse) (Result[float64], error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Float, false)
+	if typeErr != nil {
+		return CreateNilFloat64Result(), typeErr
+	}
+
+	return CreateFloat64Result(float64(response.float_value)), nil
+}
+
+func handleBooleanResponse(response *C.struct_CommandResponse) (Result[bool], error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Bool, false)
+	if typeErr != nil {
+		return CreateNilBoolResult(), typeErr
+	}
+
+	return CreateBoolResult(bool(response.bool_value)), nil
+}
+
+func handleStringToStringMapResponse(response *C.struct_CommandResponse) (map[Result[string]]Result[string], error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	m := make(map[Result[string]]Result[string], response.array_value_len)
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		key, err := convertCharArrayToString(v.map_key, true)
+		if err != nil {
+			return nil, err
+		}
+		value, err := convertCharArrayToString(v.map_value, true)
+		if err != nil {
+			return nil, err
+		}
+		m[key] = value
+	}
+
+	return m, nil
 }

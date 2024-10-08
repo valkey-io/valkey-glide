@@ -8,7 +8,7 @@ requires-python = ">=3.8"
 dependencies = [
     "async-timeout>=4.0.2",
     "typing-extensions>=4.8.0",
-    "google-api-python-client==2.85.0"
+    "protobuf>=3.20"
 ]
 classifiers = [
     "Topic :: Database",
@@ -33,4 +33,4 @@ extend-ignore = ['E203']
 target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
 
 [tool.mypy]
-exclude = [ 'submodules' ]
+exclude = [ 'submodules', 'utils/release-candidate-testing' ]

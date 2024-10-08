@@ -1,9 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
-import static glide.TestConfiguration.CLUSTER_PORTS;
 import static glide.TestConfiguration.SERVER_VERSION;
-import static glide.TestConfiguration.STANDALONE_PORTS;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
@@ -103,9 +101,6 @@ import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MaxLen;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
-import glide.api.models.configuration.GlideClientConfiguration;
-import glide.api.models.configuration.GlideClusterClientConfiguration;
-import glide.api.models.configuration.NodeAddress;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.util.Arrays;
@@ -149,19 +144,10 @@ public class SharedCommandTests {
     @SneakyThrows
     public static void init() {
         standaloneClient =
-                GlideClient.createClient(
-                                GlideClientConfiguration.builder()
-                                        .address(NodeAddress.builder().port(STANDALONE_PORTS[0]).build())
-                                        .requestTimeout(5000)
-                                        .build())
-                        .get();
+                GlideClient.createClient(commonClientConfig().requestTimeout(5000).build()).get();
 
         clusterClient =
-                GlideClusterClient.createClient(
-                                GlideClusterClientConfiguration.builder()
-                                        .address(NodeAddress.builder().port(CLUSTER_PORTS[0]).build())
-                                        .requestTimeout(5000)
-                                        .build())
+                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(5000).build())
                         .get();
 
         clients = List.of(Arguments.of(standaloneClient), Arguments.of(clusterClient));
@@ -918,14 +904,10 @@ public class SharedCommandTests {
         assertEquals("", client.getrange(stringKey, -1, -3).get());
 
         // a redis bug, fixed in version 8: https://github.com/redis/redis/issues/13207
-        assertEquals(
-                SERVER_VERSION.isLowerThan("8.0.0") ? "T" : "",
-                client.getrange(stringKey, -200, -100).get());
+        assertEquals("T", client.getrange(stringKey, -200, -100).get());
 
         // empty key (returning null isn't implemented)
-        assertEquals(
-                SERVER_VERSION.isLowerThan("8.0.0") ? "" : null,
-                client.getrange(nonStringKey, 0, -1).get());
+        assertEquals("", client.getrange(nonStringKey, 0, -1).get());
 
         // non-string key
         assertEquals(1, client.lpush(nonStringKey, new String[] {"_"}).get());
@@ -955,14 +937,10 @@ public class SharedCommandTests {
         assertEquals(gs(""), client.getrange(stringKey, -1, -3).get());
 
         // a redis bug, fixed in version 8: https://github.com/redis/redis/issues/13207
-        assertEquals(
-                gs(SERVER_VERSION.isLowerThan("8.0.0") ? "T" : ""),
-                client.getrange(stringKey, -200, -100).get());
+        assertEquals(gs("T"), client.getrange(stringKey, -200, -100).get());
 
         // empty key (returning null isn't implemented)
-        assertEquals(
-                gs(SERVER_VERSION.isLowerThan("8.0.0") ? "" : null),
-                client.getrange(nonStringKey, 0, -1).get());
+        assertEquals(gs(""), client.getrange(nonStringKey, 0, -1).get());
 
         // non-string key
         assertEquals(1, client.lpush(nonStringKey, new GlideString[] {gs("_")}).get());
@@ -3279,7 +3257,7 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void scriptShow_test(BaseClient client) {
-        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0"));
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0"));
 
         String code = "return '" + UUID.randomUUID().toString().substring(0, 5) + "'";
         Script script = new Script(code, false);
@@ -10423,7 +10401,7 @@ public class SharedCommandTests {
                             () -> client.bitcount(key1, 5, 30, BitmapIndexType.BIT).get());
             assertTrue(executionException.getCause() instanceof RequestException);
         }
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             assertEquals(26L, client.bitcount(key1, 0).get());
             assertEquals(4L, client.bitcount(key1, 5).get());
             assertEquals(0L, client.bitcount(key1, 80).get());
@@ -12557,7 +12535,7 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void sort_with_pattern(BaseClient client) {
         if (client instanceof GlideClusterClient) {
-            assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0"), "This feature added in version 8");
+            assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0"), "This feature added in version 8");
         }
         String setKey1 = "{setKey}1";
         String setKey2 = "{setKey}2";
@@ -12739,7 +12717,7 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void sort_with_pattern_binary(BaseClient client) {
         if (client instanceof GlideClusterClient) {
-            assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0"), "This feature added in version 8");
+            assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0"), "This feature added in version 8");
         }
 
         GlideString setKey1 = gs("{setKeyGs}1");
@@ -14291,7 +14269,7 @@ public class SharedCommandTests {
         assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
 
         // Negative cursor
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             ExecutionException executionException =
                     assertThrows(ExecutionException.class, () -> client.sscan(key1, "-1").get());
         } else {
@@ -14432,7 +14410,7 @@ public class SharedCommandTests {
         assertDeepEquals(new GlideString[] {}, result[resultCollectionIndex]);
 
         // Negative cursor
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             ExecutionException executionException =
                     assertThrows(ExecutionException.class, () -> client.sscan(key1, gs("-1")).get());
         } else {
@@ -14586,7 +14564,7 @@ public class SharedCommandTests {
         assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
 
         // Negative cursor
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             ExecutionException executionException =
                     assertThrows(ExecutionException.class, () -> client.zscan(key1, "-1").get());
         } else {
@@ -14710,7 +14688,7 @@ public class SharedCommandTests {
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 0);
 
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             result =
                     client.zscan(key1, initialCursor, ZScanOptions.builder().noScores(true).build()).get();
             assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
@@ -14788,7 +14766,7 @@ public class SharedCommandTests {
         assertDeepEquals(new GlideString[] {}, result[resultCollectionIndex]);
 
         // Negative cursor
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             ExecutionException executionException =
                     assertThrows(ExecutionException.class, () -> client.zscan(key1, gs("-1")).get());
         } else {
@@ -14917,7 +14895,7 @@ public class SharedCommandTests {
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 0);
 
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             result =
                     client
                             .zscan(key1, initialCursor, ZScanOptionsBinary.builder().noScores(true).build())
@@ -14993,7 +14971,7 @@ public class SharedCommandTests {
         assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
 
         // Negative cursor
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             ExecutionException executionException =
                     assertThrows(ExecutionException.class, () -> client.hscan(key1, "-1").get());
         } else {
@@ -15104,7 +15082,7 @@ public class SharedCommandTests {
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 0);
 
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             result =
                     client.hscan(key1, initialCursor, HScanOptions.builder().noValues(true).build()).get();
             assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
@@ -15175,7 +15153,7 @@ public class SharedCommandTests {
         assertDeepEquals(new GlideString[] {}, result[resultCollectionIndex]);
 
         // Negative cursor
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             ExecutionException executionException =
                     assertThrows(ExecutionException.class, () -> client.hscan(key1, gs("-1")).get());
         } else {
@@ -15293,7 +15271,7 @@ public class SharedCommandTests {
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 0);
 
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             result =
                     client
                             .hscan(key1, initialCursor, HScanOptionsBinary.builder().noValues(true).build())

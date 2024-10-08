@@ -3,6 +3,7 @@ package glide.cluster;
 
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
+import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
@@ -16,7 +17,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-import glide.TestConfiguration;
 import glide.TransactionTestUtilities.TransactionBuilder;
 import glide.api.GlideClusterClient;
 import glide.api.models.ClusterTransaction;
@@ -24,8 +24,6 @@ import glide.api.models.GlideString;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.stream.StreamAddOptions;
-import glide.api.models.configuration.GlideClusterClientConfiguration;
-import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotIdRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotType;
@@ -51,11 +49,7 @@ public class ClusterTransactionTests {
     @SneakyThrows
     public static void init() {
         clusterClient =
-                GlideClusterClient.createClient(
-                                GlideClusterClientConfiguration.builder()
-                                        .address(NodeAddress.builder().port(TestConfiguration.CLUSTER_PORTS[0]).build())
-                                        .requestTimeout(5000)
-                                        .build())
+                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(5000).build())
                         .get();
     }
 
@@ -311,7 +305,7 @@ public class ClusterTransactionTests {
             transaction.sortReadOnly(key1, SortOptions.builder().orderBy(DESC).build());
         }
 
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             transaction
                     .hset(key3, Map.of("name", "Alice", "age", "30"))
                     .hset(key4, Map.of("name", "Bob", "age", "25"))
@@ -358,7 +352,7 @@ public class ClusterTransactionTests {
                             );
         }
 
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             expectedResult =
                     concatenateArrays(
                             expectedResult,

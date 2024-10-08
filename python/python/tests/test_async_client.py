@@ -310,6 +310,40 @@ class TestCommands:
 
         assert int(result[b"proto"]) == 2
 
+    # Testing the inflight_requests_limit parameter in glide. Sending the allowed amount + 1 of requests
+    # to glide, using blocking commands, and checking the N+1 request returns immediately with error.
+    @pytest.mark.parametrize("cluster_mode", [False, True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.parametrize("inflight_requests_limit", [5, 100, 1500])
+    async def test_inflight_request_limit(
+        self, cluster_mode, protocol, inflight_requests_limit, request
+    ):
+        key1 = f"{{nonexistinglist}}:1-{get_random_string(10)}"
+        test_client = await create_client(
+            request=request,
+            protocol=protocol,
+            cluster_mode=cluster_mode,
+            inflight_requests_limit=inflight_requests_limit,
+        )
+
+        tasks = []
+        for i in range(inflight_requests_limit + 1):
+            coro = test_client.blpop([key1], 0)
+            task = asyncio.create_task(coro)
+            tasks.append(task)
+
+        done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+
+        for task in done:
+            with pytest.raises(RequestError) as e:
+                await task
+            assert "maximum inflight requests" in str(e)
+
+        for task in pending:
+            task.cancel()
+
+        await test_client.close()
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_conditional_set(self, glide_client: TGlideClient):
@@ -539,14 +573,9 @@ class TestCommands:
         # incorrect range
         assert await glide_client.getrange(key, -1, -3) == b""
 
-        # a redis bug, fixed in version 8: https://github.com/redis/redis/issues/13207
-        if await check_if_server_version_lt(glide_client, "8.0.0"):
-            assert await glide_client.getrange(key, -200, -100) == value[0].encode()
-        else:
-            assert await glide_client.getrange(key, -200, -100) == b""
+        assert await glide_client.getrange(key, -200, -100) == value[0].encode()
 
-        if await check_if_server_version_lt(glide_client, "8.0.0"):
-            assert await glide_client.getrange(non_string_key, 0, -1) == b""
+        assert await glide_client.getrange(non_string_key, 0, -1) == b""
 
         # non-string key
         assert await glide_client.lpush(non_string_key, ["_"]) == 1
@@ -4720,7 +4749,7 @@ class TestCommands:
     ):
         if isinstance(
             glide_client, GlideClusterClient
-        ) and await check_if_server_version_lt(glide_client, "7.9.0"):
+        ) and await check_if_server_version_lt(glide_client, "8.0.0"):
             return pytest.mark.skip(
                 reason=f"Valkey version required in cluster mode>= 8.0.0"
             )
@@ -7133,7 +7162,7 @@ class TestCommands:
                     set_key, OffsetOptions(1, 1, BitmapIndexType.BIT)
                 )
 
-        if await check_if_server_version_lt(glide_client, "7.9.0"):
+        if await check_if_server_version_lt(glide_client, "8.0.0"):
             # exception thrown optional end was implemented after 8.0.0
             with pytest.raises(RequestError):
                 await glide_client.bitcount(
@@ -9835,7 +9864,7 @@ class TestClusterRoutes:
         assert result[result_collection_index] == []
 
         # Negative cursor
-        if await check_if_server_version_lt(glide_client, "7.9.0"):
+        if await check_if_server_version_lt(glide_client, "8.0.0"):
             result = await glide_client.sscan(key1, "-1")
             assert result[result_cursor_index] == initial_cursor.encode()
             assert result[result_collection_index] == []
@@ -9949,7 +9978,7 @@ class TestClusterRoutes:
         assert result[result_collection_index] == []
 
         # Negative cursor
-        if await check_if_server_version_lt(glide_client, "7.9.0"):
+        if await check_if_server_version_lt(glide_client, "8.0.0"):
             result = await glide_client.zscan(key1, "-1")
             assert result[result_cursor_index] == initial_cursor.encode()
             assert result[result_collection_index] == []
@@ -10025,7 +10054,7 @@ class TestClusterRoutes:
         assert len(result[result_collection_index]) >= 0
 
         # Test no_scores option
-        if not await check_if_server_version_lt(glide_client, "7.9.0"):
+        if not await check_if_server_version_lt(glide_client, "8.0.0"):
             result = await glide_client.zscan(key1, initial_cursor, no_scores=True)
             assert result[result_cursor_index] != b"0"
             values_array = cast(List[bytes], result[result_collection_index])
@@ -10076,7 +10105,7 @@ class TestClusterRoutes:
         assert result[result_collection_index] == []
 
         # Negative cursor
-        if await check_if_server_version_lt(glide_client, "7.9.0"):
+        if await check_if_server_version_lt(glide_client, "8.0.0"):
             result = await glide_client.hscan(key1, "-1")
             assert result[result_cursor_index] == initial_cursor.encode()
             assert result[result_collection_index] == []
@@ -10152,7 +10181,7 @@ class TestClusterRoutes:
         assert len(result[result_collection_index]) >= 0
 
         # Test no_values option
-        if not await check_if_server_version_lt(glide_client, "7.9.0"):
+        if not await check_if_server_version_lt(glide_client, "8.0.0"):
             result = await glide_client.hscan(key1, initial_cursor, no_values=True)
             assert result[result_cursor_index] != b"0"
             values_array = cast(List[bytes], result[result_collection_index])
@@ -10487,7 +10516,7 @@ class TestScripts:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_script_show(self, glide_client: TGlideClient):
-        min_version = "7.9.0"
+        min_version = "8.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
             return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 

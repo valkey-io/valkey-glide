@@ -10,9 +10,16 @@ const LEVEL = new Map<LevelOptions | undefined, Level | undefined>([
     ["info", Level.Info],
     ["debug", Level.Debug],
     ["trace", Level.Trace],
+    ["off", Level.Off],
     [undefined, undefined],
 ]);
-type LevelOptions = "error" | "warn" | "info" | "debug" | "trace";
+export type LevelOptions =
+    | "error"
+    | "warn"
+    | "info"
+    | "debug"
+    | "trace"
+    | "off";
 
 /*
  * A singleton class that allows logging which is consistent with logs from the internal rust core.
@@ -55,6 +62,7 @@ export class Logger {
      * Initialize a logger if it wasn't initialized before - this method is meant to be used when there is no intention to replace an existing logger.
      * The logger will filter all logs with a level lower than the given level,
      * If given a fileName argument, will write the logs to files postfixed with fileName. If fileName isn't provided, the logs will be written to the console.
+     * To turn off the logger, provide the level "off".
      */
     public static init(level?: LevelOptions, fileName?: string) {
         if (!this._instance) {
@@ -66,6 +74,7 @@ export class Logger {
      * configure the logger.
      * the level argument is the level of the logs you want the system to provide (error logs, warn logs, etc.)
      * the filename argument is optional - if provided the target of the logs will be the file mentioned, else will be the console
+     * To turn off the logger, provide the level "off".
      */
     public static setLoggerConfig(level: LevelOptions, fileName?: string) {
         this._instance = new this(level, fileName);
