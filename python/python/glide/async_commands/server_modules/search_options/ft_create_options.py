@@ -5,7 +5,7 @@ from glide.async_commands.server_modules.search_constants import FtCreateKeyword
 
 class FieldType(Enum):
     """
-    All possible options for the data type of identifier field values used in the index.
+    All possible values for the data type of field identifier for the SCHEMA option.
     """
 
     TEXT = "TEXT"
@@ -31,7 +31,7 @@ class FieldType(Enum):
 
 class SortableOptions(Enum):
     """
-    Options to make an index field as either sortable or not sortable.
+    Options for fields with SORTABLE argument.
     """
 
     IS_SORTABLE = "IS_SORTABLE"
@@ -40,52 +40,8 @@ class SortableOptions(Enum):
     """
     IS_SORTABLE_UNF = "IS_SORTABLE_UNF"
     """
-
+    If the index field is sortable and unnormalized. This disables the normalization and keep the original form of the field value.
     """
-
-# class UNNORMALIZED(Enum):
-#     """
-#     Options for making a sortable index field as either normalized or not normalized.
-#     """
-
-#     NOT_UNNORMALIZED = 1
-#     """
-#     If a sortable field has to remain normalized(The default behaviour)
-#     """
-#     IS_UNNORMALIZED = 2
-#     """
-#     If a sortable field has to be changed to unnormalized.
-#     """
-
-# class NoIndexOptions(Enum):
-#     """
-#     Options for either making a attribute field indexed or not indexed.
-#     """
-
-#     IS_INDEX = "IS_INDEX"
-#     """
-#     If the field is indexed. This is the default behaviour for all fields that are part of the index schema.
-#     """
-#     NO_INDEX = "NO_INDEX"
-#     """
-#     If the field is not indexed. This will override the default behaviour and make the field not indexed.
-#     """
-
-
-# class CaseSensitive(Enum):
-#     """
-#     The option to select if case sensitive or not case sensitive. Used only in TAG type in [FT.CREATE].
-#     """
-
-#     IS_CASE_SENSITIVE = 1,
-#     """
-#     This option will select case sensitive option for the TAG type field options.
-#     """
-
-#     NOT_CASE_SENSITIVE = 2
-#     """
-#     This option will not select case sensitive option for TAG type field options.
-#     """
 
 class VectorAlgorithm(Enum):
     """
@@ -121,7 +77,7 @@ class DistanceMetricType(Enum):
 
 class VectorType(Enum):
     """
-    Vector type for the vector field type.
+    Type type for the vector field type.
     """
 
     FLOAT32 = "FLOAT32"
@@ -175,7 +131,7 @@ class SortableIndexableField(Field):
         name (str): The name of the field.
         type (FieldType): The type of the field.
         alias (Optional[str]): An alias for the field.
-        sortable (Optional[SORTABLE_OPTIONS]): If  sets the field as sortable with the specified sortable option.
+        sortable (Optional[SORTABLE_OPTIONS]): If not None, sets the field as sortable with the specified sortable option.
         noIndex (bool): Indicate whether the field should be excluded from indexing.
     """
 
@@ -195,7 +151,7 @@ class SortableIndexableField(Field):
 
     def getFieldArgs(self) -> List[str]:
         """
-        Get the arguments representing the field.
+        Get the arguments representing the SortableIndexableField.
 
         Returns:
             List[str]: A list of field arguments.
@@ -252,8 +208,7 @@ class TagField(SortableIndexableField):
         sortable (Optional[SortableOptions]): If not None, sets the field as sortable with the specified sortable option.
         noIndex (bool): Indicate whether the field should be excluded from indexing.
         separator (Optional[str]): Specify how text in the attribute is split into individual tags. Must be a single character.
-        caseSensitive (bool): Preserve the original letter cases of tags.
-            If set to False, characters are converted to lowercase by default.
+        caseSensitive (bool): Preserve the original letter cases of tags. If set to False, characters are converted to lowercase by default.
     """
 
     def __init__(
@@ -290,7 +245,7 @@ class TagField(SortableIndexableField):
 
 class NumericField(SortableIndexableField):
     """
-    Class for defining numeric fields in a schema.
+    Class for defining the numeric fields in a schema.
 
     Args:
         name (str): The name of the numeric field.
@@ -314,7 +269,7 @@ class NumericField(SortableIndexableField):
 
 class GeoField(SortableIndexableField):
     """
-    Class for defining geo fields in a schema.
+    Class for defining GEO fields in a schema.
 
     Args:
         name (str): The name of the geo field.
@@ -338,9 +293,12 @@ class GeoField(SortableIndexableField):
 
 class VectorFieldAttributes(ABC):
     """
-    Abstract base class for defining vector field attributes
+    Abstract base class for defining vector field attributes to be used after the vector algorithm name.
 
     Args:
+        dim (int): Number of dimensions in the vector.
+        distanceMetric (DistanceMetricType): The distance metric used in vector type field. Can be one of [L2 | IP | COSINE].
+        type (VectorType): Vector type. The only supported type is FLOAT32.
     """
 
     @abstractmethod
@@ -360,10 +318,10 @@ class VectorFieldAttributes(ABC):
     @abstractmethod
     def getVectorFieldAttributes(self) -> List[str]:
         """
-        Get the arguments representing the field.
+        Get the arguments to be used for the algorithm of the vector field.
 
         Returns:
-            List[str]: A list of field arguments.
+            List[str]: A list of arguments.
         """
         args = []
         if self.dim:
@@ -375,6 +333,15 @@ class VectorFieldAttributes(ABC):
         return args
 
 class VectorFieldAttributesFlat(VectorFieldAttributes):
+    """
+    Get the arguments to be used for the FLAT algorithm of the vector field.
+
+    Args:
+        dim (int): Number of dimensions in the vector.
+        distanceMetric (DistanceMetricType): The distance metric used in vector type field. Can be one of [L2 | IP | COSINE].
+        type (VectorType): Vector type. The only supported type is FLOAT32.
+        initialCap (Optional[int]): Initial vector capacity in the index affecting memory allocation size of the index. Defaults to 1024.
+    """
     def __init__(
         self,
         dim: int,
@@ -383,7 +350,7 @@ class VectorFieldAttributesFlat(VectorFieldAttributes):
         initialCap: Optional[int] = None
     ):
         """
-        Initialize a new TagField instance.
+        Initialize a new flat vector field attributes instance.
         """
         super().__init__(dim, distanceMetric, type)
         self.initialCap = initialCap
@@ -401,6 +368,18 @@ class VectorFieldAttributesFlat(VectorFieldAttributes):
         return args
     
 class VectorFieldAttributesHnsw(VectorFieldAttributes):
+    """
+    Get the arguments to be used for the HNSW algorithm of the vector field.
+
+    Args:
+        dim (int): Number of dimensions in the vector.
+        distanceMetric (DistanceMetricType): The distance metric used in vector type field. Can be one of [L2 | IP | COSINE].
+        type (VectorType): Vector type. The only supported type is FLOAT32.
+        initialCap (Optional[int]): Initial vector capacity in the index affecting memory allocation size of the index. Defaults to 1024.
+        m (Optional[int]): Number of maximum allowed outgoing edges for each node in the graph in each layer. Default is 16, maximum is 512.
+        efContruction (Optional[int]): Controls the number of vectors examined during index construction. Default value is 200, Maximum value is 4096.
+        efRuntime (Optional[int]): Controls the number of vectors examined during query operations. Default value is 10, Maximum value is 4096.
+    """
     def __init__(
         self,
         dim: int,
@@ -441,12 +420,13 @@ class VectorFieldAttributesHnsw(VectorFieldAttributes):
 
 class VectorField(Field):
     """
-    Class for defining vector fields in a schema.
+    Class for defining vector field in a schema.
 
     Args:
         name (str): The name of the vector field.
-        algorithm (str): The vector indexing algorithm.
+        algorithm (VectorAlgorithm): The vector indexing algorithm.
         alias (Optional[str]): An alias for the field.
+        attributes (VectorFieldAttributes): Additional attributes to be passed with the vector field after the algorithm name.
     """
 
     def __init__(
@@ -491,70 +471,6 @@ class DataType(Enum):
     """
     If the created index will index JSON document data.
     """
-
-
-
-# class FieldInfo:
-#     """
-#     This class represents the arguments after the SCHEMA keyword to create an index with the identifier 
-#     referencing the actual name of field in the JSON/HASH.
-    
-#     All the arguments associated with a single field after the SCHEMA keyword are encapsulated in this class.
-#     [FT.CREATE] uses a List of this class to represent information for multiple fields to create multiple indexes.
-
-#     Args:
-#         identifier (str): The name of the actual field in the JSON/HASH, whose value has to be indexed.
-#         type (FieldType): The data type of the field being indexed.
-#         alias (Optional[str]): The alias to be used for the indexed field identifiers.
-#         sortable (SORTABLE): This option will allow the user to sort the results by the value stored in the indexed attribute.
-#         unnormalized (UNNORMALIZED): This option will allow the user to disable the default behaviour of normalizing the attribute values stored for sorting.
-#         noIndex (NO_INDEX): This option will allow the user to disable indexing for a field.
-#     """
-#     def __init__(
-#         self,
-#         identifier: str,
-#         fieldTypeInfo: FieldTypeInfo,
-#         alias: Optional[str] = None,
-#         sortable: SORTABLE = SORTABLE.NOT_SORTABLE,
-#         unnormalized: UNNORMALIZED = UNNORMALIZED.NOT_UNNORMALIZED,
-#         noIndex: NO_INDEX = NO_INDEX.NOT_NO_INDEX
-#     ):
-#         """
-#         Initialize the attributes for the fields part of the index SCHEMA.
-#         """
-#         self.identifier = identifier
-#         self.alias = alias
-#         self.fieldTypeInfo = fieldTypeInfo
-#         self.sortable = sortable
-#         self.unnormalized = unnormalized
-#         self.noIndex = noIndex
-
-#     def getFieldInfo(self) -> List[str]:
-#         """
-#         Get the arguments for a single field for the index SCHEMA created using [FT.CREATE]
-
-#         Returns:
-#             List[str]:
-#                 List of agruments for a index field.
-#         """
-#         args = []
-#         if self.identifier:
-#             args.append(self.identifier)
-#         if self.alias:
-#             args.append(FtCreateKeywords.AS)
-#             args.append(self.alias)
-#         if self.fieldTypeInfo:
-#             args = args + self.fieldTypeInfo.getFieldTypeInfo()
-#         if self.sortable == SORTABLE.IS_SORTABLE:
-#             args.append(FtCreateKeywords.SORTABLE)
-#             if self.unnormalized == UNNORMALIZED.IS_UNNORMALIZED:
-#                 args.append(FtCreateKeywords.UNF)
-#         if self.noIndex == NO_INDEX.IS_NO_INDEX:
-#             args.append(FtCreateKeywords.NO_INDEX)
-#         print("args in field info+++++++")
-#         print(args)
-#         return args
-
         
 class FtCreateOptions:
     """
