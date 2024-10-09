@@ -291,6 +291,7 @@ async def toggle(
         await client.custom_command(args),
     )"""
 
+
 async def type(
     client: TGlideClient,
     key: TEncodable,
@@ -306,7 +307,7 @@ async def type(
             If None, the type of the root JSON object will be returned. Defaults to None.
 
     Returns:
-        Optional[Union[bytes, List[bytes]]]: 
+        Optional[Union[bytes, List[bytes]]]:
             For JSONPath ('path' starts with '$'):
                 Returns a list of types if the path exists.
                 or `NULL` if the key does not exist.
@@ -314,7 +315,7 @@ async def type(
             For legacy path (`path` doesn't starts with `$`):
                 Returns the type of the value as a string if the path exists.
                 or empty array if the path or key does not exist.
-                
+
     Examples:
         >>> from glide import json
         >>> await json.set(client, "doc", "$", '{"a": 1, "nested": {"a": 2, "b": 3}}')

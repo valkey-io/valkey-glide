@@ -197,18 +197,24 @@ class TestJson:
         with pytest.raises(RequestError):
             assert await json.toggle(glide_client, "non_exiting_key", "$")
 
-
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_json_type(self, glide_client: TGlideClient):
         key = get_random_string(10)
 
-        json_value = {"key1": "value1", "key2": 2, "key3": [1, 2, 3], "key4": {"nested_key":{"key1": [4, 5]}}, "key5": None, "key6": True}
+        json_value = {
+            "key1": "value1",
+            "key2": 2,
+            "key3": [1, 2, 3],
+            "key4": {"nested_key": {"key1": [4, 5]}},
+            "key5": None,
+            "key6": True,
+        }
         assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
 
         result = await json.type(glide_client, key, "$")
-        assert result == [b"object"] 
-        
+        assert result == [b"object"]
+
         result = await json.type(glide_client, key, "$..key1")
         assert result == [b"string", b"array"]
 
@@ -232,10 +238,12 @@ class TestJson:
 
         # Check for non-existent path $.key7
         result = await json.type(glide_client, key, "$.key7")
-        assert result == []  
+        assert result == []
 
         # Check for non-existent path within an existing key
-        result = await json.type(glide_client, key, "$.key3[3]")  # Out of bounds for the array
+        result = await json.type(
+            glide_client, key, "$.key3[3]"
+        )  # Out of bounds for the array
         assert result == []
 
         # Check for invalid path format
