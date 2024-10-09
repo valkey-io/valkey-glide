@@ -27,10 +27,11 @@ This section is currently under review. The release schedule will be soon publis
 
 ## GLIDE - How to release a new version
 
+Below are the steps required to release a new version:
+
 ### Update changelog
 
-1. CHANGELOG: Go through the CHANGELOG.md file found in the root folder and verify all required changes / bug fixes / features for this release are found in the file. Add a header with of the version and the release date above the described  changes. E.G. for releasing version 1.0.0 from version 0.4.0:
-
+Verify all required changes / bug fixes / features in the [CHANGELOG](./CHANGELOG.md) are valid and expected in the file. Add a header with of the version and the release date above the described  changes. E.G. for releasing version 1.0.0 from version 0.4.0:
 ```
 1.0.0 (2024-07-09)
 Changes
@@ -52,7 +53,7 @@ Open a PR to the main branch with the missing changes and the new version header
     ![new branch](docs/images/new-branch.png)
 
 
-1. **If it’s only a patch version and the branch already exists**, checkout the existing branch (e.g. git checkout origin-valkey/v0.2), and merge in the commit you’ve merged into main with the updates to the CHANGELOG.md file.
+1. **If it’s only a patch version and the branch already exists**, checkout the existing branch (e.g. `git checkout origin-valkey/v0.2`), and merge in the commit you’ve merged into main with the updates to the CHANGELOG.md file.
 2. **Attributions file (ORT)**: Make sure the attributions file is updated by manually running the ORT workflow:
 
     a. Go to: https://github.com/valkey-io/valkey-glide/actions/workflows/ort.yml <br>
@@ -66,34 +67,27 @@ Open a PR to the main branch with the missing changes and the new version header
 
 ### Trigger the CD workflow and create a release candidate
 
-a. The CD workflow will deploy the code into the package managers of the different wrappers. If there is any issue with the CD, **contact a Valkey-GLIDE maintainer**. There are multiple CD jobs, specifically one per client. All [CD files](https://github.com/valkey-io/valkey-glide/tree/main/.github/workflows) can be found in the workflows section. Refer to Java CD as an [example](https://github.com/valkey-io/valkey-glide/blob/main/.github/workflows/java-cd.yml). <br>
+a. The CD workflow will deploy the code into the package managers of the different wrappers. If there is any issue with the CD, **contact a Valkey-GLIDE maintainer**. There are multiple CD jobs, one per client. All CD actions can be found in the [workflows section](https://github.com/valkey-io/valkey-glide/tree/main/.github/workflows). Refer to Java CD as an [example](https://github.com/valkey-io/valkey-glide/blob/main/.github/workflows/java-cd.yml).
 
-b. To trigger a new release we need to tag the new branch commit with the release version, If it's a release candidate, which should
-    be released before a real release in order to test the version, add
+b. To trigger a new release we need to tag the new branch commit with the release version.
+   A release candidate should be released before the real release in order to test the version, add
     `-rc$RC_VERSION:`
 
-c. `git tag v1.x.x-rc0`
+c. release candidate: `git tag v1.x.x-rc0`
 
 d. Push the tag to the valkey/glide repo to trigger the CD action
 
-e. `git push origin-valkey v1.x.x-rc0`
+e. release candidate: `git push origin-valkey v1.A.B-rc$RC_VERSION`
 
-f. If your release is unsuccessful, all you need to do is create new tag for the next RC version (e.g. v0.5.0-rc3 → v0.5.0-rc4).
+f. If your release candidare is unsuccessful, all you need to do is create new tag for the next RC version (e.g. v0.5.0-rc3 → v0.5.0-rc4).
 
-g.
-Each client has its own release procedure once the release candidate is deployed.
+g. Each client has its own release procedure once the release candidate is deployed:
 
-**Node:** all the test will automatically run and once the release candidate CD workflow is done successfully, we can immediately release the final version.
+* **Node:** all the test will automatically run and once the release candidate CD workflow is done successfully, we can immediately publish the release candidate to `npm`.
 
-**Python:** there’s no such support currently, so you'll first need to test the RC version you deployed on the different supported platform.You can do so by cloning the repo into each machine, go to [examples/python/requirements.txt](https://github.com/valkey-io/valkey-glide/blob/main/examples/python/requirements.txt).
+* **Python:** there’s no such support currently, so you'll first need to test the RC version you deployed on the different supported platform. You can do so by cloning the repo into each machine, go to [examples/python/requirements.txt](https://github.com/valkey-io/valkey-glide/blob/main/examples/python/requirements.txt).
 
-**Java:** is similar to the Node client. Additionally, the owner shouldn't be able to set the RC version created as the latest release.
-
-h. and change the version to the version you just released.
-
-```
-valkey-glide==v0.5.0rc3
-```
+* **Java:** CI tests will automatically be run, and CD will automatically publish the RC to Maven.  Note: maintainer approval is required twice: Once to start the release CI testing, and once to publish the RC package to Maven.
 
 For example, this is the release process for Python.
 
@@ -137,8 +131,8 @@ For deployment guide, see the above section [GLIDE - How to release a new versio
 
 The CD workflow can be triggered in several ways.
 
-1. **By pushing a Version Tag**: Trigger the CD workflow by pushing a version tag in the format "v*.*." or "v.*.*-rc".
-For example, v1.0.0-rc1. When triggered by a push event with a version tag, all package manager CD workflows (e.g., pypi-cd.yml, npm-cd.yml, java-cd.yml) will be initiated.
+1. **By pushing a Version Tag**: Trigger the CD workflow by pushing a version tag in the format "v*.*." or "v*.*-rc".
+For example, `v1.0.0-rc1`. When triggered by a push event with a version tag, all package manager CD workflows (e.g., pypi-cd.yml, npm-cd.yml, java-cd.yml) will be initiated.
 The version will be extracted from the tag.
     ```
     [13:39:23] ubuntu $ git remote -vv
@@ -148,16 +142,15 @@ The version will be extracted from the tag.
     origin-valkey      https://github.com/valkey-io/valkey-glide (push)
     ```
 
-
 2. **By Workflow Dispatch:** Manually trigger the CD workflow using the "workflow dispatch" option.
-This is done on a specific CD workflow by passing the required version as an input parameter in the format "*.*.*" or "*.*.*-rc*".
+This is done on a specific CD workflow by passing the required version as an input parameter in the format "v*.*.*" or "v*.*.*-rc*".
 This method will not trigger deployments for other package managers and will not create a tag in the repository.
 
     ![pypi CD](docs/images/releasing/pypi-CD.png)
 
 3. **Pull Requests:** Pull requests will trigger the CD workflows as "dry runs" without actually publishing to the package managers.
 This ensures that changes do not break the CD logic. Note that PRs affecting the CD workflows (e.g., introducing changes in the CD paths) can only be opened from branches on the
-valkey-io/valkey-glide main repo (rather than from forks) since running the CD, even without publishing, requires access to the repository's secrets.
+`valkey-io/valkey-glide` main repo (rather than from forks) since running the CD, even without publishing, requires access to the repository's secrets.
 
 
 #### **Self-hosted runner**
@@ -166,7 +159,7 @@ We use a self-hosted runner for Linux-arm64. We have an automated action to star
 
 ### **PyPi**
 
-**Contact a Valkey-GLIDE maintainer** to have access to the Valkey PyPI account-they will be able to log ing to the PyPI account along with generating API tokens if needed.
+**Contact a Valkey-GLIDE maintainer** to have access to the Valkey PyPI account-they will be able to log in to the PyPI account along with generating API tokens if needed.
 
 ### **NPM**
 
@@ -193,7 +186,7 @@ c. **Use an Automation token so it could be used in CD workflow:**
 An automation token will bypass two-factor authentication (2FA) when publishing.
 If you have 2FA enabled, you will not be prompted when using an automation token, making it suitable for CI/CD workflows.
 
-![new access token](docs/images/new-access-token.png)
+![new access token](./docs/images/new-access-token.png)
 
 3. Change the NPM_AUTH_TOKEN secret in Github with the new access token.
 
@@ -210,22 +203,12 @@ If you have 2FA enabled, you will not be prompted when using an automation token
 
 TODO list:
 
-- [ ]  Create a README.md file following the python [README](python/README.md)
-
-- [ ]  Create a DEVELOPER.md file following the python [DEVELOPER.md](python/DEVELOPER.md)
-
-- [ ]  Create examples following existing client [examples](https://github.com/valkey-io/valkey-glide/tree/main/examples)-[python](https://github.com/valkey-io/valkey-glide/tree/main/examples/python), [java](https://github.com/valkey-io/valkey-glide/tree/main/examples/java), and [node](https://github.com/valkey-io/valkey-glide/tree/main/examples/node).
-
-- [ ]  Update the main [README](README.md) file with link to the new wrapper readme under Getting Started
-
-- [ ]  Update the Current Status in the main README file
-
-- [ ]  Make sure all required structures/types/enums are exported
-
+- [ ] Create a README.md file following the python [README](./python/README.md)
+- [ ] Create a DEVELOPER.md file following the python [DEVELOPER.md](./python/DEVELOPER.md)
+- [ ]  Create examples following existing client [examples](./examples)-[python](./examples/python), [java](./examples/java), and [node](./examples/node).- [ ] Update the main [README](./README.md) file with link to the new wrapper readme under Getting Started
+- [ ] Update the Current Status in the main README file
+- [ ] Make sure all required structures/types/enums are exported
 - [ ] Create a workflow to automate code deployment to the relevant package manager (see pypi_cd.yml for example)
-
-- [ ]  Add this wrapper to the ort.yml workflow so it would generate contributions file for this wrapper, make sure that the folder has updated THIRD_PARTY_LICENSES_<WRAPPER> file.
-
-- [ ]  Check that there is no vulnerabilities
-
+- [ ] Add this wrapper to the ort.yml workflow so it would generate contributions file for this wrapper, make sure that the folder has updated THIRD_PARTY_LICENSES_<WRAPPER> file.
+- [ ] Check that there is no vulnerabilities
 - [ ] Contact a Valkey-Glide maintainer for access to the GLIDE -  How to release a new version document to release the new version to the package managers.
