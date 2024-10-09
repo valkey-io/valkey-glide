@@ -25,7 +25,7 @@ class TestVss:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_vss_create(self, glide_client: TGlideClient):
         fields: List[Field] = []
-        field1: TextField = TextField("title")
+        field1: TextField = TextField("$title")
         field2: NumericField = NumericField("published_at")
         field3: TextField = TextField("category")
         fields.append(field1)
