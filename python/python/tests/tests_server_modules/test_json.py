@@ -8,7 +8,11 @@ import typing
 import pytest
 from glide.async_commands.core import ConditionalChange, InfoSection
 from glide.async_commands.server_modules import json
-from glide.async_commands.server_modules.json import JsonArrIndexOptions, JsonGetOptions
+from glide.async_commands.server_modules.json import (
+    JsonArrIndexOptions,
+    JsonArrPopOptions,
+    JsonGetOptions,
+)
 from glide.config import ProtocolVersion
 from glide.constants import OK
 from glide.exceptions import RequestError
@@ -1840,3 +1844,76 @@ class TestJson:
         assert await json.resp(glide_client, "nonexistent_key", "$") is None
         assert await json.resp(glide_client, "nonexistent_key", ".") is None
         assert await json.resp(glide_client, "nonexistent_key") is None
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_json_arrpop(self, glide_client: TGlideClient):
+        key = get_random_string(5)
+        key2 = get_random_string(5)
+
+        json_value = '{"a": [1, 2, true], "b": {"a": [3, 4, ["value", 3, false] ,5], "c": {"a": 42}}}'
+        assert await json.set(glide_client, key, "$", json_value) == OK
+
+        assert await json.arrpop(
+            glide_client, key, JsonArrPopOptions(path="$.a", index=1)
+        ) == [b"2"]
+        assert (
+            await json.arrpop(glide_client, key, JsonArrPopOptions(path="$..a"))
+        ) == [b"true", b"5", None]
+
+        assert (
+            await json.arrpop(glide_client, key, JsonArrPopOptions(path="..a")) == b"1"
+        )
+        # Even if only one array element was returned, ensure second array at `..a` was popped
+        assert await json.get(glide_client, key, "$..a") == b"[[],[3,4],42]"
+
+        # Out of index
+        assert await json.arrpop(
+            glide_client, key, JsonArrPopOptions(path="$..a", index=10)
+        ) == [None, b"4", None]
+
+        assert (
+            await json.arrpop(
+                glide_client, key, JsonArrPopOptions(path="..a", index=-10)
+            )
+            == b"3"
+        )
+
+        # Path is not an array
+        assert await json.arrpop(glide_client, key, JsonArrPopOptions(path="$")) == [
+            None
+        ]
+        with pytest.raises(RequestError):
+            assert await json.arrpop(glide_client, key, JsonArrPopOptions(path="."))
+        with pytest.raises(RequestError):
+            assert await json.arrpop(glide_client, key)
+
+        # Non existing path
+        assert (
+            await json.arrpop(
+                glide_client, key, JsonArrPopOptions(path="$.non_existing_path")
+            )
+            == []
+        )
+        with pytest.raises(RequestError):
+            assert await json.arrpop(
+                glide_client, key, JsonArrPopOptions(path="non_existing_path")
+            )
+
+        with pytest.raises(RequestError):
+            await json.arrpop(
+                glide_client, "non_existing_key", JsonArrPopOptions(path="$.a")
+            )
+        with pytest.raises(RequestError):
+            await json.arrpop(
+                glide_client, "non_existing_key", JsonArrPopOptions(path=".a")
+            )
+
+        assert (
+            await json.set(glide_client, key2, "$", '[[], ["a"], ["a", "b", "c"]]')
+            == OK
+        )
+        assert (
+            await json.arrpop(glide_client, key2, JsonArrPopOptions(path=".", index=-1))
+            == b'["a","b","c"]'
+        )

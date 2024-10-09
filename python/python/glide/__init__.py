@@ -64,7 +64,11 @@ from glide.async_commands.server_modules.ft_options.ft_search_options import (
     FtSearchLimit,
     ReturnField,
 )
-from glide.async_commands.server_modules.json import JsonArrIndexOptions, JsonGetOptions
+from glide.async_commands.server_modules.json import (
+    JsonArrIndexOptions,
+    JsonArrPopOptions,
+    JsonGetOptions,
+)
 from glide.async_commands.sorted_set import (
     AggregationType,
     GeoSearchByBox,
@@ -254,6 +258,9 @@ __all__ = [
     "json",
     "JsonGetOptions",
     "JsonArrIndexOptions",
+    "JsonArrPopOptions",
+    # Search
+    "ft",
     # Logger
     "Logger",
     "LogLevel",
