@@ -6,40 +6,65 @@ import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
-import glide.api.models.commands.vss.FTCreateOptions;
-import glide.api.models.commands.vss.FTCreateOptions.FieldInfo;
+import glide.api.models.commands.FT.FTCreateOptions;
+import glide.api.models.commands.FT.FTCreateOptions.FieldInfo;
 import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
+import lombok.NonNull;
 
+/** Module for vector search commands. */
 public class FT {
     /**
      * Creates an index and initiates a backfill of that index.
      *
      * @param indexName The index name.
-     * @param options Additional parameters for the command - see {@link FTCreateOptions}.
      * @param fields Fields to populate into the index.
      * @return <code>OK</code>.
      * @example
      *     <pre>{@code
      * // Create an index for vectors of size 2:
-     * FT.create(client, "hash_idx1", FTCreateOptions.empty(), new FieldInfo[] {
+     * FT.create(client, "my_idx1", new FieldInfo[] {
      *     new FieldInfo("vec", VectorFieldFlat.builder(DistanceMetric.L2, 2).build())
      * }).get();
      * // Create a 6-dimensional JSON index using the HNSW algorithm:
-     * FT.create(
-     *     client,
-     *     "json_idx1",
-     *     FTCreateOptions.builder().indexType(JSON).prefixes(new String[] {"json:"}).build(),
-     *     new FieldInfo[] { new FieldInfo(
-     *         "$.vec",
-     *         "VEC",
+     * FT.create(client, "my_idx2",
+     *     new FieldInfo[] { new FieldInfo("$.vec", "VEC",
      *         VectorFieldHnsw.builder(DistanceMetric.L2, 6).numberOfEdges(32).build())
      * }).get();
      * }</pre>
      */
     public static CompletableFuture<String> create(
-            BaseClient client, String indexName, FTCreateOptions options, FieldInfo[] fields) {
+            @NonNull BaseClient client, @NonNull String indexName, @NonNull FieldInfo[] fields) {
+        // Node: bug in meme DB - command fails if cmd is too short even though all mandatory args are
+        // present
+        // TODO confirm is it fixed or not and update docs if needed
+        return create(client, indexName, fields, FTCreateOptions.builder().build());
+    }
+
+    /**
+     * Creates an index and initiates a backfill of that index.
+     *
+     * @param indexName The index name.
+     * @param fields Fields to populate into the index.
+     * @param options Additional parameters for the command - see {@link FTCreateOptions}.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * // Create a 6-dimensional JSON index using the HNSW algorithm:
+     * FT.create(client, "json_idx1",
+     *     new FieldInfo[] { new FieldInfo("$.vec", "VEC",
+     *         VectorFieldHnsw.builder(DistanceMetric.L2, 6).numberOfEdges(32).build())
+     *     },
+     *     FTCreateOptions.builder().indexType(JSON).prefixes(new String[] {"json:"}).build(),
+     * ).get();
+     * }</pre>
+     */
+    public static CompletableFuture<String> create(
+            @NonNull BaseClient client,
+            @NonNull String indexName,
+            @NonNull FieldInfo[] fields,
+            @NonNull FTCreateOptions options) {
         var args =
                 Stream.of(
                                 new String[] {"FT.CREATE", indexName},
@@ -58,8 +83,8 @@ public class FT {
     /**
      * A wrapper for custom command API.
      *
-     * @param client
-     * @param args
+     * @param client The client to execute the command.
+     * @param args The command line.
      * @param returnsMap - true if command returns a map
      */
     @SuppressWarnings("unchecked")

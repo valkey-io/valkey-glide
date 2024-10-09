@@ -197,8 +197,9 @@ jobs:
               name: lint java rust
 
     test-modules:
-        if: github.repository_owner == 'valkey-io'
-        name: Modules Tests
+        if: github.event.pull_request.head.repo.owner.login == 'valkey-io'
+        environment: AWS_ACTIONS
+        name: Running Module Tests
         runs-on: [self-hosted, linux, ARM64]
         timeout-minutes: 15
         steps:

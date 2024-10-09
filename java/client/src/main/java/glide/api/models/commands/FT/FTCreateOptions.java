@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
-package glide.api.models.commands.vss;
+package glide.api.models.commands.FT;
 
+import glide.api.BaseClient;
 import glide.api.commands.servermodules.FT;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -12,7 +13,10 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.NonNull;
 
-/** Optional parameters for {@link FT#create} command. */
+/**
+ * Additional parameters for {@link FT#create(BaseClient, String, FieldInfo[], FTCreateOptions)}
+ * command.
+ */
 @Builder
 public class FTCreateOptions {
     /** The index type. If not given a {@link IndexType#HASH} index is created. */
@@ -20,14 +24,6 @@ public class FTCreateOptions {
 
     /** A list of prefixes of index definitions. */
     private final String[] prefixes;
-
-    /** Create an empty options if parametrization is not needed. */
-    public static FTCreateOptions empty() {
-        // Node: bug in meme DB - command fails if cmd is too short even though all mandatory args are
-        // present
-        // TODO confirm is it fixed or not and update docs if needed
-        return builder().build();
-    }
 
     public String[] toArgs() {
         var args = new ArrayList<String>();

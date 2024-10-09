@@ -12,17 +12,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.api.GlideClusterClient;
 import glide.api.commands.servermodules.FT;
+import glide.api.models.commands.FT.FTCreateOptions;
+import glide.api.models.commands.FT.FTCreateOptions.DistanceMetric;
+import glide.api.models.commands.FT.FTCreateOptions.FieldInfo;
+import glide.api.models.commands.FT.FTCreateOptions.IndexType;
+import glide.api.models.commands.FT.FTCreateOptions.NumericField;
+import glide.api.models.commands.FT.FTCreateOptions.TagField;
+import glide.api.models.commands.FT.FTCreateOptions.TextField;
+import glide.api.models.commands.FT.FTCreateOptions.VectorFieldFlat;
+import glide.api.models.commands.FT.FTCreateOptions.VectorFieldHnsw;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
-import glide.api.models.commands.vss.FTCreateOptions;
-import glide.api.models.commands.vss.FTCreateOptions.DistanceMetric;
-import glide.api.models.commands.vss.FTCreateOptions.FieldInfo;
-import glide.api.models.commands.vss.FTCreateOptions.IndexType;
-import glide.api.models.commands.vss.FTCreateOptions.NumericField;
-import glide.api.models.commands.vss.FTCreateOptions.TagField;
-import glide.api.models.commands.vss.FTCreateOptions.TextField;
-import glide.api.models.commands.vss.FTCreateOptions.VectorFieldFlat;
-import glide.api.models.commands.vss.FTCreateOptions.VectorFieldHnsw;
 import glide.api.models.exceptions.RequestException;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
@@ -66,7 +66,6 @@ public class VectorSearchTests {
                 FT.create(
                                 client,
                                 UUID.randomUUID().toString(),
-                                FTCreateOptions.empty(),
                                 new FieldInfo[] {
                                     new FieldInfo("vec", "VEC", VectorFieldHnsw.builder(DistanceMetric.L2, 2).build())
                                 })
@@ -76,14 +75,14 @@ public class VectorSearchTests {
                 FT.create(
                                 client,
                                 UUID.randomUUID().toString(),
-                                FTCreateOptions.builder()
-                                        .indexType(IndexType.JSON)
-                                        .prefixes(new String[] {"json:"})
-                                        .build(),
                                 new FieldInfo[] {
                                     new FieldInfo(
                                             "$.vec", "VEC", VectorFieldFlat.builder(DistanceMetric.L2, 6).build())
-                                })
+                                },
+                                FTCreateOptions.builder()
+                                        .indexType(IndexType.JSON)
+                                        .prefixes(new String[] {"json:"})
+                                        .build())
                         .get());
 
         // create an index with NSFW vector with additional parameters
@@ -92,10 +91,6 @@ public class VectorSearchTests {
                 FT.create(
                                 client,
                                 UUID.randomUUID().toString(),
-                                FTCreateOptions.builder()
-                                        .indexType(IndexType.HASH)
-                                        .prefixes(new String[] {"docs:"})
-                                        .build(),
                                 new FieldInfo[] {
                                     new FieldInfo(
                                             "doc_embedding",
@@ -104,7 +99,11 @@ public class VectorSearchTests {
                                                     .vectorsExaminedOnConstruction(250)
                                                     .vectorsExaminedOnRuntime(40)
                                                     .build())
-                                })
+                                },
+                                FTCreateOptions.builder()
+                                        .indexType(IndexType.HASH)
+                                        .prefixes(new String[] {"docs:"})
+                                        .build())
                         .get());
 
         // create an index with multiple fields
@@ -113,15 +112,15 @@ public class VectorSearchTests {
                 FT.create(
                                 client,
                                 UUID.randomUUID().toString(),
-                                FTCreateOptions.builder()
-                                        .indexType(IndexType.HASH)
-                                        .prefixes(new String[] {"blog:post:"})
-                                        .build(),
                                 new FieldInfo[] {
                                     new FieldInfo("title", new TextField()),
                                     new FieldInfo("published_at", new NumericField()),
                                     new FieldInfo("category", new TagField())
-                                })
+                                },
+                                FTCreateOptions.builder()
+                                        .indexType(IndexType.HASH)
+                                        .prefixes(new String[] {"blog:post:"})
+                                        .build())
                         .get());
 
         // create an index with multiple prefixes
@@ -131,16 +130,16 @@ public class VectorSearchTests {
                 FT.create(
                                 client,
                                 name,
-                                FTCreateOptions.builder()
-                                        .indexType(IndexType.HASH)
-                                        .prefixes(new String[] {"author:details:", "book:details:"})
-                                        .build(),
                                 new FieldInfo[] {
                                     new FieldInfo("author_id", new TagField()),
                                     new FieldInfo("author_ids", new TagField()),
                                     new FieldInfo("title", new TextField()),
                                     new FieldInfo("name", new TextField())
-                                })
+                                },
+                                FTCreateOptions.builder()
+                                        .indexType(IndexType.HASH)
+                                        .prefixes(new String[] {"author:details:", "book:details:"})
+                                        .build())
                         .get());
 
         // create a duplicating index
@@ -151,7 +150,6 @@ public class VectorSearchTests {
                                 FT.create(
                                                 client,
                                                 name,
-                                                FTCreateOptions.empty(),
                                                 new FieldInfo[] {
                                                     new FieldInfo("title", new TextField()),
                                                     new FieldInfo("name", new TextField())
@@ -164,13 +162,7 @@ public class VectorSearchTests {
         exception =
                 assertThrows(
                         ExecutionException.class,
-                        () ->
-                                FT.create(
-                                                client,
-                                                UUID.randomUUID().toString(),
-                                                FTCreateOptions.empty(),
-                                                new FieldInfo[0])
-                                        .get());
+                        () -> FT.create(client, UUID.randomUUID().toString(), new FieldInfo[0]).get());
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getMessage().contains("wrong number of arguments"));
 
@@ -182,7 +174,6 @@ public class VectorSearchTests {
                                 FT.create(
                                                 client,
                                                 UUID.randomUUID().toString(),
-                                                FTCreateOptions.empty(),
                                                 new FieldInfo[] {
                                                     new FieldInfo("name", new TextField()),
                                                     new FieldInfo("name", new TextField())
