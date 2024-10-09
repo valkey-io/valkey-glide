@@ -1,3 +1,4 @@
+import uuid
 from typing import List
 
 import pytest
@@ -35,29 +36,23 @@ class TestVss:
         prefixes: List[str] = []
         prefixes.append("blog:post:")
 
-        """
-        Create an index with multiple fields with Hash data type.
-        """
-        index = "idx"
+        # Create an index with multiple fields with Hash data type.
+        index = str(uuid.uuid4())
         result = await ft.create(
             glide_client, index, fields, FtCreateOptions(DataType.HASH, prefixes)
         )
         assert result == OK
 
-        """
-        Create an index with multiple fields with JSON data type.
-        """
-        index2 = "idx2"
+        # Create an index with multiple fields with JSON data type.
+        index2 = str(uuid.uuid4())
         result = await ft.create(
             glide_client, index2, fields, FtCreateOptions(DataType.JSON, prefixes)
         )
         assert result == OK
 
-        """
-        Create an index for vectors of size 2
-        FT.CREATE hash_idx1 ON HASH PREFIX 1 hash: SCHEMA vec AS VEC VECTOR HNSW 6 DIM 2 TYPE FLOAT32 DISTANCE_METRIC L2
-        """
-        index3 = "hash_idx1"
+        # Create an index for vectors of size 2
+        # FT.CREATE hash_idx1 ON HASH PREFIX 1 hash: SCHEMA vec AS VEC VECTOR HNSW 6 DIM 2 TYPE FLOAT32 DISTANCE_METRIC L2
+        index3 = str(uuid.uuid4())
         prefixes = []
         prefixes.append("hash:")
         fields = []
@@ -65,7 +60,7 @@ class TestVss:
             name="vec",
             algorithm=VectorAlgorithm.HNSW,
             attributes=VectorFieldAttributesHnsw(
-                dim=2, distanceMetric=DistanceMetricType.L2, type=VectorType.FLOAT32
+                dim=2, distance_metric=DistanceMetricType.L2, type=VectorType.FLOAT32
             ),
             alias="VEC",
         )
@@ -76,11 +71,9 @@ class TestVss:
         )
         assert result == OK
 
-        """
-        Create a 6-dimensional JSON index using the HNSW algorithm
-        FT.CREATE json_idx1 ON JSON PREFIX 1 json: SCHEMA $.vec AS VEC VECTOR HNSW 6 DIM 6 TYPE FLOAT32 DISTANCE_METRIC L2
-        """
-        index4 = "json_idx1"
+        # Create a 6-dimensional JSON index using the HNSW algorithm
+        # FT.CREATE json_idx1 ON JSON PREFIX 1 json: SCHEMA $.vec AS VEC VECTOR HNSW 6 DIM 6 TYPE FLOAT32 DISTANCE_METRIC L2
+        index4 = str(uuid.uuid4())
         prefixes = []
         prefixes.append("json:")
         fields = []
@@ -88,7 +81,7 @@ class TestVss:
             name="$.vec",
             algorithm=VectorAlgorithm.HNSW,
             attributes=VectorFieldAttributesHnsw(
-                dim=6, distanceMetric=DistanceMetricType.L2, type=VectorType.FLOAT32
+                dim=6, distance_metric=DistanceMetricType.L2, type=VectorType.FLOAT32
             ),
             alias="VEC",
         )
@@ -99,7 +92,11 @@ class TestVss:
         )
         assert result == OK
 
-        """
-        TO-DO:
-        Add additional tests from VSS documentation that require a combination of commands to run.
-        """
+        # Create an index without FtCreateOptions
+
+        index5 = str(uuid.uuid4())
+        result = await ft.create(glide_client, index5, fields, FtCreateOptions())
+        assert result == OK
+
+        # TO-DO:
+        # Add additional tests from VSS documentation that require a combination of commands to run.

@@ -32,7 +32,7 @@ from glide.async_commands.core import (
     InsertPosition,
     UpdateOptions,
 )
-from glide.async_commands.server_modules import json
+from glide.async_commands.server_modules import ft, json
 from glide.async_commands.sorted_set import (
     AggregationType,
     GeoSearchByBox,
@@ -185,7 +185,7 @@ __all__ = [
     "InfoSection",
     "InsertPosition",
     "json",
-    "LexBoundary",
+    "ft" "LexBoundary",
     "Limit",
     "ListDirection",
     "RangeByIndex",

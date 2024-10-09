@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from glide.async_commands.server_modules.ft_constants import FtCreateKeywords
 
@@ -22,28 +22,9 @@ class FieldType(Enum):
     """
     If the field contains a number.
     """
-    GEO = "GEO"
-    """
-    If the field contains a coordinate(latitude and longitude separated by a comma).
-    """
     VECTOR = "VECTOR"
     """
     If the field is a vector field that supports vector search.
-    """
-
-
-class SortableOptions(Enum):
-    """
-    Options for fields with SORTABLE argument.
-    """
-
-    IS_SORTABLE = "IS_SORTABLE"
-    """
-    If the index field is sortable.
-    """
-    IS_SORTABLE_UNF = "IS_SORTABLE_UNF"
-    """
-    If the index field is sortable and unnormalized. This disables the normalization and keep the original form of the field value.
     """
 
 
@@ -117,7 +98,7 @@ class Field(ABC):
         self.alias = alias
 
     @abstractmethod
-    def getFieldArgs(self) -> List[str]:
+    def toArgs(self) -> List[str]:
         """
         Get the arguments representing the field.
 
@@ -131,177 +112,96 @@ class Field(ABC):
         return args
 
 
-class SortableIndexableField(Field):
-    """
-    Abstract base class for defining sortable and indexable fields in a schema.
-    Args:
-        name (str): The name of the field.
-        type (FieldType): The type of the field.
-        alias (Optional[str]): An alias for the field.
-        sortable (Optional[SORTABLE_OPTIONS]): If not None, sets the field as sortable with the specified sortable option.
-        noIndex (bool): Indicate whether the field should be excluded from indexing.
-    """
-
-    @abstractmethod
-    def __init__(
-        self,
-        name: str,
-        type: FieldType,
-        alias: Optional[str] = None,
-        sortable: Optional[SortableOptions] = None,
-        noIndex: bool = False,
-    ):
-        """Initialize a new SortableField instance."""
-        super().__init__(name, type, alias)
-        self.sortable = sortable
-        self.noIndex = noIndex
-
-    def getFieldArgs(self) -> List[str]:
-        """
-        Get the arguments representing the SortableIndexableField.
-
-        Returns:
-            List[str]: A list of field arguments.
-        """
-        args = super().getFieldArgs()
-        if (
-            self.sortable == SortableOptions.IS_SORTABLE
-            or self.sortable == SortableOptions.IS_SORTABLE_UNF
-        ):
-            args.append(FtCreateKeywords.SORTABLE)
-            if self.sortable == SortableOptions.IS_SORTABLE_UNF:
-                args.append(FtCreateKeywords.UNF)
-        if self.noIndex:
-            args.append(FtCreateKeywords.NO_INDEX)
-        return args
-
-
-class TextField(SortableIndexableField):
+class TextField(Field):
     """
     Class for defining text fields in a schema.
 
     Args:
         name (str): The name of the text field.
         alias (Optional[str]): An alias for the field.
-        sortable (Optional[SortableOption]): If not None, sets the field as sortable with the specified sortable option.
-        noIndex (bool): Indicate whether the field should be excluded from indexing.
     """
 
-    def __init__(
-        self,
-        name: str,
-        alias: Optional[str] = None,
-        sortable: Optional[SortableOptions] = None,
-        noIndex: bool = False,
-    ):
+    def __init__(self, name: str, alias: Optional[str] = None):
         """
         Initialize a new TextField instance.
         """
-        super().__init__(name, FieldType.TEXT, alias, sortable, noIndex)
+        super().__init__(name, FieldType.TEXT, alias)
 
-    def getFieldArgs(self) -> List[str]:
+    def toArgs(self) -> List[str]:
         """
         Get the arguments representing the text field.
 
         Returns:
             List[str]: A list of text field arguments.
         """
-        args = super().getFieldArgs()
+        args = super().toArgs()
         return args
 
 
-class TagField(SortableIndexableField):
+class TagField(Field):
     """
     Class for defining tag fields in a schema.
 
     Args:
         name (str): The name of the tag field.
         alias (Optional[str]): An alias for the field.
-        sortable (Optional[SortableOptions]): If not None, sets the field as sortable with the specified sortable option.
-        noIndex (bool): Indicate whether the field should be excluded from indexing.
         separator (Optional[str]): Specify how text in the attribute is split into individual tags. Must be a single character.
-        caseSensitive (bool): Preserve the original letter cases of tags. If set to False, characters are converted to lowercase by default.
+        case_sensitive (bool): Preserve the original letter cases of tags. If set to False, characters are converted to lowercase by default.
     """
 
     def __init__(
         self,
         name: str,
         alias: Optional[str] = None,
-        sortable: Optional[SortableOptions] = None,
-        noIndex: bool = False,
         separator: Optional[str] = None,
-        caseSensitive: bool = False,
+        case_sensitive: bool = False,
     ):
         """
         Initialize a new TagField instance.
         """
-        super().__init__(name, FieldType.TAG, alias, sortable, noIndex)
-        self.sortable = sortable
-        self.noIndex = noIndex
+        super().__init__(name, FieldType.TAG, alias)
         self.separator = separator
-        self.caseSensitive = caseSensitive
+        self.case_sensitive = case_sensitive
 
-    def getFieldArgs(self) -> List[str]:
+    def toArgs(self) -> List[str]:
         """
         Get the arguments representing the tag field.
 
         Returns:
             List[str]: A list of tag field arguments.
         """
-        args = super().getFieldArgs()
+        args = super().toArgs()
         if self.separator:
             args.extend([FtCreateKeywords.SEPARATOR, self.separator])
-        if self.caseSensitive:
+        if self.case_sensitive:
             args.append(FtCreateKeywords.CASESENSITIVE)
         return args
 
 
-class NumericField(SortableIndexableField):
+class NumericField(Field):
     """
     Class for defining the numeric fields in a schema.
 
     Args:
         name (str): The name of the numeric field.
         alias (Optional[str]): An alias for the field.
-        sortable (Optional[SortableOption]): If not None, sets the field as sortable with the specified sortable option.
-        no_index (bool): Indicate whether the field should be excluded from indexing.
     """
 
-    def __init__(
-        self,
-        name: str,
-        alias: Optional[str] = None,
-        sortable: Optional[SortableOptions] = None,
-        noIndex: bool = False,
-    ):
+    def __init__(self, name: str, alias: Optional[str] = None):
         """
         Initialize a new NumericField instance.
         """
-        super().__init__(name, FieldType.NUMERIC, alias, sortable, noIndex)
+        super().__init__(name, FieldType.NUMERIC, alias)
 
-
-class GeoField(SortableIndexableField):
-    """
-    Class for defining GEO fields in a schema.
-
-    Args:
-        name (str): The name of the geo field.
-        alias (Optional[str]): An alias for the field.
-        sortable (Optional[SortableOptions]): If not None, sets the field as sortable with the specified sortable option.
-        noIndex (bool): Indicate whether the field should be excluded from indexing.
-    """
-
-    def __init__(
-        self,
-        name: str,
-        alias: Optional[str] = None,
-        sortable: Optional[SortableOptions] = None,
-        noIndex: bool = False,
-    ):
+    def toArgs(self) -> List[str]:
         """
-        Initialize a new GeoField instance.
+        Get the arguments representing the numeric field.
+
+        Returns:
+            List[str]: A list of numeric field arguments.
         """
-        super().__init__(name, FieldType.GEO, alias, sortable, noIndex)
+        args = super().toArgs()
+        return args
 
 
 class VectorFieldAttributes(ABC):
@@ -310,17 +210,17 @@ class VectorFieldAttributes(ABC):
 
     Args:
         dim (int): Number of dimensions in the vector.
-        distanceMetric (DistanceMetricType): The distance metric used in vector type field. Can be one of [L2 | IP | COSINE].
+        distance_metric (DistanceMetricType): The distance metric used in vector type field. Can be one of [L2 | IP | COSINE].
         type (VectorType): Vector type. The only supported type is FLOAT32.
     """
 
     @abstractmethod
-    def __init__(self, dim: int, distanceMetric: DistanceMetricType, type: VectorType):
+    def __init__(self, dim: int, distance_metric: DistanceMetricType, type: VectorType):
         """
         Initialize a new vector field attributes instance.
         """
         self.dim = dim
-        self.distanceMetric = distanceMetric
+        self.distance_metric = distance_metric
         self.type = type
 
     @abstractmethod
@@ -334,8 +234,8 @@ class VectorFieldAttributes(ABC):
         args = []
         if self.dim:
             args.extend([FtCreateKeywords.DIM, str(self.dim)])
-        if self.distanceMetric:
-            args.extend([FtCreateKeywords.DISTANCE_METRIC, self.distanceMetric.name])
+        if self.distance_metric:
+            args.extend([FtCreateKeywords.DISTANCE_METRIC, self.distance_metric.name])
         if self.type:
             args.extend([FtCreateKeywords.TYPE, self.type.name])
         return args
@@ -347,23 +247,23 @@ class VectorFieldAttributesFlat(VectorFieldAttributes):
 
     Args:
         dim (int): Number of dimensions in the vector.
-        distanceMetric (DistanceMetricType): The distance metric used in vector type field. Can be one of [L2 | IP | COSINE].
+        distance_metric (DistanceMetricType): The distance metric used in vector type field. Can be one of [L2 | IP | COSINE].
         type (VectorType): Vector type. The only supported type is FLOAT32.
-        initialCap (Optional[int]): Initial vector capacity in the index affecting memory allocation size of the index. Defaults to 1024.
+        initial_cap (Optional[int]): Initial vector capacity in the index affecting memory allocation size of the index. Defaults to 1024.
     """
 
     def __init__(
         self,
         dim: int,
-        distanceMetric: DistanceMetricType,
+        distance_metric: DistanceMetricType,
         type: VectorType,
-        initialCap: Optional[int] = None,
+        initial_cap: Optional[int] = None,
     ):
         """
         Initialize a new flat vector field attributes instance.
         """
-        super().__init__(dim, distanceMetric, type)
-        self.initialCap = initialCap
+        super().__init__(dim, distance_metric, type)
+        self.initial_cap = initial_cap
 
     def getVectorFieldAttributes(self) -> List[str]:
         """
@@ -373,8 +273,8 @@ class VectorFieldAttributesFlat(VectorFieldAttributes):
             List[str]: A list of FLAT algorithm type vector arguments.
         """
         args = super().getVectorFieldAttributes()
-        if self.initialCap:
-            args.extend([FtCreateKeywords.INITIAL_CAP, str(self.initialCap)])
+        if self.initial_cap:
+            args.extend([FtCreateKeywords.INITIAL_CAP, str(self.initial_cap)])
         return args
 
 
@@ -384,32 +284,32 @@ class VectorFieldAttributesHnsw(VectorFieldAttributes):
 
     Args:
         dim (int): Number of dimensions in the vector.
-        distanceMetric (DistanceMetricType): The distance metric used in vector type field. Can be one of [L2 | IP | COSINE].
+        distance_metric (DistanceMetricType): The distance metric used in vector type field. Can be one of [L2 | IP | COSINE].
         type (VectorType): Vector type. The only supported type is FLOAT32.
-        initialCap (Optional[int]): Initial vector capacity in the index affecting memory allocation size of the index. Defaults to 1024.
+        initial_cap (Optional[int]): Initial vector capacity in the index affecting memory allocation size of the index. Defaults to 1024.
         m (Optional[int]): Number of maximum allowed outgoing edges for each node in the graph in each layer. Default is 16, maximum is 512.
-        efContruction (Optional[int]): Controls the number of vectors examined during index construction. Default value is 200, Maximum value is 4096.
-        efRuntime (Optional[int]): Controls the number of vectors examined during query operations. Default value is 10, Maximum value is 4096.
+        ef_contruction (Optional[int]): Controls the number of vectors examined during index construction. Default value is 200, Maximum value is 4096.
+        ef_runtime (Optional[int]): Controls the number of vectors examined during query operations. Default value is 10, Maximum value is 4096.
     """
 
     def __init__(
         self,
         dim: int,
-        distanceMetric: DistanceMetricType,
+        distance_metric: DistanceMetricType,
         type: VectorType,
-        initialCap: Optional[int] = None,
+        initial_cap: Optional[int] = None,
         m: Optional[int] = None,
-        efContruction: Optional[int] = None,
-        efRuntime: Optional[int] = None,
+        ef_contruction: Optional[int] = None,
+        ef_runtime: Optional[int] = None,
     ):
         """
         Initialize a new TagField instance.
         """
-        super().__init__(dim, distanceMetric, type)
-        self.initialCap = initialCap
+        super().__init__(dim, distance_metric, type)
+        self.initial_cap = initial_cap
         self.m = m
-        self.efContruction = efContruction
-        self.efRuntime = efRuntime
+        self.ef_contruction = ef_contruction
+        self.ef_runtime = ef_runtime
 
     def getVectorFieldAttributes(self) -> List[str]:
         """
@@ -419,14 +319,14 @@ class VectorFieldAttributesHnsw(VectorFieldAttributes):
             List[str]: A list of HNSW algorithm type vector arguments.
         """
         args = super().getVectorFieldAttributes()
-        if self.initialCap:
-            args.extend([FtCreateKeywords.INITIAL_CAP, str(self.initialCap)])
+        if self.initial_cap:
+            args.extend([FtCreateKeywords.INITIAL_CAP, str(self.initial_cap)])
         if self.m:
             args.extend([FtCreateKeywords.M, str(self.m)])
-        if self.efContruction:
-            args.extend([FtCreateKeywords.EF_CONSTRUCTION, str(self.efContruction)])
-        if self.efRuntime:
-            args.extend([FtCreateKeywords.EF_RUNTIME, str(self.efRuntime)])
+        if self.ef_contruction:
+            args.extend([FtCreateKeywords.EF_CONSTRUCTION, str(self.ef_contruction)])
+        if self.ef_runtime:
+            args.extend([FtCreateKeywords.EF_RUNTIME, str(self.ef_runtime)])
         return args
 
 
@@ -455,19 +355,19 @@ class VectorField(Field):
         self.algorithm = algorithm
         self.attributes = attributes
 
-    def getFieldArgs(self) -> List[str]:
+    def toArgs(self) -> List[str]:
         """
         Get the arguments representing the vector field.
 
         Returns:
             List[str]: A list of vector field arguments.
         """
-        args = super().getFieldArgs()
+        args = super().toArgs()
         args.append(self.algorithm.value)
         if self.attributes:
-            attributeList = self.attributes.getVectorFieldAttributes()
-            args.append(str(len(attributeList)))
-            args.extend(attributeList)
+            attribute_list = self.attributes.getVectorFieldAttributes()
+            args.append(str(len(attribute_list)))
+            args.extend(attribute_list)
         return args
 
 
@@ -507,7 +407,7 @@ class FtCreateOptions:
         self.dataType = dataType
         self.prefixes = prefixes
 
-    def getCreateOptions(self) -> List[str]:
+    def toArgs(self) -> List[str]:
         """
         Get the optional arguments for the [FT.CREATE] command.
 

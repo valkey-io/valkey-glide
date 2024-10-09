@@ -20,15 +20,13 @@ from glide.glide_client import TGlideClient
 async def create(
     client: TGlideClient,
     indexName: TEncodable,
-    schema: List[Field] = [],
+    schema: List[Field],
     options: Optional[FtCreateOptions] = None,
 ) -> TOK:
     """
     Creates an index and initiates a backfill of that index.
 
-    See https://valkey.io/commands/ft.create/ for more details.
-
-        Args:
+    Args:
         client (TGlideClient): The client to execute the command.
         indexName (TEncodable): The index name for the index to be created
         schema (List[Field]): The fields of the index schema, specifying the fields and their types.
@@ -50,9 +48,9 @@ async def create(
     """
     args: List[TEncodable] = [CommandNames.FT_CREATE, indexName]
     if options:
-        args.extend(options.getCreateOptions())
+        args.extend(options.toArgs())
     if schema and len(schema) > 0:
         args.append(FtCreateKeywords.SCHEMA)
         for field in schema:
-            args.extend(field.getFieldArgs())
+            args.extend(field.toArgs())
     return cast(TOK, await client.custom_command(args))
