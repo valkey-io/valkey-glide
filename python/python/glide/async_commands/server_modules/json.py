@@ -253,3 +253,80 @@ async def toggle(
         TJsonResponse[bool],
         await client.custom_command(["JSON.TOGGLE", key, path]),
     )
+
+
+"""async def type(
+    client: TGlideClient,
+    key: TEncodable,
+    path: Optional[TEncodable] = None,
+) -> Optional[Union[bytes, List[bytes]]]:
+    """
+"""Retrieves the type of the JSON value at the specified `path` stored at `key`.
+
+    Args:
+        client (TGlideClient): The Redis client to execute the command.
+        key (TEncodable): The key of the JSON document.
+        path (Optional[TEncodable]): Represents the path within the JSON document where the type will be retrieved.
+            If None, the type of the root JSON object will be returned. Defaults to None.
+
+    Returns:
+        Optional[Union[bytes, List[bytes]]]: The type of the JSON value (e.g., string, object, array, etc.),
+            or None if the key or path does not exist.
+
+    Examples:
+        >>> from glide import json as redisJson
+        >>> await redisJson.set(client, "doc", "$", '{"a": 1, "nested": {"a": 2, "b": 3}}')
+        >>> await redisJson.json_type(client, "doc", "$.nested")
+        b'object'  # Indicates the type of the value at path '$.nested' in the key stored at `doc`.
+        >>> await redisJson.json_type(client, "doc", "$.nested.a")
+        b'integer'  # Indicates the type of the value at path '$.nested.a' in the key stored at `doc`.
+        >>> await redisJson.json_type(client, "doc", "$[*]")
+        [b'integer', b'number', b'string', b'boolean', b'null', b'object', b'array']  # Array of types
+    """
+"""args = ["JSON.TYPE", key]
+    if path:
+        args.append(path)
+    return cast(
+        Optional[Union[bytes, List[bytes]]],
+        await client.custom_command(args),
+    )"""
+
+async def type(
+    client: TGlideClient,
+    key: TEncodable,
+    path: Optional[TEncodable] = None,
+) -> Optional[Union[bytes, List[bytes]]]:
+    """
+    Retrieves the type of the JSON value at the specified `path` stored at `key`.
+
+    Args:
+        client (TGlideClient): The Redis client to execute the command.
+        key (TEncodable): The key of the JSON document.
+        path (Optional[TEncodable]): Represents the path within the JSON document where the type will be retrieved.
+            If None, the type of the root JSON object will be returned. Defaults to None.
+
+    Returns:
+        Optional[Union[bytes, List[bytes]]]: 
+            For JSONPath ('path' starts with '$'):
+                Returns a list of types if the path exists.
+                or `NULL` if the key does not exist.
+                or an empty list if the path does not exist.
+            For legacy path (`path` doesn't starts with `$`):
+                Returns the type of the value as a string if the path exists.
+                or empty array if the path or key does not exist.
+                
+    Examples:
+        >>> from glide import json
+        >>> await json.set(client, "doc", "$", '{"a": 1, "nested": {"a": 2, "b": 3}}')
+        >>> await json.type(client, "doc", "$.nested")
+            b'object'  # Indicates the type of the value at path '$.nested' in the key stored at `doc`.
+        >>> await json.type(client, "doc", "$.nested.a")
+            b'integer'  # Indicates the type of the value at path '$.nested.a' in the key stored at `doc`.
+        >>> await json.type(client, "doc", "$[*]")
+            [b'integer', b'number', b'string', b'boolean', b'null', b'object', b'array']  # Array of types in enhanced syntax.
+    """
+    args = ["JSON.TYPE", key]
+    if path:
+        args.append(path)
+
+    return cast(Optional[Union[bytes, List[bytes]]], await client.custom_command(args))
