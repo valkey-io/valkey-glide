@@ -49,6 +49,7 @@ from glide.async_commands.server_modules.ft_options.ft_create_options import (
     VectorFieldAttributesHnsw,
     VectorType,
 )
+from glide.async_commands.server_modules.json import JsonArrPopOptions, JsonGetOptions
 from glide.async_commands.sorted_set import (
     AggregationType,
     GeoSearchByBox,
@@ -200,8 +201,6 @@ __all__ = [
     "InfBound",
     "InfoSection",
     "InsertPosition",
-    "json",
-    "ft",
     "LexBoundary",
     "Limit",
     "ListDirection",
@@ -229,6 +228,12 @@ __all__ = [
     "ClusterScanCursor"
     # PubSub
     "PubSubMsg",
+    # Json
+    "json",
+    "JsonGetOptions",
+    "JsonArrPopOptions",
+    # Search
+    "ft",
     # Logger
     "Logger",
     "LogLevel",
