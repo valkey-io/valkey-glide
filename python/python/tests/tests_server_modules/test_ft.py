@@ -26,8 +26,8 @@ class TestVss:
     async def test_vss_create(self, glide_client: TGlideClient):
         fields: List[Field] = []
         field1: TextField = TextField("$title")
-        field2: NumericField = NumericField("published_at")
-        field3: TextField = TextField("category")
+        field2: NumericField = NumericField("$published_at")
+        field3: TextField = TextField("$category")
         fields.append(field1)
         fields.append(field2)
         fields.append(field3)
