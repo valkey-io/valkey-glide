@@ -6,12 +6,14 @@ import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.TestUtilities.getRandomString;
 import static glide.api.BaseClient.OK;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.models.exceptions.RequestException;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -23,11 +25,7 @@ import java.util.stream.Stream;
 import lombok.Getter;
 import lombok.SneakyThrows;
 import net.bytebuddy.utility.RandomString;
-
 import org.junit.jupiter.api.AfterAll;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -139,18 +137,21 @@ public class SharedClientTests {
         String keyName = "nonexistkeylist" + RandomString.make(4);
 
         if (clusterMode) {
-            testClient = GlideClient
-                    .createClient(commonClientConfig().inflightRequestsLimit(inflightRequestsLimit).build()).get();
+            testClient =
+                    GlideClient.createClient(
+                                    commonClientConfig().inflightRequestsLimit(inflightRequestsLimit).build())
+                            .get();
         } else {
-            testClient = GlideClusterClient
-                    .createClient(commonClusterClientConfig().inflightRequestsLimit(inflightRequestsLimit).build())
-                    .get();
+            testClient =
+                    GlideClusterClient.createClient(
+                                    commonClusterClientConfig().inflightRequestsLimit(inflightRequestsLimit).build())
+                            .get();
         }
 
         // exercise
         List<CompletableFuture<String[]>> responses = new ArrayList<>();
         for (int i = 0; i < inflightRequestsLimit + 1; i++) {
-            responses.add(testClient.blpop(new String[] { keyName }, 0));
+            responses.add(testClient.blpop(new String[] {keyName}, 0));
         }
 
         // verify
