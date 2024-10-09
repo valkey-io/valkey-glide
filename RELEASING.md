@@ -192,7 +192,7 @@ If you have 2FA enabled, you will not be prompted when using an automation token
 
 4. Change the NPM_SCOPE variable to an empty string.
 
-![actions secrets ss](docs/images/actions-secrets-variables.png)
+![actions secrets ss](./docs/images/actions-secrets-variables.png)
 
 ### **Maven Central**
 
@@ -205,7 +205,8 @@ TODO list:
 
 - [ ] Create a README.md file following the python [README](./python/README.md)
 - [ ] Create a DEVELOPER.md file following the python [DEVELOPER.md](./python/DEVELOPER.md)
-- [ ]  Create examples following existing client [examples](./examples)-[python](./examples/python), [java](./examples/java), and [node](./examples/node).- [ ] Update the main [README](./README.md) file with link to the new wrapper readme under Getting Started
+- [ ] Create examples following existing client [examples](./examples)-[python](./examples/python), [java](./examples/java), and [node](./examples/node).
+- [ ] Update the main [README](./README.md) file with link to the new wrapper readme under Getting Started
 - [ ] Update the Current Status in the main README file
 - [ ] Make sure all required structures/types/enums are exported
 - [ ] Create a workflow to automate code deployment to the relevant package manager (see pypi_cd.yml for example)
