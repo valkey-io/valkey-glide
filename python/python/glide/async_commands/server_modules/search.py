@@ -6,13 +6,13 @@ module for `vector search` commands.
 from typing import Optional, List, cast
 from glide.glide_client import TGlideClient
 from glide.constants import TOK, TEncodable
-from glide.async_commands.server_modules.search_options.ft_create_options import FtCreateOptions , FieldInfo
+from glide.async_commands.server_modules.search_options.ft_create_options import FtCreateOptions , Field
 from glide.async_commands.server_modules.search_constants import CommandNames, FtCreateKeywords
 
 async def create(
     client: TGlideClient,
     indexName: TEncodable,
-    fields: List[FieldInfo] = [],
+    schema: List[Field] = [],
     options: Optional[FtCreateOptions] = None
 ) -> TOK:
     """
@@ -23,7 +23,7 @@ async def create(
         Args:
         client (TGlideClient): The client to execute the command.
         indexName (TEncodable): The index name for the index to be created
-        fields (List[FieldInfo]): The fields for the index schema.
+        schema (List[Field]): The fields for the index schema.
         options (Optional[FtCreateOptions]): Optional arguments for the [FT.CREATE] command.
 
     Returns:
@@ -31,7 +31,7 @@ async def create(
 
     Examples:
         >>> from glide.async_commands.server_modules import search
-        >>> fields: List[FieldInfo] = []
+        >>> schema: List[Field] = []
         >>> fieldInfo1: FieldInfo = FieldInfo("title", fieldTypeInfo=FieldTypeInfo(fieldType=FieldType.TEXT), sortable = SORTABLE.IS_SORTABLE)
         >>> fields.append(fieldInfo1)
         >>> prefixes: List[str] = []
@@ -43,8 +43,10 @@ async def create(
     args: List[TEncodable] = [CommandNames.FT_CREATE, indexName]
     if options:
         args = args + options.getCreateOptions()
-    if fields and len(fields) > 0:
+    if schema and len(schema) > 0:
         args.append(FtCreateKeywords.SCHEMA)
-        for fieldInfo in fields:
-            args = args + fieldInfo.getFieldInfo()
+        for field in schema:
+            print("++++++++")
+            print(field.getFieldArgs())
+            args.extend(field.getFieldArgs())
     return cast(TOK, await client.custom_command(args))

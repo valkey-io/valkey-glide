@@ -3,7 +3,7 @@ from typing import List
 from glide.async_commands.server_modules import search
 from glide.config import ProtocolVersion
 from glide.glide_client import TGlideClient
-from glide.async_commands.server_modules.search_options.ft_create_options import FtCreateOptions, DataType, FieldInfo, FieldType, SORTABLE, FieldTypeInfo, VectorTypeOptions, VectorTypeAlgorithm, VectorTypeHnswAttributes, VectorTypeFlatAttributes, DistanceMetricType, VectorType
+from glide.async_commands.server_modules.search_options.ft_create_options import FtCreateOptions, DataType, Field, FieldType, SortableOptions, VectorAlgorithm, VectorFieldAttributesFlat, VectorFieldAttributesHnsw, DistanceMetricType, TextField, NumericField, VectorField, VectorType
 from glide.constants import OK
 
 @pytest.mark.asyncio
@@ -11,25 +11,22 @@ class TestVss:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_vss_create(self, glide_client: TGlideClient):
-        fields: List[FieldInfo] = []
-        fieldInfo1: FieldInfo = FieldInfo(
+        fields: List[Field] = []
+        field1: TextField = TextField(
             "title", 
-            fieldTypeInfo=FieldTypeInfo(fieldType=FieldType.TEXT),
-            sortable = SORTABLE.IS_SORTABLE
+            sortable = SortableOptions.IS_SORTABLE
         )
-        fieldInfo2: FieldInfo = FieldInfo(
+        field2: NumericField = NumericField(
             "published_at",
-            FieldTypeInfo(fieldType=FieldType.NUMERIC),
-            sortable = SORTABLE.IS_SORTABLE
+            sortable = SortableOptions.IS_SORTABLE
         )
-        fieldInfo3: FieldInfo = FieldInfo(
+        field3: TextField = TextField(
             "category",
-            FieldTypeInfo(fieldType=FieldType.TEXT),
-            sortable = SORTABLE.IS_SORTABLE
+            sortable = SortableOptions.IS_SORTABLE
         )
-        fields.append(fieldInfo1)
-        fields.append(fieldInfo2)
-        fields.append(fieldInfo3)
+        fields.append(field1)
+        fields.append(field2)
+        fields.append(field3)
 
         prefixes: List[str] = []
         prefixes.append("blog:post:")
@@ -56,18 +53,13 @@ class TestVss:
         prefixes = []
         prefixes.append("hash:")
         fields = []
-        fieldInfo: FieldInfo = FieldInfo(
-            identifier = "vec",
-            fieldTypeInfo = FieldTypeInfo(
-                FieldType.VECTOR,
-                vectorTypeOptions = VectorTypeOptions(
-                    VectorTypeAlgorithm.HNSW,
-                    vectorTypeHnswAttributes = VectorTypeHnswAttributes(
-                        dim = 2,
-                        distanceMetric = DistanceMetricType.L2,
-                        type = VectorType.FLOAT32
-                    )
-                )
+        fieldInfo: VectorField = VectorField(
+            name = "vec",
+            algorithm=VectorAlgorithm.HNSW,
+            attributes=VectorFieldAttributesHnsw(
+                dim = 2,
+                distanceMetric = DistanceMetricType.L2,
+                type = VectorType.FLOAT32
             ),
             alias = "VEC"
         )
@@ -84,18 +76,13 @@ class TestVss:
         prefixes = []
         prefixes.append("json:")
         fields = []
-        fieldInfo: FieldInfo = FieldInfo(
-            identifier = "$.vec",
-            fieldTypeInfo = FieldTypeInfo(
-                FieldType.VECTOR,
-                vectorTypeOptions = VectorTypeOptions(
-                    VectorTypeAlgorithm.HNSW,
-                    vectorTypeHnswAttributes = VectorTypeHnswAttributes(
-                        dim = 6,
-                        distanceMetric = DistanceMetricType.L2,
-                        type = VectorType.FLOAT32
-                    )
-                )
+        fieldInfo: VectorField = VectorField(
+            name = "$.vec",
+            algorithm=VectorAlgorithm.HNSW,
+            attributes=VectorFieldAttributesHnsw(
+                dim = 6,
+                distanceMetric = DistanceMetricType.L2,
+                type = VectorType.FLOAT32
             ),
             alias = "VEC"
         )
