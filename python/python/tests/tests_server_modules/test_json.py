@@ -219,22 +219,22 @@ class TestJson:
         assert result == [b"string", b"array"]
 
         result = await json.type(glide_client, key, "$.key2")
-        assert result and result[0].decode() == "integer"
+        assert result ==[b"integer"]
 
         result = await json.type(glide_client, key, "$.key3")
-        assert result and result[0].decode() == "array"
+        assert result ==[b"array"]
 
         result = await json.type(glide_client, key, "$.key4")
-        assert result and result[0].decode() == "object"
+        assert result ==[b"object"]
 
         result = await json.type(glide_client, key, "$.key4.nested_key")
-        assert result and result[0].decode() == "string"
+        assert result ==[b"string"]
 
         result = await json.type(glide_client, key, "$.key5")
-        assert result and result[0].decode() == "null"
+        assert result ==[b"null"]
 
         result = await json.type(glide_client, key, "$.key6")
-        assert result and result[0].decode() == "boolean"
+        assert result ==[b"bool"]
 
         # Check for non-existent path $.key7
         result = await json.type(glide_client, key, "$.key7")
