@@ -101,17 +101,16 @@ c. release: `git tag v1.x.x` <br>
 d. Push the tag to the valkey/glide repo to trigger the CD action <br>
 e. release candidate: `git push origin-valkey v1.A.B`
 
-Example below is done in python.
-
+Example below is done in python. <br>
 a. Edit the file [standalone_example.py](https://github.com/valkey-io/valkey-glide/blob/main/examples/python/standalone_example.py) or [cluster_example.py](https://github.com/valkey-io/valkey-glide/blob/main/examples/python/standalone_example.py) to have the right port in the different functions and run python3. <br>
 b. Follow steps b-e from above once all the CD workflow tests have passed. <br>
 c. The python release is available [here](https://pypi.org/project/valkey-glide/).
 
-Java:
+Java: <br>
 a. CI tests will automatically be run, and CD will automatically publish the RC to Maven. Note: maintainer approval is required twice: Once to start the release CI testing, and once to publish the RC package to Maven.<br>
 b. The java release is available [here](https://central.sonatype.com/artifact/io.valkey/valkey-glide).
 
-Node:
+Node: <br>
 a. All the test will automatically run and once the release candidate CD workflow is done successfully, we can immediately publish the release candidate to npm. <br>
 b. The node release is available  [here](https://www.npmjs.com/package/@valkey/valkey-glide).
 
@@ -172,21 +171,17 @@ Your artifacts will be uploaded to the registry, and your package will be live. 
 
 #### 2. Create an access tokens
 
-a. Access Tokens → Generate new token → classic token
-
+a. Access Tokens → Generate new token → classic token <br>
 b. Use a separate [granular access token](https://docs.npmjs.com/about-access-tokens#about-granular-access-tokens) for every actor on every project.
-For example, if you have CD automation publishing to npm on two projects, you should have two separate granular tokens, each of which only has permissions on a single project.
-This reduces impact when you rotate these tokens and reduces risk if there is ever a security issue with a token.
-
+For example, if you have CD automation publishing to npm on two projects, you should have two separate granular tokens, each of which only has permissions on a single project. <br>
+This reduces impact when you rotate these tokens and reduces risk if there is ever a security issue with a token. <br>
 c. **Use an Automation token so it could be used in CD workflow:**
-
 An automation token will bypass two-factor authentication (2FA) when publishing.
 If you have 2FA enabled, you will not be prompted when using an automation token, making it suitable for CI/CD workflows.
 
 ![new access token](./docs/images/new-access-token.png)
 
-3. Change the NPM_AUTH_TOKEN secret in Github with the new access token.
-
+3. Change the NPM_AUTH_TOKEN secret in Github with the new access token. <br>
 4. Change the NPM_SCOPE variable to an empty string.
 
 ![actions secrets ss](./docs/images/actions-secret-variables.png)
