@@ -50,7 +50,7 @@ Open a PR to the main branch with the missing changes and the new version header
 
 2. **Ask a maintainer** to create a new branch named v$A.$B which can be made through the Github UI or on their local device.
 
-    ![new branch](docs/images/new-branch.png)
+    ![new branch](./docs/images/new-branch.png)
 
 
 1. **If it’s only a patch version and the branch already exists**, checkout the existing branch (e.g. `git checkout origin-valkey/v0.2`), and merge in the commit you’ve merged into main with the updates to the CHANGELOG.md file.
@@ -61,7 +61,7 @@ Open a PR to the main branch with the missing changes and the new version header
     b. **(Maintainer Only)** On the right corner, click on "Run workflow" and set the branch to run against the ORT tool to your newly created branch name (e.g. v0.3), and the exact release version (e.g. 0.3.0) <br>
 
     c. <br>
-    ![OSS Review Toolkit](docs/images/oss-review-toolkit.png)
+    ![OSS Review Toolkit](./docs/images/oss-review-toolkit.png)
 
     d. If diff is found the workflow will open a PR in the release branch with the required changes. Make sure that all dependencies are approved by a Valkey-GLIDE maintainer. Merge the PR once it is ready.
 
@@ -146,7 +146,7 @@ The version will be extracted from the tag.
 This is done on a specific CD workflow by passing the required version as an input parameter in the format "v*.*.*" or "v*.*.*-rc*".
 This method will not trigger deployments for other package managers and will not create a tag in the repository.
 
-    ![pypi CD](docs/images/releasing/pypi-CD.png)
+    ![pypi CD](./docs/images/releasing/pypi-CD.png)
 
 3. **Pull Requests:** Pull requests will trigger the CD workflows as "dry runs" without actually publishing to the package managers.
 This ensures that changes do not break the CD logic. Note that PRs affecting the CD workflows (e.g., introducing changes in the CD paths) can only be opened from branches on the
