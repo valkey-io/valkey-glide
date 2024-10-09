@@ -14,7 +14,7 @@ class FieldType(Enum):
     """
     TAG = "TAG"
     """
-    If the field contains a tag field.
+    If the field contains a tag field.     
     """
     NUMERIC = "NUMERIC"
     """
