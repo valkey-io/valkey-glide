@@ -197,7 +197,7 @@ jobs:
               name: lint java rust
 
     test-modules:
-        if: github.repository_owner == 'valkey-io'
+        if: github.repository_owner == 'valkey-io' && secrets.MEMDB_MODULES_ENDPOINT != ''
         name: Modules Tests
         runs-on: [self-hosted, linux, ARM64]
         timeout-minutes: 15
