@@ -254,17 +254,24 @@ class TestJson:
         result = await json.type(glide_client, key, "..key1")
         assert result == b"string"
 
-        # Check for non-existent key with enhanced path 
+        # Check for non-existent key with enhanced path
         result = await json.type(glide_client, "non_existent_key", "$.key1")
         assert result is None
 
-        # Check for non-existent key with legacy path 
+        # Check for non-existent key with legacy path
         result = await json.type(glide_client, "non_existent_key", "key1")
         assert result is None  # Returns None for legacy path when the key doesn't exist
 
         # Check for all types in the JSON document using JSON Path
         result = await json.type(glide_client, key, "$[*]")
-        assert result == [b"string", b"integer", b"array", b"object", b"null", b"boolean"]
+        assert result == [
+            b"string",
+            b"integer",
+            b"array",
+            b"object",
+            b"null",
+            b"boolean",
+        ]
 
         # Check for all types in the JSON document using legacy path
         result = await json.type(glide_client, key, "[*]")
