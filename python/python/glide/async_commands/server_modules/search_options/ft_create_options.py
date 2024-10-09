@@ -201,7 +201,7 @@ class SortableIndexableField(Field):
             List[str]: A list of field arguments.
         """
         args = super().getFieldArgs()
-        if self.sortable == SortableOptions.IS_SORTABLE or SortableOptions.IS_SORTABLE_UNF:
+        if self.sortable == SortableOptions.IS_SORTABLE or self.sortable == SortableOptions.IS_SORTABLE_UNF:
             args.append(FtCreateKeywords.SORTABLE)
             if self.sortable == SortableOptions.IS_SORTABLE_UNF:
                 args.append(FtCreateKeywords.UNF)
