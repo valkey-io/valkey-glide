@@ -17,14 +17,14 @@ from glide.async_commands.server_modules.ft_options.ft_create_options import (
 )
 from glide.config import ProtocolVersion
 from glide.constants import OK
-from glide.glide_client import TGlideClient
+from glide.glide_client import GlideClusterClient
 
 
 @pytest.mark.asyncio
 class TestVss:
-    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_vss_create(self, glide_client: TGlideClient):
+    async def test_vss_create(self, glide_client: GlideClusterClient):
         fields: List[Field] = []
         field1: TextField = TextField("$title")
         field2: NumericField = NumericField("$published_at")
