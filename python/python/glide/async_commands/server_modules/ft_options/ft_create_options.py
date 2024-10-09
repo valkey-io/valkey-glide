@@ -1,3 +1,4 @@
+# Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import List, Optional
@@ -392,19 +393,19 @@ class FtCreateOptions:
     All fields in this class are optional inputs for [FT.CREATE].
 
     Args:
-        dataType (Optional[DataType]): The type of data to be indexed using [FT.CREATE].
+        data_type (Optional[DataType]): The type of data to be indexed using [FT.CREATE].
         prefixes (Optional[List[str]]): The prefix of the key to be indexed.
     """
 
     def __init__(
         self,
-        dataType: Optional[DataType] = None,
+        data_type: Optional[DataType] = None,
         prefixes: Optional[List[str]] = None,
     ):
         """
         Initialize the [FT.CREATE] optional fields.
         """
-        self.dataType = dataType
+        self.data_type = data_type
         self.prefixes = prefixes
 
     def toArgs(self) -> List[str]:
@@ -416,9 +417,9 @@ class FtCreateOptions:
                 List of [FT.CREATE] optional agruments.
         """
         args = []
-        if self.dataType:
+        if self.data_type:
             args.append(FtCreateKeywords.ON)
-            args.append(self.dataType.name)
+            args.append(self.data_type.name)
         if self.prefixes:
             args.append(FtCreateKeywords.PREFIX)
             args.append(str(len(self.prefixes)))
