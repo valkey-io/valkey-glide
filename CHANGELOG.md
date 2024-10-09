@@ -1,4 +1,5 @@
 #### Changes
+* Python: Python: Added FT.CREATE command([#2413](https://github.com/valkey-io/valkey-glide/pull/2413))
 
 #### Breaking Changes
 
