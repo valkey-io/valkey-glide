@@ -1,4 +1,5 @@
 #### Changes
+* Python: [Python]Added [FT.CREATE] command ([#2413](https://github.com/valkey-io/valkey-glide/pull/2413))
 * Node: Fix binary variant for xinfogroups and lrem ([#2324](https://github.com/valkey-io/valkey-glide/pull/2324))
 * Node: Fixed missing exports ([#2301](https://github.com/valkey-io/valkey-glide/pull/2301))
 * Node: Use `options` struct for all optional arguments ([#2287](https://github.com/valkey-io/valkey-glide/pull/2287))
