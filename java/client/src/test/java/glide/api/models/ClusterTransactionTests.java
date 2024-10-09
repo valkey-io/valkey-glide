@@ -1,8 +1,8 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
-import static command_request.CommandRequestOuterClass.RequestType.PubSubSChannels;
-import static command_request.CommandRequestOuterClass.RequestType.PubSubSNumSub;
+import static command_request.CommandRequestOuterClass.RequestType.PubSubShardChannels;
+import static command_request.CommandRequestOuterClass.RequestType.PubSubShardNumSub;
 import static command_request.CommandRequestOuterClass.RequestType.SPublish;
 import static command_request.CommandRequestOuterClass.RequestType.Sort;
 import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
@@ -34,13 +34,13 @@ public class ClusterTransactionTests {
         results.add(Pair.of(SPublish, buildArgs("ch1", "msg")));
 
         transaction.pubsubShardChannels();
-        results.add(Pair.of(PubSubSChannels, buildArgs()));
+        results.add(Pair.of(PubSubShardChannels, buildArgs()));
 
         transaction.pubsubShardChannels("test*");
-        results.add(Pair.of(PubSubSChannels, buildArgs("test*")));
+        results.add(Pair.of(PubSubShardChannels, buildArgs("test*")));
 
         transaction.pubsubShardNumSub(new String[] {"ch1", "ch2"});
-        results.add(Pair.of(PubSubSNumSub, buildArgs("ch1", "ch2")));
+        results.add(Pair.of(PubSubShardNumSub, buildArgs("ch1", "ch2")));
 
         transaction.sortReadOnly(
                 "key1",

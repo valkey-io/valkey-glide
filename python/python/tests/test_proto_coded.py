@@ -21,7 +21,7 @@ class TestProtobufCodec:
         b_arr = bytearray()
         ProtobufCodec.encode_delimited(b_arr, request)
         msg_len_varint = int(b_arr[0])
-        assert msg_len_varint == 18
+        assert msg_len_varint == 19
         assert len(b_arr) == msg_len_varint + 1
         offset = 0
         b_arr_view = memoryview(b_arr)

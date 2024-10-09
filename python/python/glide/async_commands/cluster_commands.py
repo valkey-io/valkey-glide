@@ -814,7 +814,7 @@ class ClusterCommands(CoreCommands):
         command_args = [pattern] if pattern is not None else []
         return cast(
             List[bytes],
-            await self._execute_command(RequestType.PubSubSChannels, command_args),
+            await self._execute_command(RequestType.PubSubShardChannels, command_args),
         )
 
     async def pubsub_shardnumsub(
@@ -845,7 +845,7 @@ class ClusterCommands(CoreCommands):
         return cast(
             Mapping[bytes, int],
             await self._execute_command(
-                RequestType.PubSubSNumSub, channels if channels else []
+                RequestType.PubSubShardNumSub, channels if channels else []
             ),
         )
 
