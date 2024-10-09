@@ -66,4 +66,11 @@ public abstract class BaseClientConfiguration {
     private final ThreadPoolResource threadPoolResource;
 
     public abstract BaseSubscriptionConfiguration getSubscriptionConfiguration();
+
+    /**
+     * The maximum number of concurrent requests allowed to be in-flight (sent but not yet completed).
+     * This limit is used to control the memory usage and prevent the client from overwhelming the server or getting stuck in case of a queue backlog.
+     * If not set, a default value will be used.
+     */
+    private final Integer inflightRequestsLimit;
 }
