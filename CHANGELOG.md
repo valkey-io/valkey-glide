@@ -1,5 +1,7 @@
 #### Changes
 
+* Java: Added `FT.CREATE` ([#2414](https://github.com/valkey-io/valkey-glide/pull/2414))
+
 #### Breaking Changes
 
 #### Fixes
