@@ -264,7 +264,7 @@ async def type(
     Retrieves the type of the JSON value at the specified `path` within the JSON document stored at `key`.
 
     Args:
-        client (TGlideClient): The Redis client to execute the command.
+        client (TGlideClient): The client to execute the command.
         key (TEncodable): The key of the JSON document.
         path (Optional[TEncodable]): Represents the path within the JSON document where the type will be retrieved.
             Defaults to None.
