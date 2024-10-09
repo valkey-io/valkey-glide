@@ -17,3 +17,4 @@ Before submitting the PR make sure the following are checked:
 * [ ] Commit message has a detailed description of what changed and why.
 * [ ] Tests are added or updated.
 * [ ] CHANGELOG.md and documentation files are updated.
+* [ ] Commits will be squashed upon merging.
