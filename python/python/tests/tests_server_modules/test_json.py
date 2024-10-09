@@ -228,24 +228,44 @@ class TestJson:
         assert result == [b"object"]
 
         result = await json.type(glide_client, key, "$.key4.nested_key")
-        assert result == [b"string"]
+        assert result == [b"object"]
 
         result = await json.type(glide_client, key, "$.key5")
         assert result == [b"null"]
 
         result = await json.type(glide_client, key, "$.key6")
-        assert result == [b"bool"]
+        assert result == [b"boolean"]
 
-        # Check for non-existent path $.key7
+        # Check for non-existent path in enhanced mode $.key7
         result = await json.type(glide_client, key, "$.key7")
         assert result == []
 
-        # Check for non-existent path within an existing key
+        # Check for non-existent path within an existing key (array bound)
         result = await json.type(
             glide_client, key, "$.key3[3]"
         )  # Out of bounds for the array
         assert result == []
 
-        # Check for invalid path format
-        result = await json.type(glide_client, key, "$.key1.key2")  # Invalid path
-        assert result == []
+        # Legacy path (without $) - will return None for non-existing path
+        result = await json.type(glide_client, key, "key7")
+        assert result is None  # Legacy path returns None for non-existent key
+
+        # Check for multiple path match in legacy
+        result = await json.type(glide_client, key, "..key1")
+        assert result == b"string"
+
+        # Check for non-existent key with enhanced path 
+        result = await json.type(glide_client, "non_existent_key", "$.key1")
+        assert result is None
+
+        # Check for non-existent key with legacy path 
+        result = await json.type(glide_client, "non_existent_key", "key1")
+        assert result is None  # Returns None for legacy path when the key doesn't exist
+
+        # Check for all types in the JSON document using JSON Path
+        result = await json.type(glide_client, key, "$[*]")
+        assert result == [b"string", b"integer", b"array", b"object", b"null", b"boolean"]
+
+        # Check for all types in the JSON document using legacy path
+        result = await json.type(glide_client, key, "[*]")
+        assert result == b"string"  # Expecting only the first type (string for key1)
