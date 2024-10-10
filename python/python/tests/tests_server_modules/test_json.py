@@ -276,3 +276,39 @@ class TestJson:
         # Check for all types in the JSON document using legacy path
         result = await json.type(glide_client, key, "[*]")
         assert result == b"string"  # Expecting only the first type (string for key1)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_json_arrlen(self, glide_client: TGlideClient):
+        key = get_random_string(5)
+
+        json_value = '{"a": [1, 2, 3], "b": {"a": [1, 2], "c": {"a": 42}}}'
+        assert await json.set(glide_client, key, "$", json_value) == OK
+
+        assert await json.arrlen(glide_client, key, "$.a") == [3]
+
+        assert await json.arrlen(glide_client, key, "$..a") == [3, 2, None]
+
+        # Legacy path retrieves the first array match at ..a
+        assert await json.arrlen(glide_client, key, "..a") == 3
+
+        # Value at path is not an array
+        assert await json.arrlen(glide_client, key, "$") == [None]
+        with pytest.raises(RequestError):
+            assert await json.arrlen(glide_client, key, ".")
+
+        # Path doesn't exist
+        assert await json.arrlen(glide_client, key, "$.non_existing_path") == []
+        with pytest.raises(RequestError):
+            assert await json.arrlen(glide_client, key, "non_existing_path")
+
+        # Non-existing key
+        assert await json.arrlen(glide_client, "non_existing_key", "$.a") is None
+        assert await json.arrlen(glide_client, "non_existing_key", ".a") is None
+
+        # No path
+        with pytest.raises(RequestError):
+            assert await json.arrlen(glide_client, key)
+
+        assert await json.set(glide_client, key, "$", "[1, 2, 3, 4]") == OK
+        assert await json.arrlen(glide_client, key) == 4
