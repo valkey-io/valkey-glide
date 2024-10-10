@@ -415,7 +415,7 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
             command_response.response_type = ResponseType::Bool;
             Ok(command_response)
         }
-        Value::Array(array) => {
+        Value::Array(array) | Value::Set(array) => {
             let vec: Vec<CommandResponse> = array
                 .into_iter()
                 .map(|v| {
@@ -451,20 +451,6 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
             command_response.array_value = vec_ptr;
             command_response.array_value_len = len;
             command_response.response_type = ResponseType::Map;
-            Ok(command_response)
-        }
-        Value::Set(array) => {
-            let vec: Vec<CommandResponse> = array
-                .into_iter()
-                .map(|v| {
-                    valkey_value_to_command_response(v)
-                        .expect("Value couldn't be converted to CommandResponse")
-                })
-                .collect();
-            let (vec_ptr, len) = convert_vec_to_pointer(vec);
-            command_response.array_value = vec_ptr;
-            command_response.array_value_len = len;
-            command_response.response_type = ResponseType::Array;
             Ok(command_response)
         }
         // TODO: Add support for other return types.
