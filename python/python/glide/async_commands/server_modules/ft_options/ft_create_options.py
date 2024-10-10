@@ -4,6 +4,7 @@ from enum import Enum
 from typing import List, Optional
 
 from glide.async_commands.server_modules.ft_constants import FtCreateKeywords
+from glide.constants import TEncodable
 
 
 class FieldType(Enum):
@@ -79,7 +80,7 @@ class Field(ABC):
     Abstract base class for defining fields in a schema.
 
     Args:
-        name (str): The name of the field.
+        name (TEncodable): The name of the field.
         type (FieldType): The type of the field.
         alias (Optional[str]): An alias for the field.
     """
@@ -87,7 +88,7 @@ class Field(ABC):
     @abstractmethod
     def __init__(
         self,
-        name: str,
+        name: TEncodable,
         type: FieldType,
         alias: Optional[str] = None,
     ):
@@ -118,11 +119,11 @@ class TextField(Field):
     Class for defining text fields in a schema.
 
     Args:
-        name (str): The name of the text field.
+        name (TEncodable): The name of the text field.
         alias (Optional[str]): An alias for the field.
     """
 
-    def __init__(self, name: str, alias: Optional[str] = None):
+    def __init__(self, name: TEncodable, alias: Optional[str] = None):
         """
         Initialize a new TextField instance.
         """
@@ -152,7 +153,7 @@ class TagField(Field):
 
     def __init__(
         self,
-        name: str,
+        name: TEncodable,
         alias: Optional[str] = None,
         separator: Optional[str] = None,
         case_sensitive: bool = False,
@@ -188,7 +189,7 @@ class NumericField(Field):
         alias (Optional[str]): An alias for the field.
     """
 
-    def __init__(self, name: str, alias: Optional[str] = None):
+    def __init__(self, name: TEncodable, alias: Optional[str] = None):
         """
         Initialize a new NumericField instance.
         """
@@ -344,7 +345,7 @@ class VectorField(Field):
 
     def __init__(
         self,
-        name: str,
+        name: TEncodable,
         algorithm: VectorAlgorithm,
         attributes: VectorFieldAttributes,
         alias: Optional[str] = None,

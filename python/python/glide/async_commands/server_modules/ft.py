@@ -44,7 +44,7 @@ async def create(
         >>> prefixes.append("blog:post:")
         >>> index = "idx"
         >>> result = await ft.create(glide_client, index, schema, FtCreateOptions(DataType.HASH, prefixes))
-            'OK'  # Indicates successful creation of index named 'idx'
+            b'OK'  # Indicates successful creation of index named 'idx'
     """
     args: List[TEncodable] = [CommandNames.FT_CREATE, indexName]
     if options:
