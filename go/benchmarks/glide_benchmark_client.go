@@ -37,11 +37,21 @@ func (glideBenchmarkClient *glideBenchmarkClient) connect(connectionSettings *co
 }
 
 func (glideBenchmarkClient *glideBenchmarkClient) get(key string) (string, error) {
-	return glideBenchmarkClient.client.Get(key)
+	result, err := glideBenchmarkClient.client.Get(key)
+	if err != nil {
+		return "", err
+	}
+
+	return result.Value(), nil
 }
 
 func (glideBenchmarkClient *glideBenchmarkClient) set(key string, value string) (string, error) {
-	return glideBenchmarkClient.client.Set(key, value)
+	result, err := glideBenchmarkClient.client.Set(key, value)
+	if err != nil {
+		return "", err
+	}
+
+	return result.Value(), nil
 }
 
 func (glideBenchmarkClient *glideBenchmarkClient) close() error {

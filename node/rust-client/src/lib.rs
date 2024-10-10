@@ -33,6 +33,7 @@ pub enum Level {
     Info = 2,
     Trace = 4,
     Warn = 1,
+    Off = 5,
 }
 
 #[napi]
@@ -136,6 +137,7 @@ impl From<logger_core::Level> for Level {
             logger_core::Level::Info => Level::Info,
             logger_core::Level::Debug => Level::Debug,
             logger_core::Level::Trace => Level::Trace,
+            logger_core::Level::Off => Level::Off,
         }
     }
 }
@@ -148,6 +150,7 @@ impl From<Level> for logger_core::Level {
             Level::Info => logger_core::Level::Info,
             Level::Debug => logger_core::Level::Debug,
             Level::Trace => logger_core::Level::Trace,
+            Level::Off => logger_core::Level::Off,
         }
     }
 }

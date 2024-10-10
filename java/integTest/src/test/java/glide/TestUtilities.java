@@ -1,9 +1,11 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
-import static glide.TestConfiguration.CLUSTER_PORTS;
-import static glide.TestConfiguration.STANDALONE_PORTS;
+import static glide.TestConfiguration.CLUSTER_HOSTS;
+import static glide.TestConfiguration.STANDALONE_HOSTS;
+import static glide.TestConfiguration.TLS;
 import static glide.api.models.GlideString.gs;
+import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -87,14 +89,24 @@ public class TestUtilities {
 
     public static GlideClientConfiguration.GlideClientConfigurationBuilder<?, ?>
             commonClientConfig() {
-        return GlideClientConfiguration.builder()
-                .address(NodeAddress.builder().port(STANDALONE_PORTS[0]).build());
+        var builder = GlideClientConfiguration.builder();
+        for (var host : STANDALONE_HOSTS) {
+            var parts = host.split(":");
+            builder.address(
+                    NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
+        }
+        return builder.useTLS(TLS);
     }
 
     public static GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder<?, ?>
             commonClusterClientConfig() {
-        return GlideClusterClientConfiguration.builder()
-                .address(NodeAddress.builder().port(CLUSTER_PORTS[0]).build());
+        var builder = GlideClusterClientConfiguration.builder();
+        for (var host : CLUSTER_HOSTS) {
+            var parts = host.split(":");
+            builder.address(
+                    NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
+        }
+        return builder.useTLS(TLS);
     }
 
     /**
@@ -405,12 +417,18 @@ public class TestUtilities {
     /**
      * This method returns the server version using a glide client.
      *
-     * @param glideClient Glide client to be used for running the info command.
+     * @param client Glide client to be used for running the info command.
      * @return String The server version number.
      */
     @SneakyThrows
-    public static String getServerVersion(@NonNull final GlideClient glideClient) {
-        String infoResponse = glideClient.info(new Section[] {Section.SERVER}).get();
+    public static String getServerVersion(@NonNull final BaseClient client) {
+        String infoResponse =
+                client instanceof GlideClient
+                        ? ((GlideClient) client).info(new Section[] {Section.SERVER}).get()
+                        : ((GlideClusterClient) client)
+                                .info(new Section[] {Section.SERVER}, RANDOM)
+                                .get()
+                                .getSingleValue();
         Map<String, String> infoResponseMap = parseInfoResponseToMap(infoResponse);
         if (infoResponseMap.containsKey(VALKEY_VERSION_KEY)) {
             return infoResponseMap.get(VALKEY_VERSION_KEY);

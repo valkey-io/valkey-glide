@@ -1,8 +1,8 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
-import static command_request.CommandRequestOuterClass.RequestType.PubSubSChannels;
-import static command_request.CommandRequestOuterClass.RequestType.PubSubSNumSub;
+import static command_request.CommandRequestOuterClass.RequestType.PubSubShardChannels;
+import static command_request.CommandRequestOuterClass.RequestType.PubSubShardNumSub;
 import static command_request.CommandRequestOuterClass.RequestType.SPublish;
 
 import glide.api.GlideClusterClient;
@@ -71,7 +71,8 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      */
     public <ArgType> ClusterTransaction pubsubShardNumSub(@NonNull ArgType[] channels) {
         checkTypeOrThrow(channels);
-        protobufTransaction.addCommands(buildCommand(PubSubSNumSub, newArgsBuilder().add(channels)));
+        protobufTransaction.addCommands(
+                buildCommand(PubSubShardNumSub, newArgsBuilder().add(channels)));
         return getThis();
     }
 
@@ -82,7 +83,7 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * @return Command response - An <code>Array</code> of all active shard channels.
      */
     public ClusterTransaction pubsubShardChannels() {
-        protobufTransaction.addCommands(buildCommand(PubSubSChannels));
+        protobufTransaction.addCommands(buildCommand(PubSubShardChannels));
         return getThis();
     }
 
@@ -97,7 +98,8 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      */
     public <ArgType> ClusterTransaction pubsubShardChannels(@NonNull ArgType pattern) {
         checkTypeOrThrow(pattern);
-        protobufTransaction.addCommands(buildCommand(PubSubSChannels, newArgsBuilder().add(pattern)));
+        protobufTransaction.addCommands(
+                buildCommand(PubSubShardChannels, newArgsBuilder().add(pattern)));
         return getThis();
     }
 }

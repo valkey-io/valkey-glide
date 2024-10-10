@@ -1,11 +1,10 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
+import static glide.TestUtilities.commonClientConfig;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import glide.api.GlideClient;
-import glide.api.models.configuration.GlideClientConfiguration;
-import glide.api.models.configuration.NodeAddress;
 import glide.connectors.resources.EpollResource;
 import glide.connectors.resources.KQueuePoolResource;
 import glide.connectors.resources.Platform;
@@ -33,11 +32,7 @@ public class CustomThreadPoolResourceTest {
 
         var regularClient =
                 GlideClient.createClient(
-                                GlideClientConfiguration.builder()
-                                        .address(
-                                                NodeAddress.builder().port(TestConfiguration.STANDALONE_PORTS[0]).build())
-                                        .threadPoolResource(customThreadPoolResource)
-                                        .build())
+                                commonClientConfig().threadPoolResource(customThreadPoolResource).build())
                         .get(10, TimeUnit.SECONDS);
 
         String payload = (String) regularClient.customCommand(new String[] {"PING"}).get();

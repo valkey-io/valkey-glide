@@ -147,6 +147,13 @@ To execute a specific test, include the `-k <test_name>` option. For example:
 pytest --asyncio-mode=auto -k test_socket_set_and_get
 ```
 
+IT suite starts the server for testing - standalone and cluster installation using `cluster_manager` script.
+If you want IT to use already started servers, use the following command line from `python/python` dir:
+
+```bash
+pytest --asyncio-mode=auto --cluster-endpoints=localhost:7000 --standalone-endpoints=localhost:6379
+```
+
 ### Submodules
 
 After pulling new changes, ensure that you update the submodules by running the following command:

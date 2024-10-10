@@ -3994,7 +3994,10 @@ export function createPubSubNumSub(
 export function createPubsubShardChannels(
     pattern?: GlideString,
 ): command_request.Command {
-    return createCommand(RequestType.PubSubSChannels, pattern ? [pattern] : []);
+    return createCommand(
+        RequestType.PubSubShardChannels,
+        pattern ? [pattern] : [],
+    );
 }
 
 /**
@@ -4003,7 +4006,10 @@ export function createPubsubShardChannels(
 export function createPubSubShardNumSub(
     channels?: GlideString[],
 ): command_request.Command {
-    return createCommand(RequestType.PubSubSNumSub, channels ? channels : []);
+    return createCommand(
+        RequestType.PubSubShardNumSub,
+        channels ? channels : [],
+    );
 }
 
 /**

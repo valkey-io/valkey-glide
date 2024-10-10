@@ -232,6 +232,12 @@ To run end-to-end tests, use the following command:
 ./gradlew :integTest:test
 ```
 
+IT suite start the server for testing - standalone and cluster installation using `cluster_manager` script.
+By default, it starts servers without TLS; to activate TLS add `-Dtls=true` to the command line:
+```bash
+./gradlew :integTest:test -Dtls=true
+```
+
 To run a single test, use the following command:
 ```bash
 ./gradlew :integTest:test --tests '*.functionLoad_and_functionList' --rerun
@@ -240,6 +246,26 @@ To run a single test, use the following command:
 To run one class, use the following command:
 ```bash
 ./gradlew :client:test --tests 'TransactionTests' --rerun
+```
+
+To run IT tests against an existing cluster and/or standalone endpoint, use:
+```bash
+./gradlew :integTest:test -Dcluster-endpoints=localhost:7000 -Dstandalone-endpoints=localhost:6379
+```
+
+If those endpoints use TLS, add `-Dtls=true` (applied to both endpoints):
+```bash
+./gradlew :integTest:test -Dcluster-endpoints=localhost:7000 -Dstandalone-endpoints=localhost:6379 -Dtls=true
+```
+
+You can combine this with test filter as well:
+```bash
+./gradlew :integTest:test -Dcluster-endpoints=localhost:7000 -Dstandalone-endpoints=localhost:6379 --tests 'TransactionTests' -Dtls=true
+```
+
+To run server modules test (it doesn't start servers):
+```bash
+./gradlew :integTest:modulesTest -Dcluster-endpoints=localhost:7000 -Dtls=true
 ```
 
 ### Generate files
