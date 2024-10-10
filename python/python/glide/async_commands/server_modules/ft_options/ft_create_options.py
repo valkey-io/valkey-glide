@@ -78,11 +78,6 @@ class VectorType(Enum):
 class Field(ABC):
     """
     Abstract base class for defining fields in a schema.
-
-    Args:
-        name (TEncodable): The name of the field.
-        type (FieldType): The type of the field.
-        alias (Optional[str]): An alias for the field.
     """
 
     @abstractmethod
@@ -94,6 +89,11 @@ class Field(ABC):
     ):
         """
         Initialize a new field instance.
+
+        Args:
+            name (TEncodable): The name of the field.
+            type (FieldType): The type of the field.
+            alias (Optional[str]): An alias for the field.
         """
         self.name = name
         self.type = type
@@ -117,15 +117,15 @@ class Field(ABC):
 class TextField(Field):
     """
     Class for defining text fields in a schema.
-
-    Args:
-        name (TEncodable): The name of the text field.
-        alias (Optional[str]): An alias for the field.
     """
 
     def __init__(self, name: TEncodable, alias: Optional[str] = None):
         """
         Initialize a new TextField instance.
+
+        Args:
+            name (TEncodable): The name of the text field.
+            alias (Optional[str]): An alias for the field.
         """
         super().__init__(name, FieldType.TEXT, alias)
 
@@ -143,12 +143,6 @@ class TextField(Field):
 class TagField(Field):
     """
     Class for defining tag fields in a schema.
-
-    Args:
-        name (TEncodable): The name of the tag field.
-        alias (Optional[str]): An alias for the field.
-        separator (Optional[str]): Specify how text in the attribute is split into individual tags. Must be a single character.
-        case_sensitive (bool): Preserve the original letter cases of tags. If set to False, characters are converted to lowercase by default.
     """
 
     def __init__(
@@ -160,6 +154,12 @@ class TagField(Field):
     ):
         """
         Initialize a new TagField instance.
+
+        Args:
+            name (TEncodable): The name of the tag field.
+            alias (Optional[str]): An alias for the field.
+            separator (Optional[str]): Specify how text in the attribute is split into individual tags. Must be a single character.
+            case_sensitive (bool): Preserve the original letter cases of tags. If set to False, characters are converted to lowercase by default.
         """
         super().__init__(name, FieldType.TAG, alias)
         self.separator = separator
@@ -183,15 +183,14 @@ class TagField(Field):
 class NumericField(Field):
     """
     Class for defining the numeric fields in a schema.
-
-    Args:
-        name (TEncodable): The name of the numeric field.
-        alias (Optional[str]): An alias for the field.
     """
 
     def __init__(self, name: TEncodable, alias: Optional[str] = None):
         """
         Initialize a new NumericField instance.
+        Args:
+            name (TEncodable): The name of the numeric field.
+            alias (Optional[str]): An alias for the field.
         """
         super().__init__(name, FieldType.NUMERIC, alias)
 
@@ -209,17 +208,17 @@ class NumericField(Field):
 class VectorFieldAttributes(ABC):
     """
     Abstract base class for defining vector field attributes to be used after the vector algorithm name.
-
-    Args:
-        dim (int): Number of dimensions in the vector.
-        distance_metric (DistanceMetricType): The distance metric used in vector type field. Can be one of [L2 | IP | COSINE].
-        type (VectorType): Vector type. The only supported type is FLOAT32.
     """
 
     @abstractmethod
     def __init__(self, dim: int, distance_metric: DistanceMetricType, type: VectorType):
         """
         Initialize a new vector field attributes instance.
+
+        Args:
+            dim (int): Number of dimensions in the vector.
+            distance_metric (DistanceMetricType): The distance metric used in vector type field. Can be one of [L2 | IP | COSINE].
+            type (VectorType): Vector type. The only supported type is FLOAT32.
         """
         self.dim = dim
         self.distance_metric = distance_metric
@@ -246,12 +245,6 @@ class VectorFieldAttributes(ABC):
 class VectorFieldAttributesFlat(VectorFieldAttributes):
     """
     Get the arguments to be used for the FLAT algorithm of the vector field.
-
-    Args:
-        dim (int): Number of dimensions in the vector.
-        distance_metric (DistanceMetricType): The distance metric used in vector type field. Can be one of [L2 | IP | COSINE].
-        type (VectorType): Vector type. The only supported type is FLOAT32.
-        initial_cap (Optional[int]): Initial vector capacity in the index affecting memory allocation size of the index. Defaults to 1024.
     """
 
     def __init__(
@@ -263,6 +256,12 @@ class VectorFieldAttributesFlat(VectorFieldAttributes):
     ):
         """
         Initialize a new flat vector field attributes instance.
+
+        Args:
+            dim (int): Number of dimensions in the vector.
+            distance_metric (DistanceMetricType): The distance metric used in vector type field. Can be one of [L2 | IP | COSINE].
+            type (VectorType): Vector type. The only supported type is FLOAT32.
+            initial_cap (Optional[int]): Initial vector capacity in the index affecting memory allocation size of the index. Defaults to 1024.
         """
         super().__init__(dim, distance_metric, type)
         self.initial_cap = initial_cap
@@ -283,15 +282,6 @@ class VectorFieldAttributesFlat(VectorFieldAttributes):
 class VectorFieldAttributesHnsw(VectorFieldAttributes):
     """
     Get the arguments to be used for the HNSW algorithm of the vector field.
-
-    Args:
-        dim (int): Number of dimensions in the vector.
-        distance_metric (DistanceMetricType): The distance metric used in vector type field. Can be one of [L2 | IP | COSINE].
-        type (VectorType): Vector type. The only supported type is FLOAT32.
-        initial_cap (Optional[int]): Initial vector capacity in the index affecting memory allocation size of the index. Defaults to 1024.
-        m (Optional[int]): Number of maximum allowed outgoing edges for each node in the graph in each layer. Default is 16, maximum is 512.
-        ef_contruction (Optional[int]): Controls the number of vectors examined during index construction. Default value is 200, Maximum value is 4096.
-        ef_runtime (Optional[int]): Controls the number of vectors examined during query operations. Default value is 10, Maximum value is 4096.
     """
 
     def __init__(
@@ -306,6 +296,15 @@ class VectorFieldAttributesHnsw(VectorFieldAttributes):
     ):
         """
         Initialize a new TagField instance.
+
+        Args:
+            dim (int): Number of dimensions in the vector.
+            distance_metric (DistanceMetricType): The distance metric used in vector type field. Can be one of [L2 | IP | COSINE].
+            type (VectorType): Vector type. The only supported type is FLOAT32.
+            initial_cap (Optional[int]): Initial vector capacity in the index affecting memory allocation size of the index. Defaults to 1024.
+            m (Optional[int]): Number of maximum allowed outgoing edges for each node in the graph in each layer. Default is 16, maximum is 512.
+            ef_contruction (Optional[int]): Controls the number of vectors examined during index construction. Default value is 200, Maximum value is 4096.
+            ef_runtime (Optional[int]): Controls the number of vectors examined during query operations. Default value is 10, Maximum value is 4096.
         """
         super().__init__(dim, distance_metric, type)
         self.initial_cap = initial_cap
@@ -335,12 +334,6 @@ class VectorFieldAttributesHnsw(VectorFieldAttributes):
 class VectorField(Field):
     """
     Class for defining vector field in a schema.
-
-    Args:
-        name (TEncodable): The name of the vector field.
-        algorithm (VectorAlgorithm): The vector indexing algorithm.
-        alias (Optional[str]): An alias for the field.
-        attributes (VectorFieldAttributes): Additional attributes to be passed with the vector field after the algorithm name.
     """
 
     def __init__(
@@ -352,6 +345,12 @@ class VectorField(Field):
     ):
         """
         Initialize a new VectorField instance.
+
+        Args:
+            name (TEncodable): The name of the vector field.
+            algorithm (VectorAlgorithm): The vector indexing algorithm.
+            alias (Optional[str]): An alias for the field.
+            attributes (VectorFieldAttributes): Additional attributes to be passed with the vector field after the algorithm name.
         """
         super().__init__(name, FieldType.VECTOR, alias)
         self.algorithm = algorithm
@@ -390,12 +389,8 @@ class DataType(Enum):
 
 class FtCreateOptions:
     """
-    This class represents the input options to be used in the [FT.CREATE](https://valkey.io/commands/ftcreate/) command.
+    This class represents the input options to be used in the [FT.CREATE] command.
     All fields in this class are optional inputs for [FT.CREATE].
-
-    Args:
-        data_type (Optional[DataType]): The type of data to be indexed using [FT.CREATE].
-        prefixes (Optional[List[str]]): The prefix of the key to be indexed.
     """
 
     def __init__(
@@ -405,6 +400,10 @@ class FtCreateOptions:
     ):
         """
         Initialize the [FT.CREATE] optional fields.
+
+        Args:
+            data_type (Optional[DataType]): The type of data to be indexed using [FT.CREATE].
+            prefixes (Optional[List[str]]): The prefix of the key to be indexed.
         """
         self.data_type = data_type
         self.prefixes = prefixes
