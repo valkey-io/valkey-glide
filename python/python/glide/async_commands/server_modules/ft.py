@@ -49,7 +49,7 @@ async def create(
     args: List[TEncodable] = [CommandNames.FT_CREATE, indexName]
     if options:
         args.extend(options.toArgs())
-    if schema and len(schema) > 0:
+    if schema:
         args.append(FtCreateKeywords.SCHEMA)
         for field in schema:
             args.extend(field.toArgs())

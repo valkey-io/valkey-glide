@@ -378,11 +378,11 @@ class DataType(Enum):
     Options for the type of data for which the index is being created.
     """
 
-    HASH = 1
+    HASH = "HASH"
     """
     If the created index will index HASH data.
     """
-    JSON = 2
+    JSON = "JSON"
     """
     If the created index will index JSON document data.
     """
@@ -420,7 +420,7 @@ class FtCreateOptions:
         args = []
         if self.data_type:
             args.append(FtCreateKeywords.ON)
-            args.append(self.data_type.name)
+            args.append(self.data_type.value)
         if self.prefixes:
             args.append(FtCreateKeywords.PREFIX)
             args.append(str(len(self.prefixes)))
