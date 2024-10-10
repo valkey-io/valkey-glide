@@ -145,7 +145,7 @@ class TagField(Field):
     Class for defining tag fields in a schema.
 
     Args:
-        name (str): The name of the tag field.
+        name (TEncodable): The name of the tag field.
         alias (Optional[str]): An alias for the field.
         separator (Optional[str]): Specify how text in the attribute is split into individual tags. Must be a single character.
         case_sensitive (bool): Preserve the original letter cases of tags. If set to False, characters are converted to lowercase by default.
@@ -185,7 +185,7 @@ class NumericField(Field):
     Class for defining the numeric fields in a schema.
 
     Args:
-        name (str): The name of the numeric field.
+        name (TEncodable): The name of the numeric field.
         alias (Optional[str]): An alias for the field.
     """
 
@@ -337,7 +337,7 @@ class VectorField(Field):
     Class for defining vector field in a schema.
 
     Args:
-        name (str): The name of the vector field.
+        name (TEncodable): The name of the vector field.
         algorithm (VectorAlgorithm): The vector indexing algorithm.
         alias (Optional[str]): An alias for the field.
         attributes (VectorFieldAttributes): Additional attributes to be passed with the vector field after the algorithm name.
