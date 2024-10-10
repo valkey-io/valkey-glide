@@ -8,10 +8,20 @@ Our CI/CD pipeline tests and builds our project across multiple languages, versi
 
 ### Workflow Triggers
 
-*   Push to `main` branch
 *   Pull requests
-*   Scheduled runs (daily)
-*   Manual trigger (workflow_dispatch)
+*   Pushes to `main` or release branches (PR merges)
+*   Scheduled runs (daily) - starts CI pipelines for all clients
+*   Manual trigger (`workflow_dispatch`) - a developer can start a client's pipeline or the scheduled one to run all pipelines on demand
+
+<img width="437" alt="Job triggers" src="https://github.com/user-attachments/assets/58bf2b76-d778-4e43-8891-5dcbf0ff9b72">
+
+### Test coverage
+
+There are two levels of testing: the basic one and full (_aka_ `full-matrix`).
+Basic amount of testing is executed on every open and merged PR. The full set of tests is executed by the scheduled job.
+A developer can select the level when starting a job, either scheduled or client's pipeline.
+
+<img width="264" alt="Matrices" src="https://github.com/user-attachments/assets/72857f80-078c-4e11-bcc6-75beb0125a9d">
 
 ### Language-Specific Workflows
 
