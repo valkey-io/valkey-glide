@@ -1,5 +1,7 @@
 #### Changes
 
+* Java, Python: Bump protobuf (protoc) version ([#2421](https://github.com/valkey-io/valkey-glide/pull/2421))
+
 #### Breaking Changes
 
 #### Fixes
