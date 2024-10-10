@@ -1,7 +1,5 @@
 # CI/CD Workflow Guide
 
-TODO: Add a description of the CI/CD workflow and its components.
-
 ### Overview
 
 Our CI/CD pipeline tests and builds our project across multiple languages, versions, and environments. This guide outlines the key components and processes of our workflow.
