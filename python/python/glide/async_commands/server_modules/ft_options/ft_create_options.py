@@ -226,7 +226,7 @@ class VectorFieldAttributes(ABC):
         self.type = type
 
     @abstractmethod
-    def getVectorFieldAttributes(self) -> List[str]:
+    def toArgs(self) -> List[str]:
         """
         Get the arguments to be used for the algorithm of the vector field.
 
@@ -267,14 +267,14 @@ class VectorFieldAttributesFlat(VectorFieldAttributes):
         super().__init__(dim, distance_metric, type)
         self.initial_cap = initial_cap
 
-    def getVectorFieldAttributes(self) -> List[str]:
+    def toArgs(self) -> List[str]:
         """
         Get the arguments representing the vector field created with FLAT algorithm.
 
         Returns:
             List[str]: A list of FLAT algorithm type vector arguments.
         """
-        args = super().getVectorFieldAttributes()
+        args = super().toArgs()
         if self.initial_cap:
             args.extend([FtCreateKeywords.INITIAL_CAP, str(self.initial_cap)])
         return args
@@ -313,14 +313,14 @@ class VectorFieldAttributesHnsw(VectorFieldAttributes):
         self.ef_contruction = ef_contruction
         self.ef_runtime = ef_runtime
 
-    def getVectorFieldAttributes(self) -> List[str]:
+    def toArgs(self) -> List[str]:
         """
         Get the arguments representing the vector field created with HSNW algorithm.
 
         Returns:
             List[str]: A list of HNSW algorithm type vector arguments.
         """
-        args = super().getVectorFieldAttributes()
+        args = super().toArgs()
         if self.initial_cap:
             args.extend([FtCreateKeywords.INITIAL_CAP, str(self.initial_cap)])
         if self.m:
@@ -367,7 +367,7 @@ class VectorField(Field):
         args = super().toArgs()
         args.append(self.algorithm.value)
         if self.attributes:
-            attribute_list = self.attributes.getVectorFieldAttributes()
+            attribute_list = self.attributes.toArgs()
             args.append(str(len(attribute_list)))
             args.extend(attribute_list)
         return args
