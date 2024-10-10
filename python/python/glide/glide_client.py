@@ -5,7 +5,6 @@ import sys
 import threading
 from typing import Any, Dict, List, Optional, Tuple, Type, Union, cast
 
-import async_timeout
 from glide.async_commands.cluster_commands import ClusterCommands
 from glide.async_commands.command_args import ObjectType
 from glide.async_commands.core import CoreCommands
@@ -27,7 +26,6 @@ from glide.protobuf.connection_request_pb2 import ConnectionRequest
 from glide.protobuf.response_pb2 import RequestErrorType, Response
 from glide.protobuf_codec import PartialMessageException, ProtobufCodec
 from glide.routes import Route, set_protobuf_route
-from typing_extensions import Self
 
 from .glide import (
     DEFAULT_TIMEOUT_IN_MILLISECONDS,
@@ -37,6 +35,13 @@ from .glide import (
     start_socket_listener_external,
     value_from_pointer,
 )
+
+if sys.version_info >= (3, 11):
+    import asyncio as async_timeout
+    from typing import Self
+else:
+    import async_timeout
+    from typing_extensions import Self
 
 
 def get_request_error_class(
