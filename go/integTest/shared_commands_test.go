@@ -1529,7 +1529,7 @@ func (suite *GlideTestSuite) TestDel_MultipleKeys() {
 		deletedCount, err := client.Del([]string{key1, key2, key3})
 
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(3), deletedCount)
+		assert.Equal(suite.T(), int64(3), deletedCount.Value())
 
 		result1, err1 := client.Get(key1)
 		result2, err2 := client.Get(key2)

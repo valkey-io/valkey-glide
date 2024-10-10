@@ -428,6 +428,7 @@ type StringCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/lcs/
 	LCS(key1 string, key2 string) (Result[string], error)
+
 	// GetDel gets the value associated with the given key and deletes the key.
 	//
 	// Parameters:
@@ -442,26 +443,6 @@ type StringCommands interface {
 	//
 	//[valkey.io]: https://valkey.io/commands/getdel/
 	GetDel(key string) (Result[string], error)
-	// Del removes the specified keys from the database. A key is ignored if it does not exist.
-	//
-	// Note:
-	//When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
-	//
-	// Parameters:
-	//  keys - One or more keys to delete.
-	//
-	// Return value:
-	//  Returns the number of keys that were removed.
-	//
-	// Example:
-	//	result, err := client.Del([]string{"key1", "key2", "key3"})
-	//	if err != nil {
-	//	    // handle error
-	//	}
-	//	fmt.Println(result) // Output: 2
-	//
-	// [valkey.io]: https://valkey.io/commands/del/
-	Del(keys []string) (int64, error)
 }
 
 // HashCommands supports commands and transactions for the "Hash Commands" group for standalone and cluster
