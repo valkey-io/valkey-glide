@@ -33,7 +33,7 @@ async def create(
         options (Optional[FtCreateOptions]): Optional arguments for the [FT.CREATE] command.
 
     Returns:
-        If the index is successfully created, returns OK.
+        If the index is successfully created, returns "OK".
 
     Examples:
         >>> from glide.async_commands.server_modules import ft
