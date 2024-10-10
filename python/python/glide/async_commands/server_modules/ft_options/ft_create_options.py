@@ -100,12 +100,12 @@ class Field(ABC):
         self.alias = alias
 
     @abstractmethod
-    def toArgs(self) -> List[str]:
+    def toArgs(self) -> List[TEncodable]:
         """
         Get the arguments representing the field.
 
         Returns:
-            List[str]: A list of field arguments.
+            List[TEncodable]: A list of field arguments.
         """
         args = [self.name]
         if self.alias:
@@ -129,12 +129,12 @@ class TextField(Field):
         """
         super().__init__(name, FieldType.TEXT, alias)
 
-    def toArgs(self) -> List[str]:
+    def toArgs(self) -> List[TEncodable]:
         """
         Get the arguments representing the text field.
 
         Returns:
-            List[str]: A list of text field arguments.
+            List[TEncodable]: A list of text field arguments.
         """
         args = super().toArgs()
         return args
@@ -165,12 +165,12 @@ class TagField(Field):
         self.separator = separator
         self.case_sensitive = case_sensitive
 
-    def toArgs(self) -> List[str]:
+    def toArgs(self) -> List[TEncodable]:
         """
         Get the arguments representing the tag field.
 
         Returns:
-            List[str]: A list of tag field arguments.
+            List[TEncodable]: A list of tag field arguments.
         """
         args = super().toArgs()
         if self.separator:
@@ -195,12 +195,12 @@ class NumericField(Field):
         """
         super().__init__(name, FieldType.NUMERIC, alias)
 
-    def toArgs(self) -> List[str]:
+    def toArgs(self) -> List[TEncodable]:
         """
         Get the arguments representing the numeric field.
 
         Returns:
-            List[str]: A list of numeric field arguments.
+            List[TEncodable]: A list of numeric field arguments.
         """
         args = super().toArgs()
         return args
@@ -357,12 +357,12 @@ class VectorField(Field):
         self.algorithm = algorithm
         self.attributes = attributes
 
-    def toArgs(self) -> List[str]:
+    def toArgs(self) -> List[TEncodable]:
         """
         Get the arguments representing the vector field.
 
         Returns:
-            List[str]: A list of vector field arguments.
+            List[TEncodable]: A list of vector field arguments.
         """
         args = super().toArgs()
         args.append(self.algorithm.value)
