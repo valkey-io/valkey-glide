@@ -188,6 +188,7 @@ class NumericField(Field):
     def __init__(self, name: TEncodable, alias: Optional[str] = None):
         """
         Initialize a new NumericField instance.
+
         Args:
             name (TEncodable): The name of the numeric field.
             alias (Optional[str]): An alias for the field.
