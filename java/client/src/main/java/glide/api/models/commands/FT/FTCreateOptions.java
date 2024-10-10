@@ -1,13 +1,18 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands.FT;
 
+import static glide.api.models.GlideString.gs;
+
 import glide.api.BaseClient;
 import glide.api.commands.servermodules.FT;
+import glide.api.models.GlideString;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -23,20 +28,36 @@ public class FTCreateOptions {
     private final IndexType indexType;
 
     /** A list of prefixes of index definitions. */
-    private final String[] prefixes;
+    private final GlideString[] prefixes;
 
-    public String[] toArgs() {
-        var args = new ArrayList<String>();
+    FTCreateOptions(IndexType indexType, GlideString[] prefixes) {
+        this.indexType = indexType;
+        this.prefixes = prefixes;
+    }
+
+    public static FTCreateOptionsBuilder builder() {
+        return new FTCreateOptionsBuilder();
+    }
+
+    public GlideString[] toArgs() {
+        var args = new ArrayList<GlideString>();
         if (indexType != null) {
-            args.add("ON");
-            args.add(indexType.toString());
+            args.add(gs("ON"));
+            args.add(gs(indexType.toString()));
         }
         if (prefixes != null && prefixes.length > 0) {
-            args.add("PREFIX");
-            args.add(Integer.toString(prefixes.length));
+            args.add(gs("PREFIX"));
+            args.add(gs(Integer.toString(prefixes.length)));
             args.addAll(List.of(prefixes));
         }
-        return args.toArray(String[]::new);
+        return args.toArray(GlideString[]::new);
+    }
+
+    public static class FTCreateOptionsBuilder {
+        public FTCreateOptionsBuilder prefixes(String[] prefixes) {
+            this.prefixes = Stream.of(prefixes).map(GlideString::gs).toArray(GlideString[]::new);
+            return this;
+        }
     }
 
     /** Type of the index dataset. */
@@ -336,8 +357,8 @@ public class FTCreateOptions {
 
     /** Field definition to be added into index schema. */
     public static class FieldInfo {
-        private final String identifier;
-        private final String alias;
+        private final GlideString identifier;
+        private final GlideString alias;
         private final Field field;
 
         /**
@@ -347,7 +368,7 @@ public class FTCreateOptions {
          * @param field The {@link Field} itself.
          */
         public FieldInfo(@NonNull String identifier, @NonNull Field field) {
-            this.identifier = identifier;
+            this.identifier = gs(identifier);
             this.field = field;
             this.alias = null;
         }
@@ -360,21 +381,47 @@ public class FTCreateOptions {
          * @param field The {@link Field} itself.
          */
         public FieldInfo(@NonNull String identifier, @NonNull String alias, @NonNull Field field) {
+            this.identifier = gs(identifier);
+            this.alias = gs(alias);
+            this.field = field;
+        }
+
+        /**
+         * Field definition to be added into index schema.
+         *
+         * @param identifier Field identifier (name).
+         * @param field The {@link Field} itself.
+         */
+        public FieldInfo(@NonNull GlideString identifier, @NonNull Field field) {
+            this.identifier = identifier;
+            this.field = field;
+            this.alias = null;
+        }
+
+        /**
+         * Field definition to be added into index schema.
+         *
+         * @param identifier Field identifier (name).
+         * @param alias Field alias.
+         * @param field The {@link Field} itself.
+         */
+        public FieldInfo(
+                @NonNull GlideString identifier, @NonNull GlideString alias, @NonNull Field field) {
             this.identifier = identifier;
             this.alias = alias;
             this.field = field;
         }
 
         /** Convert to module API. */
-        public String[] toArgs() {
-            var args = new ArrayList<String>();
+        public GlideString[] toArgs() {
+            var args = new ArrayList<GlideString>();
             args.add(identifier);
             if (alias != null) {
-                args.add("AS");
+                args.add(gs("AS"));
                 args.add(alias);
             }
-            args.addAll(List.of(field.toArgs()));
-            return args.toArray(String[]::new);
+            args.addAll(Stream.of(field.toArgs()).map(GlideString::gs).collect(Collectors.toList()));
+            return args.toArray(GlideString[]::new);
         }
     }
 }
