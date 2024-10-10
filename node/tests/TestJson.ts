@@ -1,15 +1,33 @@
-// # Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+/**
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+ */
 
-// import json as OuterJson
 
-// import pytest
-// from glide.async_commands.core import ConditionalChange, InfoSection
-// from glide.async_commands.redis_modules import json
-// from glide.async_commands.redis_modules.json import JsonGetOptions
-// from glide.config import ProtocolVersion
-// from glide.constants import OK
-// from glide.redis_client import TRedisClient
-// from tests.test_async_client import get_random_string, parse_info_response
+export function runJsonTests(config: {
+    init: () => Promise<{ client: Client }>;
+    close: (testSucceeded: boolean) => void;
+    timeout?: number;
+}) {
+    const runTest = async (test: (client: Client) => Promise<void>) => {
+        const { client } = await config.init();
+        let testSucceeded = false;
+
+        try {
+            await test(client);
+            testSucceeded = true;
+        } finally {
+            config.close(testSucceeded);
+        }
+    };
+
+    it(
+        "test1",
+        async () => {
+            await runTest((client: Client) => (client));
+        },
+        config.timeout,
+    );
+}
 
 
 // @pytest.mark.asyncio
