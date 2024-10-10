@@ -147,8 +147,6 @@ async def arrlen(
     """
     Retrieves the length of the array at the specified `path` within the JSON document stored at `key`.
 
-    See https://valkey.io/commands/json.arrlen/ for more details.
-
     Args:
         client (TGlideClient): The client to execute the command.
         key (TEncodable): The key of the JSON document.
@@ -160,7 +158,7 @@ async def arrlen(
                 Returns a list of integer replies for every possible path, indicating the length of the array,
                 or None for JSON values matching the path that are not an array.
                 If `path` doesn't exist, an empty array will be returned.
-            For legacy path (`path` starts with `.`):
+            For legacy path (`path` doesn't starts with `$`):
                 Returns the length of the array at `path`.
                 If multiple paths match, the length of the first array match is returned.
                 If the JSON value at `path` is not a array or if `path` doesn't exist, an error is raised.

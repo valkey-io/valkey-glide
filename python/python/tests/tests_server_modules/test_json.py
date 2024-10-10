@@ -310,5 +310,5 @@ class TestJson:
         with pytest.raises(RequestError):
             assert await json.arrlen(glide_client, key)
 
-        assert await json.set(glide_client, "doc", "$", "[1, 2, 3, 4]") == OK
-        assert await json.arrlen(glide_client, "doc") == 4
+        assert await json.set(glide_client, key, "$", "[1, 2, 3, 4]") == OK
+        assert await json.arrlen(glide_client, key) == 4
