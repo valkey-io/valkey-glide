@@ -1,4 +1,6 @@
 #### Changes
+* Python: Add JSON.ARRLEN command ([#2403](https://github.com/valkey-io/valkey-glide/pull/2403))
+* Python: Add JSON.CLEAR command ([#2418](https://github.com/valkey-io/valkey-glide/pull/2418))
 
 #### Breaking Changes
 
