@@ -312,3 +312,50 @@ class TestJson:
 
         assert await json.set(glide_client, key, "$", "[1, 2, 3, 4]") == OK
         assert await json.arrlen(glide_client, key) == 4
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_json_clear(self, glide_client: TGlideClient):
+        key = get_random_string(5)
+
+        json_value = '{"obj":{"a":1, "b":2}, "arr":[1,2,3], "str": "foo", "bool": true, "int": 42, "float": 3.14, "nullVal": null}'
+        assert await json.set(glide_client, key, "$", json_value) == OK
+
+        assert await json.clear(glide_client, key, "$.*") == 6
+        result = await json.get(glide_client, key, "$")
+        assert (
+            result
+            == b'[{"obj":{},"arr":[],"str":"","bool":false,"int":0,"float":0.0,"nullVal":null}]'
+        )
+        assert await json.clear(glide_client, key, "$.*") == 0
+
+        assert await json.set(glide_client, key, "$", json_value) == OK
+        assert await json.clear(glide_client, key, "*") == 6
+
+        json_value = '{"a": 1, "b": {"a": [5, 6, 7], "b": {"a": true}}, "c": {"a": "value", "b": {"a": 3.5}}, "d": {"a": {"foo": "foo"}}, "nullVal": null}'
+        assert await json.set(glide_client, key, "$", json_value) == OK
+
+        assert await json.clear(glide_client, key, "b.a[1:3]") == 2
+        assert await json.clear(glide_client, key, "b.a[1:3]") == 0
+        assert (
+            await json.get(glide_client, key, "$..a")
+            == b'[1,[5,0,0],true,"value",3.5,{"foo":"foo"}]'
+        )
+        assert await json.clear(glide_client, key, "..a") == 6
+        assert await json.get(glide_client, key, "$..a") == b'[0,[],false,"",0.0,{}]'
+
+        assert await json.clear(glide_client, key, "$..a") == 0
+
+        # Path doesn't exists
+        assert await json.clear(glide_client, key, "$.path") == 0
+        assert await json.clear(glide_client, key, "path") == 0
+
+        # Key doesn't exists
+        with pytest.raises(RequestError):
+            await json.clear(glide_client, "non_existing_key")
+
+        with pytest.raises(RequestError):
+            await json.clear(glide_client, "non_existing_key", "$")
+
+        with pytest.raises(RequestError):
+            await json.clear(glide_client, "non_existing_key", ".")
