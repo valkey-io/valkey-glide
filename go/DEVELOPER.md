@@ -21,7 +21,7 @@ Software Dependencies
 -   git
 -   GCC
 -   pkg-config
--   protoc (protobuf compiler) >= v3.25.5
+-   protoc (protobuf compiler) >= v3.20.0
 -   openssl
 -   openssl-dev
 -   rustup
@@ -45,10 +45,10 @@ source "$HOME/.cargo/env"
 rustc --version
 # Install protobuf compiler
 PB_REL="https://github.com/protocolbuffers/protobuf/releases"
-curl -LO $PB_REL/download/v3.25.5/protoc-3.25.5-linux-x86_64.zip
-unzip protoc-3.25.5-linux-x86_64.zip -d $HOME/.local
+curl -LO $PB_REL/download/v3.20.3/protoc-3.20.3-linux-x86_64.zip
+unzip protoc-3.20.3-linux-x86_64.zip -d $HOME/.local
 export PATH="$PATH:$HOME/.local/bin"
-# Check that the protobuf compiler is installed. A minimum version of 3.25.5 is required.
+# Check that the protobuf compiler is installed. A minimum version of 3.20.0 is required.
 protoc --version
 ```
 
@@ -69,10 +69,10 @@ source "$HOME/.cargo/env"
 rustc --version
 # Install protobuf compiler
 PB_REL="https://github.com/protocolbuffers/protobuf/releases"
-curl -LO $PB_REL/download/v3.25.5/protoc-3.25.5-linux-x86_64.zip
-unzip protoc-3.25.5-linux-x86_64.zip -d $HOME/.local
+curl -LO $PB_REL/download/v3.20.3/protoc-3.20.3-linux-x86_64.zip
+unzip protoc-3.20.3-linux-x86_64.zip -d $HOME/.local
 export PATH="$PATH:$HOME/.local/bin"
-# Check that the protobuf compiler is installed. A minimum version of 3.25.5 is required.
+# Check that the protobuf compiler is installed. A minimum version of 3.20.0 is required.
 protoc --version
 ```
 
