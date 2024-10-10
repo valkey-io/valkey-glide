@@ -139,6 +139,112 @@ async def get(
     return cast(bytes, await client.custom_command(args))
 
 
+async def arrlen(
+    client: TGlideClient,
+    key: TEncodable,
+    path: Optional[TEncodable] = None,
+) -> Optional[TJsonResponse[int]]:
+    """
+    Retrieves the length of the array at the specified `path` within the JSON document stored at `key`.
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+        key (TEncodable): The key of the JSON document.
+        path (Optional[TEncodable]): The path within the JSON document. Defaults to None.
+
+    Returns:
+        Optional[TJsonResponse[int]]:
+            For JSONPath (`path` starts with `$`):
+                Returns a list of integer replies for every possible path, indicating the length of the array,
+                or None for JSON values matching the path that are not an array.
+                If `path` doesn't exist, an empty array will be returned.
+            For legacy path (`path` doesn't starts with `$`):
+                Returns the length of the array at `path`.
+                If multiple paths match, the length of the first array match is returned.
+                If the JSON value at `path` is not a array or if `path` doesn't exist, an error is raised.
+            If `key` doesn't exist, None is returned.
+
+    Examples:
+        >>> from glide import json
+        >>> await json.set(client, "doc", "$", '{"a": [1, 2, 3], "b": {"a": [1, 2], "c": {"a": 42}}}')
+            b'OK'  # JSON is successfully set for doc
+        >>> await json.arrlen(client, "doc", "$")
+            [None]  # No array at the root path.
+        >>> await json.arrlen(client, "doc", "$.a")
+            [3]  # Retrieves the length of the array at path $.a.
+        >>> await json.arrlen(client, "doc", "$..a")
+            [3, 2, None]  # Retrieves lengths of arrays found at all levels of the path `..a`.
+        >>> await json.arrlen(client, "doc", "..a")
+            3  # Legacy path retrieves the first array match at path `..a`.
+        >>> await json.arrlen(client, "non_existing_key", "$.a")
+            None  # Returns None because the key does not exist.
+
+        >>> await json.set(client, "doc", "$", '[1, 2, 3, 4]')
+            b'OK'  # JSON is successfully set for doc
+        >>> await json.arrlen(client, "doc")
+            4  # Retrieves lengths of arrays in root.
+    """
+    args = ["JSON.ARRLEN", key]
+    if path:
+        args.append(path)
+    return cast(
+        Optional[TJsonResponse[int]],
+        await client.custom_command(args),
+    )
+
+
+async def clear(
+    client: TGlideClient,
+    key: TEncodable,
+    path: Optional[str] = None,
+) -> int:
+    """
+    Clears arrays or objects at the specified JSON path in the document stored at `key`.
+    Numeric values are set to `0`, and boolean values are set to `False`, and string values are converted to empty strings.
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+        key (TEncodable): The key of the JSON document.
+        path (Optional[str]): The JSON path to the arrays or objects to be cleared. Defaults to None.
+
+    Returns:
+        int: The number of containers cleared, numeric values zeroed, and booleans toggled to `false`,
+        and string values converted to empty strings.
+        If `path` doesn't exist, or the value at `path` is already empty (e.g., an empty array, object, or string), 0 is returned.
+        If `key doesn't exist, an error is raised.
+
+    Examples:
+        >>> from glide import json
+        >>> await json.set(client, "doc", "$", '{"obj":{"a":1, "b":2}, "arr":[1,2,3], "str": "foo", "bool": true, "int": 42, "float": 3.14, "nullVal": null}')
+            b'OK'  # JSON document is successfully set.
+        >>> await json.clear(client, "doc", "$.*")
+            6      # 6 values are cleared (arrays/objects/strings/numbers/booleans), but `null` remains as is.
+        >>> await json.get(client, "doc", "$")
+            b'[{"obj":{},"arr":[],"str":"","bool":false,"int":0,"float":0.0,"nullVal":null}]'
+        >>> await json.clear(client, "doc", "$.*")
+            0  # No further clearing needed since the containers are already empty and the values are defaults.
+
+        >>> await json.set(client, "doc", "$", '{"a": 1, "b": {"a": [5, 6, 7], "b": {"a": true}}, "c": {"a": "value", "b": {"a": 3.5}}, "d": {"a": {"foo": "foo"}}, "nullVal": null}')
+            b'OK'
+        >>> await json.clear(client, "doc", "b.a[1:3]")
+            2  # 2 elements (`6` and `7`) are cleared.
+        >>> await json.clear(client, "doc", "b.a[1:3]")
+            0 # No elements cleared since specified slice has already been cleared.
+        >>> await json.get(client, "doc", "$..a")
+            b'[1,[5,0,0],true,"value",3.5,{"foo":"foo"}]'
+
+        >>> await json.clear(client, "doc", "$..a")
+            6  # All numeric, boolean, and string values across paths are cleared.
+        >>> await json.get(client, "doc", "$..a")
+            b'[0,[],false,"",0.0,{}]'
+    """
+    args = ["JSON.CLEAR", key]
+    if path:
+        args.append(path)
+
+    return cast(int, await client.custom_command(args))
+
+
 async def delete(
     client: TGlideClient,
     key: TEncodable,
