@@ -18,6 +18,7 @@ public class FT {
     /**
      * Creates an index and initiates a backfill of that index.
      *
+     * @param client The client to execute the command.
      * @param indexName The index name.
      * @param fields Fields to populate into the index.
      * @return <code>OK</code>.
@@ -27,6 +28,7 @@ public class FT {
      * FT.create(client, "my_idx1", new FieldInfo[] {
      *     new FieldInfo("vec", VectorFieldFlat.builder(DistanceMetric.L2, 2).build())
      * }).get();
+     *
      * // Create a 6-dimensional JSON index using the HNSW algorithm:
      * FT.create(client, "my_idx2",
      *     new FieldInfo[] { new FieldInfo("$.vec", "VEC",
@@ -45,6 +47,7 @@ public class FT {
     /**
      * Creates an index and initiates a backfill of that index.
      *
+     * @param client The client to execute the command.
      * @param indexName The index name.
      * @param fields Fields to populate into the index.
      * @param options Additional parameters for the command - see {@link FTCreateOptions}.
