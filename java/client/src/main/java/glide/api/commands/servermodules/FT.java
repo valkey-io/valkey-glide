@@ -141,6 +141,36 @@ public class FT {
     }
 
     /**
+     * Deletes an index and associated content. Keys are unaffected.
+     *
+     * @param indexName The index name.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * client.ftdrop("hash_idx1").get();
+     * }</pre>
+     */
+    public static CompletableFuture<String> dropindex(
+            @NonNull BaseClient client, @NonNull String indexName) {
+        return executeCommand(client, new GlideString[] {gs("FT.DROPINDEX"), gs(indexName)}, false);
+    }
+
+    /**
+     * Deletes an index and associated content. Keys are unaffected.
+     *
+     * @param indexName The index name.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * client.ftdrop(gs("hash_idx1")).get();
+     * }</pre>
+     */
+    public static CompletableFuture<String> dropindex(
+            @NonNull BaseClient client, @NonNull GlideString indexName) {
+        return executeCommand(client, new GlideString[] {gs("FT.DROPINDEX"), indexName}, false);
+    }
+
+    /**
      * A wrapper for custom command API.
      *
      * @param client The client to execute the command.
