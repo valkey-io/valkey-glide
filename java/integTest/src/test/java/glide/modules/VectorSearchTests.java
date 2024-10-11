@@ -25,6 +25,8 @@ import glide.api.models.commands.FT.FTCreateOptions.VectorFieldHnsw;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.exceptions.RequestException;
+
+import java.util.Arrays;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
@@ -188,7 +190,6 @@ public class VectorSearchTests {
 
     @SneakyThrows
     @Test
-    @SuppressWarnings("unchecked")
     public void ft_drop() {
         var index = UUID.randomUUID().toString();
         assertEquals(
@@ -208,7 +209,7 @@ public class VectorSearchTests {
                         .getMultiValue()
                         .values()
                         .stream()
-                        .flatMap(s -> ((Set<String>) s).stream())
+                        .flatMap(s -> Arrays.stream((Object[]) s))
                         .collect(Collectors.toSet());
 
         assertEquals(OK, FT.dropindex(client, index).get());
@@ -220,7 +221,7 @@ public class VectorSearchTests {
                         .getMultiValue()
                         .values()
                         .stream()
-                        .flatMap(s -> ((Set<String>) s).stream())
+                        .flatMap(s -> Arrays.stream((Object[]) s))
                         .collect(Collectors.toSet());
 
         assertFalse(after.contains(index));
@@ -229,6 +230,6 @@ public class VectorSearchTests {
 
         var exception = assertThrows(ExecutionException.class, () -> FT.dropindex(client, index).get());
         assertInstanceOf(RequestException.class, exception.getCause());
-        assertTrue(exception.getMessage().contains("Unknown: Index name"));
+        assertTrue(exception.getMessage().contains("Index does not exist"));
     }
 }
