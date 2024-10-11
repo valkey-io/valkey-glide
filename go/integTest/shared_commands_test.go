@@ -1683,7 +1683,6 @@ func (suite *GlideTestSuite) TestSPop_LastMember() {
 	})
 }
 
-
 func (suite *GlideTestSuite) TestLRange() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		list := []string{"value4", "value3", "value2", "value1"}

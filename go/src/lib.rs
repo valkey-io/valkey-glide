@@ -57,6 +57,13 @@ pub struct CommandResponse {
     map_key: *mut CommandResponse,
     #[derivative(Default(value = "std::ptr::null_mut()"))]
     map_value: *mut CommandResponse,
+
+    /// Below two values are related to each other.
+    /// `sets_value` represents the set of CommandResponse.
+    /// `sets_value_len` represents the length of the set.
+    #[derivative(Default(value = "std::ptr::null_mut()"))]
+    sets_value: *mut CommandResponse,
+    sets_value_len: c_long,
 }
 
 #[repr(C)]
@@ -70,6 +77,7 @@ pub enum ResponseType {
     String = 4,
     Array = 5,
     Map = 6,
+    Sets = 7,
 }
 
 /// Success callback that is called when a command succeeds.
@@ -244,6 +252,7 @@ pub extern "C" fn get_response_type_string(response_type: ResponseType) -> *mut 
         ResponseType::String => "String",
         ResponseType::Array => "Array",
         ResponseType::Map => "Map",
+        ResponseType::Sets => "Sets",
     };
     let c_str = CString::new(s).unwrap_or_default();
     c_str.into_raw()
@@ -298,6 +307,8 @@ fn free_command_response_elements(command_response: CommandResponse) {
     let array_value_len = command_response.array_value_len;
     let map_key = command_response.map_key;
     let map_value = command_response.map_value;
+    let sets_value = command_response.sets_value;
+    let sets_value_len = command_response.sets_value_len;
     if !string_value.is_null() {
         let len = string_value_len as usize;
         unsafe { Vec::from_raw_parts(string_value, len, len) };
@@ -314,6 +325,13 @@ fn free_command_response_elements(command_response: CommandResponse) {
     }
     if !map_value.is_null() {
         unsafe { free_command_response(map_value) };
+    }
+    if !sets_value.is_null() {
+        let len = sets_value_len as usize;
+        let vec = unsafe { Vec::from_raw_parts(sets_value, len, len) };
+        for element in vec.into_iter() {
+            free_command_response_elements(element);
+        }
     }
 }
 
@@ -415,7 +433,7 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
             command_response.response_type = ResponseType::Bool;
             Ok(command_response)
         }
-        Value::Array(array) | Value::Set(array) => {
+        Value::Array(array) => {
             let vec: Vec<CommandResponse> = array
                 .into_iter()
                 .map(|v| {
@@ -451,6 +469,20 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
             command_response.array_value = vec_ptr;
             command_response.array_value_len = len;
             command_response.response_type = ResponseType::Map;
+            Ok(command_response)
+        }
+        Value::Set(array) => {
+            let vec: Vec<CommandResponse> = array
+                .into_iter()
+                .map(|v| {
+                    valkey_value_to_command_response(v)
+                        .expect("Value couldn't be converted to CommandResponse")
+                })
+                .collect();
+            let (vec_ptr, len) = convert_vec_to_pointer(vec);
+            command_response.sets_value = vec_ptr;
+            command_response.sets_value_len = len;
+            command_response.response_type = ResponseType::Sets;
             Ok(command_response)
         }
         // TODO: Add support for other return types.

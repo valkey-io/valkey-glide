@@ -625,8 +625,6 @@ func (client *baseClient) SPop(key string) (Result[string], error) {
 	return handleStringResponse(result)
 }
 
-
-
 func (client *baseClient) LRange(key string, start int64, end int64) ([]Result[string], error) {
 	result, err := client.executeCommand(C.LRange, []string{key, utils.IntToString(start), utils.IntToString(end)})
 	if err != nil {

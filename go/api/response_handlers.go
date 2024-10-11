@@ -207,13 +207,13 @@ func handleStringToStringMapResponse(response *C.struct_CommandResponse) (map[Re
 func handleStringSetResponse(response *C.struct_CommandResponse) (map[Result[string]]struct{}, error) {
 	defer C.free_command_response(response)
 
-	typeErr := checkResponseType(response, C.Array, false)
+	typeErr := checkResponseType(response, C.Sets, false)
 	if typeErr != nil {
 		return nil, typeErr
 	}
 
-	slice := make(map[Result[string]]struct{}, response.array_value_len)
-	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+	slice := make(map[Result[string]]struct{}, response.sets_value_len)
+	for _, v := range unsafe.Slice(response.sets_value, response.sets_value_len) {
 		res, err := convertCharArrayToString(&v, true)
 		if err != nil {
 			return nil, err
