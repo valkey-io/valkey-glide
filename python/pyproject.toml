@@ -6,8 +6,8 @@ build-backend = "maturin"
 name = "valkey-glide"
 requires-python = ">=3.8"
 dependencies = [
-    "async-timeout>=4.0.2",
-    "typing-extensions>=4.8.0",
+    "async-timeout>=4.0.2; python_version < '3.11'",
+    "typing-extensions>=4.8.0; python_version < '3.11'",
     "protobuf>=3.20"
 ]
 classifiers = [

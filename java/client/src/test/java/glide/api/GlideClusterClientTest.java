@@ -25,8 +25,8 @@ import static command_request.CommandRequestOuterClass.RequestType.Info;
 import static command_request.CommandRequestOuterClass.RequestType.LastSave;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
-import static command_request.CommandRequestOuterClass.RequestType.PubSubSChannels;
-import static command_request.CommandRequestOuterClass.RequestType.PubSubSNumSub;
+import static command_request.CommandRequestOuterClass.RequestType.PubSubShardChannels;
+import static command_request.CommandRequestOuterClass.RequestType.PubSubShardNumSub;
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
 import static command_request.CommandRequestOuterClass.RequestType.SPublish;
 import static command_request.CommandRequestOuterClass.RequestType.ScriptExists;
@@ -2741,7 +2741,7 @@ public class GlideClusterClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<String[]>submitNewCommand(eq(PubSubSChannels), eq(arguments), any()))
+        when(commandManager.<String[]>submitNewCommand(eq(PubSubShardChannels), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -2764,7 +2764,8 @@ public class GlideClusterClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<GlideString[]>submitNewCommand(eq(PubSubSChannels), eq(arguments), any()))
+        when(commandManager.<GlideString[]>submitNewCommand(
+                        eq(PubSubShardChannels), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -2788,7 +2789,7 @@ public class GlideClusterClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<String[]>submitNewCommand(eq(PubSubSChannels), eq(arguments), any()))
+        when(commandManager.<String[]>submitNewCommand(eq(PubSubShardChannels), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -2812,7 +2813,8 @@ public class GlideClusterClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<GlideString[]>submitNewCommand(eq(PubSubSChannels), eq(arguments), any()))
+        when(commandManager.<GlideString[]>submitNewCommand(
+                        eq(PubSubShardChannels), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -2836,7 +2838,7 @@ public class GlideClusterClientTest {
 
         // match on protobuf request
         when(commandManager.<Map<String, Long>>submitNewCommand(
-                        eq(PubSubSNumSub), eq(arguments), any()))
+                        eq(PubSubShardNumSub), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -2860,7 +2862,7 @@ public class GlideClusterClientTest {
 
         // match on protobuf request
         when(commandManager.<Map<GlideString, Long>>submitNewCommand(
-                        eq(PubSubSNumSub), eq(arguments), any()))
+                        eq(PubSubShardNumSub), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
