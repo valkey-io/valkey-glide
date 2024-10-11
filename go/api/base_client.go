@@ -595,6 +595,186 @@ func (client *baseClient) LInsert(
 	return handleLongResponse(result)
 }
 
+func (client *baseClient) BLPop(keys []string, timeout float64) ([]Result[string], error) {
+	result, err := client.executeCommand(C.BLPop, append(keys, utils.FloatToString(timeout)))
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayOrNullResponse(result)
+}
+
+func (client *baseClient) BRPop(keys []string, timeout float64) ([]Result[string], error) {
+	result, err := client.executeCommand(C.BRPop, append(keys, utils.FloatToString(timeout)))
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayOrNullResponse(result)
+}
+
+func (client *baseClient) RPushX(key string, elements []string) (Result[int64], error) {
+	result, err := client.executeCommand(C.RPushX, append([]string{key}, elements...))
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) LPushX(key string, elements []string) (Result[int64], error) {
+	result, err := client.executeCommand(C.LPushX, append([]string{key}, elements...))
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) LMPop(keys []string, listDirection ListDirection) (map[Result[string]][]Result[string], error) {
+	listDirectionStr, err := listDirection.toString()
+	if err != nil {
+		return nil, err
+	}
+
+	args := make([]string, 0, len(keys)+2)
+	args = append(args, strconv.Itoa(len(keys)))
+	args = append(args, keys...)
+	args = append(args, listDirectionStr)
+	result, err := client.executeCommand(C.LMPop, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringToStringArrayMapOrNullResponse(result)
+}
+
+func (client *baseClient) LMPopCount(
+	keys []string,
+	listDirection ListDirection,
+	count int64,
+) (map[Result[string]][]Result[string], error) {
+	listDirectionStr, err := listDirection.toString()
+	if err != nil {
+		return nil, err
+	}
+
+	args := make([]string, 0, len(keys)+4)
+	args = append(args, strconv.Itoa(len(keys)))
+	args = append(args, keys...)
+	args = append(args, listDirectionStr, CountKeyword, utils.IntToString(count))
+	result, err := client.executeCommand(C.LMPop, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringToStringArrayMapOrNullResponse(result)
+}
+
+func (client *baseClient) BLMPop(
+	keys []string,
+	listDirection ListDirection,
+	timeout float64,
+) (map[Result[string]][]Result[string], error) {
+	listDirectionStr, err := listDirection.toString()
+	if err != nil {
+		return nil, err
+	}
+
+	args := make([]string, 0, len(keys)+3)
+	args = append(args, utils.FloatToString(timeout), strconv.Itoa(len(keys)))
+	args = append(args, keys...)
+	args = append(args, listDirectionStr)
+	result, err := client.executeCommand(C.BLMPop, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringToStringArrayMapOrNullResponse(result)
+}
+
+func (client *baseClient) BLMPopCount(
+	keys []string,
+	listDirection ListDirection,
+	count int64,
+	timeout float64,
+) (map[Result[string]][]Result[string], error) {
+	listDirectionStr, err := listDirection.toString()
+	if err != nil {
+		return nil, err
+	}
+
+	args := make([]string, 0, len(keys)+5)
+	args = append(args, utils.FloatToString(timeout), strconv.Itoa(len(keys)))
+	args = append(args, keys...)
+	args = append(args, listDirectionStr, CountKeyword, utils.IntToString(count))
+	result, err := client.executeCommand(C.BLMPop, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringToStringArrayMapOrNullResponse(result)
+}
+
+func (client *baseClient) LSet(key string, index int64, element string) (Result[string], error) {
+	result, err := client.executeCommand(C.LSet, []string{key, utils.IntToString(index), element})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+
+	return handleStringResponse(result)
+}
+
+func (client *baseClient) LMove(
+	source string,
+	destination string,
+	whereFrom ListDirection,
+	whereTo ListDirection,
+) (Result[string], error) {
+	whereFromStr, err := whereFrom.toString()
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	whereToStr, err := whereTo.toString()
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+
+	result, err := client.executeCommand(C.LMove, []string{source, destination, whereFromStr, whereToStr})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+
+	return handleStringOrNullResponse(result)
+}
+
+func (client *baseClient) BLMove(
+	source string,
+	destination string,
+	whereFrom ListDirection,
+	whereTo ListDirection,
+	timeout float64,
+) (Result[string], error) {
+	whereFromStr, err := whereFrom.toString()
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	whereToStr, err := whereTo.toString()
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+
+	result, err := client.executeCommand(
+		C.BLMove,
+		[]string{source, destination, whereFromStr, whereToStr, utils.FloatToString(timeout)},
+	)
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+
+	return handleStringOrNullResponse(result)
+}
+
 func (client *baseClient) Ping() (string, error) {
 	result, err := client.executeCommand(C.Ping, []string{})
 	if err != nil {
