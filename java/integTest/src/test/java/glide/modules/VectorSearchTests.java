@@ -216,7 +216,7 @@ public class VectorSearchTests {
                                 new FieldInfo[] {
                                     new FieldInfo(
                                             "$.vec", "VEC", VectorFieldHnsw.builder(DistanceMetric.COSINE, 42).build()),
-                                    new FieldInfo("name", new TextField()),
+                                    new FieldInfo("$.name", new TextField()),
                                 },
                                 FTCreateOptions.builder()
                                         .indexType(IndexType.JSON)
