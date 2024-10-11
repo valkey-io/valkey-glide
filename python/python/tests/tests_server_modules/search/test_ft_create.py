@@ -22,10 +22,10 @@ from glide.glide_client import GlideClusterClient
 
 
 @pytest.mark.asyncio
-class TestVss:
+class TestFtCreate:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_vss_create(self, glide_client: GlideClusterClient):
+    async def test_ft_create(self, glide_client: GlideClusterClient):
         fields: List[Field] = []
         textFieldTitle: TextField = TextField("$title")
         numberField: NumericField = NumericField("$published_at")

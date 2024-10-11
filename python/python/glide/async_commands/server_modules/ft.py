@@ -54,3 +54,18 @@ async def create(
         for field in schema:
             args.extend(field.toArgs())
     return cast(TOK, await client.custom_command(args))
+
+
+async def dropindex(client: TGlideClient, indexName: TEncodable):
+    """
+    Drops an index. The index definition and associated content are deleted. Keys are unaffected.
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+        indexName (TEncodable): The index name for the index to be dropped.
+
+    Returns:
+        If the index is successfully dropped, returns "OK".
+    """
+    args: List[TEncodable] = [CommandNames.FT_DROPINDEX, indexName]
+    return cast(TOK, await client.custom_command(args))

@@ -7,6 +7,7 @@ class CommandNames:
     """
 
     FT_CREATE = "FT.CREATE"
+    FT_DROPINDEX = "FT.DROPINDEX"
 
 
 class FtCreateKeywords:
