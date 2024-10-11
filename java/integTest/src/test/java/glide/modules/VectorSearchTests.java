@@ -296,6 +296,6 @@ public class VectorSearchTests {
                                                 FTSearchOptions.builder().build())
                                         .get());
         assertInstanceOf(RequestException.class, exception.getCause());
-        assertTrue(exception.getMessage().contains("no such index"));
+        assertTrue(exception.getMessage().contains("Index not found"));
     }
 }
