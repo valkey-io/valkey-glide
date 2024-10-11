@@ -68,14 +68,9 @@ async def dropindex(client: TGlideClient, indexName: TEncodable):
         If the index is successfully dropped, returns "OK".
 
     Examples:
+        For the following example to work, an index named 'idx' must be already created. If not created, you will get an error.
         >>> from glide.async_commands.server_modules import ft
-        >>> schema: List[Field] = []
-        >>> textField: TextField = TextField("title")
-        >>> schema.append(textField)
-        >>> prefixes: List[str] = []
-        >>> prefixes.append("blog:post:")
         >>> indexName = "idx"
-        >>> await ft.create(glide_client, index, schema, FtCreateOptions(DataType.HASH, prefixes))
         >>> result = await ft.dropindex(glide_client, indexName)
             b'OK'  # Indicates successful deletion/dropping of index named 'idx'
     """
