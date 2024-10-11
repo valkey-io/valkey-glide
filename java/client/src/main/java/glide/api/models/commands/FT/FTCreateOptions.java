@@ -169,20 +169,6 @@ public class FTCreateOptions {
         }
     }
 
-    /** Vector index algorithm. */
-    public enum Algorithm {
-        /**
-         * Hierarchical Navigable Small World provides an approximation of nearest neighbors algorithm
-         * that uses a multi-layered graph.
-         */
-        HNSW,
-        /**
-         * The Flat algorithm is a brute force linear processing of each vector in the index, yielding
-         * exact answers within the bounds of the precision of the distance computations.
-         */
-        FLAT
-    }
-
     /**
      * Distance metrics to measure the degree of similarity between two vectors.<br>
      * The above metrics calculate distance between two vectors, where the smaller the value is, the
@@ -201,13 +187,13 @@ public class FTCreateOptions {
     @AllArgsConstructor(access = AccessLevel.PROTECTED)
     abstract static class VectorField implements Field {
         private final Map<VectorAlgorithmParam, String> params;
-        private final VectorAlgorithm Algorithm;
+        private final VectorAlgorithm algorithm;
 
         @Override
         public String[] toArgs() {
             var args = new ArrayList<String>();
             args.add(FieldType.VECTOR.toString());
-            args.add(Algorithm.toString());
+            args.add(algorithm.toString());
             args.add(Integer.toString(params.size() * 2));
             params.forEach(
                     (name, value) -> {

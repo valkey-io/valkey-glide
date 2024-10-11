@@ -85,7 +85,7 @@ public class VectorSearchTests {
                                         .build())
                         .get());
 
-        // create an index with NSFW vector with additional parameters
+        // create an index with HNSW vector with additional parameters
         assertEquals(
                 OK,
                 FT.create(
