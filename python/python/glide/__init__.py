@@ -32,7 +32,23 @@ from glide.async_commands.core import (
     InsertPosition,
     UpdateOptions,
 )
-from glide.async_commands.server_modules import json
+from glide.async_commands.server_modules import ft, json
+from glide.async_commands.server_modules.ft_options.ft_create_options import (
+    DataType,
+    DistanceMetricType,
+    Field,
+    FieldType,
+    FtCreateOptions,
+    NumericField,
+    TagField,
+    TextField,
+    VectorAlgorithm,
+    VectorField,
+    VectorFieldAttributes,
+    VectorFieldAttributesFlat,
+    VectorFieldAttributesHnsw,
+    VectorType,
+)
 from glide.async_commands.sorted_set import (
     AggregationType,
     GeoSearchByBox,
@@ -185,6 +201,7 @@ __all__ = [
     "InfoSection",
     "InsertPosition",
     "json",
+    "ft",
     "LexBoundary",
     "Limit",
     "ListDirection",
@@ -233,4 +250,19 @@ __all__ = [
     "GlideError",
     "RequestError",
     "TimeoutError",
+    # Ft
+    "DataType",
+    "DistanceMetricType",
+    "Field",
+    "FieldType",
+    "FtCreateOptions",
+    "NumericField",
+    "TagField",
+    "TextField",
+    "VectorAlgorithm",
+    "VectorField",
+    "VectorFieldAttributes",
+    "VectorFieldAttributesFlat",
+    "VectorFieldAttributesHnsw",
+    "VectorType",
 ]
