@@ -14,12 +14,8 @@ import org.apache.commons.lang3.tuple.Pair;
 /** Mandatory parameters for {@link FT#search}. */
 @Builder
 public class FTSearchOptions {
-    /**
-     * Which fields of a key to be returned.<br>
-     * Map keys are field names and their values are aliases. Aliases are optional, use <code>null
-     * </code> to omit.
-     */
-    @Builder.Default private final Map<String, String> identifiers = new HashMap<>();
+
+    @Builder.Default private final Map<GlideString, GlideString> identifiers = new HashMap<>();
 
     /** Query timeout in milliseconds. */
     private final Integer timeout;
@@ -45,11 +41,11 @@ public class FTSearchOptions {
             int tokenCount = 0;
             for (var pair : identifiers.entrySet()) {
                 tokenCount++;
-                args.add(gs(pair.getKey()));
+                args.add(pair.getKey());
                 if (pair.getValue() != null) {
                     tokenCount += 2;
                     args.add(gs("AS"));
-                    args.add(gs(pair.getValue()));
+                    args.add(pair.getValue());
                 }
             }
             args.add(1, gs(Integer.toString(tokenCount)));
@@ -71,8 +67,7 @@ public class FTSearchOptions {
             args.add(gs("LIMIT"));
             args.add(gs(Integer.toString(limit.getLeft())));
             args.add(gs(Integer.toString(limit.getRight())));
-        }
-        if (count) {
+        } else if (count) {
             args.add(gs("COUNT"));
         }
         return args.toArray(GlideString[]::new);
@@ -84,6 +79,32 @@ public class FTSearchOptions {
         void limit(Pair<Integer, Integer> limit) {}
 
         void count(boolean count) {}
+
+        void identifiers(Map<GlideString, GlideString> identifiers) {}
+
+        /** Add a field to be returned. */
+        public FTSearchOptionsBuilder addReturnField(String field) {
+            this.identifiers$value.put(gs(field), null);
+            return this;
+        }
+
+        /** Add a field with an alias to be returned. */
+        public FTSearchOptionsBuilder addReturnField(String field, String alias) {
+            this.identifiers$value.put(gs(field), gs(alias));
+            return this;
+        }
+
+        /** Add a field to be returned. */
+        public FTSearchOptionsBuilder addReturnField(GlideString field) {
+            this.identifiers$value.put(field, null);
+            return this;
+        }
+
+        /** Add a field with an alias to be returned. */
+        public FTSearchOptionsBuilder addReturnField(GlideString field, GlideString alias) {
+            this.identifiers$value.put(field, alias);
+            return this;
+        }
 
         /**
          * Configure query pagination. By default only first 10 documents are returned.
