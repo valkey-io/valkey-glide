@@ -513,6 +513,88 @@ func (client *baseClient) RPush(key string, elements []string) (Result[int64], e
 	return handleLongResponse(result)
 }
 
+func (client *baseClient) LRange(key string, start int64, end int64) ([]Result[string], error) {
+	result, err := client.executeCommand(C.LRange, []string{key, utils.IntToString(start), utils.IntToString(end)})
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayResponse(result)
+}
+
+func (client *baseClient) LIndex(key string, index int64) (Result[string], error) {
+	result, err := client.executeCommand(C.LIndex, []string{key, utils.IntToString(index)})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+
+	return handleStringOrNullResponse(result)
+}
+
+func (client *baseClient) LTrim(key string, start int64, end int64) (Result[string], error) {
+	result, err := client.executeCommand(C.LTrim, []string{key, utils.IntToString(start), utils.IntToString(end)})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+
+	return handleStringResponse(result)
+}
+
+func (client *baseClient) LLen(key string) (Result[int64], error) {
+	result, err := client.executeCommand(C.LLen, []string{key})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) LRem(key string, count int64, element string) (Result[int64], error) {
+	result, err := client.executeCommand(C.LRem, []string{key, utils.IntToString(count), element})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) RPop(key string) (Result[string], error) {
+	result, err := client.executeCommand(C.RPop, []string{key})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+
+	return handleStringOrNullResponse(result)
+}
+
+func (client *baseClient) RPopCount(key string, count int64) ([]Result[string], error) {
+	result, err := client.executeCommand(C.RPop, []string{key, utils.IntToString(count)})
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayOrNullResponse(result)
+}
+
+func (client *baseClient) LInsert(
+	key string,
+	insertPosition InsertPosition,
+	pivot string,
+	element string,
+) (Result[int64], error) {
+	insertPositionStr, err := insertPosition.toString()
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	result, err := client.executeCommand(C.LInsert, []string{key, insertPositionStr, pivot, element})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
 func (client *baseClient) Ping() (string, error) {
 	result, err := client.executeCommand(C.Ping, []string{})
 	if err != nil {
