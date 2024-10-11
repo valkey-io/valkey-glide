@@ -165,8 +165,8 @@ jar.dependsOn('copyNativeLib')
 javadoc.dependsOn('copyNativeLib')
 copyNativeLib.dependsOn('buildRustRelease')
 compileTestJava.dependsOn('copyNativeLib')
-test.dependsOn('buildRust')
-testFfi.dependsOn('buildRust')
+test.dependsOn('buildRustRelease')
+testFfi.dependsOn('buildRustRelease')
 
 test {
     exclude "glide/ffi/FfiTest.class"

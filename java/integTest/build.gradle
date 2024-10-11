@@ -102,7 +102,6 @@ tasks.register('startStandalone') {
     }
 }
 
-
 test.dependsOn 'stopAllBeforeTests'
 stopAllBeforeTests.finalizedBy 'clearDirs'
 clearDirs.finalizedBy 'startStandalone'
@@ -112,8 +111,6 @@ test.dependsOn ':client:buildRustRelease'
 
 tasks.withType(Test) {
     doFirst {
-        println "Cluster hosts = ${clusterHosts}"
-        println "Standalone hosts = ${standaloneHosts}"
         systemProperty 'test.server.standalone', standaloneHosts
         systemProperty 'test.server.cluster', clusterHosts
         systemProperty 'test.server.tls', System.getProperty("tls")
