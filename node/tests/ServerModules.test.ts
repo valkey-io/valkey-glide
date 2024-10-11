@@ -9,7 +9,12 @@ import {
     expect,
     it,
 } from "@jest/globals";
-import { GlideClusterClient, InfoOptions, ProtocolVersion } from "..";
+import { v4 as uuidv4 } from "uuid";
+import {
+    GlideClient,
+    GlideJson,
+    ProtocolVersion
+} from "..";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import {
     flushAndCloseClient,
@@ -55,6 +60,35 @@ describe("GlideJson", () => {
             });
             expect(info).toContain("# json_core_metrics");
             expect(info).toContain("# search_index_stats");
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "json.set and json.get tests",
+        async (protocol) => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const key = uuidv4();
+            const jsonValue = { a: 1.0, b: 2};
+
+            // JSON.set
+            expect(await GlideJson.set(client, key, "$", JSON.stringify(jsonValue))).toBe("OK");
+
+            // JSON.get
+            let result = await GlideJson.get(client, key, {paths: ["."]});
+            expect(JSON.parse(result.toString())).toEqual(jsonValue);
+
+            // JSON.get with array of paths
+            result = await GlideJson.get(client, key, {paths: ["$.a", "$.b"]});
+            expect(JSON.parse(result.toString())).toEqual({"$.a": [1.0], "$.b": [2]});
+
+            // JSON.get with non-existing key
+            expect(await GlideJson.get(client, "non_existing_key", {paths: ["$"]}));
+
+            // JSON.get with non-existing path
+            result = await GlideJson.get(client, key, {paths: ["$.d"]});
+            expect(result).toEqual("[]");
         },
     );
 });
