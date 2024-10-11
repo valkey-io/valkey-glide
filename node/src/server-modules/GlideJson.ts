@@ -45,7 +45,6 @@ function _jsonGetOptionsToArgs(options: JsonGetOptions): GlideString[] {
 }
 
 export class GlideJson {
-
     /**
      * Sets the JSON value at the specified `path` stored at `key`.
 
@@ -78,7 +77,7 @@ export class GlideJson {
         key: GlideString,
         path: GlideString,
         value: GlideString,
-        options?: {conditionalChange: ConditionalChange} & DecoderOption,
+        options?: { conditionalChange: ConditionalChange } & DecoderOption,
     ): Promise<"OK"> {
         const args: GlideString[] = ["JSON.SET", key, path, value];
 
@@ -89,12 +88,14 @@ export class GlideJson {
         console.log(args);
 
         if (client instanceof GlideClient) {
-            return (client as GlideClient).customCommand(args, options) as Promise<
-                "OK"
-            >;
+            return (client as GlideClient).customCommand(
+                args,
+                options,
+            ) as Promise<"OK">;
         } else {
             return (client as GlideClusterClient).customCommand(
-                args, options,
+                args,
+                options,
             ) as Promise<"OK">;
         }
     }
@@ -158,12 +159,14 @@ export class GlideJson {
 
         if (client instanceof GlideClient) {
             return (client as GlideClient).customCommand(
-                args, options,
+                args,
+                options,
             ) as Promise<ReturnTypeJson>;
         } else {
             return (client as GlideClusterClient).customCommand(
-                args, options,
+                args,
+                options,
             ) as Promise<ReturnTypeJson>;
         }
     }
-};
+}
