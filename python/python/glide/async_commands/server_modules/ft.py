@@ -65,7 +65,7 @@ async def dropindex(client: TGlideClient, indexName: TEncodable):
         indexName (TEncodable): The index name for the index to be dropped.
 
     Returns:
-        If the index is successfully dropped, returns "OK" else throws an error
+        If the index is successfully dropped, returns "OK".
 
     Examples:
         For the following example to work, an index named 'idx' must be already created. If not created, you will get an error.
