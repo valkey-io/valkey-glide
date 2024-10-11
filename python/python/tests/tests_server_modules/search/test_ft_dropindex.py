@@ -20,8 +20,6 @@ class TestFtDropIndex:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ft_dropindex(self, glide_client: GlideClusterClient):
-        # We will first create an index and then drop the same index.
-
         # Index name for the index to be dropped.
         indexName = str(uuid.uuid4())
 
