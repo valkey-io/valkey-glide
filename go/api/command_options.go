@@ -203,3 +203,28 @@ const (
 	RankKeyword   string = "RANK"   // Valkey API keyword use to determine the rank of the match to return.
 	MaxLenKeyword string = "MAXLEN" // Valkey API keyword used to determine the maximum number of list items to compare.
 )
+
+// A InsertPosition defines where to insert new elements into a list.
+//
+// See [valkey.io]
+//
+// [valkey.io]: https://valkey.io/commands/linsert/
+type InsertPosition string
+
+const (
+	// Insert new element before the pivot.
+	Before InsertPosition = "BEFORE"
+	// Insert new element after the pivot.
+	After InsertPosition = "AFTER"
+)
+
+func (insertPosition InsertPosition) toString() (string, error) {
+	switch insertPosition {
+	case Before:
+		return string(Before), nil
+	case After:
+		return string(After), nil
+	default:
+		return "", &RequestError{"Invalid insert position"}
+	}
+}

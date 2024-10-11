@@ -1240,8 +1240,277 @@ func (suite *GlideTestSuite) TestRPush() {
 		key2 := uuid.NewString()
 		suite.verifyOK(client.Set(key2, "value"))
 
-		res2, err := client.LPush(key2, []string{"value1"})
+		res2, err := client.RPush(key2, []string{"value1"})
 		assert.Equal(suite.T(), api.CreateNilInt64Result(), res2)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestLRange() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		list := []string{"value4", "value3", "value2", "value1"}
+		key := uuid.NewString()
+
+		res1, err := client.LPush(key, list)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), res1.Value())
+
+		resultList := []api.Result[string]{
+			api.CreateStringResult("value1"),
+			api.CreateStringResult("value2"),
+			api.CreateStringResult("value3"),
+			api.CreateStringResult("value4"),
+		}
+		res2, err := client.LRange(key, int64(0), int64(-1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), resultList, res2)
+
+		res3, err := client.LRange("non_existing_key", int64(0), int64(-1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), []api.Result[string]{}, res3)
+
+		key2 := uuid.NewString()
+		suite.verifyOK(client.Set(key2, "value"))
+
+		res4, err := client.LRange(key2, int64(0), int64(1))
+		assert.Equal(suite.T(), ([]api.Result[string])(nil), res4)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestLIndex() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		list := []string{"value4", "value3", "value2", "value1"}
+		key := uuid.NewString()
+
+		res1, err := client.LPush(key, list)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), res1.Value())
+
+		res2, err := client.LIndex(key, int64(0))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "value1", res2.Value())
+		assert.Equal(suite.T(), false, res2.IsNil())
+
+		res3, err := client.LIndex(key, int64(-1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "value4", res3.Value())
+		assert.Equal(suite.T(), false, res3.IsNil())
+
+		res4, err := client.LIndex("non_existing_key", int64(0))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), api.CreateNilStringResult(), res4)
+
+		key2 := uuid.NewString()
+		suite.verifyOK(client.Set(key2, "value"))
+
+		res5, err := client.LIndex(key2, int64(0))
+		assert.Equal(suite.T(), api.CreateNilStringResult(), res5)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestLTrim() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		list := []string{"value4", "value3", "value2", "value1"}
+		key := uuid.NewString()
+
+		res1, err := client.LPush(key, list)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), res1.Value())
+
+		suite.verifyOK(client.LTrim(key, int64(0), int64(1)))
+
+		res2, err := client.LRange(key, int64(0), int64(-1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), []api.Result[string]{api.CreateStringResult("value1"), api.CreateStringResult("value2")}, res2)
+
+		suite.verifyOK(client.LTrim(key, int64(4), int64(2)))
+
+		res3, err := client.LRange(key, int64(0), int64(-1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), []api.Result[string]{}, res3)
+
+		key2 := uuid.NewString()
+		suite.verifyOK(client.Set(key2, "value"))
+
+		res4, err := client.LIndex(key2, int64(0))
+		assert.Equal(suite.T(), api.CreateNilStringResult(), res4)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestLLen() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		list := []string{"value4", "value3", "value2", "value1"}
+		key := uuid.NewString()
+
+		res1, err := client.LPush(key, list)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), res1.Value())
+
+		res2, err := client.LLen(key)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), res2.Value())
+		assert.Equal(suite.T(), false, res2.IsNil())
+
+		res3, err := client.LLen("non_existing_key")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res3.Value())
+		assert.Equal(suite.T(), false, res3.IsNil())
+
+		key2 := uuid.NewString()
+		suite.verifyOK(client.Set(key2, "value"))
+
+		res4, err := client.LLen(key2)
+		assert.Equal(suite.T(), api.CreateNilInt64Result(), res4)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestLRem() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		list := []string{"value1", "value2", "value1", "value1", "value2"}
+		key := uuid.NewString()
+
+		res1, err := client.LPush(key, list)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(5), res1.Value())
+
+		res2, err := client.LRem(key, 2, "value1")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res2.Value())
+		assert.Equal(suite.T(), false, res2.IsNil())
+		res3, err := client.LRange(key, int64(0), int64(-1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			[]api.Result[string]{
+				api.CreateStringResult("value2"),
+				api.CreateStringResult("value2"),
+				api.CreateStringResult("value1"),
+			},
+			res3,
+		)
+
+		res4, err := client.LRem(key, -1, "value2")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res4.Value())
+		assert.Equal(suite.T(), false, res4.IsNil())
+		res5, err := client.LRange(key, int64(0), int64(-1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), []api.Result[string]{api.CreateStringResult("value2"), api.CreateStringResult("value1")}, res5)
+
+		res6, err := client.LRem(key, 0, "value2")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res6.Value())
+		assert.Equal(suite.T(), false, res6.IsNil())
+		res7, err := client.LRange(key, int64(0), int64(-1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), []api.Result[string]{api.CreateStringResult("value1")}, res7)
+
+		res8, err := client.LRem("non_existing_key", 0, "value")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res8.Value())
+		assert.Equal(suite.T(), false, res8.IsNil())
+	})
+}
+
+func (suite *GlideTestSuite) TestRPopAndRPopCount() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		list := []string{"value1", "value2", "value3", "value4"}
+		key := uuid.NewString()
+
+		res1, err := client.RPush(key, list)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), res1.Value())
+
+		res2, err := client.RPop(key)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "value4", res2.Value())
+		assert.Equal(suite.T(), false, res2.IsNil())
+
+		res3, err := client.RPopCount(key, int64(2))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), []api.Result[string]{api.CreateStringResult("value3"), api.CreateStringResult("value2")}, res3)
+
+		res4, err := client.RPop("non_existing_key")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), api.CreateNilStringResult(), res4)
+
+		res5, err := client.RPopCount("non_existing_key", int64(2))
+		assert.Equal(suite.T(), ([]api.Result[string])(nil), res5)
+		assert.Nil(suite.T(), err)
+
+		key2 := uuid.NewString()
+		suite.verifyOK(client.Set(key2, "value"))
+
+		res6, err := client.RPop(key2)
+		assert.Equal(suite.T(), api.CreateNilStringResult(), res6)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		res7, err := client.RPopCount(key2, int64(2))
+		assert.Equal(suite.T(), ([]api.Result[string])(nil), res7)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestLInsert() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		list := []string{"value1", "value2", "value3", "value4"}
+		key := uuid.NewString()
+
+		res1, err := client.RPush(key, list)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), res1.Value())
+
+		res2, err := client.LInsert(key, api.Before, "value2", "value1.5")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(5), res2.Value())
+		assert.Equal(suite.T(), false, res2.IsNil())
+
+		res3, err := client.LInsert(key, api.After, "value3", "value3.5")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(6), res3.Value())
+		assert.Equal(suite.T(), false, res3.IsNil())
+
+		res4, err := client.LRange(key, int64(0), int64(-1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			[]api.Result[string]{
+				api.CreateStringResult("value1"),
+				api.CreateStringResult("value1.5"),
+				api.CreateStringResult("value2"),
+				api.CreateStringResult("value3"),
+				api.CreateStringResult("value3.5"),
+				api.CreateStringResult("value4"),
+			},
+			res4,
+		)
+
+		res5, err := client.LInsert("non_existing_key", api.Before, "pivot", "elem")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res5.Value())
+		assert.Equal(suite.T(), false, res5.IsNil())
+
+		res6, err := client.LInsert(key, api.Before, "value5", "value6")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(-1), res6.Value())
+		assert.Equal(suite.T(), false, res6.IsNil())
+
+		key2 := uuid.NewString()
+		suite.verifyOK(client.Set(key2, "value"))
+
+		res7, err := client.LInsert(key2, api.Before, "value5", "value6")
+		assert.Equal(suite.T(), api.CreateNilInt64Result(), res7)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
