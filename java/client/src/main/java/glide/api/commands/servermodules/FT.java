@@ -141,10 +141,10 @@ public class FT {
     }
 
     /**
-     * Deletes an index and associated content. Keys are unaffected.
+     * Deletes an index and associated content. Indexed document keys are unaffected.
      *
      * @param indexName The index name.
-     * @return <code>OK</code>.
+     * @return <code>"OK"</code>.
      * @example
      *     <pre>{@code
      * client.ftdrop("hash_idx1").get();
@@ -156,10 +156,10 @@ public class FT {
     }
 
     /**
-     * Deletes an index and associated content. Keys are unaffected.
+     * Deletes an index and associated content. Indexed document keys are unaffected.
      *
      * @param indexName The index name.
-     * @return <code>OK</code>.
+     * @return <code>"OK"</code>.
      * @example
      *     <pre>{@code
      * client.ftdrop(gs("hash_idx1")).get();
