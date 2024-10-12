@@ -33,7 +33,7 @@ async def create(
         options (Optional[FtCreateOptions]): Optional arguments for the [FT.CREATE] command.
 
     Returns:
-        If the index is successfully created, returns "OK".
+        Returns a simple string "OK" message or an error reply.
 
     Examples:
         >>> from glide.async_commands.server_modules import ft
@@ -65,7 +65,7 @@ async def dropindex(client: TGlideClient, indexName: TEncodable):
         indexName (TEncodable): The index name for the index to be dropped.
 
     Returns:
-        If the index is successfully dropped, returns "OK".
+        Returns a simple string "OK" message or an error reply.
 
     Examples:
         For the following example to work, an index named 'idx' must be already created. If not created, you will get an error.
