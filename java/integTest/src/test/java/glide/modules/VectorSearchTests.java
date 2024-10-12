@@ -200,6 +200,7 @@ public class VectorSearchTests {
                                 })
                         .get());
 
+        // TODO use FT.LIST with it is done
         var before =
                 client
                         .customCommand(new String[] {"FT._LIST"}, ALL_PRIMARIES)
@@ -212,6 +213,7 @@ public class VectorSearchTests {
 
         assertEquals(OK, FT.dropindex(client, index).get());
 
+        // TODO use FT.LIST with it is done
         var after =
                 client
                         .customCommand(new String[] {"FT._LIST"}, ALL_PRIMARIES)
