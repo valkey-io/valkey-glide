@@ -23,6 +23,7 @@ import lombok.experimental.SuperBuilder;
  *         .databaseId(1)
  *         .clientName("GLIDE")
  *         .subscriptionConfiguration(subscriptionConfiguration)
+ *         .inflightRequestsLimit(1000)
  *         .build();
  * }</pre>
  */
