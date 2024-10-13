@@ -9,8 +9,16 @@ Valkey GLIDE is API-compatible with the following engine versions:
 | Valkey                |   -   |   -   |   V   |   V   |
 | Redis                 |   V   |   V   |   V   |   -   |
 
-## Current Status
+## Current Status and Road map
 In this release, Valkey GLIDE is available for Python, Java and Node.js. Support for GO is actively under development, with plans to include more programming languages in the future. We're tracking future features on the [roadmap](https://github.com/orgs/valkey-io/projects/11).
+
+#### v1.2 (Dec. 2024)
+- VSS and JSON modules support
+- Availability zone routing for Read from Replica
+
+#### v1.3 (TBD)
+- GO support
+- Open telemetry
 
 ## Getting Started
 -   [Java](./java/README.md)
