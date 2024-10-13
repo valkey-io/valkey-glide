@@ -118,6 +118,10 @@ public class ConnectionManager {
             connectionRequestBuilder.setClientName(configuration.getClientName());
         }
 
+        if (configuration.getInflightRequestsLimit() != null) {
+            connectionRequestBuilder.setInflightRequestsLimit(configuration.getInflightRequestsLimit());
+        }
+
         return connectionRequestBuilder;
     }
 

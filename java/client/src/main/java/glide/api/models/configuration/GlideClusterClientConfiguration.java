@@ -22,6 +22,7 @@ import lombok.experimental.SuperBuilder;
  *         .requestTimeout(2000)
  *         .clientName("GLIDE")
  *         .subscriptionConfiguration(subscriptionConfiguration)
+ *         .inflightRequestsLimit(1000)
  *         .build();
  * }</pre>
  */
