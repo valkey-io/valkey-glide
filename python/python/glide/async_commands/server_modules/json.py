@@ -18,7 +18,7 @@
 from typing import List, Optional, Union, cast
 
 from glide.async_commands.core import ConditionalChange
-from glide.constants import TOK, TEncodable, TJsonResponse
+from glide.constants import TOK, TEncodable, TJsonResponse, TJsonUniversalResponse
 from glide.glide_client import TGlideClient
 from glide.protobuf.command_request_pb2 import RequestType
 
@@ -859,6 +859,61 @@ async def strlen(
         await client.custom_command(
             ["JSON.STRLEN", key, path] if path else ["JSON.STRLEN", key]
         ),
+    )
+
+
+async def resp(
+    client: TGlideClient, key: TEncodable, path: Optional[TEncodable] = None
+) -> TJsonUniversalResponse[
+    Optional[Union[bytes, int, List[Optional[Union[bytes, int]]]]]
+]:
+    """
+    Retrieve the JSON value at the specified `path` within the JSON document stored at `key`.
+    The returning result is in the Valkey or Redis OSS Serialization Protocol (RESP).\n
+    JSON null is mapped to the RESP Null Bulk String.\n
+    JSON Booleans are mapped to RESP Simple string.\n
+    JSON integers are mapped to RESP Integers.\n
+    JSON doubles are mapped to RESP Bulk Strings.\n
+    JSON strings are mapped to RESP Bulk Strings.\n
+    JSON arrays are represented as RESP arrays, where the first element is the simple string [, followed by the array's elements.\n
+    JSON objects are represented as RESP object, where the first element is the simple string {, followed by key-value pairs, each of which is a RESP bulk string.\n
+
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+        key (TEncodable): The key of the JSON document.
+        path (Optional[TEncodable]): The path within the JSON document. Default to None.
+
+    Returns:
+        TJsonUniversalResponse[Optional[Union[bytes, int, List[Optional[Union[bytes, int]]]]]]
+            For JSONPath ('path' starts with '$'):
+                Returns a list of replies for every possible path, indicating the RESP form of the JSON value.
+                If `path` doesn't exist, returns an empty list.
+            For legacy path (`path` doesn't starts with `$`):
+                Returns a single reply for the JSON value at the specified path, in its RESP form.
+                This can be a bytes object, an integer, None, or a list representing complex structures.
+                If multiple paths match, the value of the first JSON value match is returned.
+                If `path` doesn't exist, an error is raised.
+            If `key` doesn't exist, an None is returned.
+
+    Examples:
+        >>> from glide import json
+        >>> await json.set(client, "doc", "$", '{"a": [1, 2, 3], "b": {"a": [1, 2], "c": {"a": 42}}}')
+            'OK'
+        >>> await json.resp(client, "doc", "$..a")
+            [[b"[", 1, 2, 3],[b"[", 1, 2],42]
+        >>> await json.resp(client, "doc", "..a")
+            [b"[", 1, 2, 3]
+    """
+    args = ["JSON.RESP", key]
+    if path:
+        args.append(path)
+
+    return cast(
+        TJsonUniversalResponse[
+            Optional[Union[bytes, int, List[Optional[Union[bytes, int]]]]]
+        ],
+        await client.custom_command(args),
     )
 
 

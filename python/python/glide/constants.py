@@ -35,6 +35,13 @@ TSingleNodeRoute = Union[RandomNode, SlotKeyRoute, SlotIdRoute, ByAddressRoute]
 # Otherwise, (when specifying JSONPath), response will be List[Optional[T]].
 # For more information, see: https://redis.io/docs/data-types/json/path/ .
 TJsonResponse = Union[T, List[Optional[T]]]
+
+# When specifying legacy path (path doesn't start with `$`), response will be T
+# Otherwise, (when specifying JSONPath), response will be List[T].
+# This type represents the response format for commands that apply to every path and every type in a JSON document.
+# It covers both singular and multiple paths, ensuring that the command returns valid results for each matched path without `null` values.
+# For more information, see: https://redis.io/docs/data-types/json/path/ .
+TJsonUniversalResponse = Union[T, List[T]]
 TEncodable = Union[str, bytes]
 TFunctionListResponse = List[
     Mapping[

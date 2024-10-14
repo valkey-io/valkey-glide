@@ -1385,3 +1385,68 @@ class TestJson:
         result = await json.get(glide_client, key, "$")
         assert isinstance(result, bytes)
         assert OuterJson.loads(result) == [[["c"], ["a", "c"], ["a", "b", "c"]]]
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_json_resp(self, glide_client: TGlideClient):
+        key = get_random_string(5)
+
+        json_value = '{"obj":{"a":1, "b":2}, "arr":[1,2,3], "str": "foo", "bool": true, "int": 42, "float": 3.14, "nullVal": null}'
+        assert await json.set(glide_client, key, "$", json_value) == OK
+
+        assert await json.resp(glide_client, key, "$.*") == [
+            [b"{", [b"a", 1], [b"b", 2]],
+            [b"[", 1, 2, 3],
+            b"foo",
+            b"true",
+            42,
+            b"3.14",
+            None,
+        ]
+        # multiple path match, the first will be returned
+        assert await json.resp(glide_client, key, "*") == [b"{", [b"a", 1], [b"b", 2]]
+
+        assert await json.resp(glide_client, key, "$") == [
+            [
+                b"{",
+                [b"obj", [b"{", [b"a", 1], [b"b", 2]]],
+                [b"arr", [b"[", 1, 2, 3]],
+                [b"str", b"foo"],
+                [b"bool", b"true"],
+                [b"int", 42],
+                [b"float", b"3.14"],
+                [b"nullVal", None],
+            ],
+        ]
+        assert await json.resp(glide_client, key, ".") == [
+            b"{",
+            [b"obj", [b"{", [b"a", 1], [b"b", 2]]],
+            [b"arr", [b"[", 1, 2, 3]],
+            [b"str", b"foo"],
+            [b"bool", b"true"],
+            [b"int", 42],
+            [b"float", b"3.14"],
+            [b"nullVal", None],
+        ]
+
+        assert await json.resp(glide_client, key, "$.str") == [b"foo"]
+        assert await json.resp(glide_client, key, ".str") == b"foo"
+
+        json_value = '{"a": [1, 2, 3], "b": {"a": [1, 2], "c": {"a": 42}}}'
+        assert await json.set(glide_client, key, "$", json_value) == OK
+
+        assert await json.resp(glide_client, key, "$..a") == [
+            [b"[", 1, 2, 3],
+            [b"[", 1, 2],
+            42,
+        ]
+        assert await json.resp(glide_client, key, "..a") == [b"[", 1, 2, 3]
+
+        # Test for non-existent paths
+        assert await json.resp(glide_client, key, "$.nonexistent") == []
+        with pytest.raises(RequestError):
+            await json.resp(glide_client, key, "nonexistent")
+        # Test for non-existent key
+        assert await json.resp(glide_client, "nonexistent_key", "$") is None
+        assert await json.resp(glide_client, "nonexistent_key", ".") is None
+        assert await json.resp(glide_client, "nonexistent_key") is None
