@@ -101,7 +101,7 @@ go-lint: .build/go_deps
 
 .build/go_deps:
 	@echo "$(GREEN)Installing GO dependencies...$(RESET)"
-	$(MAKE) -C go install-build-tools
+	$(MAKE) -C go install-build-tools install-dev-tools
 	@mkdir -p .build/ && touch .build/go_deps
 
 ##
