@@ -9725,7 +9725,7 @@ class TestClusterRoutes:
         route_class = SlotKeyRoute if is_slot_key else SlotIdRoute
         route_second_arg = "foo" if is_slot_key else 4000
         primary_res = await glide_client.custom_command(
-            ["CLUSTER", "NODES"], route_class(SlotType.PRIMARY, route_second_arg)
+            ["CLUSTER", "NODES"], route_class(SlotType.PRIMARY, route_second_arg)  # type: ignore
         )
         assert isinstance(primary_res, bytes)
         primary_res = primary_res.decode()
