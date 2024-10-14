@@ -965,7 +965,7 @@ async def type(
     client: TGlideClient,
     key: TEncodable,
     path: Optional[TEncodable] = None,
-) -> Optional[Union[bytes, List[bytes]]]:
+) -> Optional[TJsonUniversalResponse[bytes]]:
     """
     Retrieves the type of the JSON value at the specified `path` within the JSON document stored at `key`.
 
@@ -975,7 +975,7 @@ async def type(
         path (Optional[TEncodable]): The path within the JSON document. Default to None.
 
     Returns:
-        Optional[Union[bytes, List[bytes]]]:
+        Optional[TJsonUniversalResponse[bytes]]:
             For JSONPath ('path' starts with '$'):
                 Returns a list of byte string replies for every possible path, indicating the type of the JSON value.
                 If `path` doesn't exist, an empty array will be returned.
@@ -1000,4 +1000,6 @@ async def type(
     if path:
         args.append(path)
 
-    return cast(Optional[Union[bytes, List[bytes]]], await client.custom_command(args))
+    return cast(
+        Optional[TJsonUniversalResponse[bytes]], await client.custom_command(args)
+    )
