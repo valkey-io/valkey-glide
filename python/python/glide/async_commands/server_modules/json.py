@@ -408,7 +408,7 @@ async def numincrby(
     key: TEncodable,
     path: TEncodable,
     number: Union[int, float],
-) -> Optional[Union[bytes, List[bytes]]]:
+) -> Optional[bytes]:
     """
     Increments the number of the JSON values at the specified `path' by a given `number` within the JSON document stored at `key`.
 
@@ -419,16 +419,15 @@ async def numincrby(
         number (Union[int, float]): The number to increment by.
 
     Returns:
-        Optional[Union[bytes, List[bytes]]]:
+        Optional[bytes]:
             For JSONPath ('path' starts with '$'):
-                Returns an array of bulk strings representing the resulting value at each path.
-                If any value is not a number, its corresponding return value will be `null`.
+                Returns a bytes string representation of the value in every possible path indicating the new value after incrementing or decrementing it, or `None` for values that are not numbers.                If any value is not a number, its corresponding return value will be `null`.
                 If the number cannot be parsed, WRONGTYPE error is returned.
                 If the result is out of the range of 64-bit IEEE double, OVERFLOW error is returned.
                 If the document key does not exist, NONEXISTENT error is returned.
 
             For legacy path (`path` doesn't start with `$`):
-                Returns a bulk string representing the resulting value.
+                Returns a bytes string representation of the value indicating the new value after incrementing or decrementing it.
                 If multiple values are selected, the result of the last updated value is returned.
                 If the value at the path is not a number, WRONGTYPE error is returned.
                 If the number cannot be parsed, WRONGTYPE error is returned.
@@ -445,4 +444,4 @@ async def numincrby(
     """
     args = ["JSON.NUMINCRBY", key, path, str(number)]
 
-    return cast(Optional[Union[bytes, List[bytes]]], await client.custom_command(args))
+    return cast(Optional[bytes], await client.custom_command(args))
