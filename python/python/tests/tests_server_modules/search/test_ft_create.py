@@ -17,7 +17,7 @@ from glide.async_commands.server_modules.ft_options.ft_create_options import (
     VectorType,
 )
 from glide.config import ProtocolVersion
-from glide.constants import OK
+from glide.constants import OK, TEncodable
 from glide.glide_client import GlideClusterClient
 
 
@@ -34,7 +34,7 @@ class TestFtCreate:
         fields.append(numberField)
         fields.append(textFieldCategory)
 
-        prefixes: List[str] = []
+        prefixes: List[TEncodable] = []
         prefixes.append("blog:post:")
 
         # Create an index with multiple fields with Hash data type.

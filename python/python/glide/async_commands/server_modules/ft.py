@@ -5,7 +5,7 @@ module for `vector search` commands.
 
 from typing import List, Optional, cast
 
-from glide.async_commands.server_modules.ft_constants import (
+from glide.async_commands.server_modules.ft_options.ft_constants import (
     CommandNames,
     FtCreateKeywords,
 )
@@ -30,7 +30,7 @@ async def create(
         client (TGlideClient): The client to execute the command.
         indexName (TEncodable): The index name for the index to be created
         schema (List[Field]): The fields of the index schema, specifying the fields and their types.
-        options (Optional[FtCreateOptions]): Optional arguments for the [FT.CREATE] command.
+        options (Optional[FtCreateOptions]): Optional arguments for the FT.CREATE command. See `FtCreateOptions`.
 
     Returns:
         TOK: A simple "OK" response.
