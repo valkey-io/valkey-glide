@@ -410,37 +410,34 @@ async def numincrby(
     number: Union[int, float],
 ) -> Optional[bytes]:
     """
-    Increments the number of the JSON values at the specified `path' by a given `number` within the JSON document stored at `key`.
+    Increments or decrements the number of the JSON values at the specified `path' by `number` within the JSON document stored at `key`.
 
     Args:
         client (TGlideClient): The client to execute the command.
         key (TEncodable): The key of the JSON document.
-        path (TEncodable): Represents the path within the JSON document where the number values will be incremented.
-        number (Union[int, float]): The number to increment by.
+        path (TEncodable): The path within the JSON document.
+        number (Union[int, float]): The number to increment or decrement by.
 
     Returns:
         Optional[bytes]:
             For JSONPath ('path' starts with '$'):
-                Returns a bytes string representation of the value in every possible path indicating the new value after incrementing or decrementing it, or `None` for values that are not numbers.                If any value is not a number, its corresponding return value will be `null`.
-                If the number cannot be parsed, WRONGTYPE error is returned.
-                If the result is out of the range of 64-bit IEEE double, OVERFLOW error is returned.
-                If the document key does not exist, NONEXISTENT error is returned.
-
+                Returns a bytes string representation of an array of bulk strings that indicates the new values after incrementing for each matched path.
+                If a value is not a number, its corresponding return value will be 'None'.
+                If `path` doesn't exist, an empty array will be returned.
             For legacy path (`path` doesn't start with `$`):
-                Returns a bytes string representation of the value indicating the new value after incrementing or decrementing it.
+                Returns a bytes string representation of the resulting value after the increment or decrement.
                 If multiple values are selected, the result of the last updated value is returned.
-                If the value at the path is not a number, WRONGTYPE error is returned.
-                If the number cannot be parsed, WRONGTYPE error is returned.
-                If the result is out of the range of 64-bit IEEE double, OVERFLOW error is returned.
-                If the document key does not exist, NONEXISTENT error is returned.
+                If the value at the path is not a number or path doesn't exist, an error is raised.
+            If 'key' does not exist, an error is raised.
+            If the number cannot be parsed, or the result is out of the range of 64-bit IEEE double, an error is raised.
 
     Examples:
         >>> from glide import json
         >>> await json.set(client, "doc", "$", '{"a": [], "b": [1], "c": [1, 2], "d": [1, 2, 3]}')
         >>> await json.numincrby(client, "doc", "$.d[*]", 10)
             [b'11', b'12', b'13']  # Increment each element in `d` array by 10.
-        >>> await json.numincrby(client, "doc", ".d[1]", 10)
-            b'12'  # Increment the second element in the `d` array by 10.
+        >>> await json.numincrby(client, "doc", ".c[1]", 10)
+            b'12'  # Increment the second element in the `c` array by 10.
     """
     args = ["JSON.NUMINCRBY", key, path, str(number)]
 
