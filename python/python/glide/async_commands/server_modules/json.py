@@ -401,3 +401,48 @@ async def type(
         args.append(path)
 
     return cast(Optional[Union[bytes, List[bytes]]], await client.custom_command(args))
+
+
+async def numincrby(
+    client: TGlideClient,
+    key: TEncodable,
+    path: TEncodable,
+    number: Union[int, float],
+) -> Optional[Union[bytes, List[bytes]]]:
+    """
+    Increments the number of the JSON values at the specified `path' by a given `number` within the JSON document stored at `key`.
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+        key (TEncodable): The key of the JSON document.
+        path (TEncodable): Represents the path within the JSON document where the number values will be incremented.
+        number (Union[int, float]): The number to increment by.
+
+    Returns:
+        Optional[Union[bytes, List[bytes]]]:
+            For JSONPath ('path' starts with '$'):
+                Returns an array of bulk strings representing the resulting value at each path.
+                If any value is not a number, its corresponding return value will be `null`.
+                If the number cannot be parsed, WRONGTYPE error is returned.
+                If the result is out of the range of 64-bit IEEE double, OVERFLOW error is returned.
+                If the document key does not exist, NONEXISTENT error is returned.
+
+            For legacy path (`path` doesn't start with `$`):
+                Returns a bulk string representing the resulting value.
+                If multiple values are selected, the result of the last updated value is returned.
+                If the value at the path is not a number, WRONGTYPE error is returned.
+                If the number cannot be parsed, WRONGTYPE error is returned.
+                If the result is out of the range of 64-bit IEEE double, OVERFLOW error is returned.
+                If the document key does not exist, NONEXISTENT error is returned.
+
+    Examples:
+        >>> from glide import json
+        >>> await json.set(client, "doc", "$", '{"a": [], "b": [1], "c": [1, 2], "d": [1, 2, 3]}')
+        >>> await json.numincrby(client, "doc", "$.d[*]", 10)
+            [b'11', b'12', b'13']  # Increment each element in `d` array by 10.
+        >>> await json.numincrby(client, "doc", ".d[1]", 10)
+            b'12'  # Increment the second element in the `d` array by 10.
+    """
+    args = ["JSON.NUMINCRBY", key, path, str(number)]
+
+    return cast(Optional[Union[bytes, List[bytes]]], await client.custom_command(args))
