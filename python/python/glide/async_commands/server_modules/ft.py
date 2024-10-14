@@ -33,7 +33,7 @@ async def create(
         options (Optional[FtCreateOptions]): Optional arguments for the [FT.CREATE] command.
 
     Returns:
-        Returns a simple string "OK" message or an error reply.
+        TOK: A simple "OK" response.
 
     Examples:
         >>> from glide.async_commands.server_modules import ft
@@ -44,7 +44,7 @@ async def create(
         >>> prefixes.append("blog:post:")
         >>> index = "idx"
         >>> result = await ft.create(glide_client, index, schema, FtCreateOptions(DataType.HASH, prefixes))
-            b'OK'  # Indicates successful creation of index named 'idx'
+            'OK'  # Indicates successful creation of index named 'idx'
     """
     args: List[TEncodable] = [CommandNames.FT_CREATE, indexName]
     if options:
@@ -56,7 +56,7 @@ async def create(
     return cast(TOK, await client.custom_command(args))
 
 
-async def dropindex(client: TGlideClient, indexName: TEncodable):
+async def dropindex(client: TGlideClient, indexName: TEncodable) -> TOK:
     """
     Drops an index. The index definition and associated content are deleted. Keys are unaffected.
 
@@ -65,14 +65,14 @@ async def dropindex(client: TGlideClient, indexName: TEncodable):
         indexName (TEncodable): The index name for the index to be dropped.
 
     Returns:
-        Returns a simple string "OK" message or an error reply.
+        TOK: A simple "OK" response.
 
     Examples:
         For the following example to work, an index named 'idx' must be already created. If not created, you will get an error.
         >>> from glide.async_commands.server_modules import ft
         >>> indexName = "idx"
         >>> result = await ft.dropindex(glide_client, indexName)
-            b'OK'  # Indicates successful deletion/dropping of index named 'idx'
+            'OK'  # Indicates successful deletion/dropping of index named 'idx'
     """
     args: List[TEncodable] = [CommandNames.FT_DROPINDEX, indexName]
     return cast(TOK, await client.custom_command(args))
