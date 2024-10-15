@@ -25,10 +25,10 @@ import glide.api.models.commands.FT.FTCreateOptions.VectorFieldHnsw;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.exceptions.RequestException;
-import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -202,27 +202,15 @@ public class VectorSearchTests {
 
         // TODO use FT.LIST with it is done
         var before =
-                client
-                        .customCommand(new String[] {"FT._LIST"}, ALL_PRIMARIES)
-                        .get()
-                        .getMultiValue()
-                        .values()
-                        .stream()
-                        .flatMap(s -> Arrays.stream((Object[]) s))
-                        .collect(Collectors.toSet());
+                Set.of((Object[]) client.customCommand(new String[] {"FT._LIST"}).get().getSingleValue());
 
         assertEquals(OK, FT.dropindex(client, index).get());
 
         // TODO use FT.LIST with it is done
         var after =
-                client
-                        .customCommand(new String[] {"FT._LIST"}, ALL_PRIMARIES)
-                        .get()
-                        .getMultiValue()
-                        .values()
-                        .stream()
-                        .flatMap(s -> Arrays.stream((Object[]) s))
-                        .collect(Collectors.toSet());
+                new HashSet<>(
+                        Set.of(
+                                (Object[]) client.customCommand(new String[] {"FT._LIST"}).get().getSingleValue()));
 
         assertFalse(after.contains(index));
         after.add(index);
