@@ -1976,12 +1976,6 @@ describe("GlideClusterClient", () => {
         TIMEOUT,
     );
 
-    function getRandomString(length: number) {
-        return Math.random()
-            .toString(36)
-            .substring(2, length + 2);
-    }
-
     it.each([
         [ProtocolVersion.RESP2, 5],
         [ProtocolVersion.RESP2, 100],
@@ -2000,7 +1994,7 @@ describe("GlideClusterClient", () => {
             const client = await GlideClusterClient.createClient(config);
 
             try {
-                const key1 = `{nonexistinglist}:1-${getRandomString(10)}`;
+                const key1 = `{nonexistinglist}:1-${uuidv4()}`;
                 const tasks: Promise<[GlideString, GlideString] | null>[] = [];
 
                 // Start inflightRequestsLimit blocking tasks
@@ -2018,13 +2012,8 @@ describe("GlideClusterClient", () => {
                     setTimeout(resolve, 100),
                 );
                 const allTasksStatus = await Promise.race([
-                    Promise.all(
-                        tasks.map((task) =>
-                            task.then(
-                                () => "resolved",
-                                () => "rejected",
-                            ),
-                        ),
+                    Promise.any(
+                        tasks.map((task) => task.then(() => "resolved")),
                     ),
                     timeoutPromise.then(() => "pending"),
                 ]);
