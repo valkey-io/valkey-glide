@@ -147,7 +147,7 @@ public class FT {
      * @return <code>"OK"</code>.
      * @example
      *     <pre>{@code
-     * client.ftdrop("hash_idx1").get();
+     * FT.dropindex(client, "hash_idx1").get();
      * }</pre>
      */
     public static CompletableFuture<String> dropindex(
@@ -162,7 +162,7 @@ public class FT {
      * @return <code>"OK"</code>.
      * @example
      *     <pre>{@code
-     * client.ftdrop(gs("hash_idx1")).get();
+     * FT.dropindex(client, gs("hash_idx1")).get();
      * }</pre>
      */
     public static CompletableFuture<String> dropindex(
