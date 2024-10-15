@@ -355,9 +355,14 @@ impl ResponsePolicy {
                 Some(ResponsePolicy::AllSucceeded)
             }
 
-            b"KEYS" | b"MGET" | b"SLOWLOG GET" | b"PUBSUB CHANNELS" | b"PUBSUB SHARDCHANNELS" => {
-                Some(ResponsePolicy::CombineArrays)
-            }
+            b"KEYS"
+            | b"FT._ALIASLIST"
+            | b"FT._LIST"
+            | b"MGET"
+            | b"SLOWLOG GET"
+            | b"PUBSUB CHANNELS"
+            | b"PUBSUB SHARDCHANNELS" => Some(ResponsePolicy::CombineArrays),
+
             b"PUBSUB NUMSUB" | b"PUBSUB SHARDNUMSUB" => Some(ResponsePolicy::CombineMaps),
 
             b"FUNCTION KILL" | b"SCRIPT KILL" => Some(ResponsePolicy::OneSucceeded),
@@ -429,6 +434,8 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         b"DBSIZE"
         | b"FLUSHALL"
         | b"FLUSHDB"
+        | b"FT._ALIASLIST"
+        | b"FT._LIST"
         | b"FUNCTION DELETE"
         | b"FUNCTION FLUSH"
         | b"FUNCTION LOAD"
@@ -689,6 +696,14 @@ pub fn is_readonly_cmd(cmd: &[u8]) -> bool {
             | b"EXISTS"
             | b"EXPIRETIME"
             | b"FCALL_RO"
+            | b"FT.AGGREGATE"
+            | b"FT.EXPLAIN"
+            | b"FT.EXPLAINCLI"
+            | b"FT.INFO"
+            | b"FT.PROFILE"
+            | b"FT.SEARCH"
+            | b"FT._ALIASLIST"
+            | b"FT._LIST"
             | b"FUNCTION DUMP"
             | b"FUNCTION KILL"
             | b"FUNCTION LIST"
@@ -712,6 +727,16 @@ pub fn is_readonly_cmd(cmd: &[u8]) -> bool {
             | b"HSCAN"
             | b"HSTRLEN"
             | b"HVALS"
+            | b"JSON.ARRINDEX"
+            | b"JSON.ARRLEN"
+            | b"JSON.DEBUG"
+            | b"JSON.GET"
+            | b"JSON.OBJLEN"
+            | b"JSON.OBJKEYS"
+            | b"JSON.MGET"
+            | b"JSON.RESP"
+            | b"JSON.STRLEN"
+            | b"JSON.TYPE"
             | b"KEYS"
             | b"LCS"
             | b"LINDEX"
