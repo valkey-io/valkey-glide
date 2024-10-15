@@ -1,4 +1,5 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+# mypy: disable_error_code="arg-type"
 
 from __future__ import annotations
 
