@@ -6,6 +6,7 @@ import static glide.api.BaseClient.OK;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -24,6 +25,8 @@ import glide.api.models.commands.FT.FTCreateOptions.VectorFieldHnsw;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.exceptions.RequestException;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
@@ -181,5 +184,40 @@ public class VectorSearchTests {
                                         .get());
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getMessage().contains("already exists"));
+    }
+
+    @SneakyThrows
+    @Test
+    public void ft_drop() {
+        var index = UUID.randomUUID().toString();
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {
+                                    new FieldInfo("vec", VectorFieldHnsw.builder(DistanceMetric.L2, 2).build())
+                                })
+                        .get());
+
+        // TODO use FT.LIST with it is done
+        var before =
+                Set.of((Object[]) client.customCommand(new String[] {"FT._LIST"}).get().getSingleValue());
+
+        assertEquals(OK, FT.dropindex(client, index).get());
+
+        // TODO use FT.LIST with it is done
+        var after =
+                new HashSet<>(
+                        Set.of(
+                                (Object[]) client.customCommand(new String[] {"FT._LIST"}).get().getSingleValue()));
+
+        assertFalse(after.contains(index));
+        after.add(index);
+        assertEquals(after, before);
+
+        var exception = assertThrows(ExecutionException.class, () -> FT.dropindex(client, index).get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(exception.getMessage().contains("Index does not exist"));
     }
 }
