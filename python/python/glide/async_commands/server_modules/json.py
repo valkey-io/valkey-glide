@@ -351,7 +351,7 @@ async def numincrby(
     Examples:
         >>> from glide import json
         >>> await json.set(client, "doc", "$", '{"a": [], "b": [1], "c": [1, 2], "d": [1, 2, 3]}')
-        'OK'
+            'OK'
         >>> await json.numincrby(client, "doc", "$.d[*]", 10)›
             b'[11,12,13]'  # Increment each element in `d` array by 10.
         >>> await json.numincrby(client, "doc", ".c[1]", 10)
