@@ -252,6 +252,61 @@ async def arrlen(
     )
 
 
+async def arrtrim(
+    client: TGlideClient,
+    key: TEncodable,
+    path: TEncodable,
+    start: int,
+    end: int,
+) -> TJsonResponse[int]:
+    """
+    Trims an array at the specified `path` within the JSON document stored at `key` so that it becomes a subarray [start, end], both inclusive.\n
+    If `start` < 0, it is treated as 0.\n
+    If `end` >= size (size of the array), it is treated as size-1.\n
+    If `start` >= size or `start` > `end`, the array is emptied and 0 is returned.\n
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+        key (TEncodable): The key of the JSON document.
+        path (TEncodable): The path within the JSON document.
+        start (int): The start index, inclusive.
+        end (int): The end index, inclusive.
+
+    Returns:
+        TJsonResponse[int]:
+            For JSONPath (`path` starts with '$'):
+                Returns a list of integer replies for every possible path, indicating the new length of the array, or None for JSON values matching the path that are not an array.
+                If a value is an empty array, its corresponding return value is 0.
+                If `path` doesn't exist, an empty array will be returned.
+            For legacy path (`path` doesn't starts with `$`):
+                Returns an integer representing the new length of the array.
+                If the array is empty, returns 0.
+                If multiple paths match, the length of the first trimmed array match is returned.
+                If `path` doesn't exist, or the value at `path` is not an array, an error is raised.
+            If `key` doesn't exist, an error is raised.
+
+    Examples:
+        >>> from glide import json
+        >>> await json.set(client, "doc", "$", '[[], ["a"], ["a", "b"], ["a", "b", "c"]]')
+            'OK'
+        >>> await json.arrtrim(client, "doc", "$[*]", 0, 1)
+            [0, 1, 2, 2]
+        >>> await json.get(client, "doc")
+            b'[[],[\"a\"],[\"a\",\"b\"],[\"a\",\"b\"]]'
+
+        >>> await json.set(client, "doc", "$", '{"children": ["John", "Jack", "Tom", "Bob", "Mike"]}')
+            'OK'
+        >>> await json.arrtrim(client, "doc", ".children", 0, 1)
+            2
+        >>> await json.get(client, "doc", ".children")
+            b'["John","Jack"]'
+    """
+    return cast(
+        TJsonResponse[int],
+        await client.custom_command(["JSON.ARRTRIM", key, path, str(start), str(end)]),
+    )
+
+
 async def clear(
     client: TGlideClient,
     key: TEncodable,
