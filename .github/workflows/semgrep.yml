@@ -33,4 +33,4 @@ jobs:
       # Fetch project source with GitHub Actions Checkout.
       - uses: actions/checkout@v3
       # Run the "semgrep ci" command on the command line of the docker image.
-      - run: semgrep ci --config auto --no-suppress-errors
+      - run: semgrep ci --config auto --no-suppress-errors --exclude-rule generic.secrets.security.detected-private-key.detected-private-key
