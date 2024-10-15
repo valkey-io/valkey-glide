@@ -366,13 +366,13 @@ class TestJson:
         key = get_random_string(10)
 
         json_value = {
-            "key1": 1,  # Will be 11
-            "key2": 3.5,  # will be 11
-            "key3": {"nested_key": {"key1": [4, 5]}},  # Will be [9,17]
-            "key4": [1, 2, 3],  # Will be [6,8,8]
-            "key5": 0,  # Will be 15.23
-            "key6": "hello",  # Will be null
-            "key7": None,  # Will be null
+            "key1": 1,
+            "key2": 3.5,
+            "key3": {"nested_key": {"key1": [4, 5]}},
+            "key4": [1, 2, 3],
+            "key5": 0,
+            "key6": "hello",
+            "key7": None,
             "key8": {"nested_key": {"key1": 69}},
             "key9": 1.7976931348623157e308,
         }
@@ -391,7 +391,7 @@ class TestJson:
 
         # Increment nested object (key3.nested_key.key1[0]) by 7
         result = await json.numincrby(glide_client, key, "$.key3.nested_key.key1[1]", 7)
-        assert result == b"[12]"  # 4+7=12
+        assert result == b"[12]"  # Expect 4 + 7 = 12
 
         # Increment array element (key4[1]) by 1
         result = await json.numincrby(glide_client, key, "$.key4[1]", 1)
@@ -436,12 +436,24 @@ class TestJson:
         with pytest.raises(RequestError):
             await json.numincrby(glide_client, key, "$.key1", "string")
 
-        # Test Legacy Path
-        # Increment integer value (key1) by 5 (integer)
-        result = await json.numincrby(glide_client, key, "key1", 5)
-        assert result == b"17"  # Expect 12 + 5 = 17
+        # Decrement integer value (key1) by 12
+        result = await json.numincrby(glide_client, key, "$.key1", -12)
+        assert result == b"[0]"  # Expect 12 - 12 = 0
 
-        # Increment float value (key2) by 2.5 (a float number)
+        # Decrement integer value (key1) by 0.5
+        result = await json.numincrby(glide_client, key, "$.key1", -0.5)
+        assert result == b"[-0.5]"  # Expect 0 - 0.5 = -0.5
+
+        # Test Legacy Path
+        # Increment float value (key1) by 5 (integer)
+        result = await json.numincrby(glide_client, key, "key1", 5)
+        assert result == b"4.5"  # Expect -0.5 + 5 = 4.5
+
+        # Decrement float value (key1) by 5.5 (integer)
+        result = await json.numincrby(glide_client, key, "key1", -5.5)
+        assert result == b"-1"  # Expect 4.5 - 5.5 = -1
+
+        # Increment int value (key2) by 2.5 (a float number)
         result = await json.numincrby(glide_client, key, "key2", 2.5)
         assert result == b"13.5"  # Expect 11 + 2.5 = 13.5
 
@@ -460,6 +472,12 @@ class TestJson:
         # Check for multiple path match in legacy
         result = await json.numincrby(glide_client, key, "..key1", 1)
         assert result == b"76"
+
+        # Check for if the rest of the key1 path matches were updated and not only the last value
+        result = await json.numincrby(glide_client, key, "$..key1", 0)
+        assert (
+            result == b"[0,null,76]"
+        )  # First is 0 as 0 + 0 = 0, Second is null as its an array type (non-numeric), third is 76 as 0 + 76 = 0
 
         # Check for non existent path in legacy
         with pytest.raises(RequestError):
