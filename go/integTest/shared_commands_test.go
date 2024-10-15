@@ -1951,3 +1951,33 @@ func (suite *GlideTestSuite) TestLInsert() {
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
 }
+
+func (suite *GlideTestSuite) TestDel_MultipleKeys() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "testKey1_" + uuid.New().String()
+		key2 := "testKey2_" + uuid.New().String()
+		key3 := "testKey3_" + uuid.New().String()
+
+		suite.verifyOK(client.Set(key1, initialValue))
+		suite.verifyOK(client.Set(key2, initialValue))
+		suite.verifyOK(client.Set(key3, initialValue))
+
+		deletedCount, err := client.Del([]string{key1, key2, key3})
+
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), deletedCount.Value())
+
+		result1, err1 := client.Get(key1)
+		result2, err2 := client.Get(key2)
+		result3, err3 := client.Get(key3)
+
+		assert.Nil(suite.T(), err1)
+		assert.True(suite.T(), result1.IsNil())
+
+		assert.Nil(suite.T(), err2)
+		assert.True(suite.T(), result2.IsNil())
+
+		assert.Nil(suite.T(), err3)
+		assert.True(suite.T(), result3.IsNil())
+	})
+}
