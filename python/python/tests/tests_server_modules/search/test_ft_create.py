@@ -17,15 +17,15 @@ from glide.async_commands.server_modules.ft_options.ft_create_options import (
     VectorType,
 )
 from glide.config import ProtocolVersion
-from glide.constants import OK
+from glide.constants import OK, TEncodable
 from glide.glide_client import GlideClusterClient
 
 
 @pytest.mark.asyncio
-class TestVss:
+class TestFtCreate:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_vss_create(self, glide_client: GlideClusterClient):
+    async def test_ft_create(self, glide_client: GlideClusterClient):
         fields: List[Field] = []
         textFieldTitle: TextField = TextField("$title")
         numberField: NumericField = NumericField("$published_at")
@@ -34,7 +34,7 @@ class TestVss:
         fields.append(numberField)
         fields.append(textFieldCategory)
 
-        prefixes: List[str] = []
+        prefixes: List[TEncodable] = []
         prefixes.append("blog:post:")
 
         # Create an index with multiple fields with Hash data type.

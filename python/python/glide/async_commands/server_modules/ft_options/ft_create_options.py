@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from typing import List, Optional
 
-from glide.async_commands.server_modules.ft_constants import FtCreateKeywords
+from glide.async_commands.server_modules.ft_options.ft_constants import FtCreateKeywords
 from glide.constants import TEncodable
 
 
@@ -85,15 +85,15 @@ class Field(ABC):
         self,
         name: TEncodable,
         type: FieldType,
-        alias: Optional[str] = None,
+        alias: Optional[TEncodable] = None,
     ):
         """
         Initialize a new field instance.
 
         Args:
             name (TEncodable): The name of the field.
-            type (FieldType): The type of the field.
-            alias (Optional[str]): An alias for the field.
+            type (FieldType): The type of the field. See `FieldType`.
+            alias (Optional[TEncodable]): An alias for the field.
         """
         self.name = name
         self.type = type
@@ -119,13 +119,13 @@ class TextField(Field):
     Class for defining text fields in a schema.
     """
 
-    def __init__(self, name: TEncodable, alias: Optional[str] = None):
+    def __init__(self, name: TEncodable, alias: Optional[TEncodable] = None):
         """
         Initialize a new TextField instance.
 
         Args:
             name (TEncodable): The name of the text field.
-            alias (Optional[str]): An alias for the field.
+            alias (Optional[TEncodable]): An alias for the field.
         """
         super().__init__(name, FieldType.TEXT, alias)
 
@@ -148,8 +148,8 @@ class TagField(Field):
     def __init__(
         self,
         name: TEncodable,
-        alias: Optional[str] = None,
-        separator: Optional[str] = None,
+        alias: Optional[TEncodable] = None,
+        separator: Optional[TEncodable] = None,
         case_sensitive: bool = False,
     ):
         """
@@ -157,8 +157,8 @@ class TagField(Field):
 
         Args:
             name (TEncodable): The name of the tag field.
-            alias (Optional[str]): An alias for the field.
-            separator (Optional[str]): Specify how text in the attribute is split into individual tags. Must be a single character.
+            alias (Optional[TEncodable]): An alias for the field.
+            separator (Optional[TEncodable]): Specify how text in the attribute is split into individual tags. Must be a single character.
             case_sensitive (bool): Preserve the original letter cases of tags. If set to False, characters are converted to lowercase by default.
         """
         super().__init__(name, FieldType.TAG, alias)
@@ -185,13 +185,13 @@ class NumericField(Field):
     Class for defining the numeric fields in a schema.
     """
 
-    def __init__(self, name: TEncodable, alias: Optional[str] = None):
+    def __init__(self, name: TEncodable, alias: Optional[TEncodable] = None):
         """
         Initialize a new NumericField instance.
 
         Args:
             name (TEncodable): The name of the numeric field.
-            alias (Optional[str]): An alias for the field.
+            alias (Optional[TEncodable]): An alias for the field.
         """
         super().__init__(name, FieldType.NUMERIC, alias)
 
@@ -219,21 +219,21 @@ class VectorFieldAttributes(ABC):
         Args:
             dim (int): Number of dimensions in the vector.
             distance_metric (DistanceMetricType): The distance metric used in vector type field. Can be one of [L2 | IP | COSINE].
-            type (VectorType): Vector type. The only supported type is FLOAT32.
+            type (VectorType): Vector type. The only supported type is FLOAT32. See `VectorType`.
         """
         self.dim = dim
         self.distance_metric = distance_metric
         self.type = type
 
     @abstractmethod
-    def toArgs(self) -> List[str]:
+    def toArgs(self) -> List[TEncodable]:
         """
         Get the arguments to be used for the algorithm of the vector field.
 
         Returns:
-            List[str]: A list of arguments.
+            List[TEncodable]: A list of arguments.
         """
-        args = []
+        args: List[TEncodable] = []
         if self.dim:
             args.extend([FtCreateKeywords.DIM, str(self.dim)])
         if self.distance_metric:
@@ -260,19 +260,19 @@ class VectorFieldAttributesFlat(VectorFieldAttributes):
 
         Args:
             dim (int): Number of dimensions in the vector.
-            distance_metric (DistanceMetricType): The distance metric used in vector type field. Can be one of [L2 | IP | COSINE].
-            type (VectorType): Vector type. The only supported type is FLOAT32.
+            distance_metric (DistanceMetricType): The distance metric used in vector type field. Can be one of [L2 | IP | COSINE]. See `DistanceMetricType`.
+            type (VectorType): Vector type. The only supported type is FLOAT32. See `VectorType`.
             initial_cap (Optional[int]): Initial vector capacity in the index affecting memory allocation size of the index. Defaults to 1024.
         """
         super().__init__(dim, distance_metric, type)
         self.initial_cap = initial_cap
 
-    def toArgs(self) -> List[str]:
+    def toArgs(self) -> List[TEncodable]:
         """
         Get the arguments representing the vector field created with FLAT algorithm.
 
         Returns:
-            List[str]: A list of FLAT algorithm type vector arguments.
+            List[TEncodable]: A list of FLAT algorithm type vector arguments.
         """
         args = super().toArgs()
         if self.initial_cap:
@@ -300,8 +300,8 @@ class VectorFieldAttributesHnsw(VectorFieldAttributes):
 
         Args:
             dim (int): Number of dimensions in the vector.
-            distance_metric (DistanceMetricType): The distance metric used in vector type field. Can be one of [L2 | IP | COSINE].
-            type (VectorType): Vector type. The only supported type is FLOAT32.
+            distance_metric (DistanceMetricType): The distance metric used in vector type field. Can be one of [L2 | IP | COSINE]. See `DistanceMetricType`.
+            type (VectorType): Vector type. The only supported type is FLOAT32. See `VectorType`.
             initial_cap (Optional[int]): Initial vector capacity in the index affecting memory allocation size of the index. Defaults to 1024.
             m (Optional[int]): Number of maximum allowed outgoing edges for each node in the graph in each layer. Default is 16, maximum is 512.
             ef_contruction (Optional[int]): Controls the number of vectors examined during index construction. Default value is 200, Maximum value is 4096.
@@ -313,12 +313,12 @@ class VectorFieldAttributesHnsw(VectorFieldAttributes):
         self.ef_contruction = ef_contruction
         self.ef_runtime = ef_runtime
 
-    def toArgs(self) -> List[str]:
+    def toArgs(self) -> List[TEncodable]:
         """
         Get the arguments representing the vector field created with HSNW algorithm.
 
         Returns:
-            List[str]: A list of HNSW algorithm type vector arguments.
+            List[TEncodable]: A list of HNSW algorithm type vector arguments.
         """
         args = super().toArgs()
         if self.initial_cap:
@@ -342,16 +342,16 @@ class VectorField(Field):
         name: TEncodable,
         algorithm: VectorAlgorithm,
         attributes: VectorFieldAttributes,
-        alias: Optional[str] = None,
+        alias: Optional[TEncodable] = None,
     ):
         """
         Initialize a new VectorField instance.
 
         Args:
             name (TEncodable): The name of the vector field.
-            algorithm (VectorAlgorithm): The vector indexing algorithm.
-            alias (Optional[str]): An alias for the field.
-            attributes (VectorFieldAttributes): Additional attributes to be passed with the vector field after the algorithm name.
+            algorithm (VectorAlgorithm): The vector indexing algorithm. See `VectorAlgorithm`.
+            alias (Optional[TEncodable]): An alias for the field.
+            attributes (VectorFieldAttributes): Additional attributes to be passed with the vector field after the algorithm name. See `VectorFieldAttributes`.
         """
         super().__init__(name, FieldType.VECTOR, alias)
         self.algorithm = algorithm
@@ -390,34 +390,34 @@ class DataType(Enum):
 
 class FtCreateOptions:
     """
-    This class represents the input options to be used in the [FT.CREATE] command.
-    All fields in this class are optional inputs for [FT.CREATE].
+    This class represents the input options to be used in the FT.CREATE command.
+    All fields in this class are optional inputs for FT.CREATE.
     """
 
     def __init__(
         self,
         data_type: Optional[DataType] = None,
-        prefixes: Optional[List[str]] = None,
+        prefixes: Optional[List[TEncodable]] = None,
     ):
         """
-        Initialize the [FT.CREATE] optional fields.
+        Initialize the FT.CREATE optional fields.
 
         Args:
-            data_type (Optional[DataType]): The type of data to be indexed using [FT.CREATE].
-            prefixes (Optional[List[str]]): The prefix of the key to be indexed.
+            data_type (Optional[DataType]): The type of data to be indexed using FT.CREATE. See `DataType`.
+            prefixes (Optional[List[TEncodable]]): The prefix of the key to be indexed.
         """
         self.data_type = data_type
         self.prefixes = prefixes
 
-    def toArgs(self) -> List[str]:
+    def toArgs(self) -> List[TEncodable]:
         """
-        Get the optional arguments for the [FT.CREATE] command.
+        Get the optional arguments for the FT.CREATE command.
 
         Returns:
-            List[str]:
-                List of [FT.CREATE] optional agruments.
+            List[TEncodable]:
+                List of FT.CREATE optional agruments.
         """
-        args = []
+        args: List[TEncodable] = []
         if self.data_type:
             args.append(FtCreateKeywords.ON)
             args.append(self.data_type.value)
