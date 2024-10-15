@@ -24,6 +24,7 @@ import {
     GeoUnit,
     GlideClusterClient,
     GlideReturnType,
+    GlideString,
     InfoOptions,
     ListDirection,
     ProtocolVersion,
@@ -1973,5 +1974,53 @@ describe("GlideClusterClient", () => {
             }
         },
         TIMEOUT,
+    );
+
+    it.each([
+        [ProtocolVersion.RESP2, 5],
+        [ProtocolVersion.RESP2, 100],
+        [ProtocolVersion.RESP2, 1500],
+        [ProtocolVersion.RESP3, 5],
+        [ProtocolVersion.RESP3, 100],
+        [ProtocolVersion.RESP3, 1500],
+    ])(
+        "test inflight requests limit of %p with protocol %p",
+        async (protocol, inflightRequestsLimit) => {
+            const config = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+                { inflightRequestsLimit },
+            );
+            const client = await GlideClusterClient.createClient(config);
+
+            try {
+                const key1 = `{nonexistinglist}:1-${uuidv4()}`;
+                const tasks: Promise<[GlideString, GlideString] | null>[] = [];
+
+                // Start inflightRequestsLimit blocking tasks
+                for (let i = 0; i < inflightRequestsLimit; i++) {
+                    tasks.push(client.blpop([key1], 0));
+                }
+
+                // This task should immediately fail due to reaching the limit
+                await expect(client.blpop([key1], 0)).rejects.toThrow(
+                    RequestError,
+                );
+
+                // Verify that all previous tasks are still pending
+                const timeoutPromise = new Promise((resolve) =>
+                    setTimeout(resolve, 100),
+                );
+                const allTasksStatus = await Promise.race([
+                    Promise.any(
+                        tasks.map((task) => task.then(() => "resolved")),
+                    ),
+                    timeoutPromise.then(() => "pending"),
+                ]);
+                expect(allTasksStatus).toBe("pending");
+            } finally {
+                await client.close();
+            }
+        },
     );
 });

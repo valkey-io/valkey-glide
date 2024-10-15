@@ -44,6 +44,9 @@ pub const DEFAULT_TIMEOUT_IN_MILLISECONDS: u32 =
     glide_core::client::DEFAULT_RESPONSE_TIMEOUT.as_millis() as u32;
 
 #[napi]
+pub const DEFAULT_INFLIGHT_REQUESTS_LIMIT: u32 = glide_core::client::DEFAULT_MAX_INFLIGHT_REQUESTS;
+
+#[napi]
 struct AsyncClient {
     #[allow(dead_code)]
     connection: MultiplexedConnection,
