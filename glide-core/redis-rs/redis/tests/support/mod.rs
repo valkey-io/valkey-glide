@@ -85,14 +85,6 @@ where
     res
 }
 
-#[cfg(feature = "async-std-comp")]
-pub fn block_on_all_using_async_std<F>(f: F) -> F::Output
-where
-    F: Future,
-{
-    async_std::task::block_on(f)
-}
-
 #[cfg(any(feature = "cluster", feature = "cluster-async"))]
 mod cluster;
 
@@ -514,15 +506,6 @@ impl TestContext {
         self.client.get_async_pubsub().await
     }
 
-    #[cfg(feature = "async-std-comp")]
-    pub async fn async_connection_async_std(
-        &self,
-    ) -> redis::RedisResult<redis::aio::MultiplexedConnection> {
-        self.client
-            .get_multiplexed_async_std_connection(GlideConnectionOptions::default())
-            .await
-    }
-
     pub fn stop_server(&mut self) {
         self.server.stop();
     }
@@ -540,15 +523,6 @@ impl TestContext {
     ) -> redis::RedisResult<redis::aio::MultiplexedConnection> {
         self.client
             .get_multiplexed_tokio_connection(GlideConnectionOptions::default())
-            .await
-    }
-
-    #[cfg(feature = "async-std-comp")]
-    pub async fn multiplexed_async_connection_async_std(
-        &self,
-    ) -> redis::RedisResult<redis::aio::MultiplexedConnection> {
-        self.client
-            .get_multiplexed_async_std_connection(GlideConnectionOptions::default())
             .await
     }
 
