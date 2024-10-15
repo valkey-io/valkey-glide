@@ -27,6 +27,7 @@ type BaseClient interface {
 	ListCommands
 	SetCommands
 	ConnectionManagementCommands
+	GenericBaseCommands
 	// Close terminates the client by closing all associated resources.
 	Close()
 }
@@ -733,4 +734,13 @@ func (client *baseClient) PingWithMessage(message string) (string, error) {
 		return "", err
 	}
 	return response.Value(), nil
+}
+
+func (client *baseClient) Del(keys []string) (Result[int64], error) {
+	result, err := client.executeCommand(C.Del, keys)
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
 }
