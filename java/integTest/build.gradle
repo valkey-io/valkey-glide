@@ -28,6 +28,9 @@ dependencies {
     //lombok
     testCompileOnly 'org.projectlombok:lombok:1.18.32'
     testAnnotationProcessor 'org.projectlombok:lombok:1.18.32'
+
+    // jsonassert
+    testImplementation 'org.skyscreamer:jsonassert:1.5.3'
 }
 
 def standaloneHosts = ''
@@ -139,6 +142,17 @@ test {
 tasks.register('modulesTest', Test) {
     doFirst {
         clusterHosts = System.getProperty("cluster-endpoints")
+    }
+
+    filter {
+        includeTestsMatching 'glide.modules.*'
+    }
+}
+
+
+tasks.register('standaloneModulesTest', Test) {
+    doFirst {
+        standaloneHosts = System.getProperty("standalone-endpoints")
     }
 
     filter {
