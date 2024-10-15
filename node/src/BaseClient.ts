@@ -3,6 +3,7 @@
  */
 import {
     ClusterScanCursor,
+    DEFAULT_INFLIGHT_REQUESTS_LIMIT,
     DEFAULT_TIMEOUT_IN_MILLISECONDS,
     Script,
     StartSocketConnection,
@@ -563,6 +564,13 @@ export interface BaseClientConfiguration {
      * If not set, 'Decoder.String' will be used.
      */
     defaultDecoder?: Decoder;
+    /**
+     * The maximum number of concurrent requests allowed to be in-flight (sent but not yet completed).
+     * This limit is used to control the memory usage and prevent the client from overwhelming the
+     * server or getting stuck in case of a queue backlog. If not set, a default value of 1000 will be
+     * used.
+     */
+    inflightRequestsLimit?: number;
 }
 
 /**
@@ -707,6 +715,7 @@ export class BaseClient {
     protected defaultDecoder = Decoder.String;
     private readonly pubsubFutures: [PromiseFunction, ErrorFunction][] = [];
     private pendingPushNotification: response.Response[] = [];
+    private readonly inflightRequestsLimit: number;
     private config: BaseClientConfiguration | undefined;
 
     protected configurePubsub(
@@ -873,6 +882,8 @@ export class BaseClient {
                 this.close();
             });
         this.defaultDecoder = options?.defaultDecoder ?? Decoder.String;
+        this.inflightRequestsLimit =
+            options?.inflightRequestsLimit ?? DEFAULT_INFLIGHT_REQUESTS_LIMIT;
     }
 
     protected getCallbackIndex(): number {
@@ -7505,6 +7516,7 @@ export class BaseClient {
             clusterModeEnabled: false,
             readFrom,
             authenticationInfo,
+            inflightRequestsLimit: options.inflightRequestsLimit,
         };
     }
 

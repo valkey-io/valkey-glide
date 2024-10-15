@@ -1,7 +1,10 @@
 #### Changes
+* Python: Python FT.DROPINDEX command ([#2437](https://github.com/valkey-io/valkey-glide/pull/2437))
 * Python: Python: Added FT.CREATE command([#2413](https://github.com/valkey-io/valkey-glide/pull/2413))
 * Python: Add JSON.ARRLEN command ([#2403](https://github.com/valkey-io/valkey-glide/pull/2403))
 * Python: Add JSON.CLEAR command ([#2418](https://github.com/valkey-io/valkey-glide/pull/2418))
+* Python: Add JSON.TYPE command ([#2409](https://github.com/valkey-io/valkey-glide/pull/2409))
+* Python: Add JSON.NUMINCRBY command ([#2448](https://github.com/valkey-io/valkey-glide/pull/2448))
 * Java: Added `FT.CREATE` ([#2414](https://github.com/valkey-io/valkey-glide/pull/2414))
 * Java: Added `FT.DROPINDEX` ([#2440](https://github.com/valkey-io/valkey-glide/pull/2440))
 
@@ -10,6 +13,8 @@
 #### Fixes
 
 #### Operational Enhancements
+
+* Java: Add modules CI ([#2388](https://github.com/valkey-io/valkey-glide/pull/2388), [#2404](https://github.com/valkey-io/valkey-glide/pull/2404), [#2416](https://github.com/valkey-io/valkey-glide/pull/2416))
 
 ## 1.1.0 (2024-09-24)
 
