@@ -1,3 +1,0 @@
-[submodule "submodules/redis-rs"]
-	path = submodules/redis-rs
-	url = https://github.com/amazon-contributing/redis-rs
