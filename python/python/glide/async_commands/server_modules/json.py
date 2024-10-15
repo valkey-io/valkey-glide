@@ -327,7 +327,7 @@ async def numincrby(
     number: Union[int, float],
 ) -> Optional[bytes]:
     """
-    Increments or decrements the JSON value(s) at the specified `path' by `number` within the JSON document stored at `key`.
+    Increments or decrements the JSON value(s) at the specified `path` by `number` within the JSON document stored at `key`.
 
     Args:
         client (TGlideClient): The client to execute the command.
@@ -338,9 +338,9 @@ async def numincrby(
     Returns:
         Optional[bytes]:
             For JSONPath (`path` starts with `$`):
-                Returns a bytes string representation of an array of bulk strings,indicating the new values after incrementing for each matched `path`.
+                Returns a bytes string representation of an array of bulk strings, indicating the new values after incrementing for each matched `path`.
                 If a value is not a number, its corresponding return value will be `null`.
-                If `path` doesn't exist, an empty array will be returned.
+                If `path` doesn't exist, a byte string representation of an empty array will be returned.
             For legacy path (`path` doesn't start with `$`):
                 Returns a bytes string representation of the resulting value after the increment or decrement.
                 If multiple paths match, the result of the last updated value is returned.
@@ -351,7 +351,7 @@ async def numincrby(
     Examples:
         >>> from glide import json
         >>> await json.set(client, "doc", "$", '{"a": [], "b": [1], "c": [1, 2], "d": [1, 2, 3]}')
-                  'OK'
+        'OK'
         >>> await json.numincrby(client, "doc", "$.d[*]", 10)›
             b'[11,12,13]'  # Increment each element in `d` array by 10.
         >>> await json.numincrby(client, "doc", ".c[1]", 10)
