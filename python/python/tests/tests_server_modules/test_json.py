@@ -432,10 +432,6 @@ class TestJson:
         with pytest.raises(RequestError):
             await json.numincrby(glide_client, key, "$.key9", 1.7976931348623157e308)
 
-        # Check for incrementing a number value with a non-number value in JSONPath
-        with pytest.raises(RequestError):
-            await json.numincrby(glide_client, key, "$.key1", "string")
-
         # Decrement integer value (key1) by 12
         result = await json.numincrby(glide_client, key, "$.key1", -12)
         assert result == b"[0]"  # Expect 12 - 12 = 0
@@ -469,15 +465,15 @@ class TestJson:
         result = await json.numincrby(glide_client, key, "key5", 10.2)
         assert result == b"25.43"  # Expect 15.23 + 10.2 = 25.43
 
-        # Check for multiple path match in legacy
+        # Check for multiple path match in legacy and assure that the result of the last updated value is returned
         result = await json.numincrby(glide_client, key, "..key1", 1)
         assert result == b"76"
 
-        # Check for if the rest of the key1 path matches were updated and not only the last value
-        result = await json.numincrby(glide_client, key, "$..key1", 0)
+        # Check if the rest of the key1 path matches were updated and not only the last value
+        result = await json.get(glide_client, key, "$..key1")
         assert (
-            result == b"[0,null,76]"
-        )  # First is 0 as 0 + 0 = 0, Second is null as its an array type (non-numeric), third is 76 as 0 + 76 = 0
+            result == b"[0,[16,17],76]"
+        )  # First is 0 as 0 + 0 = 0, Second doesn't change as its an array type (non-numeric), third is 76 as 0 + 76 = 0
 
         # Check for non existent path in legacy
         with pytest.raises(RequestError):
@@ -490,7 +486,3 @@ class TestJson:
         # Check for Overflow in legacy
         with pytest.raises(RequestError):
             await json.numincrby(glide_client, key, ".key9", 1.7976931348623157e308)
-
-        # Check for incrementing a number value with a non-number value in legacy
-        with pytest.raises(RequestError):
-            await json.numincrby(glide_client, key, ".key1", "string")

@@ -327,7 +327,7 @@ async def numincrby(
     number: Union[int, float],
 ) -> Optional[bytes]:
     """
-    Increments or decrements the number of the JSON values at the specified `path' by `number` within the JSON document stored at `key`.
+    Increments or decrements the JSON value(s) at the specified `path' by `number` within the JSON document stored at `key`.
 
     Args:
         client (TGlideClient): The client to execute the command.
@@ -337,22 +337,23 @@ async def numincrby(
 
     Returns:
         Optional[bytes]:
-            For JSONPath ('path' starts with '$'):
-                Returns a bytes string representation of an array of bulk strings that indicates the new values after incrementing for each matched 'path'.
-                If a value is not a number, its corresponding return value will be 'None'.
+            For JSONPath (`path` starts with `$`):
+                Returns a bytes string representation of an array of bulk strings,indicating the new values after incrementing for each matched `path`.
+                If a value is not a number, its corresponding return value will be `null`.
                 If `path` doesn't exist, an empty array will be returned.
-            For legacy 'path' (`path` doesn't start with `$`):
+            For legacy path (`path` doesn't start with `$`):
                 Returns a bytes string representation of the resulting value after the increment or decrement.
-                If multiple values are selected, the result of the last updated value is returned.
-                If the value at the 'path' is not a number or 'path' doesn't exist, an error is raised.
-            If 'key' does not exist, an error is raised.
+                If multiple paths match, the result of the last updated value is returned.
+                If the value at the `path` is not a number or `path` doesn't exist, an error is raised.
+            If `key` does not exist, an error is raised.
             If the result is out of the range of 64-bit IEEE double, an error is raised.
 
     Examples:
         >>> from glide import json
         >>> await json.set(client, "doc", "$", '{"a": [], "b": [1], "c": [1, 2], "d": [1, 2, 3]}')
+                  'OK'
         >>> await json.numincrby(client, "doc", "$.d[*]", 10)›
-            b'11,12,13'  # Increment each element in `d` array by 10.
+            b'[11,12,13]'  # Increment each element in `d` array by 10.
         >>> await json.numincrby(client, "doc", ".c[1]", 10)
             b'12'  # Increment the second element in the `c` array by 10.
     """
