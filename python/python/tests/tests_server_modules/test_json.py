@@ -1,6 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import json as OuterJson
+import typing
 
 import pytest
 from glide.async_commands.core import ConditionalChange, InfoSection
@@ -771,3 +772,198 @@ class TestJson:
             await json.strappend(
                 glide_client, "non_exiting_key", OuterJson.dumps("try")
             )
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @typing.no_type_check  # since this is a complex test, skip typing to be more effective
+    async def test_json_arrinsert(self, glide_client: TGlideClient):
+        key = get_random_string(10)
+
+        assert (
+            await json.set(
+                glide_client,
+                key,
+                "$",
+                """
+            {
+                "a": [],
+                "b": { "a": [1, 2, 3, 4] },
+                "c": { "a": "not an array" },
+                "d": [{ "a": ["x", "y"] }, { "a": [["foo"]] }],
+                "e": [{ "a": 42 }, { "a": {} }],
+                "f": { "a": [true, false, null] }
+            }
+            """,
+            )
+            == OK
+        )
+
+        # Insert different types of values into the matching paths
+        result = await json.arrinsert(
+            glide_client,
+            key,
+            "$..a",
+            0,
+            ['"string_value"', "123", '{"key": "value"}', "true", "null", '["bar"]'],
+        )
+        assert result == [6, 10, None, 8, 7, None, None, 9]
+
+        updated_doc = await json.get(glide_client, key)
+
+        expected_doc = {
+            "a": ["string_value", 123, {"key": "value"}, True, None, ["bar"]],
+            "b": {
+                "a": [
+                    "string_value",
+                    123,
+                    {"key": "value"},
+                    True,
+                    None,
+                    ["bar"],
+                    1,
+                    2,
+                    3,
+                    4,
+                ],
+            },
+            "c": {"a": "not an array"},
+            "d": [
+                {
+                    "a": [
+                        "string_value",
+                        123,
+                        {"key": "value"},
+                        True,
+                        None,
+                        ["bar"],
+                        "x",
+                        "y",
+                    ]
+                },
+                {
+                    "a": [
+                        "string_value",
+                        123,
+                        {"key": "value"},
+                        True,
+                        None,
+                        ["bar"],
+                        ["foo"],
+                    ]
+                },
+            ],
+            "e": [{"a": 42}, {"a": {}}],
+            "f": {
+                "a": [
+                    "string_value",
+                    123,
+                    {"key": "value"},
+                    True,
+                    None,
+                    ["bar"],
+                    True,
+                    False,
+                    None,
+                ]
+            },
+        }
+
+        assert OuterJson.loads(updated_doc) == expected_doc
+
+        # Insert into a specific index (non-zero)
+        result = await json.arrinsert(
+            glide_client,
+            key,
+            "$..a",
+            2,
+            ['"insert_at_2"'],
+        )
+        assert result == [7, 11, None, 9, 8, None, None, 10]
+
+        # Check document after insertion at index 2
+        updated_doc_at_2 = await json.get(glide_client, key)
+        expected_doc["a"].insert(2, "insert_at_2")
+        expected_doc["b"]["a"].insert(2, "insert_at_2")
+        expected_doc["d"][0]["a"].insert(2, "insert_at_2")
+        expected_doc["d"][1]["a"].insert(2, "insert_at_2")
+        expected_doc["f"]["a"].insert(2, "insert_at_2")
+        assert OuterJson.loads(updated_doc_at_2) == expected_doc
+
+        # Insert with a legacy path
+        result = await json.arrinsert(
+            glide_client,
+            key,
+            "..a",  # legacy path
+            0,
+            ['"legacy_value"'],
+        )
+        assert (
+            result == 8
+        )  # Returns length of the first modified array (in this case, 'a')
+
+        # Check document after insertion at root legacy path (all matching arrays should be updated)
+        updated_doc_legacy = await json.get(glide_client, key)
+
+        # Update `expected_doc` with the new value inserted at index 0 of all matching arrays
+        expected_doc["a"].insert(0, "legacy_value")
+        expected_doc["b"]["a"].insert(0, "legacy_value")
+        expected_doc["d"][0]["a"].insert(0, "legacy_value")
+        expected_doc["d"][1]["a"].insert(0, "legacy_value")
+        expected_doc["f"]["a"].insert(0, "legacy_value")
+
+        assert OuterJson.loads(updated_doc_legacy) == expected_doc
+
+        # Insert with an index out of range for some arrays
+        with pytest.raises(RequestError):
+            await json.arrinsert(
+                glide_client,
+                key,
+                "$..a",
+                10,  # Index out of range for some paths but valid for others
+                ['"out_of_range_value"'],
+            )
+
+        with pytest.raises(RequestError):
+            await json.arrinsert(
+                glide_client,
+                key,
+                "..a",
+                10,  # Index out of range for some paths but valid for others
+                ['"out_of_range_value"'],
+            )
+
+        # Negative index insertion (should insert from the end of the array)
+        result = await json.arrinsert(
+            glide_client,
+            key,
+            "$..a",
+            -1,
+            ['"negative_index_value"'],
+        )
+        assert result == [9, 13, None, 11, 10, None, None, 12]  # Update valid paths
+
+        # Check document after negative index insertion
+        updated_doc_negative = await json.get(glide_client, key)
+        expected_doc["a"].insert(-1, "negative_index_value")
+        expected_doc["b"]["a"].insert(-1, "negative_index_value")
+        expected_doc["d"][0]["a"].insert(-1, "negative_index_value")
+        expected_doc["d"][1]["a"].insert(-1, "negative_index_value")
+        expected_doc["f"]["a"].insert(-1, "negative_index_value")
+        assert OuterJson.loads(updated_doc_negative) == expected_doc
+
+        # Non-existing path
+        with pytest.raises(RequestError):
+            await json.arrinsert(glide_client, key, ".path", 5, ['"value"'])
+
+        await json.arrinsert(glide_client, key, "$.path", 5, ['"value"']) == []
+
+        # Key doesnt exist
+        with pytest.raises(RequestError):
+            await json.arrinsert(glide_client, "non_existent_key", "$", 5, ['"value"'])
+
+        with pytest.raises(RequestError):
+            await json.arrinsert(glide_client, "non_existent_key", ".", 5, ['"value"'])
+
+        # value at path is not an array
+        with pytest.raises(RequestError):
+            await json.arrinsert(glide_client, key, ".e", 5, ['"value"'])
