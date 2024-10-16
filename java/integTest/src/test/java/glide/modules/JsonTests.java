@@ -86,7 +86,8 @@ public class JsonTests {
         Object getResult = GlideJson.get(client, gs(key), gs("$..c")).get();
 
         assertInstanceOf(GlideString.class, getResult);
-        JSONAssert.assertEquals("[true, 1, 2]", ((GlideString)getResult).getString(), JSONCompareMode.LENIENT);
+        JSONAssert.assertEquals(
+                "[true, 1, 2]", ((GlideString) getResult).getString(), JSONCompareMode.LENIENT);
 
         Object getResultWithMultiPaths = GlideJson.get(client, key, new String[] {"$..c", "$.c"}).get();
 
