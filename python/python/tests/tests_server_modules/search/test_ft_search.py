@@ -83,6 +83,7 @@ class TestFtSearch:
             keyString = key.decode("utf-8")
             assert keyString == json_key or keyString == json_key2
             if keyString == json_key:
+                print(fieldsMap)
                 for fieldName, fieldValue in fieldsMap:
                     fieldNameString = fieldName.decode("utf-8")
                     fieldValueInt = int(fieldValue.decode("utf-8"))
