@@ -34,6 +34,24 @@ class TestFtSearch:
         json_value2 = {"a": 22222, "b": 2, "c": 3}
         prefixes: List[TEncodable] = []
         prefixes.append("{json}:")
+
+        index = "{json}:"+str(uuid.uuid4())
+
+        # Create an index
+        assert (
+            await ft.create(
+                glide_client,
+                index,
+                schema=[
+                    NumericField("$.a", "a"),
+                    NumericField("$.b", "b"),
+                ],
+                options=FtCreateOptions(DataType.JSON, prefixes),
+            )
+            == OK
+        )
+
+
         # Create a json key
         assert (
             await json.set(glide_client, json_key, "$", OuterJson.dumps(json_value))
@@ -43,24 +61,12 @@ class TestFtSearch:
             await json.set(glide_client, json_key2, "$", OuterJson.dumps(json_value2))
             == OK
         )
-        # Create an index
-        assert (
-            await ft.create(
-                glide_client,
-                "{json}:",
-                schema=[
-                    NumericField("$.a", "a"),
-                    NumericField("$.b", "b"),
-                ],
-                options=FtCreateOptions(DataType.JSON, prefixes),
-            )
-            == OK
-        )
+
         time.sleep(2)
         # Search the index
         result = await ft.search(
             glide_client,
-            "idx",
+            index,
             "*",
             options=FtSeachOptions(
                 return_fields=[
