@@ -43,7 +43,7 @@ class TestFtSearch:
                     NumericField("$.a", "a"),
                     NumericField("$.b", "b"),
                 ],
-                options=FtCreateOptions(DataType.JSON, prefixes),
+                options=FtCreateOptions(DataType.JSON),
             )
             == OK
         )
