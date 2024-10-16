@@ -3,7 +3,7 @@
 module for `vector search` commands.
 """
 
-from typing import List, Optional, cast
+from typing import List, Mapping, Optional, Union, cast
 
 from glide.async_commands.server_modules.ft_options.ft_constants import (
     CommandNames,
@@ -12,6 +12,9 @@ from glide.async_commands.server_modules.ft_options.ft_constants import (
 from glide.async_commands.server_modules.ft_options.ft_create_options import (
     Field,
     FtCreateOptions,
+)
+from glide.async_commands.server_modules.ft_options.ft_search_options import (
+    FtSeachOptions,
 )
 from glide.constants import TOK, TEncodable
 from glide.glide_client import TGlideClient
@@ -76,3 +79,33 @@ async def dropindex(client: TGlideClient, indexName: TEncodable) -> TOK:
     """
     args: List[TEncodable] = [CommandNames.FT_DROPINDEX, indexName]
     return cast(TOK, await client.custom_command(args))
+
+
+async def search(
+    client: TGlideClient,
+    indexName: TEncodable,
+    query: TEncodable,
+    options: Optional[FtSeachOptions],
+) -> List[Union[int, Mapping[TEncodable, List[Mapping[TEncodable, TEncodable]]]]]:
+    """
+    Uses the provided query expression to locate keys within an index.
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+        indexName (TEncodable): The index name for the index to be searched.
+        query (TEncodable): The query expression to use for the search on the index.
+        options (Optional[FtSeachOptions]): Optional arguments for the FT.SEARCH command. See `FtSearchOptions`.
+
+    Returns:
+        List[Union[int, Mapping[TEncodable, Mapping[TEncodable]]]]:
+
+    Examples:
+    """
+    args: List[TEncodable] = [CommandNames.FT_SEARCH, indexName, query]
+    if options:
+        args.extend(options.toArgs())
+    args.extend(["DIALECT", "2"])
+    return cast(
+        List[Union[int, Mapping[TEncodable, List[Mapping[TEncodable, TEncodable]]]]],
+        await client.custom_command(args),
+    )
