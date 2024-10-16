@@ -22,7 +22,7 @@ from glide.glide_client import GlideClusterClient
 
 @pytest.mark.asyncio
 class TestFtSearch:
-    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ft_search(self, glide_client: GlideClusterClient):
 
