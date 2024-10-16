@@ -77,27 +77,6 @@ class TestFtSearch:
         )
 
         # Check if we get the expected result from ft.search for string inputs
-        self.checkExpectedSearchResult(self, result=result1, json_key1=json_key1, json_key2=json_key2, json_value1=json_value1, json_value2=json_value2)
-
-        # Search the index for byte inputs
-        result2 = await ft.search(
-            glide_client,
-            bytes(index, "utf-8"),
-            b"*",
-            options=FtSeachOptions(
-                return_fields=[
-                    ReturnField(field_identifier=b"a", alias=b"a_new"),
-                    ReturnField(field_identifier=b"b", alias=b"b_new"),
-                ]
-            ),
-        )
-
-
-        # Check if we get the expected result from ft.search from byte inputs
-        self.checkExpectedSearchResult(self, result=result2, json_key1=json_key1, json_key2=json_key2, json_value1=json_value1, json_value2=json_value2)
-
-
-    def checkExpectedSearchResult(self, result, json_key1, json_key2, json_value1, json_value2):
         assert len(result) == 2
         assert result[0] == 2
         searchResultMap: Mapping[TEncodable, Mapping[TEncodable, TEncodable]]  = result[1]
@@ -116,3 +95,60 @@ class TestFtSearch:
                     fieldValueInt = int(fieldValue.decode("utf-8"))
                     assert fieldNameString == "a" or fieldNameString == "b"
                     assert fieldValueInt == json_value2.get("a") or fieldValueInt == json_value2.get("b")
+
+
+        # Search the index for byte inputs
+        result2 = await ft.search(
+            glide_client,
+            bytes(index, "utf-8"),
+            b"*",
+            options=FtSeachOptions(
+                return_fields=[
+                    ReturnField(field_identifier=b"a", alias=b"a_new"),
+                    ReturnField(field_identifier=b"b", alias=b"b_new"),
+                ]
+            ),
+        )
+
+
+        # Check if we get the expected result from ft.search from byte inputs
+        assert len(result2) == 2
+        assert result2[0] == 2
+        searchResultMap: Mapping[TEncodable, Mapping[TEncodable, TEncodable]]  = result2[1]
+        for key, fieldsMap in searchResultMap.items():
+            keyString = key.decode("utf-8")
+            assert keyString == json_key1 or keyString == json_key2
+            if keyString == json_key1:
+                for fieldName, fieldValue in fieldsMap.items():
+                    fieldNameString = fieldName.decode("utf-8")
+                    fieldValueInt = int(fieldValue.decode("utf-8"))
+                    assert fieldNameString == "a" or fieldNameString == "b"
+                    assert fieldValueInt == json_value1.get("a") or fieldValueInt == json_value1.get("b")
+            if keyString == json_key2:
+                for fieldName, fieldValue in fieldsMap.items():
+                    fieldNameString = fieldName.decode("utf-8")
+                    fieldValueInt = int(fieldValue.decode("utf-8"))
+                    assert fieldNameString == "a" or fieldNameString == "b"
+                    assert fieldValueInt == json_value2.get("a") or fieldValueInt == json_value2.get("b")
+
+
+
+    # def checkExpectedSearchResult(self, result, json_key1, json_key2, json_value1, json_value2):
+    #     assert len(result) == 2
+    #     assert result[0] == 2
+    #     searchResultMap: Mapping[TEncodable, Mapping[TEncodable, TEncodable]]  = result[1]
+    #     for key, fieldsMap in searchResultMap.items():
+    #         keyString = key.decode("utf-8")
+    #         assert keyString == json_key1 or keyString == json_key2
+    #         if keyString == json_key1:
+    #             for fieldName, fieldValue in fieldsMap.items():
+    #                 fieldNameString = fieldName.decode("utf-8")
+    #                 fieldValueInt = int(fieldValue.decode("utf-8"))
+    #                 assert fieldNameString == "a" or fieldNameString == "b"
+    #                 assert fieldValueInt == json_value1.get("a") or fieldValueInt == json_value1.get("b")
+    #         if keyString == json_key2:
+    #             for fieldName, fieldValue in fieldsMap.items():
+    #                 fieldNameString = fieldName.decode("utf-8")
+    #                 fieldValueInt = int(fieldValue.decode("utf-8"))
+    #                 assert fieldNameString == "a" or fieldNameString == "b"
+    #                 assert fieldValueInt == json_value2.get("a") or fieldValueInt == json_value2.get("b")
