@@ -75,7 +75,7 @@ class TestFtSearch:
             ),
         )
 
-        searchResultMap: Mapping[TEncodable, Mapping[TEncodable, TEncodable]]  = result[1]
+        #searchResultMap: Mapping[TEncodable, Mapping[TEncodable, TEncodable]]  = result[1]
         
         print("----------")
         print(result)
