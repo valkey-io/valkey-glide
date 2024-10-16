@@ -15,15 +15,13 @@ import {
     GlideClusterClient,
     GlideJson,
     JsonGetOptions,
-    ProtocolVersion
+    ProtocolVersion,
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import {
     flushAndCloseClient,
     getClientConfigurationOption,
     getServerVersion,
-    parseCommandLineArgs,
-    parseEndpoints,
 } from "./TestUtilities";
 
 const TIMEOUT = 50000;
