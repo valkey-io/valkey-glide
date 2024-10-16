@@ -77,9 +77,9 @@ class TestFtSearch:
         )
 
         # Check if we get the expected result from ft.search for string inputs
-        assert len(result) == 2
-        assert result[0] == 2
-        searchResultMap: Mapping[TEncodable, Mapping[TEncodable, TEncodable]]  = result[1]
+        assert len(result1) == 2
+        assert result1[0] == 2
+        searchResultMap: Mapping[TEncodable, Mapping[TEncodable, TEncodable]]  = result1[1]
         for key, fieldsMap in searchResultMap.items():
             keyString = key.decode("utf-8")
             assert keyString == json_key1 or keyString == json_key2
