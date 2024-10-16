@@ -5,6 +5,7 @@
 * Python: Add JSON.CLEAR command ([#2418](https://github.com/valkey-io/valkey-glide/pull/2418))
 * Python: Add JSON.TYPE command ([#2409](https://github.com/valkey-io/valkey-glide/pull/2409))
 * Python: Add JSON.NUMINCRBY command ([#2448](https://github.com/valkey-io/valkey-glide/pull/2448))
+* Python: Add JSON.NUMMULTBY command ([#2458](https://github.com/valkey-io/valkey-glide/pull/2458))
 * Java: Added `FT.CREATE` ([#2414](https://github.com/valkey-io/valkey-glide/pull/2414))
 * Java: Added `FT.DROPINDEX` ([#2440](https://github.com/valkey-io/valkey-glide/pull/2440))
 * Core: Update routing for commands from server modules ([#2461](https://github.com/valkey-io/valkey-glide/pull/2461))
