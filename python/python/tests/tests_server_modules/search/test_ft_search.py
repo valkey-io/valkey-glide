@@ -3,6 +3,7 @@
 import json as OuterJson
 import uuid
 from typing import List
+import time
 
 import pytest
 from glide.async_commands.server_modules import ft, json
@@ -55,6 +56,7 @@ class TestFtSearch:
             )
             == OK
         )
+        time.sleep(10)
         # Search the index
         result = await ft.search(
             glide_client,
