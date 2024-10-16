@@ -438,9 +438,9 @@ public class VectorSearchTests {
         // elements (maps in array) could be reordered, comparing as sets
         assertDeepEquals(
                 Set.of(
-                        Map.of(gs("condition"), gs("new"), gs("bicycles"), gs("5")),
-                        Map.of(gs("condition"), gs("used"), gs("bicycles"), gs("4")),
-                        Map.of(gs("condition"), gs("refurbished"), gs("bicycles"), gs("1"))),
+                        Map.of(gs("condition"), gs("new"), gs("bicycles"), 5),
+                        Map.of(gs("condition"), gs("used"), gs("bicycles"), 4),
+                        Map.of(gs("condition"), gs("refurbished"), gs("bicycles"), 1)),
                 Set.of(aggreg));
 
         // FT.CREATE idx:movie ON hash PREFIX 1 "movie:" SCHEMA title TEXT release_year NUMERIC rating
@@ -580,29 +580,29 @@ public class VectorSearchTests {
                                 gs("genre"),
                                 gs("Drama"),
                                 gs("nb_of_movies"),
-                                gs("1"),
+                                1,
                                 gs("nb_of_votes"),
-                                gs("1563839"),
+                                1563839,
                                 gs("avg_rating"),
-                                gs("10")),
+                                10),
                         Map.of(
                                 gs("genre"),
                                 gs("Action"),
                                 gs("nb_of_movies"),
-                                gs("2"),
+                                2,
                                 gs("nb_of_votes"),
-                                gs("2033895"),
+                                2033895,
                                 gs("avg_rating"),
-                                gs("9")),
+                                9),
                         Map.of(
                                 gs("genre"),
                                 gs("Thriller"),
                                 gs("nb_of_movies"),
-                                gs("1"),
+                                1,
                                 gs("nb_of_votes"),
-                                gs("559490"),
+                                559490,
                                 gs("avg_rating"),
-                                gs("9"))),
+                                9)),
                 Set.of(aggreg));
     }
 }
