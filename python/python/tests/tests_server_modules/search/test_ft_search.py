@@ -26,7 +26,7 @@ class TestFtSearch:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ft_search(self, glide_client: GlideClusterClient):
-        prefix = "{json-search-"+str(uuid.uuid4()+"}:")
+        prefix = "{json-search-"+str(uuid.uuid4())+"}:"
         json_key = prefix + str(uuid.uuid4())
         json_key2 = prefix + str(uuid.uuid4())
         json_value = {"a": 11111, "b": 2, "c": 3}
