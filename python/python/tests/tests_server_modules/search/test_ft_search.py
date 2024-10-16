@@ -26,15 +26,12 @@ class TestFtSearch:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ft_search(self, glide_client: GlideClusterClient):
-
-        # Test
         json_key = "{json}:" + str(uuid.uuid4())
         json_key2 = "{json}:" + str(uuid.uuid4())
         json_value = {"a": 11111, "b": 2, "c": 3}
         json_value2 = {"a": 22222, "b": 2, "c": 3}
         prefixes: List[TEncodable] = []
         prefixes.append("{json}:")
-
         index = "{json}:"+str(uuid.uuid4())
 
         # Create an index
@@ -62,7 +59,9 @@ class TestFtSearch:
             == OK
         )
 
+        # Wait for index to be updated to avoid this error - ResponseError: The index is under construction.
         time.sleep(2)
+
         # Search the index
         result = await ft.search(
             glide_client,
@@ -75,6 +74,7 @@ class TestFtSearch:
                 ]
             ),
         )
+
         print("----------")
         print(result)
         print(len(result))
