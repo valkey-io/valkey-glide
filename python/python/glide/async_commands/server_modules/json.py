@@ -147,6 +147,57 @@ async def get(
     return cast(TJsonResponse[Optional[bytes]], await client.custom_command(args))
 
 
+async def arrinsert(
+    client: TGlideClient,
+    key: TEncodable,
+    path: TEncodable,
+    index: int,
+    values: List[TEncodable],
+) -> TJsonResponse[int]:
+    """
+    Inserts one or more values into the array at the specified `path` within the JSON document stored at `key`, before the given `index`.
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+        key (TEncodable): The key of the JSON document.
+        path (TEncodable): The path within the JSON document.
+        index (int): The array index before which values are inserted.
+        values (List[TEncodable]): The JSON values to be inserted into the array, in JSON formatted bytes or str.
+            Json string values must be wrapped with single quotes. For example, to append "foo", pass '"foo"'.
+
+    Returns:
+        TJsonResponse[int]:
+            For JSONPath (`path` starts with '$'):
+                Returns a list of integer replies for every possible path, indicating the new length of the array,
+                or None for JSON values matching the path that are not an array.
+                If `path` does not exist, an empty array will be returned.
+            For legacy path (`path` doesn't start with '$'):
+                Returns an integer representing the new length of the array.
+                If multiple paths are matched, returns the length of the first modified array.
+                If `path` doesn't exist or the value at `path` is not an array, an error is raised.
+            If the index is out of bounds, an error is raised.
+            If `key` doesn't exist, an error is raised.
+
+    Examples:
+        >>> from glide import json
+        >>> await json.set(client, "doc", "$", '[[], ["a"], ["a", "b"]]')
+            'OK'
+        >>> await json.arrinsert(client, "doc", "$[*]", 0, ['"c"', '{"key": "value"}', "true", "null", '["bar"]'])
+            [5, 6, 7]  # New lengths of arrays after insertion
+        >>> await json.get(client, "doc")
+            b'[["c",{"key":"value"},true,null,["bar"]],["c",{"key":"value"},true,null,["bar"],"a"],["c",{"key":"value"},true,null,["bar"],"a","b"]]'
+
+        >>> await json.set(client, "doc", "$", '[[], ["a"], ["a", "b"]]')
+            'OK'
+        >>> await json.arrinsert(client, "doc", ".", 0, ['"c"'])
+            4  # New length of the root array after insertion
+        >>> await json.get(client, "doc")
+            b'[\"c\",[],[\"a\"],[\"a\",\"b\"]]'
+    """
+    args = ["JSON.ARRINSERT", key, path, str(index)] + values
+    return cast(TJsonResponse[int], await client.custom_command(args))
+
+
 async def arrlen(
     client: TGlideClient,
     key: TEncodable,
