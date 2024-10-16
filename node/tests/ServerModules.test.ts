@@ -12,10 +12,10 @@ import {
 import { v4 as uuidv4 } from "uuid";
 import {
     ConditionalChange,
-    GlideClient,
+    GlideClusterClient,
     GlideJson,
     JsonGetOptions,
-    ProtocolVersion,
+    ProtocolVersion
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import {
@@ -68,7 +68,7 @@ describe("GlideJson", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "json.set and json.get tests",
         async (protocol) => {
-            client = await GlideClient.createClient(
+            client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const key = uuidv4();
@@ -113,7 +113,7 @@ describe("GlideJson", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "json.set and json.get tests with multiple value",
         async (protocol) => {
-            client = await GlideClient.createClient(
+            client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const key = uuidv4();
@@ -150,7 +150,7 @@ describe("GlideJson", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "json.set conditional set",
         async (protocol) => {
-            client = await GlideClient.createClient(
+            client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const key = uuidv4();
@@ -189,7 +189,7 @@ describe("GlideJson", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "json.get formatting",
         async (protocol) => {
-            client = await GlideClient.createClient(
+            client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const key = uuidv4();
