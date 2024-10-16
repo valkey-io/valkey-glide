@@ -287,7 +287,8 @@ jobs:
                 aws-region: ${{ secrets.AWS_REGION }}
                 ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
 
-    test-moduels:
+    test-modules:
+      environment: AWS_ACTIONS
       needs: [start-self-hosted-runner, load-engine-matrix]
       name: Running Module Tests
       runs-on: ${{ matrix.host.RUNNER }}
@@ -329,7 +330,7 @@ jobs:
                 engine-version: ${{ matrix.engine.version }}
   
           - name: test
-            run: npm test -- --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} --testNamePattern="json"
+            run: npm run test-modules -- --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }}
             working-directory: ./node
 
           - name: Upload test reports

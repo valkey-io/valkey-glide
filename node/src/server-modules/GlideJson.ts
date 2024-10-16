@@ -7,18 +7,19 @@ import { ConditionalChange } from "../Commands";
 import { GlideClient } from "../GlideClient";
 import { GlideClusterClient } from "../GlideClusterClient";
 
-export type ReturnTypeJson = GlideString | GlideString[];
+export type ReturnTypeJson = GlideString | (GlideString | null)[];
+
 /**
  * Represents options for formatting JSON data, to be used in the [JSON.GET](https://valkey.io/commands/json.get/) command.
  */
 export interface JsonGetOptions {
     /** The path or list of paths within the JSON document. Default is root `$`. */
     paths?: GlideString[];
-    /** Sets an indentation string for nested levels. Defaults to None. */
+    /** Sets an indentation string for nested levels. */
     indent?: GlideString;
-    /** Sets a string that's printed at the end of each line. Defaults to None. */
+    /** Sets a string that's printed at the end of each line. */
     newline?: GlideString;
-    /** Sets a string that's put between a key and a value. Defaults to None. */
+    /** Sets a string that's put between a key and a value. */
     space?: GlideString;
 }
 
