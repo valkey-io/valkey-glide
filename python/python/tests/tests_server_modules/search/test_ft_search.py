@@ -80,6 +80,6 @@ class TestFtSearch:
         print("----------")
         print(result)
         print(len(result))
-        assert len(result) == 2
-        assert result[0] == 2
+       # assert len(result) == 2
+       # assert result[0] == 2
         assert True == False
