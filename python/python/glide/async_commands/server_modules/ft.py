@@ -86,7 +86,7 @@ async def search(
     indexName: TEncodable,
     query: TEncodable,
     options: Optional[FtSeachOptions],
-) -> List[Union[int, Mapping[TEncodable, List[Mapping[TEncodable, TEncodable]]]]]:
+) -> List[Union[int, Mapping[TEncodable, Mapping[TEncodable, TEncodable]]]]:
     """
     Uses the provided query expression to locate keys within an index.
 

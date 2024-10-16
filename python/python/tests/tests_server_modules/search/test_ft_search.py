@@ -28,12 +28,12 @@ class TestFtSearch:
     async def test_ft_search(self, glide_client: GlideClusterClient):
 
         # Test
-        json_key = "json:" + str(uuid.uuid4())
-        json_key2 = "json:" + str(uuid.uuid4())
+        json_key = "{json}:" + str(uuid.uuid4())
+        json_key2 = "{json}:" + str(uuid.uuid4())
         json_value = {"a": 11111, "b": 2, "c": 3}
         json_value2 = {"a": 22222, "b": 2, "c": 3}
         prefixes: List[TEncodable] = []
-        prefixes.append("json:")
+        prefixes.append("{json}:")
         # Create a json key
         assert (
             await json.set(glide_client, json_key, "$", OuterJson.dumps(json_value))
@@ -47,7 +47,7 @@ class TestFtSearch:
         assert (
             await ft.create(
                 glide_client,
-                "idx",
+                "{json}:",
                 schema=[
                     NumericField("$.a", "a"),
                     NumericField("$.b", "b"),
@@ -56,7 +56,7 @@ class TestFtSearch:
             )
             == OK
         )
-        time.sleep(10)
+        time.sleep(2)
         # Search the index
         result = await ft.search(
             glide_client,
