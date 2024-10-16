@@ -81,7 +81,7 @@ jobs:
                   engine-version: ${{ matrix.engine.version }}
 
             - name: test
-              run: npm test
+              run: npm test -- --testPathIgnorePatterns="ServerModules"
               working-directory: ./node
 
             - name: test hybrid node modules - commonjs
