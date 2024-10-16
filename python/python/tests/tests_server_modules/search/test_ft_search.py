@@ -32,7 +32,7 @@ class TestFtSearch:
         json_value2 = {"a": 22222, "b": 2, "c": 3}
         prefixes: List[TEncodable] = []
         prefixes.append("{json}:")
-        index = "{json}:"+str(uuid.uuid4())
+        index = "a:"+str(uuid.uuid4())
 
         # Create an index
         assert (
