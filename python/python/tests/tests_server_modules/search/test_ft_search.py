@@ -72,3 +72,4 @@ class TestFtSearch:
         print("----------")
         print(result)
         print(len(result))
+        assert True == False
