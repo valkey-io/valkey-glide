@@ -64,7 +64,7 @@ class TestFtSearch:
         time.sleep(0.5)
 
         # Search the index for string inputs
-        result = await ft.search(
+        result1 = await ft.search(
             glide_client,
             index,
             "*",
@@ -77,10 +77,10 @@ class TestFtSearch:
         )
 
         # Check if we get the expected result from ft.search for string inputs
-        self.checkExpectedSearchResult(result=result, json_key1=json_key1, json_key2=json_key2, json_value1=json_value1, json_value2=json_value2)
+        self.checkExpectedSearchResult(result=result1, json_key1=json_key1, json_key2=json_key2, json_value1=json_value1, json_value2=json_value2)
 
         # Search the index for byte inputs
-        result = await ft.search(
+        result2 = await ft.search(
             glide_client,
             bytes(index, "utf-8"),
             b"*",
@@ -94,7 +94,7 @@ class TestFtSearch:
 
 
         # Check if we get the expected result from ft.search from byte inputs
-        self.checkExpectedSearchResult(result=result, json_key1=json_key1, json_key2=json_key2, json_value1=json_value1, json_value2=json_value2)
+        self.checkExpectedSearchResult(result=result2, json_key1=json_key1, json_key2=json_key2, json_value1=json_value1, json_value2=json_value2)
 
 
     def checkExpectedSearchResult(result, json_key1, json_key2, json_value1, json_value2):
