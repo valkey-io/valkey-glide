@@ -15,15 +15,13 @@ import {
     GlideClusterClient,
     GlideJson,
     JsonGetOptions,
-    ProtocolVersion
+    ProtocolVersion,
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import {
     flushAndCloseClient,
     getClientConfigurationOption,
     getServerVersion,
-    parseCommandLineArgs,
-    parseEndpoints,
 } from "./TestUtilities";
 
 const TIMEOUT = 50000;
@@ -32,15 +30,12 @@ describe("GlideJson", () => {
     let cluster: ValkeyCluster;
     let client: GlideClusterClient;
     beforeAll(async () => {
-        const standaloneAddresses =
-            parseCommandLineArgs()["standalone-endpoints"];
-        cluster = standaloneAddresses
-            ? await ValkeyCluster.initFromExistingCluster(
-                  false,
-                  parseEndpoints(standaloneAddresses),
-                  getServerVersion,
-              )
-            : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
+        cluster = await ValkeyCluster.createCluster(
+            false,
+            1,
+            1,
+            getServerVersion,
+        );
     }, 20000);
 
     afterEach(async () => {
