@@ -74,11 +74,12 @@ class TestFtSearch:
                 ]
             ),
         )
-        assert len(result) == 2
-        assert result[0] == 2
+
         searchResultMap: Mapping[TEncodable, Mapping[TEncodable, TEncodable]]  = result[1]
         
         print("----------")
         print(result)
         print(len(result))
+        assert len(result) == 2
+        assert result[0] == 2
         assert True == False
