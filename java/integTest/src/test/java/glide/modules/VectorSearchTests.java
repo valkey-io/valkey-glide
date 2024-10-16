@@ -190,8 +190,8 @@ public class VectorSearchTests {
     @SneakyThrows
     @Test
     public void ft_search() {
-        String index = UUID.randomUUID().toString();
         String prefix = "{" + UUID.randomUUID() + "}:";
+        String index = prefix + "index";
 
         assertEquals(
                 OK,
@@ -248,7 +248,7 @@ public class VectorSearchTests {
                                 FTSearchOptions.builder()
                                         .params(
                                                 Map.of(
-                                                        "query_vec",
+                                                        gs("query_vec"),
                                                         gs(
                                                                 new byte[] {
                                                                     (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0,

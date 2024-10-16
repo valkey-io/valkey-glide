@@ -162,7 +162,7 @@ public class FT {
      * byte[] vector = new byte[24];
      * Arrays.fill(vector, (byte) 0);
      * var result = client.ftsearch("json_idx1", "*=>[KNN 2 @VEC $query_vec]",
-     *         FTSearchOptions.builder().params(Map.of("query_vec", gs(vector))).build())
+     *         FTSearchOptions.builder().params(Map.of(gs("query_vec"), gs(vector))).build())
      *     .get();
      * assertArrayEquals(result, new Object[] { 2L, Map.of(
      *     gs("json:2"), Map.of(gs("__VEC_score"), gs("11.1100006104"), gs("$"), gs("{\"vec\":[1.1,1.2,1.3,1.4,1.5,1.6]}")),
@@ -201,7 +201,7 @@ public class FT {
      * byte[] vector = new byte[24];
      * Arrays.fill(vector, (byte) 0);
      * var result = client.ftsearch(gs("json_idx1"), gs("*=>[KNN 2 @VEC $query_vec]"),
-     *         FTSearchOptions.builder().params(Map.of("query_vec", gs(vector))).build())
+     *         FTSearchOptions.builder().params(Map.of(gs("query_vec"), gs(vector))).build())
      *     .get();
      * assertArrayEquals(result, new Object[] { 2L, Map.of(
      *     gs("json:2"), Map.of(gs("__VEC_score"), gs("11.1100006104"), gs("$"), gs("{\"vec\":[1.1,1.2,1.3,1.4,1.5,1.6]}")),

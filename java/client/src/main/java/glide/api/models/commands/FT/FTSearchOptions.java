@@ -28,7 +28,7 @@ public class FTSearchOptions {
      * Query parameters, which could be referenced in the query by <code>$</code> sign, followed by
      * the parameter name.
      */
-    @Builder.Default private final Map<String, GlideString> params = new HashMap<>();
+    @Builder.Default private final Map<GlideString, GlideString> params = new HashMap<>();
 
     // TODO maxstale?
     // dialect is no-op
@@ -59,7 +59,7 @@ public class FTSearchOptions {
             args.add(gs(Integer.toString(params.size() * 2)));
             params.forEach(
                     (name, value) -> {
-                        args.add(gs(name));
+                        args.add(name);
                         args.add(value);
                     });
         }
