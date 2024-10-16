@@ -1247,6 +1247,442 @@ func (suite *GlideTestSuite) TestRPush() {
 	})
 }
 
+func (suite *GlideTestSuite) TestSAdd() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		members := []string{"member1", "member2"}
+
+		res, err := client.SAdd(key, members)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res.Value())
+		assert.False(suite.T(), res.IsNil())
+	})
+}
+
+func (suite *GlideTestSuite) TestSAdd_WithExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		members := []string{"member1", "member2"}
+
+		res1, err := client.SAdd(key, members)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res1.Value())
+		assert.False(suite.T(), res1.IsNil())
+
+		res2, err := client.SAdd(key, members)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res2.Value())
+		assert.False(suite.T(), res2.IsNil())
+	})
+}
+
+func (suite *GlideTestSuite) TestSRem() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		members := []string{"member1", "member2", "member3"}
+
+		res1, err := client.SAdd(key, members)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res1.Value())
+		assert.False(suite.T(), res1.IsNil())
+
+		res2, err := client.SRem(key, []string{"member1", "member2"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res2.Value())
+		assert.False(suite.T(), res2.IsNil())
+	})
+}
+
+func (suite *GlideTestSuite) TestSRem_WithExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		members := []string{"member1", "member2"}
+
+		res1, err := client.SAdd(key, members)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res1.Value())
+		assert.False(suite.T(), res1.IsNil())
+
+		res2, err := client.SRem(key, []string{"member3", "member4"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res2.Value())
+		assert.False(suite.T(), res2.IsNil())
+	})
+}
+
+func (suite *GlideTestSuite) TestSRem_WithNotExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+
+		res2, err := client.SRem(key, []string{"member1", "member2"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res2.Value())
+		assert.False(suite.T(), res2.IsNil())
+	})
+}
+
+func (suite *GlideTestSuite) TestSRem_WithExistingKeyAndDifferentMembers() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		members := []string{"member1", "member2", "member3"}
+
+		res1, err := client.SAdd(key, members)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res1.Value())
+		assert.False(suite.T(), res1.IsNil())
+
+		res2, err := client.SRem(key, []string{"member1", "member3", "member4"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res2.Value())
+		assert.False(suite.T(), res2.IsNil())
+	})
+}
+
+func (suite *GlideTestSuite) TestSMembers() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		members := []string{"member1", "member2", "member3"}
+
+		res1, err := client.SAdd(key, members)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res1.Value())
+		assert.False(suite.T(), res1.IsNil())
+
+		res2, err := client.SMembers(key)
+		assert.Nil(suite.T(), err)
+		assert.Len(suite.T(), res2, 3)
+	})
+}
+
+func (suite *GlideTestSuite) TestSMembers_WithNotExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+
+		res, err := client.SMembers(key)
+		assert.Nil(suite.T(), err)
+		assert.Empty(suite.T(), res)
+	})
+}
+
+func (suite *GlideTestSuite) TestSCard() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		members := []string{"member1", "member2", "member3"}
+
+		res1, err := client.SAdd(key, members)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res1.Value())
+		assert.False(suite.T(), res1.IsNil())
+
+		res2, err := client.SCard(key)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res2.Value())
+		assert.False(suite.T(), res2.IsNil())
+	})
+}
+
+func (suite *GlideTestSuite) TestSCard_WithNotExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+
+		res, err := client.SCard(key)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res.Value())
+		assert.False(suite.T(), res.IsNil())
+	})
+}
+
+func (suite *GlideTestSuite) TestSIsMember() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		members := []string{"member1", "member2", "member3"}
+
+		res1, err := client.SAdd(key, members)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res1.Value())
+
+		res2, err := client.SIsMember(key, "member2")
+		assert.Nil(suite.T(), err)
+		assert.True(suite.T(), res2.Value())
+		assert.False(suite.T(), res2.IsNil())
+	})
+}
+
+func (suite *GlideTestSuite) TestSIsMember_WithNotExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+
+		res, err := client.SIsMember(key, "member2")
+		assert.Nil(suite.T(), err)
+		assert.False(suite.T(), res.Value())
+		assert.False(suite.T(), res.IsNil())
+	})
+}
+
+func (suite *GlideTestSuite) TestSIsMember_WithNotExistingMember() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		members := []string{"member1", "member2", "member3"}
+
+		res1, err := client.SAdd(key, members)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res1.Value())
+		assert.False(suite.T(), res1.IsNil())
+
+		res2, err := client.SIsMember(key, "nonExistingMember")
+		assert.Nil(suite.T(), err)
+		assert.False(suite.T(), res2.Value())
+		assert.False(suite.T(), res2.IsNil())
+	})
+}
+
+func (suite *GlideTestSuite) TestSDiff() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1-" + uuid.NewString()
+		key2 := "{key}-2-" + uuid.NewString()
+
+		res1, err := client.SAdd(key1, []string{"a", "b", "c", "d"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), res1.Value())
+		assert.False(suite.T(), res1.IsNil())
+
+		res2, err := client.SAdd(key2, []string{"c", "d", "e"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res2.Value())
+		assert.False(suite.T(), res2.IsNil())
+
+		result, err := client.SDiff([]string{key1, key2})
+		assert.Nil(suite.T(), err)
+		assert.Len(suite.T(), result, 2)
+		assert.Contains(suite.T(), result, api.CreateStringResult("a"))
+		assert.Contains(suite.T(), result, api.CreateStringResult("b"))
+	})
+}
+
+func (suite *GlideTestSuite) TestSDiff_WithNotExistingKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1-" + uuid.NewString()
+		key2 := "{key}-2-" + uuid.NewString()
+
+		result, err := client.SDiff([]string{key1, key2})
+		assert.Nil(suite.T(), err)
+		assert.Empty(suite.T(), result)
+	})
+}
+
+func (suite *GlideTestSuite) TestSDiff_WithSingleKeyExist() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1-" + uuid.NewString()
+		key2 := "{key}-2-" + uuid.NewString()
+
+		res1, err := client.SAdd(key1, []string{"a", "b", "c"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res1.Value())
+		assert.False(suite.T(), res1.IsNil())
+
+		res2, err := client.SDiff([]string{key1, key2})
+		assert.Nil(suite.T(), err)
+		assert.Len(suite.T(), res2, 3)
+		assert.Contains(suite.T(), res2, api.CreateStringResult("a"))
+		assert.Contains(suite.T(), res2, api.CreateStringResult("b"))
+		assert.Contains(suite.T(), res2, api.CreateStringResult("c"))
+	})
+}
+
+func (suite *GlideTestSuite) TestSDiffStore() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1-" + uuid.NewString()
+		key2 := "{key}-2-" + uuid.NewString()
+		key3 := "{key}-3-" + uuid.NewString()
+
+		res1, err := client.SAdd(key1, []string{"a", "b", "c"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res1.Value())
+		assert.False(suite.T(), res1.IsNil())
+
+		res2, err := client.SAdd(key2, []string{"c", "d", "e"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res2.Value())
+		assert.False(suite.T(), res2.IsNil())
+
+		res3, err := client.SDiffStore(key3, []string{key1, key2})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res3.Value())
+		assert.False(suite.T(), res3.IsNil())
+
+		members, err := client.SMembers(key3)
+		assert.Nil(suite.T(), err)
+		assert.Len(suite.T(), members, 2)
+		assert.Contains(suite.T(), members, api.CreateStringResult("a"))
+		assert.Contains(suite.T(), members, api.CreateStringResult("b"))
+	})
+}
+
+func (suite *GlideTestSuite) TestSDiffStore_WithNotExistingKeys() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1-" + uuid.NewString()
+		key2 := "{key}-2-" + uuid.NewString()
+		key3 := "{key}-3-" + uuid.NewString()
+
+		res, err := client.SDiffStore(key3, []string{key1, key2})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res.Value())
+		assert.False(suite.T(), res.IsNil())
+
+		members, err := client.SMembers(key3)
+		assert.Nil(suite.T(), err)
+		assert.Empty(suite.T(), members)
+	})
+}
+
+func (suite *GlideTestSuite) TestSinter() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1-" + uuid.NewString()
+		key2 := "{key}-2-" + uuid.NewString()
+
+		res1, err := client.SAdd(key1, []string{"a", "b", "c", "d"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), res1.Value())
+		assert.False(suite.T(), res1.IsNil())
+
+		res2, err := client.SAdd(key2, []string{"c", "d", "e"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res2.Value())
+		assert.False(suite.T(), res2.IsNil())
+
+		members, err := client.SInter([]string{key1, key2})
+		assert.Nil(suite.T(), err)
+		assert.Len(suite.T(), members, 2)
+		assert.Contains(suite.T(), members, api.CreateStringResult("c"))
+		assert.Contains(suite.T(), members, api.CreateStringResult("d"))
+	})
+}
+
+func (suite *GlideTestSuite) TestSinter_WithNotExistingKeys() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1-" + uuid.NewString()
+		key2 := "{key}-2-" + uuid.NewString()
+
+		members, err := client.SInter([]string{key1, key2})
+		assert.Nil(suite.T(), err)
+		assert.Empty(suite.T(), members)
+	})
+}
+
+func (suite *GlideTestSuite) TestSInterCard() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1-" + uuid.NewString()
+		key2 := "{key}-2-" + uuid.NewString()
+
+		res1, err := client.SAdd(key1, []string{"one", "two", "three", "four"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), res1.Value())
+		assert.False(suite.T(), res1.IsNil())
+
+		result1, err := client.SInterCard([]string{key1, key2})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), result1.Value())
+		assert.False(suite.T(), result1.IsNil())
+
+		res2, err := client.SAdd(key2, []string{"two", "three", "four", "five"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), res2.Value())
+		assert.False(suite.T(), res2.IsNil())
+
+		result2, err := client.SInterCard([]string{key1, key2})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), result2.Value())
+		assert.False(suite.T(), result2.IsNil())
+	})
+}
+
+func (suite *GlideTestSuite) TestSInterCardLimit() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1-" + uuid.NewString()
+		key2 := "{key}-2-" + uuid.NewString()
+
+		res1, err := client.SAdd(key1, []string{"one", "two", "three", "four"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), res1.Value())
+		assert.False(suite.T(), res1.IsNil())
+
+		res2, err := client.SAdd(key2, []string{"two", "three", "four", "five"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), res2.Value())
+		assert.False(suite.T(), res2.IsNil())
+
+		result1, err := client.SInterCardLimit([]string{key1, key2}, 2)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), result1.Value())
+		assert.False(suite.T(), result1.IsNil())
+
+		result2, err := client.SInterCardLimit([]string{key1, key2}, 4)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), result2.Value())
+		assert.False(suite.T(), result2.IsNil())
+	})
+}
+
+func (suite *GlideTestSuite) TestSRandMember() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+
+		res, err := client.SAdd(key, []string{"one"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res.Value())
+		assert.False(suite.T(), res.IsNil())
+
+		member, err := client.SRandMember(key)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "one", member.Value())
+		assert.False(suite.T(), member.IsNil())
+	})
+}
+
+func (suite *GlideTestSuite) TestSPop() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		members := []string{"value1", "value2", "value3"}
+
+		res, err := client.SAdd(key, members)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res.Value())
+		assert.False(suite.T(), res.IsNil())
+
+		popMember, err := client.SPop(key)
+		assert.Nil(suite.T(), err)
+		assert.Contains(suite.T(), members, popMember.Value())
+		assert.False(suite.T(), popMember.IsNil())
+
+		remainingMembers, err := client.SMembers(key)
+		assert.Nil(suite.T(), err)
+		assert.Len(suite.T(), remainingMembers, 2)
+		assert.NotContains(suite.T(), remainingMembers, popMember)
+	})
+}
+
+func (suite *GlideTestSuite) TestSPop_LastMember() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+
+		res1, err := client.SAdd(key, []string{"lastValue"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res1.Value())
+		assert.False(suite.T(), res1.IsNil())
+
+		popMember, err := client.SPop(key)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "lastValue", popMember.Value())
+		assert.False(suite.T(), popMember.IsNil())
+
+		remainingMembers, err := client.SMembers(key)
+		assert.Nil(suite.T(), err)
+		assert.Empty(suite.T(), remainingMembers)
+	})
+}
+
 func (suite *GlideTestSuite) TestLRange() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		list := []string{"value4", "value3", "value2", "value1"}
@@ -2031,5 +2467,35 @@ func (suite *GlideTestSuite) TestBLMove() {
 		assert.Equal(suite.T(), api.CreateNilStringResult(), res12)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestDel_MultipleKeys() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "testKey1_" + uuid.New().String()
+		key2 := "testKey2_" + uuid.New().String()
+		key3 := "testKey3_" + uuid.New().String()
+
+		suite.verifyOK(client.Set(key1, initialValue))
+		suite.verifyOK(client.Set(key2, initialValue))
+		suite.verifyOK(client.Set(key3, initialValue))
+
+		deletedCount, err := client.Del([]string{key1, key2, key3})
+
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), deletedCount.Value())
+
+		result1, err1 := client.Get(key1)
+		result2, err2 := client.Get(key2)
+		result3, err3 := client.Get(key3)
+
+		assert.Nil(suite.T(), err1)
+		assert.True(suite.T(), result1.IsNil())
+
+		assert.Nil(suite.T(), err2)
+		assert.True(suite.T(), result2.IsNil())
+
+		assert.Nil(suite.T(), err3)
+		assert.True(suite.T(), result3.IsNil())
 	})
 }
