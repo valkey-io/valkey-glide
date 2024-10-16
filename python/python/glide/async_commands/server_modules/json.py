@@ -362,6 +362,48 @@ async def numincrby(
     return cast(Optional[bytes], await client.custom_command(args))
 
 
+async def nummultby(
+    client: TGlideClient,
+    key: TEncodable,
+    path: TEncodable,
+    number: Union[int, float],
+) -> Optional[bytes]:
+    """
+    Multiplies the JSON value(s) at the specified `path` by `number` within the JSON document stored at `key`.
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+        key (TEncodable): The key of the JSON document.
+        path (TEncodable): The path within the JSON document.
+        number (Union[int, float]): The number to multiply by.
+
+    Returns:
+        Optional[bytes]:
+            For JSONPath (`path` starts with `$`):
+                Returns a bytes string representation of an array of bulk strings, indicating the new values after multiplication for each matched `path`.
+                If a value is not a number, its corresponding return value will be `null`.
+                If `path` doesn't exist, a byte string representation of an empty array will be returned.
+            For legacy path (`path` doesn't start with `$`):
+                Returns a bytes string representation of the resulting value after multiplication.
+                If multiple paths match, the result of the last updated value is returned.
+                If the value at the `path` is not a number or `path` doesn't exist, an error is raised.
+            If `key` does not exist, an error is raised.
+            If the result is out of the range of 64-bit IEEE double, an error is raised.
+
+    Examples:
+        >>> from glide import json
+        >>> await json.set(client, "doc", "$", '{"a": [], "b": [1], "c": [1, 2], "d": [1, 2, 3]}')
+            'OK'
+        >>> await json.nummultby(client, "doc", "$.d[*]", 2)
+            b'[2,4,6]'  # Multiplies each element in the `d` array by 2.
+        >>> await json.nummultby(client, "doc", ".c[1]", 2)
+            b'4'  # Multiplies the second element in the `c` array by 2.
+    """
+    args = ["JSON.NUMMULTBY", key, path, str(number)]
+
+    return cast(Optional[bytes], await client.custom_command(args))
+
+
 async def toggle(
     client: TGlideClient,
     key: TEncodable,
