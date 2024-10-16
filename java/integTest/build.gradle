@@ -148,14 +148,3 @@ tasks.register('modulesTest', Test) {
         includeTestsMatching 'glide.modules.*'
     }
 }
-
-
-tasks.register('standaloneModulesTest', Test) {
-    doFirst {
-        standaloneHosts = System.getProperty("standalone-endpoints")
-    }
-
-    filter {
-        includeTestsMatching 'glide.modules.*'
-    }
-}
