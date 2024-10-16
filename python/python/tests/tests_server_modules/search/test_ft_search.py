@@ -80,8 +80,11 @@ class TestFtSearch:
         assert result[0] == 2
         searchResultMap: Mapping[TEncodable, Mapping[TEncodable, TEncodable]]  = result[1]
         for key, fieldsMap in searchResultMap.items():
-            assert str(key) == json_key or str(key) == json_key2
-            if str(key) == json_key:
+            keyString = key.decode("utf-8")
+            assert keyString == json_key or keyString == json_key2
+            if keyString == json_key:
                 for fieldName, fieldValue in fieldsMap:
-                    assert str(fieldName) == "a" or str(fieldName) == "b"
-                    assert int(fieldValue) == json_value.get("a") or int(fieldValue) == json_value.get("b")
+                    fieldNameString = fieldName.decode("utf-8")
+                    fieldValueInt = int(fieldValue.decode("utf-8"))
+                    assert fieldNameString == "a" or fieldNameString == "b"
+                    assert fieldValueInt == json_value.get("a") or fieldValueInt == json_value.get("b")
