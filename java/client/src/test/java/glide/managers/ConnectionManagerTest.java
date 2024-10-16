@@ -64,6 +64,8 @@ public class ConnectionManagerTest {
 
     private static final String CLIENT_NAME = "ClientName";
 
+    private static final int INFLIGHT_REQUESTS_LIMIT = 1000;
+
     @BeforeEach
     public void setUp() {
         channel = mock(ChannelHandler.class);
@@ -149,6 +151,7 @@ public class ConnectionManagerTest {
                                         .subscription(EXACT, gs("channel_2"))
                                         .subscription(PATTERN, gs("*chatRoom*"))
                                         .build())
+                        .inflightRequestsLimit(INFLIGHT_REQUESTS_LIMIT)
                         .build();
         ConnectionRequest expectedProtobufConnectionRequest =
                 ConnectionRequest.newBuilder()
@@ -193,6 +196,7 @@ public class ConnectionManagerTest {
                                                                                 ByteString.copyFrom(gs("*chatRoom*").getBytes()))
                                                                         .build()))
                                         .build())
+                        .setInflightRequestsLimit(INFLIGHT_REQUESTS_LIMIT)
                         .build();
         CompletableFuture<Response> completedFuture = new CompletableFuture<>();
         Response response = Response.newBuilder().setConstantResponse(ConstantResponse.OK).build();
