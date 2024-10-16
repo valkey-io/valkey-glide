@@ -216,9 +216,9 @@ jobs:
 
             - name: Install dependencies
               if: always()
-              working-directory: ./python
-              run: |
-                  sudo apt install -y python3-pip python3 flake8 isort black
+              uses: threeal/pipx-install-action@latest
+              with:
+                  packages: flake8 isort black
 
             - name: Lint python with isort
               if: always()
