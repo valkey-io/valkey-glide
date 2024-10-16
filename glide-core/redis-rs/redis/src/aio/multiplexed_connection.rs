@@ -3,7 +3,7 @@ use crate::aio::setup_connection;
 use crate::aio::DisconnectNotifier;
 use crate::client::GlideConnectionOptions;
 use crate::cmd::Cmd;
-#[cfg(any(feature = "tokio-comp", feature = "async-std-comp"))]
+#[cfg(feature = "tokio-comp")]
 use crate::parser::ValueCodec;
 use crate::push_manager::PushManager;
 use crate::types::{RedisError, RedisFuture, RedisResult, Value};
@@ -29,7 +29,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::task::{self, Poll};
 use std::time::Duration;
-#[cfg(any(feature = "tokio-comp", feature = "async-std-comp"))]
+#[cfg(feature = "tokio-comp")]
 use tokio_util::codec::Decoder;
 
 // Senders which the result of a single request are sent through
@@ -448,8 +448,8 @@ impl MultiplexedConnection {
             Box::pin(f)
         }
 
-        #[cfg(all(not(feature = "tokio-comp"), not(feature = "async-std-comp")))]
-        compile_error!("tokio-comp or async-std-comp features required for aio feature");
+        #[cfg(not(feature = "tokio-comp"))]
+        compile_error!("tokio-comp feature is required for aio feature");
 
         let redis_connection_info = &connection_info.redis;
         let codec = ValueCodec::default()

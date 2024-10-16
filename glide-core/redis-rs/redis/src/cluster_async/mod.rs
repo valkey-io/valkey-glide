@@ -38,11 +38,7 @@ use crate::{
     commands::cluster_scan::{cluster_scan, ClusterScanArgs, ObjectType, ScanStateRC},
     FromRedisValue, InfoDict, ToRedisArgs,
 };
-#[cfg(all(not(feature = "tokio-comp"), feature = "async-std-comp"))]
-use async_std::task::{spawn, JoinHandle};
 use dashmap::DashMap;
-#[cfg(all(not(feature = "tokio-comp"), feature = "async-std-comp"))]
-use futures::executor::block_on;
 use std::{
     collections::{HashMap, HashSet},
     fmt, io, mem,
@@ -83,13 +79,6 @@ use crate::{
 };
 use futures::stream::{FuturesUnordered, StreamExt};
 use std::time::Duration;
-
-#[cfg(all(not(feature = "tokio-comp"), feature = "async-std-comp"))]
-use crate::aio::{async_std::AsyncStd, RedisRuntime};
-#[cfg(all(not(feature = "tokio-comp"), feature = "async-std-comp"))]
-use backoff_std_async::future::retry;
-#[cfg(all(not(feature = "tokio-comp"), feature = "async-std-comp"))]
-use backoff_std_async::{Error as BackoffError, ExponentialBackoff};
 
 #[cfg(feature = "tokio-comp")]
 use async_trait::async_trait;
@@ -142,9 +131,6 @@ where
                 };
                 #[cfg(feature = "tokio-comp")]
                 tokio::spawn(stream);
-                #[cfg(all(not(feature = "tokio-comp"), feature = "async-std-comp"))]
-                AsyncStd::spawn(stream);
-
                 ClusterConnection(tx)
             })
     }
@@ -510,14 +496,10 @@ pub(crate) struct ClusterConnInner<C> {
 impl<C> Dispose for ClusterConnInner<C> {
     fn dispose(self) {
         if let Some(handle) = self.periodic_checks_handler {
-            #[cfg(all(not(feature = "tokio-comp"), feature = "async-std-comp"))]
-            block_on(handle.cancel());
             #[cfg(feature = "tokio-comp")]
             handle.abort()
         }
         if let Some(handle) = self.connections_validation_handler {
-            #[cfg(all(not(feature = "tokio-comp"), feature = "async-std-comp"))]
-            block_on(handle.cancel());
             #[cfg(feature = "tokio-comp")]
             handle.abort()
         }
@@ -657,9 +639,6 @@ fn route_for_pipeline(pipeline: &crate::Pipeline) -> RedisResult<Option<Route>> 
 fn boxed_sleep(duration: Duration) -> BoxFuture<'static, ()> {
     #[cfg(feature = "tokio-comp")]
     return Box::pin(tokio::time::sleep(duration));
-
-    #[cfg(all(not(feature = "tokio-comp"), feature = "async-std-comp"))]
-    return Box::pin(async_std::task::sleep(duration));
 }
 
 pub(crate) enum Response {
@@ -1080,10 +1059,6 @@ where
             {
                 connection.periodic_checks_handler = Some(tokio::spawn(periodic_task));
             }
-            #[cfg(all(not(feature = "tokio-comp"), feature = "async-std-comp"))]
-            {
-                connection.periodic_checks_handler = Some(spawn(periodic_task));
-            }
         }
 
         let connections_validation_interval = cluster_params.connections_validation_interval;
@@ -1094,11 +1069,6 @@ where
             {
                 connection.connections_validation_handler =
                     Some(tokio::spawn(connections_validation_handler));
-            }
-            #[cfg(all(not(feature = "tokio-comp"), feature = "async-std-comp"))]
-            {
-                connection.connections_validation_handler =
-                    Some(spawn(connections_validation_handler));
             }
         }
 
@@ -2554,16 +2524,6 @@ impl Connect for MultiplexedConnection {
                         ),
                     )
                     .await?
-                }
-                #[cfg(feature = "async-std-comp")]
-                rt @ Runtime::AsyncStd => {
-                    rt.timeout(connection_timeout,client
-                        .get_multiplexed_async_connection_inner::<crate::aio::async_std::AsyncStd>(
-                            response_timeout,
-                            socket_addr,
-                            glide_connection_options,
-                        ))
-                        .await?
                 }
             }
         }

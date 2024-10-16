@@ -66,13 +66,9 @@ derivative = { version = "2.2.0", optional = true }
 # Only needed for async cluster
 dashmap = { version = "6.0", optional = true }
 
-# Only needed for async_std support
-async-std = { version = "1.8.0", optional = true }
 async-trait = { version = "0.1.24", optional = true }
-# To avoid conflicts, backoff-std-async.version != backoff-tokio.version so we could run tests with --all-features
-backoff-std-async = { package = "backoff", version = "0.3.0", optional = true, features = ["async-std"] }
 
-# Only needed for tokio support 
+# Only needed for tokio support
 backoff-tokio = { package = "backoff", version = "0.4.0", optional = true, features = ["tokio"] }
 
 # Only needed for native tls
@@ -108,7 +104,18 @@ arcstr = "1.1.5"
 uuid = { version = "1.6.1", optional = true }
 
 [features]
-default = ["acl", "streams", "geospatial", "script", "keep-alive"]
+default = [
+    "acl",
+    "streams",
+    "geospatial",
+    "script",
+    "keep-alive",
+    "tokio-comp",
+    "tokio-rustls-comp",
+    "connection-manager",
+    "cluster",
+    "cluster-async"
+]
 acl = []
 aio = ["bytes", "pin-project-lite", "futures-util", "futures-util/alloc", "futures-util/sink", "tokio/io-util", "tokio-util", "tokio-util/codec", "combine/tokio", "async-trait", "fast-math", "dispose"]
 geospatial = []
@@ -119,9 +126,6 @@ tls-native-tls = ["native-tls"]
 tls-rustls = ["rustls", "rustls-native-certs", "rustls-pemfile", "rustls-pki-types"]
 tls-rustls-insecure = ["tls-rustls"]
 tls-rustls-webpki-roots = ["tls-rustls", "webpki-roots"]
-async-std-comp = ["aio", "async-std", "backoff-std-async"]
-async-std-native-tls-comp = ["async-std-comp", "async-native-tls", "tls-native-tls"]
-async-std-rustls-comp = ["async-std-comp", "futures-rustls", "tls-rustls"]
 tokio-comp = ["aio", "tokio/net", "backoff-tokio"]
 tokio-native-tls-comp = ["tokio-comp", "tls-native-tls", "tokio-native-tls"]
 tokio-rustls-comp = ["tokio-comp", "tls-rustls", "tokio-rustls"]
@@ -139,7 +143,6 @@ disable-client-setinfo = []
 
 # Deprecated features
 tls = ["tls-native-tls"] # use "tls-native-tls" instead
-async-std-tls-comp = ["async-std-native-tls-comp"] # use "async-std-native-tls-comp" instead
 
 [dev-dependencies]
 rand = "0.8"
@@ -156,14 +159,11 @@ tempfile = "=3.6.0"
 once_cell = "1"
 anyhow = "1"
 sscanf = "0.4.1"
+serial_test = "2"
 
 [[test]]
 name = "test_async"
 required-features = ["tokio-comp"]
-
-[[test]]
-name = "test_async_async_std"
-required-features = ["async-std-comp"]
 
 [[test]]
 name = "parser"
@@ -178,7 +178,7 @@ required-features = ["json", "serde/derive"]
 
 [[test]]
 name = "test_cluster_async"
-required-features = ["cluster-async"]
+required-features = ["cluster-async", "tokio-comp"]
 
 [[test]]
 name = "test_async_cluster_connections_logic"
