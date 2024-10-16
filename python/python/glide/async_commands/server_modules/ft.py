@@ -105,6 +105,8 @@ async def search(
     if options:
         args.extend(options.toArgs())
     args.extend(["DIALECT", "2"])
+    print("args======")
+    print(args)
     return cast(
         List[Union[int, Mapping[TEncodable, List[Mapping[TEncodable, TEncodable]]]]],
         await client.custom_command(args),
