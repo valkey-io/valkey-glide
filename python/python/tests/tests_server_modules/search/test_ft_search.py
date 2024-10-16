@@ -84,7 +84,7 @@ class TestFtSearch:
             assert keyString == json_key or keyString == json_key2
             if keyString == json_key:
                 print(fieldsMap)
-                for fieldName, fieldValue in fieldsMap:
+                for fieldName, fieldValue in fieldsMap.items():
                     fieldNameString = fieldName.decode("utf-8")
                     fieldValueInt = int(fieldValue.decode("utf-8"))
                     assert fieldNameString == "a" or fieldNameString == "b"
