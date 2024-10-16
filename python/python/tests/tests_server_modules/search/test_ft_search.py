@@ -26,13 +26,14 @@ class TestFtSearch:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ft_search(self, glide_client: GlideClusterClient):
-        json_key = "a:" + str(uuid.uuid4())
-        json_key2 = "z:" + str(uuid.uuid4())
+        prefix = "{json-search-"+str(uuid.uuid4()+"}:")
+        json_key = prefix + str(uuid.uuid4())
+        json_key2 = prefix + str(uuid.uuid4())
         json_value = {"a": 11111, "b": 2, "c": 3}
         json_value2 = {"a": 22222, "b": 2, "c": 3}
         prefixes: List[TEncodable] = []
-        prefixes.append("{json}:")
-        index = "a:"+str(uuid.uuid4())
+        prefixes.append(prefix)
+        index = "{json-search}:"+str(uuid.uuid4())
 
         # Create an index
         assert (
@@ -74,12 +75,13 @@ class TestFtSearch:
                 ]
             ),
         )
-
-        #searchResultMap: Mapping[TEncodable, Mapping[TEncodable, TEncodable]]  = result[1]
-        
-        print("----------")
-        print(result)
-        print(len(result))
-       # assert len(result) == 2
-       # assert result[0] == 2
-        assert True == False
+        # Check if we get the expected result
+        assert len(result) == 2
+        assert result[0] == 2
+        searchResultMap: Mapping[TEncodable, Mapping[TEncodable, TEncodable]]  = result[1]
+        for key, fieldsMap in searchResultMap.items():
+            assert str(key) == json_key or str(key) == json_key2
+            if str(key) == json_key:
+                for fieldName, fieldValue in fieldsMap:
+                    assert str(fieldName) == "a" or str(fieldName) == "b"
+                    assert int(fieldValue) == json_value.get("a") or int(fieldValue) == json_value.get("b")
