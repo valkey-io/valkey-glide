@@ -7,11 +7,12 @@ class CommandNames:
     """
 
     FT_CREATE = "FT.CREATE"
+    FT_DROPINDEX = "FT.DROPINDEX"
 
 
 class FtCreateKeywords:
     """
-    Keywords used in the [FT.CREATE] command statment.
+    Keywords used in the FT.CREATE command statment.
     """
 
     SCHEMA = "SCHEMA"

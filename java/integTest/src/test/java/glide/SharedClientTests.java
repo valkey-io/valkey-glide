@@ -6,18 +6,25 @@ import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.TestUtilities.getRandomString;
 import static glide.api.BaseClient.OK;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
+import glide.api.models.exceptions.RequestException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 import lombok.Getter;
 import lombok.SneakyThrows;
+import net.bytebuddy.utility.RandomString;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Timeout;
@@ -110,5 +117,58 @@ public class SharedClientTests {
         CompletableFuture.allOf(futures).join();
 
         executorService.shutdown();
+    }
+
+    private static Stream<Arguments> inflightRequestsLimitSizeAndClusterMode() {
+        return Stream.of(
+                Arguments.of(false, 5),
+                Arguments.of(false, 100),
+                Arguments.of(false, 1000),
+                Arguments.of(true, 5),
+                Arguments.of(true, 100),
+                Arguments.of(true, 1000));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest()
+    @MethodSource("inflightRequestsLimitSizeAndClusterMode")
+    public void inflight_requests_limit(boolean clusterMode, int inflightRequestsLimit) {
+        BaseClient testClient;
+        String keyName = "nonexistkeylist" + RandomString.make(4);
+
+        if (clusterMode) {
+            testClient =
+                    GlideClient.createClient(
+                                    commonClientConfig().inflightRequestsLimit(inflightRequestsLimit).build())
+                            .get();
+        } else {
+            testClient =
+                    GlideClusterClient.createClient(
+                                    commonClusterClientConfig().inflightRequestsLimit(inflightRequestsLimit).build())
+                            .get();
+        }
+
+        // exercise
+        List<CompletableFuture<String[]>> responses = new ArrayList<>();
+        for (int i = 0; i < inflightRequestsLimit + 1; i++) {
+            responses.add(testClient.blpop(new String[] {keyName}, 0));
+        }
+
+        // verify
+        // Check that all requests except the last one are still pending
+        for (int i = 0; i < inflightRequestsLimit; i++) {
+            assertFalse(responses.get(i).isDone(), "Request " + i + " should still be pending");
+        }
+
+        // The last request should complete exceptionally
+        try {
+            responses.get(inflightRequestsLimit).get(100, TimeUnit.MILLISECONDS);
+            fail("Expected the last request to throw an exception");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof RequestException);
+            assertTrue(e.getCause().getMessage().contains("maximum inflight requests"));
+        }
+
+        testClient.close();
     }
 }

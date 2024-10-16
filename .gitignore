@@ -43,6 +43,8 @@ logger-rs.linux-x64-gnu.node
 utils/clusters/
 utils/tls_crts/
 utils/TestUtils.js
+.build/
+.project
 
 # OSS Review Toolkit (ORT) files
 **/ort*/**

@@ -70,6 +70,7 @@ Before starting this step, make sure you've installed all software requirments.
     git submodule update --init --recursive
     ```
 3. Install all node dependencies:
+
     ```bash
     cd node
     npm i
@@ -77,6 +78,7 @@ Before starting this step, make sure you've installed all software requirments.
     npm i
     cd ..
     ```
+
 4. Build the Node wrapper (Choose a build option from the following and run it from the `node` folder):
 
     1. Build in release mode, stripped from all debug symbols (optimized and minimized binary size):
