@@ -28,13 +28,11 @@ import glide.api.models.commands.FT.FTCreateOptions.VectorFieldHnsw;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.exceptions.RequestException;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -196,15 +194,8 @@ public class VectorSearchTests {
     @Test
     @SuppressWarnings("unchecked")
     public void ft_info() {
-        var indices =
-                client
-                        .customCommand(new String[] {"FT._LIST"}, ALL_PRIMARIES)
-                        .get()
-                        .getMultiValue()
-                        .values()
-                        .stream()
-                        .flatMap(s -> Arrays.stream((Object[]) s))
-                        .collect(Collectors.toSet());
+        // TODO use FT.LIST with it is done
+        var indices = (Object[]) client.customCommand(new String[] {"FT._LIST"}).get().getSingleValue();
 
         // check that we can get a response for all indices (no crashes on value conversion or so)
         for (var idx : indices) {
@@ -263,7 +254,6 @@ public class VectorSearchTests {
 
     @SneakyThrows
     @Test
-    @SuppressWarnings("unchecked")
     public void ft_drop() {
         var index = UUID.randomUUID().toString();
         assertEquals(
