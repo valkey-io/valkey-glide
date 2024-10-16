@@ -97,7 +97,6 @@ public class ConnectionManager {
         }
 
         connectionRequestBuilder
-                .setProtocolValue(1)
                 .setTlsMode(configuration.isUseTLS() ? TlsMode.SecureTls : TlsMode.NoTls)
                 .setReadFrom(mapReadFromEnum(configuration.getReadFrom()));
 
