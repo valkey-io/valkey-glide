@@ -416,6 +416,7 @@ public class VectorSearchTests {
                                     + " last you long past graduation.\", \"condition\": \"refurbished\"}"
                         })
                 .get();
+        Thread.sleep(1000); // let server digest the data and update index
 
         // FT.AGGREGATE idx:bicycle "*" LOAD 1 "__key" GROUPBY 1 "@condition" REDUCE COUNT 0 AS bicylces
         var aggreg =
@@ -540,6 +541,7 @@ public class VectorSearchTests {
                                 "ibmdb_id",
                                 "tt0086190"))
                 .get();
+        Thread.sleep(1000); // let server digest the data and update index
 
         // FT.AGGREGATE idx:movie * LOAD * APPLY ceil(@rating) as r_rating GROUPBY 1 @genre REDUCE
         // COUNT 0 AS nb_of_movies REDUCE SUM 1 votes AS nb_of_votes REDUCE AVG 1 r_rating AS avg_rating
