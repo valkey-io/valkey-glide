@@ -77,7 +77,7 @@ class TestFtSearch:
         )
 
         # Check if we get the expected result from ft.search for string inputs
-        self.checkExpectedSearchResult(result)
+        self.checkExpectedSearchResult(result, json_key1, json_value1, json_key2, json_value2)
 
         # Search the index for byte inputs
         result = await ft.search(
@@ -94,7 +94,7 @@ class TestFtSearch:
 
 
         # Check if we get the expected result from ft.search from byte inputs
-        self.checkExpectedSearchResult(result)
+        self.checkExpectedSearchResult(result, json_key1, json_value1, json_key2, json_value2)
 
 
 
