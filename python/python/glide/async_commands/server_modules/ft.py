@@ -97,16 +97,13 @@ async def search(
         options (Optional[FtSeachOptions]): Optional arguments for the FT.SEARCH command. See `FtSearchOptions`.
 
     Returns:
-        List[Union[int, Mapping[TEncodable, Mapping[TEncodable]]]]:
+        List[Union[int, Mapping[TEncodable, Mapping[TEncodable]]]]: 
 
     Examples:
     """
     args: List[TEncodable] = [CommandNames.FT_SEARCH, indexName, query]
     if options:
         args.extend(options.toArgs())
-    args.extend(["DIALECT", "2"])
-    print("args======")
-    print(args)
     return cast(
         List[Union[int, Mapping[TEncodable, List[Mapping[TEncodable, TEncodable]]]]],
         await client.custom_command(args),
