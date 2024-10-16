@@ -39,7 +39,7 @@ class TestFtSearch:
             == OK
         )
         assert (
-            await json.set(glide_client, json_key2, "$", OuterJson.dumps(json_value))
+            await json.set(glide_client, json_key2, "$", OuterJson.dumps(json_value2))
             == OK
         )
         # Create an index
@@ -62,8 +62,8 @@ class TestFtSearch:
             "*",
             options=FtSeachOptions(
                 return_fields=[
-                    ReturnField(field_identifier="$.a", alias="a"),
-                    ReturnField(field_identifier="$.b", alias="b"),
+                    ReturnField(field_identifier="$.a", alias="a_new"),
+                    ReturnField(field_identifier="$.b", alias="b_new"),
                 ]
             ),
         )
