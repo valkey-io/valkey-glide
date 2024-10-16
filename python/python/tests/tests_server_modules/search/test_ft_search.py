@@ -77,7 +77,7 @@ class TestFtSearch:
         )
 
         # Check if we get the expected result from ft.search for string inputs
-        self.checkExpectedSearchResult(result=result1, json_key1=json_key1, json_key2=json_key2, json_value1=json_value1, json_value2=json_value2)
+        self.checkExpectedSearchResult(self, result=result1, json_key1=json_key1, json_key2=json_key2, json_value1=json_value1, json_value2=json_value2)
 
         # Search the index for byte inputs
         result2 = await ft.search(
@@ -94,10 +94,10 @@ class TestFtSearch:
 
 
         # Check if we get the expected result from ft.search from byte inputs
-        self.checkExpectedSearchResult(result=result2, json_key1=json_key1, json_key2=json_key2, json_value1=json_value1, json_value2=json_value2)
+        self.checkExpectedSearchResult(self, result=result2, json_key1=json_key1, json_key2=json_key2, json_value1=json_value1, json_value2=json_value2)
 
 
-    def checkExpectedSearchResult(result, json_key1, json_key2, json_value1, json_value2):
+    def checkExpectedSearchResult(self, result, json_key1, json_key2, json_value1, json_value2):
         assert len(result) == 2
         assert result[0] == 2
         searchResultMap: Mapping[TEncodable, Mapping[TEncodable, TEncodable]]  = result[1]
