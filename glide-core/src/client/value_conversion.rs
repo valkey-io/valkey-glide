@@ -958,40 +958,33 @@ pub(crate) fn convert_to_expected_type(
                     key_type: &None,
                     value_type: &None,
                 }))? else { unreachable!() };
-                for pair in map.iter_mut() {
-                    if pair.0 == Value::SimpleString("fields".into()) {
-                        let Value::Array(mut fields) = pair.1.clone() else {
-                            return Err((
-                                ErrorKind::TypeError,
-                                "Response couldn't be converted for FT.INFO",
-                                format!("(`fields` was {:?})", get_value_type(&pair.1.clone())),
-                            )
-                                .into());
-                        };
-
-                        for field in fields.iter_mut() {
-                            let Value::Map(mut field_params) = convert_to_expected_type(field.clone(), Some(ExpectedReturnType::Map {
-                                key_type: &None,
-                                value_type: &None,
-                            })).unwrap() else { unreachable!() };
-
-                            for pair in field_params.iter_mut() {
-                                if pair.0 == Value::SimpleString("vector_params".into()) {
-                                    *pair = (pair.0.clone(), convert_to_expected_type(pair.1.clone(), Some(ExpectedReturnType::Map {
-                                        key_type: &None,
-                                        value_type: &None,
-                                    }))?);
-                                    break;
-                                }
-                            }
-
-                            *field = Value::Map(field_params);
-                        }
-
-                        *pair = (pair.0.clone(), Value::Array(fields));
-                        break;
-                    }
-                }
+                let Some(fields_pair) = map.iter_mut().find(|(key, _)| {
+                    *key == Value::SimpleString("fields".into())
+                }) else { return Ok(Value::Map(map)) };
+                let (fields_key, fields_value) = std::mem::replace(fields_pair, (Value::Nil, Value::Nil));
+                let Value::Array(fields) = fields_value else {
+                    return Err((
+                        ErrorKind::TypeError,
+                        "Response couldn't be converted for FT.INFO",
+                        format!("(`fields` was {:?})", get_value_type(&fields_value)),
+                    ).into());
+                };
+                let fields = fields.into_iter().map(|field| {
+                    let Value::Map(mut field_params) = convert_to_expected_type(field, Some(ExpectedReturnType::Map {
+                        key_type: &None,
+                        value_type: &None,
+                    }))? else { unreachable!() };
+                    let Some(vector_params_pair) = field_params.iter_mut().find(|(key, _)| {
+                        *key == Value::SimpleString("vector_params".into())
+                    }) else { return Ok(Value::Map(field_params)) };
+                    let (vector_params_key, vector_params_value) = std::mem::replace(vector_params_pair, (Value::Nil, Value::Nil));
+                    let _ = std::mem::replace(vector_params_pair, (vector_params_key, convert_to_expected_type(vector_params_value, Some(ExpectedReturnType::Map {
+                        key_type: &None,
+                        value_type: &None,
+                    }))?));
+                    Ok(Value::Map(field_params))
+                }).collect::<RedisResult<Vec<Value>>>()?;
+                let _ = std::mem::replace(fields_pair, (fields_key, Value::Array(fields)));
                 Ok(Value::Map(map))
             },
             _ => Err((

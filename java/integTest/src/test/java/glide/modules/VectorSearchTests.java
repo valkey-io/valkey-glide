@@ -3,6 +3,7 @@ package glide.modules;
 
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -14,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.api.GlideClusterClient;
 import glide.api.commands.servermodules.FT;
+import glide.api.models.GlideString;
 import glide.api.models.commands.FT.FTCreateOptions;
 import glide.api.models.commands.FT.FTCreateOptions.DistanceMetric;
 import glide.api.models.commands.FT.FTCreateOptions.FieldInfo;
@@ -204,8 +206,7 @@ public class VectorSearchTests {
                         .flatMap(s -> Arrays.stream((Object[]) s))
                         .collect(Collectors.toSet());
 
-        // check that we can get a response for all existing indices (no crashes on value conversion or
-        // so)
+        // check that we can get a response for all indices (no crashes on value conversion or so)
         for (var idx : indices) {
             FT.info(client, (String) idx).get();
         }
@@ -228,23 +229,33 @@ public class VectorSearchTests {
                         .get());
 
         var response = FT.info(client, index).get();
-        assertEquals(index, response.get("index_name"));
-        assertEquals("JSON", response.get("key_type"));
-        assertArrayEquals(new String[] {"123"}, (Object[]) response.get("key_prefixes"));
+        assertEquals(gs(index), response.get("index_name"));
+        assertEquals(gs("JSON"), response.get("key_type"));
+        assertArrayEquals(new GlideString[] {gs("123")}, (Object[]) response.get("key_prefixes"));
         var fields = (Object[]) response.get("fields");
         assertEquals(2, fields.length);
-        var f1 = (Map<String, Object>) fields[1];
-        assertEquals("$.vec", f1.get("identifier"));
-        assertEquals("VECTOR", f1.get("type"));
-        assertEquals("VEC", f1.get("field_name"));
-        var f1params = (Map<String, Object>) f1.get("vector_params");
-        assertEquals("COSINE", f1params.get("distance_metric"));
-        assertEquals(42L, f1params.get("dimension"));
+        var f1 = (Map<GlideString, Object>) fields[1];
+        assertEquals(gs("$.vec"), f1.get(gs("identifier")));
+        assertEquals(gs("VECTOR"), f1.get(gs("type")));
+        assertEquals(gs("VEC"), f1.get(gs("field_name")));
+        var f1params = (Map<GlideString, Object>) f1.get(gs("vector_params"));
+        assertEquals(gs("COSINE"), f1params.get(gs("distance_metric")));
+        assertEquals(42L, f1params.get(gs("dimension")));
 
         assertEquals(
-                Map.of("identifier", "$.name", "type", "TEXT", "field_name", "$.name", "option", ""),
+                Map.of(
+                        gs("identifier"),
+                        gs("$.name"),
+                        gs("type"),
+                        gs("TEXT"),
+                        gs("field_name"),
+                        gs("$.name"),
+                        gs("option"),
+                        gs("")),
                 fields[0]);
 
+        // querying a missing index
+        assertEquals(OK, FT.dropindex(client, index).get());
         var exception = assertThrows(ExecutionException.class, () -> FT.info(client, index).get());
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getMessage().contains("Index not found"));
