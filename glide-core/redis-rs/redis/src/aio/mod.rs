@@ -14,11 +14,6 @@ use std::path::Path;
 use std::pin::Pin;
 use std::time::Duration;
 
-/// Enables the async_std compatibility
-#[cfg(feature = "async-std-comp")]
-#[cfg_attr(docsrs, doc(cfg(feature = "async-std-comp")))]
-pub mod async_std;
-
 #[cfg(feature = "tls-rustls")]
 use crate::tls::TlsConnParams;
 

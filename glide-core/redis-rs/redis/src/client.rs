@@ -88,13 +88,12 @@ pub struct GlideConnectionOptions {
     pub disconnect_notifier: Option<Box<dyn DisconnectNotifier>>,
 }
 
-/// To enable async support you need to chose one of the supported runtimes and active its
-/// corresponding feature: `tokio-comp` or `async-std-comp`
+/// To enable async support you need to enable the feature: `tokio-comp`
 #[cfg(feature = "aio")]
 #[cfg_attr(docsrs, doc(cfg(feature = "aio")))]
 impl Client {
     /// Returns an async connection from the client.
-    #[cfg(any(feature = "tokio-comp", feature = "async-std-comp"))]
+    #[cfg(feature = "tokio-comp")]
     #[deprecated(
         note = "aio::Connection is deprecated. Use client::get_multiplexed_async_connection instead."
     )]
@@ -107,11 +106,6 @@ impl Client {
             #[cfg(feature = "tokio-comp")]
             Runtime::Tokio => {
                 self.get_simple_async_connection::<crate::aio::tokio::Tokio>(None)
-                    .await?
-            }
-            #[cfg(feature = "async-std-comp")]
-            Runtime::AsyncStd => {
-                self.get_simple_async_connection::<crate::aio::async_std::AsyncStd>(None)
                     .await?
             }
         };
@@ -136,27 +130,8 @@ impl Client {
     }
 
     /// Returns an async connection from the client.
-    #[cfg(feature = "async-std-comp")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "async-std-comp")))]
-    #[deprecated(
-        note = "aio::Connection is deprecated. Use client::get_multiplexed_async_std_connection instead."
-    )]
-    #[allow(deprecated)]
-    pub async fn get_async_std_connection(&self) -> RedisResult<crate::aio::Connection> {
-        use crate::aio::RedisRuntime;
-        Ok(
-            crate::aio::connect::<crate::aio::async_std::AsyncStd>(&self.connection_info, None)
-                .await?
-                .map(RedisRuntime::boxed),
-        )
-    }
-
-    /// Returns an async connection from the client.
-    #[cfg(any(feature = "tokio-comp", feature = "async-std-comp"))]
-    #[cfg_attr(
-        docsrs,
-        doc(cfg(any(feature = "tokio-comp", feature = "async-std-comp")))
-    )]
+    #[cfg(feature = "tokio-comp")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "tokio-comp")))]
     pub async fn get_multiplexed_async_connection(
         &self,
         glide_connection_options: GlideConnectionOptions,
@@ -170,11 +145,8 @@ impl Client {
     }
 
     /// Returns an async connection from the client.
-    #[cfg(any(feature = "tokio-comp", feature = "async-std-comp"))]
-    #[cfg_attr(
-        docsrs,
-        doc(cfg(any(feature = "tokio-comp", feature = "async-std-comp")))
-    )]
+    #[cfg(feature = "tokio-comp")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "tokio-comp")))]
     pub async fn get_multiplexed_async_connection_with_timeouts(
         &self,
         response_timeout: std::time::Duration,
@@ -194,18 +166,6 @@ impl Client {
                 )
                 .await
             }
-            #[cfg(feature = "async-std-comp")]
-            rt @ Runtime::AsyncStd => {
-                rt.timeout(
-                    connection_timeout,
-                    self.get_multiplexed_async_connection_inner::<crate::aio::async_std::AsyncStd>(
-                        response_timeout,
-                        None,
-                        glide_connection_options,
-                    ),
-                )
-                .await
-            }
         };
 
         match result {
@@ -218,11 +178,8 @@ impl Client {
 
     /// For TCP connections: returns (async connection, Some(the direct IP address))
     /// For Unix connections, returns (async connection, None)
-    #[cfg(any(feature = "tokio-comp", feature = "async-std-comp"))]
-    #[cfg_attr(
-        docsrs,
-        doc(cfg(any(feature = "tokio-comp", feature = "async-std-comp")))
-    )]
+    #[cfg(feature = "tokio-comp")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "tokio-comp")))]
     pub async fn get_multiplexed_async_connection_and_ip(
         &self,
         glide_connection_options: GlideConnectionOptions,
@@ -231,15 +188,6 @@ impl Client {
             #[cfg(feature = "tokio-comp")]
             Runtime::Tokio => {
                 self.get_multiplexed_async_connection_inner::<crate::aio::tokio::Tokio>(
-                    Duration::MAX,
-                    None,
-                    glide_connection_options,
-                )
-                .await
-            }
-            #[cfg(feature = "async-std-comp")]
-            Runtime::AsyncStd => {
-                self.get_multiplexed_async_connection_inner::<crate::aio::async_std::AsyncStd>(
                     Duration::MAX,
                     None,
                     glide_connection_options,
@@ -297,54 +245,6 @@ impl Client {
         .await
     }
 
-    /// Returns an async multiplexed connection from the client.
-    ///
-    /// A multiplexed connection can be cloned, allowing requests to be be sent concurrently
-    /// on the same underlying connection (tcp/unix socket).
-    #[cfg(feature = "async-std-comp")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "async-std-comp")))]
-    pub async fn get_multiplexed_async_std_connection_with_timeouts(
-        &self,
-        response_timeout: std::time::Duration,
-        connection_timeout: std::time::Duration,
-        glide_connection_options: GlideConnectionOptions,
-    ) -> RedisResult<crate::aio::MultiplexedConnection> {
-        let result = Runtime::locate()
-            .timeout(
-                connection_timeout,
-                self.get_multiplexed_async_connection_inner::<crate::aio::async_std::AsyncStd>(
-                    response_timeout,
-                    None,
-                    glide_connection_options,
-                ),
-            )
-            .await;
-
-        match result {
-            Ok(Ok((connection, _ip))) => Ok(connection),
-            Ok(Err(e)) => Err(e),
-            Err(elapsed) => Err(elapsed.into()),
-        }
-    }
-
-    /// Returns an async multiplexed connection from the client.
-    ///
-    /// A multiplexed connection can be cloned, allowing requests to be be sent concurrently
-    /// on the same underlying connection (tcp/unix socket).
-    #[cfg(feature = "async-std-comp")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "async-std-comp")))]
-    pub async fn get_multiplexed_async_std_connection(
-        &self,
-        glide_connection_options: GlideConnectionOptions,
-    ) -> RedisResult<crate::aio::MultiplexedConnection> {
-        self.get_multiplexed_async_std_connection_with_timeouts(
-            std::time::Duration::MAX,
-            std::time::Duration::MAX,
-            glide_connection_options,
-        )
-        .await
-    }
-
     /// Returns an async multiplexed connection from the client and a future which must be polled
     /// to drive any requests submitted to it (see `get_multiplexed_tokio_connection`).
     ///
@@ -390,52 +290,6 @@ impl Client {
         )
         .await
         .map(|conn_res| (conn_res.0, conn_res.1))
-    }
-
-    /// Returns an async multiplexed connection from the client and a future which must be polled
-    /// to drive any requests submitted to it (see `get_multiplexed_tokio_connection`).
-    ///
-    /// A multiplexed connection can be cloned, allowing requests to be be sent concurrently
-    /// on the same underlying connection (tcp/unix socket).
-    /// The multiplexer will return a timeout error on any request that takes longer then `response_timeout`.
-    #[cfg(feature = "async-std-comp")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "async-std-comp")))]
-    pub async fn create_multiplexed_async_std_connection_with_response_timeout(
-        &self,
-        response_timeout: std::time::Duration,
-        glide_connection_options: GlideConnectionOptions,
-    ) -> RedisResult<(
-        crate::aio::MultiplexedConnection,
-        impl std::future::Future<Output = ()>,
-    )> {
-        self.create_multiplexed_async_connection_inner::<crate::aio::async_std::AsyncStd>(
-            response_timeout,
-            None,
-            glide_connection_options,
-        )
-        .await
-        .map(|(conn, driver, _ip)| (conn, driver))
-    }
-
-    /// Returns an async multiplexed connection from the client and a future which must be polled
-    /// to drive any requests submitted to it (see `get_multiplexed_tokio_connection`).
-    ///
-    /// A multiplexed connection can be cloned, allowing requests to be be sent concurrently
-    /// on the same underlying connection (tcp/unix socket).
-    #[cfg(feature = "async-std-comp")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "async-std-comp")))]
-    pub async fn create_multiplexed_async_std_connection(
-        &self,
-        glide_connection_options: GlideConnectionOptions,
-    ) -> RedisResult<(
-        crate::aio::MultiplexedConnection,
-        impl std::future::Future<Output = ()>,
-    )> {
-        self.create_multiplexed_async_std_connection_with_response_timeout(
-            std::time::Duration::MAX,
-            glide_connection_options,
-        )
-        .await
     }
 
     /// Returns an async [`ConnectionManager`][connection-manager] from the client.
@@ -785,7 +639,7 @@ impl Client {
     }
 
     /// Returns an async receiver for pub-sub messages.
-    #[cfg(any(feature = "tokio-comp", feature = "async-std-comp"))]
+    #[cfg(feature = "tokio-comp")]
     // TODO - do we want to type-erase pubsub using a trait, to allow us to replace it with a different implementation later?
     pub async fn get_async_pubsub(&self) -> RedisResult<crate::aio::PubSub> {
         #[allow(deprecated)]
@@ -795,7 +649,7 @@ impl Client {
     }
 
     /// Returns an async receiver for monitor messages.
-    #[cfg(any(feature = "tokio-comp", feature = "async-std-comp"))]
+    #[cfg(feature = "tokio-comp")]
     // TODO - do we want to type-erase monitor using a trait, to allow us to replace it with a different implementation later?
     pub async fn get_async_monitor(&self) -> RedisResult<crate::aio::Monitor> {
         #[allow(deprecated)]

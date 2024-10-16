@@ -5,14 +5,15 @@ use futures_intrusive::sync::ManualResetEvent;
 use redis::{Cmd, ConnectionAddr, Value};
 use std::collections::HashMap;
 use std::io;
+use std::io::Read;
+use std::io::Write;
 use std::net::TcpListener;
+use std::net::TcpStream as StdTcpStream;
 use std::str::from_utf8;
 use std::sync::{
     atomic::{AtomicU16, Ordering},
     Arc,
 };
-use tokio::io::AsyncWriteExt;
-use tokio::net::TcpStream;
 use tokio::sync::mpsc::UnboundedSender;
 
 pub struct MockedRequest {
@@ -29,20 +30,24 @@ pub struct ServerMock {
     closing_completed_signal: Arc<ManualResetEvent>,
 }
 
-async fn read_from_socket(buffer: &mut Vec<u8>, socket: &mut TcpStream) -> Option<usize> {
-    let _ = socket.readable().await;
-
-    loop {
-        match socket.try_read_buf(buffer) {
+fn read_from_socket(
+    buffer: &mut [u8],
+    socket: &mut StdTcpStream,
+    closing_signal: &Arc<ManualResetEvent>,
+) -> Option<usize> {
+    while !closing_signal.is_set() {
+        let read_res = socket.read(buffer); // read() is using timeout
+        match read_res {
             Ok(0) => {
                 return None;
             }
-            Ok(size) => return Some(size),
+            Ok(size) => {
+                return Some(size);
+            }
             Err(ref e)
                 if e.kind() == io::ErrorKind::WouldBlock
                     || e.kind() == io::ErrorKind::Interrupted =>
             {
-                tokio::task::yield_now().await;
                 continue;
             }
             Err(_) => {
@@ -50,43 +55,53 @@ async fn read_from_socket(buffer: &mut Vec<u8>, socket: &mut TcpStream) -> Optio
             }
         }
     }
+    // If we reached here, it means we got a signal to terminate
+    None
 }
 
-async fn receive_and_respond_to_next_message(
+/// Escape and print a RESP message
+fn log_resp_message(msg: &str) {
+    logger_core::log_info(
+        "Test",
+        format!(
+            "{:?} {}",
+            std::thread::current().id(),
+            msg.replace('\r', "\\r").replace('\n', "\\n")
+        ),
+    );
+}
+
+fn receive_and_respond_to_next_message(
     receiver: &mut tokio::sync::mpsc::UnboundedReceiver<MockedRequest>,
-    socket: &mut TcpStream,
+    socket: &mut StdTcpStream,
     received_commands: &Arc<AtomicU16>,
     constant_responses: &HashMap<String, Value>,
     closing_signal: &Arc<ManualResetEvent>,
 ) -> bool {
-    let mut buffer = Vec::with_capacity(1024);
-    let size = tokio::select! {
-        size = read_from_socket(&mut buffer, socket) => {
-            let Some(size) = size else {
-                return false;
-            };
-            size
-        },
-        _ = closing_signal.wait() => {
+    let mut buffer = vec![0; 1024];
+    let size = match read_from_socket(&mut buffer, socket, closing_signal) {
+        Some(size) => size,
+        None => {
             return false;
         }
     };
-
     let message = from_utf8(&buffer[..size]).unwrap().to_string();
+    log_resp_message(&message);
+
     let setinfo_count = message.matches("SETINFO").count();
     if setinfo_count > 0 {
         let mut buffer = Vec::new();
         for _ in 0..setinfo_count {
             super::encode_value(&Value::Okay, &mut buffer).unwrap();
         }
-        socket.write_all(&buffer).await.unwrap();
+        socket.write_all(&buffer).unwrap();
         return true;
     }
 
     if let Some(response) = constant_responses.get(&message) {
         let mut buffer = Vec::new();
         super::encode_value(response, &mut buffer).unwrap();
-        socket.write_all(&buffer).await.unwrap();
+        socket.write_all(&buffer).unwrap();
         return true;
     }
     let Ok(request) = receiver.try_recv() else {
@@ -94,7 +109,7 @@ async fn receive_and_respond_to_next_message(
     };
     received_commands.fetch_add(1, Ordering::AcqRel);
     assert_eq!(message, request.expected_message);
-    socket.write_all(request.response.as_bytes()).await.unwrap();
+    socket.write_all(request.response.as_bytes()).unwrap();
     true
 }
 
@@ -127,15 +142,11 @@ impl ServerMock {
         let closing_signal_clone = closing_signal.clone();
         let closing_completed_signal = Arc::new(ManualResetEvent::new(false));
         let closing_completed_signal_clone = closing_completed_signal.clone();
-        let runtime = tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(1)
-            .thread_name(format!("ServerMock - {address}"))
-            .enable_all()
-            .build()
-            .unwrap();
-        runtime.spawn(async move {
-            let listener = tokio::net::TcpListener::from_std(listener).unwrap();
-            let mut socket = listener.accept().await.unwrap().0;
+        let address_clone = address.clone();
+        std::thread::spawn(move || {
+            logger_core::log_info("Test", format!("ServerMock started on: {}", address_clone));
+            let mut socket: StdTcpStream = listener.accept().unwrap().0;
+            let _ = socket.set_read_timeout(Some(std::time::Duration::from_millis(10)));
 
             while receive_and_respond_to_next_message(
                 &mut receiver,
@@ -143,17 +154,25 @@ impl ServerMock {
                 &received_commands_clone,
                 &constant_responses,
                 &closing_signal_clone,
-            )
-            .await
-            {}
+            ) {}
 
+            // Terminate the connection
+            let _ = socket.shutdown(std::net::Shutdown::Both);
+
+            // Now notify exit completed
             closing_completed_signal_clone.set();
+
+            logger_core::log_info(
+                "Test",
+                format!("{:?} ServerMock exited", std::thread::current().id()),
+            );
         });
+
         Self {
             request_sender,
             address,
             received_commands,
-            runtime: Some(runtime),
+            runtime: None,
             closing_signal,
             closing_completed_signal,
         }
@@ -186,6 +205,5 @@ impl Mock for ServerMock {
 impl Drop for ServerMock {
     fn drop(&mut self) {
         self.closing_signal.set();
-        self.runtime.take().unwrap().shutdown_background();
     }
 }

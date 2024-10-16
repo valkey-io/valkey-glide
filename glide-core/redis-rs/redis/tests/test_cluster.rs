@@ -16,6 +16,7 @@ mod cluster {
     };
 
     #[test]
+    #[serial_test::serial]
     fn test_cluster_basics() {
         let cluster = TestClusterContext::new(3, 0);
         let mut con = cluster.connection();
@@ -35,6 +36,7 @@ mod cluster {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_cluster_with_username_and_password() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -65,6 +67,7 @@ mod cluster {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_cluster_with_bad_password() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -80,6 +83,7 @@ mod cluster {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_cluster_read_from_replicas() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             6,
@@ -106,6 +110,7 @@ mod cluster {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_cluster_eval() {
         let cluster = TestClusterContext::new(3, 0);
         let mut con = cluster.connection();
@@ -127,6 +132,7 @@ mod cluster {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_cluster_resp3() {
         if use_protocol() == ProtocolVersion::RESP2 {
             return;
@@ -159,6 +165,7 @@ mod cluster {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_cluster_multi_shard_commands() {
         let cluster = TestClusterContext::new(3, 0);
 
@@ -173,6 +180,7 @@ mod cluster {
     }
 
     #[test]
+    #[serial_test::serial]
     #[cfg(feature = "script")]
     fn test_cluster_script() {
         let cluster = TestClusterContext::new(3, 0);
@@ -191,6 +199,7 @@ mod cluster {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_cluster_pipeline() {
         let cluster = TestClusterContext::new(3, 0);
         cluster.wait_for_cluster_up();
@@ -207,6 +216,7 @@ mod cluster {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_cluster_pipeline_multiple_keys() {
         use redis::FromRedisValue;
         let cluster = TestClusterContext::new(3, 0);
@@ -244,6 +254,7 @@ mod cluster {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_cluster_pipeline_invalid_command() {
         let cluster = TestClusterContext::new(3, 0);
         cluster.wait_for_cluster_up();
@@ -272,6 +283,7 @@ mod cluster {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_cluster_can_connect_to_server_that_sends_cluster_slots_without_host_name() {
         let name = "test_cluster_can_connect_to_server_that_sends_cluster_slots_without_host_name";
 
@@ -298,6 +310,7 @@ mod cluster {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_cluster_can_connect_to_server_that_sends_cluster_slots_with_null_host_name() {
         let name =
             "test_cluster_can_connect_to_server_that_sends_cluster_slots_with_null_host_name";
@@ -322,6 +335,7 @@ mod cluster {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_cluster_can_connect_to_server_that_sends_cluster_slots_with_partial_nodes_with_unknown_host_name(
     ) {
         let name = "test_cluster_can_connect_to_server_that_sends_cluster_slots_with_partial_nodes_with_unknown_host_name";
@@ -358,6 +372,7 @@ mod cluster {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_cluster_pipeline_command_ordering() {
         let cluster = TestClusterContext::new(3, 0);
         cluster.wait_for_cluster_up();
@@ -383,6 +398,7 @@ mod cluster {
     }
 
     #[test]
+    #[serial_test::serial]
     #[ignore] // Flaky
     fn test_cluster_pipeline_ordering_with_improper_command() {
         let cluster = TestClusterContext::new(3, 0);
@@ -417,6 +433,7 @@ mod cluster {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_cluster_retries() {
         let name = "tryagain";
 
@@ -444,6 +461,7 @@ mod cluster {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_cluster_exhaust_retries() {
         let name = "tryagain_exhaust_retries";
 
@@ -479,6 +497,7 @@ mod cluster {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_cluster_move_error_when_new_node_is_added() {
         let name = "rebuild_with_extra_nodes";
 
@@ -536,6 +555,7 @@ mod cluster {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_cluster_ask_redirect() {
         let name = "node";
         let completed = Arc::new(AtomicI32::new(0));
@@ -580,6 +600,7 @@ mod cluster {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_cluster_ask_error_when_new_node_is_added() {
         let name = "ask_with_extra_nodes";
 
@@ -629,6 +650,7 @@ mod cluster {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_cluster_replica_read() {
         let name = "node";
 
@@ -682,6 +704,7 @@ mod cluster {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_cluster_io_error() {
         let name = "node";
         let completed = Arc::new(AtomicI32::new(0));
@@ -715,6 +738,7 @@ mod cluster {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_cluster_non_retryable_error_should_not_retry() {
         let name = "node";
         let completed = Arc::new(AtomicI32::new(0));
@@ -785,16 +809,19 @@ mod cluster {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_cluster_fan_out_to_all_primaries() {
         test_cluster_fan_out("FLUSHALL", vec![6379, 6381], None);
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_cluster_fan_out_to_all_nodes() {
         test_cluster_fan_out("CONFIG SET", vec![6379, 6380, 6381, 6382], None);
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_cluster_fan_out_out_once_to_each_primary_when_no_replicas_are_available() {
         test_cluster_fan_out(
             "CONFIG SET",
@@ -815,6 +842,7 @@ mod cluster {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_cluster_fan_out_out_once_even_if_primary_has_multiple_slot_ranges() {
         test_cluster_fan_out(
             "CONFIG SET",
@@ -845,6 +873,7 @@ mod cluster {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_cluster_split_multi_shard_command_and_combine_arrays_of_values() {
         let name = "test_cluster_split_multi_shard_command_and_combine_arrays_of_values";
         let mut cmd = cmd("MGET");
@@ -882,6 +911,7 @@ mod cluster {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_cluster_route_correctly_on_packed_transaction_with_single_node_requests() {
         let name = "test_cluster_route_correctly_on_packed_transaction_with_single_node_requests";
         let mut pipeline = redis::pipe();
@@ -931,6 +961,7 @@ mod cluster {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_cluster_route_correctly_on_packed_transaction_with_single_node_requests2() {
         let name = "test_cluster_route_correctly_on_packed_transaction_with_single_node_requests2";
         let mut pipeline = redis::pipe();
@@ -974,6 +1005,7 @@ mod cluster {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_cluster_with_client_name() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -1001,6 +1033,7 @@ mod cluster {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_cluster_can_be_created_with_partial_slot_coverage() {
         let name = "test_cluster_can_be_created_with_partial_slot_coverage";
         let slots_config = Some(vec![
@@ -1046,6 +1079,7 @@ mod cluster {
         use redis::ConnectionInfo;
 
         #[test]
+        #[serial_test::serial]
         fn test_cluster_basics_with_mtls() {
             let cluster = TestClusterContext::new_with_mtls(3, 0);
 
@@ -1067,6 +1101,7 @@ mod cluster {
         }
 
         #[test]
+        #[serial_test::serial]
         fn test_cluster_should_not_connect_without_mtls() {
             let cluster = TestClusterContext::new_with_mtls(3, 0);
 
