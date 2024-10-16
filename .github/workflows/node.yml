@@ -339,6 +339,6 @@ jobs:
             with:
                 name: test-report-node-${{ matrix.engine.type }}-${{ matrix.engine.version }}-ubuntu
                 path: |
-                    node/test-report*.html
+                    node/test-report-modules*.html
                     utils/clusters/**
                     benchmarks/results/**
