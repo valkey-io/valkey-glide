@@ -398,12 +398,12 @@ type ListCommands interface {
 	// See [valkey.io] for details.
 	//
 	// Parameters:
-	//  keys    - The keys of the lists to pop from.
-	//  timeout - The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
+	//  keys        - The keys of the lists to pop from.
+	//  timeoutSecs - The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
 	//
 	// Return value:
-	// A two-element array of Result[string] containing the key from which the element was popped and the value of the popped
-	// element, formatted as [key, value].
+	//  A two-element array of Result[string] containing the key from which the element was popped and the value of the popped
+	//  element, formatted as [key, value].
 	//  If no element could be popped and the timeout expired, returns nil.
 	//
 	// For example:
@@ -412,7 +412,7 @@ type ListCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/blpop/
 	// [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
-	BLPop(keys []string, timeout float64) ([]Result[string], error)
+	BLPop(keys []string, timeoutSecs float64) ([]Result[string], error)
 
 	// Pops an element from the tail of the first list that is non-empty, with the given keys being checked in the order that
 	// they are given.
@@ -425,13 +425,13 @@ type ListCommands interface {
 	// See [valkey.io] for details.
 	//
 	// Parameters:
-	//  keys    - The keys of the lists to pop from.
-	//  timeout - The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
+	//  keys        - The keys of the lists to pop from.
+	//  timeoutSecs - The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
 	//
 	// Return value:
-	// A two-element array of Result[string] containing the key from which the element was popped and the value of the popped
-	// element, formatted as [key, value].
-	//  If no element could be popped and the timeout expired, returns nil.
+	//  A two-element array of Result[string] containing the key from which the element was popped and the value of the popped
+	//  element, formatted as [key, value].
+	//  If no element could be popped and the timeoutSecs expired, returns nil.
 	//
 	// For example:
 	//  result, err := client.BRPop("list1", "list2", 0.5)
@@ -439,7 +439,7 @@ type ListCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/brpop/
 	// [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
-	BRPop(keys []string, timeout float64) ([]Result[string], error)
+	BRPop(keys []string, timeoutSecs float64) ([]Result[string], error)
 
 	// Inserts all the specified values at the tail of the list stored at key, only if key exists and holds a list. If key is
 	// not a list, this performs no operation.
@@ -541,8 +541,8 @@ type ListCommands interface {
 	// Parameters:
 	//  keys          - An array of keys to lists.
 	//  listDirection - The direction based on which elements are popped from - see [api.ListDirection].
-	// timeout       - The number of seconds to wait for a blocking operation to complete. A value of 0 will block
-	// indefinitely.
+	//  timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of 0 will block
+	//  indefinitely.
 	//
 	// Return value:
 	//  A map of key name mapped array of popped element.
@@ -555,7 +555,7 @@ type ListCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/blmpop/
 	// [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
-	BLMPop(keys []string, listDirection ListDirection, timeout float64) (map[Result[string]][]Result[string], error)
+	BLMPop(keys []string, listDirection ListDirection, timeoutSecs float64) (map[Result[string]][]Result[string], error)
 
 	// Blocks the connection until it pops one or more elements from the first non-empty list from the provided keys.
 	// BLMPopCount is the blocking variant of [api.LMPopCount].
@@ -573,7 +573,7 @@ type ListCommands interface {
 	//  keys          - An array of keys to lists.
 	//  listDirection - The direction based on which elements are popped from - see [api.ListDirection].
 	//  count         - The maximum number of popped elements.
-	// timeout       - The number of seconds to wait for a blocking operation to complete. A value of 0 will block
+	//  timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of 0 will block
 	// indefinitely.
 	//
 	// Return value:
@@ -591,7 +591,7 @@ type ListCommands interface {
 		keys []string,
 		listDirection ListDirection,
 		count int64,
-		timeout float64,
+		timeoutSecs float64,
 	) (map[Result[string]][]Result[string], error)
 
 	// Sets the list element at index to element.
@@ -638,8 +638,8 @@ type ListCommands interface {
 	//  updatedList1, err: client.LRange("my_list1", int64(0), int64(-1))
 	//  updatedList2, err: client.LRange("my_list2", int64(0), int64(-1))
 	//  updatedList1: []api.Result[string]{api.CreateStringResult("two")}
-	// updatedList2: []api.Result[string]{api.CreateStringResult("one"), api.CreateStringResult("three"),
-	// api.CreateStringResult("four")}
+	//  updatedList2: []api.Result[string]{api.CreateStringResult("one"), api.CreateStringResult("three"),
+	//  api.CreateStringResult("four")}
 	//
 	// [valkey.io]: https://valkey.io/commands/lmove/
 	LMove(source string, destination string, whereFrom ListDirection, whereTo ListDirection) (Result[string], error)
@@ -663,7 +663,7 @@ type ListCommands interface {
 	//  destination - The key to the destination list.
 	//  wherefrom   - The ListDirection the element should be removed from.
 	//  whereto     - The ListDirection the element should be added to.
-	//  timeout     - The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
+	//  timeoutSecs - The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
 	//
 	// Return value:
 	// A Result[string] containing the popped element or api.CreateNilStringResult() if source does not exist or if the
@@ -677,8 +677,8 @@ type ListCommands interface {
 	//  updatedList1, err: client.LRange("my_list1", int64(0), int64(-1))
 	//  updatedList2, err: client.LRange("my_list2", int64(0), int64(-1))
 	//  updatedList1: []api.Result[string]{api.CreateStringResult("two")}
-	// updatedList2: []api.Result[string]{api.CreateStringResult("one"), api.CreateStringResult("three"),
-	// api.CreateStringResult("four")}
+	//  updatedList2: []api.Result[string]{api.CreateStringResult("one"), api.CreateStringResult("three"),
+	//  api.CreateStringResult("four")}
 	//
 	// [valkey.io]: https://valkey.io/commands/blmove/
 	// [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
@@ -687,6 +687,6 @@ type ListCommands interface {
 		destination string,
 		whereFrom ListDirection,
 		whereTo ListDirection,
-		timeout float64,
+		timeoutSecs float64,
 	) (Result[string], error)
 }

@@ -1718,6 +1718,11 @@ func (suite *GlideTestSuite) TestLMPopAndLMPopCount() {
 		assert.Equal(suite.T(), (map[api.Result[string]][]api.Result[string])(nil), res7)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		res8, err := client.LMPop([]string{key3}, "Invalid")
+		assert.Equal(suite.T(), (map[api.Result[string]][]api.Result[string])(nil), res8)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
 }
 

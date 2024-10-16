@@ -235,7 +235,7 @@ type ListDirection string
 const (
 	// Represents the option that elements should be popped from or added to the left side of a list.
 	Left ListDirection = "LEFT"
-	//  Represents the option that elements should be popped from or added to the right side of a list.
+	// Represents the option that elements should be popped from or added to the right side of a list.
 	Right ListDirection = "RIGHT"
 )
 

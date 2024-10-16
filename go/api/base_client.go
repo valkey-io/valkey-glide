@@ -595,8 +595,8 @@ func (client *baseClient) LInsert(
 	return handleLongResponse(result)
 }
 
-func (client *baseClient) BLPop(keys []string, timeout float64) ([]Result[string], error) {
-	result, err := client.executeCommand(C.BLPop, append(keys, utils.FloatToString(timeout)))
+func (client *baseClient) BLPop(keys []string, timeoutSecs float64) ([]Result[string], error) {
+	result, err := client.executeCommand(C.BLPop, append(keys, utils.FloatToString(timeoutSecs)))
 	if err != nil {
 		return nil, err
 	}
@@ -604,8 +604,8 @@ func (client *baseClient) BLPop(keys []string, timeout float64) ([]Result[string
 	return handleStringArrayOrNullResponse(result)
 }
 
-func (client *baseClient) BRPop(keys []string, timeout float64) ([]Result[string], error) {
-	result, err := client.executeCommand(C.BRPop, append(keys, utils.FloatToString(timeout)))
+func (client *baseClient) BRPop(keys []string, timeoutSecs float64) ([]Result[string], error) {
+	result, err := client.executeCommand(C.BRPop, append(keys, utils.FloatToString(timeoutSecs)))
 	if err != nil {
 		return nil, err
 	}
@@ -674,7 +674,7 @@ func (client *baseClient) LMPopCount(
 func (client *baseClient) BLMPop(
 	keys []string,
 	listDirection ListDirection,
-	timeout float64,
+	timeoutSecs float64,
 ) (map[Result[string]][]Result[string], error) {
 	listDirectionStr, err := listDirection.toString()
 	if err != nil {
@@ -682,7 +682,7 @@ func (client *baseClient) BLMPop(
 	}
 
 	args := make([]string, 0, len(keys)+3)
-	args = append(args, utils.FloatToString(timeout), strconv.Itoa(len(keys)))
+	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, listDirectionStr)
 	result, err := client.executeCommand(C.BLMPop, args)
@@ -697,7 +697,7 @@ func (client *baseClient) BLMPopCount(
 	keys []string,
 	listDirection ListDirection,
 	count int64,
-	timeout float64,
+	timeoutSecs float64,
 ) (map[Result[string]][]Result[string], error) {
 	listDirectionStr, err := listDirection.toString()
 	if err != nil {
@@ -705,7 +705,7 @@ func (client *baseClient) BLMPopCount(
 	}
 
 	args := make([]string, 0, len(keys)+5)
-	args = append(args, utils.FloatToString(timeout), strconv.Itoa(len(keys)))
+	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
 	args = append(args, keys...)
 	args = append(args, listDirectionStr, CountKeyword, utils.IntToString(count))
 	result, err := client.executeCommand(C.BLMPop, args)
@@ -753,7 +753,7 @@ func (client *baseClient) BLMove(
 	destination string,
 	whereFrom ListDirection,
 	whereTo ListDirection,
-	timeout float64,
+	timeoutSecs float64,
 ) (Result[string], error) {
 	whereFromStr, err := whereFrom.toString()
 	if err != nil {
@@ -766,7 +766,7 @@ func (client *baseClient) BLMove(
 
 	result, err := client.executeCommand(
 		C.BLMove,
-		[]string{source, destination, whereFromStr, whereToStr, utils.FloatToString(timeout)},
+		[]string{source, destination, whereFromStr, whereToStr, utils.FloatToString(timeoutSecs)},
 	)
 	if err != nil {
 		return CreateNilStringResult(), err
