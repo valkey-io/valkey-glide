@@ -10,6 +10,7 @@ import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.json.JsonGetOptions;
+import glide.api.models.commands.json.JsonGetOptionsBinary;
 import glide.utils.ArgsBuilder;
 import glide.utils.ArrayTransformUtils;
 import java.util.concurrent.CompletableFuture;
@@ -138,21 +139,16 @@ public class Json {
      *
      * @param client The Valkey GLIDE client to execute the command.
      * @param key The <code>key</code> of the JSON document.
-     * @param path The path within the JSON document.
-     * @return For JSONPath (path starts with <code>$</code>): Returns a stringifies JSON list of
-     *     bytes replies for every possible path, or a byte string representation of an empty array,
-     *     if path doesn't exist. For legacy path (path doesn't start with <code>$</code>): Returns a
-     *     byte string representation of the value in <code>path</code>. If <code>path</code> doesn't
-     *     exist, an error is raised. If <code>key</code> doesn't exist, returns null.
+     * @return Returns a string representation of the JSON document. If <code>key</code> doesn't
+     *     exist, returns null.
      * @example
      *     <pre>{@code
-     * String value = client.Json.get(client, "doc", "$").get();
+     * String value = client.Json.get(client, "doc").get();
      * assert value.equals("{'a': 1.0, 'b': 2}");
      * }</pre>
      */
-    public static CompletableFuture<String> get(
-            @NonNull BaseClient client, @NonNull String key, @NonNull String path) {
-        return executeCommand(client, new String[] {JSON_GET, key, path});
+    public static CompletableFuture<String> get(@NonNull BaseClient client, @NonNull String key) {
+        return executeCommand(client, new String[] {JSON_GET, key});
     }
 
     /**
@@ -160,21 +156,17 @@ public class Json {
      *
      * @param client The Valkey GLIDE client to execute the command.
      * @param key The <code>key</code> of the JSON document.
-     * @param path The path within the JSON document.
-     * @return For JSONPath (path starts with <code>$</code>): Returns a stringifies JSON list of
-     *     bytes replies for every possible path, or a byte string representation of an empty array,
-     *     if path doesn't exist. For legacy path (path doesn't start with <code>$</code>): Returns a
-     *     byte string representation of the value in <code>path</code>. If <code>path</code> doesn't
-     *     exist, an error is raised. If <code>key</code> doesn't exist, returns null.
+     * @return Returns a string representation of the JSON document. If <code>key</code> doesn't
+     *     exist, returns null.
      * @example
      *     <pre>{@code
-     * GlideString value = client.Json.get(client, gs("doc"), gs("$")).get();
+     * GlideString value = client.Json.get(client, gs("doc")).get();
      * assert value.equals(gs("{'a': 1.0, 'b': 2}"));
      * }</pre>
      */
     public static CompletableFuture<GlideString> get(
-            @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString path) {
-        return executeCommand(client, new GlideString[] {gs(JSON_GET), key, path});
+            @NonNull BaseClient client, @NonNull GlideString key) {
+        return executeCommand(client, new GlideString[] {gs(JSON_GET), key});
     }
 
     /**
@@ -183,9 +175,24 @@ public class Json {
      * @param client The Valkey GLIDE client to execute the command.
      * @param key The <code>key</code> of the JSON document.
      * @param paths List of paths within the JSON document.
-     * @return Returns a stringifies JSON object in bytes, in which each path is a key, and it's
-     *     corresponding value, is the value as if the path was executed in the command as a single
-     *     path. If <code>key</code> doesn't exist, returns null.
+     * @return
+     *     <ul>
+     *       <li>If one path is given:
+     *           <ul>
+     *             <li>For JSONPath (path starts with <code>$</code>): Returns a stringified JSON list
+     *                 replies for every possible path, or a string representation of an empty array,
+     *                 if path doesn't exist. If <code>key</code> doesn't exist, returns None.
+     *             <li>For legacy path (path doesn't start with <code>$</code>): Returns a string
+     *                 representation of the value in <code>paths</code>. If <code>paths</code>
+     *                 doesn't exist, an error is raised. If <code>key</code> doesn't exist, returns
+     *                 None.
+     *           </ul>
+     *       <li>If multiple paths are given: Returns a stringified JSON, in which each path is a key,
+     *           and it's corresponding value, is the value as if the path was executed in the command
+     *           as a single path.
+     *     </ul>
+     *     In case of multiple paths, and <code>paths</code> are a mix of both JSONPath and legacy
+     *     path, the command behaves as if all are JSONPath paths.
      * @example
      *     <pre>{@code
      * String value = client.Json.get(client, "doc", new String[] {"$.a", "$.b"}).get();
@@ -204,9 +211,24 @@ public class Json {
      * @param client The Valkey GLIDE client to execute the command.
      * @param key The <code>key</code> of the JSON document.
      * @param paths List of paths within the JSON document.
-     * @return Returns a stringifies JSON object in bytes, in which each path is a key, and it's
-     *     corresponding value, is the value as if the path was executed in the command as a single
-     *     path. If <code>key</code> doesn't exist, returns null.
+     * @return
+     *     <ul>
+     *       <li>If one path is given:
+     *           <ul>
+     *             <li>For JSONPath (path starts with <code>$</code>): Returns a stringified JSON list
+     *                 replies for every possible path, or a string representation of an empty array,
+     *                 if path doesn't exist. If <code>key</code> doesn't exist, returns None.
+     *             <li>For legacy path (path doesn't start with <code>$</code>): Returns a string
+     *                 representation of the value in <code>paths</code>. If <code>paths</code>
+     *                 doesn't exist, an error is raised. If <code>key</code> doesn't exist, returns
+     *                 None.
+     *           </ul>
+     *       <li>If multiple paths are given: Returns a stringified JSON, in which each path is a key,
+     *           and it's corresponding value, is the value as if the path was executed in the command
+     *           as a single path.
+     *     </ul>
+     *     In case of multiple paths, and <code>paths</code> are a mix of both JSONPath and legacy
+     *     path, the command behaves as if all are JSONPath paths.
      * @example
      *     <pre>{@code
      * GlideString value = client.Json.get(client, gs("doc"), new GlideString[] {gs("$.a"), gs("$.b")}).get();
@@ -225,14 +247,10 @@ public class Json {
      *
      * @param client The Valkey GLIDE client to execute the command.
      * @param key The <code>key</code> of the JSON document.
-     * @param path The path within the JSON document.
      * @param options Options for formatting the byte representation of the JSON data. See <code>
      *     JsonGetOptions</code>.
-     * @return For JSONPath (path starts with <code>$</code>): Returns a stringifies JSON list of
-     *     bytes replies for every possible path, or a byte string representation of an empty array,
-     *     if path doesn't exist. For legacy path (path doesn't start with <code>$</code>): Returns a
-     *     byte string representation of the value in <code>path</code>. If <code>path</code> doesn't
-     *     exist, an error is raised. If <code>key</code> doesn't exist, returns null.
+     * @return Returns a string representation of the JSON document. If <code>key</code> doesn't
+     *     exist, returns null.
      * @example
      *     <pre>{@code
      * JsonGetOptions options = JsonGetOptions.builder()
@@ -245,14 +263,10 @@ public class Json {
      * }</pre>
      */
     public static CompletableFuture<String> get(
-            @NonNull BaseClient client,
-            @NonNull String key,
-            @NonNull String path,
-            @NonNull JsonGetOptions options) {
+            @NonNull BaseClient client, @NonNull String key, @NonNull JsonGetOptions options) {
         return executeCommand(
                 client,
-                ArrayTransformUtils.concatenateArrays(
-                        new String[] {JSON_GET, key}, options.toArgs(), new String[] {path}));
+                ArrayTransformUtils.concatenateArrays(new String[] {JSON_GET, key}, options.toArgs()));
     }
 
     /**
@@ -260,14 +274,10 @@ public class Json {
      *
      * @param client The Valkey GLIDE client to execute the command.
      * @param key The <code>key</code> of the JSON document.
-     * @param path The path within the JSON document.
      * @param options Options for formatting the byte representation of the JSON data. See <code>
      *     JsonGetOptions</code>.
-     * @return For JSONPath (path starts with <code>$</code>): Returns a stringifies JSON list of
-     *     bytes replies for every possible path, or a byte string representation of an empty array,
-     *     if path doesn't exist. For legacy path (path doesn't start with <code>$</code>): Returns a
-     *     byte string representation of the value in <code>path</code>. If <code>path</code> doesn't
-     *     exist, an error is raised. If <code>key</code> doesn't exist, returns null.
+     * @return Returns a string representation of the JSON document. If <code>key</code> doesn't
+     *     exist, returns null.
      * @example
      *     <pre>{@code
      * JsonGetOptions options = JsonGetOptions.builder()
@@ -280,13 +290,9 @@ public class Json {
      * }</pre>
      */
     public static CompletableFuture<GlideString> get(
-            @NonNull BaseClient client,
-            @NonNull GlideString key,
-            @NonNull GlideString path,
-            @NonNull JsonGetOptions options) {
+            @NonNull BaseClient client, @NonNull GlideString key, @NonNull JsonGetOptionsBinary options) {
         return executeCommand(
-                client,
-                new ArgsBuilder().add(gs(JSON_GET)).add(key).add(options.toArgs()).add(path).toArray());
+                client, new ArgsBuilder().add(gs(JSON_GET)).add(key).add(options.toArgs()).toArray());
     }
 
     /**
@@ -297,9 +303,24 @@ public class Json {
      * @param paths List of paths within the JSON document.
      * @param options Options for formatting the byte representation of the JSON data. See <code>
      *     JsonGetOptions</code>.
-     * @return Returns a stringifies JSON object in bytes, in which each path is a key, and it's
-     *     corresponding value, is the value as if the path was executed in the command as a single
-     *     path. If <code>key</code> doesn't exist, returns null.
+     * @return
+     *     <ul>
+     *       <li>If one path is given:
+     *           <ul>
+     *             <li>For JSONPath (path starts with <code>$</code>): Returns a stringified JSON list
+     *                 replies for every possible path, or a string representation of an empty array,
+     *                 if path doesn't exist. If <code>key</code> doesn't exist, returns None.
+     *             <li>For legacy path (path doesn't start with <code>$</code>): Returns a string
+     *                 representation of the value in <code>paths</code>. If <code>paths</code>
+     *                 doesn't exist, an error is raised. If <code>key</code> doesn't exist, returns
+     *                 None.
+     *           </ul>
+     *       <li>If multiple paths are given: Returns a stringified JSON, in which each path is a key,
+     *           and it's corresponding value, is the value as if the path was executed in the command
+     *           as a single path.
+     *     </ul>
+     *     In case of multiple paths, and <code>paths</code> are a mix of both JSONPath and legacy
+     *     path, the command behaves as if all are JSONPath paths.
      * @example
      *     <pre>{@code
      * JsonGetOptions options = JsonGetOptions.builder()
@@ -330,9 +351,24 @@ public class Json {
      * @param paths List of paths within the JSON document.
      * @param options Options for formatting the byte representation of the JSON data. See <code>
      *     JsonGetOptions</code>.
-     * @return Returns a stringifies JSON object in bytes, in which each path is a key, and it's
-     *     corresponding value, is the value as if the path was executed in the command as a single
-     *     path. If <code>key</code> doesn't exist, returns null.
+     * @return
+     *     <ul>
+     *       <li>If one path is given:
+     *           <ul>
+     *             <li>For JSONPath (path starts with <code>$</code>): Returns a stringified JSON list
+     *                 replies for every possible path, or a string representation of an empty array,
+     *                 if path doesn't exist. If <code>key</code> doesn't exist, returns None.
+     *             <li>For legacy path (path doesn't start with <code>$</code>): Returns a string
+     *                 representation of the value in <code>paths</code>. If <code>paths</code>
+     *                 doesn't exist, an error is raised. If <code>key</code> doesn't exist, returns
+     *                 None.
+     *           </ul>
+     *       <li>If multiple paths are given: Returns a stringified JSON, in which each path is a key,
+     *           and it's corresponding value, is the value as if the path was executed in the command
+     *           as a single path.
+     *     </ul>
+     *     In case of multiple paths, and <code>paths</code> are a mix of both JSONPath and legacy
+     *     path, the command behaves as if all are JSONPath paths.
      * @example
      *     <pre>{@code
      * JsonGetOptions options = JsonGetOptions.builder()
@@ -348,7 +384,7 @@ public class Json {
             @NonNull BaseClient client,
             @NonNull GlideString key,
             @NonNull GlideString[] paths,
-            @NonNull JsonGetOptions options) {
+            @NonNull JsonGetOptionsBinary options) {
         return executeCommand(
                 client,
                 new ArgsBuilder().add(gs(JSON_GET)).add(key).add(options.toArgs()).add(paths).toArray());

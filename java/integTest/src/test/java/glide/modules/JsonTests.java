@@ -59,7 +59,7 @@ public class JsonTests {
 
         assertEquals(OK, Json.set(client, key, "$", jsonValue).get());
 
-        String getResult = Json.get(client, key, ".").get();
+        String getResult = Json.get(client, key).get();
 
         JSONAssert.assertEquals(jsonValue, getResult, JSONCompareMode.LENIENT);
 
@@ -68,8 +68,8 @@ public class JsonTests {
         JSONAssert.assertEquals(
                 "{\"$.a\":[1.0],\"$.b\":[2]}", getResultWithMultiPaths, JSONCompareMode.LENIENT);
 
-        assertNull(Json.get(client, "non_existing_key", "$").get());
-        assertEquals("[]", Json.get(client, key, "$.d").get());
+        assertNull(Json.get(client, "non_existing_key").get());
+        assertEquals("[]", Json.get(client, key, new String[] {"$.d"}).get());
     }
 
     @Test
@@ -80,7 +80,7 @@ public class JsonTests {
 
         assertEquals(OK, Json.set(client, gs(key), gs("$"), gs(jsonValue)).get());
 
-        GlideString getResult = Json.get(client, gs(key), gs("$..c")).get();
+        GlideString getResult = Json.get(client, gs(key), new GlideString[] {gs("$..c")}).get();
 
         JSONAssert.assertEquals("[true, 1, 2]", getResult.getString(), JSONCompareMode.LENIENT);
 
@@ -92,7 +92,7 @@ public class JsonTests {
                 JSONCompareMode.LENIENT);
 
         assertEquals(OK, Json.set(client, key, "$..c", "\"new_value\"").get());
-        String getResultAfterSetNewValue = Json.get(client, key, "$..c").get();
+        String getResultAfterSetNewValue = Json.get(client, key, new String[] {"$..c"}).get();
         JSONAssert.assertEquals(
                 "[\"new_value\", \"new_value\", \"new_value\"]",
                 getResultAfterSetNewValue,
@@ -109,9 +109,9 @@ public class JsonTests {
         assertEquals(
                 OK, Json.set(client, key, "$", jsonValue, ConditionalChange.ONLY_IF_DOES_NOT_EXIST).get());
         assertNull(Json.set(client, key, "$.a", "4.5", ConditionalChange.ONLY_IF_DOES_NOT_EXIST).get());
-        assertEquals("1.0", Json.get(client, key, ".a").get());
+        assertEquals("1.0", Json.get(client, key, new String[] {".a"}).get());
         assertEquals(OK, Json.set(client, key, "$.a", "4.5", ConditionalChange.ONLY_IF_EXISTS).get());
-        assertEquals("4.5", Json.get(client, key, ".a").get());
+        assertEquals("4.5", Json.get(client, key, new String[] {".a"}).get());
     }
 
     @Test
@@ -138,7 +138,7 @@ public class JsonTests {
                 Json.get(
                                 client,
                                 key,
-                                "$",
+                                new String[] {"$"},
                                 JsonGetOptions.builder().indent("  ").newline("\n").space(" ").build())
                         .get();
         assertEquals(expectedGetResult, actualGetResult);
@@ -149,7 +149,7 @@ public class JsonTests {
                 Json.get(
                                 client,
                                 key,
-                                "$",
+                                new String[] {"$"},
                                 JsonGetOptions.builder().indent("~").newline("\n").space("*").build())
                         .get();
         assertEquals(expectedGetResult2, actualGetResult2);

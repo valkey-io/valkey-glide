@@ -14,12 +14,13 @@ import glide.api.GlideClient;
 import glide.api.models.GlideString;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.json.JsonGetOptions;
+import glide.api.models.commands.json.JsonGetOptionsBinary;
 import glide.utils.ArgsBuilder;
+import glide.utils.ArrayTransformUtils;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
-import org.apache.commons.lang3.ArrayUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -139,20 +140,17 @@ class JsonTest {
 
     @Test
     @SneakyThrows
-    void get_with_single_path_returns_success() {
+    void get_with_no_path_returns_success() {
         // setup
         String key = "testKey";
-        String path = "$";
         CompletableFuture<String> expectedResponse = new CompletableFuture<>();
         String expectedResponseValue = "{\"a\": 1.0, \"b\": 2}";
         expectedResponse.complete(expectedResponseValue);
-        when(glideClient
-                        .customCommand(eq(new String[] {Json.JSON_GET, key, path}))
-                        .<String>thenApply(any()))
+        when(glideClient.customCommand(eq(new String[] {Json.JSON_GET, key})).<String>thenApply(any()))
                 .thenReturn(expectedResponse);
 
         // exercise
-        CompletableFuture<String> actualResponse = Json.get(glideClient, key, path);
+        CompletableFuture<String> actualResponse = Json.get(glideClient, key);
         String actualResponseValue = actualResponse.get();
 
         // verify
@@ -162,20 +160,19 @@ class JsonTest {
 
     @Test
     @SneakyThrows
-    void get_binary_with_single_path_returns_success() {
+    void get_binary_with_no_path_returns_success() {
         // setup
         GlideString key = gs("testKey");
-        GlideString path = gs("$");
         CompletableFuture<GlideString> expectedResponse = new CompletableFuture<>();
         GlideString expectedResponseValue = gs("{\"a\": 1.0, \"b\": 2}");
         expectedResponse.complete(expectedResponseValue);
         when(glideClient
-                        .customCommand(eq(new GlideString[] {gs(Json.JSON_GET), key, path}))
+                        .customCommand(eq(new GlideString[] {gs(Json.JSON_GET), key}))
                         .<GlideString>thenApply(any()))
                 .thenReturn(expectedResponse);
 
         // exercise
-        CompletableFuture<GlideString> actualResponse = Json.get(glideClient, key, path);
+        CompletableFuture<GlideString> actualResponse = Json.get(glideClient, key);
         GlideString actualResponseValue = actualResponse.get();
 
         // verify
@@ -235,10 +232,9 @@ class JsonTest {
 
     @Test
     @SneakyThrows
-    void get_with_single_path_and_options_returns_success() {
+    void get_with_no_path_and_options_returns_success() {
         // setup
         String key = "testKey";
-        String path = "$";
         JsonGetOptions options = JsonGetOptions.builder().indent("\t").space(" ").newline("\n").build();
         CompletableFuture<String> expectedResponse = new CompletableFuture<>();
         String expectedResponseValue = "{\"a\": 1.0, \"b\": 2}";
@@ -246,14 +242,13 @@ class JsonTest {
         when(glideClient
                         .customCommand(
                                 eq(
-                                        ArrayUtils.add(
-                                                ArrayUtils.addAll(new String[] {Json.JSON_GET, key}, options.toArgs()),
-                                                path)))
+                                        ArrayTransformUtils.concatenateArrays(
+                                                new String[] {Json.JSON_GET, key}, options.toArgs())))
                         .<String>thenApply(any()))
                 .thenReturn(expectedResponse);
 
         // exercise
-        CompletableFuture<String> actualResponse = Json.get(glideClient, key, path, options);
+        CompletableFuture<String> actualResponse = Json.get(glideClient, key, options);
         String actualResponseValue = actualResponse.get();
 
         // verify
@@ -263,11 +258,11 @@ class JsonTest {
 
     @Test
     @SneakyThrows
-    void get_binary_with_single_path_and_options_returns_success() {
+    void get_binary_with_no_path_and_options_returns_success() {
         // setup
         GlideString key = gs("testKey");
-        GlideString path = gs("$");
-        JsonGetOptions options = JsonGetOptions.builder().indent("\t").space(" ").newline("\n").build();
+        JsonGetOptionsBinary options =
+                JsonGetOptionsBinary.builder().indent(gs("\t")).space(gs(" ")).newline(gs("\n")).build();
         CompletableFuture<GlideString> expectedResponse = new CompletableFuture<>();
         GlideString expectedResponseValue = gs("{\"a\": 1.0, \"b\": 2}");
         expectedResponse.complete(expectedResponseValue);
@@ -277,13 +272,12 @@ class JsonTest {
                                         new ArgsBuilder()
                                                 .add(new GlideString[] {gs(Json.JSON_GET), key})
                                                 .add(options.toArgs())
-                                                .add(path)
                                                 .toArray()))
                         .<GlideString>thenApply(any()))
                 .thenReturn(expectedResponse);
 
         // exercise
-        CompletableFuture<GlideString> actualResponse = Json.get(glideClient, key, path, options);
+        CompletableFuture<GlideString> actualResponse = Json.get(glideClient, key, options);
         GlideString actualResponseValue = actualResponse.get();
 
         // verify
@@ -329,7 +323,8 @@ class JsonTest {
         GlideString key = gs("testKey");
         GlideString path1 = gs(".firstName");
         GlideString path2 = gs(".lastName");
-        JsonGetOptions options = JsonGetOptions.builder().indent("\t").newline("\n").space(" ").build();
+        JsonGetOptionsBinary options =
+                JsonGetOptionsBinary.builder().indent(gs("\t")).newline(gs("\n")).space(gs(" ")).build();
         GlideString[] paths = new GlideString[] {path1, path2};
         CompletableFuture<GlideString> expectedResponse = new CompletableFuture<>();
         GlideString expectedResponseValue = gs("{\"a\": 1.0, \"b\": 2}");
