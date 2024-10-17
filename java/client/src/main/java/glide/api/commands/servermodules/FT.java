@@ -469,11 +469,7 @@ public class FT {
             @NonNull FTAggregateOptions options) {
         var args =
                 concatenateArrays(
-                        new GlideString[] {gs("FT.AGGREGATE"), indexName, query},
-                        Stream.of(options)
-                                .map(FTAggregateOptions::toArgs)
-                                .flatMap(Stream::of)
-                                .toArray(GlideString[]::new));
+                        new GlideString[] {gs("FT.AGGREGATE"), indexName, query}, options.toArgs());
         return FT.<Object[]>executeCommand(client, args, false)
                 .thenApply(res -> castArray(res, Map.class));
     }
