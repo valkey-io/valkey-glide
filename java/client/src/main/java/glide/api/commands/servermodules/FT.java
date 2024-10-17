@@ -318,7 +318,7 @@ public class FT {
      * @example
      *     <pre>{@code
      * // example of using the API:
-     * FT.aggregate(client, "myIndex", "*", options);
+     * FT.aggregate(client, "myIndex", "*").get();
      * // the response contains data in the following format:
      * Map<GlideString, Object>[] response = new Map[] {
      *     Map.of(
@@ -361,7 +361,7 @@ public class FT {
      *                         new Reducer("TOLIST", new String[] {"__key"}, "bicycles")
      *                     }))
      *     .build();
-     * FT.aggregate(client, "myIndex", "*", options);
+     * FT.aggregate(client, "myIndex", "*", options).get();
      * // the response contains data in the following format:
      * Map<GlideString, Object>[] response = new Map[] {
      *     Map.of(
@@ -397,7 +397,7 @@ public class FT {
      * @example
      *     <pre>{@code
      * // example of using the API:
-     * FT.aggregate(client, gs("myIndex"), gs("*"));
+     * FT.aggregate(client, gs("myIndex"), gs("*")).get();
      * // the response contains data in the following format:
      * Map<GlideString, Object>[] response = new Map[] {
      *     Map.of(
@@ -415,10 +415,12 @@ public class FT {
      * };
      * }</pre>
      */
+    @SuppressWarnings("unchecked")
     public static CompletableFuture<Map<GlideString, Object>[]> aggregate(
             @NonNull BaseClient client, @NonNull GlideString indexName, @NonNull GlideString query) {
         var args = new GlideString[] {gs("FT.AGGREGATE"), indexName, query};
-        return executeCommand(client, args, false);
+        return FT.<Object[]>executeCommand(client, args, false)
+                .thenApply(res -> castArray(res, Map.class));
     }
 
     /**
@@ -441,7 +443,7 @@ public class FT {
      *                         new Reducer("TOLIST", new String[] {"__key"}, "bicycles")
      *                     }))
      *     .build();
-     * FT.aggregate(client, gs("myIndex"), gs("*"), options);
+     * FT.aggregate(client, gs("myIndex"), gs("*"), options).get();
      * // the response contains data in the following format:
      * Map<GlideString, Object>[] response = new Map[] {
      *     Map.of(

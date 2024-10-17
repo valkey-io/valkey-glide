@@ -54,8 +54,10 @@ public class FTAggregateOptions {
                         args.add(value);
                     });
         }
-        for (var expression : expressions) {
-            args.addAll(List.of(expression.toArgs()));
+        if (expressions != null) {
+            for (var expression : expressions) {
+                args.addAll(List.of(expression.toArgs()));
+            }
         }
         return args.toArray(GlideString[]::new);
     }
