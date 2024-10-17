@@ -8,6 +8,7 @@ class CommandNames:
 
     FT_CREATE = "FT.CREATE"
     FT_DROPINDEX = "FT.DROPINDEX"
+    FT_SEARCH = "FT.SEARCH"
 
 
 class FtCreateKeywords:
@@ -31,3 +32,16 @@ class FtCreateKeywords:
     M = "M"
     EF_CONSTRUCTION = "EF_CONSTRUCTION"
     EF_RUNTIME = "EF_RUNTIME"
+
+
+class FtSeachKeywords:
+    """
+    Keywords used in the FT.SEARCH command statment.
+    """
+
+    RETURN = "RETURN"
+    TIMEOUT = "TIMEOUT"
+    PARAMS = "PARAMS"
+    LIMIT = "LIMIT"
+    COUNT = "COUNT"
+    AS = "AS"
