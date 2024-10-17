@@ -781,9 +781,9 @@ public class VectorSearchTests {
     @Test
     public void ft_aliasadd_aliasdel_aliasupdate() {
 
-        var alias1 = "a1";
+        var alias1 = "alias1";
         var alias2 = "a2";
-        var indexName = "index";
+        var indexName = "{" + UUID.randomUUID() + "-index}";
 
         // create some indices
         assertEquals(
@@ -807,7 +807,10 @@ public class VectorSearchTests {
         assertEquals(OK, FT.aliasupdate(client, alias2, indexName).get());
         assertEquals(OK, FT.aliasdel(client, alias2).get());
 
-        assertEquals(OK, FT.aliasupdate(client, alias1, indexName).get());
+        // with GlideString:
+        assertEquals(OK, FT.aliasupdate(client, gs(alias1), gs(indexName)).get());
+        assertEquals(OK, FT.aliasadd(client, gs(alias1), gs(indexName)).get());
+        assertEquals(OK, FT.aliasdel(client, gs(alias1)).get());
 
         // exception with calling `aliasdel` on an alias that doesn't exist
         exception = assertThrows(ExecutionException.class, () -> FT.aliasdel(client, alias2).get());
