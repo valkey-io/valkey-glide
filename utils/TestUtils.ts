@@ -37,17 +37,23 @@ function parseOutput(input: string): {
 
 export class ValkeyCluster {
     private addresses: [string, number][];
+    private useTLS: boolean;
+    private clusterMode: boolean;
     private clusterFolder: string | undefined;
     private version: string;
 
     private constructor(
         version: string,
         addresses: [string, number][],
-        clusterFolder?: string
+        clusterFolder?: string,
+        useTLS?: boolean,
+        clusterMode?: boolean,
     ) {
         this.addresses = addresses;
         this.clusterFolder = clusterFolder;
         this.version = version;
+        this.useTLS = useTLS || false;
+        this.clusterMode = clusterMode || false;
     }
 
     public static createCluster(
