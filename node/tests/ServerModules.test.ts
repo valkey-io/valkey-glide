@@ -27,6 +27,8 @@ describe("GlideJson", () => {
     beforeAll(async () => {
         const useTLS = parseCommandLineArgs()["tls"] || false;
         const clusterAddresses = parseCommandLineArgs()["cluster-endpoints"];
+        console.log(useTLS);
+        console.log(clusterAddresses);
         cluster = clusterAddresses
             ? await ValkeyCluster.initFromExistingCluster(
                   false,
