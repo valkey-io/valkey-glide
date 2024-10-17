@@ -25,14 +25,16 @@ describe("GlideJson", () => {
     let cluster: ValkeyCluster;
     let client: GlideClusterClient;
     beforeAll(async () => {
+        const useTLS = parseCommandLineArgs()["tls"] || false;
         const clusterAddresses = parseCommandLineArgs()["cluster-endpoints"];
         cluster = clusterAddresses
             ? await ValkeyCluster.initFromExistingCluster(
                   false,
                   parseEndpoints(clusterAddresses),
+                  useTLS,
                   getServerVersion,
               )
-            : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
+            : await ValkeyCluster.createCluster(false, useTLS, 1, 1, getServerVersion);
     }, 20000);
 
     afterEach(async () => {
