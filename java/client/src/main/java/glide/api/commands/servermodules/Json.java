@@ -140,7 +140,7 @@ public class Json {
      * @param client The Valkey GLIDE client to execute the command.
      * @param key The <code>key</code> of the JSON document.
      * @return Returns a string representation of the JSON document. If <code>key</code> doesn't
-     *     exist, returns null.
+     *     exist, returns <code>null</code>.
      * @example
      *     <pre>{@code
      * String value = client.Json.get(client, "doc").get();
@@ -157,7 +157,7 @@ public class Json {
      * @param client The Valkey GLIDE client to execute the command.
      * @param key The <code>key</code> of the JSON document.
      * @return Returns a string representation of the JSON document. If <code>key</code> doesn't
-     *     exist, returns null.
+     *     exist, returns <code>null</code>.
      * @example
      *     <pre>{@code
      * GlideString value = client.Json.get(client, gs("doc")).get();
@@ -195,6 +195,8 @@ public class Json {
      *     path, the command behaves as if all are JSONPath paths.
      * @example
      *     <pre>{@code
+     * String value = client.Json.get(client, "doc", new String[] {"$"}).get();
+     * assert value.equals("{'a': 1.0, 'b': 2}");
      * String value = client.Json.get(client, "doc", new String[] {"$.a", "$.b"}).get();
      * assert value.equals("{\"$.a\": [1.0], \"$.b\": [2]}");
      * }</pre>
@@ -231,6 +233,8 @@ public class Json {
      *     path, the command behaves as if all are JSONPath paths.
      * @example
      *     <pre>{@code
+     * GlideString value = client.Json.get(client, gs("doc"), new GlideString[] {gs("$")}).get();
+     * assert value.equals(gs("{'a': 1.0, 'b': 2}"));
      * GlideString value = client.Json.get(client, gs("doc"), new GlideString[] {gs("$.a"), gs("$.b")}).get();
      * assert value.equals(gs("{\"$.a\": [1.0], \"$.b\": [2]}"));
      * }</pre>
@@ -250,7 +254,7 @@ public class Json {
      * @param options Options for formatting the byte representation of the JSON data. See <code>
      *     JsonGetOptions</code>.
      * @return Returns a string representation of the JSON document. If <code>key</code> doesn't
-     *     exist, returns null.
+     *     exist, returns <code>null</code>.
      * @example
      *     <pre>{@code
      * JsonGetOptions options = JsonGetOptions.builder()
@@ -277,7 +281,7 @@ public class Json {
      * @param options Options for formatting the byte representation of the JSON data. See <code>
      *     JsonGetOptions</code>.
      * @return Returns a string representation of the JSON document. If <code>key</code> doesn't
-     *     exist, returns null.
+     *     exist, returns <code>null</code>.
      * @example
      *     <pre>{@code
      * JsonGetOptions options = JsonGetOptions.builder()
