@@ -24,7 +24,7 @@ from glide.glide_client import GlideClusterClient
 
 @pytest.mark.asyncio
 class TestFtSearch:
-    sleep_wait_time = 0.5  # T his value is in seconds
+    sleep_wait_time = 0.5  # This value is in seconds
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
