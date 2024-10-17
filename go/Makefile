@@ -39,13 +39,13 @@ clean:
 	rm -f lib.h
 	rm -f benchmarks/benchmarks
 
-
-build-glide-client:
+build-glide-client: generate-bindings
 	cargo build --release
-	cbindgen --config cbindgen.toml --crate glide-rs --output lib.h
 
-build-glide-client-debug:
+build-glide-client-debug: generate-bindings
 	cargo build
+	
+generate-bindings:
 	cbindgen --config cbindgen.toml --crate glide-rs --output lib.h
 
 generate-protobuf:
