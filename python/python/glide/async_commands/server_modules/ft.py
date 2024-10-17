@@ -76,3 +76,77 @@ async def dropindex(client: TGlideClient, indexName: TEncodable) -> TOK:
     """
     args: List[TEncodable] = [CommandNames.FT_DROPINDEX, indexName]
     return cast(TOK, await client.custom_command(args))
+
+
+async def aliasadd(
+    client: TGlideClient, alias: TEncodable, indexName: TEncodable
+) -> TOK:
+    """
+    Add an alias for an index. The new alias name can be used anywhere that an index name is required.
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+        alias (TEncodable): The alias to be added to an index.
+        indexName (TEncodable): The index name for which the alias has to be added.
+
+    Returns:
+        TOK: A simple "OK" response.
+
+    Examples:
+        For the following example to work, an index named "idx" must already be created.
+        >>> from glide.async_commands.server_modules import ft
+        >>> indexName = "idx"
+        >>> alias = "alias"
+        >>> result = await ft.aliasadd(glide_client, alias, indexName)
+            'OK'  # Indicates the successful addition of the alias for the index.
+    """
+    args: List[TEncodable] = [CommandNames.FT_ALIASADD, alias, indexName]
+    return cast(TOK, await client.custom_command(args))
+
+
+async def aliasdel(client: TGlideClient, alias: TEncodable) -> TOK:
+    """
+    Delete an existing alias for an index.
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+        alias (TEncodable): The exisiting alias to be deleted for an index.
+
+    Returns:
+        TOK: A simple "OK" response.
+
+    Examples:
+        For the following example to work alias named "a" must exist.
+        >>> from glide.async_commands.server_modules import ft
+        >>> alias = "a"
+        >>> result = await ft.aliasdel(glide_client, alias)
+            'OK'  # Indicates the successful deletion of the alias
+    """
+    args: List[TEncodable] = [CommandNames.FT_ALIASDEL, alias]
+    return cast(TOK, await client.custom_command(args))
+
+
+async def aliasupdate(
+    client: TGlideClient, alias: TEncodable, indexName: TEncodable
+) -> TOK:
+    """
+    Update an existing alias to point to a different physical index. This command only affects future references to the alias.
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+        alias (TEncodable): The alias name. This alias will now be pointed to a different index.
+        indexName (TEncodable): The index name for which an existing alias has to updated.
+
+    Returns:
+        TOK: A simple "OK" response.
+
+    Examples:
+        For the following example to work an alias named "a" and an index named "idx" must exist.
+        >>> from glide.async_commands.server_modules import ft
+        >>> indexName = "idx"
+        >>> alias = "a"
+        >>> result = await ft.aliasupdate(glide_client, alias, indexName)
+            'OK'  # Indicates the successful updation of the alias to point to the index "idx"
+    """
+    args: List[TEncodable] = [CommandNames.FT_ALIASUPDATE, alias, indexName]
+    return cast(TOK, await client.custom_command(args))
