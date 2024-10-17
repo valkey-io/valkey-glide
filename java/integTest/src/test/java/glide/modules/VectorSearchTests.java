@@ -787,20 +787,20 @@ public class VectorSearchTests {
 
         // create some indices
         assertEquals(
-            OK,
-            FT.create(
-                    client,
-                    indexName,
-                    new FieldInfo[] {
-                        new FieldInfo("vec", VectorFieldFlat.builder(DistanceMetric.L2, 2).build())
-                    })
-                .get());
+                OK,
+                FT.create(
+                                client,
+                                indexName,
+                                new FieldInfo[] {
+                                    new FieldInfo("vec", VectorFieldFlat.builder(DistanceMetric.L2, 2).build())
+                                })
+                        .get());
 
         assertEquals(OK, FT.aliasadd(client, alias1, indexName).get());
 
         // error with adding the same alias to the same index
         var exception =
-            assertThrows(ExecutionException.class, () -> FT.aliasadd(client, alias1, indexName).get());
+                assertThrows(ExecutionException.class, () -> FT.aliasadd(client, alias1, indexName).get());
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getMessage().contains("Alias already exists"));
 
@@ -816,8 +816,8 @@ public class VectorSearchTests {
 
         // exception with calling `aliasadd` with a nonexisting index
         exception =
-            assertThrows(
-                ExecutionException.class, () -> FT.aliasadd(client, alias1, "nonexistent_index").get());
+                assertThrows(
+                        ExecutionException.class, () -> FT.aliasadd(client, alias1, "nonexistent_index").get());
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getMessage().contains("Index does not exist"));
     }
