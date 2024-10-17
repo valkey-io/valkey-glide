@@ -15,6 +15,7 @@ on:
             - .github/workflows/lint-rust/action.yml
             - .github/workflows/install-valkey/action.yml
             - .github/json_matrices/build-matrix.json
+            - .github/workflows/start-self-hosted-runner/action.yml
     pull_request:
         paths:
             - glide-core/src/**
@@ -28,6 +29,7 @@ on:
             - .github/workflows/lint-rust/action.yml
             - .github/workflows/install-valkey/action.yml
             - .github/json_matrices/build-matrix.json
+            - .github/workflows/start-self-hosted-runner/action.yml
     workflow_dispatch:
 
 concurrency:
@@ -79,7 +81,7 @@ jobs:
                   engine-version: ${{ matrix.engine.version }}
 
             - name: test
-              run: npm test
+              run: npm test -- --testPathIgnorePatterns="ServerModules"
               working-directory: ./node
 
             - name: test hybrid node modules - commonjs
@@ -269,3 +271,48 @@ jobs:
                       node/test-report*.html
                       utils/clusters/**
                       benchmarks/results/**
+
+    test-modules:
+      if: github.event.pull_request.head.repo.owner.login == 'valkey-io'
+      # environment: AWS_ACTIONS
+      name: Running Module Tests
+      runs-on: [self-hosted, linux, ARM64]
+      timeout-minutes: 15
+
+      steps:
+          - name: Setup self-hosted runner access
+            run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
+
+          - uses: actions/checkout@v4
+            with:
+              submodules: recursive
+
+          - name: Use Node.js 16.x
+            uses: actions/setup-node@v3
+            with:
+                node-version: 16.x
+
+          - name: Build Node wrapper
+            uses: ./.github/workflows/build-node-wrapper
+            with:
+                    os: ubuntu
+                    named_os: linux
+                    arch: arm64
+                    target: aarch64-unknown-linux-gnu
+                    github-token: ${{ secrets.GITHUB_TOKEN }}
+                    engine-version: ${{ matrix.engine.version }}
+
+          - name: test
+            run: npm run test-modules --tls -- --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }}
+            working-directory: ./node
+
+          - name: Upload test reports
+            if: always()
+            continue-on-error: true
+            uses: actions/upload-artifact@v4
+            with:
+                name: test-report-node-modules-${{ matrix.engine.type }}-${{ matrix.engine.version }}-ubuntu
+                path: |
+                    node/test-report-modules*.html
+                    utils/clusters/**
+                    benchmarks/results/**
