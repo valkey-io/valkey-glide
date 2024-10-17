@@ -15,13 +15,14 @@ import glide.utils.ArrayTransformUtils;
 import java.util.concurrent.CompletableFuture;
 import lombok.NonNull;
 
-public class GlideJson {
+/** Module for JSON commands. */
+public class Json {
 
     public static final String JSON_PREFIX = "JSON.";
     public static final String JSON_SET = JSON_PREFIX + "SET";
     public static final String JSON_GET = JSON_PREFIX + "GET";
 
-    private GlideJson() {}
+    private Json() {}
 
     /**
      * Sets the JSON value at the specified <code>path</code> stored at <code>key</code>.
@@ -33,11 +34,10 @@ public class GlideJson {
      *     <code>path</code>, or if the specified <code>path</code> acts as the parent of a new child
      *     being added.
      * @param value The value to set at the specific path, in JSON formatted string.
-     * @return A simple <code>"OK"</code> response if the value is successfully set. If value isn't
-     *     set because of <code>set_condition</code>, returns null.
+     * @return A simple <code>"OK"</code> response if the value is successfully set.
      * @example
      *     <pre>{@code
-     * String value = client.Json.set(client, "doc", , ".", "{'a': 1.0, 'b': 2}").get();
+     * String value = Json.set(client, "doc", , ".", "{'a': 1.0, 'b': 2}").get();
      * assert value.equals("OK");
      * }</pre>
      */
@@ -46,8 +46,7 @@ public class GlideJson {
             @NonNull String key,
             @NonNull String path,
             @NonNull String value) {
-        return executeCommand(client, new String[] {JSON_SET, key, path, value})
-                .thenApply(r -> (String) r);
+        return executeCommand(client, new String[] {JSON_SET, key, path, value});
     }
 
     /**
@@ -60,8 +59,7 @@ public class GlideJson {
      *     <code>path</code>, or if the specified <code>path</code> acts as the parent of a new child
      *     being added.
      * @param value The value to set at the specific path, in JSON formatted GlideString.
-     * @return A simple <code>"OK"</code> response if the value is successfully set. If value isn't
-     *     set because of <code>set_condition</code>, returns null.
+     * @return A simple <code>"OK"</code> response if the value is successfully set.
      * @example
      *     <pre>{@code
      * String value = client.Json.set(client, gs("doc"), , gs("."), gs("{'a': 1.0, 'b': 2}")).get();
@@ -73,8 +71,7 @@ public class GlideJson {
             @NonNull GlideString key,
             @NonNull GlideString path,
             @NonNull GlideString value) {
-        return executeCommand(client, new GlideString[] {gs(JSON_SET), key, path, value})
-                .thenApply(r -> (String) r);
+        return executeCommand(client, new GlideString[] {gs(JSON_SET), key, path, value});
     }
 
     /**
@@ -89,7 +86,7 @@ public class GlideJson {
      * @param value The value to set at the specific path, in JSON formatted string.
      * @param setCondition Set the value only if the given condition is met (within the key or path).
      * @return A simple <code>"OK"</code> response if the value is successfully set. If value isn't
-     *     set because of <code>set_condition</code>, returns null.
+     *     set because of <code>setCondition</code>, returns <code>null</code>.
      * @example
      *     <pre>{@code
      * String value = client.Json.set(client, "doc", , ".", "{'a': 1.0, 'b': 2}", ConditionalChange.ONLY_IF_DOES_NOT_EXIST).get();
@@ -103,8 +100,7 @@ public class GlideJson {
             @NonNull String value,
             @NonNull ConditionalChange setCondition) {
         return executeCommand(
-                        client, new String[] {JSON_SET, key, path, value, setCondition.getValkeyApi()})
-                .thenApply(r -> (String) r);
+                client, new String[] {JSON_SET, key, path, value, setCondition.getValkeyApi()});
     }
 
     /**
@@ -119,7 +115,7 @@ public class GlideJson {
      * @param value The value to set at the specific path, in JSON formatted GlideString.
      * @param setCondition Set the value only if the given condition is met (within the key or path).
      * @return A simple <code>"OK"</code> response if the value is successfully set. If value isn't
-     *     set because of <code>set_condition</code>, returns null.
+     *     set because of <code>setCondition</code>, returns <code>null</code>.
      * @example
      *     <pre>{@code
      * String value = client.Json.set(client, gs("doc"), , gs("."), gs("{'a': 1.0, 'b': 2}"), ConditionalChange.ONLY_IF_DOES_NOT_EXIST).get();
@@ -133,9 +129,8 @@ public class GlideJson {
             @NonNull GlideString value,
             @NonNull ConditionalChange setCondition) {
         return executeCommand(
-                        client,
-                        new GlideString[] {gs(JSON_SET), key, path, value, gs(setCondition.getValkeyApi())})
-                .thenApply(r -> (String) r);
+                client,
+                new GlideString[] {gs(JSON_SET), key, path, value, gs(setCondition.getValkeyApi())});
     }
 
     /**
@@ -151,11 +146,12 @@ public class GlideJson {
      *     exist, an error is raised. If <code>key</code> doesn't exist, returns null.
      * @example
      *     <pre>{@code
-     * String value = client.Json.set(client, "doc", "$").get();
+     * String value = client.Json.get(client, "doc", "$").get();
      * assert value.equals("{'a': 1.0, 'b': 2}");
      * }</pre>
      */
-    public static CompletableFuture<Object> get(BaseClient client, String key, String path) {
+    public static CompletableFuture<String> get(
+            @NonNull BaseClient client, @NonNull String key, @NonNull String path) {
         return executeCommand(client, new String[] {JSON_GET, key, path});
     }
 
@@ -172,12 +168,12 @@ public class GlideJson {
      *     exist, an error is raised. If <code>key</code> doesn't exist, returns null.
      * @example
      *     <pre>{@code
-     * GlideString value = client.Json.set(client, gs("doc"), gs("$")).get();
+     * GlideString value = client.Json.get(client, gs("doc"), gs("$")).get();
      * assert value.equals(gs("{'a': 1.0, 'b': 2}"));
      * }</pre>
      */
-    public static CompletableFuture<Object> get(
-            BaseClient client, GlideString key, GlideString path) {
+    public static CompletableFuture<GlideString> get(
+            @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString path) {
         return executeCommand(client, new GlideString[] {gs(JSON_GET), key, path});
     }
 
@@ -192,11 +188,12 @@ public class GlideJson {
      *     path. If <code>key</code> doesn't exist, returns null.
      * @example
      *     <pre>{@code
-     * String value = client.Json.set(client, "doc", new String[] {"$.a", "$.b"}).get();
+     * String value = client.Json.get(client, "doc", new String[] {"$.a", "$.b"}).get();
      * assert value.equals("{\"$.a\": [1.0], \"$.b\": [2]}");
      * }</pre>
      */
-    public static CompletableFuture<Object> get(BaseClient client, String key, String[] paths) {
+    public static CompletableFuture<String> get(
+            @NonNull BaseClient client, @NonNull String key, @NonNull String[] paths) {
         return executeCommand(
                 client, ArrayTransformUtils.concatenateArrays(new String[] {JSON_GET, key}, paths));
     }
@@ -212,12 +209,12 @@ public class GlideJson {
      *     path. If <code>key</code> doesn't exist, returns null.
      * @example
      *     <pre>{@code
-     * GlideString value = client.Json.set(client, gs("doc"), new GlideString[] {gs("$.a"), gs("$.b")}).get();
+     * GlideString value = client.Json.get(client, gs("doc"), new GlideString[] {gs("$.a"), gs("$.b")}).get();
      * assert value.equals(gs("{\"$.a\": [1.0], \"$.b\": [2]}"));
      * }</pre>
      */
-    public static CompletableFuture<Object> get(
-            BaseClient client, GlideString key, GlideString[] paths) {
+    public static CompletableFuture<GlideString> get(
+            @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString[] paths) {
         return executeCommand(
                 client,
                 ArrayTransformUtils.concatenateArrays(new GlideString[] {gs(JSON_GET), key}, paths));
@@ -238,18 +235,20 @@ public class GlideJson {
      *     exist, an error is raised. If <code>key</code> doesn't exist, returns null.
      * @example
      *     <pre>{@code
-     * String value = client.Json.set(client, "doc", "$",
-     *                  JsonGetOptions.builder()
-     *                      .indent("  ")
-     *                      .space(" ")
-     *                      .newline("\n")
-     *                      .build()
-     *                  ).get();
+     * JsonGetOptions options = JsonGetOptions.builder()
+     *                              .indent("  ")
+     *                              .space(" ")
+     *                              .newline("\n")
+     *                              .build();
+     * String value = client.Json.get(client, "doc", "$", options).get();
      * assert value.equals("{\n \"a\": \n  1.0\n ,\n \"b\": \n  2\n }");
      * }</pre>
      */
-    public static CompletableFuture<Object> get(
-            BaseClient client, String key, String path, JsonGetOptions options) {
+    public static CompletableFuture<String> get(
+            @NonNull BaseClient client,
+            @NonNull String key,
+            @NonNull String path,
+            @NonNull JsonGetOptions options) {
         return executeCommand(
                 client,
                 ArrayTransformUtils.concatenateArrays(
@@ -271,18 +270,20 @@ public class GlideJson {
      *     exist, an error is raised. If <code>key</code> doesn't exist, returns null.
      * @example
      *     <pre>{@code
-     * GlideString value = client.Json.set(client, gs("doc"), gs("$"),
-     *                  JsonGetOptions.builder()
-     *                      .indent("  ")
-     *                      .space(" ")
-     *                      .newline("\n")
-     *                      .build()
-     *                  ).get();
+     * JsonGetOptions options = JsonGetOptions.builder()
+     *                              .indent("  ")
+     *                              .space(" ")
+     *                              .newline("\n")
+     *                              .build();
+     * GlideString value = client.Json.get(client, gs("doc"), gs("$"), options).get();
      * assert value.equals(gs("{\n \"a\": \n  1.0\n ,\n \"b\": \n  2\n }"));
      * }</pre>
      */
-    public static CompletableFuture<Object> get(
-            BaseClient client, GlideString key, GlideString path, JsonGetOptions options) {
+    public static CompletableFuture<GlideString> get(
+            @NonNull BaseClient client,
+            @NonNull GlideString key,
+            @NonNull GlideString path,
+            @NonNull JsonGetOptions options) {
         return executeCommand(
                 client,
                 new ArgsBuilder().add(gs(JSON_GET)).add(key).add(options.toArgs()).add(path).toArray());
@@ -301,18 +302,20 @@ public class GlideJson {
      *     path. If <code>key</code> doesn't exist, returns null.
      * @example
      *     <pre>{@code
-     * String value = client.Json.set(client, "doc", new String[] {"$.a", "$.b"},
-     *                  JsonGetOptions.builder()
-     *                      .indent("  ")
-     *                      .space(" ")
-     *                      .newline("\n")
-     *                      .build()
-     *                  ).get();
+     * JsonGetOptions options = JsonGetOptions.builder()
+     *                              .indent("  ")
+     *                              .space(" ")
+     *                              .newline("\n")
+     *                              .build();
+     * String value = client.Json.get(client, "doc", new String[] {"$.a", "$.b"}, options).get();
      * assert value.equals("{\n \"$.a\": [\n  1.0\n ],\n \"$.b\": [\n  2\n ]\n}");
      * }</pre>
      */
-    public static CompletableFuture<Object> get(
-            BaseClient client, String key, String[] paths, JsonGetOptions options) {
+    public static CompletableFuture<String> get(
+            @NonNull BaseClient client,
+            @NonNull String key,
+            @NonNull String[] paths,
+            @NonNull JsonGetOptions options) {
         return executeCommand(
                 client,
                 ArrayTransformUtils.concatenateArrays(
@@ -332,18 +335,20 @@ public class GlideJson {
      *     path. If <code>key</code> doesn't exist, returns null.
      * @example
      *     <pre>{@code
-     * GlideString value = client.Json.set(client, gs("doc"), new GlideString[] {gs("$.a"), gs("$.b")},
-     *                  JsonGetOptions.builder()
-     *                      .indent("  ")
-     *                      .space(" ")
-     *                      .newline("\n")
-     *                      .build()
-     *                  ).get();
+     * JsonGetOptions options = JsonGetOptions.builder()
+     *                              .indent("  ")
+     *                              .space(" ")
+     *                              .newline("\n")
+     *                              .build();
+     * GlideString value = client.Json.get(client, gs("doc"), new GlideString[] {gs("$.a"), gs("$.b")}, options).get();
      * assert value.equals(gs("{\n \"$.a\": [\n  1.0\n ],\n \"$.b\": [\n  2\n ]\n}"));
      * }</pre>
      */
-    public static CompletableFuture<Object> get(
-            BaseClient client, GlideString key, GlideString[] paths, JsonGetOptions options) {
+    public static CompletableFuture<GlideString> get(
+            @NonNull BaseClient client,
+            @NonNull GlideString key,
+            @NonNull GlideString[] paths,
+            @NonNull JsonGetOptions options) {
         return executeCommand(
                 client,
                 new ArgsBuilder().add(gs(JSON_GET)).add(key).add(options.toArgs()).add(paths).toArray());
@@ -355,7 +360,7 @@ public class GlideJson {
      * @param client The client to execute the command.
      * @param args The command line.
      */
-    private static CompletableFuture<Object> executeCommand(BaseClient client, String[] args) {
+    private static <T> CompletableFuture<T> executeCommand(BaseClient client, String[] args) {
         return executeCommand(client, args, false);
     }
 
@@ -366,14 +371,16 @@ public class GlideJson {
      * @param args The command line.
      * @param returnsMap - true if command returns a map
      */
-    private static CompletableFuture<Object> executeCommand(
+    @SuppressWarnings({"unchecked", "SameParameterValue"})
+    private static <T> CompletableFuture<T> executeCommand(
             BaseClient client, String[] args, boolean returnsMap) {
         if (client instanceof GlideClient) {
-            return ((GlideClient) client).customCommand(args);
+            return ((GlideClient) client).customCommand(args).thenApply(r -> (T) r);
         } else if (client instanceof GlideClusterClient) {
             return ((GlideClusterClient) client)
                     .customCommand(args)
-                    .thenApply(returnsMap ? ClusterValue::getMultiValue : ClusterValue::getSingleValue);
+                    .thenApply(returnsMap ? ClusterValue::getMultiValue : ClusterValue::getSingleValue)
+                    .thenApply(r -> (T) r);
         }
         throw new IllegalArgumentException(
                 "Unknown type of client, should be either `GlideClient` or `GlideClusterClient`");
@@ -385,7 +392,7 @@ public class GlideJson {
      * @param client The client to execute the command.
      * @param args The command line.
      */
-    private static CompletableFuture<Object> executeCommand(BaseClient client, GlideString[] args) {
+    private static <T> CompletableFuture<T> executeCommand(BaseClient client, GlideString[] args) {
         return executeCommand(client, args, false);
     }
 
@@ -396,14 +403,16 @@ public class GlideJson {
      * @param args The command line.
      * @param returnsMap - true if command returns a map
      */
-    private static CompletableFuture<Object> executeCommand(
+    @SuppressWarnings({"unchecked", "SameParameterValue"})
+    private static <T> CompletableFuture<T> executeCommand(
             BaseClient client, GlideString[] args, boolean returnsMap) {
         if (client instanceof GlideClient) {
-            return ((GlideClient) client).customCommand(args);
+            return ((GlideClient) client).customCommand(args).thenApply(r -> (T) r);
         } else if (client instanceof GlideClusterClient) {
             return ((GlideClusterClient) client)
                     .customCommand(args)
-                    .thenApply(returnsMap ? ClusterValue::getMultiValue : ClusterValue::getSingleValue);
+                    .thenApply(returnsMap ? ClusterValue::getMultiValue : ClusterValue::getSingleValue)
+                    .thenApply(r -> (T) r);
         }
         throw new IllegalArgumentException(
                 "Unknown type of client, should be either `GlideClient` or `GlideClusterClient`");

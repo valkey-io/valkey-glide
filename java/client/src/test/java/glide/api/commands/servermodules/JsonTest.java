@@ -23,7 +23,7 @@ import org.apache.commons.lang3.ArrayUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-class GlideJsonTest {
+class JsonTest {
 
     private GlideClient glideClient;
 
@@ -43,12 +43,12 @@ class GlideJsonTest {
         String expectedResponseValue = "OK";
         expectedResponse.complete(expectedResponseValue);
         when(glideClient
-                        .customCommand(eq(new String[] {GlideJson.JSON_SET, key, path, jsonValue}))
+                        .customCommand(eq(new String[] {Json.JSON_SET, key, path, jsonValue}))
                         .<String>thenApply(any()))
                 .thenReturn(expectedResponse);
 
         // exercise
-        CompletableFuture<String> actualResponse = GlideJson.set(glideClient, key, path, jsonValue);
+        CompletableFuture<String> actualResponse = Json.set(glideClient, key, path, jsonValue);
         String actualResponseValue = actualResponse.get();
 
         // verify
@@ -67,12 +67,12 @@ class GlideJsonTest {
         String expectedResponseValue = "OK";
         expectedResponse.complete(expectedResponseValue);
         when(glideClient
-                        .customCommand(eq(new GlideString[] {gs(GlideJson.JSON_SET), key, path, jsonValue}))
+                        .customCommand(eq(new GlideString[] {gs(Json.JSON_SET), key, path, jsonValue}))
                         .<String>thenApply(any()))
                 .thenReturn(expectedResponse);
 
         // exercise
-        CompletableFuture<String> actualResponse = GlideJson.set(glideClient, key, path, jsonValue);
+        CompletableFuture<String> actualResponse = Json.set(glideClient, key, path, jsonValue);
         String actualResponseValue = actualResponse.get();
 
         // verify
@@ -93,16 +93,13 @@ class GlideJsonTest {
         expectedResponse.complete(expectedResponseValue);
         when(glideClient
                         .customCommand(
-                                eq(
-                                        new String[] {
-                                            GlideJson.JSON_SET, key, path, jsonValue, setCondition.getValkeyApi()
-                                        }))
+                                eq(new String[] {Json.JSON_SET, key, path, jsonValue, setCondition.getValkeyApi()}))
                         .<String>thenApply(any()))
                 .thenReturn(expectedResponse);
 
         // exercise
         CompletableFuture<String> actualResponse =
-                GlideJson.set(glideClient, key, path, jsonValue, setCondition);
+                Json.set(glideClient, key, path, jsonValue, setCondition);
         String actualResponseValue = actualResponse.get();
 
         // verify
@@ -125,14 +122,14 @@ class GlideJsonTest {
                         .customCommand(
                                 eq(
                                         new GlideString[] {
-                                            gs(GlideJson.JSON_SET), key, path, jsonValue, gs(setCondition.getValkeyApi())
+                                            gs(Json.JSON_SET), key, path, jsonValue, gs(setCondition.getValkeyApi())
                                         }))
                         .<String>thenApply(any()))
                 .thenReturn(expectedResponse);
 
         // exercise
         CompletableFuture<String> actualResponse =
-                GlideJson.set(glideClient, key, path, jsonValue, setCondition);
+                Json.set(glideClient, key, path, jsonValue, setCondition);
         String actualResponseValue = actualResponse.get();
 
         // verify
@@ -146,15 +143,17 @@ class GlideJsonTest {
         // setup
         String key = "testKey";
         String path = "$";
-        CompletableFuture<Object> expectedResponse = new CompletableFuture<>();
+        CompletableFuture<String> expectedResponse = new CompletableFuture<>();
         String expectedResponseValue = "{\"a\": 1.0, \"b\": 2}";
         expectedResponse.complete(expectedResponseValue);
-        when(glideClient.customCommand(eq(new String[] {GlideJson.JSON_GET, key, path})))
+        when(glideClient
+                        .customCommand(eq(new String[] {Json.JSON_GET, key, path}))
+                        .<String>thenApply(any()))
                 .thenReturn(expectedResponse);
 
         // exercise
-        CompletableFuture<Object> actualResponse = GlideJson.get(glideClient, key, path);
-        String actualResponseValue = (String) actualResponse.get();
+        CompletableFuture<String> actualResponse = Json.get(glideClient, key, path);
+        String actualResponseValue = actualResponse.get();
 
         // verify
         assertEquals(expectedResponse, actualResponse);
@@ -167,15 +166,17 @@ class GlideJsonTest {
         // setup
         GlideString key = gs("testKey");
         GlideString path = gs("$");
-        CompletableFuture<Object> expectedResponse = new CompletableFuture<>();
+        CompletableFuture<GlideString> expectedResponse = new CompletableFuture<>();
         GlideString expectedResponseValue = gs("{\"a\": 1.0, \"b\": 2}");
         expectedResponse.complete(expectedResponseValue);
-        when(glideClient.customCommand(eq(new GlideString[] {gs(GlideJson.JSON_GET), key, path})))
+        when(glideClient
+                        .customCommand(eq(new GlideString[] {gs(Json.JSON_GET), key, path}))
+                        .<GlideString>thenApply(any()))
                 .thenReturn(expectedResponse);
 
         // exercise
-        CompletableFuture<Object> actualResponse = GlideJson.get(glideClient, key, path);
-        GlideString actualResponseValue = (GlideString) actualResponse.get();
+        CompletableFuture<GlideString> actualResponse = Json.get(glideClient, key, path);
+        GlideString actualResponseValue = actualResponse.get();
 
         // verify
         assertEquals(expectedResponse, actualResponse);
@@ -190,15 +191,17 @@ class GlideJsonTest {
         String path1 = ".firstName";
         String path2 = ".lastName";
         String[] paths = new String[] {path1, path2};
-        CompletableFuture<Object> expectedResponse = new CompletableFuture<>();
+        CompletableFuture<String> expectedResponse = new CompletableFuture<>();
         String expectedResponseValue = "{\"a\": 1.0, \"b\": 2}";
         expectedResponse.complete(expectedResponseValue);
-        when(glideClient.customCommand(eq(new String[] {GlideJson.JSON_GET, key, path1, path2})))
+        when(glideClient
+                        .customCommand(eq(new String[] {Json.JSON_GET, key, path1, path2}))
+                        .<String>thenApply(any()))
                 .thenReturn(expectedResponse);
 
         // exercise
-        CompletableFuture<Object> actualResponse = GlideJson.get(glideClient, key, paths);
-        String actualResponseValue = (String) actualResponse.get();
+        CompletableFuture<String> actualResponse = Json.get(glideClient, key, paths);
+        String actualResponseValue = actualResponse.get();
 
         // verify
         assertEquals(expectedResponse, actualResponse);
@@ -213,16 +216,17 @@ class GlideJsonTest {
         GlideString path1 = gs(".firstName");
         GlideString path2 = gs(".lastName");
         GlideString[] paths = new GlideString[] {path1, path2};
-        CompletableFuture<Object> expectedResponse = new CompletableFuture<>();
+        CompletableFuture<GlideString> expectedResponse = new CompletableFuture<>();
         GlideString expectedResponseValue = gs("{\"a\": 1.0, \"b\": 2}");
         expectedResponse.complete(expectedResponseValue);
-        when(glideClient.customCommand(
-                        eq(new GlideString[] {gs(GlideJson.JSON_GET), key, path1, path2})))
+        when(glideClient
+                        .customCommand(eq(new GlideString[] {gs(Json.JSON_GET), key, path1, path2}))
+                        .<GlideString>thenApply(any()))
                 .thenReturn(expectedResponse);
 
         // exercise
-        CompletableFuture<Object> actualResponse = GlideJson.get(glideClient, key, paths);
-        GlideString actualResponseValue = (GlideString) actualResponse.get();
+        CompletableFuture<GlideString> actualResponse = Json.get(glideClient, key, paths);
+        GlideString actualResponseValue = actualResponse.get();
 
         // verify
         assertEquals(expectedResponse, actualResponse);
@@ -236,19 +240,21 @@ class GlideJsonTest {
         String key = "testKey";
         String path = "$";
         JsonGetOptions options = JsonGetOptions.builder().indent("\t").space(" ").newline("\n").build();
-        CompletableFuture<Object> expectedResponse = new CompletableFuture<>();
+        CompletableFuture<String> expectedResponse = new CompletableFuture<>();
         String expectedResponseValue = "{\"a\": 1.0, \"b\": 2}";
         expectedResponse.complete(expectedResponseValue);
-        when(glideClient.customCommand(
-                        eq(
-                                ArrayUtils.add(
-                                        ArrayUtils.addAll(new String[] {GlideJson.JSON_GET, key}, options.toArgs()),
-                                        path))))
+        when(glideClient
+                        .customCommand(
+                                eq(
+                                        ArrayUtils.add(
+                                                ArrayUtils.addAll(new String[] {Json.JSON_GET, key}, options.toArgs()),
+                                                path)))
+                        .<String>thenApply(any()))
                 .thenReturn(expectedResponse);
 
         // exercise
-        CompletableFuture<Object> actualResponse = GlideJson.get(glideClient, key, path, options);
-        String actualResponseValue = (String) actualResponse.get();
+        CompletableFuture<String> actualResponse = Json.get(glideClient, key, path, options);
+        String actualResponseValue = actualResponse.get();
 
         // verify
         assertEquals(expectedResponse, actualResponse);
@@ -262,21 +268,23 @@ class GlideJsonTest {
         GlideString key = gs("testKey");
         GlideString path = gs("$");
         JsonGetOptions options = JsonGetOptions.builder().indent("\t").space(" ").newline("\n").build();
-        CompletableFuture<Object> expectedResponse = new CompletableFuture<>();
+        CompletableFuture<GlideString> expectedResponse = new CompletableFuture<>();
         GlideString expectedResponseValue = gs("{\"a\": 1.0, \"b\": 2}");
         expectedResponse.complete(expectedResponseValue);
-        when(glideClient.customCommand(
-                        eq(
-                                new ArgsBuilder()
-                                        .add(new GlideString[] {gs(GlideJson.JSON_GET), key})
-                                        .add(options.toArgs())
-                                        .add(path)
-                                        .toArray())))
+        when(glideClient
+                        .customCommand(
+                                eq(
+                                        new ArgsBuilder()
+                                                .add(new GlideString[] {gs(Json.JSON_GET), key})
+                                                .add(options.toArgs())
+                                                .add(path)
+                                                .toArray()))
+                        .<GlideString>thenApply(any()))
                 .thenReturn(expectedResponse);
 
         // exercise
-        CompletableFuture<Object> actualResponse = GlideJson.get(glideClient, key, path, options);
-        GlideString actualResponseValue = (GlideString) actualResponse.get();
+        CompletableFuture<GlideString> actualResponse = Json.get(glideClient, key, path, options);
+        GlideString actualResponseValue = actualResponse.get();
 
         // verify
         assertEquals(expectedResponse, actualResponse);
@@ -292,20 +300,20 @@ class GlideJsonTest {
         String path2 = ".lastName";
         JsonGetOptions options = JsonGetOptions.builder().indent("\t").newline("\n").space(" ").build();
         String[] paths = new String[] {path1, path2};
-        CompletableFuture<Object> expectedResponse = new CompletableFuture<>();
+        CompletableFuture<String> expectedResponse = new CompletableFuture<>();
         String expectedResponseValue = "{\"a\": 1.0, \"b\": 2}";
         expectedResponse.complete(expectedResponseValue);
         ArrayList<String> argsList = new ArrayList<>();
-        argsList.add(GlideJson.JSON_GET);
+        argsList.add(Json.JSON_GET);
         argsList.add(key);
         Collections.addAll(argsList, options.toArgs());
         Collections.addAll(argsList, paths);
-        when(glideClient.customCommand(eq(argsList.toArray(new String[0]))))
+        when(glideClient.customCommand(eq(argsList.toArray(new String[0]))).<String>thenApply(any()))
                 .thenReturn(expectedResponse);
 
         // exercise
-        CompletableFuture<Object> actualResponse = GlideJson.get(glideClient, key, paths, options);
-        String actualResponseValue = (String) actualResponse.get();
+        CompletableFuture<String> actualResponse = Json.get(glideClient, key, paths, options);
+        String actualResponseValue = actualResponse.get();
 
         // verify
         assertArrayEquals(
@@ -323,21 +331,17 @@ class GlideJsonTest {
         GlideString path2 = gs(".lastName");
         JsonGetOptions options = JsonGetOptions.builder().indent("\t").newline("\n").space(" ").build();
         GlideString[] paths = new GlideString[] {path1, path2};
-        CompletableFuture<Object> expectedResponse = new CompletableFuture<>();
+        CompletableFuture<GlideString> expectedResponse = new CompletableFuture<>();
         GlideString expectedResponseValue = gs("{\"a\": 1.0, \"b\": 2}");
         expectedResponse.complete(expectedResponseValue);
         GlideString[] args =
-                new ArgsBuilder()
-                        .add(GlideJson.JSON_GET)
-                        .add(key)
-                        .add(options.toArgs())
-                        .add(paths)
-                        .toArray();
-        when(glideClient.customCommand(eq(args))).thenReturn(expectedResponse);
+                new ArgsBuilder().add(Json.JSON_GET).add(key).add(options.toArgs()).add(paths).toArray();
+        when(glideClient.customCommand(eq(args)).<GlideString>thenApply(any()))
+                .thenReturn(expectedResponse);
 
         // exercise
-        CompletableFuture<Object> actualResponse = GlideJson.get(glideClient, key, paths, options);
-        GlideString actualResponseValue = (GlideString) actualResponse.get();
+        CompletableFuture<GlideString> actualResponse = Json.get(glideClient, key, paths, options);
+        GlideString actualResponseValue = actualResponse.get();
 
         // verify
         assertEquals(expectedResponse, actualResponse);

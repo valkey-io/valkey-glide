@@ -1,14 +1,12 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands.json;
 
-import glide.api.commands.servermodules.GlideJson;
+import glide.api.commands.servermodules.Json;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.Builder;
-import lombok.Getter;
 
-/** Additional parameters for {@link GlideJson#get} command. */
-@Getter
+/** Additional parameters for {@link Json#get} command. */
 @Builder
 public final class JsonGetOptions {
     /** ValKey API string to designate INDENT */
@@ -20,14 +18,20 @@ public final class JsonGetOptions {
     /** ValKey API string to designate SPACE */
     public static final String SPACE_VALKEY_API = "SPACE";
 
-    /** Sets an indentation string for nested levels. Defaults to null. */
-    @Builder.Default private String indent = null;
+    /** ValKey API string to designate SPACE */
+    public static final String NOESCAPE_VALKEY_API = "NOESCAPE";
 
-    /** Sets a string that's printed at the end of each line. Defaults to null. */
-    @Builder.Default private String newline = null;
+    /** Sets an indentation string for nested levels. */
+    private String indent;
 
-    /** Sets a string that's put between a key and a value. Defaults to null. */
-    @Builder.Default private String space = null;
+    /** Sets a string that's printed at the end of each line. */
+    private String newline;
+
+    /** Sets a string that's put between a key and a value. */
+    private String space;
+
+    /** Allowed to be present for legacy compatibility and has no other effect. */
+    private boolean noescape;
 
     /**
      * Converts JsonGetOptions into a String[].
@@ -35,22 +39,26 @@ public final class JsonGetOptions {
      * @return String[]
      */
     public String[] toArgs() {
-        List<String> resultList = new ArrayList<>();
+        List<String> args = new ArrayList<>();
         if (indent != null) {
-            resultList.add(INDENT_VALKEY_API);
-            resultList.add(indent);
+            args.add(INDENT_VALKEY_API);
+            args.add(indent);
         }
 
         if (newline != null) {
-            resultList.add(NEWLINE_VALKEY_API);
-            resultList.add(newline);
+            args.add(NEWLINE_VALKEY_API);
+            args.add(newline);
         }
 
         if (space != null) {
-            resultList.add(SPACE_VALKEY_API);
-            resultList.add(space);
+            args.add(SPACE_VALKEY_API);
+            args.add(space);
         }
 
-        return resultList.toArray(new String[0]);
+        if (noescape) {
+            args.add(NOESCAPE_VALKEY_API);
+        }
+
+        return args.toArray(new String[0]);
     }
 }
