@@ -776,4 +776,49 @@ public class VectorSearchTests {
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getMessage().contains("Index not found"));
     }
+
+    @SneakyThrows
+    @Test
+    public void ft_aliasadd_aliasdel_aliasupdate() {
+
+        var alias1 = "a1";
+        var alias2 = "a2";
+        var indexName = "index";
+
+        // create some indices
+        assertEquals(
+            OK,
+            FT.create(
+                    client,
+                    indexName,
+                    new FieldInfo[] {
+                        new FieldInfo("vec", VectorFieldFlat.builder(DistanceMetric.L2, 2).build())
+                    })
+                .get());
+
+        assertEquals(OK, FT.aliasadd(client, alias1, indexName).get());
+
+        // error with adding the same alias to the same index
+        var exception =
+            assertThrows(ExecutionException.class, () -> FT.aliasadd(client, alias1, indexName).get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(exception.getMessage().contains("Alias already exists"));
+
+        assertEquals(OK, FT.aliasupdate(client, alias2, indexName).get());
+        assertEquals(OK, FT.aliasdel(client, alias2).get());
+
+        assertEquals(OK, FT.aliasupdate(client, alias1, indexName).get());
+
+        // exception with calling `aliasdel` on an alias that doesn't exist
+        exception = assertThrows(ExecutionException.class, () -> FT.aliasdel(client, alias2).get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(exception.getMessage().contains("Alias does not exist"));
+
+        // exception with calling `aliasadd` with a nonexisting index
+        exception =
+            assertThrows(
+                ExecutionException.class, () -> FT.aliasadd(client, alias1, "nonexistent_index").get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(exception.getMessage().contains("Index does not exist"));
+    }
 }
