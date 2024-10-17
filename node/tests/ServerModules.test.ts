@@ -49,7 +49,9 @@ describe("GlideJson", () => {
         "ServerModules check modules loaded",
         async (protocol) => {
             client = await GlideClusterClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    useTLS: true,
+                }),
             );
             const info = await client.info({
                 sections: [InfoOptions.Modules],
