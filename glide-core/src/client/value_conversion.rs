@@ -24,6 +24,7 @@ pub(crate) enum ExpectedReturnType<'a> {
     ArrayOfDoubleOrNull,
     FTAggregateReturnType,
     FTSearchReturnType,
+    FTProfileReturnType(&'a Option<ExpectedReturnType<'a>>),
     Lolwut,
     ArrayOfStringAndArrays,
     ArrayOfArraysOfDoubleOrNull,
@@ -938,7 +939,7 @@ pub(crate) fn convert_to_expected_type(
                     let Value::Array(fields) = aggregation else {
                         return Err((
                             ErrorKind::TypeError,
-                            "Response couldn't be converted for FT.AGGREGATION",
+                            "Response couldn't be converted for FT.AGGREGATE",
                             format!("(`fields` was {:?})", get_value_type(&aggregation)),
                         )
                             .into());
@@ -953,7 +954,7 @@ pub(crate) fn convert_to_expected_type(
             }
             _ => Err((
                 ErrorKind::TypeError,
-                "Response couldn't be converted to FT.AGGREGATION",
+                "Response couldn't be converted for FT.AGGREGATE",
                 format!("(response was {:?})", get_value_type(&value)),
             )
                 .into()),
@@ -999,11 +1000,47 @@ pub(crate) fn convert_to_expected_type(
             },
             _ => Err((
                 ErrorKind::TypeError,
-                "Response couldn't be converted to Pair",
+                "Response couldn't be converted for FT.SEARCH",
                 format!("(response was {:?})", get_value_type(&value)),
             )
                 .into())
         },
+        ExpectedReturnType::FTProfileReturnType(type_of_query) => match value {
+            /*
+            Example of the response
+                1) <query response>
+                2) 1) 1) "parse.time"
+                      2) 119
+                   2) 1) "all.count"
+                      2) 4
+                   3) 1) "sync.time"
+                      2) 0
+
+            Converting response to
+                1) <converted query>
+                2) 1# "parse.time" => 119
+                   2# "all.count" => 4
+                   3# "sync.time" => 0
+
+            Converting first array element as it is needed for the inner query and second element to a map.
+            */
+            Value::Array(mut array) if array.len() == 2 => {
+                let res = vec![
+                    convert_to_expected_type(array.remove(0), *type_of_query)?,
+                    convert_to_expected_type(array.remove(0), Some(ExpectedReturnType::Map {
+                    key_type: &None,
+                    value_type: &None,
+                }))?];
+
+                Ok(Value::Array(res))
+            },
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted for FT.PROFILE",
+                format!("(response was {:?})", get_value_type(&value)),
+            )
+                .into())
+        }
     }
 }
 
@@ -1370,6 +1407,14 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
         }),
         b"FT.AGGREGATE" => Some(ExpectedReturnType::FTAggregateReturnType),
         b"FT.SEARCH" => Some(ExpectedReturnType::FTSearchReturnType),
+        // TODO replace with tuple
+        b"FT.PROFILE" => Some(ExpectedReturnType::FTProfileReturnType(
+            if cmd.arg_idx(2).is_some_and(|a| a == b"SEARCH") {
+                &Some(ExpectedReturnType::FTSearchReturnType)
+            } else {
+                &Some(ExpectedReturnType::FTAggregateReturnType)
+            },
+        )),
         _ => None,
     }
 }

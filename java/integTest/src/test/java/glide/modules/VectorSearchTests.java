@@ -32,6 +32,7 @@ import glide.api.models.commands.FT.FTCreateOptions.TagField;
 import glide.api.models.commands.FT.FTCreateOptions.TextField;
 import glide.api.models.commands.FT.FTCreateOptions.VectorFieldFlat;
 import glide.api.models.commands.FT.FTCreateOptions.VectorFieldHnsw;
+import glide.api.models.commands.FT.FTProfileOptions;
 import glide.api.models.commands.FT.FTSearchOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
@@ -254,22 +255,21 @@ public class VectorSearchTests {
                                                 })))
                         .get());
 
-        var ftsearch =
-                FT.search(
-                                client,
-                                index,
-                                "*=>[KNN 2 @VEC $query_vec]",
-                                FTSearchOptions.builder()
-                                        .params(
-                                                Map.of(
-                                                        gs("query_vec"),
-                                                        gs(
-                                                                new byte[] {
-                                                                    (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0,
-                                                                    (byte) 0, (byte) 0
-                                                                })))
-                                        .build())
-                        .get();
+        // FT.SEARCH hash_idx1 "*=>[KNN 2 @VEC $query_vec]" PARAMS 2 query_vec
+        // "\x00\x00\x00\x00\x00\x00\x00\x00" DIALECT 2
+        var options =
+                FTSearchOptions.builder()
+                        .params(
+                                Map.of(
+                                        gs("query_vec"),
+                                        gs(
+                                                new byte[] {
+                                                    (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0,
+                                                    (byte) 0
+                                                })))
+                        .build();
+        var query = "*=>[KNN 2 @VEC $query_vec]";
+        var ftsearch = FT.search(client, index, query, options).get();
 
         assertArrayEquals(
                 new Object[] {
@@ -297,6 +297,9 @@ public class VectorSearchTests {
                 ftsearch);
 
         // TODO more tests with json index
+
+        var ftprofile = FT.profile(client, index, new FTProfileOptions(query, options)).get();
+        assertArrayEquals(ftsearch, (Object[]) ftprofile[0]);
 
         // querying non-existing index
         var exception =
@@ -530,19 +533,15 @@ public class VectorSearchTests {
         Thread.sleep(DATA_PROCESSING_TIMEOUT); // let server digest the data and update index
 
         // FT.AGGREGATE idx:bicycle "*" LOAD 1 "__key" GROUPBY 1 "@condition" REDUCE COUNT 0 AS bicylces
-        var aggreg =
-                FT.aggregate(
-                                client,
-                                indexBicycles,
-                                "*",
-                                FTAggregateOptions.builder()
-                                        .loadFields(new String[] {"__key"})
-                                        .addExpression(
-                                                new GroupBy(
-                                                        new String[] {"@condition"},
-                                                        new Reducer[] {new Reducer("COUNT", new String[0], "bicycles")}))
-                                        .build())
-                        .get();
+        var options =
+                FTAggregateOptions.builder()
+                        .loadFields(new String[] {"__key"})
+                        .addExpression(
+                                new GroupBy(
+                                        new String[] {"@condition"},
+                                        new Reducer[] {new Reducer("COUNT", new String[0], "bicycles")}))
+                        .build();
+        var aggreg = FT.aggregate(client, indexBicycles, "*", options).get();
         // elements (maps in array) could be reordered, comparing as sets
         assertDeepEquals(
                 Set.of(
@@ -657,30 +656,26 @@ public class VectorSearchTests {
         // FT.AGGREGATE idx:movie * LOAD * APPLY ceil(@rating) as r_rating GROUPBY 1 @genre REDUCE
         // COUNT 0 AS nb_of_movies REDUCE SUM 1 votes AS nb_of_votes REDUCE AVG 1 r_rating AS avg_rating
         // SORTBY 4 @avg_rating DESC @nb_of_votes DESC
-        aggreg =
-                FT.aggregate(
-                                client,
-                                indexMovies,
-                                "*",
-                                FTAggregateOptions.builder()
-                                        .loadAll()
-                                        .addExpression(new Apply("ceil(@rating)", "r_rating"))
-                                        .addExpression(
-                                                new GroupBy(
-                                                        new String[] {"@genre"},
-                                                        new Reducer[] {
-                                                            new Reducer("COUNT", new String[0], "nb_of_movies"),
-                                                            new Reducer("SUM", new String[] {"votes"}, "nb_of_votes"),
-                                                            new Reducer("AVG", new String[] {"r_rating"}, "avg_rating")
-                                                        }))
-                                        .addExpression(
-                                                new SortBy(
-                                                        new SortProperty[] {
-                                                            new SortProperty("@avg_rating", SortOrder.DESC),
-                                                            new SortProperty("@nb_of_votes", SortOrder.DESC)
-                                                        }))
-                                        .build())
-                        .get();
+        options =
+                FTAggregateOptions.builder()
+                        .loadAll()
+                        .addExpression(new Apply("ceil(@rating)", "r_rating"))
+                        .addExpression(
+                                new GroupBy(
+                                        new String[] {"@genre"},
+                                        new Reducer[] {
+                                            new Reducer("COUNT", new String[0], "nb_of_movies"),
+                                            new Reducer("SUM", new String[] {"votes"}, "nb_of_votes"),
+                                            new Reducer("AVG", new String[] {"r_rating"}, "avg_rating")
+                                        }))
+                        .addExpression(
+                                new SortBy(
+                                        new SortProperty[] {
+                                            new SortProperty("@avg_rating", SortOrder.DESC),
+                                            new SortProperty("@nb_of_votes", SortOrder.DESC)
+                                        }))
+                        .build();
+        aggreg = FT.aggregate(client, indexMovies, "*", options).get();
         // elements (maps in array) could be reordered, comparing as sets
         assertDeepEquals(
                 Set.of(
@@ -712,5 +707,8 @@ public class VectorSearchTests {
                                 gs("avg_rating"),
                                 9.)),
                 Set.of(aggreg));
+
+        var ftprofile = FT.profile(client, indexMovies, new FTProfileOptions("*", options)).get();
+        assertDeepEquals(aggreg, ftprofile[0]);
     }
 }
