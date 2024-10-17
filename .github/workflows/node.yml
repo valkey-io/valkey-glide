@@ -272,44 +272,30 @@ jobs:
                       utils/clusters/**
                       benchmarks/results/**
 
-    start-self-hosted-runner:
-      if: github.event.pull_request.head.repo.owner.login == 'valkey-io'
-      runs-on: ubuntu-latest
-      environment: AWS_ACTIONS
-      steps:
-          - name: Checkout
-            uses: actions/checkout@v4
+    # start-self-hosted-runner:
+    #   if: github.event.pull_request.head.repo.owner.login == 'valkey-io'
+    #   runs-on: ubuntu-latest
+    #   environment: AWS_ACTIONS
+    #   steps:
+    #       - name: Checkout
+    #         uses: actions/checkout@v4
 
-          - name: Start self hosted EC2 runner
-            uses: ./.github/workflows/start-self-hosted-runner
-            with:
-                role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
-                aws-region: ${{ secrets.AWS_REGION }}
-                ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
+    #       - name: Start self hosted EC2 runner
+    #         uses: ./.github/workflows/start-self-hosted-runner
+    #         with:
+    #             role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
+    #             aws-region: ${{ secrets.AWS_REGION }}
+    #             ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
 
     test-modules:
-      environment: AWS_ACTIONS
-      needs: [start-self-hosted-runner, load-engine-matrix]
+      if: github.event.pull_request.head.repo.owner.login == 'valkey-io'
+      # environment: AWS_ACTIONS
       name: Running Module Tests
-      runs-on: ${{ matrix.host.RUNNER }}
-      timeout-minutes: 35
-      strategy:
-        fail-fast: false
-        matrix:
-                engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
-                python:
-                    - "3.12"
-                host:
-                    - {
-                        OS: "ubuntu",
-                        NAMED_OS: "linux",
-                        RUNNER: ["self-hosted", "Linux", "ARM64"],
-                        TARGET: "aarch64-unknown-linux-gnu",
-                     }
+      runs-on: [self-hosted, linux, ARM64]
+      timeout-minutes: 15
         
       steps:
           - name: Setup self-hosted runner access
-            if: ${{ contains(matrix.host.RUNNER, 'self-hosted') }}
             run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
           
           - uses: actions/checkout@v4
@@ -324,13 +310,27 @@ jobs:
           - name: Build Node wrapper
             uses: ./.github/workflows/build-node-wrapper
             with:
-                os: "ubuntu"
-                target: "x86_64-unknown-linux-gnu"
-                github-token: ${{ secrets.GITHUB_TOKEN }}
-                engine-version: ${{ matrix.engine.version }}
+                    os: ubuntu
+                    named_os: linux
+                    arch: arm64
+                    target: aarch64-unknown-linux-gnu
+                    github-token: ${{ secrets.GITHUB_TOKEN }}
+                    engine-version: ${{ matrix.engine.version }}
+        
+          # - name: Install dependencies
+          #   run: |
+          #     npm config set loglevel silly
+          #     npm ci --no-optional
+          #   continue-on-error: true
+
+          # - name: display npm logs
+          #   if: failure()
+          #   run: |
+          #     echo "last 1000 lines of npm debug logging:"
+          #     tail -n 1000 ~/.npm/_logs/*-debug-0.log
   
           - name: test
-            run: npm run test-modules -- --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }}
+            run: npm run test-modules --tls -- --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }}
             working-directory: ./node
 
           - name: Upload test reports
@@ -338,7 +338,7 @@ jobs:
             continue-on-error: true
             uses: actions/upload-artifact@v4
             with:
-                name: test-report-node-${{ matrix.engine.type }}-${{ matrix.engine.version }}-ubuntu
+                name: test-report-node-modules-${{ matrix.engine.type }}-${{ matrix.engine.version }}-ubuntu
                 path: |
                     node/test-report-modules*.html
                     utils/clusters/**
