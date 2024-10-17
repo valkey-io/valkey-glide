@@ -273,8 +273,8 @@ jobs:
                       benchmarks/results/**
 
     test-modules:
-        if: github.event.pull_request.head.repo.owner.login == 'valkey-io'
-        # environment: AWS_ACTIONS
+        if: (github.repository_owner == 'valkey-io' && github.event_name == 'workflow_dispatch') || github.event.pull_request.head.repo.owner.login == 'valkey-io'
+        #environment: AWS_ACTIONS
         name: Running Module Tests
         runs-on: [self-hosted, linux, ARM64]
         timeout-minutes: 15
@@ -288,7 +288,7 @@ jobs:
                   submodules: recursive
 
             - name: Use Node.js 16.x
-              uses: actions/setup-node@v3
+              uses: actions/setup-node@v4
               with:
                   node-version: 16.x
 
