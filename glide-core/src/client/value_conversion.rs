@@ -22,7 +22,6 @@ pub(crate) enum ExpectedReturnType<'a> {
     ArrayOfStrings,
     ArrayOfBools,
     ArrayOfDoubleOrNull,
-    FTSearchReturnType,
     Lolwut,
     ArrayOfStringAndArrays,
     ArrayOfArraysOfDoubleOrNull,
@@ -892,53 +891,7 @@ pub(crate) fn convert_to_expected_type(
                 format!("(response was {:?})", get_value_type(&value)),
             )
                 .into()),
-        },
-        ExpectedReturnType::FTSearchReturnType => match value {
-            /*
-            Example of the response
-                1) (integer) 2
-                2) "json:2"
-                3) 1) "__VEC_score"
-                   2) "11.1100006104"
-                   3) "$"
-                   4) "{\"vec\":[1.1,1.2,1.3,1.4,1.5,1.6]}"
-                4) "json:0"
-                5) 1) "__VEC_score"
-                   2) "91"
-                   3) "$"
-                   4) "{\"vec\":[1,2,3,4,5,6]}"
-
-            Converting response to
-                1) (integer) 2
-                2) 1# "json:2" =>
-                      1# "__VEC_score" => "11.1100006104"
-                      2# "$" => "{\"vec\":[1.1,1.2,1.3,1.4,1.5,1.6]}"
-                   2# "json:0" =>
-                      1# "__VEC_score" => "91"
-                      2# "$" => "{\"vec\":[1,2,3,4,5,6]}"
-
-            Response may contain only 1 element, no conversion in that case.
-            */
-            Value::Array(ref array) if array.len() == 1 => Ok(value),
-            Value::Array(mut array) => {
-                Ok(Value::Array(vec![
-                    array.remove(0),
-                    convert_to_expected_type(Value::Array(array), Some(ExpectedReturnType::Map {
-                        key_type: &Some(ExpectedReturnType::BulkString),
-                        value_type: &Some(ExpectedReturnType::Map {
-                            key_type: &Some(ExpectedReturnType::BulkString),
-                            value_type: &Some(ExpectedReturnType::BulkString),
-                        }),
-                    }))?
-                ]))
-            },
-            _ => Err((
-                ErrorKind::TypeError,
-                "Response couldn't be converted to Pair",
-                format!("(response was {:?})", get_value_type(&value)),
-            )
-                .into())
-        },
+        }
     }
 }
 
@@ -1303,7 +1256,6 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
             key_type: &None,
             value_type: &None,
         }),
-        b"FT.SEARCH" => Some(ExpectedReturnType::FTSearchReturnType),
         _ => None,
     }
 }
