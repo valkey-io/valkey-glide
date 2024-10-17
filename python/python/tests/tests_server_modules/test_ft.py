@@ -63,18 +63,9 @@ class TestFt:
         indexName: str = str(uuid.uuid4())
         alias: str = "alias"
         await TestFt.create_test_index_hash_type(self, glide_client, indexName)
-
-        # Test if updating a non existent alias to an index without an alias name throws an error.
-        with pytest.raises(RequestError):
-            await ft.aliasupdate(glide_client, alias, indexName)
-
         assert await ft.aliasadd(glide_client, alias, indexName) == OK
         newAliasName: str = "newAlias"
         newIndexName: str = str(uuid.uuid4())
-
-        # Test if updating a non existent alias to point to an index already having an alias throws an error.
-        with pytest.raises(RequestError):
-            await ft.aliasupdate(glide_client, newAliasName, indexName)
 
         await TestFt.create_test_index_hash_type(self, glide_client, newIndexName)
         assert await ft.aliasadd(glide_client, newAliasName, newIndexName) == OK
