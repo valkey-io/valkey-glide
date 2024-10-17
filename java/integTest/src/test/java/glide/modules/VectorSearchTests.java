@@ -291,13 +291,7 @@ public class VectorSearchTests {
         var exception =
                 assertThrows(
                         ExecutionException.class,
-                        () ->
-                                FT.search(
-                                                client,
-                                                UUID.randomUUID().toString(),
-                                                "*",
-                                                FTSearchOptions.builder().build())
-                                        .get());
+                        () -> FT.search(client, UUID.randomUUID().toString(), "*").get());
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getMessage().contains("Index not found"));
     }
