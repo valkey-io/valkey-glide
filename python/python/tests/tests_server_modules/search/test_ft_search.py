@@ -1,12 +1,13 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-import json as OuterJson
+import json
 import time
 import uuid
 from typing import List, Mapping, Union, cast
 
 import pytest
-from glide.async_commands.server_modules import ft, json
+from glide.async_commands.server_modules import ft
+from glide.async_commands.server_modules import json as GlideJson
 from glide.async_commands.server_modules.ft_options.ft_create_options import (
     DataType,
     FtCreateOptions,
@@ -23,6 +24,8 @@ from glide.glide_client import GlideClusterClient
 
 @pytest.mark.asyncio
 class TestFtSearch:
+    sleep_wait_time = 0.5  # T his value is in seconds
+
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ft_search(self, glide_client: GlideClusterClient):
@@ -33,7 +36,7 @@ class TestFtSearch:
         json_value2 = {"a": 22222, "b": 2, "c": 3}
         prefixes: List[TEncodable] = []
         prefixes.append(prefix)
-        index = "{json-search}:" + str(uuid.uuid4())
+        index = prefix + str(uuid.uuid4())
 
         # Create an index
         assert (
@@ -51,16 +54,16 @@ class TestFtSearch:
 
         # Create a json key
         assert (
-            await json.set(glide_client, json_key1, "$", OuterJson.dumps(json_value1))
+            await GlideJson.set(glide_client, json_key1, "$", json.dumps(json_value1))
             == OK
         )
         assert (
-            await json.set(glide_client, json_key2, "$", OuterJson.dumps(json_value2))
+            await GlideJson.set(glide_client, json_key2, "$", json.dumps(json_value2))
             == OK
         )
 
         # Wait for index to be updated to avoid this error - ResponseError: The index is under construction.
-        time.sleep(0.5)
+        time.sleep(self.sleep_wait_time)
 
         # Search the index for string inputs
         result1 = await ft.search(
@@ -75,7 +78,7 @@ class TestFtSearch:
             ),
         )
         # Check if we get the expected result from ft.search for string inputs
-        TestFtSearch.f(
+        TestFtSearch._ft_search_deep_compare_result(
             self,
             result=result1,
             json_key1=json_key1,
@@ -98,7 +101,7 @@ class TestFtSearch:
         )
 
         # Check if we get the expected result from ft.search from byte inputs
-        TestFtSearch.f(
+        TestFtSearch._ft_search_deep_compare_result(
             self,
             result=result2,
             json_key1=json_key1,
@@ -107,7 +110,7 @@ class TestFtSearch:
             json_value2=json_value2,
         )
 
-    def f(
+    def _ft_search_deep_compare_result(
         self,
         result: List[Union[int, Mapping[TEncodable, Mapping[TEncodable, TEncodable]]]],
         json_key1: str,

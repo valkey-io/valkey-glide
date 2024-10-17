@@ -102,12 +102,11 @@ async def search(
     Examples:
         For the following example to work the following must already exist:
         - An index named "idx", with fields having identifiers as "a" and "b" and prefix as "{json:}"
-        - A key named {json:}1 with value {"a": 1, "b":2}
+        - A key named {json:}1 with value {"a":1, "b":2}
 
         >>> from glide.async_commands.server_modules import ft
-        >>> index = "idx"
-        >>> result = await ft.search(glide_client, index, "*", options=FtSeachOptions(return_fields=[ReturnField(field_identifier="a"),ReturnField(field_identifier="b")]))
-            [1, { b'{json:}1': {b'a': b'1', b'b' : b'2'}}]  #The first element, 1 is the number of keys returned in the search result. The second element is field/value pair map for the index.
+        >>> result = await ft.search(glide_client, "idx", "*", options=FtSeachOptions(return_fields=[ReturnField(field_identifier="a"),ReturnField(field_identifier="b")]))
+            [1, { b'{json:}1': {b'a': b'1', b'b': b'2'}}]  #The first element, 1 is the number of keys returned in the search result. The second element is field/value pair map for the index.
     """
     args: List[TEncodable] = [CommandNames.FT_SEARCH, indexName, query]
     if options:
