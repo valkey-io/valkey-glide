@@ -75,7 +75,14 @@ class TestFtSearch:
             ),
         )
         # Check if we get the expected result from ft.search for string inputs
-        TestFtSearch.f(self, result=result1, json_key1=json_key1, json_key2=json_key2, json_value1=json_value1, json_value2=json_value2)
+        TestFtSearch.f(
+            self,
+            result=result1,
+            json_key1=json_key1,
+            json_key2=json_key2,
+            json_value1=json_value1,
+            json_value2=json_value2,
+        )
 
         # Search the index for byte inputs
         result2 = await ft.search(
@@ -91,26 +98,47 @@ class TestFtSearch:
         )
 
         # Check if we get the expected result from ft.search from byte inputs
-        TestFtSearch.f(self, result=result2, json_key1=json_key1, json_key2=json_key2, json_value1=json_value1, json_value2=json_value2)
+        TestFtSearch.f(
+            self,
+            result=result2,
+            json_key1=json_key1,
+            json_key2=json_key2,
+            json_value1=json_value1,
+            json_value2=json_value2,
+        )
 
-    def f(self, result: List[Union[int, Mapping[TEncodable, Mapping[TEncodable, TEncodable]]]], json_key1: str, json_key2: str, json_value1: dict, json_value2: dict):
+    def f(
+        self,
+        result: List[Union[int, Mapping[TEncodable, Mapping[TEncodable, TEncodable]]]],
+        json_key1: str,
+        json_key2: str,
+        json_value1: dict,
+        json_value2: dict,
+    ):
+        type_name_bytes = "bytes"
         assert len(result) == 2
         assert result[0] == 2
-        searchResultMap: Mapping[TEncodable, Mapping[TEncodable, TEncodable]] = cast(Mapping[TEncodable, Mapping[TEncodable, TEncodable]],result[1])
+        searchResultMap: Mapping[TEncodable, Mapping[TEncodable, TEncodable]] = cast(
+            Mapping[TEncodable, Mapping[TEncodable, TEncodable]], result[1]
+        )
         for key, fieldsMap in searchResultMap.items():
             keyString = key
-            if type(key).__name__ == "bytes":
+            if type(key).__name__ == type_name_bytes:
                 print(type(key).__name__)
                 keyString = cast(bytes, key).decode(encoding="utf-8")
             assert keyString == json_key1 or keyString == json_key2
             if keyString == json_key1:
                 for fieldName, fieldValue in fieldsMap.items():
                     fieldNameString = fieldName
-                    if type(fieldName).__name__ == "bytes":
-                        fieldNameString = cast(bytes,fieldName).decode(encoding="utf-8")
+                    if type(fieldName).__name__ == type_name_bytes:
+                        fieldNameString = cast(bytes, fieldName).decode(
+                            encoding="utf-8"
+                        )
                     fieldValueInt = int(fieldValue)
-                    if type(fieldValue).__name__ == "bytes":
-                        fieldValueInt = int(cast(bytes,fieldValue).decode(encoding="utf-8"))
+                    if type(fieldValue).__name__ == type_name_bytes:
+                        fieldValueInt = int(
+                            cast(bytes, fieldValue).decode(encoding="utf-8")
+                        )
                     assert fieldNameString == "a" or fieldNameString == "b"
                     assert fieldValueInt == json_value1.get(
                         "a"
@@ -118,11 +146,15 @@ class TestFtSearch:
             if keyString == json_key2:
                 for fieldName, fieldValue in fieldsMap.items():
                     fieldNameString = fieldName
-                    if type(fieldName).__name__ == "bytes":
-                        fieldNameString = cast(bytes,fieldName).decode(encoding="utf-8")
+                    if type(fieldName).__name__ == type_name_bytes:
+                        fieldNameString = cast(bytes, fieldName).decode(
+                            encoding="utf-8"
+                        )
                     fieldValueInt = int(fieldValue)
-                    if type(fieldValue).__name__ == "bytes":
-                        fieldValueInt = int(cast(bytes,fieldValue).decode(encoding="utf-8"))
+                    if type(fieldValue).__name__ == type_name_bytes:
+                        fieldValueInt = int(
+                            cast(bytes, fieldValue).decode(encoding="utf-8")
+                        )
                     assert fieldNameString == "a" or fieldNameString == "b"
                     assert fieldValueInt == json_value2.get(
                         "a"
