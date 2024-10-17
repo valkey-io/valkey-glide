@@ -809,8 +809,9 @@ public class VectorSearchTests {
 
         // with GlideString:
         assertEquals(OK, FT.aliasupdate(client, gs(alias1), gs(indexName)).get());
-        assertEquals(OK, FT.aliasadd(client, gs(alias1), gs(indexName)).get());
         assertEquals(OK, FT.aliasdel(client, gs(alias1)).get());
+        assertEquals(OK, FT.aliasadd(client, gs(alias2), gs(indexName)).get());
+        assertEquals(OK, FT.aliasdel(client, gs(alias2)).get());
 
         // exception with calling `aliasdel` on an alias that doesn't exist
         exception = assertThrows(ExecutionException.class, () -> FT.aliasdel(client, alias2).get());
