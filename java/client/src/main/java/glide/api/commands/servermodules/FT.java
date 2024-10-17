@@ -624,7 +624,7 @@ public class FT {
     }
 
     /**
-     * Remove an alias from an index
+     * Removes an alias from an index.
      *
      * @param client The client to execute the command.
      * @param aliasName The alias to be added to an index.
@@ -640,14 +640,14 @@ public class FT {
     }
 
     /**
-     * Remove an alias from an index
+     * Removes an alias from an index.
      *
      * @param client The client to execute the command.
      * @param aliasName The alias to be added to an index.
      * @return <code>"OK"</code>.
      * @example
      *     <pre>{@code
-     * FT.aliasdel(client, "alias").get();
+     * FT.aliasdel(client, "alias").get(); // "OK"
      * }</pre>
      */
     public static CompletableFuture<String> aliasdel(
@@ -685,7 +685,7 @@ public class FT {
      * @return <code>OK</code>.
      * @example
      *     <pre>{@code
-     * FT.aliasupdate(client, "alias", "idx").get();
+     * FT.aliasupdate(client, "alias", "idx").get(); // "OK"
      * }</pre>
      */
     public static CompletableFuture<String> aliasupdate(
