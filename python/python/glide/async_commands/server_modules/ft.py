@@ -137,8 +137,8 @@ async def aliasupdate(
 
     Examples:
         >>> from glide.async_commands.server_modules import ft
-        >>> result = await ft.aliasupdate(glide_client, "aliasName", "indexName")
-            'OK'  # Indicates the successful update of the alias to point to the index "indexName"
+        >>> result = await ft.aliasupdate(glide_client, "myalias", "myindex")
+            'OK'  # Indicates the successful update of the alias to point to the index named "myindex"
     """
     args: List[TEncodable] = [CommandNames.FT_ALIASUPDATE, alias, indexName]
     return cast(TOK, await client.custom_command(args))
