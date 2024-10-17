@@ -28,6 +28,9 @@ dependencies {
     //lombok
     testCompileOnly 'org.projectlombok:lombok:1.18.32'
     testAnnotationProcessor 'org.projectlombok:lombok:1.18.32'
+
+    // jsonassert
+    testImplementation 'org.skyscreamer:jsonassert:1.5.3'
 }
 
 def standaloneHosts = ''
