@@ -331,7 +331,7 @@ public class FT {
      * @return <code>"OK"</code>.
      * @example
      *     <pre>{@code
-     * FT.aliasadd(client, "alias", "idx").get(); // "OK"
+     * FT.aliasadd(client, gs("alias"), gs("idx")).get(); // "OK"
      * }</pre>
      */
     public static CompletableFuture<String> aliasadd(
@@ -365,7 +365,7 @@ public class FT {
      * @return <code>"OK"</code>.
      * @example
      *     <pre>{@code
-     * FT.aliasdel(client, "alias").get(); // "OK"
+     * FT.aliasdel(client, gs("alias")).get(); // "OK"
      * }</pre>
      */
     public static CompletableFuture<String> aliasdel(
@@ -403,7 +403,7 @@ public class FT {
      * @return <code>OK</code>.
      * @example
      *     <pre>{@code
-     * FT.aliasupdate(client, "alias", "idx").get(); // "OK"
+     * FT.aliasupdate(client,gs("alias"), gs("idx")).get(); // "OK"
      * }</pre>
      */
     public static CompletableFuture<String> aliasupdate(
