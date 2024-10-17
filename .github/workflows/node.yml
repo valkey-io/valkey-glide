@@ -302,7 +302,7 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: test
-              run: npm run test-modules --tls -- --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }}
+              run: npm run test-modules -- --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} --tls
               working-directory: ./node
 
             - name: Upload test reports
