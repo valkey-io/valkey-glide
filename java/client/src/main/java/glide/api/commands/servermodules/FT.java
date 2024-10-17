@@ -590,14 +590,13 @@ public class FT {
     /**
      * Adds an alias to an index.
      *
-     * @see TODO
+     * @param client The client to execute the command.
      * @param aliasName The alias to be added to an index.
      * @param indexName The index name.
-     * @return <code>OK</code>.
+     * @return <code>"OK"</code>.
      * @example
      *     <pre>{@code
-     * // index already exists
-     * FT.aliasadd(client, "alias", "idx").get();
+     * FT.aliasadd(client, "alias", "idx").get(); // "OK"
      * }</pre>
      */
     public static CompletableFuture<String> aliasadd(
@@ -608,14 +607,13 @@ public class FT {
     /**
      * Adds an alias to an index.
      *
-     * @see TODO
+     * @param client The client to execute the command.
      * @param aliasName The alias to be added to an index.
      * @param indexName The index name.
-     * @return <code>OK</code>.
+     * @return <code>"OK"</code>.
      * @example
      *     <pre>{@code
-     * // index already exists
-     * FT.aliasadd(client, "alias", "idx").get();
+     * FT.aliasadd(client, "alias", "idx").get(); // "OK"
      * }</pre>
      */
     public static CompletableFuture<String> aliasadd(
@@ -628,14 +626,12 @@ public class FT {
     /**
      * Remove an alias from an index
      *
-     * @see TODO
+     * @param client The client to execute the command.
      * @param aliasName The alias to be added to an index.
-     * @param indexName The index name.
-     * @return <code>OK</code>.
+     * @return <code>"OK"</code>.
      * @example
      *     <pre>{@code
-     * // index already exists
-     * FT.aliasdel(client, "alias", "idx").get();
+     * FT.aliasdel(client, "alias").get(); // "OK"
      * }</pre>
      */
     public static CompletableFuture<String> aliasdel(
@@ -646,13 +642,12 @@ public class FT {
     /**
      * Remove an alias from an index
      *
-     * @see TODO
+     * @param client The client to execute the command.
      * @param aliasName The alias to be added to an index.
-     * @param indexName The index name.
-     * @return <code>OK</code>.
-     * @example // index already exists
+     * @return <code>"OK"</code>.
+     * @example
      *     <pre>{@code
-     * FT.aliasdel(client, "alias", "idx").get();
+     * FT.aliasdel(client, "alias").get();
      * }</pre>
      */
     public static CompletableFuture<String> aliasdel(
@@ -666,13 +661,13 @@ public class FT {
      * Adds an alias to an index. If the alias is already associated with another index, <code>
      * FT.ALIASUPDATE</code> removes the alias association with the previous index.
      *
-     * @see TODO
+     * @param client The client to execute the command.
      * @param aliasName The alias to be added to an index.
-     * @param indexName The index name.
+     * @param indexName The index name for which the alias has to be added.
      * @return <code>OK</code>.
-     * @example // index already exists
+     * @example
      *     <pre>{@code
-     * FT.aliasupdate(client, "alias", "idx").get();
+     * FT.aliasupdate(client, "alias", "idx").get(); // "OK"
      * }</pre>
      */
     public static CompletableFuture<String> aliasupdate(
@@ -684,11 +679,11 @@ public class FT {
      * Adds an alias to an index. If the alias is already associated with another index, <code>
      * FT.ALIASUPDATE</code> removes the alias association with the previous index.
      *
-     * @see TODO
+     * @param client The client to execute the command.
      * @param aliasName The alias to be added to an index.
-     * @param indexName The index name.
+     * @param indexName The index name for which the alias has to be added.
      * @return <code>OK</code>.
-     * @example // index already exists
+     * @example
      *     <pre>{@code
      * FT.aliasupdate(client, "alias", "idx").get();
      * }</pre>
