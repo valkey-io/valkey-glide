@@ -29,11 +29,11 @@ describe("GlideJson", () => {
             parseCommandLineArgs()["cluster-endpoints"];
         cluster = clusterAddresses
             ? await ValkeyCluster.initFromExistingCluster(
-                  false,
+                  true,
                   parseEndpoints(clusterAddresses),
                   getServerVersion,
               )
-            : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
+            : await ValkeyCluster.createCluster(true, 1, 1, getServerVersion);
     }, 20000);
 
     afterEach(async () => {
