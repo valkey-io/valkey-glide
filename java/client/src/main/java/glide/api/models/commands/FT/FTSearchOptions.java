@@ -67,7 +67,8 @@ public class FTSearchOptions {
             args.add(gs("LIMIT"));
             args.add(gs(Integer.toString(limit.getLeft())));
             args.add(gs(Integer.toString(limit.getRight())));
-        } else if (count) {
+        }
+        if (count) {
             args.add(gs("COUNT"));
         }
         return args.toArray(GlideString[]::new);
