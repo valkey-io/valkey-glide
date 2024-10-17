@@ -100,6 +100,7 @@ class TestFtSearch:
         for key, fieldsMap in searchResultMap.items():
             keyString = key
             if type(key).__name__ == "bytes":
+                print(type(key).__name__)
                 keyString = cast(bytes,key).decode(encoding="utf-8")
             assert keyString == json_key1 or keyString == json_key2
             if keyString == json_key1:
