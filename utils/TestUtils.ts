@@ -52,9 +52,10 @@ export class ValkeyCluster {
 
     public static createCluster(
         cluster_mode: boolean,
+        useTLS: boolean,
         shardCount: number,
         replicaCount: number,
-        getVersionCallback: (addresses: [string, number][], clusterMode: boolean) => Promise<string>,
+        getVersionCallback: (addresses: [string, number][], clusterMode: boolean, useTLS: boolean) => Promise<string>,
         loadModule?: string[]
     ): Promise<ValkeyCluster> {
         return new Promise<ValkeyCluster>((resolve, reject) => {
@@ -86,7 +87,7 @@ export class ValkeyCluster {
                         const { clusterFolder, addresses } =
                             parseOutput(stdout);
                         resolve(
-                            getVersionCallback(addresses, cluster_mode).then(
+                            getVersionCallback(addresses, cluster_mode, useTLS).then(
                                 (ver) =>
                                     new ValkeyCluster(ver, addresses, clusterFolder)
                             )
@@ -100,9 +101,10 @@ export class ValkeyCluster {
     public static async initFromExistingCluster(
         cluster_mode: boolean,
         addresses: [string, number][],
-        getVersionCallback: (addresses: [string, number][], clusterMode: boolean) => Promise<string>
+        useTLS: boolean,
+        getVersionCallback: (addresses: [string, number][], clusterMode: boolean, useTLS: boolean) => Promise<string>
     ): Promise<ValkeyCluster> {
-        return getVersionCallback(addresses, cluster_mode).then(
+        return getVersionCallback(addresses, cluster_mode, useTLS).then(
             (ver) => new ValkeyCluster(ver, addresses, "")
         );
     }

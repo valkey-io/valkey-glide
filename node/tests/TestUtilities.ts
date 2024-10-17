@@ -1771,13 +1771,14 @@ export async function transactionTest(
  */
 export async function getServerVersion(
     addresses: [string, number][],
-    clusterMode = false,
+    clusterMode: boolean,
+    useTLS: boolean,
 ): Promise<string> {
     let info = "";
 
     if (clusterMode) {
         const glideClusterClient = await GlideClusterClient.createClient(
-            getClientConfigurationOption(addresses, ProtocolVersion.RESP2),
+            getClientConfigurationOption(addresses, ProtocolVersion.RESP2, {useTLS}),
         );
         info = getFirstResult(
             await glideClusterClient.info({ sections: [InfoOptions.Server] }),
@@ -1785,7 +1786,7 @@ export async function getServerVersion(
         await flushAndCloseClient(clusterMode, addresses, glideClusterClient);
     } else {
         const glideClient = await GlideClient.createClient(
-            getClientConfigurationOption(addresses, ProtocolVersion.RESP2),
+            getClientConfigurationOption(addresses, ProtocolVersion.RESP2, {useTLS}),
         );
         info = await glideClient.info([InfoOptions.Server]);
         await flushAndCloseClient(clusterMode, addresses, glideClient);
