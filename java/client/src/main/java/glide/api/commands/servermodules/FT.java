@@ -306,7 +306,8 @@ public class FT {
     }
 
     /**
-     * Adds an alias for an index. The new alias name can be used anywhere that an index name is required.
+     * Adds an alias for an index. The new alias name can be used anywhere that an index name is
+     * required.
      *
      * @param client The client to execute the command.
      * @param aliasName The alias to be added to an index.
@@ -323,7 +324,8 @@ public class FT {
     }
 
     /**
-     * Adds an alias for an index. The new alias name can be used anywhere that an index name is required.
+     * Adds an alias for an index. The new alias name can be used anywhere that an index name is
+     * required.
      *
      * @param client The client to execute the command.
      * @param aliasName The alias to be added to an index.
@@ -376,7 +378,8 @@ public class FT {
     }
 
     /**
-     * Updates an existing alias to point to a different physical index. This command only affects future references to the alias.
+     * Updates an existing alias to point to a different physical index. This command only affects
+     * future references to the alias.
      *
      * @param client The client to execute the command.
      * @param aliasName The alias name. This alias will now be pointed to a different index.
@@ -393,7 +396,8 @@ public class FT {
     }
 
     /**
-     * Update an existing alias to point to a different physical index. This command only affects future references to the alias.
+     * Update an existing alias to point to a different physical index. This command only affects
+     * future references to the alias.
      *
      * @param client The client to execute the command.
      * @param aliasName The alias name. This alias will now be pointed to a different index.
