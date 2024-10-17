@@ -3,8 +3,10 @@ package glide.modules;
 
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -22,10 +24,12 @@ import glide.api.models.commands.FT.FTCreateOptions.TagField;
 import glide.api.models.commands.FT.FTCreateOptions.TextField;
 import glide.api.models.commands.FT.FTCreateOptions.VectorFieldFlat;
 import glide.api.models.commands.FT.FTCreateOptions.VectorFieldHnsw;
+import glide.api.models.commands.FT.FTSearchOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.exceptions.RequestException;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
@@ -184,6 +188,112 @@ public class VectorSearchTests {
                                         .get());
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getMessage().contains("already exists"));
+    }
+
+    @SneakyThrows
+    @Test
+    public void ft_search() {
+        String prefix = "{" + UUID.randomUUID() + "}:";
+        String index = prefix + "index";
+
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {
+                                    new FieldInfo("vec", "VEC", VectorFieldHnsw.builder(DistanceMetric.L2, 2).build())
+                                },
+                                FTCreateOptions.builder()
+                                        .indexType(IndexType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
+                        .get());
+
+        assertEquals(
+                1L,
+                client
+                        .hset(
+                                gs(prefix + 0),
+                                Map.of(
+                                        gs("vec"),
+                                        gs(
+                                                new byte[] {
+                                                    (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0,
+                                                    (byte) 0
+                                                })))
+                        .get());
+        assertEquals(
+                1L,
+                client
+                        .hset(
+                                gs(prefix + 1),
+                                Map.of(
+                                        gs("vec"),
+                                        gs(
+                                                new byte[] {
+                                                    (byte) 0,
+                                                    (byte) 0,
+                                                    (byte) 0,
+                                                    (byte) 0,
+                                                    (byte) 0,
+                                                    (byte) 0,
+                                                    (byte) 0x80,
+                                                    (byte) 0xBF
+                                                })))
+                        .get());
+
+        var ftsearch =
+                FT.search(
+                                client,
+                                index,
+                                "*=>[KNN 2 @VEC $query_vec]",
+                                FTSearchOptions.builder()
+                                        .params(
+                                                Map.of(
+                                                        gs("query_vec"),
+                                                        gs(
+                                                                new byte[] {
+                                                                    (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0,
+                                                                    (byte) 0, (byte) 0
+                                                                })))
+                                        .build())
+                        .get();
+
+        assertArrayEquals(
+                new Object[] {
+                    2L,
+                    Map.of(
+                            gs(prefix + 0),
+                            Map.of(gs("__VEC_score"), gs("0"), gs("vec"), gs("\0\0\0\0\0\0\0\0")),
+                            gs(prefix + 1),
+                            Map.of(
+                                    gs("__VEC_score"),
+                                    gs("1"),
+                                    gs("vec"),
+                                    gs(
+                                            new byte[] {
+                                                (byte) 0,
+                                                (byte) 0,
+                                                (byte) 0,
+                                                (byte) 0,
+                                                (byte) 0,
+                                                (byte) 0,
+                                                (byte) 0x80,
+                                                (byte) 0xBF
+                                            })))
+                },
+                ftsearch);
+
+        // TODO more tests with json index
+
+        // querying non-existing index
+        var exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> FT.search(client, UUID.randomUUID().toString(), "*").get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(exception.getMessage().contains("Index not found"));
     }
 
     @SneakyThrows
