@@ -319,7 +319,7 @@ public class FT {
      * }</pre>
      */
     public static CompletableFuture<String> aliasadd(
-        @NonNull BaseClient client, @NonNull String aliasName, @NonNull String indexName) {
+            @NonNull BaseClient client, @NonNull String aliasName, @NonNull String indexName) {
         return aliasadd(client, gs(aliasName), gs(indexName));
     }
 
@@ -337,7 +337,7 @@ public class FT {
      * }</pre>
      */
     public static CompletableFuture<String> aliasadd(
-        @NonNull BaseClient client, @NonNull GlideString aliasName, @NonNull GlideString indexName) {
+            @NonNull BaseClient client, @NonNull GlideString aliasName, @NonNull GlideString indexName) {
         var args = new GlideString[] {gs("FT.ALIASADD"), aliasName, indexName};
 
         return executeCommand(client, args, false);
@@ -357,7 +357,7 @@ public class FT {
      * }</pre>
      */
     public static CompletableFuture<String> aliasdel(
-        @NonNull BaseClient client, @NonNull String aliasName) {
+            @NonNull BaseClient client, @NonNull String aliasName) {
         return aliasdel(client, gs(aliasName));
     }
 
@@ -374,7 +374,7 @@ public class FT {
      * }</pre>
      */
     public static CompletableFuture<String> aliasdel(
-        @NonNull BaseClient client, @NonNull GlideString aliasName) {
+            @NonNull BaseClient client, @NonNull GlideString aliasName) {
         var args = new GlideString[] {gs("FT.ALIASDEL"), aliasName};
 
         return executeCommand(client, args, false);
@@ -394,7 +394,7 @@ public class FT {
      * }</pre>
      */
     public static CompletableFuture<String> aliasupdate(
-        @NonNull BaseClient client, @NonNull String aliasName, @NonNull String indexName) {
+            @NonNull BaseClient client, @NonNull String aliasName, @NonNull String indexName) {
         return aliasupdate(client, gs(aliasName), gs(indexName));
     }
 
@@ -412,7 +412,7 @@ public class FT {
      * }</pre>
      */
     public static CompletableFuture<String> aliasupdate(
-        @NonNull BaseClient client, @NonNull GlideString aliasName, @NonNull GlideString indexName) {
+            @NonNull BaseClient client, @NonNull GlideString aliasName, @NonNull GlideString indexName) {
         var args = new GlideString[] {gs("FT.ALIASUPDATE"), aliasName, indexName};
 
         return executeCommand(client, args, false);
