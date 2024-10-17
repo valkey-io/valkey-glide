@@ -101,15 +101,15 @@ class TestFtSearch:
             keyString = key
             if type(key).__name__ == "bytes":
                 print(type(key).__name__)
-                keyString = cast(bytes,key).decode(encoding="utf-8")
+                keyString = cast(bytes, key).decode(encoding="utf-8")
             assert keyString == json_key1 or keyString == json_key2
             if keyString == json_key1:
                 for fieldName, fieldValue in fieldsMap.items():
                     fieldNameString = fieldName
-                    if type(fieldName) == "bytes":
+                    if type(fieldName).__name__ == "bytes":
                         fieldNameString = cast(bytes,fieldName).decode(encoding="utf-8")
                     fieldValueInt = int(fieldValue)
-                    if type(fieldValue) == "bytes":
+                    if type(fieldValue).__name__ == "bytes":
                         fieldValueInt = int(cast(bytes,fieldValue).decode(encoding="utf-8"))
                     assert fieldNameString == "a" or fieldNameString == "b"
                     assert fieldValueInt == json_value1.get(
@@ -118,10 +118,10 @@ class TestFtSearch:
             if keyString == json_key2:
                 for fieldName, fieldValue in fieldsMap.items():
                     fieldNameString = fieldName
-                    if type(fieldName) == "bytes":
+                    if type(fieldName).__name__ == "bytes":
                         fieldNameString = cast(bytes,fieldName).decode(encoding="utf-8")
                     fieldValueInt = int(fieldValue)
-                    if type(fieldValue) == "bytes":
+                    if type(fieldValue).__name__ == "bytes":
                         fieldValueInt = int(cast(bytes,fieldValue).decode(encoding="utf-8"))
                     assert fieldNameString == "a" or fieldNameString == "b"
                     assert fieldValueInt == json_value2.get(
