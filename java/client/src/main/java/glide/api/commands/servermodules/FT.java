@@ -14,6 +14,7 @@ import glide.api.models.commands.FT.FTAggregateOptions;
 import glide.api.models.commands.FT.FTCreateOptions;
 import glide.api.models.commands.FT.FTCreateOptions.FieldInfo;
 import glide.api.models.commands.FT.FTSearchOptions;
+import glide.api.models.commands.FT.FTExplainOptions;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -309,282 +310,83 @@ public class FT {
     }
 
     /**
-     * Runs a search query on an index, and perform aggregate transformations on the results.
-     *
+     * Returns the execution plan for a complex query
+     * 
      * @param client The client to execute the command.
-     * @param indexName The index name.
+     * @param indexName The index name to search into.
      * @param query The text query to search.
-     * @return Results of the last stage of the pipeline.
+     * @param options The additional parameter for the command - see {@link FTCreateOptions}.
+     * @return A <code>string</code> representing the execution plan.
      * @example
      *     <pre>{@code
-     * // example of using the API:
-     * FT.aggregate(client, "myIndex", "*").get();
-     * // the response contains data in the following format:
-     * Map<GlideString, Object>[] response = new Map[] {
-     *     Map.of(
-     *         gs("condition"), gs("refurbished"),
-     *         gs("bicycles"), new Object[] { gs("bicycle:9") }
-     *     ),
-     *     Map.of(
-     *         gs("condition"), gs("used"),
-     *         gs("bicycles"), new Object[] { gs("bicycle:1"), gs("bicycle:2"), gs("bicycle:3") }
-     *     ),
-     *     Map.of(
-     *         gs("condition"), gs("new"),
-     *         gs("bicycles"), new Object[] { gs("bicycle:0"), gs("bicycle:5") }
-     *     )
-     * };
-     * }</pre>
-     */
-    public static CompletableFuture<Map<GlideString, Object>[]> aggregate(
-            @NonNull BaseClient client, @NonNull String indexName, @NonNull String query) {
-        return aggregate(client, gs(indexName), gs(query));
-    }
-
-    /**
-     * Runs a search query on an index, and perform aggregate transformations on the results.
-     *
-     * @param client The client to execute the command.
-     * @param indexName The index name.
-     * @param query The text query to search.
-     * @param options Additional parameters for the command - see {@link FTAggregateOptions}.
-     * @return Results of the last stage of the pipeline.
-     * @example
-     *     <pre>{@code
-     * // example of using the API:
-     * FTAggregateOptions options = FTAggregateOptions.builder()
-     *     .loadFields(new String[] {"__key"})
-     *     .addExpression(
-     *             new FTAggregateOptions.GroupBy(
-     *                     new String[] {"@condition"},
-     *                     new Reducer[] {
-     *                         new Reducer("TOLIST", new String[] {"__key"}, "bicycles")
-     *                     }))
-     *     .build();
-     * FT.aggregate(client, "myIndex", "*", options).get();
-     * // the response contains data in the following format:
-     * Map<GlideString, Object>[] response = new Map[] {
-     *     Map.of(
-     *         gs("condition"), gs("refurbished"),
-     *         gs("bicycles"), new Object[] { gs("bicycle:9") }
-     *     ),
-     *     Map.of(
-     *         gs("condition"), gs("used"),
-     *         gs("bicycles"), new Object[] { gs("bicycle:1"), gs("bicycle:2"), gs("bicycle:3") }
-     *     ),
-     *     Map.of(
-     *         gs("condition"), gs("new"),
-     *         gs("bicycles"), new Object[] { gs("bicycle:0"), gs("bicycle:5") }
-     *     )
-     * };
-     * }</pre>
-     */
-    public static CompletableFuture<Map<GlideString, Object>[]> aggregate(
-            @NonNull BaseClient client,
-            @NonNull String indexName,
-            @NonNull String query,
-            @NonNull FTAggregateOptions options) {
-        return aggregate(client, gs(indexName), gs(query), options);
-    }
-
-    /**
-     * Runs a search query on an index, and perform aggregate transformations on the results.
-     *
-     * @param client The client to execute the command.
-     * @param indexName The index name.
-     * @param query The text query to search.
-     * @return Results of the last stage of the pipeline.
-     * @example
-     *     <pre>{@code
-     * // example of using the API:
-     * FT.aggregate(client, gs("myIndex"), gs("*")).get();
-     * // the response contains data in the following format:
-     * Map<GlideString, Object>[] response = new Map[] {
-     *     Map.of(
-     *         gs("condition"), gs("refurbished"),
-     *         gs("bicycles"), new Object[] { gs("bicycle:9") }
-     *     ),
-     *     Map.of(
-     *         gs("condition"), gs("used"),
-     *         gs("bicycles"), new Object[] { gs("bicycle:1"), gs("bicycle:2"), gs("bicycle:3") }
-     *     ),
-     *     Map.of(
-     *         gs("condition"), gs("new"),
-     *         gs("bicycles"), new Object[] { gs("bicycle:0"), gs("bicycle:5") }
-     *     )
-     * };
-     * }</pre>
-     */
-    @SuppressWarnings("unchecked")
-    public static CompletableFuture<Map<GlideString, Object>[]> aggregate(
-            @NonNull BaseClient client, @NonNull GlideString indexName, @NonNull GlideString query) {
-        var args = new GlideString[] {gs("FT.AGGREGATE"), indexName, query};
-        return FT.<Object[]>executeCommand(client, args, false)
-                .thenApply(res -> castArray(res, Map.class));
-    }
-
-    /**
-     * Runs a search query on an index, and perform aggregate transformations on the results.
-     *
-     * @param client The client to execute the command.
-     * @param indexName The index name.
-     * @param query The text query to search.
-     * @param options Additional parameters for the command - see {@link FTAggregateOptions}.
-     * @return Results of the last stage of the pipeline.
-     * @example
-     *     <pre>{@code
-     * // example of using the API:
-     * FTAggregateOptions options = FTAggregateOptions.builder()
-     *     .loadFields(new String[] {"__key"})
-     *     .addExpression(
-     *             new FTAggregateOptions.GroupBy(
-     *                     new String[] {"@condition"},
-     *                     new Reducer[] {
-     *                         new Reducer("TOLIST", new String[] {"__key"}, "bicycles")
-     *                     }))
-     *     .build();
-     * FT.aggregate(client, gs("myIndex"), gs("*"), options).get();
-     * // the response contains data in the following format:
-     * Map<GlideString, Object>[] response = new Map[] {
-     *     Map.of(
-     *         gs("condition"), gs("refurbished"),
-     *         gs("bicycles"), new Object[] { gs("bicycle:9") }
-     *     ),
-     *     Map.of(
-     *         gs("condition"), gs("used"),
-     *         gs("bicycles"), new Object[] { gs("bicycle:1"), gs("bicycle:2"), gs("bicycle:3") }
-     *     ),
-     *     Map.of(
-     *         gs("condition"), gs("new"),
-     *         gs("bicycles"), new Object[] { gs("bicycle:0"), gs("bicycle:5") }
-     *     )
-     * };
-     * }</pre>
-     */
-    @SuppressWarnings("unchecked")
-    public static CompletableFuture<Map<GlideString, Object>[]> aggregate(
-            @NonNull BaseClient client,
-            @NonNull GlideString indexName,
-            @NonNull GlideString query,
-            @NonNull FTAggregateOptions options) {
+     * FT.explain().get();
+     * }</pre>     
+     * */
+    public static CompletableFuture<String> explain(@NonNull BaseClient client, @NonNull String indexName, @NonNull String query, @NonNull FTExplainOptions options) {
         var args =
                 concatenateArrays(
-                        new GlideString[] {gs("FT.AGGREGATE"), indexName, query}, options.toArgs());
-        return FT.<Object[]>executeCommand(client, args, false)
-                .thenApply(res -> castArray(res, Map.class));
+                        new GlideString[] {gs("FT.EXPLAIN"), gs(indexName), gs(query)});
+        return executeCommand(client, args, false);
     }
 
     /**
-     * Returns information about a given index.
-     *
-     * @param indexName The index name.
-     * @return Nested maps with info about the index. See example for more details.
+     * Returns the execution plan for a complex query     
+     * 
+     * @param client The client to execute the command.
+     * @param indexName The index name to search into.
+     * @param query The text query to search.
+     * @param options The additional parameter for the command - see {@link FTCreateOptions}.
+     * @return A <code>string</code> representing the execution plan.
      * @example
      *     <pre>{@code
-     * // example of using the API:
-     * Map<String, Object> response = client.ftinfo("myIndex").get();
-     * // the response contains data in the following format:
-     * Map<String, Object> data = Map.of(
-     *     "index_name", gs("bcd97d68-4180-4bc5-98fe-5125d0abbcb8"),
-     *     "index_status", gs("AVAILABLE"),
-     *     "key_type", gs("JSON"),
-     *     "creation_timestamp", 1728348101728771L,
-     *     "key_prefixes", new String[] { gs("json:") },
-     *     "num_indexed_vectors", 0L,
-     *     "space_usage", 653471L,
-     *     "num_docs", 0L,
-     *     "vector_space_usage", 653471L,
-     *     "index_degradation_percentage", 0L,
-     *     "fulltext_space_usage", 0L,
-     *     "current_lag", 0L,
-     *     "fields", new Object [] {
-     *         Map.of(
-     *             gs("identifier"), gs("$.vec"),
-     *             gs("type"), gs("VECTOR"),
-     *             gs("field_name"), gs("VEC"),
-     *             gs("option"), gs(""),
-     *             gs("vector_params", Map.of(
-     *                 gs("data_type", gs("FLOAT32"),
-     *                 gs("initial_capacity", 1000L,
-     *                 gs("current_capacity", 1000L,
-     *                 gs("distance_metric", gs("L2"),
-     *                 gs("dimension", 6L,
-     *                 gs("block_size", 1024L,
-     *                 gs("algorithm", gs("FLAT")
-     *           )
-     *         ),
-     *         Map.of(
-     *             gs("identifier"), gs("name"),
-     *             gs("type"), gs("TEXT"),
-     *             gs("field_name"), gs("name"),
-     *             gs("option"), gs("")
-     *         ),
-     *     }
-     * );
-     * }</pre>
-     */
-    public static CompletableFuture<Map<String, Object>> info(
-            @NonNull BaseClient client, @NonNull String indexName) {
-        // TODO inconsistency: the outer map is `Map<String, T>`,
-        //   while inner maps are `Map<GlideString, T>`
-        //   The outer map converted from `Map<GlideString, T>` in ClusterValue::ofMultiValueBinary
-        // TODO server returns all strings as `SimpleString`, we're safe to convert all to
-        //   `GlideString`s to `String`
-        return executeCommand(client, new GlideString[] {gs("FT.INFO"), gs(indexName)}, true);
+     * FT.explain().get();
+     * }</pre>     
+     * */
+    public static CompletableFuture<String> explain(@NonNull BaseClient client, @NonNull GlideString indexName, @NonNull GlideString query, @NonNull FTExplainOptions options) {
+        var args =
+                concatenateArrays(
+                        new GlideString[] {gs("FT.EXPLAIN"), indexName, query});
+        return executeCommand(client, args, false);
     }
 
     /**
-     * Returns information about a given index.
-     *
-     * @param indexName The index name.
-     * @return Nested maps with info about the index. See example for more details.
+     * Return the execution plan for a complex query but formatted for easier reading without using redis-cli --raw.
+     * 
+     * @param client The client to execute the command.
+     * @param indexName The index name to search into.
+     * @param query The text query to search.
+     * @param options The additional parameter for the command - see {@link FTCreateOptions}.
+     * @return A <code>string</code> representing the execution plan.
      * @example
      *     <pre>{@code
-     * // example of using the API:
-     * Map<String, Object> response = client.ftinfo(gs("myIndex")).get();
-     * // the response contains data in the following format:
-     * Map<String, Object> data = Map.of(
-     *     "index_name", gs("bcd97d68-4180-4bc5-98fe-5125d0abbcb8"),
-     *     "index_status", gs("AVAILABLE"),
-     *     "key_type", gs("JSON"),
-     *     "creation_timestamp", 1728348101728771L,
-     *     "key_prefixes", new String[] { gs("json:") },
-     *     "num_indexed_vectors", 0L,
-     *     "space_usage", 653471L,
-     *     "num_docs", 0L,
-     *     "vector_space_usage", 653471L,
-     *     "index_degradation_percentage", 0L,
-     *     "fulltext_space_usage", 0L,
-     *     "current_lag", 0L,
-     *     "fields", new Object [] {
-     *         Map.of(
-     *             gs("identifier"), gs("$.vec"),
-     *             gs("type"), gs("VECTOR"),
-     *             gs("field_name"), gs("VEC"),
-     *             gs("option"), gs(""),
-     *             gs("vector_params", Map.of(
-     *                 gs("data_type", gs("FLOAT32"),
-     *                 gs("initial_capacity", 1000L,
-     *                 gs("current_capacity", 1000L,
-     *                 gs("distance_metric", gs("L2"),
-     *                 gs("dimension", 6L,
-     *                 gs("block_size", 1024L,
-     *                 gs("algorithm", gs("FLAT")
-     *           )
-     *         ),
-     *         Map.of(
-     *             gs("identifier"), gs("name"),
-     *             gs("type"), gs("TEXT"),
-     *             gs("field_name"), gs("name"),
-     *             gs("option"), gs("")
-     *         ),
-     *     }
-     * );
-     * }</pre>
-     */
-    public static CompletableFuture<Map<String, Object>> info(
-            @NonNull BaseClient client, @NonNull GlideString indexName) {
-        return executeCommand(client, new GlideString[] {gs("FT.INFO"), indexName}, true);
+     * FT.explain().get();
+     * }</pre>     
+     * */
+    public static CompletableFuture<String> explaincli(@NonNull BaseClient client, @NonNull String indexName, @NonNull String query, @NonNull FTExplainOptions options) {
+        var args =
+                concatenateArrays(
+                        new GlideString[] {gs("FT.EXPLAINCLI"), gs(indexName), gs(query)});
+        return executeCommand(client, args, false);
+    }
+
+    /**
+     * Return the execution plan for a complex query but formatted for easier reading without using redis-cli --raw.
+     * 
+     * @param client The client to execute the command.
+     * @param indexName The index name to search into.
+     * @param query The text query to search.
+     * @param options The additional parameter for the command - see {@link FTCreateOptions}.
+     * @return A <code>string</code> representing the execution plan.
+     * @example
+     *     <pre>{@code
+     * FT.explain().get();
+     * }</pre>     
+     * */
+    public static CompletableFuture<String> explaincli(@NonNull BaseClient client, @NonNull GlideString indexName, @NonNull GlideString query, @NonNull FTExplainOptions options) {
+        var args =
+                concatenateArrays(
+                        new GlideString[] {gs("FT.EXPLAINCLI"), indexName, query});
+        return executeCommand(client, args, false);
     }
 
     /**
