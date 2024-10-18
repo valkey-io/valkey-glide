@@ -385,29 +385,18 @@ def ft_search_deep_compare_result(
     searchResultMap: Mapping[TEncodable, Mapping[TEncodable, TEncodable]] = cast(
         Mapping[TEncodable, Mapping[TEncodable, TEncodable]], result[1]
     )
-    for key, fieldsMap in searchResultMap.items():
-        keyString = convert_bytes_to_string(key)
-        assert keyString == json_key1 or keyString == json_key2
-        if keyString == json_key1:
-            for fieldName, fieldValue in fieldsMap.items():
-                fieldNameString = convert_bytes_to_string(fieldName)
-                fieldValueString = convert_bytes_to_string(fieldValue)
-                fieldValueInt = convert_str_to_int(fieldValueString)
-
-                assert fieldNameString == "a" or fieldNameString == "b"
-                assert fieldValueInt == json_value1.get(
-                    "a"
-                ) or fieldValueInt == json_value1.get("b")
-
-        if keyString == json_key2:
-            for fieldName, fieldValue in fieldsMap.items():
-                fieldNameString = convert_bytes_to_string(fieldName)
-                fieldValueString = convert_bytes_to_string(fieldValue)
-                fieldValueInt = convert_str_to_int(fieldValueString)
-                assert fieldNameString == "a" or fieldNameString == "b"
-                assert fieldValueInt == json_value2.get(
-                    "a"
-                ) or fieldValueInt == json_value2.get("b")
+    fieldName1 = "a"
+    fieldName2 = "b"
+    assert searchResultMap == {
+        json_key1.encode(): {
+            fieldName1.encode(): str(json_value1.get(fieldName1)).encode(),
+            fieldName2.encode(): str(json_value2.get(fieldName2)).encode(),
+        },
+        json_key2.encode(): {
+            fieldName1.encode(): str(json_value1.get(fieldName1)).encode(),
+            fieldName2.encode(): str(json_value2.get(fieldName2)).encode(),
+        },
+    }
 
 
 def convert_bytes_to_string(field: Union[str, bytes]) -> str:
