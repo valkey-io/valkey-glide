@@ -10,7 +10,7 @@ import {
     it,
 } from "@jest/globals";
 import { v4 as uuidv4 } from "uuid";
-import { DataType, Field, GlideClusterClient, GlideFt, InfoOptions, ProtocolVersion } from "..";
+import { DataType, Field, GlideClusterClient, GlideFt, InfoOptions, NumericField, ProtocolVersion, TextField } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import {
     flushAndCloseClient,
@@ -97,12 +97,16 @@ describe("GlideFt", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "",
+        "Ft.Create test_%p",
         async (protocol) => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            const fields: Field[] = [];
+            const textField: TextField = {name: "$title"};
+            const numberField: NumericField = {name: "$published_at"};
+            const textFieldCat: TextField = {name: "$category"};
+            const fields: Field[] = [textField, numberField, textFieldCat];
+
             const index = uuidv4();
             const prefixes = ["blog:post:"];
 
