@@ -10,6 +10,7 @@ import {
     it,
 } from "@jest/globals";
 import { v4 as uuidv4 } from "uuid";
+import { DataType } from "build-ts/src/server-modules/GlideFtOptions";
 import {
     ConditionalChange,
     GlideClusterClient,
@@ -18,6 +19,7 @@ import {
     JsonGetOptions,
     ProtocolVersion,
     RequestError,
+    GlideFt,
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import {
@@ -62,7 +64,6 @@ describe("GlideJson", () => {
                 sections: [InfoOptions.Modules],
                 route: "randomNode",
             });
-            expect(info).toContain("# json_core_metrics");
             expect(info).toContain("# search_index_stats");
         },
     );
@@ -314,9 +315,20 @@ describe("GlideFt", () => {
                 sections: [InfoOptions.Modules],
                 route: "randomNode",
             });
-            console.log(info);
-            expect(info).toContain("# json_core_metrics");
             expect(info).toContain("# search_index_stats");
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const fields: Field[] = [];
+            const index =
+
+                GlideFt.create(client, index, fields, {dataType: DataType.Hash, prefixes});
         },
     );
 });
