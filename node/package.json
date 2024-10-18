@@ -31,14 +31,15 @@
         "build-protobuf": "npm run compile-protobuf-files && npm run fix-protobuf-file",
         "compile-protobuf-files": "cd src && pbjs -t static-module -o ProtobufMessage.js ../../glide-core/src/protobuf/*.proto && pbts -o ProtobufMessage.d.ts ProtobufMessage.js",
         "fix-protobuf-file": "replace 'this\\.encode\\(message, writer\\)\\.ldelim' 'this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim' src/ProtobufMessage.js",
-        "test": "npm run build-test-utils && jest --verbose --runInBand --testPathIgnorePatterns='RedisModules'",
+        "test": "npm run build-test-utils && jest --verbose --runInBand --testPathIgnorePatterns='ServerModules'",
         "build-test-utils": "cd ../utils && npm i && npm run build",
         "lint:fix": "npm run install-linting && npx eslint -c ../eslint.config.mjs --fix && npm run prettier:format",
         "lint": "npm run install-linting && npx eslint -c ../eslint.config.mjs && npm run prettier:check:ci",
         "install-linting": "cd ../ & npm install",
         "prepack": "npmignore --auto",
         "prettier:check:ci": "npx prettier --check . --ignore-unknown '!**/*.{js,d.ts}'",
-        "prettier:format": "npx prettier --write . --ignore-unknown '!**/*.{js,d.ts}'"
+        "prettier:format": "npx prettier --write . --ignore-unknown '!**/*.{js,d.ts}'",
+        "test-modules": "npm run build-test-utils && jest --verbose --runInBand --testNamePattern='ServerModules'"
     },
     "devDependencies": {
         "@jest/globals": "^29.7.0",
