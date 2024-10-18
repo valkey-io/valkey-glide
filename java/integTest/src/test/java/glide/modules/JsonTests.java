@@ -6,10 +6,12 @@ import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.google.gson.JsonParser;
 import glide.api.GlideClusterClient;
 import glide.api.commands.servermodules.Json;
 import glide.api.models.GlideString;
@@ -153,5 +155,116 @@ public class JsonTests {
                                 JsonGetOptions.builder().indent("~").newline("\n").space("*").build())
                         .get();
         assertEquals(expectedGetResult2, actualGetResult2);
+    }
+
+    @Test
+    @SneakyThrows
+    public void arrinsert() {
+        String key = UUID.randomUUID().toString();
+
+        String doc =
+                "{"
+                        + "\"a\": [],"
+                        + "\"b\": { \"a\": [1, 2, 3, 4] },"
+                        + "\"c\": { \"a\": \"not an array\" },"
+                        + "\"d\": [{ \"a\": [\"x\", \"y\"] }, { \"a\": [[\"foo\"]] }],"
+                        + "\"e\": [{ \"a\": 42 }, { \"a\": {} }],"
+                        + "\"f\": { \"a\": [true, false, null] }"
+                        + "}";
+        assertEquals("OK", Json.set(client, key, "$", doc).get());
+
+        String[] values =
+                new String[] {
+                    "\"string_value\"", "123", "{\"key\": \"value\"}", "true", "null", "[\"bar\"]"
+                };
+        var res = Json.arrinsert(client, key, "$..a", 0, values).get();
+
+        doc = Json.get(client, key).get();
+        var expected =
+                "{"
+                        + "    \"a\": [\"string_value\", 123, {\"key\": \"value\"}, true, null, [\"bar\"]],"
+                        + "    \"b\": {"
+                        + "        \"a\": ["
+                        + "            \"string_value\","
+                        + "            123,"
+                        + "            {\"key\": \"value\"},"
+                        + "            true,"
+                        + "            null,"
+                        + "            [\"bar\"],"
+                        + "            1,"
+                        + "            2,"
+                        + "            3,"
+                        + "            4"
+                        + "        ]"
+                        + "    },"
+                        + "    \"c\": {\"a\": \"not an array\"},"
+                        + "    \"d\": ["
+                        + "        {"
+                        + "            \"a\": ["
+                        + "                \"string_value\","
+                        + "                123,"
+                        + "                {\"key\": \"value\"},"
+                        + "                true,"
+                        + "                null,"
+                        + "                [\"bar\"],"
+                        + "                \"x\","
+                        + "                \"y\""
+                        + "            ]"
+                        + "        },"
+                        + "        {"
+                        + "            \"a\": ["
+                        + "                \"string_value\","
+                        + "                123,"
+                        + "                {\"key\": \"value\"},"
+                        + "                true,"
+                        + "                null,"
+                        + "                [\"bar\"],"
+                        + "                [\"foo\"]"
+                        + "            ]"
+                        + "        }"
+                        + "    ],"
+                        + "    \"e\": [{\"a\": 42}, {\"a\": {}}],"
+                        + "    \"f\": {"
+                        + "        \"a\": ["
+                        + "            \"string_value\","
+                        + "            123,"
+                        + "            {\"key\": \"value\"},"
+                        + "            true,"
+                        + "            null,"
+                        + "            [\"bar\"],"
+                        + "            true,"
+                        + "            false,"
+                        + "            null"
+                        + "        ]"
+                        + "    }"
+                        + "}";
+
+        assertEquals(JsonParser.parseString(expected), JsonParser.parseString(doc));
+    }
+
+    @Test
+    @SneakyThrows
+    public void arrlen() {
+        String key = UUID.randomUUID().toString();
+
+        String doc = "{\"a\": [1, 2, 3], \"b\": {\"a\": [1, 2], \"c\": {\"a\": 42}}}";
+        assertEquals("OK", Json.set(client, key, "$", doc).get());
+
+        var res = Json.arrlen(client, key, "$.a").get();
+        assertArrayEquals(new Object[] {3L}, (Object[]) res);
+
+        res = Json.arrlen(client, key, "$..a").get();
+        assertArrayEquals(new Object[] {3L, 2L, null}, (Object[]) res);
+
+        // Legacy path retrieves the first array match at ..a
+        res = Json.arrlen(client, key, "..a").get();
+        assertEquals(3L, res);
+
+        doc = "[1, 2, true, null, \"tree\"]";
+        assertEquals("OK", Json.set(client, key, "$", doc).get());
+
+        // no path
+        res = Json.arrlen(client, "doc").get();
+        assertEquals(5L, res);
     }
 }
