@@ -136,7 +136,7 @@ export class GlideJson {
      * ```typescript
      * const jsonStr = await client.jsonGet('doc', '$');
      * console.log(JSON.parse(jsonStr as string));
-     * // Output: [{"a": 1.0, "b" :2}] - JSON object retrieved from the key `doc`
+     * // Output: [{"a": 1.0, "b" :2}] - JSON object retrieved from the key `doc`.
      *
      * const jsonData = await client.jsonGet('doc', '$');
      * console.log(jsonData);
@@ -149,7 +149,7 @@ export class GlideJson {
      *     space: " "
      * });
      * console.log(formattedJson);
-     * // Output: "{\n \"$.a\": [\n  1.0\n ],\n \"$.b\": [\n  2\n ]\n}" - Returns values at paths '$.a' and '$.b' with custom formatt
+     * // Output: "{\n \"$.a\": [\n  1.0\n ],\n \"$.b\": [\n  2\n ]\n}" - Returns values at paths '$.a' and '$.b' with custom format.
      *
      * const nonExistingPath = await client.jsonGet('doc', '$.non_existing_path');
      * console.log(nonExistingPath);
