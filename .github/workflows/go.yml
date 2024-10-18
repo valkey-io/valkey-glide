@@ -2,7 +2,10 @@ name: Go CI
 
 on:
     push:
-        branches: [ "main" ]
+        branches:
+            - main
+            - release-*
+            - v*
         paths:
             - glide-core/src/**
             - submodules/**
