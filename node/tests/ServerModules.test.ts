@@ -47,16 +47,14 @@ describe("GlideJson", () => {
         "ServerModules check modules loaded",
         async (protocol) => {
             client = await GlideClusterClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol, {
-                    useTLS: true,
-                }),
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const info = await client.info({
                 sections: [InfoOptions.Modules],
                 route: "randomNode",
             });
-            expect(info).toContain("Modules");
-            //expect(info).toContain("# search_index_stats");
+            expect(info).toContain("# json_core_metrics");
+            expect(info).toContain("# search_index_stats");
         },
     );
 });
