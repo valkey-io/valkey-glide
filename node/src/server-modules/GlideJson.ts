@@ -25,6 +25,9 @@ export interface JsonGetOptions {
     noescape?: GlideString;
 }
 
+/**
+ * @internal
+ */
 function _jsonGetOptionsToArgs(options: JsonGetOptions): GlideString[] {
     const result: GlideString[] = [];
 
