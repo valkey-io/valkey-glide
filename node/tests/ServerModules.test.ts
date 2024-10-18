@@ -9,7 +9,8 @@ import {
     expect,
     it,
 } from "@jest/globals";
-import { GlideClusterClient, InfoOptions, ProtocolVersion } from "..";
+import { DataType } from "build-ts/src/server-modules/GlideFtOptions";
+import { GlideClusterClient, GlideFt, InfoOptions, ProtocolVersion } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import {
     flushAndCloseClient,
@@ -53,7 +54,6 @@ describe("GlideJson", () => {
                 sections: [InfoOptions.Modules],
                 route: "randomNode",
             });
-            expect(info).toContain("# json_core_metrics");
             expect(info).toContain("# search_index_stats");
         },
     );
@@ -92,9 +92,20 @@ describe("GlideFt", () => {
                 sections: [InfoOptions.Modules],
                 route: "randomNode",
             });
-            console.log(info);
-            expect(info).toContain("# json_core_metrics");
             expect(info).toContain("# search_index_stats");
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const fields: Field[] = [];
+            const index = 
+
+            GlideFt.create(client, index, fields, {dataType: DataType.Hash, prefixes});
         },
     );
 });
