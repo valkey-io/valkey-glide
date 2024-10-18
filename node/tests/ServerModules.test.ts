@@ -9,7 +9,8 @@ import {
     expect,
     it,
 } from "@jest/globals";
-import { DataType } from "build-ts/src/server-modules/GlideFtOptions";
+import { DataType, Field } from "build-ts/src/server-modules/GlideFtOptions";
+import { v4 as uuidv4 } from "uuid";
 import { GlideClusterClient, GlideFt, InfoOptions, ProtocolVersion } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import {
@@ -103,9 +104,12 @@ describe("GlideFt", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const fields: Field[] = [];
-            const index = 
+            const index = uuidv4();
+            const prefixes = ["blog:post:"];
 
-            GlideFt.create(client, index, fields, {dataType: DataType.Hash, prefixes});
+            expect(
+                GlideFt.create(client, index, fields, {dataType: DataType.Hash, prefixes})
+            ).toBe("OK");
         },
     );
 });
