@@ -287,10 +287,10 @@ jobs:
               with:
                   submodules: recursive
 
-            - name: Use Node.js 16.x
+            - name: Use Node.js 18.x
               uses: actions/setup-node@v4
               with:
-                  node-version: 16.x
+                  node-version: 18.x
 
             - name: Build Node wrapper
               uses: ./.github/workflows/build-node-wrapper
