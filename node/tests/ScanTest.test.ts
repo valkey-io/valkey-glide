@@ -36,11 +36,10 @@ describe("Scan GlideClusterClient", () => {
             ? await ValkeyCluster.initFromExistingCluster(
                   true,
                   parseEndpoints(clusterAddresses),
-                  false,
                   getServerVersion,
               )
             : // setting replicaCount to 1 to facilitate tests routed to replicas
-              await ValkeyCluster.createCluster(true, false, 3, 1, getServerVersion);
+              await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
     }, 20000);
 
     afterEach(async () => {
@@ -390,10 +389,9 @@ describe("Scan GlideClient", () => {
             ? await ValkeyCluster.initFromExistingCluster(
                   false,
                   parseEndpoints(standaloneAddresses),
-                  false,
                   getServerVersion,
               )
-            : await ValkeyCluster.createCluster(false, false, 1, 1, getServerVersion);
+            : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
     }, 20000);
 
     afterEach(async () => {
