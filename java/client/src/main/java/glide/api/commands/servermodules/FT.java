@@ -588,6 +588,116 @@ public class FT {
     }
 
     /**
+     * Adds an alias for an index. The new alias name can be used anywhere that an index name is
+     * required.
+     *
+     * @param client The client to execute the command.
+     * @param aliasName The alias to be added to an index.
+     * @param indexName The index name for which the alias has to be added.
+     * @return <code>"OK"</code>.
+     * @example
+     *     <pre>{@code
+     * FT.aliasadd(client, "myalias", "myindex").get(); // "OK"
+     * }</pre>
+     */
+    public static CompletableFuture<String> aliasadd(
+            @NonNull BaseClient client, @NonNull String aliasName, @NonNull String indexName) {
+        return aliasadd(client, gs(aliasName), gs(indexName));
+    }
+
+    /**
+     * Adds an alias for an index. The new alias name can be used anywhere that an index name is
+     * required.
+     *
+     * @param client The client to execute the command.
+     * @param aliasName The alias to be added to an index.
+     * @param indexName The index name for which the alias has to be added.
+     * @return <code>"OK"</code>.
+     * @example
+     *     <pre>{@code
+     * FT.aliasadd(client, gs("myalias"), gs("myindex")).get(); // "OK"
+     * }</pre>
+     */
+    public static CompletableFuture<String> aliasadd(
+            @NonNull BaseClient client, @NonNull GlideString aliasName, @NonNull GlideString indexName) {
+        var args = new GlideString[] {gs("FT.ALIASADD"), aliasName, indexName};
+
+        return executeCommand(client, args, false);
+    }
+
+    /**
+     * Deletes an existing alias for an index.
+     *
+     * @param client The client to execute the command.
+     * @param aliasName The existing alias to be deleted for an index.
+     * @return <code>"OK"</code>.
+     * @example
+     *     <pre>{@code
+     * FT.aliasdel(client, "myalias").get(); // "OK"
+     * }</pre>
+     */
+    public static CompletableFuture<String> aliasdel(
+            @NonNull BaseClient client, @NonNull String aliasName) {
+        return aliasdel(client, gs(aliasName));
+    }
+
+    /**
+     * Deletes an existing alias for an index.
+     *
+     * @param client The client to execute the command.
+     * @param aliasName The existing alias to be deleted for an index.
+     * @return <code>"OK"</code>.
+     * @example
+     *     <pre>{@code
+     * FT.aliasdel(client, gs("myalias")).get(); // "OK"
+     * }</pre>
+     */
+    public static CompletableFuture<String> aliasdel(
+            @NonNull BaseClient client, @NonNull GlideString aliasName) {
+        var args = new GlideString[] {gs("FT.ALIASDEL"), aliasName};
+
+        return executeCommand(client, args, false);
+    }
+
+    /**
+     * Updates an existing alias to point to a different physical index. This command only affects
+     * future references to the alias.
+     *
+     * @param client The client to execute the command.
+     * @param aliasName The alias name. This alias will now be pointed to a different index.
+     * @param indexName The index name for which an existing alias has to updated.
+     * @return <code>"OK"</code>.
+     * @example
+     *     <pre>{@code
+     * FT.aliasupdate(client, "myalias", "myindex").get(); // "OK"
+     * }</pre>
+     */
+    public static CompletableFuture<String> aliasupdate(
+            @NonNull BaseClient client, @NonNull String aliasName, @NonNull String indexName) {
+        return aliasupdate(client, gs(aliasName), gs(indexName));
+    }
+
+    /**
+     * Update an existing alias to point to a different physical index. This command only affects
+     * future references to the alias.
+     *
+     * @param client The client to execute the command.
+     * @param aliasName The alias name. This alias will now be pointed to a different index.
+     * @param indexName The index name for which an existing alias has to updated.
+     * @return <code>"OK"</code>.
+     * @example
+     *     <pre>{@code
+     * FT.aliasupdate(client,gs("myalias"), gs("myindex")).get(); // "OK"
+     * }</pre>
+     */
+    public static CompletableFuture<String> aliasupdate(
+            @NonNull BaseClient client, @NonNull GlideString aliasName, @NonNull GlideString indexName) {
+        var args = new GlideString[] {gs("FT.ALIASUPDATE"), aliasName, indexName};
+
+        return executeCommand(client, args, false);
+    }
+
+    /**
      * Returns the execution plan for a complex query
      *
      * @param client The client to execute the command.
