@@ -2,6 +2,7 @@
 package glide.api.commands.servermodules;
 
 import static glide.api.models.GlideString.gs;
+import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 
 import glide.api.BaseClient;
@@ -9,10 +10,12 @@ import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
+import glide.api.models.commands.FT.FTAggregateOptions;
 import glide.api.models.commands.FT.FTCreateOptions;
 import glide.api.models.commands.FT.FTCreateOptions.FieldInfo;
 import glide.api.models.commands.FT.FTSearchOptions;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 import lombok.NonNull;
@@ -303,6 +306,172 @@ public class FT {
     public static CompletableFuture<String> dropindex(
             @NonNull BaseClient client, @NonNull GlideString indexName) {
         return executeCommand(client, new GlideString[] {gs("FT.DROPINDEX"), indexName}, false);
+    }
+
+    /**
+     * Runs a search query on an index, and perform aggregate transformations on the results.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name.
+     * @param query The text query to search.
+     * @return Results of the last stage of the pipeline.
+     * @example
+     *     <pre>{@code
+     * // example of using the API:
+     * FT.aggregate(client, "myIndex", "*").get();
+     * // the response contains data in the following format:
+     * Map<GlideString, Object>[] response = new Map[] {
+     *     Map.of(
+     *         gs("condition"), gs("refurbished"),
+     *         gs("bicycles"), new Object[] { gs("bicycle:9") }
+     *     ),
+     *     Map.of(
+     *         gs("condition"), gs("used"),
+     *         gs("bicycles"), new Object[] { gs("bicycle:1"), gs("bicycle:2"), gs("bicycle:3") }
+     *     ),
+     *     Map.of(
+     *         gs("condition"), gs("new"),
+     *         gs("bicycles"), new Object[] { gs("bicycle:0"), gs("bicycle:5") }
+     *     )
+     * };
+     * }</pre>
+     */
+    public static CompletableFuture<Map<GlideString, Object>[]> aggregate(
+            @NonNull BaseClient client, @NonNull String indexName, @NonNull String query) {
+        return aggregate(client, gs(indexName), gs(query));
+    }
+
+    /**
+     * Runs a search query on an index, and perform aggregate transformations on the results.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name.
+     * @param query The text query to search.
+     * @param options Additional parameters for the command - see {@link FTAggregateOptions}.
+     * @return Results of the last stage of the pipeline.
+     * @example
+     *     <pre>{@code
+     * // example of using the API:
+     * FTAggregateOptions options = FTAggregateOptions.builder()
+     *     .loadFields(new String[] {"__key"})
+     *     .addExpression(
+     *             new FTAggregateOptions.GroupBy(
+     *                     new String[] {"@condition"},
+     *                     new Reducer[] {
+     *                         new Reducer("TOLIST", new String[] {"__key"}, "bicycles")
+     *                     }))
+     *     .build();
+     * FT.aggregate(client, "myIndex", "*", options).get();
+     * // the response contains data in the following format:
+     * Map<GlideString, Object>[] response = new Map[] {
+     *     Map.of(
+     *         gs("condition"), gs("refurbished"),
+     *         gs("bicycles"), new Object[] { gs("bicycle:9") }
+     *     ),
+     *     Map.of(
+     *         gs("condition"), gs("used"),
+     *         gs("bicycles"), new Object[] { gs("bicycle:1"), gs("bicycle:2"), gs("bicycle:3") }
+     *     ),
+     *     Map.of(
+     *         gs("condition"), gs("new"),
+     *         gs("bicycles"), new Object[] { gs("bicycle:0"), gs("bicycle:5") }
+     *     )
+     * };
+     * }</pre>
+     */
+    public static CompletableFuture<Map<GlideString, Object>[]> aggregate(
+            @NonNull BaseClient client,
+            @NonNull String indexName,
+            @NonNull String query,
+            @NonNull FTAggregateOptions options) {
+        return aggregate(client, gs(indexName), gs(query), options);
+    }
+
+    /**
+     * Runs a search query on an index, and perform aggregate transformations on the results.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name.
+     * @param query The text query to search.
+     * @return Results of the last stage of the pipeline.
+     * @example
+     *     <pre>{@code
+     * // example of using the API:
+     * FT.aggregate(client, gs("myIndex"), gs("*")).get();
+     * // the response contains data in the following format:
+     * Map<GlideString, Object>[] response = new Map[] {
+     *     Map.of(
+     *         gs("condition"), gs("refurbished"),
+     *         gs("bicycles"), new Object[] { gs("bicycle:9") }
+     *     ),
+     *     Map.of(
+     *         gs("condition"), gs("used"),
+     *         gs("bicycles"), new Object[] { gs("bicycle:1"), gs("bicycle:2"), gs("bicycle:3") }
+     *     ),
+     *     Map.of(
+     *         gs("condition"), gs("new"),
+     *         gs("bicycles"), new Object[] { gs("bicycle:0"), gs("bicycle:5") }
+     *     )
+     * };
+     * }</pre>
+     */
+    @SuppressWarnings("unchecked")
+    public static CompletableFuture<Map<GlideString, Object>[]> aggregate(
+            @NonNull BaseClient client, @NonNull GlideString indexName, @NonNull GlideString query) {
+        var args = new GlideString[] {gs("FT.AGGREGATE"), indexName, query};
+        return FT.<Object[]>executeCommand(client, args, false)
+                .thenApply(res -> castArray(res, Map.class));
+    }
+
+    /**
+     * Runs a search query on an index, and perform aggregate transformations on the results.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name.
+     * @param query The text query to search.
+     * @param options Additional parameters for the command - see {@link FTAggregateOptions}.
+     * @return Results of the last stage of the pipeline.
+     * @example
+     *     <pre>{@code
+     * // example of using the API:
+     * FTAggregateOptions options = FTAggregateOptions.builder()
+     *     .loadFields(new String[] {"__key"})
+     *     .addExpression(
+     *             new FTAggregateOptions.GroupBy(
+     *                     new String[] {"@condition"},
+     *                     new Reducer[] {
+     *                         new Reducer("TOLIST", new String[] {"__key"}, "bicycles")
+     *                     }))
+     *     .build();
+     * FT.aggregate(client, gs("myIndex"), gs("*"), options).get();
+     * // the response contains data in the following format:
+     * Map<GlideString, Object>[] response = new Map[] {
+     *     Map.of(
+     *         gs("condition"), gs("refurbished"),
+     *         gs("bicycles"), new Object[] { gs("bicycle:9") }
+     *     ),
+     *     Map.of(
+     *         gs("condition"), gs("used"),
+     *         gs("bicycles"), new Object[] { gs("bicycle:1"), gs("bicycle:2"), gs("bicycle:3") }
+     *     ),
+     *     Map.of(
+     *         gs("condition"), gs("new"),
+     *         gs("bicycles"), new Object[] { gs("bicycle:0"), gs("bicycle:5") }
+     *     )
+     * };
+     * }</pre>
+     */
+    @SuppressWarnings("unchecked")
+    public static CompletableFuture<Map<GlideString, Object>[]> aggregate(
+            @NonNull BaseClient client,
+            @NonNull GlideString indexName,
+            @NonNull GlideString query,
+            @NonNull FTAggregateOptions options) {
+        var args =
+                concatenateArrays(
+                        new GlideString[] {gs("FT.AGGREGATE"), indexName, query}, options.toArgs());
+        return FT.<Object[]>executeCommand(client, args, false)
+                .thenApply(res -> castArray(res, Map.class));
     }
 
     /**

@@ -22,6 +22,7 @@ pub(crate) enum ExpectedReturnType<'a> {
     ArrayOfStrings,
     ArrayOfBools,
     ArrayOfDoubleOrNull,
+    FTAggregateReturnType,
     FTSearchReturnType,
     Lolwut,
     ArrayOfStringAndArrays,
@@ -893,6 +894,70 @@ pub(crate) fn convert_to_expected_type(
             )
                 .into()),
         },
+        ExpectedReturnType::FTAggregateReturnType => match value {
+            /*
+            Example of the response
+                1) "3"
+                2) 1) "condition"
+                   2) "refurbished"
+                   3) "bicylces"
+                   4) 1) "bicycle:9"
+                3) 1) "condition"
+                   2) "used"
+                   3) "bicylces"
+                   4) 1) "bicycle:1"
+                      2) "bicycle:2"
+                      3) "bicycle:3"
+                      4) "bicycle:4"
+                4) 1) "condition"
+                   2) "new"
+                   3) "bicylces"
+                   4) 1) "bicycle:5"
+                      2) "bicycle:6"
+
+            Converting response to (array of maps)
+                1) 1# "condition" => "refurbished"
+                   2# "bicylces" =>
+                      1) "bicycle:9"
+                2) 1# "condition" => "used"
+                   2# "bicylces" =>
+                      1) "bicycle:1"
+                      2) "bicycle:2"
+                      3) "bicycle:3"
+                      4) "bicycle:4"
+                3) 1# "condition" => "new"
+                   2# "bicylces" =>
+                      1) "bicycle:5"
+                      2) "bicycle:6"
+
+            Very first element in the response is meaningless and should be ignored.
+            */
+            Value::Array(array) => {
+                let mut res = Vec::with_capacity(array.len() - 1);
+                for aggregation in array.into_iter().skip(1) {
+                    let Value::Array(fields) = aggregation else {
+                        return Err((
+                            ErrorKind::TypeError,
+                            "Response couldn't be converted for FT.AGGREGATION",
+                            format!("(`fields` was {:?})", get_value_type(&aggregation)),
+                        )
+                            .into());
+                    };
+                    res.push(convert_array_to_map_by_type(
+                        fields,
+                        None,
+                        None,
+                    )?);
+                }
+                Ok(Value::Array(res))
+            }
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted to FT.AGGREGATION",
+                format!("(response was {:?})", get_value_type(&value)),
+            )
+                .into()),
+        },
         ExpectedReturnType::FTSearchReturnType => match value {
             /*
             Example of the response
@@ -1303,6 +1368,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
             key_type: &None,
             value_type: &None,
         }),
+        b"FT.AGGREGATE" => Some(ExpectedReturnType::FTAggregateReturnType),
         b"FT.SEARCH" => Some(ExpectedReturnType::FTSearchReturnType),
         _ => None,
     }
