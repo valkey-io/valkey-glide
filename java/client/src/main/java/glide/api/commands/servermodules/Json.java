@@ -22,6 +22,7 @@ public class Json {
     public static final String JSON_PREFIX = "JSON.";
     public static final String JSON_SET = JSON_PREFIX + "SET";
     public static final String JSON_GET = JSON_PREFIX + "GET";
+    public static final String JSON_ARRAPPEND = JSON_PREFIX + "ARRAPPEND";
 
     private Json() {}
 
@@ -392,6 +393,78 @@ public class Json {
         return executeCommand(
                 client,
                 new ArgsBuilder().add(gs(JSON_GET)).add(key).add(options.toArgs()).add(paths).toArray());
+    }
+
+    /**
+     * Appends one or more <code>values</code> to the JSON array at the specified <code>path</code> within the JSON
+     * document stored at <code>key</code>.
+     *
+     * @param client The Valkey GLIDE client to execute the command.
+     * @param key The <code>key</code> of the JSON document.
+     * @param path Represents the <code>path</code> within the JSON document where the <code>values</code> will be
+     *             appended. Defaults to None.
+     * @param values The <code>values</code> to append to the JSON array at the specified <code>path</code>.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (path starts with <code>$</code>): Returns a list of integer replies for every possible
+     *           path, indicating the new length of the new array after appending <code>values</code>, or None for JSON
+     *           values matching the path that are not an array.
+     *           If <code>key</code> doesn't exist, an error is raised.
+     *       <li>For legacy path (path doesn't start with <code>$</code>): Returns the length of the new array after
+     *           appending <code>values</code> to the array at <code>path</code>. If multiple paths match, the length of
+     *           the last updated array is returned. If the JSON value at <code>path</code> is not a array or if
+     *           <code>path</code> doesn't exist, an error is raised.
+     *           If <code>key</code> doesn't exist, an error is raised.
+     * @example
+     *     <pre>{@code
+     * String value = client.Json.set(client, "doc", , "$", "{'a': 1, 'b': ['one', 'two']}").get();
+     * assert value.equals("OK");
+     * Long length = client.Json.arrapend(client, "doc", "$.b", "['three']").get();
+     * assert length.equals([3]);
+     * length = client.Json.arrapend(client, "doc", ".b", "['four']").get();
+     * assert length.equals(4);
+     * }</pre>
+     */
+    public static CompletableFuture<Long> arrappend(
+        @NonNull BaseClient client,
+        @NonNull String key,
+        @NonNull String path,
+        @NonNull String[] values) {
+        return executeCommand(
+            client,
+            ArrayTransformUtils.concatenateArrays(
+                new String[] {JSON_ARRAPPEND, key, path}, values));
+    }
+
+    public static CompletableFuture<Long> arrappend(
+        @NonNull BaseClient client,
+        @NonNull String key,
+        @NonNull String[] values) {
+        return executeCommand(
+            client,
+            ArrayTransformUtils.concatenateArrays(
+                new String[] {JSON_ARRAPPEND, key}, values));
+    }
+
+    public static CompletableFuture<Long> arrappend(
+        @NonNull BaseClient client,
+        @NonNull GlideString key,
+        @NonNull GlideString path,
+        @NonNull GlideString[] values) {
+        return executeCommand(
+            client,
+            ArrayTransformUtils.concatenateArrays(
+                new GlideString[] {gs(JSON_ARRAPPEND), key, path}, values));
+    }
+
+    public static CompletableFuture<Long> arrappend(
+        @NonNull BaseClient client,
+        @NonNull GlideString key,
+        @NonNull GlideString[] values) {
+        return executeCommand(
+            client,
+            ArrayTransformUtils.concatenateArrays(
+                new GlideString[] {gs(JSON_ARRAPPEND), key}, values));
     }
 
     /**
