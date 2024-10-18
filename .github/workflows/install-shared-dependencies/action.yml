@@ -22,10 +22,9 @@ inputs:
             - aarch64-unknown-linux-musl
             - x86_64-unknown-linux-musl
     engine-version:
-      description: "Engine version to install"
-      required: true
-      type: string
-
+        description: "Engine version to install"
+        required: false
+        type: string
     github-token:
         description: "GITHUB_TOKEN, GitHub App installation access token"
         required: true
@@ -72,6 +71,7 @@ runs:
             github-token: ${{ inputs.github-token }}
 
         - name: Install Valkey
+          if: ${{ inputs.engine-version != '' }}
           uses: ./.github/workflows/install-valkey
           with:
               engine-version: ${{ inputs.engine-version }}

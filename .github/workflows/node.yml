@@ -15,6 +15,7 @@ on:
             - .github/workflows/lint-rust/action.yml
             - .github/workflows/install-valkey/action.yml
             - .github/json_matrices/build-matrix.json
+            - .github/workflows/start-self-hosted-runner/action.yml
     pull_request:
         paths:
             - glide-core/src/**
@@ -28,6 +29,7 @@ on:
             - .github/workflows/lint-rust/action.yml
             - .github/workflows/install-valkey/action.yml
             - .github/json_matrices/build-matrix.json
+            - .github/workflows/start-self-hosted-runner/action.yml
     workflow_dispatch:
 
 concurrency:
@@ -39,17 +41,17 @@ env:
 
 jobs:
     load-engine-matrix:
-      runs-on: ubuntu-latest
-      outputs:
-        matrix: ${{ steps.load-engine-matrix.outputs.matrix }}
-      steps:
-          - name: Checkout
-            uses: actions/checkout@v4
+        runs-on: ubuntu-latest
+        outputs:
+            matrix: ${{ steps.load-engine-matrix.outputs.matrix }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
 
-          - name: Load the engine matrix
-            id: load-engine-matrix
-            shell: bash
-            run: echo "matrix=$(jq -c . < .github/json_matrices/engine-matrix.json)" >> $GITHUB_OUTPUT
+            - name: Load the engine matrix
+              id: load-engine-matrix
+              shell: bash
+              run: echo "matrix=$(jq -c . < .github/json_matrices/engine-matrix.json)" >> $GITHUB_OUTPUT
 
     test-ubuntu-latest:
         runs-on: ubuntu-latest
@@ -84,18 +86,18 @@ jobs:
 
             - name: test hybrid node modules - commonjs
               run: |
-                npm install --package-lock-only
-                npm ci
-                npm run build-and-test
+                  npm install --package-lock-only
+                  npm ci
+                  npm run build-and-test
               working-directory: ./node/hybrid-node-tests/commonjs-test
               env:
                   JEST_HTML_REPORTER_OUTPUT_PATH: test-report-commonjs.html
 
             - name: test hybrid node modules - ecma
               run: |
-                npm install --package-lock-only
-                npm ci
-                npm run build-and-test
+                  npm install --package-lock-only
+                  npm ci
+                  npm run build-and-test
               working-directory: ./node/hybrid-node-tests/ecmascript-test
               env:
                   JEST_HTML_REPORTER_OUTPUT_PATH: test-report-ecma.html
@@ -269,3 +271,45 @@ jobs:
                       node/test-report*.html
                       utils/clusters/**
                       benchmarks/results/**
+
+    test-modules:
+        if: (github.repository_owner == 'valkey-io' && github.event_name == 'workflow_dispatch') || github.event.pull_request.head.repo.owner.login == 'valkey-io'
+        environment: AWS_ACTIONS
+        name: Running Module Tests
+        runs-on: [self-hosted, linux, ARM64]
+        timeout-minutes: 15
+
+        steps:
+            - name: Setup self-hosted runner access
+              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
+
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+
+            - name: Use Node.js 18.x
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 18.x
+
+            - name: Build Node wrapper
+              uses: ./.github/workflows/build-node-wrapper
+              with:
+                  os: ubuntu
+                  named_os: linux
+                  arch: arm64
+                  target: aarch64-unknown-linux-gnu
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: test
+              run: npm run test-modules -- --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} --tls=true
+              working-directory: ./node
+
+            - name: Upload test reports
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: test-report-node-modules-ubuntu
+                  path: |
+                      node/test-report*.html

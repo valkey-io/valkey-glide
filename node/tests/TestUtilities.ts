@@ -387,6 +387,7 @@ export const getClientConfigurationOption = (
             port,
         })),
         protocol,
+        useTLS: parseCommandLineArgs()["tls"] == "true",
         ...configOverrides,
     };
 };
