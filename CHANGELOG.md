@@ -21,6 +21,7 @@
 #### Operational Enhancements
 
 * Java: Add modules CI ([#2388](https://github.com/valkey-io/valkey-glide/pull/2388), [#2404](https://github.com/valkey-io/valkey-glide/pull/2404), [#2416](https://github.com/valkey-io/valkey-glide/pull/2416))
+* Node: Add modules CI ([#2472](https://github.com/valkey-io/valkey-glide/pull/2472))
 
 ## 1.1.0 (2024-09-24)
 
