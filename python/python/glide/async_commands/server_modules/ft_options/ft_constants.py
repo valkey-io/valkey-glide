@@ -8,6 +8,9 @@ class CommandNames:
 
     FT_CREATE = "FT.CREATE"
     FT_DROPINDEX = "FT.DROPINDEX"
+    FT_ALIASADD = "FT.ALIASADD"
+    FT_ALIASDEL = "FT.ALIASDEL"
+    FT_ALIASUPDATE = "FT.ALIASUPDATE"
 
 
 class FtCreateKeywords:
