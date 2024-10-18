@@ -38,7 +38,6 @@ describe("GlideJson", () => {
         cluster = await ValkeyCluster.initFromExistingCluster(
             true,
             parseEndpoints(clusterAddresses),
-            true,
             getServerVersion,
         );
     }, 20000);
@@ -291,7 +290,6 @@ describe("GlideFt", () => {
         cluster = await ValkeyCluster.initFromExistingCluster(
             true,
             parseEndpoints(clusterAddresses),
-            true,
             getServerVersion,
         );
     }, 20000);
