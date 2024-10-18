@@ -20,8 +20,8 @@ import lombok.NonNull;
 public class Json {
 
     private static final String JSON_PREFIX = "JSON.";
-    private static final String JSON_SET = JSON_PREFIX + "SET";
-    private static final String JSON_GET = JSON_PREFIX + "GET";
+    public static final String JSON_SET = JSON_PREFIX + "SET";
+    public static final String JSON_GET = JSON_PREFIX + "GET";
     private static final String JSON_ARRINSERT = JSON_PREFIX + "ARRINSERT";
     private static final String JSON_ARRLEN = JSON_PREFIX + "ARRLEN";
 
