@@ -16,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.api.GlideClusterClient;
 import glide.api.commands.servermodules.FT;
+import glide.api.models.GlideString;
 import glide.api.models.commands.FT.FTAggregateOptions;
 import glide.api.models.commands.FT.FTAggregateOptions.Apply;
 import glide.api.models.commands.FT.FTAggregateOptions.GroupBy;
@@ -142,12 +143,12 @@ public class VectorSearchTests {
                         .get());
 
         // create an index with multiple prefixes
-        var name = UUID.randomUUID().toString();
+        var index = UUID.randomUUID().toString();
         assertEquals(
                 OK,
                 FT.create(
                                 client,
-                                name,
+                                index,
                                 new FieldInfo[] {
                                     new FieldInfo("author_id", new TagField()),
                                     new FieldInfo("author_ids", new TagField()),
@@ -167,7 +168,7 @@ public class VectorSearchTests {
                         () ->
                                 FT.create(
                                                 client,
-                                                name,
+                                                index,
                                                 new FieldInfo[] {
                                                     new FieldInfo("title", new TextField()),
                                                     new FieldInfo("name", new TextField())
@@ -712,5 +713,116 @@ public class VectorSearchTests {
                                 gs("avg_rating"),
                                 9.)),
                 Set.of(aggreg));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    @SneakyThrows
+    public void ft_info() {
+        // TODO use FT.LIST when it is done
+        var indices = (Object[]) client.customCommand(new String[] {"FT._LIST"}).get().getSingleValue();
+
+        // check that we can get a response for all indices (no crashes on value conversion or so)
+        for (var idx : indices) {
+            FT.info(client, (String) idx).get();
+        }
+
+        var index = UUID.randomUUID().toString();
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {
+                                    new FieldInfo(
+                                            "$.vec", "VEC", VectorFieldHnsw.builder(DistanceMetric.COSINE, 42).build()),
+                                    new FieldInfo("$.name", new TextField()),
+                                },
+                                FTCreateOptions.builder()
+                                        .indexType(IndexType.JSON)
+                                        .prefixes(new String[] {"123"})
+                                        .build())
+                        .get());
+
+        var response = FT.info(client, index).get();
+        assertEquals(gs(index), response.get("index_name"));
+        assertEquals(gs("JSON"), response.get("key_type"));
+        assertArrayEquals(new GlideString[] {gs("123")}, (Object[]) response.get("key_prefixes"));
+        var fields = (Object[]) response.get("fields");
+        assertEquals(2, fields.length);
+        var f1 = (Map<GlideString, Object>) fields[1];
+        assertEquals(gs("$.vec"), f1.get(gs("identifier")));
+        assertEquals(gs("VECTOR"), f1.get(gs("type")));
+        assertEquals(gs("VEC"), f1.get(gs("field_name")));
+        var f1params = (Map<GlideString, Object>) f1.get(gs("vector_params"));
+        assertEquals(gs("COSINE"), f1params.get(gs("distance_metric")));
+        assertEquals(42L, f1params.get(gs("dimension")));
+
+        assertEquals(
+                Map.of(
+                        gs("identifier"),
+                        gs("$.name"),
+                        gs("type"),
+                        gs("TEXT"),
+                        gs("field_name"),
+                        gs("$.name"),
+                        gs("option"),
+                        gs("")),
+                fields[0]);
+
+        // querying a missing index
+        assertEquals(OK, FT.dropindex(client, index).get());
+        var exception = assertThrows(ExecutionException.class, () -> FT.info(client, index).get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(exception.getMessage().contains("Index not found"));
+    }
+
+    @SneakyThrows
+    @Test
+    public void ft_aliasadd_aliasdel_aliasupdate() {
+
+        var alias1 = "alias1";
+        var alias2 = "a2";
+        var indexName = "{" + UUID.randomUUID() + "-index}";
+
+        // create some indices
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                indexName,
+                                new FieldInfo[] {
+                                    new FieldInfo("vec", VectorFieldFlat.builder(DistanceMetric.L2, 2).build())
+                                })
+                        .get());
+
+        assertEquals(OK, FT.aliasadd(client, alias1, indexName).get());
+
+        // error with adding the same alias to the same index
+        var exception =
+                assertThrows(ExecutionException.class, () -> FT.aliasadd(client, alias1, indexName).get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(exception.getMessage().contains("Alias already exists"));
+
+        assertEquals(OK, FT.aliasupdate(client, alias2, indexName).get());
+        assertEquals(OK, FT.aliasdel(client, alias2).get());
+
+        // with GlideString:
+        assertEquals(OK, FT.aliasupdate(client, gs(alias1), gs(indexName)).get());
+        assertEquals(OK, FT.aliasdel(client, gs(alias1)).get());
+        assertEquals(OK, FT.aliasadd(client, gs(alias2), gs(indexName)).get());
+        assertEquals(OK, FT.aliasdel(client, gs(alias2)).get());
+
+        // exception with calling `aliasdel` on an alias that doesn't exist
+        exception = assertThrows(ExecutionException.class, () -> FT.aliasdel(client, alias2).get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(exception.getMessage().contains("Alias does not exist"));
+
+        // exception with calling `aliasadd` with a nonexisting index
+        exception =
+                assertThrows(
+                        ExecutionException.class, () -> FT.aliasadd(client, alias1, "nonexistent_index").get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(exception.getMessage().contains("Index does not exist"));
     }
 }
