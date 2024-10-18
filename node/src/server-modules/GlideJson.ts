@@ -57,14 +57,14 @@ function _executeCommand<Type>(
     client: GlideClient | GlideClusterClient,
     args: GlideString[],
     options?: (RouteOption & DecoderOption) | undefined,
-): Type {
+): Promise<Type> {
     if (client instanceof GlideClient) {
-        return (client as GlideClient).customCommand(args, options) as Type;
+        return (client as GlideClient).customCommand(args, options) as Promise<Type>;
     } else {
         return (client as GlideClusterClient).customCommand(
             args,
             options,
-        ) as Type;
+        ) as Promise<Type>;
     }
 }
 
@@ -110,7 +110,7 @@ export class GlideJson {
             args.push(options.conditionalChange);
         }
 
-        return _executeCommand<Promise<"OK" | null>>(client, args, options);
+        return _executeCommand<"OK" | null>(client, args, options);
     }
 
     /**
@@ -168,6 +168,6 @@ export class GlideJson {
             args.push(...optionArgs);
         }
 
-        return _executeCommand<Promise<ReturnTypeJson>>(client, args, options);
+        return _executeCommand<ReturnTypeJson>(client, args, options);
     }
 }
