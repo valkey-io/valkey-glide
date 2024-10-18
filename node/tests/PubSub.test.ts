@@ -68,18 +68,16 @@ describe("PubSub", () => {
             ? await ValkeyCluster.initFromExistingCluster(
                   false,
                   parseEndpoints(standaloneAddresses),
-                  false,
                   getServerVersion,
               )
-            : await ValkeyCluster.createCluster(false, false, 1, 1, getServerVersion);
+            : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
         cmeCluster = clusterAddresses
             ? await ValkeyCluster.initFromExistingCluster(
                   true,
                   parseEndpoints(clusterAddresses),
-                  false,
                   getServerVersion,
               )
-            : await ValkeyCluster.createCluster(true, false, 3, 1, getServerVersion);
+            : await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
     }, 40000);
     afterEach(async () => {
         await flushAndCloseClient(false, cmdCluster.getAddresses());

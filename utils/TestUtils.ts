@@ -37,31 +37,24 @@ function parseOutput(input: string): {
 
 export class ValkeyCluster {
     private addresses: [string, number][];
-    private useTLS: boolean;
-    private clusterMode: boolean;
     private clusterFolder: string | undefined;
     private version: string;
 
     private constructor(
         version: string,
         addresses: [string, number][],
-        clusterFolder?: string,
-        useTLS?: boolean,
-        clusterMode?: boolean,
+        clusterFolder?: string
     ) {
         this.addresses = addresses;
         this.clusterFolder = clusterFolder;
         this.version = version;
-        this.useTLS = useTLS || false;
-        this.clusterMode = clusterMode || false;
     }
 
     public static createCluster(
         cluster_mode: boolean,
-        useTLS: boolean,
         shardCount: number,
         replicaCount: number,
-        getVersionCallback: (addresses: [string, number][], clusterMode: boolean, useTLS: boolean) => Promise<string>,
+        getVersionCallback: (addresses: [string, number][], clusterMode: boolean) => Promise<string>,
         loadModule?: string[]
     ): Promise<ValkeyCluster> {
         return new Promise<ValkeyCluster>((resolve, reject) => {
@@ -93,7 +86,7 @@ export class ValkeyCluster {
                         const { clusterFolder, addresses } =
                             parseOutput(stdout);
                         resolve(
-                            getVersionCallback(addresses, cluster_mode, useTLS).then(
+                            getVersionCallback(addresses, cluster_mode).then(
                                 (ver) =>
                                     new ValkeyCluster(ver, addresses, clusterFolder)
                             )
@@ -107,10 +100,9 @@ export class ValkeyCluster {
     public static async initFromExistingCluster(
         cluster_mode: boolean,
         addresses: [string, number][],
-        useTLS: boolean,
-        getVersionCallback: (addresses: [string, number][], clusterMode: boolean, useTLS: boolean) => Promise<string>
+        getVersionCallback: (addresses: [string, number][], clusterMode: boolean) => Promise<string>
     ): Promise<ValkeyCluster> {
-        return getVersionCallback(addresses, cluster_mode, useTLS).then(
+        return getVersionCallback(addresses, cluster_mode).then(
             (ver) => new ValkeyCluster(ver, addresses, "")
         );
     }
