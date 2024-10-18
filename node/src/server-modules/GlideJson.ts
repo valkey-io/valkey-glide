@@ -50,6 +50,7 @@ function _jsonGetOptionsToArgs(options: JsonGetOptions): GlideString[] {
     return result;
 }
 
+/** Module for JSON commands. */
 export class GlideJson {
     /**
      * Sets the JSON value at the specified `path` stored at `key`.
@@ -95,12 +96,12 @@ export class GlideJson {
             return (client as GlideClient).customCommand(
                 args,
                 options,
-            ) as Promise<"OK">;
+            ) as Promise<"OK" | null>;
         } else {
             return (client as GlideClusterClient).customCommand(
                 args,
                 options,
-            ) as Promise<"OK">;
+            ) as Promise<"OK" | null>;
         }
     }
 

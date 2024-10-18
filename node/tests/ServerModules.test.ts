@@ -14,6 +14,7 @@ import {
     ConditionalChange,
     GlideClusterClient,
     GlideJson,
+    InfoOptions,
     JsonGetOptions,
     ProtocolVersion,
 } from "..";
@@ -22,6 +23,8 @@ import {
     flushAndCloseClient,
     getClientConfigurationOption,
     getServerVersion,
+    parseCommandLineArgs,
+    parseEndpoints,
 } from "./TestUtilities";
 
 const TIMEOUT = 50000;
