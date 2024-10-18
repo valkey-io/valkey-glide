@@ -146,8 +146,8 @@ public class FT {
     }
 
     /**
-     * <<<<<<< HEAD Uses the provided query expression to locate keys within an index. Once located,
-     * the count and/or content of indexed fields within those keys can be returned.
+     * Uses the provided query expression to locate keys within an index. Once located, the count
+     * and/or content of indexed fields within those keys can be returned.
      *
      * @param client The client to execute the command.
      * @param indexName The index name to search into.
