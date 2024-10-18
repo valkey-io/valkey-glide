@@ -112,7 +112,7 @@ describe("GlideFt", () => {
 
             expect(
                 GlideFt.create(client, index, fields, {dataType: DataType.Hash, prefixes})
-            ).toBe("OK");
+            ).toEqual("OK");
         },
     );
 });

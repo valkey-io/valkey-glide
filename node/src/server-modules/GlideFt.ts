@@ -27,12 +27,28 @@ export class GlideFt {
     ): Promise<"OK" | null> {
         const args: GlideString[] = ["FT.CREATE", indexName];
 
+        if (options) {
+            if ("dataType" in options) {
+                args.push("ON", options.dataType);
+            }
+
+            if ("prefixes" in options && options.prefixes) {
+                args.push(
+                    "PREFIX",
+                    options.prefixes.length.toString(),
+                    ...options.prefixes,
+                );
+            }
+        }
+
         schema.forEach((f) => {
             args.push(f.name)
 
             if (f.alias) {
                 args.push("AS", f.alias);
             }
+            
+            args.push(f.type);
 
             // TagField attributes
             if ("separator" in f && f.separator) {
@@ -85,19 +101,7 @@ export class GlideFt {
             }
         });
 
-        if (options) {
-            if ("dataType" in options) {
-                args.push("ON", options.dataType);
-            }
-
-            if ("prefixes" in options && options.prefixes) {
-                args.push(
-                    "PREFIX",
-                    options.prefixes.length.toString(),
-                    ...options.prefixes,
-                );
-            }
-        }
+        console.log("Args:", args);
 
         return _handleCustomCommand(client, args, {
             decoder: Decoder.String,

@@ -15,28 +15,6 @@ export enum DataType {
 }
 
 /**
- * All possible values for the data type of field identifier for the SCHEMA option.
- */
-export enum FieldType {
-    /**
-     * If the field contains any blob of data.
-     */
-    Text = "TEXT",
-    /**
-     * If the field contains a tag field.
-     */
-    Tag = "TAG",
-    /**
-     * If the field contains a number.
-     */
-    Numeric = "NUMERIC",
-    /**
-     * If the field is a vector field that supports vector search.
-     */
-    Vector = "VECTOR",
-}
-
-/**
  * Algorithm for vector type fields used for vector similarity search.
  */
 export enum VectorAlgorithm {
@@ -79,16 +57,23 @@ export enum VectorType {
 }
 
 /**
- * Class for defining text fields in a schema.
+ * If the field contains any blob of data.
  */
 export interface TextField {
+    /** Field identifier */
+    type: "TEXT";
     /** The name of the text field. */
     name: GlideString;
     /** An alias for the field. */
     alias?: GlideString;
 }
 
+/**
+ * If the field contains a tag field.
+ */
 export interface TagField {
+    /** Field identifier */
+    type: "TAG";
     /** The name of the text field. */
     name: GlideString;
     /** An alias for the field. */
@@ -98,13 +83,25 @@ export interface TagField {
     /** Preserve the original letter cases of tags. If set to False, characters are converted to lowercase by default. */
     caseSensitive?: boolean;
 }
+
+/**
+ * If the field contains a number.
+ */
 export interface NumericField {
+    /** Field identifier */
+    type: "NUMERIC";
     /** The name of the text field. */
     name: GlideString;
     /** An alias for the field. */
     alias?: GlideString;
 }
+
+/**
+ * If the field is a vector field that supports vector search.
+ */
 export interface VectorField {
+    /** Field identifier */
+    type: "VECTOR";
     /** The name of the text field. */
     name: GlideString;
     /** An alias for the field. */
