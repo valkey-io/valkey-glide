@@ -370,7 +370,16 @@ def ft_search_deep_compare_result(
     json_value1: dict,
     json_value2: dict,
 ):
+    """
+    Deep compare the keys and values in FT.SEARCH result array.
 
+    Args:
+        result (List[Union[int, Mapping[TEncodable, Mapping[TEncodable, TEncodable]]]]):
+        json_key1 (str): The first key in search result.
+        json_key2 (str): The second key in the search result.
+        json_value1 (dict): The fields map for first key in the search result.
+        json_value2 (dict): The fields map for second key in the search result.
+    """
     assert len(result) == 2
     assert result[0] == 2
     searchResultMap: Mapping[TEncodable, Mapping[TEncodable, TEncodable]] = cast(
@@ -402,6 +411,16 @@ def ft_search_deep_compare_result(
 
 
 def convert_bytes_to_string(field: Union[str, bytes]) -> str:
+    """
+    Convert Union[str, bytes] type variable to str.
+
+    Args:
+        field (Union[str, bytes]): Field to be converted to str type.
+
+    Returns:
+        str:
+            Field converted to str type.
+    """
     type_name_bytes = "bytes"
     fieldNameString = field
     if type(field).__name__ == type_name_bytes:
@@ -410,4 +429,14 @@ def convert_bytes_to_string(field: Union[str, bytes]) -> str:
 
 
 def convert_str_to_int(field: str) -> int:
+    """
+    Convert str type variable to int.
+
+    Args:
+        field (str): Field to be converted to int type.
+
+    Returns:
+        int:
+            Field converted to int type.
+    """
     return int(field)
