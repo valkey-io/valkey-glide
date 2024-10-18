@@ -264,7 +264,7 @@ public class JsonTests {
         assertEquals("OK", Json.set(client, key, "$", doc).get());
 
         // no path
-        res = Json.arrlen(client, "doc").get();
+        res = Json.arrlen(client, key).get();
         assertEquals(5L, res);
     }
 }
