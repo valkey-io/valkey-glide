@@ -59,7 +59,10 @@ function _executeCommand<Type>(
     options?: (RouteOption & DecoderOption) | undefined,
 ): Promise<Type> {
     if (client instanceof GlideClient) {
-        return (client as GlideClient).customCommand(args, options) as Promise<Type>;
+        return (client as GlideClient).customCommand(
+            args,
+            options,
+        ) as Promise<Type>;
     } else {
         return (client as GlideClusterClient).customCommand(
             args,
