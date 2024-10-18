@@ -29,6 +29,7 @@ describe("GlideJson", () => {
         cluster = await ValkeyCluster.initFromExistingCluster(
             true,
             parseEndpoints(clusterAddresses),
+            true,
             getServerVersion,
         );
     }, 20000);
@@ -44,7 +45,7 @@ describe("GlideJson", () => {
     }, TIMEOUT);
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "ServerModules check modules loaded",
+        "ServerModules check JSON module is loaded",
         async (protocol) => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
@@ -53,6 +54,47 @@ describe("GlideJson", () => {
                 sections: [InfoOptions.Modules],
                 route: "randomNode",
             });
+            expect(info).toContain("# json_core_metrics");
+            expect(info).toContain("# search_index_stats");
+        },
+    );
+});
+
+describe("GlideFt", () => {
+    const testsFailed = 0;
+    let cluster: ValkeyCluster;
+    let client: GlideClusterClient;
+    beforeAll(async () => {
+        const clusterAddresses = parseCommandLineArgs()["cluster-endpoints"];
+        cluster = await ValkeyCluster.initFromExistingCluster(
+            true,
+            parseEndpoints(clusterAddresses),
+            true,
+            getServerVersion,
+        );
+    }, 20000);
+
+    afterEach(async () => {
+        await flushAndCloseClient(true, cluster.getAddresses(), client);
+    });
+
+    afterAll(async () => {
+        if (testsFailed === 0) {
+            await cluster.close();
+        }
+    }, TIMEOUT);
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "ServerModules check Vector Search module is loaded",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const info = await client.info({
+                sections: [InfoOptions.Modules],
+                route: "randomNode",
+            });
+            console.log(info);
             expect(info).toContain("# json_core_metrics");
             expect(info).toContain("# search_index_stats");
         },
