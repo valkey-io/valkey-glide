@@ -397,6 +397,4 @@ def ft_search_deep_compare_result(
             fieldName2.encode(): str(json_value2.get(fieldName2)).encode(),
         },
     }
-    print(expectedResultMap)
-    assert True == False
     assert searchResultMap == expectedResultMap
