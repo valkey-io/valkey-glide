@@ -107,12 +107,16 @@ describe("GlideFt", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "",
+        "Ft.Create test_%p",
         async (protocol) => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            const fields: Field[] = [];
+            const textField: TextField = {name: "$title"};
+            const numberField: NumericField = {name: "$published_at"};
+            const textFieldCat: TextField = {name: "$category"};
+            const fields: Field[] = [textField, numberField, textFieldCat];
+
             const index = uuidv4();
             const prefixes = ["blog:post:"];
 

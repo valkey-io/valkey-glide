@@ -96,7 +96,7 @@ export interface TagField {
     /** Specify how text in the attribute is split into individual tags. Must be a single character. */
     separator?: GlideString;
     /** Preserve the original letter cases of tags. If set to False, characters are converted to lowercase by default. */
-    case_sensitive?: boolean;
+    caseSensitive?: boolean;
 }
 export interface NumericField {
     /** The name of the text field. */
@@ -124,13 +124,13 @@ export interface VectorFieldAttributes {
     /**
      * The distance metric used in vector type field. Can be one of [L2 | IP | COSINE].
      */
-    distance_metric: DistanceMetricType;
+    distanceMetric: DistanceMetricType;
     /** Vector type. The only supported type is FLOAT32. */
     type: VectorType;
     /**
      * Initial vector capacity in the index affecting memory allocation size of the index. Defaults to 1024.
      */
-    initial_cap?: number;
+    initialCap?: number;
 }
 export type VectorFieldAttributesFlat = VectorFieldAttributes;
 export type VectorFieldAttributesHnsw = {
@@ -141,11 +141,11 @@ export type VectorFieldAttributesHnsw = {
     /**
      * Controls the number of vectors examined during index construction. Default value is 200, Maximum value is 4096.
      */
-    ef_contruction?: number;
+    efContruction?: number;
     /**
      * Controls the number of vectors examined during query operations. Default value is 10, Maximum value is 4096.
      */
-    ef_runtime?: number;
+    efRuntime?: number;
 } & VectorFieldAttributes;
 
 export type Field = TextField | TagField | NumericField | VectorField;
