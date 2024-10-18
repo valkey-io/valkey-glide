@@ -64,7 +64,7 @@ describe("GlideJson", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "json.set and json.get tests",
+        "ServerModules json.set and json.get tests",
         async (protocol) => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
@@ -109,7 +109,7 @@ describe("GlideJson", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "json.set and json.get tests with multiple value",
+        "ServerModules json.set and json.get tests with multiple value",
         async (protocol) => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
@@ -146,7 +146,7 @@ describe("GlideJson", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "json.set conditional set",
+        "ServerModules json.set conditional set",
         async (protocol) => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
@@ -185,7 +185,7 @@ describe("GlideJson", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "json.get formatting",
+        "ServerModules json.get formatting",
         async (protocol) => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
