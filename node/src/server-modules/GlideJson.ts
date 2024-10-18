@@ -22,7 +22,7 @@ export interface JsonGetOptions {
     /** Sets a string that's put between a key and a value. */
     space?: GlideString;
     /** Optional, allowed to be present for legacy compatibility and has no other effect */
-    noescape?: GlideString;
+    noescape?: boolean;
 }
 
 /**
@@ -45,6 +45,10 @@ function _jsonGetOptionsToArgs(options: JsonGetOptions): GlideString[] {
 
     if (options.space !== undefined) {
         result.push("SPACE", options.space);
+    }
+
+    if (options.noescape !== undefined) {
+        result.push("NOESCAPE");
     }
 
     return result;
