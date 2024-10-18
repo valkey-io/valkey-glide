@@ -9,9 +9,8 @@ import {
     expect,
     it,
 } from "@jest/globals";
-import { DataType, Field } from "build-ts/src/server-modules/GlideFtOptions";
 import { v4 as uuidv4 } from "uuid";
-import { GlideClusterClient, GlideFt, InfoOptions, ProtocolVersion } from "..";
+import { DataType, Field, GlideClusterClient, GlideFt, InfoOptions, ProtocolVersion } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import {
     flushAndCloseClient,
