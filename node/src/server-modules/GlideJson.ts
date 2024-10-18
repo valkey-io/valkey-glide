@@ -5,7 +5,7 @@
 import { DecoderOption, GlideString } from "../BaseClient";
 import { ConditionalChange } from "../Commands";
 import { GlideClient } from "../GlideClient";
-import { GlideClusterClient } from "../GlideClusterClient";
+import { GlideClusterClient, RouteOption } from "../GlideClusterClient";
 
 export type ReturnTypeJson = GlideString | (GlideString | null)[];
 
@@ -50,6 +50,24 @@ function _jsonGetOptionsToArgs(options: JsonGetOptions): GlideString[] {
     return result;
 }
 
+/**
+ * @internal
+ */
+function _executeCommand<Type>(
+    client: GlideClient | GlideClusterClient,
+    args: GlideString[],
+    options?: (RouteOption & DecoderOption) | undefined,
+): Type {
+    if (client instanceof GlideClient) {
+        return (client as GlideClient).customCommand(args, options) as Type;
+    } else {
+        return (client as GlideClusterClient).customCommand(
+            args,
+            options,
+        ) as Type;
+    }
+}
+
 /** Module for JSON commands. */
 export class GlideJson {
     /**
@@ -75,8 +93,8 @@ export class GlideJson {
      * console.log(result); // 'OK' - Indicates successful setting of the value at path '$' in the key stored at `doc`.
      *
      * const jsonGetStr = await GlideJson.get(client, "doc", "$"); // Returns the value at path '$' in the JSON document stored at `doc` as JSON string.
-     * console.log(jsonGetStr); // b"[{\"a\":1.0,\"b\":2}]"
-     * console.log(JSON.stringify(jsonGetStr)); //  [{"a": 1.0, "b" :2}] # JSON object retrieved from the key `doc`
+     * console.log(jsonGetStr); // '[{"a":1.0,"b":2}]'
+     * console.log(JSON.stringify(jsonGetStr)); //  [{"a": 1.0, "b": 2}] # JSON object retrieved from the key `doc`
      * ```
      */
     static async set(
@@ -92,17 +110,7 @@ export class GlideJson {
             args.push(options.conditionalChange);
         }
 
-        if (client instanceof GlideClient) {
-            return (client as GlideClient).customCommand(
-                args,
-                options,
-            ) as Promise<"OK" | null>;
-        } else {
-            return (client as GlideClusterClient).customCommand(
-                args,
-                options,
-            ) as Promise<"OK" | null>;
-        }
+        return _executeCommand<Promise<"OK" | null>>(client, args, options);
     }
 
     /**
@@ -132,7 +140,7 @@ export class GlideJson {
      *
      * const jsonData = await client.jsonGet('doc', '$');
      * console.log(jsonData);
-     * // Output: "[{\"a\":1.0,\"b\":2}]" - Returns the value at path '$' in the JSON document stored at `doc`.
+     * // Output: '[{"a":1.0,"b":2}]' - Returns the value at path '$' in the JSON document stored at `doc`.
      *
      * const formattedJson = await client.jsonGet('doc', {
      *     ['$.a', '$.b']
@@ -160,16 +168,6 @@ export class GlideJson {
             args.push(...optionArgs);
         }
 
-        if (client instanceof GlideClient) {
-            return (client as GlideClient).customCommand(
-                args,
-                options,
-            ) as Promise<ReturnTypeJson>;
-        } else {
-            return (client as GlideClusterClient).customCommand(
-                args,
-                options,
-            ) as Promise<ReturnTypeJson>;
-        }
+        return _executeCommand<Promise<ReturnTypeJson>>(client, args, options);
     }
 }
