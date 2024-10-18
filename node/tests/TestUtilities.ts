@@ -381,6 +381,8 @@ export const getClientConfigurationOption = (
     protocol: ProtocolVersion,
     configOverrides?: Partial<BaseClientConfiguration>,
 ): BaseClientConfiguration => {
+    console.log("parseCommandLineArgs() = " + JSON.stringify(parseCommandLineArgs()));
+    console.log("tls = " + parseCommandLineArgs()["tls"]);
     return {
         addresses: addresses.map(([host, port]) => ({
             host,
