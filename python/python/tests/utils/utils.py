@@ -8,7 +8,6 @@ from glide.async_commands.core import InfoSection
 from glide.constants import (
     OK,
     TClusterResponse,
-    TEncodable,
     TFunctionListResponse,
     TFunctionStatsSingleNodeResponse,
     TResult,
@@ -361,40 +360,3 @@ def check_function_stats_response(
         b"LUA": {b"libraries_count": lib_count, b"functions_count": function_count}
     }
     assert expected == response.get(b"engines")
-
-
-def ft_search_deep_compare_result(
-    result: List[Union[int, Mapping[TEncodable, Mapping[TEncodable, TEncodable]]]],
-    json_key1: str,
-    json_key2: str,
-    json_value1: dict,
-    json_value2: dict,
-):
-    """
-    Deep compare the keys and values in FT.SEARCH result array.
-
-    Args:
-        result (List[Union[int, Mapping[TEncodable, Mapping[TEncodable, TEncodable]]]]):
-        json_key1 (str): The first key in search result.
-        json_key2 (str): The second key in the search result.
-        json_value1 (dict): The fields map for first key in the search result.
-        json_value2 (dict): The fields map for second key in the search result.
-    """
-    assert len(result) == 2
-    assert result[0] == 2
-    searchResultMap: Mapping[TEncodable, Mapping[TEncodable, TEncodable]] = cast(
-        Mapping[TEncodable, Mapping[TEncodable, TEncodable]], result[1]
-    )
-    fieldName1 = "a"
-    fieldName2 = "b"
-    expectedResultMap: Mapping[TEncodable, Mapping[TEncodable, TEncodable]] = {
-        json_key1.encode(): {
-            fieldName1.encode(): str(json_value1.get(fieldName1)).encode(),
-            fieldName2.encode(): str(json_value1.get(fieldName2)).encode(),
-        },
-        json_key2.encode(): {
-            fieldName1.encode(): str(json_value2.get(fieldName1)).encode(),
-            fieldName2.encode(): str(json_value2.get(fieldName2)).encode(),
-        },
-    }
-    assert searchResultMap == expectedResultMap

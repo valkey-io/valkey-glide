@@ -6,14 +6,14 @@ from glide.async_commands.server_modules.ft_options.ft_constants import FtSeachK
 from glide.constants import TEncodable
 
 
-class Limit:
+class FtSearchLimit:
     """
     This class represents the arguments for the LIMIT option of the FT.SEARCH command.
     """
 
     def __init__(self, offset: int, count: int):
         """
-        Initialize a new Limit instance.
+        Initialize a new FtSearchLimit instance.
 
         Args:
             offset (int): The number of keys to skip before returning the result for the FT.SEARCH command.
@@ -80,7 +80,7 @@ class FtSeachOptions:
         return_fields: Optional[List[ReturnField]] = None,
         timeout: Optional[int] = None,
         params: Optional[Mapping[TEncodable, TEncodable]] = None,
-        limit: Optional[Limit] = None,
+        limit: Optional[FtSearchLimit] = None,
         count: Optional[bool] = False,
     ):
         """
@@ -90,7 +90,7 @@ class FtSeachOptions:
             return_fields (Optional[List[ReturnField]]): The fields of a key that are returned by FT.SEARCH command. See `ReturnField`.
             timeout (Optional[int]): This value overrides the timeout parameter of the module. The unit for the timout is in milliseconds.
             params (Optional[Mapping[TEncodable, TEncodable]]): Param key/value pairs that can be referenced from within the query expression.
-            limit (Optional[Limit]): This option provides pagination capability. Only the keys that satisfy the offset and count values are returned. See `Limit`.
+            limit (Optional[FtSearchLimit]): This option provides pagination capability. Only the keys that satisfy the offset and count values are returned. See `FtSearchLimit`.
             count (Optional[bool]): This flag option suppresses returning the contents of keys. Only the number of keys is returned.
         """
         self.return_fields = return_fields

@@ -3,7 +3,7 @@
 import json
 import time
 import uuid
-from typing import List
+from typing import List, Mapping, Union, cast
 
 import pytest
 from glide.async_commands.server_modules import ft
@@ -20,7 +20,6 @@ from glide.async_commands.server_modules.ft_options.ft_search_options import (
 from glide.config import ProtocolVersion
 from glide.constants import OK, TEncodable
 from glide.glide_client import GlideClusterClient
-from tests.utils.utils import ft_search_deep_compare_result
 
 
 @pytest.mark.asyncio
@@ -79,12 +78,15 @@ class TestFtSearch:
             ),
         )
         # Check if we get the expected result from ft.search for string inputs
-        ft_search_deep_compare_result(
+        TestFtSearch._ft_search_deep_compare_result(
+            self,
             result=result1,
             json_key1=json_key1,
             json_key2=json_key2,
             json_value1=json_value1,
             json_value2=json_value2,
+            fieldName1="a",
+            fieldName2="b",
         )
 
         # Search the index for byte inputs
@@ -101,10 +103,50 @@ class TestFtSearch:
         )
 
         # Check if we get the expected result from ft.search from byte inputs
-        ft_search_deep_compare_result(
+        TestFtSearch._ft_search_deep_compare_result(
+            self,
             result=result2,
             json_key1=json_key1,
             json_key2=json_key2,
             json_value1=json_value1,
             json_value2=json_value2,
+            fieldName1="a",
+            fieldName2="b",
         )
+
+    def _ft_search_deep_compare_result(
+        self,
+        result: List[Union[int, Mapping[TEncodable, Mapping[TEncodable, TEncodable]]]],
+        json_key1: str,
+        json_key2: str,
+        json_value1: dict,
+        json_value2: dict,
+        fieldName1: str,
+        fieldName2: str,
+    ):
+        """
+        Deep compare the keys and values in FT.SEARCH result array.
+
+        Args:
+            result (List[Union[int, Mapping[TEncodable, Mapping[TEncodable, TEncodable]]]]):
+            json_key1 (str): The first key in search result.
+            json_key2 (str): The second key in the search result.
+            json_value1 (dict): The fields map for first key in the search result.
+            json_value2 (dict): The fields map for second key in the search result.
+        """
+        assert len(result) == 2
+        assert result[0] == 2
+        searchResultMap: Mapping[TEncodable, Mapping[TEncodable, TEncodable]] = cast(
+            Mapping[TEncodable, Mapping[TEncodable, TEncodable]], result[1]
+        )
+        expectedResultMap: Mapping[TEncodable, Mapping[TEncodable, TEncodable]] = {
+            json_key1.encode(): {
+                fieldName1.encode(): str(json_value1.get(fieldName1)).encode(),
+                fieldName2.encode(): str(json_value1.get(fieldName2)).encode(),
+            },
+            json_key2.encode(): {
+                fieldName1.encode(): str(json_value2.get(fieldName1)).encode(),
+                fieldName2.encode(): str(json_value2.get(fieldName2)).encode(),
+            },
+        }
+        assert searchResultMap == expectedResultMap
