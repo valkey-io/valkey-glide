@@ -387,45 +387,16 @@ def ft_search_deep_compare_result(
     )
     fieldName1 = "a"
     fieldName2 = "b"
-    assert searchResultMap == {
+    expectedResultMap: Mapping[TEncodable, Mapping[TEncodable, TEncodable]] = {
         json_key1.encode(): {
             fieldName1.encode(): str(json_value1.get(fieldName1)).encode(),
-            fieldName2.encode(): str(json_value2.get(fieldName2)).encode(),
+            fieldName2.encode(): str(json_value1.get(fieldName2)).encode(),
         },
         json_key2.encode(): {
-            fieldName1.encode(): str(json_value1.get(fieldName1)).encode(),
+            fieldName1.encode(): str(json_value2.get(fieldName1)).encode(),
             fieldName2.encode(): str(json_value2.get(fieldName2)).encode(),
         },
     }
-
-
-def convert_bytes_to_string(field: Union[str, bytes]) -> str:
-    """
-    Convert Union[str, bytes] type variable to str.
-
-    Args:
-        field (Union[str, bytes]): Field to be converted to str type.
-
-    Returns:
-        str:
-            Field converted to str type.
-    """
-    type_name_bytes = "bytes"
-    fieldNameString = field
-    if type(field).__name__ == type_name_bytes:
-        fieldNameString = cast(bytes, field).decode(encoding="utf-8")
-    return str(fieldNameString)
-
-
-def convert_str_to_int(field: str) -> int:
-    """
-    Convert str type variable to int.
-
-    Args:
-        field (str): Field to be converted to int type.
-
-    Returns:
-        int:
-            Field converted to int type.
-    """
-    return int(field)
+    print(expectedResultMap)
+    assert True == False
+    assert searchResultMap == expectedResultMap
