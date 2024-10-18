@@ -122,12 +122,12 @@ export class GlideJson {
      *   - If one path is given:
      *     - For JSONPath (path starts with `$`):
      *       - Returns a stringified JSON list of bytes replies for every possible path,
-     *         or a byte string representation of an empty array, if path doesn't exists.
-     *         If `key` doesn't exist, returns None.
+     *         or a byte string representation of an empty array, if path doesn't exist.
+     *         If `key` doesn't exist, returns null.
      *     - For legacy path (path doesn't start with `$`):
      *         Returns a byte string representation of the value in `path`.
      *         If `path` doesn't exist, an error is raised.
-     *         If `key` doesn't exist, returns None.
+     *         If `key` doesn't exist, returns null.
      *  - If multiple paths are given:
      *         Returns a stringified JSON object in bytes, in which each path is a key, and it's corresponding value, is the value as if the path was executed in the command as a single path.
      * In case of multiple paths, and `paths` are a mix of both JSONPath and legacy path, the command behaves as if all are JSONPath paths.
