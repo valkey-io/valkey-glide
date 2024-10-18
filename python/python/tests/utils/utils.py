@@ -6,7 +6,9 @@ from typing import Any, Dict, List, Mapping, Optional, Set, TypeVar, Union, cast
 import pytest
 from glide.async_commands.core import InfoSection
 from glide.constants import (
+    OK,
     TClusterResponse,
+    TEncodable,
     TFunctionListResponse,
     TFunctionStatsSingleNodeResponse,
     TResult,
@@ -359,3 +361,53 @@ def check_function_stats_response(
         b"LUA": {b"libraries_count": lib_count, b"functions_count": function_count}
     }
     assert expected == response.get(b"engines")
+
+
+def ft_search_deep_compare_result(
+    result: List[Union[int, Mapping[TEncodable, Mapping[TEncodable, TEncodable]]]],
+    json_key1: str,
+    json_key2: str,
+    json_value1: dict,
+    json_value2: dict,
+):
+
+    assert len(result) == 2
+    assert result[0] == 2
+    searchResultMap: Mapping[TEncodable, Mapping[TEncodable, TEncodable]] = cast(
+        Mapping[TEncodable, Mapping[TEncodable, TEncodable]], result[1]
+    )
+    for key, fieldsMap in searchResultMap.items():
+        keyString = convert_bytes_to_string(key)
+        assert keyString == json_key1 or keyString == json_key2
+        if keyString == json_key1:
+            for fieldName, fieldValue in fieldsMap.items():
+                fieldNameString = convert_bytes_to_string(fieldName)
+                fieldValueString = convert_bytes_to_string(fieldValue)
+                fieldValueInt = convert_str_to_int(fieldValueString)
+
+                assert fieldNameString == "a" or fieldNameString == "b"
+                assert fieldValueInt == json_value1.get(
+                    "a"
+                ) or fieldValueInt == json_value1.get("b")
+
+        if keyString == json_key2:
+            for fieldName, fieldValue in fieldsMap.items():
+                fieldNameString = convert_bytes_to_string(fieldName)
+                fieldValueString = convert_bytes_to_string(fieldValue)
+                fieldValueInt = convert_str_to_int(fieldValueString)
+                assert fieldNameString == "a" or fieldNameString == "b"
+                assert fieldValueInt == json_value2.get(
+                    "a"
+                ) or fieldValueInt == json_value2.get("b")
+
+
+def convert_bytes_to_string(field: Union[str, bytes]) -> str:
+    type_name_bytes = "bytes"
+    fieldNameString = field
+    if type(field).__name__ == type_name_bytes:
+        fieldNameString = cast(bytes, field).decode(encoding="utf-8")
+    return str(fieldNameString)
+
+
+def convert_str_to_int(field: str) -> int:
+    return int(field)
