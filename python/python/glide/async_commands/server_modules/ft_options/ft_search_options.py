@@ -120,6 +120,10 @@ class FtSeachOptions:
             args.append(str(self.timeout))
         if self.params:
             args.append(FtSeachKeywords.PARAMS)
+            args.append(str(len(self.params)))
+            for name, value in self.params.items():
+                args.append(name)
+                args.append(value)
         if self.limit:
             args.extend(self.limit.toArgs())
         if self.count:

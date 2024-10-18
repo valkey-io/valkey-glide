@@ -88,25 +88,25 @@ async def search(
     options: Optional[FtSeachOptions],
 ) -> List[Union[int, Mapping[TEncodable, Mapping[TEncodable, TEncodable]]]]:
     """
-    Uses the provided query expression to locate keys within an index.
+        Uses the provided query expression to locate keys within an index.
 
-    Args:
-        client (TGlideClient): The client to execute the command.
-        indexName (TEncodable): The index name for the index to be searched.
-        query (TEncodable): The query expression to use for the search on the index.
-        options (Optional[FtSeachOptions]): Optional arguments for the FT.SEARCH command. See `FtSearchOptions`.
+        Args:
+            client (TGlideClient): The client to execute the command.
+            indexName (TEncodable): The index name for the index to be searched.
+            query (TEncodable): The query expression to use for the search on the index.
+            options (Optional[FtSeachOptions]): Optional arguments for the FT.SEARCH command. See `FtSearchOptions`.
 
-    Returns:
-        List[Union[int, Mapping[TEncodable, Mapping[TEncodable]]]]: A list containing the search result. The first element is the total number of keys matching the query. The second element is a map of key name and field/value pair map.
+        Returns:
+            List[Union[int, Mapping[TEncodable, Mapping[TEncodable]]]]: A list containing the search result. The first element is the total number of keys matching the query. The second element is a map of key name and field/value pair map.
 
-    Examples:
-        For the following example to work the following must already exist:
-        - An index named "idx", with fields having identifiers as "a" and "b" and prefix as "{json:}"
-        - A key named {json:}1 with value {"a":1, "b":2}
+        Examples:
+            For the following example to work the following must already exist:
+            - An index named "idx", with fields having identifiers as "a" and "b" and prefix as "{json:}"
+            - A key named {json:}1 with value {"a":1, "b":2}
 
-        >>> from glide.async_commands.server_modules import ft
-        >>> result = await ft.search(glide_client, "idx", "*", options=FtSeachOptions(return_fields=[ReturnField(field_identifier="a"),ReturnField(field_identifier="b")]))
-            [1, { b'{json:}1': {b'a': b'1', b'b': b'2'}}]  #The first element, 1 is the number of keys returned in the search result. The second element is field/value pair map for the index.
+            >>> from glide.async_commands.server_modules import ft
+    >>> result = await ft.search(glide_client, "idx", "*", options=FtSeachOptions(return_fields=[ReturnField(field_identifier="first"), ReturnField(field_identifier="second")]))
+            [1, { b'json:1': { b'first': b'42', b'second': b'33' } }]  # The first element, 1 is the number of keys returned in the search result. The second element is a map of data queried per key.
     """
     args: List[TEncodable] = [CommandNames.FT_SEARCH, indexName, query]
     if options:
