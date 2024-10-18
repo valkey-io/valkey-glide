@@ -2,7 +2,7 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { DecoderOption, GlideString } from "../BaseClient";
+import { BaseClient, DecoderOption, GlideString } from "../BaseClient";
 import { ConditionalChange } from "../Commands";
 import { GlideClient } from "../GlideClient";
 import { GlideClusterClient, RouteOption } from "../GlideClusterClient";
@@ -53,21 +53,21 @@ function _jsonGetOptionsToArgs(options: JsonGetOptions): GlideString[] {
 /**
  * @internal
  */
-function _executeCommand<Type>(
-    client: GlideClient | GlideClusterClient,
+function _executeCommand<T>(
+    client: BaseClient,
     args: GlideString[],
-    options?: (RouteOption & DecoderOption) | undefined,
-): Promise<Type> {
+    options?: RouteOption & DecoderOption,
+): Promise<T> {
     if (client instanceof GlideClient) {
         return (client as GlideClient).customCommand(
             args,
             options,
-        ) as Promise<Type>;
+        ) as Promise<T>;
     } else {
         return (client as GlideClusterClient).customCommand(
             args,
             options,
-        ) as Promise<Type>;
+        ) as Promise<T>;
     }
 }
 
@@ -101,7 +101,7 @@ export class GlideJson {
      * ```
      */
     static async set(
-        client: GlideClient | GlideClusterClient,
+        client: BaseClient,
         key: GlideString,
         path: GlideString,
         value: GlideString,
