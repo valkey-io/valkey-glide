@@ -2,7 +2,10 @@ name: Rust tests
 
 on:
     push:
-        branches: [main]
+        branches:
+            - main
+            - release-*
+            - v*
         paths:
             - logger_core/**
             - glide-core/**
