@@ -2,6 +2,7 @@
 package glide.api.commands.servermodules;
 
 import static glide.api.models.GlideString.gs;
+import static glide.utils.ArrayTransformUtils.concatenateArrays;
 
 import glide.api.BaseClient;
 import glide.api.GlideClient;
@@ -12,16 +13,17 @@ import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.json.JsonGetOptions;
 import glide.api.models.commands.json.JsonGetOptionsBinary;
 import glide.utils.ArgsBuilder;
-import glide.utils.ArrayTransformUtils;
 import java.util.concurrent.CompletableFuture;
 import lombok.NonNull;
 
 /** Module for JSON commands. */
 public class Json {
 
-    public static final String JSON_PREFIX = "JSON.";
+    private static final String JSON_PREFIX = "JSON.";
     public static final String JSON_SET = JSON_PREFIX + "SET";
     public static final String JSON_GET = JSON_PREFIX + "GET";
+    private static final String JSON_ARRINSERT = JSON_PREFIX + "ARRINSERT";
+    private static final String JSON_ARRLEN = JSON_PREFIX + "ARRLEN";
 
     private Json() {}
 
@@ -38,7 +40,7 @@ public class Json {
      * @return A simple <code>"OK"</code> response if the value is successfully set.
      * @example
      *     <pre>{@code
-     * String value = Json.set(client, "doc", , ".", "{'a': 1.0, 'b': 2}").get();
+     * String value = Json.set(client, "doc", ".", "{'a': 1.0, 'b': 2}").get();
      * assert value.equals("OK");
      * }</pre>
      */
@@ -63,7 +65,7 @@ public class Json {
      * @return A simple <code>"OK"</code> response if the value is successfully set.
      * @example
      *     <pre>{@code
-     * String value = client.Json.set(client, gs("doc"), , gs("."), gs("{'a': 1.0, 'b': 2}")).get();
+     * String value = Json.set(client, gs("doc"), gs("."), gs("{'a': 1.0, 'b': 2}")).get();
      * assert value.equals("OK");
      * }</pre>
      */
@@ -90,7 +92,7 @@ public class Json {
      *     set because of <code>setCondition</code>, returns <code>null</code>.
      * @example
      *     <pre>{@code
-     * String value = client.Json.set(client, "doc", , ".", "{'a': 1.0, 'b': 2}", ConditionalChange.ONLY_IF_DOES_NOT_EXIST).get();
+     * String value = Json.set(client, "doc", ".", "{'a': 1.0, 'b': 2}", ConditionalChange.ONLY_IF_DOES_NOT_EXIST).get();
      * assert value.equals("OK");
      * }</pre>
      */
@@ -119,7 +121,7 @@ public class Json {
      *     set because of <code>setCondition</code>, returns <code>null</code>.
      * @example
      *     <pre>{@code
-     * String value = client.Json.set(client, gs("doc"), , gs("."), gs("{'a': 1.0, 'b': 2}"), ConditionalChange.ONLY_IF_DOES_NOT_EXIST).get();
+     * String value = Json.set(client, gs("doc"), gs("."), gs("{'a': 1.0, 'b': 2}"), ConditionalChange.ONLY_IF_DOES_NOT_EXIST).get();
      * assert value.equals("OK");
      * }</pre>
      */
@@ -143,7 +145,7 @@ public class Json {
      *     exist, returns <code>null</code>.
      * @example
      *     <pre>{@code
-     * String value = client.Json.get(client, "doc").get();
+     * String value = Json.get(client, "doc").get();
      * assert value.equals("{'a': 1.0, 'b': 2}");
      * }</pre>
      */
@@ -160,7 +162,7 @@ public class Json {
      *     exist, returns <code>null</code>.
      * @example
      *     <pre>{@code
-     * GlideString value = client.Json.get(client, gs("doc")).get();
+     * GlideString value = Json.get(client, gs("doc")).get();
      * assert value.equals(gs("{'a': 1.0, 'b': 2}"));
      * }</pre>
      */
@@ -195,16 +197,15 @@ public class Json {
      *     path, the command behaves as if all are JSONPath paths.
      * @example
      *     <pre>{@code
-     * String value = client.Json.get(client, "doc", new String[] {"$"}).get();
+     * String value = Json.get(client, "doc", new String[] {"$"}).get();
      * assert value.equals("{'a': 1.0, 'b': 2}");
-     * String value = client.Json.get(client, "doc", new String[] {"$.a", "$.b"}).get();
+     * String value = Json.get(client, "doc", new String[] {"$.a", "$.b"}).get();
      * assert value.equals("{\"$.a\": [1.0], \"$.b\": [2]}");
      * }</pre>
      */
     public static CompletableFuture<String> get(
             @NonNull BaseClient client, @NonNull String key, @NonNull String[] paths) {
-        return executeCommand(
-                client, ArrayTransformUtils.concatenateArrays(new String[] {JSON_GET, key}, paths));
+        return executeCommand(client, concatenateArrays(new String[] {JSON_GET, key}, paths));
     }
 
     /**
@@ -233,17 +234,15 @@ public class Json {
      *     path, the command behaves as if all are JSONPath paths.
      * @example
      *     <pre>{@code
-     * GlideString value = client.Json.get(client, gs("doc"), new GlideString[] {gs("$")}).get();
+     * GlideString value = Json.get(client, gs("doc"), new GlideString[] {gs("$")}).get();
      * assert value.equals(gs("{'a': 1.0, 'b': 2}"));
-     * GlideString value = client.Json.get(client, gs("doc"), new GlideString[] {gs("$.a"), gs("$.b")}).get();
+     * GlideString value = Json.get(client, gs("doc"), new GlideString[] {gs("$.a"), gs("$.b")}).get();
      * assert value.equals(gs("{\"$.a\": [1.0], \"$.b\": [2]}"));
      * }</pre>
      */
     public static CompletableFuture<GlideString> get(
             @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString[] paths) {
-        return executeCommand(
-                client,
-                ArrayTransformUtils.concatenateArrays(new GlideString[] {gs(JSON_GET), key}, paths));
+        return executeCommand(client, concatenateArrays(new GlideString[] {gs(JSON_GET), key}, paths));
     }
 
     /**
@@ -262,15 +261,14 @@ public class Json {
      *                              .space(" ")
      *                              .newline("\n")
      *                              .build();
-     * String value = client.Json.get(client, "doc", "$", options).get();
+     * String value = Json.get(client, "doc", "$", options).get();
      * assert value.equals("{\n \"a\": \n  1.0\n ,\n \"b\": \n  2\n }");
      * }</pre>
      */
     public static CompletableFuture<String> get(
             @NonNull BaseClient client, @NonNull String key, @NonNull JsonGetOptions options) {
         return executeCommand(
-                client,
-                ArrayTransformUtils.concatenateArrays(new String[] {JSON_GET, key}, options.toArgs()));
+                client, concatenateArrays(new String[] {JSON_GET, key}, options.toArgs()));
     }
 
     /**
@@ -289,7 +287,7 @@ public class Json {
      *                              .space(" ")
      *                              .newline("\n")
      *                              .build();
-     * GlideString value = client.Json.get(client, gs("doc"), gs("$"), options).get();
+     * GlideString value = Json.get(client, gs("doc"), gs("$"), options).get();
      * assert value.equals(gs("{\n \"a\": \n  1.0\n ,\n \"b\": \n  2\n }"));
      * }</pre>
      */
@@ -332,7 +330,7 @@ public class Json {
      *                              .space(" ")
      *                              .newline("\n")
      *                              .build();
-     * String value = client.Json.get(client, "doc", new String[] {"$.a", "$.b"}, options).get();
+     * String value = Json.get(client, "doc", new String[] {"$.a", "$.b"}, options).get();
      * assert value.equals("{\n \"$.a\": [\n  1.0\n ],\n \"$.b\": [\n  2\n ]\n}");
      * }</pre>
      */
@@ -342,9 +340,7 @@ public class Json {
             @NonNull String[] paths,
             @NonNull JsonGetOptions options) {
         return executeCommand(
-                client,
-                ArrayTransformUtils.concatenateArrays(
-                        new String[] {JSON_GET, key}, options.toArgs(), paths));
+                client, concatenateArrays(new String[] {JSON_GET, key}, options.toArgs(), paths));
     }
 
     /**
@@ -380,7 +376,7 @@ public class Json {
      *                              .space(" ")
      *                              .newline("\n")
      *                              .build();
-     * GlideString value = client.Json.get(client, gs("doc"), new GlideString[] {gs("$.a"), gs("$.b")}, options).get();
+     * GlideString value = Json.get(client, gs("doc"), new GlideString[] {gs("$.a"), gs("$.b")}, options).get();
      * assert value.equals(gs("{\n \"$.a\": [\n  1.0\n ],\n \"$.b\": [\n  2\n ]\n}"));
      * }</pre>
      */
@@ -392,6 +388,237 @@ public class Json {
         return executeCommand(
                 client,
                 new ArgsBuilder().add(gs(JSON_GET)).add(key).add(options.toArgs()).add(paths).toArray());
+    }
+
+    /**
+     * Inserts one or more values into the array at the specified <code>path</code> within the JSON
+     * document stored at <code>key</code>, before the given <code>index</code>.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @param index The array index before which values are inserted.
+     * @param values The JSON values to be inserted into the array, in JSON formatted bytes or str.
+     *     JSON string values must be wrapped with quotes. For example, to append <code>"foo"</code>,
+     *     pass <code>"\"foo\""</code>.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
+     *           Returns an <code>Object[]</code> with a list of integers for every possible path,
+     *           indicating the new length of the array, or <code>null</code> for JSON values matching
+     *           the path that are not an array. If <code>path</code> does not exist, an empty array
+     *           will be returned.
+     *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
+     *           Returns an integer representing the new length of the array. If multiple paths are
+     *           matched, returns the length of the first modified array. If <code>path</code> doesn't
+     *           exist or the value at <code>path</code> is not an array, an error is raised.
+     *     </ul>
+     *     If the index is out of bounds or <code>key</code> doesn't exist, an error is raised.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "[[], [\"a\"], [\"a\", \"b\"]]").get();
+     * var newValues = new String[] { "\"c\"", "{\"key\": \"value\"}", "true", "null", "[\"bar\"]" };
+     * var res = Json.arrinsert(client, "doc", "$[*]", 0, newValues).get();
+     * assert Arrays.equals((Object[]) res, new int[] { 5, 6, 7 }); // New lengths of arrays after insertion
+     * var doc = Json.get(client, "doc").get();
+     * assert doc.equals("[[\"c\", {\"key\": \"value\"}, true, null, [\"bar\"]], [\"c\", {\"key\": \"value\"}, "
+     *     + "true, null, [\"bar\"], \"a\"], [\"c\", {\"key\": \"value\"}, true, null, [\"bar\"], \"a\", \"b\"]]");
+     *
+     * Json.set(client, "doc", "$", "[[], [\"a\"], [\"a\", \"b\"]]").get();
+     * res = Json.arrinsert(client, "doc", ".", 0, new String[] { "\"c\"" }).get();
+     * assert res == 4 // New length of the root array after insertion
+     * doc = Json.get(client, "doc").get();
+     * assert doc.equals("[\"c\", [], [\"a\"], [\"a\", \"b\"]]");
+     * }</pre>
+     */
+    public static CompletableFuture<Object> arrinsert(
+            @NonNull BaseClient client,
+            @NonNull String key,
+            @NonNull String path,
+            int index,
+            @NonNull String[] values) {
+        return executeCommand(
+                client,
+                concatenateArrays(
+                        new String[] {JSON_ARRINSERT, key, path, Integer.toString(index)}, values));
+    }
+
+    /**
+     * Inserts one or more values into the array at the specified <code>path</code> within the JSON
+     * document stored at <code>key</code>, before the given <code>index</code>.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @param index The array index before which values are inserted.
+     * @param values The JSON values to be inserted into the array, in JSON formatted bytes or str.
+     *     JSON string values must be wrapped with quotes. For example, to append <code>"foo"</code>,
+     *     pass <code>"\"foo\""</code>.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
+     *           Returns an <code>Object[]</code> with a list of integers for every possible path,
+     *           indicating the new length of the array, or <code>null</code> for JSON values matching
+     *           the path that are not an array. If <code>path</code> does not exist, an empty array
+     *           will be returned.
+     *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
+     *           Returns an integer representing the new length of the array. If multiple paths are
+     *           matched, returns the length of the first modified array. If <code>path</code> doesn't
+     *           exist or the value at <code>path</code> is not an array, an error is raised.
+     *     </ul>
+     *     If the index is out of bounds or <code>key</code> doesn't exist, an error is raised.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "[[], [\"a\"], [\"a\", \"b\"]]").get();
+     * var newValues = new GlideString[] { gs("\"c\""), gs("{\"key\": \"value\"}"), gs("true"), gs("null"), gs("[\"bar\"]") };
+     * var res = Json.arrinsert(client, gs("doc"), gs("$[*]"), 0, newValues).get();
+     * assert Arrays.equals((Object[]) res, new int[] { 5, 6, 7 }); // New lengths of arrays after insertion
+     * var doc = Json.get(client, "doc").get();
+     * assert doc.equals("[[\"c\", {\"key\": \"value\"}, true, null, [\"bar\"]], [\"c\", {\"key\": \"value\"}, "
+     *     + "true, null, [\"bar\"], \"a\"], [\"c\", {\"key\": \"value\"}, true, null, [\"bar\"], \"a\", \"b\"]]");
+     *
+     * Json.set(client, "doc", "$", "[[], [\"a\"], [\"a\", \"b\"]]").get();
+     * res = Json.arrinsert(client, gs("doc"), gs("."), 0, new GlideString[] { gs("\"c\"") }).get();
+     * assert res == 4 // New length of the root array after insertion
+     * doc = Json.get(client, "doc").get();
+     * assert doc.equals("[\"c\", [], [\"a\"], [\"a\", \"b\"]]");
+     * }</pre>
+     */
+    public static CompletableFuture<Object> arrinsert(
+            @NonNull BaseClient client,
+            @NonNull GlideString key,
+            @NonNull GlideString path,
+            int index,
+            @NonNull GlideString[] values) {
+        return executeCommand(
+                client,
+                new ArgsBuilder()
+                        .add(gs(JSON_ARRINSERT))
+                        .add(key)
+                        .add(path)
+                        .add(Integer.toString(index))
+                        .add(values)
+                        .toArray());
+    }
+
+    /**
+     * Retrieves the length of the array at the specified <code>path</code> within the JSON document
+     * stored at <code>key</code>.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
+     *           Returns an <code>Object[]</code> with a list of integers for every possible path,
+     *           indicating the length of the array, or <code>null</code> for JSON values matching the
+     *           path that are not an array. If <code>path</code> does not exist, an empty array will
+     *           be returned.
+     *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
+     *           Returns an integer representing the length of the array. If multiple paths are
+     *           matched, returns the length of the first matching array. If <code>path</code> doesn't
+     *           exist or the value at <code>path</code> is not an array, an error is raised.
+     *     </ul>
+     *     If <code>key</code> doesn't exist, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "{\"a\": [1, 2, 3], \"b\": {\"a\": [1, 2], \"c\": {\"a\": 42}}}").get();
+     * var res = Json.arrlen(client, "doc", "$").get();
+     * assert Arrays.equals((Object[]) res, new Object[] { null }); // No array at the root path.
+     * res = Json.arrlen(client, "doc", "$.a").get();
+     * assert Arrays.equals((Object[]) res, new Object[] { 3 }); // Retrieves the length of the array at path $.a.
+     * res = Json.arrlen(client, "doc", "$..a").get();
+     * assert Arrays.equals((Object[]) res, new Object[] { 3, 2, null }); // Retrieves lengths of arrays found at all levels of the path `..a`.
+     * res = Json.arrlen(client, "doc", "..a").get();
+     * assert res == 3; // Legacy path retrieves the first array match at path `..a`.
+     * }</pre>
+     */
+    public static CompletableFuture<Object> arrlen(
+            @NonNull BaseClient client, @NonNull String key, @NonNull String path) {
+        return executeCommand(client, new String[] {JSON_ARRLEN, key, path});
+    }
+
+    /**
+     * Retrieves the length of the array at the specified <code>path</code> within the JSON document
+     * stored at <code>key</code>.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
+     *           Returns an <code>Object[]</code> with a list of integers for every possible path,
+     *           indicating the length of the array, or <code>null</code> for JSON values matching the
+     *           path that are not an array. If <code>path</code> does not exist, an empty array will
+     *           be returned.
+     *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
+     *           Returns an integer representing the length of the array. If multiple paths are
+     *           matched, returns the length of the first matching array. If <code>path</code> doesn't
+     *           exist or the value at <code>path</code> is not an array, an error is raised.
+     *     </ul>
+     *     If <code>key</code> doesn't exist, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "{\"a\": [1, 2, 3], \"b\": {\"a\": [1, 2], \"c\": {\"a\": 42}}}").get();
+     * var res = Json.arrlen(client, gs("doc"), gs("$")).get();
+     * assert Arrays.equals((Object[]) res, new Object[] { null }); // No array at the root path.
+     * res = Json.arrlen(client, gs("doc"), gs("$.a")).get();
+     * assert Arrays.equals((Object[]) res, new Object[] { 3 }); // Retrieves the length of the array at path $.a.
+     * res = Json.arrlen(client, gs("doc"), gs("$..a")).get();
+     * assert Arrays.equals((Object[]) res, new Object[] { 3, 2, null }); // Retrieves lengths of arrays found at all levels of the path `..a`.
+     * res = Json.arrlen(client, gs("doc"), gs("..a")).get();
+     * assert res == 3; // Legacy path retrieves the first array match at path `..a`.
+     * }</pre>
+     */
+    public static CompletableFuture<Object> arrlen(
+            @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString path) {
+        return executeCommand(client, new GlideString[] {gs(JSON_ARRLEN), key, path});
+    }
+
+    /**
+     * Retrieves the length of the array at the root of the JSON document stored at <code>key</code>.
+     * <br>
+     * Equivalent to {@link #arrlen(BaseClient, String, String)} with <code>path</code> set to <code>
+     * "."</code>.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @return The array length stored at the root of the document. If document root is not an array,
+     *     an error is raised.<br>
+     *     If <code>key</code> doesn't exist, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "[1, 2, true, null, \"tree\"]").get();
+     * var res = Json.arrlen(client, "doc").get();
+     * assert res == 5;
+     * }</pre>
+     */
+    public static CompletableFuture<Long> arrlen(@NonNull BaseClient client, @NonNull String key) {
+        return executeCommand(client, new String[] {JSON_ARRLEN, key});
+    }
+
+    /**
+     * Retrieves the length of the array at the root of the JSON document stored at <code>key</code>.
+     * Equivalent to {@link #arrlen(BaseClient, GlideString, GlideString)} with <code>path</code> set
+     * to <code>gs(".")</code>.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @return The array length stored at the root of the document. If document root is not an array,
+     *     an error is raised.<br>
+     *     If <code>key</code> doesn't exist, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "[1, 2, true, null, \"tree\"]").get();
+     * var res = Json.arrlen(client, gs("doc")).get();
+     * assert res == 5;
+     * }</pre>
+     */
+    public static CompletableFuture<Long> arrlen(
+            @NonNull BaseClient client, @NonNull GlideString key) {
+        return executeCommand(client, new GlideString[] {gs(JSON_ARRLEN), key});
     }
 
     /**
