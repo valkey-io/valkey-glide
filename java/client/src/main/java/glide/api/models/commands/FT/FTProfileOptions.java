@@ -9,6 +9,7 @@ import glide.api.models.GlideString;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
+import lombok.NonNull;
 
 /** Mandatory parameters for {@link FT#profile} command. */
 public class FTProfileOptions {
@@ -28,7 +29,7 @@ public class FTProfileOptions {
      * @param queryType The query type.
      * @param commandLine Command arguments (not including index name).
      */
-    public FTProfileOptions(QueryType queryType, GlideString[] commandLine) {
+    public FTProfileOptions(@NonNull QueryType queryType, @NonNull GlideString[] commandLine) {
         this(queryType, commandLine, false);
     }
 
@@ -38,7 +39,7 @@ public class FTProfileOptions {
      * @param queryType The query type.
      * @param commandLine Command arguments (not including index name).
      */
-    public FTProfileOptions(QueryType queryType, String[] commandLine) {
+    public FTProfileOptions(@NonNull QueryType queryType, @NonNull String[] commandLine) {
         this(queryType, commandLine, false);
     }
 
@@ -49,7 +50,8 @@ public class FTProfileOptions {
      * @param commandLine Command arguments (not including index name).
      * @param limited Either provide a full verbose output or some brief version (limited).
      */
-    public FTProfileOptions(QueryType queryType, GlideString[] commandLine, boolean limited) {
+    public FTProfileOptions(
+            @NonNull QueryType queryType, @NonNull GlideString[] commandLine, boolean limited) {
         this.queryType = queryType;
         this.query = commandLine;
         this.limited = limited;
@@ -62,7 +64,8 @@ public class FTProfileOptions {
      * @param commandLine Command arguments (not including index name).
      * @param limited Either provide a full verbose output or some brief version (limited).
      */
-    public FTProfileOptions(QueryType queryType, String[] commandLine, boolean limited) {
+    public FTProfileOptions(
+            @NonNull QueryType queryType, @NonNull String[] commandLine, boolean limited) {
         this(
                 queryType,
                 Stream.of(commandLine).map(GlideString::gs).toArray(GlideString[]::new),
@@ -75,7 +78,7 @@ public class FTProfileOptions {
      * @param query The query itself.
      * @param options {@link FT#aggregate} options.
      */
-    public FTProfileOptions(String query, FTAggregateOptions options) {
+    public FTProfileOptions(@NonNull String query, @NonNull FTAggregateOptions options) {
         this(gs(query), options);
     }
 
@@ -85,7 +88,7 @@ public class FTProfileOptions {
      * @param query The query itself.
      * @param options {@link FT#aggregate} options.
      */
-    public FTProfileOptions(GlideString query, FTAggregateOptions options) {
+    public FTProfileOptions(@NonNull GlideString query, @NonNull FTAggregateOptions options) {
         this(QueryType.AGGREGATE, concatenateArrays(new GlideString[] {query}, options.toArgs()));
     }
 
@@ -95,7 +98,7 @@ public class FTProfileOptions {
      * @param query The query itself.
      * @param options {@link FT#search} options.
      */
-    public FTProfileOptions(String query, FTSearchOptions options) {
+    public FTProfileOptions(@NonNull String query, @NonNull FTSearchOptions options) {
         this(gs(query), options);
     }
 
@@ -105,7 +108,7 @@ public class FTProfileOptions {
      * @param query The query itself.
      * @param options {@link FT#search} options.
      */
-    public FTProfileOptions(GlideString query, FTSearchOptions options) {
+    public FTProfileOptions(@NonNull GlideString query, @NonNull FTSearchOptions options) {
         this(QueryType.SEARCH, concatenateArrays(new GlideString[] {query}, options.toArgs()));
     }
 
@@ -116,7 +119,8 @@ public class FTProfileOptions {
      * @param options {@link FT#aggregate} options.
      * @param limited Either provide a full verbose output or some brief version (limited).
      */
-    public FTProfileOptions(String query, FTAggregateOptions options, boolean limited) {
+    public FTProfileOptions(
+            @NonNull String query, @NonNull FTAggregateOptions options, boolean limited) {
         this(gs(query), options, limited);
     }
 
@@ -127,7 +131,8 @@ public class FTProfileOptions {
      * @param options {@link FT#search} options.
      * @param limited Either provide a full verbose output or some brief version (limited).
      */
-    public FTProfileOptions(GlideString query, FTAggregateOptions options, boolean limited) {
+    public FTProfileOptions(
+            @NonNull GlideString query, @NonNull FTAggregateOptions options, boolean limited) {
         this(
                 QueryType.AGGREGATE,
                 concatenateArrays(new GlideString[] {query}, options.toArgs()),
@@ -141,7 +146,8 @@ public class FTProfileOptions {
      * @param options {@link FT#aggregate} options.
      * @param limited Either provide a full verbose output or some brief version (limited).
      */
-    public FTProfileOptions(String query, FTSearchOptions options, boolean limited) {
+    public FTProfileOptions(
+            @NonNull String query, @NonNull FTSearchOptions options, boolean limited) {
         this(gs(query), options, limited);
     }
 
@@ -152,7 +158,8 @@ public class FTProfileOptions {
      * @param options {@link FT#search} options.
      * @param limited Either provide a full verbose output or some brief version (limited).
      */
-    public FTProfileOptions(GlideString query, FTSearchOptions options, boolean limited) {
+    public FTProfileOptions(
+            @NonNull GlideString query, @NonNull FTSearchOptions options, boolean limited) {
         this(QueryType.SEARCH, concatenateArrays(new GlideString[] {query}, options.toArgs()), limited);
     }
 
