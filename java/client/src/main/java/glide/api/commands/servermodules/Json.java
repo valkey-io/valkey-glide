@@ -439,7 +439,7 @@ public class Json {
             @NonNull String[] values) {
         return executeCommand(
                 client,
-                concatenateArrays(new String[] {JSON_ARRLEN, key, path, Integer.toString(index)}, values));
+                concatenateArrays(new String[] {JSON_ARRINSERT, key, path, Integer.toString(index)}, values));
     }
 
     /**
