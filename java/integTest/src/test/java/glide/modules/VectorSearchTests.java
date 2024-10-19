@@ -254,7 +254,7 @@ public class VectorSearchTests {
                                                     (byte) 0xBF
                                                 })))
                         .get());
-
+        Thread.sleep(DATA_PROCESSING_TIMEOUT); // let server digest the data and update index
         var ftsearch =
                 FT.search(
                                 client,

@@ -11,6 +11,7 @@ dependencies {
     implementation project(':client')
 
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
+    implementation 'com.google.code.gson:gson:2.10.1'
 
     // https://github.com/netty/netty/wiki/Native-transports
     // At the moment, Windows is not supported
