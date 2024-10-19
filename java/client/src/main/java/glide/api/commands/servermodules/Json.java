@@ -2,6 +2,7 @@
 package glide.api.commands.servermodules;
 
 import static glide.api.models.GlideString.gs;
+import static glide.utils.ArrayTransformUtils.concatenateArrays;
 
 import glide.api.BaseClient;
 import glide.api.GlideClient;
@@ -12,7 +13,6 @@ import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.json.JsonGetOptions;
 import glide.api.models.commands.json.JsonGetOptionsBinary;
 import glide.utils.ArgsBuilder;
-import glide.utils.ArrayTransformUtils;
 import java.util.concurrent.CompletableFuture;
 import lombok.NonNull;
 
@@ -205,8 +205,7 @@ public class Json {
      */
     public static CompletableFuture<String> get(
             @NonNull BaseClient client, @NonNull String key, @NonNull String[] paths) {
-        return executeCommand(
-                client, ArrayTransformUtils.concatenateArrays(new String[] {JSON_GET, key}, paths));
+        return executeCommand(client, concatenateArrays(new String[] {JSON_GET, key}, paths));
     }
 
     /**
@@ -243,9 +242,7 @@ public class Json {
      */
     public static CompletableFuture<GlideString> get(
             @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString[] paths) {
-        return executeCommand(
-                client,
-                ArrayTransformUtils.concatenateArrays(new GlideString[] {gs(JSON_GET), key}, paths));
+        return executeCommand(client, concatenateArrays(new GlideString[] {gs(JSON_GET), key}, paths));
     }
 
     /**
@@ -271,8 +268,7 @@ public class Json {
     public static CompletableFuture<String> get(
             @NonNull BaseClient client, @NonNull String key, @NonNull JsonGetOptions options) {
         return executeCommand(
-                client,
-                ArrayTransformUtils.concatenateArrays(new String[] {JSON_GET, key}, options.toArgs()));
+                client, concatenateArrays(new String[] {JSON_GET, key}, options.toArgs()));
     }
 
     /**
@@ -344,9 +340,7 @@ public class Json {
             @NonNull String[] paths,
             @NonNull JsonGetOptions options) {
         return executeCommand(
-                client,
-                ArrayTransformUtils.concatenateArrays(
-                        new String[] {JSON_GET, key}, options.toArgs(), paths));
+                client, concatenateArrays(new String[] {JSON_GET, key}, options.toArgs(), paths));
     }
 
     /**
@@ -445,13 +439,7 @@ public class Json {
             @NonNull String[] values) {
         return executeCommand(
                 client,
-                new ArgsBuilder()
-                        .add(gs(JSON_ARRINSERT))
-                        .add(key)
-                        .add(path)
-                        .add(Integer.toString(index))
-                        .add(values)
-                        .toArray());
+                concatenateArrays(new String[] {JSON_ARRLEN, key, path, Integer.toString(index)}, values));
     }
 
     /**
@@ -547,8 +535,7 @@ public class Json {
      */
     public static CompletableFuture<Object> arrlen(
             @NonNull BaseClient client, @NonNull String key, @NonNull String path) {
-        return executeCommand(
-                client, new ArgsBuilder().add(gs(JSON_ARRLEN)).add(key).add(path).toArray());
+        return executeCommand(client, new String[] {JSON_ARRLEN, key, path});
     }
 
     /**
@@ -586,8 +573,7 @@ public class Json {
      */
     public static CompletableFuture<Object> arrlen(
             @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString path) {
-        return executeCommand(
-                client, new ArgsBuilder().add(gs(JSON_ARRLEN)).add(key).add(path).toArray());
+        return executeCommand(client, new GlideString[] {gs(JSON_ARRLEN), key, path});
     }
 
     /**
@@ -609,7 +595,7 @@ public class Json {
      * }</pre>
      */
     public static CompletableFuture<Long> arrlen(@NonNull BaseClient client, @NonNull String key) {
-        return executeCommand(client, new ArgsBuilder().add(gs(JSON_ARRLEN)).add(key).toArray());
+        return executeCommand(client, new String[] {JSON_ARRLEN, key});
     }
 
     /**
@@ -631,7 +617,7 @@ public class Json {
      */
     public static CompletableFuture<Long> arrlen(
             @NonNull BaseClient client, @NonNull GlideString key) {
-        return executeCommand(client, new ArgsBuilder().add(gs(JSON_ARRLEN)).add(key).toArray());
+        return executeCommand(client, new GlideString[] {gs(JSON_ARRLEN), key});
     }
 
     /**
