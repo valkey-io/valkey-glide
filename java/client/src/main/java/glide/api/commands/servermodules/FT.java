@@ -13,6 +13,7 @@ import glide.api.models.GlideString;
 import glide.api.models.commands.FT.FTAggregateOptions;
 import glide.api.models.commands.FT.FTCreateOptions;
 import glide.api.models.commands.FT.FTCreateOptions.FieldInfo;
+import glide.api.models.commands.FT.FTProfileOptions;
 import glide.api.models.commands.FT.FTSearchOptions;
 import java.util.Arrays;
 import java.util.Map;
@@ -475,6 +476,37 @@ public class FT {
     }
 
     /**
+     * Runs a search or aggregation query and collects performance profiling information.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name.
+     * @param options Querying and profiling parameters - see {@link FTProfileOptions}.
+     * @return A two-element array. The first element contains results of query being profiled, the
+     *     second element stores profiling information.
+     */
+    public static CompletableFuture<Object[]> profile(
+            @NonNull BaseClient client, @NonNull String indexName, @NonNull FTProfileOptions options) {
+        return profile(client, gs(indexName), options);
+    }
+
+    /**
+     * Runs a search or aggregation query and collects performance profiling information.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name.
+     * @param options Querying and profiling parameters - see {@link FTProfileOptions}.
+     * @return A two-element array. The first element contains results of query being profiled, the
+     *     second element stores profiling information.
+     */
+    public static CompletableFuture<Object[]> profile(
+            @NonNull BaseClient client,
+            @NonNull GlideString indexName,
+            @NonNull FTProfileOptions options) {
+        var args = concatenateArrays(new GlideString[] {gs("FT.PROFILE"), indexName}, options.toArgs());
+        return executeCommand(client, args, false);
+    }
+
+    /**
      * Returns information about a given index.
      *
      * @param indexName The index name.
@@ -693,7 +725,6 @@ public class FT {
     public static CompletableFuture<String> aliasupdate(
             @NonNull BaseClient client, @NonNull GlideString aliasName, @NonNull GlideString indexName) {
         var args = new GlideString[] {gs("FT.ALIASUPDATE"), aliasName, indexName};
-
         return executeCommand(client, args, false);
     }
 
