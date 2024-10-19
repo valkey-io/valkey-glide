@@ -82,7 +82,7 @@ async def aliasadd(
     client: TGlideClient, alias: TEncodable, indexName: TEncodable
 ) -> TOK:
     """
-    Add an alias for an index. The new alias name can be used anywhere that an index name is required.
+    Adds an alias for an index. The new alias name can be used anywhere that an index name is required.
 
     Args:
         client (TGlideClient): The client to execute the command.
@@ -103,11 +103,11 @@ async def aliasadd(
 
 async def aliasdel(client: TGlideClient, alias: TEncodable) -> TOK:
     """
-    Delete an existing alias for an index.
+    Deletes an existing alias for an index.
 
     Args:
         client (TGlideClient): The client to execute the command.
-        alias (TEncodable): The exisiting alias to be deleted for an index.
+        alias (TEncodable): The existing alias to be deleted for an index.
 
     Returns:
         TOK: A simple "OK" response.
@@ -125,7 +125,7 @@ async def aliasupdate(
     client: TGlideClient, alias: TEncodable, indexName: TEncodable
 ) -> TOK:
     """
-    Update an existing alias to point to a different physical index. This command only affects future references to the alias.
+    Updates an existing alias to point to a different physical index. This command only affects future references to the alias.
 
     Args:
         client (TGlideClient): The client to execute the command.
