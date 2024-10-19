@@ -65,11 +65,7 @@ Before starting this step, make sure you've installed all software requirments.
     git clone https://github.com/valkey-io/valkey-glide.git
     cd valkey-glide
     ```
-2. Initialize git submodule:
-    ```bash
-    git submodule update --init --recursive
-    ```
-3. Install all node dependencies:
+2. Install all node dependencies:
 
     ```bash
     cd node
@@ -79,7 +75,7 @@ Before starting this step, make sure you've installed all software requirments.
     cd ..
     ```
 
-4. Build the Node wrapper (Choose a build option from the following and run it from the `node` folder):
+3. Build the Node wrapper (Choose a build option from the following and run it from the `node` folder):
 
     1. Build in release mode, stripped from all debug symbols (optimized and minimized binary size):
 
@@ -101,14 +97,14 @@ Before starting this step, make sure you've installed all software requirments.
 
     Once building completed, you'll find the compiled JavaScript code in the`./build-ts` folder.
 
-5. Run tests:
+4. Run tests:
     1. Ensure that you have installed server and valkey-cli on your host. You can download Valkey at the following link: [Valkey Download page](https://valkey.io/download/).
     2. Execute the following command from the node folder:
         ```bash
         npm run build # make sure we have a debug build compiled first
         npm test
         ```
-6. Integrating the built GLIDE package into your project:
+5. Integrating the built GLIDE package into your project:
    Add the package to your project using the folder path with the command `npm install <path to GLIDE>/node`.
 
 -   For a fast build, execute `npm run build`. This will perform a full, unoptimized build, which is suitable for developing tests. Keep in mind that performance is significantly affected in an unoptimized build, so it's required to build with the `build:release` or `build:benchmark` option when measuring performance.
