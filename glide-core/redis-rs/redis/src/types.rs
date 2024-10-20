@@ -178,6 +178,12 @@ pub(crate) enum ServerError {
     },
 }
 
+impl From<tokio::time::error::Elapsed> for RedisError {
+    fn from(_: tokio::time::error::Elapsed) -> Self {
+        RedisError::from((ErrorKind::IoError, "Operation timed out"))
+    }
+}
+
 impl From<ServerError> for RedisError {
     fn from(value: ServerError) -> Self {
         // TODO - Consider changing RedisError to explicitly represent whether an error came from the server or not. Today it is only implied.

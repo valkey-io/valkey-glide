@@ -359,7 +359,7 @@ mod tests {
     }
 
     fn create_container_with_strategy(
-        stragey: ReadFromReplicaStrategy,
+        strategy: ReadFromReplicaStrategy,
         use_management_connections: bool,
     ) -> ConnectionsContainer<usize> {
         let slot_map = SlotMap::new(
@@ -409,7 +409,7 @@ mod tests {
         ConnectionsContainer {
             slot_map,
             connection_map,
-            read_from_replica_strategy: stragey,
+            read_from_replica_strategy: strategy,
             topology_hash: 0,
         }
     }
