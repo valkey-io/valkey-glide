@@ -1599,6 +1599,8 @@ func (suite *GlideTestSuite) TestSInterCard() {
 }
 
 func (suite *GlideTestSuite) TestSInterCardLimit() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key1 := "{key}-1-" + uuid.NewString()
 		key2 := "{key}-2-" + uuid.NewString()
@@ -1979,5 +1981,30 @@ func (suite *GlideTestSuite) TestDel_MultipleKeys() {
 
 		assert.Nil(suite.T(), err3)
 		assert.True(suite.T(), result3.IsNil())
+	})
+}
+
+func (suite *GlideTestSuite) TestCopyCommand() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{dolly}_" + uuid.New().String()
+		key2 := "{dolly}_" + uuid.New().String()
+
+		suite.verifyOK(client.Set(key1, "sheep"))
+
+		result, err := client.Copy(key1, key2, nil, false)
+		assert.Nil(suite.T(), err)
+		assert.True(suite.T(), result.Value())
+
+		resultClone, err := client.Get(key2)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "sheep", resultClone.Value())
+
+		resultReplace, err := client.Copy(key1, key2, nil, true)
+		assert.Nil(suite.T(), err)
+		assert.True(suite.T(), resultReplace.Value())
+
+		resultReplacedClone, err := client.Get(key2)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "sheep", resultReplacedClone.Value())
 	})
 }

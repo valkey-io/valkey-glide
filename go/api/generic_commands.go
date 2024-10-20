@@ -30,4 +30,34 @@ type GenericBaseCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/del/
 	Del(keys []string) (Result[int64], error)
+
+	// Copy duplicates the value stored at `sourceKey` into `destinationKey`.
+	//
+	// By default, the destination key is created in the same logical database as the connection.
+	// The `destinationDB` parameter allows specifying an alternative logical database index for the destination key.
+	// If the `replace` option is true, the destination key will be removed if it already exists.
+	//
+	// Note:
+	// - In cluster mode, both `sourceKey` and `destinationKey` must be managed by the same node for this command to succeed.
+	//
+	// Parameters:
+	//  - sourceKey      (string): The key from which to copy the value.
+	//  - destinationKey (string): The key to copy the value to.
+	//  - destinationDB  (*int): An optional integer specifying the database index for the destination key.
+	//                           If nil, the current database is used.
+	//  - replace        (bool): If true, removes `destinationKey` before copying the value if it already exists.
+	//
+	// Return value:
+	// - Result[bool]: Returns true if the copy was successful; returns false if the destination key exists and `replace` is
+	// not specified.
+	//
+	// Example:
+	//	result, err := client.Copy("dolly", "clone", nil, false)
+	//	if err != nil {
+	//	    // handle error
+	//	}
+	//	fmt.Println(result.Value()) // Output: true or false
+	//
+	// [valkey.io]: https://valkey.io/commands/copy/
+	Copy(sourceKey string, destinationKey string, destinationDB *int, replace bool) (Result[bool], error)
 }

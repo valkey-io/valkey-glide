@@ -744,3 +744,22 @@ func (client *baseClient) Del(keys []string) (Result[int64], error) {
 
 	return handleLongResponse(result)
 }
+
+func (client *baseClient) Copy(sourceKey, destinationKey string, destinationDB *int, replace bool) (Result[bool], error) {
+	args := []string{sourceKey, destinationKey}
+
+	if destinationDB != nil {
+		args = append(args, "DB", strconv.Itoa(*destinationDB))
+	}
+
+	if replace {
+		args = append(args, "REPLACE")
+	}
+
+	result, err := client.executeCommand(C.Copy, args)
+	if err != nil {
+		return CreateNilBoolResult(), err
+	}
+
+	return handleBooleanResponse(result)
+}
