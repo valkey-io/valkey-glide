@@ -2,7 +2,10 @@ name: Python tests
 
 on:
     push:
-        branches: ["main"]
+        branches:
+            - main
+            - release-*
+            - v*
         paths:
             - python/**
             - glide-core/src/**
