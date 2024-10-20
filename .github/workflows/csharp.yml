@@ -2,7 +2,10 @@ name: C# tests
 
 on:
     push:
-        branches: ["main"]
+        branches:
+            - main
+            - release-*
+            - v*
         paths:
             - csharp/**
             - glide-core/src/**
