@@ -304,7 +304,7 @@ async def debug(
     if path:
         args.append(path)
 
-    return cast(Optional[Union[bytes, List[bytes]]], await client.custom_command(args))
+    return cast(Optional[Union[int, List[int]]], await client.custom_command(args))
 
 
 async def delete(
