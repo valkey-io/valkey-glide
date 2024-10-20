@@ -118,6 +118,8 @@ pub enum ErrorKind {
     /// not native to the system.  This is usually the case if
     /// the cause is another error.
     IoError,
+    /// An I/O error that is considered safe to retry as the request was not received by the server
+    IoErrorRetrySafe,
     /// An error raised that was identified on the client before execution.
     ClientError,
     /// An extension error.  This is an error created by the server
@@ -802,6 +804,7 @@ impl fmt::Debug for RedisError {
 
 pub(crate) enum RetryMethod {
     Reconnect,
+    ReconnectAndRetry,
     NoRetry,
     RetryImmediately,
     WaitAndRetry,
@@ -870,6 +873,7 @@ impl RedisError {
             ErrorKind::CrossSlot => "cross-slot",
             ErrorKind::MasterDown => "master down",
             ErrorKind::IoError => "I/O error",
+            ErrorKind::IoErrorRetrySafe => "I/O error -  Request wasn't received by the server",
             ErrorKind::ExtensionError => "extension error",
             ErrorKind::ClientError => "client error",
             ErrorKind::ReadOnly => "read-only",
@@ -957,6 +961,7 @@ impl RedisError {
     pub fn is_unrecoverable_error(&self) -> bool {
         match self.retry_method() {
             RetryMethod::Reconnect => true,
+            RetryMethod::ReconnectAndRetry => true,
 
             RetryMethod::NoRetry => false,
             RetryMethod::RetryImmediately => false,
@@ -1064,12 +1069,14 @@ impl RedisError {
 
                     io::ErrorKind::PermissionDenied => RetryMethod::NoRetry,
                     io::ErrorKind::Unsupported => RetryMethod::NoRetry,
+                    io::ErrorKind::TimedOut => RetryMethod::NoRetry,
 
                     _ => RetryMethod::RetryImmediately,
                 },
                 _ => RetryMethod::RetryImmediately,
             },
             ErrorKind::NotAllSlotsCovered => RetryMethod::NoRetry,
+            ErrorKind::IoErrorRetrySafe => RetryMethod::ReconnectAndRetry,
         }
     }
 }

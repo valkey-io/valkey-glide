@@ -771,7 +771,8 @@ where
                                 .wait_time_for_retry(retries);
                             thread::sleep(sleep_time);
                         }
-                        crate::types::RetryMethod::Reconnect => {
+                        crate::types::RetryMethod::Reconnect
+                        | crate::types::RetryMethod::ReconnectAndRetry => {
                             if *self.auto_reconnect.borrow() {
                                 if let Ok(mut conn) = self.connect(&addr) {
                                     if conn.check_connection() {
