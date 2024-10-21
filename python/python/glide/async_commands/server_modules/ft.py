@@ -170,6 +170,8 @@ async def info(client: TGlideClient, indexName: TEncodable) -> Mapping[
 
     Examples:
         >>> from glide.async_commands.server_modules import ft
+        >>> result = await ft.info(glide_client, "myIndex")
+            Mapping[TEncodable, Union[TEncodable, int, List[TEncodable], List[Mapping[TEncodable, Union[TEncodable, Mapping[TEncodable, Union[TEncodable, int]]]]]]]: A map with info about the index.
     """
     args: List[TEncodable] = [CommandNames.FT_INFO, indexName]
     return cast(

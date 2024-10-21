@@ -111,12 +111,12 @@ class TestFt:
         assert indexName.encode() == result.get(b"index_name")
         assert b"JSON" == result.get(b"key_type")
         assert [b"key-prefix"] == result.get(b"key_prefixes")
+
+        # Get vector and text fields from the fields array.
         fields: List[Mapping[TEncodable, Union[TEncodable, Mapping[TEncodable, Union[TEncodable, int]]]]] = result.get(b"fields")
         assert len(fields) == 2
-
         textField: Mapping[TEncodable, Union[TEncodable, Mapping[TEncodable, Union[TEncodable, int]]]] = None
         vectorField:Mapping[TEncodable, Union[TEncodable, Mapping[TEncodable, Union[TEncodable, int]]]] = None
-
         if fields[0].get(b"type") == b"VECTOR":
             vectorField = fields[0]
             textField = fields[1]
