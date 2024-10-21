@@ -22,6 +22,7 @@ public class Json {
     private static final String JSON_PREFIX = "JSON.";
     public static final String JSON_SET = JSON_PREFIX + "SET";
     public static final String JSON_GET = JSON_PREFIX + "GET";
+    private static final String JSON_ARRAPPEND = JSON_PREFIX + "ARRAPPEND";
     private static final String JSON_ARRINSERT = JSON_PREFIX + "ARRINSERT";
     private static final String JSON_ARRLEN = JSON_PREFIX + "ARRLEN";
     private static final String JSON_OBJLEN = JSON_PREFIX + "OBJLEN";
@@ -389,6 +390,86 @@ public class Json {
         return executeCommand(
                 client,
                 new ArgsBuilder().add(gs(JSON_GET)).add(key).add(options.toArgs()).add(paths).toArray());
+    }
+
+    /**
+     * Appends one or more <code>values</code> to the JSON array at the specified <code>path</code>
+     * within the JSON document stored at <code>key</code>.
+     *
+     * @param client The client to execute the command.
+     * @param key The <code>key</code> of the JSON document.
+     * @param path Represents the <code>path</code> within the JSON document where the <code>values
+     *     </code> will be appended.
+     * @param values The <code>values</code> to append to the JSON array at the specified <code>path
+     *     </code>.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
+     *           Returns a list of integers for every possible path, indicating the new length of the
+     *           new array after appending <code>values</code>, or <code>null</code> for JSON values
+     *           matching the path that are not an array. If <code>path</code> does not exist, an
+     *           empty array will be returned.
+     *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
+     *           Returns the length of the new array after appending <code>values</code> to the array
+     *           at <code>path</code>. If multiple paths are matched, returns the last updated array.
+     *           If the JSON value at <code>path</code> is not a array or if <code>path</code> doesn't
+     *           exist, an error is raised. If <code>key</code> doesn't exist, an error is raised.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "{\"a\": 1, \"b\": [\"one\", \"two\"]}").get();
+     * var res = Json.arrappend(client, "doc", "$.b", new String[] {"\"three\""}).get();
+     * assert Arrays.equals((Object[]) res, new int[] {3}); // New length of the array after appending
+     * res = Json.arrappend(client, "doc", ".b", new String[] {"\"four\""}).get();
+     * assert res.equals(4); // New length of the array after appending
+     * }</pre>
+     */
+    public static CompletableFuture<Object> arrappend(
+            @NonNull BaseClient client,
+            @NonNull String key,
+            @NonNull String path,
+            @NonNull String[] values) {
+        return executeCommand(
+                client, concatenateArrays(new String[] {JSON_ARRAPPEND, key, path}, values));
+    }
+
+    /**
+     * Appends one or more <code>values</code> to the JSON array at the specified <code>path</code>
+     * within the JSON document stored at <code>key</code>.
+     *
+     * @param client The client to execute the command.
+     * @param key The <code>key</code> of the JSON document.
+     * @param path Represents the <code>path</code> within the JSON document where the <code>values
+     *     </code> will be appended.
+     * @param values The <code>values</code> to append to the JSON array at the specified <code>path
+     *     </code>.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
+     *           Returns a list of integers for every possible path, indicating the new length of the
+     *           new array after appending <code>values</code>, or <code>null</code> for JSON values
+     *           matching the path that are not an array. If <code>path</code> does not exist, an
+     *           empty array will be returned.
+     *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
+     *           Returns the length of the new array after appending <code>values</code> to the array
+     *           at <code>path</code>. If multiple paths are matched, returns the last updated array.
+     *           If the JSON value at <code>path</code> is not a array or if <code>path</code> doesn't
+     *           exist, an error is raised. If <code>key</code> doesn't exist, an error is raised.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "{\"a\": 1, \"b\": [\"one\", \"two\"]}").get();
+     * var res = Json.arrappend(client, gs("doc"), gs("$.b"), new GlideString[] {gs("\"three\"")}).get();
+     * assert Arrays.equals((Object[]) res, new int[] {3}); // New length of the array after appending
+     * res = Json.arrappend(client, gs("doc"), gs(".b"), new GlideString[] {gs("\"four\"")}).get();
+     * assert res.equals(4); // New length of the array after appending
+     * }</pre>
+     */
+    public static CompletableFuture<Object> arrappend(
+            @NonNull BaseClient client,
+            @NonNull GlideString key,
+            @NonNull GlideString path,
+            @NonNull GlideString[] values) {
+        return executeCommand(
+                client, new ArgsBuilder().add(gs(JSON_ARRAPPEND)).add(key).add(path).add(values).toArray());
     }
 
     /**
