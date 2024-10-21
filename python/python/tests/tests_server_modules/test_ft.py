@@ -109,9 +109,9 @@ class TestFt:
         result = await ft.info(glide_client, indexName)
         print("result=====")
         print(result)
-        assert indexName.encode() == result.get("index_name")
-        assert b"JSON" == result.get("key_type")
-        assert [b"key-prefix"] == result.get("key_prefixes")
+        assert indexName.encode() == result.get(b"index_name")
+        assert b"JSON" == result.get(b"key_type")
+        assert [b"key-prefix"] == result.get(b"key_prefixes")
 
     async def _create_test_index_with_vector_field(
         self, glide_client: GlideClusterClient, index_name: TEncodable
