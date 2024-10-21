@@ -188,7 +188,7 @@ export class GlideJson {
 
     /**
      * Toggles a Boolean value stored at the specified `path` within the JSON document stored at `key`.
-    
+     * 
      * @param client - The client to execute the command.
      * @param key - The key of the JSON document.
      * @param path - The JSONPath to specify.

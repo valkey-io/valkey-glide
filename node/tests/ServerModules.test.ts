@@ -230,7 +230,7 @@ describe("GlideJson", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "json.toggle formatting",
+        "json.toggle tests",
         async (protocol) => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),

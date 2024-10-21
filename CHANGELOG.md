@@ -18,7 +18,7 @@
 * Core: Update routing for commands from server modules ([#2461](https://github.com/valkey-io/valkey-glide/pull/2461))
 * Node: Added `JSON.SET` and `JSON.GET` ([#2427](https://github.com/valkey-io/valkey-glide/pull/2427))
 * Java: Added `JSON.ARRAPPEND` ([#2489](https://github.com/valkey-io/valkey-glide/pull/2489))
-* Node: Added `JSON.TOGGLE` ([#TBD](https://github.com/valkey-io/valkey-glide/pull/TBD))
+* Node: Added `JSON.TOGGLE` ([#2491](https://github.com/valkey-io/valkey-glide/pull/2491))
 
 #### Breaking Changes
 
