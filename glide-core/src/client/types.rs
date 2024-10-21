@@ -58,6 +58,7 @@ pub enum ReadFrom {
     #[default]
     Primary,
     PreferReplica,
+    AZAffinity,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Default)]

@@ -498,7 +498,10 @@ export type ReadFrom =
     | "primary"
     /** Spread the requests between all replicas in a round robin manner.
         If no replica is available, route the requests to the primary.*/
-    | "preferReplica";
+    | "preferReplica"
+    /** Spread the requests between replicas in the same client's AZ (Aviliablity zone) in a round robin manner.
+        If no replica is available, route the requests to the primary.*/
+    | "AZAffinity";
 
 /**
  * Configuration settings for creating a client. Shared settings for standalone and cluster clients.
@@ -5986,6 +5989,7 @@ export class BaseClient {
     > = {
         primary: connection_request.ReadFrom.Primary,
         preferReplica: connection_request.ReadFrom.PreferReplica,
+        AZAffinity: connection_request.ReadFrom.AZAffinity,
     };
 
     /**

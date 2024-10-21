@@ -24,6 +24,7 @@ enum ReadFrom {
     PreferReplica {
         latest_read_replica_index: Arc<std::sync::atomic::AtomicUsize>,
     },
+    AZAffinity,
 }
 
 #[derive(Debug)]
@@ -249,6 +250,10 @@ impl StandaloneClient {
         }
     }
 
+    fn round_robin_read_from_az_awareness_replica(&self) -> &ReconnectingConnection {
+        return self.get_primary_connection();
+    }
+
     fn get_connection(&self, readonly: bool) -> &ReconnectingConnection {
         if self.inner.nodes.len() == 1 || !readonly {
             return self.get_primary_connection();
@@ -259,6 +264,7 @@ impl StandaloneClient {
             ReadFrom::PreferReplica {
                 latest_read_replica_index,
             } => self.round_robin_read_from_replica(latest_read_replica_index),
+            ReadFrom::AZAffinity {} => self.round_robin_read_from_az_awareness_replica(),
         }
     }
 
@@ -519,6 +525,7 @@ fn get_read_from(read_from: Option<super::ReadFrom>) -> ReadFrom {
         Some(super::ReadFrom::PreferReplica) => ReadFrom::PreferReplica {
             latest_read_replica_index: Default::default(),
         },
+        Some(super::ReadFrom::AZAffinity) => ReadFrom::AZAffinity,
         None => ReadFrom::Primary,
     }
 }

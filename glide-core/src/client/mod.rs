@@ -625,6 +625,7 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
                 match rfr {
                     ReadFrom::Primary => "Only primary",
                     ReadFrom::PreferReplica => "Prefer replica",
+                    ReadFrom::AZAffinity => "Prefer replica in user's availability zone",
                 }
             )
         })

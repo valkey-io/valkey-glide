@@ -28,6 +28,7 @@ pub(crate) enum ReadFromReplicaStrategy {
     #[default]
     AlwaysFromPrimary,
     RoundRobin,
+    AZAffinity,
 }
 
 #[derive(Debug, Default)]
@@ -46,7 +47,7 @@ fn get_address_from_slot(
     }
     match read_from_replica {
         ReadFromReplicaStrategy::AlwaysFromPrimary => slot.addrs.primary.as_str(),
-        ReadFromReplicaStrategy::RoundRobin => {
+        ReadFromReplicaStrategy::RoundRobin | ReadFromReplicaStrategy::AZAffinity => {
             let index = slot
                 .latest_used_replica
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
