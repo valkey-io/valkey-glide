@@ -24,7 +24,10 @@ enum ReadFrom {
     PreferReplica {
         latest_read_replica_index: Arc<std::sync::atomic::AtomicUsize>,
     },
-    AZAffinity,
+    AZAffinity {
+        client_az: String,
+        lasted_read_replica_index: Arc<std::sync::atomic::AtomicUsize>,
+    },
 }
 
 #[derive(Debug)]
@@ -250,10 +253,6 @@ impl StandaloneClient {
         }
     }
 
-    fn round_robin_read_from_az_awareness_replica(&self) -> &ReconnectingConnection {
-        return self.get_primary_connection();
-    }
-
     fn get_connection(&self, readonly: bool) -> &ReconnectingConnection {
         if self.inner.nodes.len() == 1 || !readonly {
             return self.get_primary_connection();
@@ -264,7 +263,17 @@ impl StandaloneClient {
             ReadFrom::PreferReplica {
                 latest_read_replica_index,
             } => self.round_robin_read_from_replica(latest_read_replica_index),
-            ReadFrom::AZAffinity {} => self.round_robin_read_from_az_awareness_replica(),
+            ReadFrom::AZAffinity {
+                #[allow(unused_variables)]
+                client_az,
+                lasted_read_replica_index,
+            } => {
+                log_warn(
+                    "get_connection",
+                    "AZAffinity is not yet supported for Standalone client, choosing a random node",
+                );
+                self.round_robin_read_from_replica(lasted_read_replica_index)
+            }
         }
     }
 
@@ -525,7 +534,10 @@ fn get_read_from(read_from: Option<super::ReadFrom>) -> ReadFrom {
         Some(super::ReadFrom::PreferReplica) => ReadFrom::PreferReplica {
             latest_read_replica_index: Default::default(),
         },
-        Some(super::ReadFrom::AZAffinity) => ReadFrom::AZAffinity,
+        Some(super::ReadFrom::AZAffinity(az)) => ReadFrom::AZAffinity {
+            client_az: az,
+            lasted_read_replica_index: Default::default(),
+        },
         None => ReadFrom::Primary,
     }
 }

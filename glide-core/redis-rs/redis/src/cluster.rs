@@ -229,7 +229,10 @@ where
     ) -> RedisResult<Self> {
         let connection = Self {
             connections: RefCell::new(HashMap::new()),
-            slots: RefCell::new(SlotMap::new(vec![], cluster_params.read_from_replicas)),
+            slots: RefCell::new(SlotMap::new(
+                vec![],
+                cluster_params.read_from_replicas.clone(),
+            )),
             auto_reconnect: RefCell::new(true),
             cluster_params,
             read_timeout: RefCell::new(None),
@@ -387,7 +390,7 @@ where
                 "can't parse node address",
             )))?;
             match parse_and_count_slots(&value, self.cluster_params.tls, addr).map(|slots_data| {
-                SlotMap::new(slots_data.1, self.cluster_params.read_from_replicas)
+                SlotMap::new(slots_data.1, self.cluster_params.read_from_replicas.clone())
             }) {
                 Ok(new_slots) => {
                     result = Ok(new_slots);

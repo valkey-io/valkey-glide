@@ -33,7 +33,6 @@ use tokio::sync::mpsc;
 struct BuilderParams {
     password: Option<String>,
     username: Option<String>,
-    client_az: Option<String>,
     read_from_replicas: ReadFromReplicaStrategy,
     tls: Option<TlsMode>,
     #[cfg(feature = "tls-rustls")]
@@ -131,7 +130,6 @@ impl SlotsRefreshRateLimit {
 pub struct ClusterParams {
     pub(crate) password: Option<String>,
     pub(crate) username: Option<String>,
-    pub(crate) client_az: Option<String>,
     pub(crate) read_from_replicas: ReadFromReplicaStrategy,
     /// tls indicates tls behavior of connections.
     /// When Some(TlsMode), connections use tls and verify certification depends on TlsMode.
@@ -167,7 +165,6 @@ impl ClusterParams {
         Ok(Self {
             password: value.password,
             username: value.username,
-            client_az: value.client_az,
             read_from_replicas: value.read_from_replicas,
             tls: value.tls,
             retry_params: value.retries_configuration,
@@ -387,6 +384,22 @@ impl ClusterClientBuilder {
     /// primary nodes. If there are no replica nodes, then all queries will go to the primary nodes.
     pub fn read_from_replicas(mut self) -> ClusterClientBuilder {
         self.builder_params.read_from_replicas = ReadFromReplicaStrategy::RoundRobin;
+        self
+    }
+
+    /// Sets the read strategy on all new connections, based on the specified policy.
+    ///
+    /// Using the specified `read_strategy`, this function configures whether read queries will be
+    /// routed to replica nodes or primary nodes. If `ReadFromReplicaStrategy::AZAffinity` is set,
+    /// read requests will first attempt to access replicas in the same availability zone, falling
+    /// back to other replicas or the primary if needed. If `ReadFromReplicaStrategy::RoundRobin` is chosen, reads are distributed
+    /// across replicas for load balancing, while `ReadFromReplicaStrategy::AlwaysFromPrimary` ensures all read and write queries
+    /// are directed to the primary node.
+    ///
+    /// # Parameters
+    /// - `read_strategy`: Defines the replica routing strategy.
+    pub fn read_from(mut self, read_strategy: ReadFromReplicaStrategy) -> ClusterClientBuilder {
+        self.builder_params.read_from_replicas = read_strategy;
         self
     }
 

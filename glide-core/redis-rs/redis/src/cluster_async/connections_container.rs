@@ -1,4 +1,4 @@
-use crate::cluster_async::{ClusterParams, ConnectionFuture};
+use crate::cluster_async::ConnectionFuture;
 use crate::cluster_routing::{Route, SlotAddr};
 use crate::cluster_slotmap::{ReadFromReplicaStrategy, SlotMap, SlotMapValue};
 use crate::cluster_topology::TopologyHash;
@@ -233,10 +233,10 @@ where
         }
     }
 
-    fn round_robin_read_from_az_awareness_replica(
+    pub(crate) fn round_robin_read_from_az_awareness_replica(
         &self,
         slot_map_value: &SlotMapValue,
-        user_az: String,
+        client_az: String,
     ) -> Option<ConnectionAndAddress<Connection>> {
         let addrs = &slot_map_value.addrs;
         let initial_index = slot_map_value
@@ -264,9 +264,10 @@ where
             let replica = &addrs.replicas[index];
 
             // Check if this replica’s AZ matches the user’s AZ.
-            if let Some(connection_details) = self.connection_details_for_address(replica.as_str())
+            if let Some((address, connection_details)) =
+                self.connection_details_for_address(replica.as_str())
             {
-                if connection_details.1.az.as_deref() == Some(&user_az) {
+                if connection_details.az.as_deref() == Some(&client_az) {
                     // Attempt to update `latest_used_replica` with the index of this replica.
                     let _ = slot_map_value.latest_used_replica.compare_exchange_weak(
                         initial_index,
@@ -274,48 +275,39 @@ where
                         std::sync::atomic::Ordering::Relaxed,
                         std::sync::atomic::Ordering::Relaxed,
                     );
-                    return Some((connection_details.0, connection_details.1.conn));
+                    return Some((address, connection_details.conn));
                 }
             }
         }
     }
 
-    fn lookup_route(
-        &self,
-        route: &Route,
-        cluster_params: &Option<ClusterParams>,
-    ) -> Option<ConnectionAndAddress<Connection>> {
+    fn lookup_route(&self, route: &Route) -> Option<ConnectionAndAddress<Connection>> {
         let slot_map_value = self.slot_map.slot_value_for_route(route)?;
         let addrs = &slot_map_value.addrs;
         if addrs.replicas.is_empty() {
             return self.connection_for_address(addrs.primary.as_str());
         }
 
-        //
         match route.slot_addr() {
             // Master strategy will be in use when the command is not read_only
             SlotAddr::Master => self.connection_for_address(addrs.primary.as_str()),
             // ReplicaOptional strategy will be in use when the command is read_only
-            SlotAddr::ReplicaOptional => match self.read_from_replica_strategy {
+            SlotAddr::ReplicaOptional => match &self.read_from_replica_strategy {
                 ReadFromReplicaStrategy::AlwaysFromPrimary => {
                     self.connection_for_address(addrs.primary.as_str())
                 }
                 ReadFromReplicaStrategy::RoundRobin => {
                     self.round_robin_read_from_replica(slot_map_value)
                 }
-                ReadFromReplicaStrategy::AZAffinity => self
-                    .round_robin_read_from_az_awareness_replica(
-                        slot_map_value,
-                        cluster_params.as_ref().unwrap().client_az.clone()?,
-                    ),
+                ReadFromReplicaStrategy::AZAffinity(az) => {
+                    self.round_robin_read_from_az_awareness_replica(slot_map_value, az.to_string())
+                }
             },
             // when the user strategy per command is replica_preffered
-            SlotAddr::ReplicaRequired => match self.read_from_replica_strategy {
-                ReadFromReplicaStrategy::AZAffinity => self
-                    .round_robin_read_from_az_awareness_replica(
-                        slot_map_value,
-                        cluster_params.as_ref().unwrap().client_az.clone()?,
-                    ),
+            SlotAddr::ReplicaRequired => match &self.read_from_replica_strategy {
+                ReadFromReplicaStrategy::AZAffinity(az) => {
+                    self.round_robin_read_from_az_awareness_replica(slot_map_value, az.to_string())
+                }
                 _ => self.round_robin_read_from_replica(slot_map_value),
             },
         }
@@ -325,17 +317,9 @@ where
         &self,
         route: &Route,
     ) -> Option<ConnectionAndAddress<Connection>> {
-        self.connection_for_route_with_params(route, None)
-    }
-
-    pub(crate) fn connection_for_route_with_params(
-        &self,
-        route: &Route,
-        cluster_params: Option<ClusterParams>,
-    ) -> Option<ConnectionAndAddress<Connection>> {
-        self.lookup_route(route, &cluster_params).or_else(|| {
+        self.lookup_route(route).or_else(|| {
             if route.slot_addr() != SlotAddr::Master {
-                self.lookup_route(&Route::new(route.slot(), SlotAddr::Master), &cluster_params)
+                self.lookup_route(&Route::new(route.slot(), SlotAddr::Master))
             } else {
                 None
             }
@@ -514,7 +498,7 @@ mod tests {
     }
 
     fn create_container_with_az_strategy(
-        strategy: ReadFromReplicaStrategy,
+        // strategy: ReadFromReplicaStrategy,
         use_management_connections: bool,
     ) -> ConnectionsContainer<usize> {
         let slot_map = SlotMap::new(
@@ -572,7 +556,7 @@ mod tests {
         ConnectionsContainer {
             slot_map,
             connection_map,
-            read_from_replica_strategy: strategy,
+            read_from_replica_strategy: ReadFromReplicaStrategy::AZAffinity("use-1a".to_string()),
             topology_hash: 0,
         }
     }
@@ -803,28 +787,17 @@ mod tests {
 
     #[test]
     fn get_connection_for_az_affinity_route() {
-        let container =
-            create_container_with_az_strategy(ReadFromReplicaStrategy::AZAffinity, false);
-        let mut cluster_params = ClusterParams::default();
-
-        cluster_params.client_az = Some("use-1a".to_string());
+        let container = create_container_with_az_strategy(false);
 
         // slot number is not exits
         assert!(container
-            .connection_for_route_with_params(
-                &Route::new(1001, SlotAddr::ReplicaOptional),
-                Some(cluster_params.clone())
-            )
+            .connection_for_route(&Route::new(1001, SlotAddr::ReplicaOptional))
             .is_none());
-
         // Get the replica that holds the slot 1002
         assert_eq!(
             21,
             container
-                .connection_for_route_with_params(
-                    &Route::new(1002, SlotAddr::ReplicaOptional),
-                    Some(cluster_params.clone())
-                )
+                .connection_for_route(&Route::new(1002, SlotAddr::ReplicaOptional))
                 .unwrap()
                 .1
         );
@@ -833,20 +806,14 @@ mod tests {
         assert_eq!(
             2,
             container
-                .connection_for_route_with_params(
-                    &Route::new(1500, SlotAddr::Master),
-                    Some(cluster_params.clone())
-                )
+                .connection_for_route(&Route::new(1500, SlotAddr::Master))
                 .unwrap()
                 .1
         );
 
         // receive one of the replicas that holds the slot 2001 and is in the availability zone of the client ("use-1a")
         assert!(one_of(
-            container.connection_for_route_with_params(
-                &Route::new(2001, SlotAddr::ReplicaRequired),
-                Some(cluster_params.clone())
-            ),
+            container.connection_for_route(&Route::new(2001, SlotAddr::ReplicaRequired)),
             &[31, 33],
         ));
 
@@ -855,10 +822,7 @@ mod tests {
         assert_eq!(
             31,
             container
-                .connection_for_route_with_params(
-                    &Route::new(2001, SlotAddr::ReplicaOptional),
-                    Some(cluster_params.clone())
-                )
+                .connection_for_route(&Route::new(2001, SlotAddr::ReplicaOptional))
                 .unwrap()
                 .1
         );
@@ -868,10 +832,7 @@ mod tests {
         assert_eq!(
             32,
             container
-                .connection_for_route_with_params(
-                    &Route::new(2001, SlotAddr::ReplicaOptional),
-                    Some(cluster_params.clone())
-                )
+                .connection_for_route(&Route::new(2001, SlotAddr::ReplicaOptional))
                 .unwrap()
                 .1
         );
@@ -881,13 +842,36 @@ mod tests {
         assert_eq!(
             3,
             container
-                .connection_for_route_with_params(
-                    &Route::new(2001, SlotAddr::ReplicaOptional),
-                    Some(cluster_params.clone())
-                )
+                .connection_for_route(&Route::new(2001, SlotAddr::ReplicaOptional))
                 .unwrap()
                 .1
         );
+    }
+
+    #[test]
+    fn get_connection_for_az_affinity_route_round_robin() {
+        let container = create_container_with_az_strategy(false);
+
+        let mut addresses = vec![
+            container
+                .connection_for_route(&Route::new(2001, SlotAddr::ReplicaOptional))
+                .unwrap()
+                .1,
+            container
+                .connection_for_route(&Route::new(2001, SlotAddr::ReplicaOptional))
+                .unwrap()
+                .1,
+            container
+                .connection_for_route(&Route::new(2001, SlotAddr::ReplicaOptional))
+                .unwrap()
+                .1,
+            container
+                .connection_for_route(&Route::new(2001, SlotAddr::ReplicaOptional))
+                .unwrap()
+                .1,
+        ];
+        addresses.sort();
+        assert_eq!(addresses, vec![31, 31, 33, 33]);
     }
 
     #[test]

@@ -1047,7 +1047,7 @@ where
             conn_lock: StdRwLock::new(ConnectionsContainer::new(
                 Default::default(),
                 connections,
-                cluster_params.read_from_replicas,
+                cluster_params.read_from_replicas.clone(),
                 0,
             )),
             cluster_params: cluster_params.clone(),
@@ -1820,7 +1820,7 @@ where
         *write_guard = ConnectionsContainer::new(
             new_slots,
             new_connections,
-            inner.cluster_params.read_from_replicas,
+            inner.cluster_params.read_from_replicas.clone(),
             topology_hash,
         );
         Ok(())
@@ -2534,7 +2534,7 @@ where
             curr_retry,
             inner.cluster_params.tls,
             num_of_nodes_to_query,
-            inner.cluster_params.read_from_replicas,
+            inner.cluster_params.read_from_replicas.clone(),
         ),
         failed_addresses,
     )

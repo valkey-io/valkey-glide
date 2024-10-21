@@ -53,12 +53,12 @@ impl ::std::fmt::Display for NodeAddress {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Default)]
+#[derive(PartialEq, Eq, Clone, Default)]
 pub enum ReadFrom {
     #[default]
     Primary,
     PreferReplica,
-    AZAffinity,
+    AZAffinity(String),
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Default)]
@@ -100,7 +100,17 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             protobuf::ReadFrom::Primary => ReadFrom::Primary,
             protobuf::ReadFrom::PreferReplica => ReadFrom::PreferReplica,
             protobuf::ReadFrom::LowestLatency => todo!(),
-            protobuf::ReadFrom::AZAffinity => todo!(),
+            protobuf::ReadFrom::AZAffinity => {
+                if let Some(client_az) = chars_to_string_option(&value.client_az) {
+                    ReadFrom::AZAffinity(client_az)
+                } else {
+                    log_warn(
+                        "types",
+                        format!("Failed to convert AZ string: '{:?}'", value.client_az),
+                    );
+                    ReadFrom::PreferReplica
+                }
+            }
         });
 
         let client_name = chars_to_string_option(&value.client_name);
