@@ -192,7 +192,6 @@ export class GlideJson {
      * @param client - The client to execute the command.
      * @param key - The key of the JSON document.
      * @param path - The JSONPath to specify.
-     * @param option - see {@link DecoderOption}.
      * @returns - For JSONPath (`path` starts with `$`), returns a list of boolean replies for every possible path, with the toggled boolean value,
      * or null for JSON values matching the path that are not boolean.
      * - For legacy path (`path` doesn't starts with `$`), returns the value of the toggled boolean in `path`.
@@ -223,9 +222,8 @@ export class GlideJson {
         client: BaseClient,
         key: GlideString,
         path: GlideString,
-        option?: DecoderOption,
     ): Promise<ReturnTypeJson<boolean>> {
         const args = ["JSON.TOGGLE", key, path];
-        return _executeCommand<ReturnTypeJson<boolean>>(client, args, option);
+        return _executeCommand<ReturnTypeJson<boolean>>(client, args);
     }
 }
