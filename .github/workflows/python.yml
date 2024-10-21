@@ -296,8 +296,6 @@ jobs:
               run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
 
             - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
 
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
