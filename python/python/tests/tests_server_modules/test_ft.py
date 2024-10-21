@@ -115,7 +115,7 @@ class TestFt:
     ):
         # Helper function used for creating a basic index with JSON data type with a text and vector field.
         fields: List[Field] = []
-        textField: Field = TextField("text-field")
+        textField: Field = TextField("$.text-field", "text-field")
 
         vectorFieldHash: VectorField = VectorField(
             name="$.vec",
