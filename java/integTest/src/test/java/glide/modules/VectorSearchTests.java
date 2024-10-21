@@ -67,6 +67,7 @@ public class VectorSearchTests {
     @AfterAll
     @SneakyThrows
     public static void teardown() {
+        client.flushall(FlushMode.SYNC, ALL_PRIMARIES).get();
         client.close();
     }
 
