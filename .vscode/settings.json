@@ -59,6 +59,4 @@
     ],
     "rust-analyzer.cargo.features": "all",
     "dotnet.defaultSolution": "csharp/csharp.sln",
-    "makefile.configureOnOpen": false,
-    "prettier.configPath": "/home/ubuntu/glide-for-redis/eslint.config.mjs"
 }
