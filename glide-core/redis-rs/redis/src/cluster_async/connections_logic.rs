@@ -14,7 +14,6 @@ use crate::{
 };
 use std::net::SocketAddr;
 
-use future::ok;
 use futures::prelude::*;
 use futures_util::{future::BoxFuture, join};
 use tracing::warn;
@@ -349,7 +348,6 @@ async fn setup_user_connection<C>(
 where
     C: ConnectionLike + Connect + Send + 'static,
 {
-    // let mut conn = &conn_details.conn;
     let read_from_replicas = params.read_from_replicas
         != crate::cluster_slotmap::ReadFromReplicaStrategy::AlwaysFromPrimary;
     let connection_timeout = params.connection_timeout;
@@ -373,29 +371,16 @@ where
     let info_res = conn_details.conn.req_packed_command(&cmd("INFO")).await;
     match info_res {
         Ok(value) => {
-            let info_dict: Result<InfoDict, RedisError> = FromRedisValue::from_redis_value(&value);
-            if let Ok(info_dict) = info_dict {
-                if let Some(az) = info_dict.get::<String>("availability_zone") {
-                    conn_details.az = Some(az);
-                    Ok(())
-                } else {
-                    Err(RedisError::from((
-                        ErrorKind::ResponseError,
-                        "Failed to get availability_zone from info",
-                    )))
-                }
-            } else {
-                Err(RedisError::from((
-                    ErrorKind::ResponseError,
-                    "Failed to parse info command",
-                )))
-            }
+            let info_dict: InfoDict = FromRedisValue::from_redis_value(&value)?;
+            conn_details.az = info_dict.get::<String>("availability_zone");
+            Ok(())
         }
-        Err(_) => {
+        Err(e) => {
             // Handle the error case for the INFO command
             Err(RedisError::from((
                 ErrorKind::ResponseError,
-                "Failed to execute INFO command",
+                "Failed to execute INFO command. ",
+                format!("{:?}", e),
             )))
         }
     }

@@ -1171,7 +1171,7 @@ where
             conn_lock: StdRwLock::new(ConnectionsContainer::new(
                 Default::default(),
                 connections,
-                cluster_params.read_from_replicas,
+                cluster_params.read_from_replicas.clone(),
                 0,
             )),
             cluster_params: StdRwLock::new(cluster_params.clone()),

@@ -121,6 +121,164 @@ mod cluster_async {
         .unwrap();
     }
 
+    #[cfg(feature = "valkey-gte-7-2")]
+    #[tokio::test]
+    async fn test_routing_by_slot_to_replica_with_az_affinity_strategy_to_half_replicas() {
+        let replica_num: u16 = 4;
+        let primaries_num: u16 = 3;
+        let replicas_num_in_client_az = replica_num / 2;
+        let cluster =
+            TestClusterContext::new((replica_num * primaries_num) + primaries_num, replica_num);
+        let az: String = "us-east-1a".to_string();
+
+        let mut connection = cluster.async_connection(None).await;
+        let cluster_addresses: Vec<_> = cluster
+            .cluster
+            .servers
+            .iter()
+            .map(|server| server.connection_info())
+            .collect();
+
+        let mut cmd = redis::cmd("CONFIG");
+        cmd.arg(&["SET", "availability-zone", &az.clone()]);
+
+        for _ in 0..replicas_num_in_client_az {
+            connection
+                .route_command(
+                    &cmd,
+                    RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
+                        12182, // foo key is mapping to 12182 slot
+                        SlotAddr::ReplicaRequired,
+                    ))),
+                )
+                .await
+                .unwrap();
+        }
+
+        let mut client = ClusterClient::builder(cluster_addresses.clone())
+            .read_from(redis::cluster_slotmap::ReadFromReplicaStrategy::AZAffinity(
+                az.clone(),
+            ))
+            .build()
+            .unwrap()
+            .get_async_connection(None)
+            .await
+            .unwrap();
+
+        // Each replica in the client az will return the value of foo n times
+        let n = 4;
+        for _ in 0..n * replicas_num_in_client_az {
+            let mut cmd = redis::cmd("GET");
+            cmd.arg("foo");
+            let _res: RedisResult<Value> = cmd.query_async(&mut client).await;
+        }
+
+        let mut cmd = redis::cmd("INFO");
+        cmd.arg("ALL");
+        let info = connection
+            .route_command(
+                &cmd,
+                RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None)),
+            )
+            .await
+            .unwrap();
+
+        let info_result = redis::from_owned_redis_value::<HashMap<String, String>>(info).unwrap();
+        let get_cmdstat = format!("cmdstat_get:calls={}", n);
+        let client_az = format!("availability_zone:{}", az);
+
+        let matching_entries_count = info_result
+            .values()
+            .filter(|value| value.contains(&get_cmdstat) && value.contains(&client_az))
+            .count();
+
+        assert_eq!(
+            (matching_entries_count.try_into() as Result<u16, _>).unwrap(),
+            replicas_num_in_client_az,
+            "Test failed: expected exactly '{}' entries with '{}' and '{}', found {}",
+            replicas_num_in_client_az,
+            get_cmdstat,
+            client_az,
+            matching_entries_count
+        );
+    }
+
+    #[cfg(feature = "valkey-gte-7-2")]
+    #[tokio::test]
+    async fn test_routing_by_slot_to_replica_with_az_affinity_strategy_to_all_replicas() {
+        let replica_num: u16 = 3;
+        let primaries_num: u16 = 3;
+        let cluster =
+            TestClusterContext::new((replica_num * primaries_num) + primaries_num, replica_num);
+        let az: String = "us-east-1a".to_string();
+
+        let mut connection = cluster.async_connection(None).await;
+        let cluster_addresses: Vec<_> = cluster
+            .cluster
+            .servers
+            .iter()
+            .map(|server| server.connection_info())
+            .collect();
+
+        let mut cmd = redis::cmd("CONFIG");
+        cmd.arg(&["SET", "availability-zone", &az.clone()]);
+
+        connection
+            .route_command(
+                &cmd,
+                RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None)),
+            )
+            .await
+            .unwrap();
+
+        let mut client = ClusterClient::builder(cluster_addresses.clone())
+            .read_from(redis::cluster_slotmap::ReadFromReplicaStrategy::AZAffinity(
+                az.clone(),
+            ))
+            .build()
+            .unwrap()
+            .get_async_connection(None)
+            .await
+            .unwrap();
+
+        // Each replica will return the value of foo n times
+        let n = 4;
+        for _ in 0..(n * replica_num) {
+            let mut cmd = redis::cmd("GET");
+            cmd.arg("foo");
+            let _res: RedisResult<Value> = cmd.query_async(&mut client).await;
+        }
+
+        let mut cmd = redis::cmd("INFO");
+        cmd.arg("ALL");
+        let info = connection
+            .route_command(
+                &cmd,
+                RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None)),
+            )
+            .await
+            .unwrap();
+
+        let info_result = redis::from_owned_redis_value::<HashMap<String, String>>(info).unwrap();
+        let get_cmdstat = format!("cmdstat_get:calls={}", n);
+        let client_az = format!("availability_zone:{}", az);
+
+        let matching_entries_count = info_result
+            .values()
+            .filter(|value| value.contains(&get_cmdstat) && value.contains(&client_az))
+            .count();
+
+        assert_eq!(
+            (matching_entries_count.try_into() as Result<u16, _>).unwrap(),
+            replica_num,
+            "Test failed: expected exactly '{}' entries with '{}' and '{}', found {}",
+            replica_num.to_string(),
+            get_cmdstat,
+            client_az,
+            matching_entries_count
+        );
+    }
+
     #[test]
     #[serial_test::serial]
     fn test_async_cluster_basic_eval() {
@@ -546,12 +704,12 @@ mod cluster_async {
             connection_timeout: std::time::Duration,
             socket_addr: Option<SocketAddr>,
             glide_connection_options: GlideConnectionOptions,
-        ) -> RedisFuture<'a, (Self, Option<IpAddr>)>
+        ) -> RedisFuture<'a, (Self, Option<IpAddr>, Option<String>)>
         where
             T: IntoConnectionInfo + Send + 'a,
         {
             Box::pin(async move {
-                let (inner, _ip) = MultiplexedConnection::connect(
+                let (inner, _ip, _az) = MultiplexedConnection::connect(
                     info,
                     response_timeout,
                     connection_timeout,
@@ -559,7 +717,7 @@ mod cluster_async {
                     glide_connection_options,
                 )
                 .await?;
-                Ok((ErrorConnection { inner }, None))
+                Ok((ErrorConnection { inner }, None, None))
             })
         }
     }

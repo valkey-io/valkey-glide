@@ -133,7 +133,7 @@ impl cluster_async::Connect for MockConnection {
         _connection_timeout: Duration,
         _socket_addr: Option<SocketAddr>,
         _glide_connection_options: GlideConnectionOptions,
-    ) -> RedisFuture<'a, (Self, Option<IpAddr>)>
+    ) -> RedisFuture<'a, (Self, Option<IpAddr>, Option<String>)>
     where
         T: IntoConnectionInfo + Send + 'a,
     {
@@ -180,6 +180,7 @@ impl cluster_async::Connect for MockConnection {
                 port,
             },
             ip,
+            None,
         )))
     }
 }
