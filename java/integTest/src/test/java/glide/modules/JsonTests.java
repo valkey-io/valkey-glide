@@ -18,6 +18,8 @@ import glide.api.models.GlideString;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.json.JsonArrPopOptions;
+import glide.api.models.commands.json.JsonArrPopOptionsBinary;
 import glide.api.models.commands.json.JsonGetOptions;
 import java.util.UUID;
 import lombok.SneakyThrows;
@@ -257,7 +259,7 @@ public class JsonTests {
         assertArrayEquals(new Object[] {3L, 2L, null}, (Object[]) res);
 
         // Legacy path retrieves the first array match at ..a
-        res = Json.arrlen(client, key, "..a").get();
+        res = Json.arrlen(client, gs(key), gs("..a")).get();
         assertEquals(3L, res);
 
         doc = "[1, 2, true, null, \"tree\"]";
@@ -266,5 +268,45 @@ public class JsonTests {
         // no path
         res = Json.arrlen(client, key).get();
         assertEquals(5L, res);
+        res = Json.arrlen(client, gs(key)).get();
+        assertEquals(5L, res);
+    }
+
+    @Test
+    @SneakyThrows
+    public void arrpop() {
+        String key = UUID.randomUUID().toString();
+        String doc =
+                "{\"a\": [1, 2, true], \"b\": {\"a\": [3, 4, [\"value\", 3, false] ,5], \"c\": {\"a\":"
+                        + " 42}}}";
+        assertEquals(OK, Json.set(client, key, "$", doc).get());
+
+        var res =
+                Json.arrpop(client, key, JsonArrPopOptions.builder().path("$.a").index(1).build()).get();
+        assertArrayEquals(new Object[] {"2"}, (Object[]) res);
+
+        res =
+                Json.arrpop(client, gs(key), JsonArrPopOptionsBinary.builder().path(gs("$..a")).build())
+                        .get();
+        assertArrayEquals(new Object[] {gs("true"), gs("5"), null}, (Object[]) res);
+
+        res = Json.arrpop(client, key, JsonArrPopOptions.builder().path("..a").build()).get();
+        assertEquals("1", res);
+
+        // Even if only one array element was returned, ensure second array at `..a` was popped
+        doc = Json.get(client, key, new String[] {"$..a"}).get();
+        assertEquals("[[],[3,4],42]", doc);
+
+        // Out of index
+        res =
+                Json.arrpop(client, key, JsonArrPopOptions.builder().path("$..a").index(10).build()).get();
+        assertArrayEquals(new Object[] {null, "4", null}, (Object[]) res);
+
+        // pop without options
+        assertEquals(OK, Json.set(client, key, "$", doc).get());
+        res = Json.arrpop(client, key).get();
+        assertEquals("42", res);
+        res = Json.arrpop(client, gs(key)).get();
+        assertEquals(gs("[3]"), res);
     }
 }
