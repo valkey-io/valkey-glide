@@ -107,6 +107,8 @@ class TestFt:
         indexName = str(uuid.uuid4())
         await TestFt._create_test_index_with_vector_field(self, glide_client=glide_client, index_name=indexName)
         result = await ft.info(glide_client, indexName)
+        print("result=====")
+        print(result)
         assert indexName.encode() == result.get("index_name")
         assert b"JSON" == result.get("key_type")
         assert [b"key-prefix"] == result.get("key_prefixes")
