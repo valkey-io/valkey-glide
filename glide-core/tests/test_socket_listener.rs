@@ -172,7 +172,7 @@ mod socket_listener {
     }
 
     fn read_from_socket(buffer: &mut Vec<u8>, socket: &mut UnixStream) -> usize {
-        buffer.resize(100, 0_u8);
+        buffer.resize(300, 0_u8);
         socket.read(buffer).unwrap()
     }
 
