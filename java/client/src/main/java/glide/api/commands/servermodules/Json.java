@@ -20,11 +20,13 @@ import lombok.NonNull;
 public class Json {
 
     private static final String JSON_PREFIX = "JSON.";
-    public static final String JSON_SET = JSON_PREFIX + "SET";
-    public static final String JSON_GET = JSON_PREFIX + "GET";
+    private static final String JSON_SET = JSON_PREFIX + "SET";
+    private static final String JSON_GET = JSON_PREFIX + "GET";
     private static final String JSON_ARRAPPEND = JSON_PREFIX + "ARRAPPEND";
     private static final String JSON_ARRINSERT = JSON_PREFIX + "ARRINSERT";
     private static final String JSON_ARRLEN = JSON_PREFIX + "ARRLEN";
+    private static final String JSON_DEL = JSON_PREFIX + "DEL";
+    private static final String JSON_FORGET = JSON_PREFIX + "FORGET";
 
     private Json() {}
 
@@ -41,7 +43,7 @@ public class Json {
      * @return A simple <code>"OK"</code> response if the value is successfully set.
      * @example
      *     <pre>{@code
-     * String value = Json.set(client, "doc", ".", "{'a': 1.0, 'b': 2}").get();
+     * String value = Json.set(client, "doc", ".", "{\"a\": 1.0, \"b\": 2}").get();
      * assert value.equals("OK");
      * }</pre>
      */
@@ -66,7 +68,7 @@ public class Json {
      * @return A simple <code>"OK"</code> response if the value is successfully set.
      * @example
      *     <pre>{@code
-     * String value = Json.set(client, gs("doc"), gs("."), gs("{'a': 1.0, 'b': 2}")).get();
+     * String value = Json.set(client, gs("doc"), gs("."), gs("{\"a\": 1.0, \"b\": 2}")).get();
      * assert value.equals("OK");
      * }</pre>
      */
@@ -93,7 +95,7 @@ public class Json {
      *     set because of <code>setCondition</code>, returns <code>null</code>.
      * @example
      *     <pre>{@code
-     * String value = Json.set(client, "doc", ".", "{'a': 1.0, 'b': 2}", ConditionalChange.ONLY_IF_DOES_NOT_EXIST).get();
+     * String value = Json.set(client, "doc", ".", "{\"a\": 1.0, \"b\": 2}", ConditionalChange.ONLY_IF_DOES_NOT_EXIST).get();
      * assert value.equals("OK");
      * }</pre>
      */
@@ -122,7 +124,7 @@ public class Json {
      *     set because of <code>setCondition</code>, returns <code>null</code>.
      * @example
      *     <pre>{@code
-     * String value = Json.set(client, gs("doc"), gs("."), gs("{'a': 1.0, 'b': 2}"), ConditionalChange.ONLY_IF_DOES_NOT_EXIST).get();
+     * String value = Json.set(client, gs("doc"), gs("."), gs("{\"a\": 1.0, \"b\": 2}"), ConditionalChange.ONLY_IF_DOES_NOT_EXIST).get();
      * assert value.equals("OK");
      * }</pre>
      */
@@ -147,7 +149,7 @@ public class Json {
      * @example
      *     <pre>{@code
      * String value = Json.get(client, "doc").get();
-     * assert value.equals("{'a': 1.0, 'b': 2}");
+     * assert value.equals("{\"a\": 1.0, \"b\": 2}");
      * }</pre>
      */
     public static CompletableFuture<String> get(@NonNull BaseClient client, @NonNull String key) {
@@ -164,7 +166,7 @@ public class Json {
      * @example
      *     <pre>{@code
      * GlideString value = Json.get(client, gs("doc")).get();
-     * assert value.equals(gs("{'a': 1.0, 'b': 2}"));
+     * assert value.equals(gs("{\"a\": 1.0, \"b\": 2}"));
      * }</pre>
      */
     public static CompletableFuture<GlideString> get(
@@ -199,7 +201,7 @@ public class Json {
      * @example
      *     <pre>{@code
      * String value = Json.get(client, "doc", new String[] {"$"}).get();
-     * assert value.equals("{'a': 1.0, 'b': 2}");
+     * assert value.equals("{\"a\": 1.0, \"b\": 2}");
      * String value = Json.get(client, "doc", new String[] {"$.a", "$.b"}).get();
      * assert value.equals("{\"$.a\": [1.0], \"$.b\": [2]}");
      * }</pre>
@@ -236,7 +238,7 @@ public class Json {
      * @example
      *     <pre>{@code
      * GlideString value = Json.get(client, gs("doc"), new GlideString[] {gs("$")}).get();
-     * assert value.equals(gs("{'a': 1.0, 'b': 2}"));
+     * assert value.equals(gs("{\"a\": 1.0, \"b\": 2}"));
      * GlideString value = Json.get(client, gs("doc"), new GlideString[] {gs("$.a"), gs("$.b")}).get();
      * assert value.equals(gs("{\"$.a\": [1.0], \"$.b\": [2]}"));
      * }</pre>
@@ -700,6 +702,151 @@ public class Json {
     public static CompletableFuture<Long> arrlen(
             @NonNull BaseClient client, @NonNull GlideString key) {
         return executeCommand(client, new GlideString[] {gs(JSON_ARRLEN), key});
+    }
+
+    /**
+     * Deletes the JSON document stored at <code>key</code>.
+     *
+     * @param client The Valkey GLIDE client to execute the command.
+     * @param key The <code>key</code> of the JSON document.
+     * @return The number of elements deleted. 0 if the key does not exist.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", , ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}");
+     * Long result = Json.del(client, "doc").get();
+     * assertEquals(result, 1L);
+     * }</pre>
+     */
+    public static CompletableFuture<Long> del(@NonNull BaseClient client, @NonNull String key) {
+        return executeCommand(client, new String[] {JSON_DEL, key});
+    }
+
+    /**
+     * Deletes the JSON document stored at <code>key</code>.
+     *
+     * @param client The Valkey GLIDE client to execute the command.
+     * @param key The <code>key</code> of the JSON document.
+     * @return The number of elements deleted. 0 if the key does not exist.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", , ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}");
+     * Long result = Json.del(client, gs("doc")).get();
+     * assertEquals(result, 1L);
+     * }</pre>
+     */
+    public static CompletableFuture<Long> del(@NonNull BaseClient client, @NonNull GlideString key) {
+        return executeCommand(client, new GlideString[] {gs(JSON_DEL), key});
+    }
+
+    /**
+     * Deletes the JSON value at the specified <code>path</code> within the JSON document stored at <code>key</code>.
+     *
+     * @param client The Valkey GLIDE client to execute the command.
+     * @param key The <code>key</code> of the JSON document.
+     * @param path Represents the path within the JSON document where the value will be deleted.
+     * @return The number of elements deleted. 0 if the key does not exist, or if the JSON path is invalid or does not exist.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", , ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}");
+     * Long result = Json.del(client, "doc", "$..a").get();
+     * assertEquals(result, 2L);
+     * }</pre>
+     */
+    public static CompletableFuture<Long> del(
+            @NonNull BaseClient client, @NonNull String key, @NonNull String path) {
+        return executeCommand(client, new String[] {JSON_DEL, key, path});
+    }
+
+    /**
+     * Deletes the JSON value at the specified <code>path</code> within the JSON document stored at <code>key</code>.
+     *
+     * @param client The Valkey GLIDE client to execute the command.
+     * @param key The <code>key</code> of the JSON document.
+     * @param path Represents the path within the JSON document where the value will be deleted.
+     * @return The number of elements deleted. 0 if the key does not exist, or if the JSON path is invalid or does not exist.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", , ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}");
+     * Long result = Json.del(client, gs("doc"), gs("$..a")).get();
+     * assertEquals(result, 2L);
+     * }</pre>
+     */
+    public static CompletableFuture<Long> del(
+            @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString path) {
+        return executeCommand(client, new GlideString[] {gs(JSON_DEL), key, path});
+    }
+
+    /**
+     * Deletes the JSON document stored at <code>key</code>.
+     *
+     * @param client The Valkey GLIDE client to execute the command.
+     * @param key The <code>key</code> of the JSON document.
+     * @return The number of elements deleted. 0 if the key does not exist.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", , ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}");
+     * Long result = Json.forget(client, "doc").get();
+     * assertEquals(result, 1L);
+     * }</pre>
+     */
+    public static CompletableFuture<Long> forget(@NonNull BaseClient client, @NonNull String key) {
+        return executeCommand(client, new String[] {JSON_FORGET, key});
+    }
+
+    /**
+     * Deletes the JSON document stored at <code>key</code>.
+     *
+     * @param client The Valkey GLIDE client to execute the command.
+     * @param key The <code>key</code> of the JSON document.
+     * @return The number of elements deleted. 0 if the key does not exist.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", , ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}");
+     * Long result = Json.forget(client, gs("doc")).get();
+     * assertEquals(result, 1L);
+     * }</pre>
+     */
+    public static CompletableFuture<Long> forget(
+            @NonNull BaseClient client, @NonNull GlideString key) {
+        return executeCommand(client, new GlideString[] {gs(JSON_FORGET), key});
+    }
+
+    /**
+     * Deletes the JSON value at the specified <code>path</code> within the JSON document stored at <code>key</code>.
+     *
+     * @param client The Valkey GLIDE client to execute the command.
+     * @param key The <code>key</code> of the JSON document.
+     * @param path Represents the path within the JSON document where the value will be deleted.
+     * @return The number of elements deleted. 0 if the key does not exist, or if the JSON path is invalid or does not exist.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", , ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}");
+     * Long result = Json.forget(client, "doc", "$..a").get();
+     * assertEquals(result, 2L);
+     * }</pre>
+     */
+    public static CompletableFuture<Long> forget(
+            @NonNull BaseClient client, @NonNull String key, @NonNull String path) {
+        return executeCommand(client, new String[] {JSON_FORGET, key, path});
+    }
+
+    /**
+     * Deletes the JSON value at the specified <code>path</code> within the JSON document stored at <code>key</code>.
+     *
+     * @param client The Valkey GLIDE client to execute the command.
+     * @param key The <code>key</code> of the JSON document.
+     * @param path Represents the path within the JSON document where the value will be deleted.
+     * @return The number of elements deleted. 0 if the key does not exist, or if the JSON path is invalid or does not exist.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", , ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}");
+     * Long result = Json.forget(client, gs("doc"), gs("$..a")).get();
+     * assertEquals(result, 2L);
+     * }</pre>
+     */
+    public static CompletableFuture<Long> forget(
+            @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString path) {
+        return executeCommand(client, new GlideString[] {gs(JSON_FORGET), key, path});
     }
 
     /**
