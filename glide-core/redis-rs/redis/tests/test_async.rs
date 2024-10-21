@@ -569,7 +569,7 @@ mod basic_async {
                 Err(err) => break err,
             }
         };
-        assert_eq!(err.kind(), ErrorKind::IoErrorRetrySafe);
+        assert_eq!(err.kind(), ErrorKind::FatalSendError);
     }
 
     #[tokio::test]

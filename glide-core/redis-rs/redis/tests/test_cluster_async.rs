@@ -2542,7 +2542,7 @@ mod cluster_async {
                     6380 => panic!("Node should not be called"),
                     _ => match completed.fetch_add(1, Ordering::SeqCst) {
                         0..=1 => Err(Err(RedisError::from((
-                            ErrorKind::IoErrorRetrySafe,
+                            ErrorKind::FatalSendError,
                             "mock-io-error",
                         )))),
                         _ => Err(Ok(Value::BulkString(b"123".to_vec()))),
@@ -2651,7 +2651,7 @@ mod cluster_async {
                 let i = requests.fetch_add(1, atomic::Ordering::SeqCst);
                 match i {
                     0 => Err(Err(RedisError::from((
-                        ErrorKind::IoErrorRetrySafe,
+                        ErrorKind::FatalSendError,
                         "server didn't receive the request, safe to retry",
                     )))),
                     _ => Err(Ok(Value::Int(1))),
@@ -3988,7 +3988,7 @@ mod cluster_async {
                         panic!("Too many pings!");
                     }
                     Err(Err(RedisError::from((
-                        ErrorKind::IoErrorRetrySafe,
+                        ErrorKind::FatalSendError,
                         "mock-io-error",
                     ))))
                 } else {
@@ -3999,7 +3999,7 @@ mod cluster_async {
                         // Error once with io-error, ensure connection is reestablished w/out calling
                         // other node (i.e., not doing a full slot rebuild)
                         Err(Err(RedisError::from((
-                            ErrorKind::IoErrorRetrySafe,
+                            ErrorKind::FatalSendError,
                             "mock-io-error",
                         ))))
                     } else {

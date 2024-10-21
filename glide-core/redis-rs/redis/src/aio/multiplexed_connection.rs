@@ -374,20 +374,22 @@ where
                 // by the 'send' function. Since the server did not receive the data, it is safe to retry
                 // the request.
                 RedisError::from((
-                    crate::ErrorKind::IoErrorRetrySafe,
+                    crate::ErrorKind::FatalSendError,
                     "Failed to send the request to the server",
-                    format!("{err}"),
+                    err.to_string(),
                 ))
             })?;
         match Runtime::locate().timeout(timeout, receiver).await {
             Ok(Ok(result)) => result,
-            Ok(Err(_)) => {
-                // The `sender` was dropped which likely means that the stream part
-                // failed for one reason or another.
-                // Since we don't know if the server received the request, retrying it isn't safe.
-                // For example, retrying an INCR request could result in double increments.
-                // Hence, we return an IoError instead of an IoErrorRetrySafe.
-                Err(RedisError::from(io::Error::from(io::ErrorKind::BrokenPipe)))
+            Ok(Err(err)) => {
+                // The `sender` was dropped, likely indicating a failure in the stream.
+                // This error suggests that it's unclear whether the server received the request before the connection failed,
+                // making it unsafe to retry. For example, retrying an INCR request could result in double increments.
+                Err(RedisError::from((
+                    crate::ErrorKind::FatalReceiveError,
+                    "Failed to receive a response due to a fatal error",
+                    err.to_string(),
+                )))
             }
             Err(elapsed) => Err(elapsed.into()),
         }

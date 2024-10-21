@@ -83,7 +83,7 @@ macro_rules! reconnect_if_dropped {
 macro_rules! reconnect_if_io_error {
     ($self:expr, $result:expr, $current:expr) => {
         if let Err(e) = $result {
-            if e.is_io_error() {
+            if e.is_connection_dropped() {
                 $self.reconnect($current);
             }
             return Err(e);
