@@ -342,7 +342,6 @@ where
     Ok(connection)
 }
 
-// adarov todo: change to get connectionDetails and update the az
 async fn setup_user_connection<C>(
     conn_details: &mut ConnectionDetails<C>,
     params: ClusterParams,

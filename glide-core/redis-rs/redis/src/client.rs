@@ -160,12 +160,11 @@ impl Client {
         .map(|(conn, _ip, _az)| conn)
     }
 
-    // adarov todo: remove az from sending
     /// For TCP connections: returns (async connection, Some(the direct IP address, Some(az)))
     /// For Unix connections, returns (async connection, None, None)
     #[cfg(feature = "tokio-comp")]
     #[cfg_attr(docsrs, doc(cfg(feature = "tokio-comp")))]
-    pub async fn get_multiplexed_async_connection_and_ip(
+    pub async fn get_multiplexed_async_connection_ip_and_az(
         &self,
         glide_connection_options: GlideConnectionOptions,
     ) -> RedisResult<(

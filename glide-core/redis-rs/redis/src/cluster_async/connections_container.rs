@@ -25,7 +25,6 @@ macro_rules! count_connections {
 
 /// A struct that encapsulates a network connection along with its associated IP address.
 #[derive(Clone, Eq, PartialEq, Debug)]
-/// adarov: rename to ConnectionDetails
 pub struct ConnectionDetails<Connection> {
     /// The actual connection
     pub conn: Connection,
@@ -292,8 +291,11 @@ where
             return self.connection_for_address(addrs.primary.as_str());
         }
 
+        //
         match route.slot_addr() {
+            // Master strategy will be in use when the command is not read_only
             SlotAddr::Master => self.connection_for_address(addrs.primary.as_str()),
+            // ReplicaOptional strategy will be in use when the command is read_only
             SlotAddr::ReplicaOptional => match self.read_from_replica_strategy {
                 ReadFromReplicaStrategy::AlwaysFromPrimary => {
                     self.connection_for_address(addrs.primary.as_str())
@@ -307,11 +309,15 @@ where
                         cluster_params.as_ref().unwrap().client_az.clone()?,
                     ),
             },
-            SlotAddr::ReplicaRequired => self.round_robin_read_from_replica(slot_map_value),
-            SlotAddr::AZAffinity => self.round_robin_read_from_az_awareness_replica(
-                slot_map_value,
-                cluster_params.as_ref().unwrap().client_az.clone()?,
-            ),
+            // when the user strategy per command is replica_preffered
+            SlotAddr::ReplicaRequired => match self.read_from_replica_strategy {
+                ReadFromReplicaStrategy::AZAffinity => self
+                    .round_robin_read_from_az_awareness_replica(
+                        slot_map_value,
+                        cluster_params.as_ref().unwrap().client_az.clone()?,
+                    ),
+                _ => self.round_robin_read_from_replica(slot_map_value),
+            },
         }
     }
 
@@ -524,7 +530,11 @@ mod tests {
                     2001,
                     3000,
                     "primary3".to_owned(),
-                    vec!["replica3-1".to_owned(), "replica3-2".to_owned()],
+                    vec![
+                        "replica3-1".to_owned(),
+                        "replica3-2".to_owned(),
+                        "replica3-3".to_owned(),
+                    ],
                 ),
             ],
             ReadFromReplicaStrategy::AlwaysFromPrimary, // this argument shouldn't matter, since we overload the RFR strategy.
@@ -553,6 +563,10 @@ mod tests {
         connection_map.insert(
             "replica3-2".into(),
             create_cluster_node(32, use_management_connections, Some("use-1b".to_string())),
+        );
+        connection_map.insert(
+            "replica3-3".into(),
+            create_cluster_node(33, use_management_connections, Some("use-1a".to_string())),
         );
 
         ConnectionsContainer {
@@ -795,51 +809,80 @@ mod tests {
 
         cluster_params.client_az = Some("use-1a".to_string());
 
+        // slot number is not exits
         assert!(container
             .connection_for_route_with_params(
-                &Route::new(1001, SlotAddr::AZAffinity),
+                &Route::new(1001, SlotAddr::ReplicaOptional),
                 Some(cluster_params.clone())
             )
             .is_none());
 
+        // Get the replica that holds the slot 1002
         assert_eq!(
             21,
             container
                 .connection_for_route_with_params(
-                    &Route::new(1002, SlotAddr::AZAffinity),
+                    &Route::new(1002, SlotAddr::ReplicaOptional),
                     Some(cluster_params.clone())
                 )
                 .unwrap()
                 .1
         );
 
+        // Get the Primary that holds the slot 1500
         assert_eq!(
-            21,
+            2,
             container
                 .connection_for_route_with_params(
-                    &Route::new(1500, SlotAddr::AZAffinity),
+                    &Route::new(1500, SlotAddr::Master),
                     Some(cluster_params.clone())
                 )
                 .unwrap()
                 .1
         );
 
+        // receive one of the replicas that holds the slot 2001 and is in the availability zone of the client ("use-1a")
+        assert!(one_of(
+            container.connection_for_route_with_params(
+                &Route::new(2001, SlotAddr::ReplicaRequired),
+                Some(cluster_params.clone())
+            ),
+            &[31, 33],
+        ));
+
+        // remove the replica in the same client's az and get the other replica in the same az
+        remove_nodes(&container, &["replica3-3"]);
         assert_eq!(
             31,
             container
                 .connection_for_route_with_params(
-                    &Route::new(2001, SlotAddr::AZAffinity),
+                    &Route::new(2001, SlotAddr::ReplicaOptional),
                     Some(cluster_params.clone())
                 )
                 .unwrap()
                 .1
         );
 
-        assert_ne!(
+        // remove the replica in the same clients az and get the other replica
+        remove_nodes(&container, &["replica3-1"]);
+        assert_eq!(
             32,
             container
                 .connection_for_route_with_params(
-                    &Route::new(2001, SlotAddr::AZAffinity),
+                    &Route::new(2001, SlotAddr::ReplicaOptional),
+                    Some(cluster_params.clone())
+                )
+                .unwrap()
+                .1
+        );
+
+        // remove the last replica and get the primary
+        remove_nodes(&container, &["replica3-2"]);
+        assert_eq!(
+            3,
+            container
+                .connection_for_route_with_params(
+                    &Route::new(2001, SlotAddr::ReplicaOptional),
                     Some(cluster_params.clone())
                 )
                 .unwrap()
