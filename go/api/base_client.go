@@ -11,6 +11,7 @@ import "C"
 
 import (
 	"errors"
+	"math"
 	"slices"
 	"strconv"
 	"unsafe"
@@ -750,6 +751,12 @@ func (client *baseClient) LMPop(keys []string, listDirection ListDirection) (map
 		return nil, err
 	}
 
+	// Check for potential length overflow.
+	if len(keys) > math.MaxInt-2 {
+		return nil, &RequestError{"Length overflow for the provided keys"}
+	}
+
+	// args slice will have 2 more arguments with the keys provided.
 	args := make([]string, 0, len(keys)+2)
 	args = append(args, strconv.Itoa(len(keys)))
 	args = append(args, keys...)
@@ -772,6 +779,12 @@ func (client *baseClient) LMPopCount(
 		return nil, err
 	}
 
+	// Check for potential length overflow.
+	if len(keys) > math.MaxInt-4 {
+		return nil, &RequestError{"Length overflow for the provided keys"}
+	}
+
+	// args slice will have 4 more arguments with the keys provided.
 	args := make([]string, 0, len(keys)+4)
 	args = append(args, strconv.Itoa(len(keys)))
 	args = append(args, keys...)
@@ -794,6 +807,12 @@ func (client *baseClient) BLMPop(
 		return nil, err
 	}
 
+	// Check for potential length overflow.
+	if len(keys) > math.MaxInt-3 {
+		return nil, &RequestError{"Length overflow for the provided keys"}
+	}
+
+	// args slice will have 3 more arguments with the keys provided.
 	args := make([]string, 0, len(keys)+3)
 	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
 	args = append(args, keys...)
@@ -817,6 +836,12 @@ func (client *baseClient) BLMPopCount(
 		return nil, err
 	}
 
+	// Check for potential length overflow.
+	if len(keys) > math.MaxInt-5 {
+		return nil, &RequestError{"Length overflow for the provided keys"}
+	}
+
+	// args slice will have 5 more arguments with the keys provided.
 	args := make([]string, 0, len(keys)+5)
 	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
 	args = append(args, keys...)
