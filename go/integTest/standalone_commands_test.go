@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/valkey-io/valkey-glide/go/glide/api"
 
 	"github.com/stretchr/testify/assert"
@@ -26,7 +27,7 @@ func (suite *GlideTestSuite) TestCustomCommandPing() {
 	result, err := client.CustomCommand([]string{"PING"})
 
 	assert.Nil(suite.T(), err)
-	assert.Equal(suite.T(), "PONG", result)
+	assert.Equal(suite.T(), "PONG", result.(string))
 }
 
 func (suite *GlideTestSuite) TestCustomCommandClientInfo() {
@@ -42,6 +43,32 @@ func (suite *GlideTestSuite) TestCustomCommandClientInfo() {
 	assert.IsType(suite.T(), "", result)
 	strResult := result.(string)
 	assert.True(suite.T(), strings.Contains(strResult, fmt.Sprintf("name=%s", clientName)))
+}
+
+func (suite *GlideTestSuite) TestCustomCommandMGET() {
+	clientName := "TEST_CLIENT_NAME"
+	config := api.NewGlideClientConfiguration().
+		WithAddress(&api.NodeAddress{Port: suite.standalonePorts[0]}).
+		WithClientName(clientName)
+	client := suite.client(config)
+
+	key1 := uuid.New().String()
+	key2 := uuid.New().String()
+	key3 := uuid.New().String()
+	oldValue := uuid.New().String()
+	value := uuid.New().String()
+	suite.verifyOK(client.Set(key1, oldValue))
+	keyValueMap := map[string]string{
+		key1: value,
+		key2: value,
+	}
+	suite.verifyOK(client.MSet(keyValueMap))
+	keys := []string{key1, key2, key3}
+	values := []interface{}{value, value, nil}
+	result, err := client.CustomCommand(append([]string{"MGET"}, keys...))
+
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), values, result.([]interface{}))
 }
 
 func (suite *GlideTestSuite) TestCustomCommand_invalidCommand() {
