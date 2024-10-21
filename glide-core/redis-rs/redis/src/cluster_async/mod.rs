@@ -1218,7 +1218,7 @@ where
         }
     }
 
-    // Validate all existing user connections and try to reconnect if nessesary.
+    // Validate all existing user connections and try to reconnect if necessary.
     // In addition, as a safety measure, drop nodes that do not have any assigned slots.
     // This function serves as a cheap alternative to slot_refresh() and thus can be used much more frequently.
     // The function does not discover the topology from the cluster and assumes the cached topology is valid.
@@ -1293,7 +1293,7 @@ where
         let connections_container = inner.conn_lock.read().await;
         let cluster_params = &inner.cluster_params;
         let subscriptions_by_address = &inner.subscriptions_by_address;
-        let glide_connection_optons = &inner.glide_connection_options;
+        let glide_connection_options = &inner.glide_connection_options;
 
         stream::iter(addresses.into_iter())
             .fold(
@@ -1315,7 +1315,7 @@ where
                         node_option,
                         &cluster_params,
                         conn_type,
-                        glide_connection_optons.clone(),
+                        glide_connection_options.clone(),
                     )
                     .await;
                     match node {
@@ -1528,7 +1528,7 @@ where
                 Self::check_topology_and_refresh_if_diff(inner.clone(), &RefreshPolicy::Throttable)
                     .await;
             if !topology_changed {
-                // This serves as a safety measure for validating pubsub subsctiptions state in case it has drifted
+                // This serves as a safety measure for validating pubsub subscriptions state in case it has drifted
                 // while topology stayed the same.
                 // For example, a failed attempt to refresh a connection which is triggered from refresh_pubsub_subscriptions(),
                 // might leave a node unconnected indefinitely in case topology is stable and no request are attempted to this node.
