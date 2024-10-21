@@ -7,7 +7,7 @@ use crate::connection::{
     resp2_is_pub_sub_state_cleared, resp3_is_pub_sub_state_cleared, ConnectionAddr, ConnectionInfo,
     Msg, RedisConnectionInfo,
 };
-#[cfg(any(feature = "tokio-comp"))]
+#[cfg(feature = "tokio-comp")]
 use crate::parser::ValueCodec;
 use crate::types::{ErrorKind, FromRedisValue, RedisError, RedisFuture, RedisResult, Value};
 use crate::{from_owned_redis_value, ProtocolVersion, ToRedisArgs};
