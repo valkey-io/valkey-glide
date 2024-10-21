@@ -404,6 +404,50 @@ async def nummultby(
     return cast(Optional[bytes], await client.custom_command(args))
 
 
+async def objlen(
+    client: TGlideClient,
+    key: TEncodable,
+    path: Optional[TEncodable] = None,
+) -> Optional[Union[int, List[int]]]:
+    """
+    Retrieves the number of key-value pairs in the object values at the specified `path` within the JSON document stored at `key`.
+    
+    Args:
+        client (TGlideClient): The client to execute the command.
+        key (TEncodable): The key of the JSON document.
+        path (Optional[TEncodable]): Represents the path within the JSON document where the key names will be retrieved.
+            Defaults to None.
+    Returns:
+        Optional[Union[int, List[int]]]:
+            For JSONPath (`path` starts with `$`):
+                Returns a list of integers representing the number of key-value pairs for each matching object.
+                If a value matching the path is not an object, None is returned.
+            For legacy path (`path` starts with `.`):
+                Returns the number of key-value pairs for the object value matching the path.
+                If multiple objects match the path, the length of the first object is returned.
+                If a value matching the path is not an object, an error is raised.
+
+    Examples:
+        >>> from glide import json
+        >>> await json.set(client, "doc", "$", '{"a": 1.0, "b": {"a": {"x": 1, "y": 2}, "b": 2.5, "c": true}}')
+            b'OK'  # Indicates successful setting of the value at the root path '$' in the key `doc`.
+        >>> await json.objlen(client, "doc", "$")
+            [2]  # Returns the number of key-value pairs at the root object, which has 2 keys: 'a' and 'b'.
+        >>> await json.objlen(client, "doc", ".")
+            2  # Returns the number of key-value pairs for the object matching the path '.', which has 2 keys: 'a' and 'b'.
+        >>> await json.objlen(client, "doc", "$.b")
+            3  # Returns the length of the object at path '$.b', which has 3 keys: 'a', 'b', and 'c'.
+        >>> await json.objlen(client, "doc", ".b")
+            3  # Returns the length of the nested object at path '.b', which has 3 keys.
+    """
+    args = ["JSON.OBJLEN", key]
+    if path:
+        args.append(path)
+    return cast(
+        Optional[Union[int, List[int]]],
+        await client.custom_command(args),
+    )
+
 async def toggle(
     client: TGlideClient,
     key: TEncodable,
