@@ -9,6 +9,7 @@ import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleS
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.google.gson.JsonParser;
@@ -20,6 +21,7 @@ import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.json.JsonGetOptions;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -155,6 +157,58 @@ public class JsonTests {
                                 JsonGetOptions.builder().indent("~").newline("\n").space("*").build())
                         .get();
         assertEquals(expectedGetResult2, actualGetResult2);
+    }
+
+    @Test
+    @SneakyThrows
+    public void arrappend() {
+        String key = UUID.randomUUID().toString();
+        String doc = "{\"a\": 1, \"b\": [\"one\", \"two\"]}";
+
+        assertEquals(OK, Json.set(client, key, "$", doc).get());
+
+        assertArrayEquals(
+                new Object[] {3L},
+                (Object[]) Json.arrappend(client, key, "$.b", new String[] {"\"three\""}).get());
+        assertEquals(
+                5L, Json.arrappend(client, key, ".b", new String[] {"\"four\"", "\"five\""}).get());
+
+        String getResult = Json.get(client, key, new String[] {"$"}).get();
+        String expectedGetResult =
+                "[{\"a\": 1, \"b\": [\"one\", \"two\", \"three\", \"four\", \"five\"]}]";
+        assertEquals(JsonParser.parseString(expectedGetResult), JsonParser.parseString(getResult));
+
+        assertArrayEquals(
+                new Object[] {null},
+                (Object[]) Json.arrappend(client, key, "$.a", new String[] {"\"value\""}).get());
+
+        // JSONPath, path doesn't exist
+        assertArrayEquals(
+                new Object[] {},
+                (Object[]) Json.arrappend(client, key, "$.c", new String[] {"\"value\""}).get());
+
+        // Legacy path, path doesn't exist
+        var exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> Json.arrappend(client, key, ".c", new String[] {"\"value\""}).get());
+
+        // Legacy path, the JSON value at path is not a array
+        exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> Json.arrappend(client, key, ".a", new String[] {"\"value\""}).get());
+
+        exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                Json.arrappend(client, "non_existing_key", "$.b", new String[] {"\"six\""}).get());
+
+        exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> Json.arrappend(client, "non_existing_key", ".b", new String[] {"\"six\""}).get());
     }
 
     @Test
