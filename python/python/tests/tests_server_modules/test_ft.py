@@ -1,6 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 import uuid
-from typing import List
+from typing import List, Mapping, Union
 
 import pytest
 from glide.async_commands.server_modules import ft
@@ -109,9 +109,31 @@ class TestFt:
         result = await ft.info(glide_client, indexName)
         print("result=====")
         print(result)
+
         assert indexName.encode() == result.get(b"index_name")
         assert b"JSON" == result.get(b"key_type")
         assert [b"key-prefix"] == result.get(b"key_prefixes")
+
+        fields: List[Mapping[TEncodable, Union[TEncodable, Mapping[TEncodable, Union[TEncodable, int]]]]] = result.get(b"fields")
+        assert len(fields) == 2
+        textField: Mapping[TEncodable, Union[TEncodable, Mapping[TEncodable, Union[TEncodable, int]]]] = None
+        vectorField:Mapping[TEncodable, Union[TEncodable, Mapping[TEncodable, Union[TEncodable, int]]]] = None
+
+        if fields[0].get(b"type") == b"VECTOR":
+            vectorField = fields[0]
+            textField = fields[1]
+        else:
+            vectorField = fields[1]
+            textField = fields[0]
+
+        assert b"$.vec" == vectorField.get(b"identifier")
+        assert b"VECTOR" == vectorField.get(b"type")
+        assert b"VEC" == vectorField.get(b"field_name")
+
+        vectorFieldParams:  Mapping[TEncodable, Union[TEncodable, int]] = vectorField.get(b"vector_params")
+        assert DistanceMetricType.L2.value.encode() == vectorFieldParams.get(b"distance_metric")
+        assert 2 == vectorFieldParams.get(b"dimension")
+        assert True == False
 
     async def _create_test_index_with_vector_field(
         self, glide_client: GlideClusterClient, index_name: TEncodable
