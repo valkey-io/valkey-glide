@@ -185,7 +185,8 @@ public class JsonTests {
         // JSONPath, path doesn't exist
         assertArrayEquals(
                 new Object[] {},
-                (Object[]) Json.arrappend(client, key, "$.c", new String[] {"\"value\""}).get());
+                (Object[])
+                        Json.arrappend(client, gs(key), gs("$.c"), new GlideString[] {gs("\"value\"")}).get());
 
         // Legacy path, path doesn't exist
         var exception =

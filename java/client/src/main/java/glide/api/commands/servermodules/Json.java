@@ -472,8 +472,8 @@ public class Json {
     }
 
     /**
-     * /** Inserts one or more values into the array at the specified <code>path</code> within the
-     * JSON document stored at <code>key</code>, before the given <code>index</code>.
+     * Inserts one or more values into the array at the specified <code>path</code> within the JSON
+     * document stored at <code>key</code>, before the given <code>index</code>.
      *
      * @param client The client to execute the command.
      * @param key The key of the JSON document.
