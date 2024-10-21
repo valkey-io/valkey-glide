@@ -3,7 +3,7 @@
 module for `vector search` commands.
 """
 
-from typing import List, Optional, cast
+from typing import List, Mapping, Optional, Union, cast
 
 from glide.async_commands.server_modules.ft_options.ft_constants import (
     CommandNames,
@@ -142,3 +142,50 @@ async def aliasupdate(
     """
     args: List[TEncodable] = [CommandNames.FT_ALIASUPDATE, alias, indexName]
     return cast(TOK, await client.custom_command(args))
+
+
+async def info(client: TGlideClient, indexName: TEncodable) -> Mapping[
+    TEncodable,
+    Union[
+        TEncodable,
+        int,
+        List[TEncodable],
+        List[
+            Mapping[
+                TEncodable,
+                Union[TEncodable, Mapping[TEncodable, Union[TEncodable, int]]],
+            ]
+        ],
+    ],
+]:
+    """
+    Returns information about a given index.
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+        indexName (TEncodable): The index name for which the information has to be returned.
+
+    Returns:
+        Mapping[TEncodable, Union[TEncodable, int, List[TEncodable], List[Mapping[TEncodable, Union[TEncodable, Mapping[TEncodable, Union[TEncodable, int]]]]]]]: Nested maps with info about the index. See example for more details.
+
+    Examples:
+        >>> from glide.async_commands.server_modules import ft
+    """
+    args: List[TEncodable] = [CommandNames.FT_INFO, indexName]
+    return cast(
+        Mapping[
+            TEncodable,
+            Union[
+                TEncodable,
+                int,
+                List[TEncodable],
+                List[
+                    Mapping[
+                        TEncodable,
+                        Union[TEncodable, Mapping[TEncodable, Union[TEncodable, int]]],
+                    ]
+                ],
+            ],
+        ],
+        await client.custom_command(args),
+    )
