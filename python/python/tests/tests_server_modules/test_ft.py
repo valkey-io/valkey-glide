@@ -118,7 +118,7 @@ class TestFt:
         textField: Field = TextField("text-field")
 
         vectorFieldHash: VectorField = VectorField(
-            name="vec",
+            name="$.vec",
             algorithm=VectorAlgorithm.HNSW,
             attributes=VectorFieldAttributesHnsw(
                 dim=2, distance_metric=DistanceMetricType.L2, type=VectorType.FLOAT32
