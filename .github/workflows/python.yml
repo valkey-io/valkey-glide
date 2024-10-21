@@ -291,39 +291,12 @@ jobs:
                   path: |
                       python/python/tests/pytest_report.html
     
-    start-self-hosted-runner:
-      if: github.event.pull_request.head.repo.owner.login == 'valkey-io'
-      runs-on: ubuntu-latest
-      environment: AWS_ACTIONS
-      steps:
-          - name: Checkout
-            uses: actions/checkout@v4
-
-          - name: Start self hosted EC2 runner
-            uses: ./.github/workflows/start-self-hosted-runner
-            with:
-                role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
-                aws-region: ${{ secrets.AWS_REGION }}
-                ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
-
     test-modules:
-      needs: [start-self-hosted-runner, load-engine-matrix]
-      name: Running Module Tests
-      runs-on: ${{ matrix.host.RUNNER }}
-      timeout-minutes: 35
-      strategy:
-        fail-fast: false
-        matrix:
-                engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
-                python:
-                    - "3.12"
-                host:
-                    - {
-                        OS: "ubuntu",
-                        NAMED_OS: "linux",
-                        RUNNER: ["self-hosted", "Linux", "ARM64"],
-                        TARGET: "aarch64-unknown-linux-gnu",
-                     }
+        if: (github.repository_owner == 'valkey-io' && github.event_name == 'workflow_dispatch') || github.event.pull_request.head.repo.owner.login == 'valkey-io'
+        environment: AWS_ACTIONS
+        name: Running Module Tests
+        runs-on: [self-hosted, linux, ARM64]
+        timeout-minutes: 15
         
       steps:
           - name: Setup self-hosted runner access
@@ -332,34 +305,27 @@ jobs:
           
           - uses: actions/checkout@v4
             with:
-              submodules: recursive
+                submodules: recursive
           
-          - name: Setup Python for self-hosted Ubuntu runners
-            run: |
-                  sudo apt update -y
-                  sudo apt upgrade -y
-                  sudo apt install python3 python3-venv python3-pip -y
-  
           - name: Build Python wrapper
             uses: ./.github/workflows/build-python-wrapper
             with:
-                    os: ${{ matrix.host.OS }}
-                    target: ${{ matrix.host.TARGET }}
-                    github-token: ${{ secrets.GITHUB_TOKEN }}
-                    engine-version: ${{ matrix.engine.version }}
+                os: ubuntu
+                target: aarch64-unknown-linux-gnu
+                github-token: ${{ secrets.GITHUB_TOKEN }}
 
           - name: Test with pytest
             working-directory: ./python
             run: |
-                    source .env/bin/activate
-                    cd python/tests/
-                    pytest --asyncio-mode=auto --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -k server_modules --html=pytest_report.html --self-contained-html
+                source .env/bin/activate
+                cd python/tests/
+                pytest --asyncio-mode=auto --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -k server_modules --html=pytest_report.html --self-contained-html
 
           - name: Upload test reports
             if: always()
             continue-on-error: true
             uses: actions/upload-artifact@v4
             with:
-                name: modules-test-report-${{ matrix.host.TARGET }}-python-${{ matrix.python }}-server-${{ matrix.engine.version }}
+                name: modules-test-report
                 path: |
                     python/python/tests/pytest_report.html
