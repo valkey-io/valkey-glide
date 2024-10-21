@@ -78,12 +78,12 @@ macro_rules! reconnect_if_dropped {
     };
 }
 
-/// Handle a connection result. If there's an I/O error, reconnect.
+/// Handle a connection result. If the connection has dropped, reconnect.
 /// Propagate any error.
-macro_rules! reconnect_if_io_error {
+macro_rules! reconnect_if_conn_dropped {
     ($self:expr, $result:expr, $current:expr) => {
         if let Err(e) = $result {
-            if e.is_io_error() {
+            if e.is_connection_dropped() {
                 $self.reconnect($current);
             }
             return Err(e);
@@ -249,7 +249,7 @@ impl ConnectionManager {
             .clone()
             .await
             .map_err(|e| e.clone_mostly("Reconnecting failed"));
-        reconnect_if_io_error!(self, connection_result, guard);
+        reconnect_if_conn_dropped!(self, connection_result, guard);
         let result = connection_result?.send_packed_command(cmd).await;
         reconnect_if_dropped!(self, &result, guard);
         result
@@ -270,7 +270,7 @@ impl ConnectionManager {
             .clone()
             .await
             .map_err(|e| e.clone_mostly("Reconnecting failed"));
-        reconnect_if_io_error!(self, connection_result, guard);
+        reconnect_if_conn_dropped!(self, connection_result, guard);
         let result = connection_result?
             .send_packed_commands(cmd, offset, count)
             .await;

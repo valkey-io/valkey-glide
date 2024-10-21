@@ -349,7 +349,7 @@ where
         &mut self,
         item: SinkItem,
         timeout: Duration,
-    ) -> Result<Value, Option<RedisError>> {
+    ) -> Result<Value, RedisError> {
         self.send_recv(item, None, timeout).await
     }
 
@@ -359,7 +359,7 @@ where
         // If `None`, this is a single request, not a pipeline of multiple requests.
         pipeline_response_count: Option<usize>,
         timeout: Duration,
-    ) -> Result<Value, Option<RedisError>> {
+    ) -> Result<Value, RedisError> {
         let (sender, receiver) = oneshot::channel();
 
         self.sender
@@ -369,15 +369,29 @@ where
                 output: sender,
             })
             .await
-            .map_err(|_| None)?;
+            .map_err(|err| {
+                // If an error occurs here, it means the request never reached the server, as guaranteed
+                // by the 'send' function. Since the server did not receive the data, it is safe to retry
+                // the request.
+                RedisError::from((
+                    crate::ErrorKind::FatalSendError,
+                    "Failed to send the request to the server",
+                    err.to_string(),
+                ))
+            })?;
         match Runtime::locate().timeout(timeout, receiver).await {
-            Ok(Ok(result)) => result.map_err(Some),
-            Ok(Err(_)) => {
-                // The `sender` was dropped which likely means that the stream part
-                // failed for one reason or another
-                Err(None)
+            Ok(Ok(result)) => result,
+            Ok(Err(err)) => {
+                // The `sender` was dropped, likely indicating a failure in the stream.
+                // This error suggests that it's unclear whether the server received the request before the connection failed,
+                // making it unsafe to retry. For example, retrying an INCR request could result in double increments.
+                Err(RedisError::from((
+                    crate::ErrorKind::FatalReceiveError,
+                    "Failed to receive a response due to a fatal error",
+                    err.to_string(),
+                )))
             }
-            Err(elapsed) => Err(Some(elapsed.into())),
+            Err(elapsed) => Err(elapsed.into()),
         }
     }
 
@@ -503,10 +517,7 @@ impl MultiplexedConnection {
         let result = self
             .pipeline
             .send_single(cmd.get_packed_command(), self.response_timeout)
-            .await
-            .map_err(|err| {
-                err.unwrap_or_else(|| RedisError::from(io::Error::from(io::ErrorKind::BrokenPipe)))
-            });
+            .await;
         if self.protocol != ProtocolVersion::RESP2 {
             if let Err(e) = &result {
                 if e.is_connection_dropped() {
@@ -537,10 +548,7 @@ impl MultiplexedConnection {
                 Some(offset + count),
                 self.response_timeout,
             )
-            .await
-            .map_err(|err| {
-                err.unwrap_or_else(|| RedisError::from(io::Error::from(io::ErrorKind::BrokenPipe)))
-            });
+            .await;
 
         if self.protocol != ProtocolVersion::RESP2 {
             if let Err(e) = &result {
