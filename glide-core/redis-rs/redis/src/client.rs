@@ -116,22 +116,6 @@ impl Client {
     /// Returns an async connection from the client.
     #[cfg(feature = "tokio-comp")]
     #[cfg_attr(docsrs, doc(cfg(feature = "tokio-comp")))]
-    #[deprecated(
-        note = "aio::Connection is deprecated. Use client::get_multiplexed_tokio_connection instead."
-    )]
-    #[allow(deprecated)]
-    pub async fn get_tokio_connection(&self) -> RedisResult<crate::aio::Connection> {
-        use crate::aio::RedisRuntime;
-        Ok(
-            crate::aio::connect::<crate::aio::tokio::Tokio>(&self.connection_info, None)
-                .await?
-                .map(RedisRuntime::boxed),
-        )
-    }
-
-    /// Returns an async connection from the client.
-    #[cfg(feature = "tokio-comp")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "tokio-comp")))]
     pub async fn get_multiplexed_async_connection(
         &self,
         glide_connection_options: GlideConnectionOptions,
@@ -245,53 +229,6 @@ impl Client {
         .await
     }
 
-    /// Returns an async multiplexed connection from the client and a future which must be polled
-    /// to drive any requests submitted to it (see `get_multiplexed_tokio_connection`).
-    ///
-    /// A multiplexed connection can be cloned, allowing requests to be be sent concurrently
-    /// on the same underlying connection (tcp/unix socket).
-    /// The multiplexer will return a timeout error on any request that takes longer then `response_timeout`.
-    #[cfg(feature = "tokio-comp")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "tokio-comp")))]
-    pub async fn create_multiplexed_tokio_connection_with_response_timeout(
-        &self,
-        response_timeout: std::time::Duration,
-        glide_connection_options: GlideConnectionOptions,
-    ) -> RedisResult<(
-        crate::aio::MultiplexedConnection,
-        impl std::future::Future<Output = ()>,
-    )> {
-        self.create_multiplexed_async_connection_inner::<crate::aio::tokio::Tokio>(
-            response_timeout,
-            None,
-            glide_connection_options,
-        )
-        .await
-        .map(|(conn, driver, _ip)| (conn, driver))
-    }
-
-    /// Returns an async multiplexed connection from the client and a future which must be polled
-    /// to drive any requests submitted to it (see `get_multiplexed_tokio_connection`).
-    ///
-    /// A multiplexed connection can be cloned, allowing requests to be be sent concurrently
-    /// on the same underlying connection (tcp/unix socket).
-    #[cfg(feature = "tokio-comp")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "tokio-comp")))]
-    pub async fn create_multiplexed_tokio_connection(
-        &self,
-        glide_connection_options: GlideConnectionOptions,
-    ) -> RedisResult<(
-        crate::aio::MultiplexedConnection,
-        impl std::future::Future<Output = ()>,
-    )> {
-        self.create_multiplexed_tokio_connection_with_response_timeout(
-            std::time::Duration::MAX,
-            glide_connection_options,
-        )
-        .await
-        .map(|conn_res| (conn_res.0, conn_res.1))
-    }
-
     /// Returns an async [`ConnectionManager`][connection-manager] from the client.
     ///
     /// The connection manager wraps a
@@ -371,45 +308,6 @@ impl Client {
             number_of_retries,
             std::time::Duration::MAX,
             std::time::Duration::MAX,
-        )
-        .await
-    }
-
-    /// Returns an async [`ConnectionManager`][connection-manager] from the client.
-    ///
-    /// The connection manager wraps a
-    /// [`MultiplexedConnection`][multiplexed-connection]. If a command to that
-    /// connection fails with a connection error, then a new connection is
-    /// established in the background and the error is returned to the caller.
-    ///
-    /// This means that on connection loss at least one command will fail, but
-    /// the connection will be re-established automatically if possible. Please
-    /// refer to the [`ConnectionManager`][connection-manager] docs for
-    /// detailed reconnecting behavior.
-    ///
-    /// A connection manager can be cloned, allowing requests to be be sent concurrently
-    /// on the same underlying connection (tcp/unix socket).
-    ///
-    /// [connection-manager]: aio/struct.ConnectionManager.html
-    /// [multiplexed-connection]: aio/struct.MultiplexedConnection.html
-    #[cfg(feature = "connection-manager")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "connection-manager")))]
-    #[deprecated(note = "use get_connection_manager_with_backoff_and_timeouts instead")]
-    pub async fn get_tokio_connection_manager_with_backoff_and_timeouts(
-        &self,
-        exponent_base: u64,
-        factor: u64,
-        number_of_retries: usize,
-        response_timeout: std::time::Duration,
-        connection_timeout: std::time::Duration,
-    ) -> RedisResult<crate::aio::ConnectionManager> {
-        crate::aio::ConnectionManager::new_with_backoff_and_timeouts(
-            self.clone(),
-            exponent_base,
-            factor,
-            number_of_retries,
-            response_timeout,
-            connection_timeout,
         )
         .await
     }

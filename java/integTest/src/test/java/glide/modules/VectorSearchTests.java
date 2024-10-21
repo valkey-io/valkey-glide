@@ -255,6 +255,7 @@ public class VectorSearchTests {
                                                     (byte) 0xBF
                                                 })))
                         .get());
+        Thread.sleep(DATA_PROCESSING_TIMEOUT); // let server digest the data and update index
 
         // FT.SEARCH hash_idx1 "*=>[KNN 2 @VEC $query_vec]" PARAMS 2 query_vec
         // "\x00\x00\x00\x00\x00\x00\x00\x00" DIALECT 2

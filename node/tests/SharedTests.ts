@@ -9269,7 +9269,6 @@ export function runBaseTests(config: {
                         { sortOrder: SortOrder.DESC, storeDist: true },
                     ),
                 ).toEqual(3);
-                // TODO deep close to https://github.com/maasencioh/jest-matcher-deep-close-to
                 expect(
                     await client.zrangeWithScores(
                         key2,
@@ -9277,11 +9276,20 @@ export function runBaseTests(config: {
                         { reverse: true },
                     ),
                 ).toEqual(
-                    convertElementsAndScores({
-                        edge2: 236529.17986494553,
-                        Palermo: 166274.15156960033,
-                        Catania: 0.0,
-                    }),
+                    expect.arrayContaining([
+                        {
+                            element: "edge2",
+                            score: expect.closeTo(236529.17986494553, 0.0001),
+                        },
+                        {
+                            element: "Palermo",
+                            score: expect.closeTo(166274.15156960033, 0.0001),
+                        },
+                        {
+                            element: "Catania",
+                            score: expect.closeTo(0.0, 0.0001),
+                        },
+                    ]),
                 );
 
                 // test search by box, unit: feet, from member, with limited count 2, with hash
