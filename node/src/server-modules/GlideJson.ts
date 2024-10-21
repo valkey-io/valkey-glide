@@ -188,7 +188,7 @@ export class GlideJson {
 
     /**
      * Toggles a Boolean value stored at the specified `path` within the JSON document stored at `key`.
-     * 
+     *
      * @param client - The client to execute the command.
      * @param key - The key of the JSON document.
      * @param path - The JSONPath to specify.
@@ -197,23 +197,23 @@ export class GlideJson {
      * or null for JSON values matching the path that are not boolean.
      * - For legacy path (`path` doesn't starts with `$`), returns the value of the toggled boolean in `path`.
      * - Note that when sending legacy path syntax, If `path` doesn't exist or the value at `path` isn't a boolean, an error is raised.
-     * 
+     *
      * @example
      * ```typescript
      * const value = {bool: true, nested: {bool: false, nested: {bool: 10}}};
      * const jsonStr = JSON.stringify(value);
      * const resultSet = await GlideJson.set("doc", "$", jsonStr);
      * // Output: 'OK'
-     * 
+     *
      * const resultToggle = await.GlideJson.toggle(client, "doc", "$.bool")
      * // Output: [false, true, null] - Indicates successful toggling of the Boolean values at path '$.bool' in the key stored at `doc`.
-     * 
+     *
      * const resultToggle = await.GlideJson.toggle(client, "doc", "bool")
      * // Output: true - Indicates successful toggling of the Boolean value at path 'bool' in the key stored at `doc`.
-     * 
+     *
      * const resultToggle = await.GlideJson.toggle(client, "doc", "bool")
      * // Output: true - Indicates successful toggling of the Boolean value at path 'bool' in the key stored at `doc`.
-     * 
+     *
      * const jsonGetStr = await GlideJson.get(client, "doc", "$");
      * console.log(JSON.stringify(jsonGetStr));
      * // Output: [{bool: true, nested: {bool: true, nested: {bool: 10}}}] - The updated JSON value in the key stored at `doc`.
