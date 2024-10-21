@@ -15,8 +15,7 @@ runs:
 
     steps:
         - uses: actions/checkout@v4
-          with:
-              submodules: recursive
+          
 
         - name: Install Rust toolchain and protoc
           uses: ./.github/workflows/install-rust-and-protoc
