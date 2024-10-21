@@ -406,7 +406,6 @@ pub(crate) fn combine_and_sort_array_results(
 fn get_route(is_readonly: bool, key: &[u8]) -> Route {
     let slot = get_slot(key);
     if is_readonly {
-        // adarov: here we need to check if az awareness is on and to route accordinally
         Route::new(slot, SlotAddr::ReplicaOptional)
     } else {
         Route::new(slot, SlotAddr::Master)
@@ -1203,8 +1202,6 @@ pub enum SlotAddr {
     /// The request must be routed to replica node, if one exists.
     /// For example, by user requested routing.
     ReplicaRequired,
-    /// The request must be routed to replica node in the same user's AZ, if one exists.
-    AZAffinity,
 }
 
 /// This is just a simplified version of [`Slot`],
