@@ -21,6 +21,7 @@
 #### Breaking Changes
 
 #### Fixes
+* Core: UDS Socket Handling Rework ([#2482](https://github.com/valkey-io/valkey-glide/pull/2482))
 
 #### Operational Enhancements
 
