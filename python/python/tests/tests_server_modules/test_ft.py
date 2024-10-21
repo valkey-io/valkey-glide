@@ -140,9 +140,8 @@ class TestFt:
         assert b"text-field" == textField.get(b"field_name")
 
         # Querying a missing index throws an error.
-        ft.dropindex(glide_client, indexName=indexName)
         with pytest.raises(RequestError):
-            await ft.info(glide_client, indexName)
+            await ft.info(glide_client, str(uuid.uuid4()))
 
     async def _create_test_index_with_vector_field(
         self, glide_client: GlideClusterClient, index_name: TEncodable
