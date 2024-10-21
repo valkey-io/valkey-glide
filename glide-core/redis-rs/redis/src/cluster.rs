@@ -43,7 +43,9 @@ use std::time::Duration;
 
 use rand::{seq::IteratorRandom, thread_rng};
 
+pub use crate::cluster_client::{ClusterClient, ClusterClientBuilder};
 use crate::cluster_pipeline::UNROUTABLE_ERROR;
+pub use crate::cluster_pipeline::{cluster_pipe, ClusterPipeline};
 use crate::cluster_routing::{
     MultipleNodeRoutingInfo, ResponsePolicy, Routable, SingleNodeRoutingInfo,
 };
@@ -54,16 +56,13 @@ use crate::connection::{
     connect, Connection, ConnectionAddr, ConnectionInfo, ConnectionLike, RedisConnectionInfo,
 };
 use crate::parser::parse_redis_value;
-use crate::types::{ErrorKind, HashMap, RedisError, RedisResult, Value};
+use crate::types::{ErrorKind, HashMap, RedisError, RedisResult, RetryMethod, Value};
 pub use crate::TlsMode; // Pub for backwards compatibility
 use crate::{
     cluster_client::ClusterParams,
     cluster_routing::{Redirect, Route, RoutingInfo},
     IntoConnectionInfo, PushInfo,
 };
-
-pub use crate::cluster_client::{ClusterClient, ClusterClientBuilder};
-pub use crate::cluster_pipeline::{cluster_pipe, ClusterPipeline};
 
 use tokio::sync::mpsc;
 
@@ -749,12 +748,12 @@ where
                     retries += 1;
 
                     match err.retry_method() {
-                        crate::types::RetryMethod::AskRedirect => {
+                        RetryMethod::AskRedirect => {
                             redirected = err
                                 .redirect_node()
                                 .map(|(node, _slot)| Redirect::Ask(node.to_string()));
                         }
-                        crate::types::RetryMethod::MovedRedirect => {
+                        RetryMethod::MovedRedirect => {
                             // Refresh slots.
                             self.refresh_slots()?;
                             // Request again.
@@ -762,8 +761,8 @@ where
                                 .redirect_node()
                                 .map(|(node, _slot)| Redirect::Moved(node.to_string()));
                         }
-                        crate::types::RetryMethod::WaitAndRetryOnPrimaryRedirectOnReplica
-                        | crate::types::RetryMethod::WaitAndRetry => {
+                        RetryMethod::WaitAndRetryOnPrimaryRedirectOnReplica
+                        | RetryMethod::WaitAndRetry => {
                             // Sleep and retry.
                             let sleep_time = self
                                 .cluster_params
@@ -771,7 +770,7 @@ where
                                 .wait_time_for_retry(retries);
                             thread::sleep(sleep_time);
                         }
-                        crate::types::RetryMethod::Reconnect => {
+                        RetryMethod::Reconnect | RetryMethod::ReconnectAndRetry => {
                             if *self.auto_reconnect.borrow() {
                                 if let Ok(mut conn) = self.connect(&addr) {
                                     if conn.check_connection() {
@@ -780,10 +779,10 @@ where
                                 }
                             }
                         }
-                        crate::types::RetryMethod::NoRetry => {
+                        RetryMethod::NoRetry => {
                             return Err(err);
                         }
-                        crate::types::RetryMethod::RetryImmediately => {}
+                        RetryMethod::RetryImmediately => {}
                     }
                 }
             }
