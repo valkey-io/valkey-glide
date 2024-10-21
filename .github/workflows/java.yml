@@ -213,7 +213,7 @@ jobs:
               uses: ./.github/workflows/lint-rust
               with:
                   cargo-toml-folder: ./java
-              name: lint java rust
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
 
     test-modules:
         if: github.event.pull_request.head.repo.owner.login == 'valkey-io'

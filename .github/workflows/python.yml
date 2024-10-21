@@ -14,8 +14,8 @@ on:
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
             - .github/workflows/install-valkey/action.yml
-            - .github/workflows/start-self-hosted-runner/action.yml
             - .github/workflows/create-test-matrices/action.yml
+            - .github/workflows/start-self-hosted-runner/action.yml
             - .github/json_matrices/**
 
     pull_request:
@@ -30,8 +30,8 @@ on:
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
             - .github/workflows/install-valkey/action.yml
-            - .github/workflows/start-self-hosted-runner/action.yml
             - .github/workflows/create-test-matrices/action.yml
+            - .github/workflows/start-self-hosted-runner/action.yml
             - .github/json_matrices/**
 
     workflow_dispatch:
