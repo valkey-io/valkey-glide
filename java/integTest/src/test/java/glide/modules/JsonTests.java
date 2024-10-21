@@ -328,7 +328,7 @@ public class JsonTests {
     public void objlen() {
         String key = UUID.randomUUID().toString();
 
-        String doc = "{\"a\": [1, 2, 3], \"b\": {\"a\": [1, 2], \"c\": {\"a\": 42}}}";
+        String doc = "{\"a\": 1.0, \"b\": {\"a\": {\"x\": 1, \"y\": 2}, \"b\": 2.5, \"c\": true}}";
         assertEquals("OK", Json.set(client, key, "$", doc).get());
 
         var res = Json.objlen(client, key, "$..").get();
