@@ -33,6 +33,7 @@ use tokio::sync::mpsc;
 struct BuilderParams {
     password: Option<String>,
     username: Option<String>,
+    client_az: Option<String>,
     read_from_replicas: ReadFromReplicaStrategy,
     tls: Option<TlsMode>,
     #[cfg(feature = "tls-rustls")]
@@ -130,6 +131,7 @@ impl SlotsRefreshRateLimit {
 pub struct ClusterParams {
     pub(crate) password: Option<String>,
     pub(crate) username: Option<String>,
+    pub(crate) client_az: Option<String>,
     pub(crate) read_from_replicas: ReadFromReplicaStrategy,
     /// tls indicates tls behavior of connections.
     /// When Some(TlsMode), connections use tls and verify certification depends on TlsMode.
@@ -165,6 +167,7 @@ impl ClusterParams {
         Ok(Self {
             password: value.password,
             username: value.username,
+            client_az: value.client_az,
             read_from_replicas: value.read_from_replicas,
             tls: value.tls,
             retry_params: value.retries_configuration,
