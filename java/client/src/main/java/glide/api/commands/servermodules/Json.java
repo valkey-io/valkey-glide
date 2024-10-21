@@ -712,7 +712,7 @@ public class Json {
      * @return The number of elements deleted. 0 if the key does not exist.
      * @example
      *     <pre>{@code
-     * Json.set(client, "doc", , ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}");
+     * Json.set(client, "doc", ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}");
      * Long result = Json.del(client, "doc").get();
      * assertEquals(result, 1L);
      * }</pre>
@@ -729,7 +729,7 @@ public class Json {
      * @return The number of elements deleted. 0 if the key does not exist.
      * @example
      *     <pre>{@code
-     * Json.set(client, "doc", , ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}");
+     * Json.set(client, "doc", ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}");
      * Long result = Json.del(client, gs("doc")).get();
      * assertEquals(result, 1L);
      * }</pre>
@@ -747,7 +747,7 @@ public class Json {
      * @return The number of elements deleted. 0 if the key does not exist, or if the JSON path is invalid or does not exist.
      * @example
      *     <pre>{@code
-     * Json.set(client, "doc", , ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}");
+     * Json.set(client, "doc", ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}");
      * Long result = Json.del(client, "doc", "$..a").get();
      * assertEquals(result, 2L);
      * }</pre>
@@ -766,7 +766,7 @@ public class Json {
      * @return The number of elements deleted. 0 if the key does not exist, or if the JSON path is invalid or does not exist.
      * @example
      *     <pre>{@code
-     * Json.set(client, "doc", , ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}");
+     * Json.set(client, "doc", ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}");
      * Long result = Json.del(client, gs("doc"), gs("$..a")).get();
      * assertEquals(result, 2L);
      * }</pre>
@@ -784,7 +784,7 @@ public class Json {
      * @return The number of elements deleted. 0 if the key does not exist.
      * @example
      *     <pre>{@code
-     * Json.set(client, "doc", , ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}");
+     * Json.set(client, "doc", ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}");
      * Long result = Json.forget(client, "doc").get();
      * assertEquals(result, 1L);
      * }</pre>
@@ -801,7 +801,7 @@ public class Json {
      * @return The number of elements deleted. 0 if the key does not exist.
      * @example
      *     <pre>{@code
-     * Json.set(client, "doc", , ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}");
+     * Json.set(client, "doc", ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}");
      * Long result = Json.forget(client, gs("doc")).get();
      * assertEquals(result, 1L);
      * }</pre>
@@ -820,7 +820,7 @@ public class Json {
      * @return The number of elements deleted. 0 if the key does not exist, or if the JSON path is invalid or does not exist.
      * @example
      *     <pre>{@code
-     * Json.set(client, "doc", , ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}");
+     * Json.set(client, "doc", ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}");
      * Long result = Json.forget(client, "doc", "$..a").get();
      * assertEquals(result, 2L);
      * }</pre>
@@ -839,7 +839,7 @@ public class Json {
      * @return The number of elements deleted. 0 if the key does not exist, or if the JSON path is invalid or does not exist.
      * @example
      *     <pre>{@code
-     * Json.set(client, "doc", , ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}");
+     * Json.set(client, "doc", ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}");
      * Long result = Json.forget(client, gs("doc"), gs("$..a")).get();
      * assertEquals(result, 2L);
      * }</pre>

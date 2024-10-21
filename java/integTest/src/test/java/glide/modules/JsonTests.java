@@ -336,7 +336,7 @@ public class JsonTests {
         assertEquals(
                 JsonParser.parseString(expectedGetResult), JsonParser.parseString(actualGetResult));
 
-        assertEquals(1L, Json.del(client, key, "$").get());
+        assertEquals(1L, Json.del(client, gs(key), gs("$")).get());
         assertEquals(0L, Json.del(client, key).get());
         assertNull(Json.get(client, key, new String[] {"$"}).get());
     }
@@ -356,7 +356,7 @@ public class JsonTests {
         assertEquals(
                 JsonParser.parseString(expectedGetResult), JsonParser.parseString(actualGetResult));
 
-        assertEquals(1L, Json.forget(client, key, "$").get());
+        assertEquals(1L, Json.forget(client, gs(key), gs("$")).get());
         assertEquals(0L, Json.forget(client, key).get());
         assertNull(Json.get(client, key, new String[] {"$"}).get());
     }
