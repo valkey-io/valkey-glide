@@ -109,6 +109,7 @@ class TestFt:
         result = await ft.info(glide_client, indexName)
         print("result====")
         print(result)
+        assert True == False
 
     async def _create_test_index_with_vector_field(
         self, glide_client: GlideClusterClient, index_name: TEncodable
