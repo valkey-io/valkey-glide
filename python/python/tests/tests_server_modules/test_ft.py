@@ -38,6 +38,9 @@ class TestFt:
         await TestFt.create_test_index_hash_type(self, glide_client, indexNameString)
         assert await ft.aliasadd(glide_client, aliasNameBytes, indexNameBytes) == OK
 
+        assert await ft.dropindex(glide_client, indexName=indexName) == OK
+        assert await ft.dropindex(glide_client, indexName=indexNameString) == OK
+
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ft_aliasdel(self, glide_client: GlideClusterClient):
@@ -56,6 +59,8 @@ class TestFt:
         # Test if an existing alias is deleted successfully for bytes type input.
         assert await ft.aliasadd(glide_client, alias, indexName) == OK
         assert await ft.aliasdel(glide_client, bytes(alias, "utf-8")) == OK
+
+        assert await ft.dropindex(glide_client, indexName=indexName) == OK
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -78,6 +83,9 @@ class TestFt:
             )
             == OK
         )
+
+        assert await ft.dropindex(glide_client, indexName=indexName) == OK
+        assert await ft.dropindex(glide_client, indexName=newIndexName) == OK
 
     async def create_test_index_hash_type(
         self, glide_client: GlideClusterClient, index_name: TEncodable
