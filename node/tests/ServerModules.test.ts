@@ -17,6 +17,7 @@ import {
     InfoOptions,
     JsonGetOptions,
     ProtocolVersion,
+    RequestError,
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import {
@@ -225,6 +226,51 @@ describe("GlideJson", () => {
             const expectedResult2 =
                 '[\n~{\n~~"a":*1,\n~~"b":*2,\n~~"c":*{\n~~~"d":*3,\n~~~"e":*4\n~~}\n~}\n]';
             expect(result).toEqual(expectedResult2);
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "json.toggle formatting",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const key = uuidv4();
+            const jsonValue = {
+                bool: true,
+                nested: { bool: false, nested: { bool: 10 } },
+            };
+            expect(
+                await GlideJson.set(
+                    client,
+                    key,
+                    "$",
+                    JSON.stringify(jsonValue),
+                ),
+            ).toBe("OK");
+            expect(await GlideJson.toggle(client, key, "$..bool")).toEqual([
+                false,
+                true,
+                null,
+            ]);
+            expect(await GlideJson.toggle(client, key, "bool")).toBe(true);
+            expect(
+                await GlideJson.toggle(client, key, "$.non_existing"),
+            ).toEqual([]);
+            expect(await GlideJson.toggle(client, key, "$.nested")).toEqual([
+                null,
+            ]);
+
+            // expect request errors
+            await expect(
+                GlideJson.toggle(client, key, "nested"),
+            ).rejects.toThrow(RequestError);
+            await expect(
+                GlideJson.toggle(client, key, ".non_existing"),
+            ).rejects.toThrow(RequestError);
+            await expect(
+                GlideJson.toggle(client, "non_existing_key", "$"),
+            ).rejects.toThrow(RequestError);
         },
     );
 });

@@ -277,7 +277,7 @@ jobs:
 
     test-modules:
         if: (github.repository_owner == 'valkey-io' && github.event_name == 'workflow_dispatch') || github.event.pull_request.head.repo.owner.login == 'valkey-io'
-        environment: AWS_ACTIONS
+        #environment: AWS_ACTIONS
         name: Running Module Tests
         runs-on: [self-hosted, linux, ARM64]
         timeout-minutes: 15
