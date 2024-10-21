@@ -118,6 +118,14 @@ pub enum ErrorKind {
     /// not native to the system.  This is usually the case if
     /// the cause is another error.
     IoError,
+    /// An error indicating that a fatal error occurred while attempting to send a request to the server,
+    /// meaning the connection was closed before the request was transmitted. Since the server did not process the request,
+    /// it is safe to retry the request.
+    FatalSendError,
+    /// An error indicating that a fatal error occurred while trying to receive a response,
+    /// likely due to the closure of the underlying connection. It is unclear whether
+    /// the server processed the request, making it unsafe to retry the request.
+    FatalReceiveError,
     /// An error raised that was identified on the client before execution.
     ClientError,
     /// An extension error.  This is an error created by the server
@@ -808,6 +816,7 @@ impl fmt::Debug for RedisError {
 
 pub(crate) enum RetryMethod {
     Reconnect,
+    ReconnectAndRetry,
     NoRetry,
     RetryImmediately,
     WaitAndRetry,
@@ -876,6 +885,10 @@ impl RedisError {
             ErrorKind::CrossSlot => "cross-slot",
             ErrorKind::MasterDown => "master down",
             ErrorKind::IoError => "I/O error",
+            ErrorKind::FatalSendError => {
+                "failed to send the request to the server due to a fatal error - the request was not transmitted"
+            }
+            ErrorKind::FatalReceiveError => "a fatal error occurred while attempting to receive a response from the server",
             ErrorKind::ExtensionError => "extension error",
             ErrorKind::ClientError => "client error",
             ErrorKind::ReadOnly => "read-only",
@@ -948,6 +961,12 @@ impl RedisError {
 
     /// Returns true if error was caused by a dropped connection.
     pub fn is_connection_dropped(&self) -> bool {
+        if matches!(
+            self.kind(),
+            ErrorKind::FatalSendError | ErrorKind::FatalReceiveError
+        ) {
+            return true;
+        }
         match self.repr {
             ErrorRepr::IoError(ref err) => matches!(
                 err.kind(),
@@ -963,6 +982,7 @@ impl RedisError {
     pub fn is_unrecoverable_error(&self) -> bool {
         match self.retry_method() {
             RetryMethod::Reconnect => true,
+            RetryMethod::ReconnectAndRetry => true,
 
             RetryMethod::NoRetry => false,
             RetryMethod::RetryImmediately => false,
@@ -1070,12 +1090,15 @@ impl RedisError {
 
                     io::ErrorKind::PermissionDenied => RetryMethod::NoRetry,
                     io::ErrorKind::Unsupported => RetryMethod::NoRetry,
+                    io::ErrorKind::TimedOut => RetryMethod::NoRetry,
 
                     _ => RetryMethod::RetryImmediately,
                 },
                 _ => RetryMethod::RetryImmediately,
             },
             ErrorKind::NotAllSlotsCovered => RetryMethod::NoRetry,
+            ErrorKind::FatalReceiveError => RetryMethod::Reconnect,
+            ErrorKind::FatalSendError => RetryMethod::ReconnectAndRetry,
         }
     }
 }
