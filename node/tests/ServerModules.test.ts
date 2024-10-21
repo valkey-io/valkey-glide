@@ -236,6 +236,7 @@ describe("GlideJson", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const key = uuidv4();
+            const key2 = uuidv4();
             const jsonValue = {
                 bool: true,
                 nested: { bool: false, nested: { bool: 10 } },
@@ -260,6 +261,11 @@ describe("GlideJson", () => {
             expect(await GlideJson.toggle(client, key, "$.nested")).toEqual([
                 null,
             ]);
+
+            // testing behavior with default pathing
+            expect(await GlideJson.set(client, key2, ".", "true")).toBe("OK");
+            expect(await GlideJson.toggle(client, key2)).toBe(false);
+            expect(await GlideJson.toggle(client, key2)).toBe(true);
 
             // expect request errors
             await expect(

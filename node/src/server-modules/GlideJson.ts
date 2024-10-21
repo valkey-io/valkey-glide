@@ -191,7 +191,7 @@ export class GlideJson {
      *
      * @param client - The client to execute the command.
      * @param key - The key of the JSON document.
-     * @param path - The JSONPath to specify.
+     * @param path - (Optional) The JSONPath to specify. Defaults to the root if not specified.
      * @returns - For JSONPath (`path` starts with `$`), returns a list of boolean replies for every possible path, with the toggled boolean value,
      * or null for JSON values matching the path that are not boolean.
      * - For legacy path (`path` doesn't starts with `$`), returns the value of the toggled boolean in `path`.
@@ -216,14 +216,24 @@ export class GlideJson {
      * const jsonGetStr = await GlideJson.get(client, "doc", "$");
      * console.log(JSON.stringify(jsonGetStr));
      * // Output: [{bool: true, nested: {bool: true, nested: {bool: 10}}}] - The updated JSON value in the key stored at `doc`.
+     *
+     * // Without specifying a path, the path defaults to root.
+     * console.log(await GlideJson.set(client, "doc2", ".", true)); // Output: "OK"
+     * console.log(await GlideJson.toggle(client,"doc2")); // Output: "false"
+     * console.log(await GlideJson.toggle(client, "doc2")); // Output: "true"
      * ```
      */
     static async toggle(
         client: BaseClient,
         key: GlideString,
-        path: GlideString,
+        path?: GlideString,
     ): Promise<ReturnTypeJson<boolean>> {
-        const args = ["JSON.TOGGLE", key, path];
+        const args = ["JSON.TOGGLE", key];
+
+        if (path !== undefined) {
+            args.push(path);
+        }
+
         return _executeCommand<ReturnTypeJson<boolean>>(client, args);
     }
 }
