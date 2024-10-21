@@ -307,6 +307,6 @@ public class JsonTests {
         res = Json.arrpop(client, key).get();
         assertEquals("42", res);
         res = Json.arrpop(client, gs(key)).get();
-        assertEquals(gs("[3]"), res);
+        assertEquals(gs("[3,4]"), res);
     }
 }
