@@ -42,11 +42,6 @@ concurrency:
     group: python-${{ github.head_ref || github.ref }}
     cancel-in-progress: true
 
-permissions:
-    contents: read
-    # Allows the GITHUB_TOKEN to make an API call to generate an OIDC token.
-    id-token: write
-
 jobs:
     load-engine-matrix:
         runs-on: ubuntu-latest
@@ -298,34 +293,34 @@ jobs:
         runs-on: [self-hosted, linux, ARM64]
         timeout-minutes: 15
         
-      steps:
-          - name: Setup self-hosted runner access
-            if: ${{ contains(matrix.host.RUNNER, 'self-hosted') }}
-            run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
-          
-          - uses: actions/checkout@v4
-            with:
-                submodules: recursive
-          
-          - name: Build Python wrapper
-            uses: ./.github/workflows/build-python-wrapper
-            with:
-                os: ubuntu
-                target: aarch64-unknown-linux-gnu
-                github-token: ${{ secrets.GITHUB_TOKEN }}
+        steps:
+            - name: Setup self-hosted runner access
+              if: ${{ contains(matrix.host.RUNNER, 'self-hosted') }}
+              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
 
-          - name: Test with pytest
-            working-directory: ./python
-            run: |
-                source .env/bin/activate
-                cd python/tests/
-                pytest --asyncio-mode=auto --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -k server_modules --html=pytest_report.html --self-contained-html
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
 
-          - name: Upload test reports
-            if: always()
-            continue-on-error: true
-            uses: actions/upload-artifact@v4
-            with:
-                name: modules-test-report
-                path: |
-                    python/python/tests/pytest_report.html
+            - name: Build Python wrapper
+              uses: ./.github/workflows/build-python-wrapper
+              with:
+                  os: ubuntu
+                  target: aarch64-unknown-linux-gnu
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Test with pytest
+              working-directory: ./python
+              run: |
+                  source .env/bin/activate
+                  cd python/tests/
+                  pytest --asyncio-mode=auto --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -k server_modules --html=pytest_report.html --self-contained-html
+
+            - name: Upload test reports
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: modules-test-report
+                  path: |
+                      python/python/tests/pytest_report.html
