@@ -105,6 +105,7 @@ class TestFt:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ft_info(self, glide_client: GlideClusterClient):
         indexName = str(uuid.uuid4())
+        await TestFt._create_test_index_with_vector_field(self, glide_client=glide_client, index_name=indexName)
         result = await ft.info(glide_client, indexName)
         print("result====")
         print(result)
