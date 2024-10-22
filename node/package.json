@@ -40,8 +40,7 @@
         "install-linting": "cd ../ & npm install",
         "prepack": "npmignore --auto",
         "prettier:check:ci": "npx prettier --check . --ignore-unknown '!**/*.{js,d.ts}'",
-        "prettier:format": "npx prettier --write . --ignore-unknown '!**/*.{js,d.ts}'",
-        "test-modules": "npm run build-test-utils && jest --verbose --runInBand --testNamePattern='ServerModules'"
+        "prettier:format": "npx prettier --write . --ignore-unknown '!**/*.{js,d.ts}'"
     },
     "devDependencies": {
         "@jest/globals": "^29.7.0",
