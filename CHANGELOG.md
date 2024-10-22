@@ -1,4 +1,5 @@
 #### Changes
+* Python: Add FT.SEARCH command([#2470](https://github.com/valkey-io/valkey-glide/pull/2470))
 * Python: Add commands FT.ALIASADD, FT.ALIASDEL, FT.ALIASUPDATE([#2471](https://github.com/valkey-io/valkey-glide/pull/2471))
 * Python: Python FT.DROPINDEX command ([#2437](https://github.com/valkey-io/valkey-glide/pull/2437))
 * Python: Python: Added FT.CREATE command([#2413](https://github.com/valkey-io/valkey-glide/pull/2413))
