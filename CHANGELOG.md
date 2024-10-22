@@ -1,5 +1,5 @@
 #### Changes
-* Python: Add JSON.OBJLEN command ([#2484](https://github.com/valkey-io/valkey-glide/pull/2484))
+* Python: Add JSON.OBJLEN command ([#2495](https://github.com/valkey-io/valkey-glide/pull/2495))
 * Python: Add FT.SEARCH command([#2470](https://github.com/valkey-io/valkey-glide/pull/2470))
 * Python: Add commands FT.ALIASADD, FT.ALIASDEL, FT.ALIASUPDATE([#2471](https://github.com/valkey-io/valkey-glide/pull/2471))
 * Python: Python FT.DROPINDEX command ([#2437](https://github.com/valkey-io/valkey-glide/pull/2437))
