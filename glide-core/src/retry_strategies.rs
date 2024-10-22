@@ -56,6 +56,7 @@ pub(crate) fn get_exponential_backoff(
 }
 
 #[cfg(feature = "socket-layer")]
+#[allow(dead_code)]
 pub(crate) fn get_fixed_interval_backoff(
     fixed_interval: u32,
     number_of_retries: u32,
