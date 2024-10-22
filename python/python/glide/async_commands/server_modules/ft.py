@@ -195,9 +195,41 @@ async def info(client: TGlideClient, indexName: TEncodable) -> FtInfoResponse:
         FtInfoResponse: Nested maps with info about the index. See example for more details. See `FtInfoResponse`.
 
     Examples:
+        An index with name 'myIndex', 1 text field and 1 vector field is already created for gettting the output of this example.
         >>> from glide.async_commands.server_modules import ft
         >>> result = await ft.info(glide_client, "myIndex")
-            : A map with info about the index.
+            [
+                b'index_name',
+                b'myIndex',
+                b'creation_timestamp', 1729531116945240,
+                b'key_type', b'JSON',
+                b'key_prefixes', [b'key-prefix'],
+                b'fields', [
+                    [
+                        b'identifier', b'$.vec',
+                        b'field_name', b'VEC',
+                        b'type', b'VECTOR',
+                        b'option', b'',
+                        b'vector_params', [
+                            b'algorithm', b'HNSW', b'data_type', b'FLOAT32', b'dimension', 2, b'distance_metric', b'L2', b'initial_capacity', 1000, b'current_capacity', 1000, b'maximum_edges', 16, b'ef_construction', 200, b'ef_runtime', 10, b'epsilon', b'0.01'
+                        ]
+                    ],
+                    [
+                        b'identifier', b'$.text-field',
+                        b'field_name', b'text-field',
+                        b'type', b'TEXT',
+                        b'option', b''
+                    ]
+                ],
+                b'space_usage', 653351,
+                b'fulltext_space_usage', 0,
+                b'vector_space_usage', 653351,
+                b'num_docs', 0,
+                b'num_indexed_vectors',
+                0, b'current_lag', 0,
+                b'index_status', b'AVAILABLE',
+                b'index_degradation_percentage', 0
+            ]
     """
     args: List[TEncodable] = [CommandNames.FT_INFO, indexName]
     return cast(FtInfoResponse, await client.custom_command(args))
