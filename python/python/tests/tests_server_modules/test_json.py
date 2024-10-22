@@ -304,6 +304,9 @@ class TestJson:
         len = await json.objlen(glide_client, key, "..b")
         assert len == 3
 
+        len = await json.objlen(glide_client, key)
+        assert len == 2
+
         # path doesn't exist
         assert await json.objlen(glide_client, key, "$.non_existing_path") == []
         with pytest.raises(RequestError):
