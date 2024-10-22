@@ -104,6 +104,7 @@ from glide.config import (
 from glide.constants import (
     OK,
     TOK,
+    FtInfoResponse,
     TClusterResponse,
     TEncodable,
     TFunctionListResponse,
@@ -170,6 +171,7 @@ __all__ = [
     "TResult",
     "TXInfoStreamFullResponse",
     "TXInfoStreamResponse",
+    "FtInfoResponse",
     # Commands
     "BitEncoding",
     "BitFieldGet",
