@@ -118,7 +118,7 @@ jobs:
               if: startsWith(matrix.build.NAMED_OS, 'darwin')
               run: |
                   brew update
-                  brew install python@3.8 python@3.9
+                  brew install python@3.9
 
             - name: Setup Python for self-hosted Ubuntu runners
               if: contains(matrix.build.OS, 'ubuntu') && contains(matrix.build.RUNNER, 'self-hosted')

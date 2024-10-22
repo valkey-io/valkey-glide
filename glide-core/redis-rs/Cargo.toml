@@ -1,3 +1,4 @@
 [workspace]
 members = ["redis", "redis-test"]
 resolver = "2"
+exclude = ["afl"]

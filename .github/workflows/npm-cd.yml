@@ -79,12 +79,12 @@ jobs:
               if: ${{ contains(matrix.build.RUNNER, 'self-hosted') && matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
               run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
 
-            # For MUSL on X64 we need to install git since we use the checkout action
-            - name: Install git for musl
+            # For MUSL on X86 we need to install git since we use the checkout action
+            - name: Install git and node for musl
               if: ${{ contains(matrix.build.TARGET, 'x86_64-unknown-linux-musl')}}
               run: |
                   apk update
-                  apk add git
+                  apk add git 
               
             - name: Checkout
               if: ${{ matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
@@ -119,10 +119,10 @@ jobs:
                 INPUT_VERSION: ${{ github.event.inputs.version }}
 
             - name: Setup node
-              if: ${{ matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
-              uses: actions/setup-node@v3
+              if: ${{ !contains(matrix.build.TARGET, 'musl') }}
+              uses: actions/setup-node@v4
               with:
-                  node-version: "20"
+                  node-version: "22.x"
                   registry-url: "https://registry.npmjs.org"
                   architecture: ${{ matrix.build.ARCH }}
                   scope: "${{ vars.NPM_SCOPE }}"
@@ -130,7 +130,7 @@ jobs:
                   token: ${{ secrets.NPM_AUTH_TOKEN }}
             
             - name: Setup node for publishing
-              if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-musl' }}
+              if: ${{ !contains(matrix.build.TARGET, 'musl') }}
               working-directory: ./node
               run: |
                 npm config set registry https://registry.npmjs.org/
@@ -185,7 +185,7 @@ jobs:
                   # 2>&1 1>&3- redirects stderr to stdout and then redirects the original stdout to another file descriptor,
                   # effectively separating stderr and stdout. The 3>&1 at the end redirects the original stdout back to the console.
                   # https://github.com/npm/npm/issues/118#issuecomment-325440 - ignoring notice messages since currentlly they are directed to stderr 
-                    { npm_publish_err=$(npm publish --tag ${{ env.NPM_TAG }} --access public 2>&1 1>&3- | grep -v "notice") ;} 3>&1
+                  { npm_publish_err=$(npm publish --tag ${{ env.NPM_TAG }} --access public 2>&1 1>&3- | grep -Ev "notice|ExperimentalWarning") ;} 3>&1
                   if [[ "$npm_publish_err" == *"You cannot publish over the previously published versions"* ]]
                   then
                     echo "Skipping publishing, package already published"
@@ -203,8 +203,11 @@ jobs:
               if: ${{ matrix.build.ARCH == 'arm64' }}
               shell: bash
               run: |
-                git reset --hard
+                echo "Resetting repository"
                 git clean -xdf
+                git reset --hard
+                git fetch
+                git checkout ${{ github.sha }}
 
     publish-base-to-npm:
         if: github.event_name != 'pull_request'
@@ -218,9 +221,9 @@ jobs:
                   submodules: "true"
 
             - name: Install node
-              uses: actions/setup-node@v3
+              uses: actions/setup-node@v4
               with:
-                  node-version: "20"
+                  node-version: "22.x"
                   registry-url: "https://registry.npmjs.org"
                   scope: "${{ vars.NPM_SCOPE }}"
                   always-auth: true
@@ -336,10 +339,10 @@ jobs:
                   arch: ${{ matrix.build.ARCH }}
 
             - name: Setup node
-              if: ${{ matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
-              uses: actions/setup-node@v3
+              if: ${{ !contains(matrix.build.TARGET, 'musl') }}
+              uses: actions/setup-node@v4
               with:
-                  node-version: "16"
+                  node-version: "22.x"
                   registry-url: "https://registry.npmjs.org"
                   architecture: ${{ matrix.build.ARCH }}
                   scope: "${{ vars.NPM_SCOPE }}"

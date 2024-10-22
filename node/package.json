@@ -69,10 +69,12 @@
             "tests/",
             "rust-client/**",
             "!build-ts/**",
-            "babel.config.js",
+            ".prettierignore",
             "jest.config.js",
             "hybrid-node-tests/**",
-            "docs/"
+            "docs/",
+            "DEVELOPER.md",
+            ".ort.yml"
         ]
     },
     "//": [
