@@ -162,13 +162,36 @@ describe("GlideFt", () => {
                 ], {dataType: "HASH", prefixes: ["author:details:", "book:details:"]})
             ).toEqual("OK");
 
-            // create a duplicating index
-            expect(
-                await GlideFt.create(client, name, [
-                    {type: "TEXT", name: "title"},
-                    {type: "TEXT", name: "name"},
-                ])
-            ).toEqual("OK");
+            // create a duplicating index - expect a RequestError
+            try {
+                expect(
+                    await GlideFt.create(client, name, [
+                        {type: "TEXT", name: "title"},
+                        {type: "TEXT", name: "name"},
+                    ])
+                ).rejects.toThrow();
+            } catch (e) {
+                expect((e as Error).message).toContain("already exists");
+            }
+
+            // create an index without fields - expect a RequestError
+            try {
+                expect(await GlideFt.create(client, uuidv4(), [])).rejects.toThrow();
+            } catch (e) {
+                expect((e as Error).message).toContain("wrong number of arguments");
+            }
+
+            // duplicated field name - expect a RequestError
+            try {
+                expect(
+                    await GlideFt.create(client, uuidv4(), [
+                        {type: "TEXT", name: "name"},
+                        {type: "TEXT", name: "name"},
+                    ])
+                ).rejects.toThrow();
+            } catch (e) {
+                expect((e as Error).message).toContain("already exists");
+            }
         },
     );
 });
