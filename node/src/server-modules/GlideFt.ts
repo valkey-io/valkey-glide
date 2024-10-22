@@ -41,13 +41,19 @@ export class GlideFt {
             }
         }
 
+        if (schema) {
+            args.push("SCHEMA");
+        }
+
         schema.forEach((f) => {
 
-            args.push(f.type, f.name);
+            args.push(f.name);
 
             if (f.alias) {
                 args.push("AS", f.alias);
             }
+
+            args.push(f.type);
 
             // TagField attributes
             if (f.type === "TAG") {
