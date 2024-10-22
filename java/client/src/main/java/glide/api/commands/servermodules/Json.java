@@ -915,7 +915,7 @@ public class Json {
      *     <pre>{@code
      * Json.set(client, "doc", "$", "{\"bool\": true, \"nested\": {\"bool\": false, \"nested\": {\"bool\": 10}}}").get();
      * var res = Json.toggle(client, "doc", "$..bool").get();
-     * assert Arrays.equals((Object[]) res, new int[] {[0, 1, null]});
+     * assert Arrays.equals((Object[]) res, new Object[] {0, 1, null});
      * res = Json.toggle(client, "doc", "bool").get();
      * assert res.equals(true);
      * var getResult = Json.get(client, "doc", "$").get();
@@ -949,7 +949,7 @@ public class Json {
      *     <pre>{@code
      * Json.set(client, "doc", "$", "{\"bool\": true, \"nested\": {\"bool\": false, \"nested\": {\"bool\": 10}}}").get();
      * var res = Json.toggle(client, gs("doc"), gs("$..bool")).get();
-     * assert Arrays.equals((Object[]) res, new int[] {0, 1, null});
+     * assert Arrays.equals((Object[]) res, new Object[] {0, 1, null});
      * res = Json.toggle(client, gs("doc"), gs("bool")).get();
      * assert res.equals(true);
      * var getResult = Json.get(client, "doc", "$").get();
