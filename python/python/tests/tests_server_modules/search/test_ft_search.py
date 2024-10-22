@@ -114,6 +114,8 @@ class TestFtSearch:
             fieldName2="b",
         )
 
+        assert await ft.dropindex(glide_client, indexName=index) == OK
+
     def _ft_search_deep_compare_result(
         self,
         result: List[Union[int, Mapping[TEncodable, Mapping[TEncodable, TEncodable]]]],
