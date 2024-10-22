@@ -373,7 +373,7 @@ public class JsonTests {
         assertArrayEquals(
                 new Object[] {false, true, null}, (Object[]) Json.toggle(client, key, "$..bool").get());
 
-        assertEquals(true, Json.toggle(client, key, "bool").get());
+        assertEquals(true, Json.toggle(client, gs(key), gs("bool")).get());
 
         assertArrayEquals(new Object[] {}, (Object[]) Json.toggle(client, key, "$.non_existing").get());
         assertArrayEquals(new Object[] {null}, (Object[]) Json.toggle(client, key, "$.nested").get());
@@ -381,7 +381,7 @@ public class JsonTests {
         // testing behaviour with default path
         assertEquals("OK", Json.set(client, key2, ".", "true").get());
         assertEquals(false, Json.toggle(client, key2).get());
-        assertEquals(true, Json.toggle(client, key2).get());
+        assertEquals(true, Json.toggle(client, gs(key2)).get());
 
         // expect request errors
         var exception =
