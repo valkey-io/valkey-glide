@@ -855,9 +855,9 @@ public class Json {
      *
      * @param client The client to execute the command.
      * @param key The key of the JSON document.
-     * @return Returns an <code>Object[]</code> with a list of integers for the root, with the toggled
-     *     boolean value, or <code>null</code> for JSON values matching the root that are not boolean.
-     *     If <code>key</code> doesn't exist, returns <code>null</code>.
+     * @return Returns the toggled boolean value at the root of the document, or <code>null</code> for
+     *     JSON values matching the root that are not boolean. If <code>key</code> doesn't exist, returns
+     *     <code>null</code>.
      * @example
      *     <pre>{@code
      * Json.set(client, "doc", ".", true).get();
@@ -867,7 +867,7 @@ public class Json {
      * assert res.equals(true);
      * }</pre>
      */
-    public static CompletableFuture<Object> toggle(@NonNull BaseClient client, @NonNull String key) {
+    public static CompletableFuture<Boolean> toggle(@NonNull BaseClient client, @NonNull String key) {
         return executeCommand(client, new String[] {JSON_TOGGLE, key});
     }
 
@@ -876,9 +876,9 @@ public class Json {
      *
      * @param client The client to execute the command.
      * @param key The key of the JSON document.
-     * @return Returns an <code>Object[]</code> with a list of integers for the root, with the toggled
-     *     boolean value, or <code>null</code> for JSON values matching the root that are not boolean.
-     *     If <code>key</code> doesn't exist, returns <code>null</code>.
+     * @return Returns the toggled boolean value at the root of the document, or <code>null</code> for
+     *     JSON values matching the root that are not boolean. If <code>key</code> doesn't exist, returns
+     *     <code>null</code>.
      * @example
      *     <pre>{@code
      * Json.set(client, "doc", ".", true).get();
@@ -888,7 +888,7 @@ public class Json {
      * assert res.equals(true);
      * }</pre>
      */
-    public static CompletableFuture<Object> toggle(
+    public static CompletableFuture<Boolean> toggle(
             @NonNull BaseClient client, @NonNull GlideString key) {
         return executeCommand(client, new ArgsBuilder().add(gs(JSON_TOGGLE)).add(key).toArray());
     }
@@ -899,7 +899,7 @@ public class Json {
      *
      * @param client The client to execute the command.
      * @param key The key of the JSON document.
-     * @param path The path within the JSON document. Default to the root if not specified.
+     * @param path The path within the JSON document.
      * @return
      *     <ul>
      *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
@@ -914,8 +914,8 @@ public class Json {
      * @example
      *     <pre>{@code
      * Json.set(client, "doc", "$", "{\"bool\": true, \"nested\": {\"bool\": false, \"nested\": {\"bool\": 10}}}").get();
-     * var res = Json.toggle(client, "doc", "$.bool").get();
-     * assert Arrays.equals((Object[]) res, new int[] {[false, true, null]});
+     * var res = Json.toggle(client, "doc", "$..bool").get();
+     * assert Arrays.equals((Object[]) res, new int[] {[0, 1, null]});
      * res = Json.toggle(client, "doc", "bool").get();
      * assert res.equals(true);
      * var getResult = Json.get(client, "doc", "$").get();
@@ -933,7 +933,7 @@ public class Json {
      *
      * @param client The client to execute the command.
      * @param key The key of the JSON document.
-     * @param path The path within the JSON document. Default to the root if not specified.
+     * @param path The path within the JSON document.
      * @return
      *     <ul>
      *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
@@ -948,8 +948,8 @@ public class Json {
      * @example
      *     <pre>{@code
      * Json.set(client, "doc", "$", "{\"bool\": true, \"nested\": {\"bool\": false, \"nested\": {\"bool\": 10}}}").get();
-     * var res = Json.toggle(client, gs("doc"), gs("$.bool")).get();
-     * assert Arrays.equals((Object[]) res, new int[] {false, true, null});
+     * var res = Json.toggle(client, gs("doc"), gs("$..bool")).get();
+     * assert Arrays.equals((Object[]) res, new int[] {0, 1, null});
      * res = Json.toggle(client, gs("doc"), gs("bool")).get();
      * assert res.equals(true);
      * var getResult = Json.get(client, "doc", "$").get();

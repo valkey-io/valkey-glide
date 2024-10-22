@@ -371,9 +371,9 @@ public class JsonTests {
         assertEquals("OK", Json.set(client, key, "$", doc).get());
 
         assertArrayEquals(
-                new Object[] {false, true, null}, (Object[]) Json.toggle(client, key, "$..bool").get());
+                new Object[] {0, 1, null}, (Object[]) Json.toggle(client, key, "$..bool").get());
 
-        assertEquals(true, Json.toggle(client, gs(key), gs("bool")).get());
+        assertEquals(1, Json.toggle(client, gs(key), gs("bool")).get());
 
         assertArrayEquals(new Object[] {}, (Object[]) Json.toggle(client, key, "$.non_existing").get());
         assertArrayEquals(new Object[] {null}, (Object[]) Json.toggle(client, key, "$.nested").get());
