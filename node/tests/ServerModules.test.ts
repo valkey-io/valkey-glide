@@ -122,7 +122,7 @@ describe("GlideFt", () => {
             attributes: {
                 algorithm: "HNSW",
                 type: "FLOAT32",
-                dim: 2,
+                dimension: 2,
                 distanceMetric: "L2",
             },
         };
@@ -137,7 +137,7 @@ describe("GlideFt", () => {
             attributes: {
                 algorithm: "FLAT",
                 type: "FLOAT32",
-                dim: 6,
+                dimension: 6,
                 distanceMetric: "L2",
             },
         };
@@ -152,7 +152,7 @@ describe("GlideFt", () => {
             attributes: {
                 algorithm: "HNSW",
                 type: "FLOAT32",
-                dim: 1536,
+                dimension: 1536,
                 distanceMetric: "COSINE",
                 numberOfEdges: 40,
                 vectorsExaminedOnConstruction: 250,
