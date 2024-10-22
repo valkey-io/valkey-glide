@@ -9,6 +9,7 @@ import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleS
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.google.gson.JsonParser;
@@ -22,12 +23,11 @@ import glide.api.models.commands.json.JsonArrPopOptions;
 import glide.api.models.commands.json.JsonArrPopOptionsBinary;
 import glide.api.models.commands.json.JsonGetOptions;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.skyscreamer.jsonassert.JSONAssert;
-import org.skyscreamer.jsonassert.JSONCompareMode;
 
 public class JsonTests {
 
@@ -65,12 +65,13 @@ public class JsonTests {
 
         String getResult = Json.get(client, key).get();
 
-        JSONAssert.assertEquals(jsonValue, getResult, JSONCompareMode.LENIENT);
+        assertEquals(JsonParser.parseString(jsonValue), JsonParser.parseString(getResult));
 
         String getResultWithMultiPaths = Json.get(client, key, new String[] {"$.a", "$.b"}).get();
 
-        JSONAssert.assertEquals(
-                "{\"$.a\":[1.0],\"$.b\":[2]}", getResultWithMultiPaths, JSONCompareMode.LENIENT);
+        assertEquals(
+                JsonParser.parseString("{\"$.a\":[1.0],\"$.b\":[2]}"),
+                JsonParser.parseString(getResultWithMultiPaths));
 
         assertNull(Json.get(client, "non_existing_key").get());
         assertEquals("[]", Json.get(client, key, new String[] {"$.d"}).get());
@@ -86,21 +87,20 @@ public class JsonTests {
 
         GlideString getResult = Json.get(client, gs(key), new GlideString[] {gs("$..c")}).get();
 
-        JSONAssert.assertEquals("[true, 1, 2]", getResult.getString(), JSONCompareMode.LENIENT);
+        assertEquals(
+                JsonParser.parseString("[true, 1, 2]"), JsonParser.parseString(getResult.getString()));
 
         String getResultWithMultiPaths = Json.get(client, key, new String[] {"$..c", "$.c"}).get();
 
-        JSONAssert.assertEquals(
-                "{\"$..c\": [True, 1, 2], \"$.c\": [True]}",
-                getResultWithMultiPaths,
-                JSONCompareMode.LENIENT);
+        assertEquals(
+                JsonParser.parseString("{\"$..c\": [True, 1, 2], \"$.c\": [True]}"),
+                JsonParser.parseString(getResultWithMultiPaths));
 
         assertEquals(OK, Json.set(client, key, "$..c", "\"new_value\"").get());
         String getResultAfterSetNewValue = Json.get(client, key, new String[] {"$..c"}).get();
-        JSONAssert.assertEquals(
-                "[\"new_value\", \"new_value\", \"new_value\"]",
-                getResultAfterSetNewValue,
-                JSONCompareMode.LENIENT);
+        assertEquals(
+                JsonParser.parseString("[\"new_value\", \"new_value\", \"new_value\"]"),
+                JsonParser.parseString(getResultAfterSetNewValue));
     }
 
     @Test
@@ -157,6 +157,59 @@ public class JsonTests {
                                 JsonGetOptions.builder().indent("~").newline("\n").space("*").build())
                         .get();
         assertEquals(expectedGetResult2, actualGetResult2);
+    }
+
+    @Test
+    @SneakyThrows
+    public void arrappend() {
+        String key = UUID.randomUUID().toString();
+        String doc = "{\"a\": 1, \"b\": [\"one\", \"two\"]}";
+
+        assertEquals(OK, Json.set(client, key, "$", doc).get());
+
+        assertArrayEquals(
+                new Object[] {3L},
+                (Object[]) Json.arrappend(client, key, "$.b", new String[] {"\"three\""}).get());
+        assertEquals(
+                5L, Json.arrappend(client, key, ".b", new String[] {"\"four\"", "\"five\""}).get());
+
+        String getResult = Json.get(client, key, new String[] {"$"}).get();
+        String expectedGetResult =
+                "[{\"a\": 1, \"b\": [\"one\", \"two\", \"three\", \"four\", \"five\"]}]";
+        assertEquals(JsonParser.parseString(expectedGetResult), JsonParser.parseString(getResult));
+
+        assertArrayEquals(
+                new Object[] {null},
+                (Object[]) Json.arrappend(client, key, "$.a", new String[] {"\"value\""}).get());
+
+        // JSONPath, path doesn't exist
+        assertArrayEquals(
+                new Object[] {},
+                (Object[])
+                        Json.arrappend(client, gs(key), gs("$.c"), new GlideString[] {gs("\"value\"")}).get());
+
+        // Legacy path, path doesn't exist
+        var exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> Json.arrappend(client, key, ".c", new String[] {"\"value\""}).get());
+
+        // Legacy path, the JSON value at path is not a array
+        exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> Json.arrappend(client, key, ".a", new String[] {"\"value\""}).get());
+
+        exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                Json.arrappend(client, "non_existing_key", "$.b", new String[] {"\"six\""}).get());
+
+        exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> Json.arrappend(client, "non_existing_key", ".b", new String[] {"\"six\""}).get());
     }
 
     @Test
@@ -308,5 +361,45 @@ public class JsonTests {
         assertEquals("42", res);
         res = Json.arrpop(client, gs(key)).get();
         assertEquals(gs("[3,4]"), res);
+    }
+
+    @Test
+    @SneakyThrows
+    public void json_del() {
+        String key = UUID.randomUUID().toString();
+        assertEquals(
+                OK,
+                Json.set(client, key, "$", "{\"a\": 1.0, \"b\": {\"a\": 1, \"b\": 2.5, \"c\": true}}")
+                        .get());
+        assertEquals(2L, Json.del(client, key, "$..a").get());
+        assertEquals("[]", Json.get(client, key, new String[] {"$..a"}).get());
+        String expectedGetResult = "{\"b\": {\"b\": 2.5, \"c\": true}}";
+        String actualGetResult = Json.get(client, key).get();
+        assertEquals(
+                JsonParser.parseString(expectedGetResult), JsonParser.parseString(actualGetResult));
+
+        assertEquals(1L, Json.del(client, gs(key), gs("$")).get());
+        assertEquals(0L, Json.del(client, key).get());
+        assertNull(Json.get(client, key, new String[] {"$"}).get());
+    }
+
+    @Test
+    @SneakyThrows
+    public void json_forget() {
+        String key = UUID.randomUUID().toString();
+        assertEquals(
+                OK,
+                Json.set(client, key, "$", "{\"a\": 1.0, \"b\": {\"a\": 1, \"b\": 2.5, \"c\": true}}")
+                        .get());
+        assertEquals(2L, Json.forget(client, key, "$..a").get());
+        assertEquals("[]", Json.get(client, key, new String[] {"$..a"}).get());
+        String expectedGetResult = "{\"b\": {\"b\": 2.5, \"c\": true}}";
+        String actualGetResult = Json.get(client, key).get();
+        assertEquals(
+                JsonParser.parseString(expectedGetResult), JsonParser.parseString(actualGetResult));
+
+        assertEquals(1L, Json.forget(client, gs(key), gs("$")).get());
+        assertEquals(0L, Json.forget(client, key).get());
+        assertNull(Json.get(client, key, new String[] {"$"}).get());
     }
 }

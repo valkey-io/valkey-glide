@@ -327,13 +327,13 @@ impl ClusterClientBuilder {
         self
     }
 
-    /// Sets maximal wait time in millisceonds between retries for the new ClusterClient.
+    /// Sets maximal wait time in milliseconds between retries for the new ClusterClient.
     pub fn max_retry_wait(mut self, max_wait: u64) -> ClusterClientBuilder {
         self.builder_params.retries_configuration.max_wait_time = max_wait;
         self
     }
 
-    /// Sets minimal wait time in millisceonds between retries for the new ClusterClient.
+    /// Sets minimal wait time in milliseconds between retries for the new ClusterClient.
     pub fn min_retry_wait(mut self, min_wait: u64) -> ClusterClientBuilder {
         self.builder_params.retries_configuration.min_wait_time = min_wait;
         self
@@ -400,9 +400,9 @@ impl ClusterClientBuilder {
     }
 
     /// Enables periodic connections checks for this client.
-    /// If enabled, the conenctions to the cluster nodes will be validated periodicatly, per configured interval.
+    /// If enabled, the connections to the cluster nodes will be validated periodically, per configured interval.
     /// In addition, for tokio runtime, passive disconnections could be detected instantly,
-    /// triggering reestablishemnt, w/o waiting for the next periodic check.
+    /// triggering reestablishment, w/o waiting for the next periodic check.
     #[cfg(feature = "cluster-async")]
     pub fn periodic_connections_checks(mut self, interval: Duration) -> ClusterClientBuilder {
         self.builder_params.connections_validation_interval = Some(interval);
