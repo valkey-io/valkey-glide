@@ -32,7 +32,6 @@ import {
 
 const TIMEOUT = 50000;
 describe("GlideJson", () => {
-    const testsFailed = 0;
     let cluster: ValkeyCluster;
     let client: GlideClusterClient;
     beforeAll(async () => {
@@ -49,9 +48,7 @@ describe("GlideJson", () => {
     });
 
     afterAll(async () => {
-        if (testsFailed === 0) {
-            await cluster.close();
-        }
+        await cluster.close();
     }, TIMEOUT);
 
     it("ServerModules check JSON module is loaded", async () => {
