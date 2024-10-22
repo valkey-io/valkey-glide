@@ -849,7 +849,7 @@ public class Json {
             @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString path) {
         return executeCommand(client, new GlideString[] {gs(JSON_FORGET), key, path});
     }
-  
+
     /**
      * Toggles a Boolean value stored at the root within the JSON document stored at <code>key</code>.
      *

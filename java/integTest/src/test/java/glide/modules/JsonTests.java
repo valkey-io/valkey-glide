@@ -360,7 +360,7 @@ public class JsonTests {
         assertEquals(0L, Json.forget(client, key).get());
         assertNull(Json.get(client, key, new String[] {"$"}).get());
     }
-  
+
     @Test
     @SneakyThrows
     public void toggle() {
