@@ -29,6 +29,14 @@ on:
             - .github/workflows/install-valkey/action.yml
             - .github/json_matrices/build-matrix.json
     workflow_dispatch:
+        inputs:
+            full-matrix:
+                description: "Run the full matrix"
+                required: false
+                default: "false"
+
+    schedule:
+        - cron: "0 1 * * *"
 
 concurrency:
     group: node-${{ github.head_ref || github.ref }}
@@ -38,43 +46,50 @@ env:
     CARGO_TERM_COLOR: always
 
 jobs:
-    load-engine-matrix:
-      runs-on: ubuntu-latest
-      outputs:
-        matrix: ${{ steps.load-engine-matrix.outputs.matrix }}
-      steps:
-          - name: Checkout
-            uses: actions/checkout@v4
-
-          - name: Load the engine matrix
-            id: load-engine-matrix
-            shell: bash
-            run: echo "matrix=$(jq -c . < .github/json_matrices/engine-matrix.json)" >> $GITHUB_OUTPUT
-
-    test-ubuntu-latest:
+    get-matrices:
         runs-on: ubuntu-latest
-        needs: load-engine-matrix
+        # Avoid running on schedule for forks
+        if: (github.repository_owner == 'valkey-io' || github.event_name != 'schedule')
+        outputs:
+            engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
+            host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
+            version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
+
+        steps:
+            - uses: actions/checkout@v4
+            - id: get-matrices
+              uses: ./.github/workflows/create-test-matrices
+              with:
+                  language-name: node
+                  dispatch-run-full-matrix: ${{ github.event.inputs.full-matrix || 'false' }}
+
+    test-node:
+        runs-on: ubuntu-latest
+        needs: [get-matrices]
         timeout-minutes: 25
         strategy:
             fail-fast: false
             matrix:
-                engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
-
+                engine: ${{ fromJson(needs.get-matrices.outputs.engine-matrix-output) }}
+                host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
+                node: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output)}}
         steps:
             - uses: actions/checkout@v4
               with:
                   submodules: recursive
 
-            - name: Use Node.js 16.x
-              uses: actions/setup-node@v3
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              env:
+                  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
               with:
-                  node-version: 16.x
+                  node-version: ${{ matrix.node }}
 
             - name: Build Node wrapper
               uses: ./.github/workflows/build-node-wrapper
               with:
-                  os: "ubuntu"
-                  target: "x86_64-unknown-linux-gnu"
+                  os: ${{ matrix.host.OS }}
+                  target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
@@ -84,18 +99,18 @@ jobs:
 
             - name: test hybrid node modules - commonjs
               run: |
-                npm install --package-lock-only
-                npm ci
-                npm run build-and-test
+                  npm install --package-lock-only
+                  npm ci
+                  npm run build-and-test
               working-directory: ./node/hybrid-node-tests/commonjs-test
               env:
                   JEST_HTML_REPORTER_OUTPUT_PATH: test-report-commonjs.html
 
             - name: test hybrid node modules - ecma
               run: |
-                npm install --package-lock-only
-                npm ci
-                npm run build-and-test
+                  npm install --package-lock-only
+                  npm ci
+                  npm run build-and-test
               working-directory: ./node/hybrid-node-tests/ecmascript-test
               env:
                   JEST_HTML_REPORTER_OUTPUT_PATH: test-report-ecma.html
@@ -109,7 +124,7 @@ jobs:
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: test-report-node-${{ matrix.engine.type }}-${{ matrix.engine.version }}-ubuntu
+                  name: test-report-node-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.node }}-ubuntu
                   path: |
                       node/test-report*.html
                       utils/clusters/**
@@ -128,52 +143,8 @@ jobs:
                   cargo-toml-folder: ./node/rust-client
               name: lint node rust
 
-    # build-macos-latest:
-    #     runs-on: macos-latest
-    #     timeout-minutes: 25
-    #     steps:
-    #         - uses: actions/checkout@v4
-    #           with:
-    #               submodules: recursive
-    #         - name: Set up Homebrew
-    #           uses: Homebrew/actions/setup-homebrew@master
-
-    #         - name: Install NodeJS
-    #           run: |
-    #               brew update
-    #               brew upgrade || true
-    #               brew install node
-
-    #         - name: Downgrade npm major version to 8
-    #           run: |
-    #               npm i -g npm@8
-
-    #         - name: Build Node wrapper
-    #           uses: ./.github/workflows/build-node-wrapper
-    #           with:
-    #               os: "macos"
-    #               named_os: "darwin"
-    #               arch: "arm64"
-    #               target: "aarch64-apple-darwin"
-    #               github-token: ${{ secrets.GITHUB_TOKEN }}
-    #               engine-version: "7.2.5"
-
-    #         - name: Test compatibility
-    #           run: npm test -- -t "set and get flow works"
-    #           working-directory: ./node
-
-    #         - name: Upload test reports
-    #           if: always()
-    #           continue-on-error: true
-    #           uses: actions/upload-artifact@v4
-    #           with:
-    #               name: test-report-node-${{ matrix.engine.type }}-${{ matrix.engine.version }}-macos
-    #               path: |
-    #                   node/test-report*.html
-    #                   utils/clusters/**
-    #                   benchmarks/results/**
-
     build-amazonlinux-latest:
+        if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule')
         runs-on: ubuntu-latest
         container: amazonlinux:latest
         timeout-minutes: 15
@@ -205,8 +176,8 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: "7.2.5"
 
-            - name: Test compatibility
-              run: npm test -- -t "set and get flow works"
+            - name: test
+              run: npm test
               working-directory: ./node
 
             - name: Upload test reports
@@ -221,6 +192,7 @@ jobs:
                       benchmarks/results/**
 
     build-and-test-linux-musl-on-x86:
+        if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && github.event.inputs.full-matrix == 'true')
         name: Build and test Node wrapper on Linux musl
         runs-on: ubuntu-latest
         container:
@@ -254,9 +226,8 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: "7.2.5"
 
-            - name: Test compatibility
-              shell: bash
-              run: npm test -- -t "set and get flow works"
+            - name: test
+              run: npm test
               working-directory: ./node
 
             - name: Upload test reports
