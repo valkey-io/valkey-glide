@@ -18,6 +18,7 @@
 * Java: Added `FT.ALIASADD`, `FT.ALIASDEL`, `FT.ALIASUPDATE` ([#2442](https://github.com/valkey-io/valkey-glide/pull/2442))
 * Core: Update routing for commands from server modules ([#2461](https://github.com/valkey-io/valkey-glide/pull/2461))
 * Node: Added `JSON.SET` and `JSON.GET` ([#2427](https://github.com/valkey-io/valkey-glide/pull/2427))
+* Java: Added `JSON.ARRAPPEND` ([#2489](https://github.com/valkey-io/valkey-glide/pull/2489))
 
 #### Breaking Changes
 
@@ -27,6 +28,7 @@
 
 * Java: Add modules CI ([#2388](https://github.com/valkey-io/valkey-glide/pull/2388), [#2404](https://github.com/valkey-io/valkey-glide/pull/2404), [#2416](https://github.com/valkey-io/valkey-glide/pull/2416))
 * Node: Add modules CI ([#2472](https://github.com/valkey-io/valkey-glide/pull/2472))
+* Python: Fix modules CI ([#2487](https://github.com/valkey-io/valkey-glide/pull/2487))
 
 ## 1.1.0 (2024-09-24)
 
