@@ -3,7 +3,7 @@
 module for `vector search` commands.
 """
 
-from typing import List, Optional, cast
+from typing import List, Mapping, Optional, Union, cast
 
 from glide.async_commands.server_modules.ft_options.ft_constants import (
     CommandNames,
@@ -12,6 +12,9 @@ from glide.async_commands.server_modules.ft_options.ft_constants import (
 from glide.async_commands.server_modules.ft_options.ft_create_options import (
     Field,
     FtCreateOptions,
+)
+from glide.async_commands.server_modules.ft_options.ft_search_options import (
+    FtSeachOptions,
 )
 from glide.constants import TOK, TEncodable
 from glide.glide_client import TGlideClient
@@ -76,6 +79,42 @@ async def dropindex(client: TGlideClient, indexName: TEncodable) -> TOK:
     """
     args: List[TEncodable] = [CommandNames.FT_DROPINDEX, indexName]
     return cast(TOK, await client.custom_command(args))
+
+
+async def search(
+    client: TGlideClient,
+    indexName: TEncodable,
+    query: TEncodable,
+    options: Optional[FtSeachOptions],
+) -> List[Union[int, Mapping[TEncodable, Mapping[TEncodable, TEncodable]]]]:
+    """
+    Uses the provided query expression to locate keys within an index. Once located, the count and/or the content of indexed fields within those keys can be returned.
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+        indexName (TEncodable): The index name to search into.
+        query (TEncodable): The text query to search.
+        options (Optional[FtSeachOptions]): The search options. See `FtSearchOptions`.
+
+    Returns:
+        List[Union[int, Mapping[TEncodable, Mapping[TEncodable, TEncodable]]]]: A two element array, where first element is count of documents in result set, and the second element, which has the format Mapping[TEncodable, Mapping[TEncodable, TEncodable]] is a mapping between document names and map of their attributes.
+        If count(option in `FtSearchOptions`) is set to true or limit(option in `FtSearchOptions`) is set to FtSearchLimit(0, 0), the command returns array with only one element - the count of the documents.
+    Examples:
+        For the following example to work the following must already exist:
+        - An index named "idx", with fields having identifiers as "a" and "b" and prefix as "{json:}"
+        - A key named {json:}1 with value {"a":1, "b":2}
+
+        >>> from glide.async_commands.server_modules import ft
+        >>> result = await ft.search(glide_client, "idx", "*", options=FtSeachOptions(return_fields=[ReturnField(field_identifier="first"), ReturnField(field_identifier="second")]))
+        [1, { b'json:1': { b'first': b'42', b'second': b'33' } }] # The first element, 1 is the number of keys returned in the search result. The second element is a map of data queried per key.
+    """
+    args: List[TEncodable] = [CommandNames.FT_SEARCH, indexName, query]
+    if options:
+        args.extend(options.toArgs())
+    return cast(
+        List[Union[int, Mapping[TEncodable, Mapping[TEncodable, TEncodable]]]],
+        await client.custom_command(args),
+    )
 
 
 async def aliasadd(
