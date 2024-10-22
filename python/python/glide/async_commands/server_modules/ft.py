@@ -98,7 +98,7 @@ async def search(
 
     Returns:
         List[Union[int, Mapping[TEncodable, Mapping[TEncodable, TEncodable]]]]: A two element array, where first element is count of documents in result set, and the second element, which has the format Mapping[TEncodable, Mapping[TEncodable, TEncodable]] is a mapping between document names and map of their attributes.
-        If count(option in `FtSearchOptions`) is set to true is set or limit(option in `FtSearchOptions`) is set to FtSearchLimit(0, 0) is set, the command returns array with only one element - the count of the documents. See `FtSearchOptions` and see `FtSearchLimit`.
+        If count(option in `FtSearchOptions`) is set to true or limit(option in `FtSearchOptions`) is set to FtSearchLimit(0, 0), the command returns array with only one element - the count of the documents. See `FtSearchOptions` and see `FtSearchLimit`.
     Examples:
         For the following example to work the following must already exist:
         - An index named "idx", with fields having identifiers as "a" and "b" and prefix as "{json:}"
