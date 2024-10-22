@@ -112,10 +112,11 @@ describe("GlideFt", () => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            const textField: TextField = {name: "$title"};
-            const numberField: NumericField = {name: "$published_at"};
-            const textFieldCat: TextField = {name: "$category"};
-            const fields: Field[] = [textField, numberField, textFieldCat];
+            const fields: Field[] = [
+                {type: "TEXT", name: "$title"},
+                {type: "NUMERIC", name: "$published_at"},
+                {type: "TEXT", name: "$category"},
+            ];
 
             const index = uuidv4();
             const prefixes = ["blog:post:"];

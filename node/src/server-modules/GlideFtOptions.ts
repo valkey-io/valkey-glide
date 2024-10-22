@@ -56,28 +56,27 @@ export enum VectorType {
     FLOAT32 = "FLOAT32",
 }
 
+interface BaseField {
+    /** The name of the field. */
+    name: GlideString;
+    /** An alias for field. */
+    alias?: GlideString;
+}
+
 /**
  * If the field contains any blob of data.
  */
-export interface TextField {
+export type TextField = BaseField & {
     /** Field identifier */
     type: "TEXT";
-    /** The name of the text field. */
-    name: GlideString;
-    /** An alias for the field. */
-    alias?: GlideString;
 }
 
 /**
  * If the field contains a tag field.
  */
-export interface TagField {
+export type TagField = BaseField & {
     /** Field identifier */
     type: "TAG";
-    /** The name of the text field. */
-    name: GlideString;
-    /** An alias for the field. */
-    alias?: GlideString;
     /** Specify how text in the attribute is split into individual tags. Must be a single character. */
     separator?: GlideString;
     /** Preserve the original letter cases of tags. If set to False, characters are converted to lowercase by default. */
@@ -87,25 +86,17 @@ export interface TagField {
 /**
  * If the field contains a number.
  */
-export interface NumericField {
+export type NumericField = BaseField & {
     /** Field identifier */
     type: "NUMERIC";
-    /** The name of the text field. */
-    name: GlideString;
-    /** An alias for the field. */
-    alias?: GlideString;
 }
 
 /**
  * If the field is a vector field that supports vector search.
  */
-export interface VectorField {
+export type VectorField = BaseField & {
     /** Field identifier */
     type: "VECTOR";
-    /** The name of the text field. */
-    name: GlideString;
-    /** An alias for the field. */
-    alias?: GlideString;
     /** The vector indexing algorithm. */
     algorithm: VectorAlgorithm;
     /** Additional attributes to be passed with the vector field after the algorithm name. */
