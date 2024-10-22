@@ -41,9 +41,7 @@ export class GlideFt {
             }
         }
 
-        if (schema) {
-            args.push("SCHEMA");
-        }
+        args.push("SCHEMA");
 
         schema.forEach((f) => {
 

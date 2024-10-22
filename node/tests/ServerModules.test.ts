@@ -122,7 +122,7 @@ describe("GlideFt", () => {
             const prefixes = ["blog:post:"];
 
             expect(
-                GlideFt.create(client, index, fields, {dataType: DataType.Hash, prefixes})
+                await GlideFt.create(client, index, fields, {dataType: DataType.Hash, prefixes})
             ).toEqual("OK");
         },
     );
