@@ -18,6 +18,26 @@ export class GlideFt {
      * @param options Optional arguments for the `FT.CREATE` command.
      *
      * @returns If the index is successfully created, returns "OK".
+     *
+     * @example
+     * ```typescript
+     * // Example usage of FT.CREATE to create a 6-dimensional JSON index using the HNSW algorithm
+     * await GlideFt.create(client, "json_idx1", [{
+     *      type: "VECTOR",
+     *      name: "$.vec",
+     *      alias: "VEC",
+     *      attributes: {
+     *          algorithm: "HNSW",
+     *          type: "FLOAT32",
+     *          dimension: 6,
+     *          distanceMetric: "L2",
+     *          numberOfEdges: 32,
+     *      },
+     *  }], {
+     *      dataType: "JSON",
+     *      prefixes: ["json:"]
+     *  });
+     * ```
      */
     static async create(
         client: GlideClient | GlideClusterClient,
@@ -64,7 +84,6 @@ export class GlideFt {
             }
 
             if (f.type === "VECTOR" && f.attributes) {
-
                 args.push(f.attributes.algorithm);
 
                 const attributes: GlideString[] = [];
@@ -117,8 +136,6 @@ export class GlideFt {
                 args.push(attributes.length.toString(), ...attributes);
             }
         });
-
-        console.log("Args:", args);
 
         return _handleCustomCommand(client, args, {
             decoder: Decoder.String,

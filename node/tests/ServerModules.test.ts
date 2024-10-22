@@ -130,6 +130,29 @@ describe("GlideFt", () => {
             "OK",
         );
 
+        await GlideFt.create(
+            client,
+            "json_idx1",
+            [
+                {
+                    type: "VECTOR",
+                    name: "$.vec",
+                    alias: "VEC",
+                    attributes: {
+                        algorithm: "HNSW",
+                        type: "FLOAT32",
+                        dimension: 6,
+                        distanceMetric: "L2",
+                        numberOfEdges: 32,
+                    },
+                },
+            ],
+            {
+                dataType: "JSON",
+                prefixes: ["json:"],
+            },
+        );
+
         const vectorField_2: VectorField = {
             type: "VECTOR",
             name: "$.vec",
