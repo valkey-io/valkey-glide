@@ -26,7 +26,7 @@ public class Json {
     private static final String JSON_ARRINSERT = JSON_PREFIX + "ARRINSERT";
     private static final String JSON_ARRLEN = JSON_PREFIX + "ARRLEN";
     private static final String JSON_OBJLEN = JSON_PREFIX + "OBJLEN";
-    private static final String JSON_OBJKEYS = JSON_PREFIX + "JSON_OBJKEYS";
+    private static final String JSON_OBJKEYS = JSON_PREFIX + "OBJKEYS";
 
     private Json() {}
 

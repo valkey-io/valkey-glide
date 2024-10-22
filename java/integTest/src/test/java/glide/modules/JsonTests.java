@@ -356,7 +356,7 @@ public class JsonTests {
         assertArrayEquals(new Object[] {"a", "b"}, res);
 
         res = Json.objkeys(client, gs(key), gs("$..b")).get();
-        assertArrayEquals(new Object[][] {{gs("a"), gs("b"), gs("c")}}, res);
+        assertArrayEquals(new Object[][] {{gs("a"), gs("b"), gs("c")}, {}}, res);
 
         // without path
         res = Json.objkeys(client, key).get();
