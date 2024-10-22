@@ -16,7 +16,7 @@ from glide.async_commands.server_modules.ft_options.ft_create_options import (
 from glide.async_commands.server_modules.ft_options.ft_search_options import (
     FtSeachOptions,
 )
-from glide.constants import TOK, TEncodable
+from glide.constants import TOK, FtInfoResponse, TEncodable
 from glide.glide_client import TGlideClient
 
 
@@ -39,7 +39,7 @@ async def create(
         TOK: A simple "OK" response.
 
     Examples:
-        >>> from glide.async_commands.server_modules import ft
+        >>> from glide import ft
         >>> schema: List[Field] = []
         >>> field: TextField = TextField("title")
         >>> schema.append(field)
@@ -72,7 +72,7 @@ async def dropindex(client: TGlideClient, indexName: TEncodable) -> TOK:
 
     Examples:
         For the following example to work, an index named 'idx' must be already created. If not created, you will get an error.
-        >>> from glide.async_commands.server_modules import ft
+        >>> from glide import ft
         >>> indexName = "idx"
         >>> result = await ft.dropindex(glide_client, indexName)
             'OK'  # Indicates successful deletion/dropping of index named 'idx'
@@ -99,12 +99,13 @@ async def search(
     Returns:
         List[Union[int, Mapping[TEncodable, Mapping[TEncodable, TEncodable]]]]: A two element array, where first element is count of documents in result set, and the second element, which has the format Mapping[TEncodable, Mapping[TEncodable, TEncodable]] is a mapping between document names and map of their attributes.
         If count(option in `FtSearchOptions`) is set to true or limit(option in `FtSearchOptions`) is set to FtSearchLimit(0, 0), the command returns array with only one element - the count of the documents.
+
     Examples:
         For the following example to work the following must already exist:
         - An index named "idx", with fields having identifiers as "a" and "b" and prefix as "{json:}"
         - A key named {json:}1 with value {"a":1, "b":2}
 
-        >>> from glide.async_commands.server_modules import ft
+        >>> from glide import ft
         >>> result = await ft.search(glide_client, "idx", "*", options=FtSeachOptions(return_fields=[ReturnField(field_identifier="first"), ReturnField(field_identifier="second")]))
         [1, { b'json:1': { b'first': b'42', b'second': b'33' } }] # The first element, 1 is the number of keys returned in the search result. The second element is a map of data queried per key.
     """
@@ -132,7 +133,7 @@ async def aliasadd(
         TOK: A simple "OK" response.
 
     Examples:
-        >>> from glide.async_commands.server_modules import ft
+        >>> from glide import ft
         >>> result = await ft.aliasadd(glide_client, "myalias", "myindex")
             'OK'  # Indicates the successful addition of the alias named "myalias" for the index.
     """
@@ -152,7 +153,7 @@ async def aliasdel(client: TGlideClient, alias: TEncodable) -> TOK:
         TOK: A simple "OK" response.
 
     Examples:
-        >>> from glide.async_commands.server_modules import ft
+        >>> from glide import ft
         >>> result = await ft.aliasdel(glide_client, "myalias")
             'OK'  # Indicates the successful deletion of the alias named "myalias"
     """
@@ -175,9 +176,61 @@ async def aliasupdate(
         TOK: A simple "OK" response.
 
     Examples:
-        >>> from glide.async_commands.server_modules import ft
+        >>> from glide import ft
         >>> result = await ft.aliasupdate(glide_client, "myalias", "myindex")
             'OK'  # Indicates the successful update of the alias to point to the index named "myindex"
     """
     args: List[TEncodable] = [CommandNames.FT_ALIASUPDATE, alias, indexName]
     return cast(TOK, await client.custom_command(args))
+
+
+async def info(client: TGlideClient, indexName: TEncodable) -> FtInfoResponse:
+    """
+    Returns information about a given index.
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+        indexName (TEncodable): The index name for which the information has to be returned.
+
+    Returns:
+        FtInfoResponse: Nested maps with info about the index. See example for more details. See `FtInfoResponse`.
+
+    Examples:
+        An index with name 'myIndex', 1 text field and 1 vector field is already created for gettting the output of this example.
+        >>> from glide import ft
+        >>> result = await ft.info(glide_client, "myIndex")
+            [
+                b'index_name',
+                b'myIndex',
+                b'creation_timestamp', 1729531116945240,
+                b'key_type', b'JSON',
+                b'key_prefixes', [b'key-prefix'],
+                b'fields', [
+                    [
+                        b'identifier', b'$.vec',
+                        b'field_name', b'VEC',
+                        b'type', b'VECTOR',
+                        b'option', b'',
+                        b'vector_params', [
+                            b'algorithm', b'HNSW', b'data_type', b'FLOAT32', b'dimension', 2, b'distance_metric', b'L2', b'initial_capacity', 1000, b'current_capacity', 1000, b'maximum_edges', 16, b'ef_construction', 200, b'ef_runtime', 10, b'epsilon', b'0.01'
+                        ]
+                    ],
+                    [
+                        b'identifier', b'$.text-field',
+                        b'field_name', b'text-field',
+                        b'type', b'TEXT',
+                        b'option', b''
+                    ]
+                ],
+                b'space_usage', 653351,
+                b'fulltext_space_usage', 0,
+                b'vector_space_usage', 653351,
+                b'num_docs', 0,
+                b'num_indexed_vectors', 0,
+                b'current_lag', 0,
+                b'index_status', b'AVAILABLE',
+                b'index_degradation_percentage', 0
+            ]
+    """
+    args: List[TEncodable] = [CommandNames.FT_INFO, indexName]
+    return cast(FtInfoResponse, await client.custom_command(args))
