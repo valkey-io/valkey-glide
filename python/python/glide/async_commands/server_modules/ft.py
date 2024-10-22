@@ -88,17 +88,17 @@ async def search(
     options: Optional[FtSeachOptions],
 ) -> List[Union[int, Mapping[TEncodable, Mapping[TEncodable, TEncodable]]]]:
     """
-    Uses the provided query expression to locate keys within an index.
+    Uses the provided query expression to locate keys within an index. Once located, the count and/or the content of indexed fields within those keys can be returned.
 
     Args:
         client (TGlideClient): The client to execute the command.
-        indexName (TEncodable): The index name for the index to be searched.
-        query (TEncodable): The query expression to use for the search on the index.
-        options (Optional[FtSeachOptions]): Optional arguments for the FT.SEARCH command. See `FtSearchOptions`.
+        indexName (TEncodable): The index name to search into.
+        query (TEncodable): The text query to search.
+        options (Optional[FtSeachOptions]): The search options. See `FtSearchOptions`.
 
     Returns:
-        List[Union[int, Mapping[TEncodable, Mapping[TEncodable]]]]: A list containing the search result. The first element is the total number of keys matching the query. The second element is a map of key name and field/value pair map.
-
+        List[Union[int, Mapping[TEncodable, Mapping[TEncodable, TEncodable]]]]: A two element array, where first element is count of documents in result set, and the second element, which has the format Mapping[TEncodable, Mapping[TEncodable, TEncodable]] is a mapping between document names and map of their attributes.
+        If count(option in `FtSearchOptions`) is set to true is set or limit(option in `FtSearchOptions`) is set to FtSearchLimit(0, 0) is set, the command returns array with only one element - the count of the documents. See `FtSearchOptions` and see `FtSearchLimit`.
     Examples:
         For the following example to work the following must already exist:
         - An index named "idx", with fields having identifiers as "a" and "b" and prefix as "{json:}"
@@ -106,7 +106,7 @@ async def search(
 
         >>> from glide.async_commands.server_modules import ft
         >>> result = await ft.search(glide_client, "idx", "*", options=FtSeachOptions(return_fields=[ReturnField(field_identifier="first"), ReturnField(field_identifier="second")]))
-        [1, { b'json:1': { b'first': b'42', b'second': b'33' } }]  # The first element, 1 is the number of keys returned in the search result. The second element is a map of data queried per key.
+        [1, { b'json:1': { b'first': b'42', b'second': b'33' } }] # The first element, 1 is the number of keys returned in the search result. The second element is a map of data queried per key.
     """
     args: List[TEncodable] = [CommandNames.FT_SEARCH, indexName, query]
     if options:

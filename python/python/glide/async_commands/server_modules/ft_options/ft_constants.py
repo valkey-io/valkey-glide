@@ -16,7 +16,7 @@ class CommandNames:
 
 class FtCreateKeywords:
     """
-    Keywords used in the FT.CREATE command statment.
+    Keywords used in the FT.CREATE command.
     """
 
     SCHEMA = "SCHEMA"
@@ -39,7 +39,7 @@ class FtCreateKeywords:
 
 class FtSeachKeywords:
     """
-    Keywords used in the FT.SEARCH command statment.
+    Keywords used in the FT.SEARCH command.
     """
 
     RETURN = "RETURN"
