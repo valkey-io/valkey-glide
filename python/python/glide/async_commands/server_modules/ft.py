@@ -226,8 +226,8 @@ async def info(client: TGlideClient, indexName: TEncodable) -> FtInfoResponse:
                 b'fulltext_space_usage', 0,
                 b'vector_space_usage', 653351,
                 b'num_docs', 0,
-                b'num_indexed_vectors',
-                0, b'current_lag', 0,
+                b'num_indexed_vectors', 0,
+                b'current_lag', 0,
                 b'index_status', b'AVAILABLE',
                 b'index_degradation_percentage', 0
             ]
