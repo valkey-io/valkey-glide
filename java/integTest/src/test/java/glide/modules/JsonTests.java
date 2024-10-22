@@ -332,16 +332,16 @@ public class JsonTests {
         assertEquals("OK", Json.set(client, key, "$", doc).get());
 
         var res = Json.objlen(client, key, "$..").get();
-        assertArrayEquals(new Object[] {2, 3, 2}, (Object[]) res);
+        assertArrayEquals(new Object[] {2L, 3L, 2L}, (Object[]) res);
 
         res = Json.objlen(client, gs(key), gs("..b")).get();
-        assertEquals(3, res);
+        assertEquals(3L, res);
 
         // without path
         res = Json.objlen(client, key).get();
-        assertEquals(2, res);
+        assertEquals(2L, res);
         res = Json.objlen(client, gs(key)).get();
-        assertEquals(2, res);
+        assertEquals(2L, res);
     }
 
     @Test

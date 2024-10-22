@@ -26,6 +26,7 @@ public class Json {
     private static final String JSON_ARRINSERT = JSON_PREFIX + "ARRINSERT";
     private static final String JSON_ARRLEN = JSON_PREFIX + "ARRLEN";
     private static final String JSON_OBJLEN = JSON_PREFIX + "OBJLEN";
+    private static final String JSON_OBJKEYS = JSON_PREFIX + "JSON_OBJKEYS";
 
     private Json() {}
 
@@ -758,8 +759,9 @@ public class Json {
      * @return
      *     <ul>
      *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
-     *           Returns an <code>Object[]</code> with a list of integers for every possible path,
-     *           indicating the number of key-value pairs for each matching object, or <code>null
+     *           Returns an <code>Object[]</code> with a list of long integers for every possible
+     *           path, indicating the number of key-value pairs for each matching object, or <code>
+     *           null
      *           </code> for JSON values matching the path that are not an object. If <code>path
      *           </code> does not exist, an empty array will be returned.
      *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
@@ -793,8 +795,9 @@ public class Json {
      * @return
      *     <ul>
      *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
-     *           Returns an <code>Object[]</code> with a list of integers for every possible path,
-     *           indicating the number of key-value pairs for each matching object, or <code>null
+     *           Returns an <code>Object[]</code> with a list of long integers for every possible
+     *           path, indicating the number of key-value pairs for each matching object, or <code>
+     *           null
      *           </code> for JSON values matching the path that are not an object. If <code>path
      *           </code> does not exist, an empty array will be returned.
      *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
@@ -838,7 +841,7 @@ public class Json {
      */
     public static CompletableFuture<Object[]> objkeys(
             @NonNull BaseClient client, @NonNull String key) {
-        return executeCommand(client, new String[] {JSON_OBJLEN, key});
+        return executeCommand(client, new String[] {JSON_OBJKEYS, key});
     }
 
     /**
@@ -861,7 +864,7 @@ public class Json {
      */
     public static CompletableFuture<Object[]> objkeys(
             @NonNull BaseClient client, @NonNull GlideString key) {
-        return executeCommand(client, new GlideString[] {gs(JSON_OBJLEN), key});
+        return executeCommand(client, new GlideString[] {gs(JSON_OBJKEYS), key});
     }
 
     /**
@@ -897,7 +900,7 @@ public class Json {
      */
     public static CompletableFuture<Object[]> objkeys(
             @NonNull BaseClient client, @NonNull String key, @NonNull String path) {
-        return executeCommand(client, new String[] {JSON_OBJLEN, key, path});
+        return executeCommand(client, new String[] {JSON_OBJKEYS, key, path});
     }
 
     /**
@@ -933,7 +936,7 @@ public class Json {
      */
     public static CompletableFuture<Object[]> objkeys(
             @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString path) {
-        return executeCommand(client, new GlideString[] {gs(JSON_OBJLEN), key, path});
+        return executeCommand(client, new GlideString[] {gs(JSON_OBJKEYS), key, path});
     }
 
     /**
