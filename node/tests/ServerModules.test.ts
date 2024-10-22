@@ -54,19 +54,19 @@ describe("GlideJson", () => {
         }
     }, TIMEOUT);
 
-    it(
-        "ServerModules check JSON module is loaded",
-        async () => {
-            client = await GlideClusterClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), ProtocolVersion.RESP3),
-            );
-            const info = await client.info({
-                sections: [InfoOptions.Modules],
-                route: "randomNode",
-            });
-            expect(info).toContain("# search_index_stats");
-        },
-    );
+    it("ServerModules check JSON module is loaded", async () => {
+        client = await GlideClusterClient.createClient(
+            getClientConfigurationOption(
+                cluster.getAddresses(),
+                ProtocolVersion.RESP3,
+            ),
+        );
+        const info = await client.info({
+            sections: [InfoOptions.Modules],
+            route: "randomNode",
+        });
+        expect(info).toContain("# search_index_stats");
+    });
 });
 
 describe("GlideFt", () => {
@@ -92,106 +92,144 @@ describe("GlideFt", () => {
         }
     }, TIMEOUT);
 
-    it(
-        "ServerModules check Vector Search module is loaded",
-        async () => {
-            client = await GlideClusterClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), ProtocolVersion.RESP3),
-            );
-            const info = await client.info({
-                sections: [InfoOptions.Modules],
-                route: "randomNode",
-            });
-            expect(info).toContain("# search_index_stats");
-        },
-    );
+    it("ServerModules check Vector Search module is loaded", async () => {
+        client = await GlideClusterClient.createClient(
+            getClientConfigurationOption(
+                cluster.getAddresses(),
+                ProtocolVersion.RESP3,
+            ),
+        );
+        const info = await client.info({
+            sections: [InfoOptions.Modules],
+            route: "randomNode",
+        });
+        expect(info).toContain("# search_index_stats");
+    });
 
-    it(
-        "Ft.Create test",
-        async () => {
-            client = await GlideClusterClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), ProtocolVersion.RESP3),
-            );
+    it("Ft.Create test", async () => {
+        client = await GlideClusterClient.createClient(
+            getClientConfigurationOption(
+                cluster.getAddresses(),
+                ProtocolVersion.RESP3,
+            ),
+        );
 
-            // Create a few simple indices:
-            const vectorField_1: VectorField = {type: "VECTOR", name: "vec", alias: "VEC", attributes: {algorithm: "HNSW", type: "FLOAT32", dim: 2, distanceMetric: "L2"} };
-            expect(
-                await GlideFt.create(client, uuidv4(), [vectorField_1])
-            ).toEqual("OK");
+        // Create a few simple indices:
+        const vectorField_1: VectorField = {
+            type: "VECTOR",
+            name: "vec",
+            alias: "VEC",
+            attributes: {
+                algorithm: "HNSW",
+                type: "FLOAT32",
+                dim: 2,
+                distanceMetric: "L2",
+            },
+        };
+        expect(await GlideFt.create(client, uuidv4(), [vectorField_1])).toEqual(
+            "OK",
+        );
 
-            const vectorField_2: VectorField = {type: "VECTOR", name: "$.vec", alias: "VEC", attributes: {algorithm: "FLAT", type: "FLOAT32", dim: 6, distanceMetric: "L2"} };
-            expect(
-                await GlideFt.create(client, uuidv4(), [vectorField_2])
-            ).toEqual("OK");
+        const vectorField_2: VectorField = {
+            type: "VECTOR",
+            name: "$.vec",
+            alias: "VEC",
+            attributes: {
+                algorithm: "FLAT",
+                type: "FLOAT32",
+                dim: 6,
+                distanceMetric: "L2",
+            },
+        };
+        expect(await GlideFt.create(client, uuidv4(), [vectorField_2])).toEqual(
+            "OK",
+        );
 
-            // create an index with HNSW vector with additional parameters
-            const vectorField_3: VectorField = {
-                type: "VECTOR",
-                name: "doc_embedding",
-                attributes: {
-                    algorithm: "HNSW",
-                    type: "FLOAT32",
-                    dim: 1536,
-                    distanceMetric: "COSINE",
-                    numberOfEdges: 40,
-                    vectorsExaminedOnConstruction: 250,
-                    vectorsExaminedOnRuntime: 40
-                }
-            };
-            expect(
-                await GlideFt.create(client, uuidv4(), [vectorField_3], {dataType: "HASH", prefixes: ["docs:"]})
-            ).toEqual("OK");
+        // create an index with HNSW vector with additional parameters
+        const vectorField_3: VectorField = {
+            type: "VECTOR",
+            name: "doc_embedding",
+            attributes: {
+                algorithm: "HNSW",
+                type: "FLOAT32",
+                dim: 1536,
+                distanceMetric: "COSINE",
+                numberOfEdges: 40,
+                vectorsExaminedOnConstruction: 250,
+                vectorsExaminedOnRuntime: 40,
+            },
+        };
+        expect(
+            await GlideFt.create(client, uuidv4(), [vectorField_3], {
+                dataType: "HASH",
+                prefixes: ["docs:"],
+            }),
+        ).toEqual("OK");
 
-            // create an index with multiple fields
-            expect(
-                await GlideFt.create(client, uuidv4(), [
-                    {type: "TEXT", name: "title"},
-                    {type: "NUMERIC", name: "published_at"},
-                    {type: "TAG", name: "category"},
-                ], {dataType: "HASH", prefixes: ["blog:post:"]})
-            ).toEqual("OK");
+        // create an index with multiple fields
+        expect(
+            await GlideFt.create(
+                client,
+                uuidv4(),
+                [
+                    { type: "TEXT", name: "title" },
+                    { type: "NUMERIC", name: "published_at" },
+                    { type: "TAG", name: "category" },
+                ],
+                { dataType: "HASH", prefixes: ["blog:post:"] },
+            ),
+        ).toEqual("OK");
 
-            // create an index with multiple prefixes
-            const name = uuidv4();
+        // create an index with multiple prefixes
+        const name = uuidv4();
+        expect(
+            await GlideFt.create(
+                client,
+                name,
+                [
+                    { type: "TAG", name: "author_id" },
+                    { type: "TAG", name: "author_ids" },
+                    { type: "TEXT", name: "title" },
+                    { type: "TEXT", name: "name" },
+                ],
+                {
+                    dataType: "HASH",
+                    prefixes: ["author:details:", "book:details:"],
+                },
+            ),
+        ).toEqual("OK");
+
+        // create a duplicating index - expect a RequestError
+        try {
             expect(
                 await GlideFt.create(client, name, [
-                    {type: "TAG", name: "author_id"},
-                    {type: "TAG", name: "author_ids"},
-                    {type: "TEXT", name: "title"},
-                    {type: "TEXT", name: "name"},
-                ], {dataType: "HASH", prefixes: ["author:details:", "book:details:"]})
-            ).toEqual("OK");
+                    { type: "TEXT", name: "title" },
+                    { type: "TEXT", name: "name" },
+                ]),
+            ).rejects.toThrow();
+        } catch (e) {
+            expect((e as Error).message).toContain("already exists");
+        }
 
-            // create a duplicating index - expect a RequestError
-            try {
-                expect(
-                    await GlideFt.create(client, name, [
-                        {type: "TEXT", name: "title"},
-                        {type: "TEXT", name: "name"},
-                    ])
-                ).rejects.toThrow();
-            } catch (e) {
-                expect((e as Error).message).toContain("already exists");
-            }
+        // create an index without fields - expect a RequestError
+        try {
+            expect(
+                await GlideFt.create(client, uuidv4(), []),
+            ).rejects.toThrow();
+        } catch (e) {
+            expect((e as Error).message).toContain("wrong number of arguments");
+        }
 
-            // create an index without fields - expect a RequestError
-            try {
-                expect(await GlideFt.create(client, uuidv4(), [])).rejects.toThrow();
-            } catch (e) {
-                expect((e as Error).message).toContain("wrong number of arguments");
-            }
-
-            // duplicated field name - expect a RequestError
-            try {
-                expect(
-                    await GlideFt.create(client, uuidv4(), [
-                        {type: "TEXT", name: "name"},
-                        {type: "TEXT", name: "name"},
-                    ])
-                ).rejects.toThrow();
-            } catch (e) {
-                expect((e as Error).message).toContain("already exists");
-            }
-        },
-    );
+        // duplicated field name - expect a RequestError
+        try {
+            expect(
+                await GlideFt.create(client, uuidv4(), [
+                    { type: "TEXT", name: "name" },
+                    { type: "TEXT", name: "name" },
+                ]),
+            ).rejects.toThrow();
+        } catch (e) {
+            expect((e as Error).message).toContain("already exists");
+        }
+    });
 });

@@ -17,7 +17,7 @@ interface BaseField {
 export type TextField = BaseField & {
     /** Field identifier */
     type: "TEXT";
-}
+};
 
 /**
  * If the field contains a tag field.
@@ -29,7 +29,7 @@ export type TagField = BaseField & {
     separator?: GlideString;
     /** Preserve the original letter cases of tags. If set to False, characters are converted to lowercase by default. */
     caseSensitive?: boolean;
-}
+};
 
 /**
  * If the field contains a number.
@@ -37,7 +37,7 @@ export type TagField = BaseField & {
 export type NumericField = BaseField & {
     /** Field identifier */
     type: "NUMERIC";
-}
+};
 
 /**
  * If the field is a vector field that supports vector search.
@@ -47,14 +47,14 @@ export type VectorField = BaseField & {
     type: "VECTOR";
     /** Additional attributes to be passed with the vector field after the algorithm name. */
     attributes: VectorFieldAttributesFlat | VectorFieldAttributesHnsw;
-}
+};
 
 /**
  * Base class for defining vector field attributes to be used after the vector algorithm name.
  */
 export interface VectorFieldAttributes {
-    /** Number of dimensions in the vector. */
-    dim: number;
+    /** Number of dimensions in the vector. Equivalent to DIM in the option. */
+    dimension: number;
     /**
      * The distance metric used in vector type field. Can be one of [L2 | IP | COSINE].
      */

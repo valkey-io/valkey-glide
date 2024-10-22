@@ -44,7 +44,6 @@ export class GlideFt {
         args.push("SCHEMA");
 
         schema.forEach((f) => {
-
             args.push(f.name);
 
             if (f.alias) {
@@ -64,42 +63,58 @@ export class GlideFt {
                 }
             }
 
-            if (f.type === "VECTOR") {
-                if (f.attributes) {
-                    const attributes: GlideString[] = [f.attributes.algorithm];
+            if (f.type === "VECTOR" && f.attributes) {
 
-                    // all VectorFieldAttributes attributes
-                    if (f.attributes.dim) {
-                        attributes.push("DIM", f.attributes.dim.toString());
-                    }
+                args.push(f.attributes.algorithm);
 
-                    if (f.attributes.distanceMetric) {
-                        attributes.push("DISTANCE_METRIC", f.attributes.distanceMetric.toString());
-                    }
-                    
-                    if (f.attributes.type) {
-                        attributes.push("TYPE", f.attributes.type.toString());
-                    }
+                const attributes: GlideString[] = [];
 
-                    if (f.attributes.initialCap) {
-                        attributes.push("INITIAL_CAP", f.attributes.initialCap.toString());
-                    }
-
-                    // VectorFieldAttributesHnsw attributes
-                    if ("m" in f.attributes && f.attributes.m) {
-                        attributes.push("M", f.attributes.m.toString());
-                    }
-
-                    if ("efContruction" in f.attributes && f.attributes.efContruction) {
-                        attributes.push("EF_CONSTRUCTION", f.attributes.efContruction.toString());
-                    }
-
-                    if ("efRuntime" in f.attributes && f.attributes.efRuntime) {
-                        attributes.push("EF_RUNTIME", f.attributes.efRuntime.toString());
-                    }
-
-                    args.push(attributes.length.toString(), ...attributes);
+                // all VectorFieldAttributes attributes
+                if (f.attributes.dimension) {
+                    attributes.push("DIM", f.attributes.dimension.toString());
                 }
+
+                if (f.attributes.distanceMetric) {
+                    attributes.push(
+                        "DISTANCE_METRIC",
+                        f.attributes.distanceMetric.toString(),
+                    );
+                }
+
+                if (f.attributes.type) {
+                    attributes.push("TYPE", f.attributes.type.toString());
+                }
+
+                if (f.attributes.initialCap) {
+                    attributes.push(
+                        "INITIAL_CAP",
+                        f.attributes.initialCap.toString(),
+                    );
+                }
+
+                // VectorFieldAttributesHnsw attributes
+                if ("m" in f.attributes && f.attributes.m) {
+                    attributes.push("M", f.attributes.m.toString());
+                }
+
+                if (
+                    "efContruction" in f.attributes &&
+                    f.attributes.efContruction
+                ) {
+                    attributes.push(
+                        "EF_CONSTRUCTION",
+                        f.attributes.efContruction.toString(),
+                    );
+                }
+
+                if ("efRuntime" in f.attributes && f.attributes.efRuntime) {
+                    attributes.push(
+                        "EF_RUNTIME",
+                        f.attributes.efRuntime.toString(),
+                    );
+                }
+
+                args.push(attributes.length.toString(), ...attributes);
             }
         });
 
@@ -108,8 +123,8 @@ export class GlideFt {
         return _handleCustomCommand(client, args, {
             decoder: Decoder.String,
         }) as Promise<"OK" | null>;
-    };
-};
+    }
+}
 
 /**
  * @internal
