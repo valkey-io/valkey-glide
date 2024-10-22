@@ -44,7 +44,7 @@ class JsonTest {
         String expectedResponseValue = "OK";
         expectedResponse.complete(expectedResponseValue);
         when(glideClient
-                        .customCommand(eq(new String[] {Json.JSON_SET, key, path, jsonValue}))
+                        .customCommand(eq(new String[] {"JSON.SET", key, path, jsonValue}))
                         .<String>thenApply(any()))
                 .thenReturn(expectedResponse);
 
@@ -68,7 +68,7 @@ class JsonTest {
         String expectedResponseValue = "OK";
         expectedResponse.complete(expectedResponseValue);
         when(glideClient
-                        .customCommand(eq(new GlideString[] {gs(Json.JSON_SET), key, path, jsonValue}))
+                        .customCommand(eq(new GlideString[] {gs("JSON.SET"), key, path, jsonValue}))
                         .<String>thenApply(any()))
                 .thenReturn(expectedResponse);
 
@@ -94,7 +94,7 @@ class JsonTest {
         expectedResponse.complete(expectedResponseValue);
         when(glideClient
                         .customCommand(
-                                eq(new String[] {Json.JSON_SET, key, path, jsonValue, setCondition.getValkeyApi()}))
+                                eq(new String[] {"JSON.SET", key, path, jsonValue, setCondition.getValkeyApi()}))
                         .<String>thenApply(any()))
                 .thenReturn(expectedResponse);
 
@@ -123,7 +123,7 @@ class JsonTest {
                         .customCommand(
                                 eq(
                                         new GlideString[] {
-                                            gs(Json.JSON_SET), key, path, jsonValue, gs(setCondition.getValkeyApi())
+                                            gs("JSON.SET"), key, path, jsonValue, gs(setCondition.getValkeyApi())
                                         }))
                         .<String>thenApply(any()))
                 .thenReturn(expectedResponse);
@@ -146,7 +146,7 @@ class JsonTest {
         CompletableFuture<String> expectedResponse = new CompletableFuture<>();
         String expectedResponseValue = "{\"a\": 1.0, \"b\": 2}";
         expectedResponse.complete(expectedResponseValue);
-        when(glideClient.customCommand(eq(new String[] {Json.JSON_GET, key})).<String>thenApply(any()))
+        when(glideClient.customCommand(eq(new String[] {"JSON.GET", key})).<String>thenApply(any()))
                 .thenReturn(expectedResponse);
 
         // exercise
@@ -167,7 +167,7 @@ class JsonTest {
         GlideString expectedResponseValue = gs("{\"a\": 1.0, \"b\": 2}");
         expectedResponse.complete(expectedResponseValue);
         when(glideClient
-                        .customCommand(eq(new GlideString[] {gs(Json.JSON_GET), key}))
+                        .customCommand(eq(new GlideString[] {gs("JSON.GET"), key}))
                         .<GlideString>thenApply(any()))
                 .thenReturn(expectedResponse);
 
@@ -192,7 +192,7 @@ class JsonTest {
         String expectedResponseValue = "{\"a\": 1.0, \"b\": 2}";
         expectedResponse.complete(expectedResponseValue);
         when(glideClient
-                        .customCommand(eq(new String[] {Json.JSON_GET, key, path1, path2}))
+                        .customCommand(eq(new String[] {"JSON.GET", key, path1, path2}))
                         .<String>thenApply(any()))
                 .thenReturn(expectedResponse);
 
@@ -217,7 +217,7 @@ class JsonTest {
         GlideString expectedResponseValue = gs("{\"a\": 1.0, \"b\": 2}");
         expectedResponse.complete(expectedResponseValue);
         when(glideClient
-                        .customCommand(eq(new GlideString[] {gs(Json.JSON_GET), key, path1, path2}))
+                        .customCommand(eq(new GlideString[] {gs("JSON.GET"), key, path1, path2}))
                         .<GlideString>thenApply(any()))
                 .thenReturn(expectedResponse);
 
@@ -243,7 +243,7 @@ class JsonTest {
                         .customCommand(
                                 eq(
                                         ArrayTransformUtils.concatenateArrays(
-                                                new String[] {Json.JSON_GET, key}, options.toArgs())))
+                                                new String[] {"JSON.GET", key}, options.toArgs())))
                         .<String>thenApply(any()))
                 .thenReturn(expectedResponse);
 
@@ -270,7 +270,7 @@ class JsonTest {
                         .customCommand(
                                 eq(
                                         new ArgsBuilder()
-                                                .add(new GlideString[] {gs(Json.JSON_GET), key})
+                                                .add(new GlideString[] {gs("JSON.GET"), key})
                                                 .add(options.toArgs())
                                                 .toArray()))
                         .<GlideString>thenApply(any()))
@@ -298,7 +298,7 @@ class JsonTest {
         String expectedResponseValue = "{\"a\": 1.0, \"b\": 2}";
         expectedResponse.complete(expectedResponseValue);
         ArrayList<String> argsList = new ArrayList<>();
-        argsList.add(Json.JSON_GET);
+        argsList.add("JSON.GET");
         argsList.add(key);
         Collections.addAll(argsList, options.toArgs());
         Collections.addAll(argsList, paths);
@@ -330,13 +330,187 @@ class JsonTest {
         GlideString expectedResponseValue = gs("{\"a\": 1.0, \"b\": 2}");
         expectedResponse.complete(expectedResponseValue);
         GlideString[] args =
-                new ArgsBuilder().add(Json.JSON_GET).add(key).add(options.toArgs()).add(paths).toArray();
+                new ArgsBuilder().add("JSON.GET").add(key).add(options.toArgs()).add(paths).toArray();
         when(glideClient.customCommand(eq(args)).<GlideString>thenApply(any()))
                 .thenReturn(expectedResponse);
 
         // exercise
         CompletableFuture<GlideString> actualResponse = Json.get(glideClient, key, paths, options);
         GlideString actualResponseValue = actualResponse.get();
+
+        // verify
+        assertEquals(expectedResponse, actualResponse);
+        assertEquals(expectedResponseValue, actualResponseValue);
+    }
+
+    @Test
+    @SneakyThrows
+    void del_with_no_path_returns_success() {
+        // setup
+        String key = "testKey";
+        CompletableFuture<Long> expectedResponse = new CompletableFuture<>();
+        Long expectedResponseValue = 1L;
+        expectedResponse.complete(expectedResponseValue);
+        when(glideClient.customCommand(eq(new String[] {"JSON.DEL", key})).<Long>thenApply(any()))
+                .thenReturn(expectedResponse);
+
+        // exercise
+        CompletableFuture<Long> actualResponse = Json.del(glideClient, key);
+        Long actualResponseValue = actualResponse.get();
+
+        // verify
+        assertEquals(expectedResponse, actualResponse);
+        assertEquals(expectedResponseValue, actualResponseValue);
+    }
+
+    @Test
+    @SneakyThrows
+    void del_binary_with_no_path_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        CompletableFuture<Long> expectedResponse = new CompletableFuture<>();
+        Long expectedResponseValue = 1L;
+        expectedResponse.complete(expectedResponseValue);
+        when(glideClient
+                        .customCommand(eq(new GlideString[] {gs("JSON.DEL"), key}))
+                        .<Long>thenApply(any()))
+                .thenReturn(expectedResponse);
+
+        // exercise
+        CompletableFuture<Long> actualResponse = Json.del(glideClient, key);
+        Long actualResponseValue = actualResponse.get();
+
+        // verify
+        assertEquals(expectedResponse, actualResponse);
+        assertEquals(expectedResponseValue, actualResponseValue);
+    }
+
+    @Test
+    @SneakyThrows
+    void del_with_path_returns_success() {
+        // setup
+        String key = "testKey";
+        String path = "$";
+        CompletableFuture<Long> expectedResponse = new CompletableFuture<>();
+        Long expectedResponseValue = 2L;
+        expectedResponse.complete(expectedResponseValue);
+        when(glideClient.customCommand(eq(new String[] {"JSON.DEL", key, path})).<Long>thenApply(any()))
+                .thenReturn(expectedResponse);
+
+        // exercise
+        CompletableFuture<Long> actualResponse = Json.del(glideClient, key, path);
+        Long actualResponseValue = actualResponse.get();
+
+        // verify
+        assertEquals(expectedResponse, actualResponse);
+        assertEquals(expectedResponseValue, actualResponseValue);
+    }
+
+    @Test
+    @SneakyThrows
+    void del_binary_with_path_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString path = gs("$");
+        CompletableFuture<Long> expectedResponse = new CompletableFuture<>();
+        Long expectedResponseValue = 2L;
+        expectedResponse.complete(expectedResponseValue);
+        when(glideClient
+                        .customCommand(eq(new GlideString[] {gs("JSON.DEL"), key, path}))
+                        .<Long>thenApply(any()))
+                .thenReturn(expectedResponse);
+
+        // exercise
+        CompletableFuture<Long> actualResponse = Json.del(glideClient, key, path);
+        Long actualResponseValue = actualResponse.get();
+
+        // verify
+        assertEquals(expectedResponse, actualResponse);
+        assertEquals(expectedResponseValue, actualResponseValue);
+    }
+
+    @Test
+    @SneakyThrows
+    void forget_with_no_path_returns_success() {
+        // setup
+        String key = "testKey";
+        CompletableFuture<Long> expectedResponse = new CompletableFuture<>();
+        Long expectedResponseValue = 1L;
+        expectedResponse.complete(expectedResponseValue);
+        when(glideClient.customCommand(eq(new String[] {"JSON.FORGET", key})).<Long>thenApply(any()))
+                .thenReturn(expectedResponse);
+
+        // exercise
+        CompletableFuture<Long> actualResponse = Json.forget(glideClient, key);
+        Long actualResponseValue = actualResponse.get();
+
+        // verify
+        assertEquals(expectedResponse, actualResponse);
+        assertEquals(expectedResponseValue, actualResponseValue);
+    }
+
+    @Test
+    @SneakyThrows
+    void forget_binary_with_no_path_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        CompletableFuture<Long> expectedResponse = new CompletableFuture<>();
+        Long expectedResponseValue = 1L;
+        expectedResponse.complete(expectedResponseValue);
+        when(glideClient
+                        .customCommand(eq(new GlideString[] {gs("JSON.FORGET"), key}))
+                        .<Long>thenApply(any()))
+                .thenReturn(expectedResponse);
+
+        // exercise
+        CompletableFuture<Long> actualResponse = Json.forget(glideClient, key);
+        Long actualResponseValue = actualResponse.get();
+
+        // verify
+        assertEquals(expectedResponse, actualResponse);
+        assertEquals(expectedResponseValue, actualResponseValue);
+    }
+
+    @Test
+    @SneakyThrows
+    void forget_with_path_returns_success() {
+        // setup
+        String key = "testKey";
+        String path = "$";
+        CompletableFuture<Long> expectedResponse = new CompletableFuture<>();
+        Long expectedResponseValue = 2L;
+        expectedResponse.complete(expectedResponseValue);
+        when(glideClient
+                        .customCommand(eq(new String[] {"JSON.FORGET", key, path}))
+                        .<Long>thenApply(any()))
+                .thenReturn(expectedResponse);
+
+        // exercise
+        CompletableFuture<Long> actualResponse = Json.forget(glideClient, key, path);
+        Long actualResponseValue = actualResponse.get();
+
+        // verify
+        assertEquals(expectedResponse, actualResponse);
+        assertEquals(expectedResponseValue, actualResponseValue);
+    }
+
+    @Test
+    @SneakyThrows
+    void forget_binary_with_path_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString path = gs("$");
+        CompletableFuture<Long> expectedResponse = new CompletableFuture<>();
+        Long expectedResponseValue = 2L;
+        expectedResponse.complete(expectedResponseValue);
+        when(glideClient
+                        .customCommand(eq(new GlideString[] {gs("JSON.FORGET"), key, path}))
+                        .<Long>thenApply(any()))
+                .thenReturn(expectedResponse);
+
+        // exercise
+        CompletableFuture<Long> actualResponse = Json.forget(glideClient, key, path);
+        Long actualResponseValue = actualResponse.get();
 
         // verify
         assertEquals(expectedResponse, actualResponse);
