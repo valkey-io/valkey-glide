@@ -12,7 +12,7 @@ interface BaseField {
 }
 
 /**
- * If the field contains any blob of data.
+ * Field contains any blob of data.
  */
 export type TextField = BaseField & {
     /** Field identifier */
@@ -20,7 +20,11 @@ export type TextField = BaseField & {
 };
 
 /**
- * If the field contains a tag field.
+ * Tag fields are similar to full-text fields, but they interpret the text as a simple list of
+ * tags delimited by a separator character.
+ *
+ * For HASH fields, separator default is a comma (`,`). For JSON fields, there is no default
+ * separator; you must declare one explicitly if needed.
  */
 export type TagField = BaseField & {
     /** Field identifier */
@@ -32,7 +36,7 @@ export type TagField = BaseField & {
 };
 
 /**
- * If the field contains a number.
+ * Field contains a number.
  */
 export type NumericField = BaseField & {
     /** Field identifier */
@@ -40,7 +44,7 @@ export type NumericField = BaseField & {
 };
 
 /**
- * If the field is a vector field that supports vector search.
+ * Superclass for vector field implementations, contains common logic.
  */
 export type VectorField = BaseField & {
     /** Field identifier */
@@ -66,21 +70,24 @@ export interface VectorFieldAttributes {
      */
     initialCap?: number;
 }
+
+/**
+ * Vector field that supports vector search by FLAT (brute force) algorithm.
+ *
+ * The algorithm is a brute force linear processing of each vector in the index, yielding exact
+ * answers within the bounds of the precision of the distance computations.
+ */
 export type VectorFieldAttributesFlat = VectorFieldAttributes & {
-    /**
-     * Vector field that supports vector search by FLAT (brute force) algorithm.
-     * The algorithm is a brute force linear processing of each vector in the index, yielding exact
-     * answers within the bounds of the precision of the distance computations.
-     */
     algorithm: "FLAT";
 };
+
+/**
+ * Vector field that supports vector search by HNSM (Hierarchical Navigable Small World) algorithm.
+ *
+ * The algorithm provides an approximation of the correct answer in exchange for substantially
+ * lower execution times.
+ */
 export type VectorFieldAttributesHnsw = VectorFieldAttributes & {
-    /**
-     * Vector field that supports vector search by HNSM (Hierarchical Navigable Small
-     * World) algorithm.
-     * The algorithm provides an approximation of the correct answer in exchange for substantially
-     * lower execution times.
-     */
     algorithm: "HNSW";
     /**
      * Number of maximum allowed outgoing edges for each node in the graph in each layer. Default is 16, maximum is 512.

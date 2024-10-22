@@ -32,7 +32,6 @@ import {
 
 const TIMEOUT = 50000;
 describe("GlideJson", () => {
-    const testsFailed = 0;
     let cluster: ValkeyCluster;
     let client: GlideClusterClient;
     beforeAll(async () => {
@@ -49,9 +48,7 @@ describe("GlideJson", () => {
     });
 
     afterAll(async () => {
-        if (testsFailed === 0) {
-            await cluster.close();
-        }
+        await cluster.close();
     }, TIMEOUT);
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -284,7 +281,6 @@ describe("GlideJson", () => {
 });
 
 describe("GlideFt", () => {
-    const testsFailed = 0;
     let cluster: ValkeyCluster;
     let client: GlideClusterClient;
     beforeAll(async () => {
@@ -301,9 +297,7 @@ describe("GlideFt", () => {
     });
 
     afterAll(async () => {
-        if (testsFailed === 0) {
-            await cluster.close();
-        }
+        await cluster.close();
     }, TIMEOUT);
 
     it("ServerModules check Vector Search module is loaded", async () => {
@@ -344,28 +338,30 @@ describe("GlideFt", () => {
             "OK",
         );
 
-        await GlideFt.create(
-            client,
-            "json_idx1",
-            [
-                {
-                    type: "VECTOR",
-                    name: "$.vec",
-                    alias: "VEC",
-                    attributes: {
-                        algorithm: "HNSW",
-                        type: "FLOAT32",
-                        dimension: 6,
-                        distanceMetric: "L2",
-                        numberOfEdges: 32,
+        expect(
+            await GlideFt.create(
+                client,
+                "json_idx1",
+                [
+                    {
+                        type: "VECTOR",
+                        name: "$.vec",
+                        alias: "VEC",
+                        attributes: {
+                            algorithm: "HNSW",
+                            type: "FLOAT32",
+                            dimension: 6,
+                            distanceMetric: "L2",
+                            numberOfEdges: 32,
+                        },
                     },
+                ],
+                {
+                    dataType: "JSON",
+                    prefixes: ["json:"],
                 },
-            ],
-            {
-                dataType: "JSON",
-                prefixes: ["json:"],
-            },
-        );
+            ),
+        ).toEqual("OK");
 
         const vectorField_2: VectorField = {
             type: "VECTOR",

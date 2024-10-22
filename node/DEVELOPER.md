@@ -139,6 +139,13 @@ To run the integration tests with existing servers, run the following command:
 npm run test -- --cluster-endpoints=localhost:7000 --standalone-endpoints=localhost:6379
 ```
 
+By default, the server_modules tests do not run using `npm run test`. After pointing to a server with JSON and VSS modules setup,
+run the following command:
+
+```bash
+npm run test-modules
+```
+
 ### Submodules
 
 After pulling new changes, ensure that you update the submodules by running the following command:

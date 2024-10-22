@@ -15,7 +15,7 @@ export class GlideFt {
      * @param client The client to execute the command.
      * @param indexName The index name for the index to be created.
      * @param schema The fields of the index schema, specifying the fields and their types.
-     * @param options Optional arguments for the `FT.CREATE` command.
+     * @param options Optional arguments for the `FT.CREATE` command. See {@link FtCreateOptions}.
      *
      * @returns If the index is successfully created, returns "OK".
      *
@@ -43,7 +43,7 @@ export class GlideFt {
         client: GlideClient | GlideClusterClient,
         indexName: GlideString,
         schema: Field[],
-        options?: FtCreateOptions | DecoderOption,
+        options?: FtCreateOptions,
     ): Promise<"OK" | null> {
         const args: GlideString[] = ["FT.CREATE", indexName];
 
@@ -72,68 +72,87 @@ export class GlideFt {
 
             args.push(f.type);
 
-            // TagField attributes
-            if (f.type === "TAG") {
-                if (f.separator) {
-                    args.push("SEPARATOR", f.separator);
+            switch (f.type) {
+                case "TAG": {
+                    if (f.separator) {
+                        args.push("SEPARATOR", f.separator);
+                    }
+
+                    if (f.caseSensitive) {
+                        args.push("CASESENSITIVE");
+                    }
+
+                    break;
                 }
 
-                if (f.caseSensitive) {
-                    args.push("CASESENSITIVE");
+                case "VECTOR": {
+                    if (f.attributes) {
+                        args.push(f.attributes.algorithm);
+
+                        const attributes: GlideString[] = [];
+
+                        // all VectorFieldAttributes attributes
+                        if (f.attributes.dimension) {
+                            attributes.push(
+                                "DIM",
+                                f.attributes.dimension.toString(),
+                            );
+                        }
+
+                        if (f.attributes.distanceMetric) {
+                            attributes.push(
+                                "DISTANCE_METRIC",
+                                f.attributes.distanceMetric.toString(),
+                            );
+                        }
+
+                        if (f.attributes.type) {
+                            attributes.push(
+                                "TYPE",
+                                f.attributes.type.toString(),
+                            );
+                        }
+
+                        if (f.attributes.initialCap) {
+                            attributes.push(
+                                "INITIAL_CAP",
+                                f.attributes.initialCap.toString(),
+                            );
+                        }
+
+                        // VectorFieldAttributesHnsw attributes
+                        if ("m" in f.attributes && f.attributes.m) {
+                            attributes.push("M", f.attributes.m.toString());
+                        }
+
+                        if (
+                            "efContruction" in f.attributes &&
+                            f.attributes.efContruction
+                        ) {
+                            attributes.push(
+                                "EF_CONSTRUCTION",
+                                f.attributes.efContruction.toString(),
+                            );
+                        }
+
+                        if (
+                            "efRuntime" in f.attributes &&
+                            f.attributes.efRuntime
+                        ) {
+                            attributes.push(
+                                "EF_RUNTIME",
+                                f.attributes.efRuntime.toString(),
+                            );
+                        }
+
+                        args.push(attributes.length.toString(), ...attributes);
+                    }
+
+                    break;
                 }
-            }
 
-            if (f.type === "VECTOR" && f.attributes) {
-                args.push(f.attributes.algorithm);
-
-                const attributes: GlideString[] = [];
-
-                // all VectorFieldAttributes attributes
-                if (f.attributes.dimension) {
-                    attributes.push("DIM", f.attributes.dimension.toString());
-                }
-
-                if (f.attributes.distanceMetric) {
-                    attributes.push(
-                        "DISTANCE_METRIC",
-                        f.attributes.distanceMetric.toString(),
-                    );
-                }
-
-                if (f.attributes.type) {
-                    attributes.push("TYPE", f.attributes.type.toString());
-                }
-
-                if (f.attributes.initialCap) {
-                    attributes.push(
-                        "INITIAL_CAP",
-                        f.attributes.initialCap.toString(),
-                    );
-                }
-
-                // VectorFieldAttributesHnsw attributes
-                if ("m" in f.attributes && f.attributes.m) {
-                    attributes.push("M", f.attributes.m.toString());
-                }
-
-                if (
-                    "efContruction" in f.attributes &&
-                    f.attributes.efContruction
-                ) {
-                    attributes.push(
-                        "EF_CONSTRUCTION",
-                        f.attributes.efContruction.toString(),
-                    );
-                }
-
-                if ("efRuntime" in f.attributes && f.attributes.efRuntime) {
-                    attributes.push(
-                        "EF_RUNTIME",
-                        f.attributes.efRuntime.toString(),
-                    );
-                }
-
-                args.push(attributes.length.toString(), ...attributes);
+                default:
+                // no-op
             }
         });
 
