@@ -758,6 +758,60 @@ async def arrlen(
     )
 
 
+async def arrlen(
+    client: TGlideClient,
+    key: TEncodable,
+    path: Optional[TEncodable] = None,
+) -> Optional[TJsonResponse[int]]:
+    """
+    Retrieves the length of the array at the specified `path` within the JSON document stored at `key`.
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+        key (TEncodable): The key of the JSON document.
+        path (Optional[TEncodable]): The path within the JSON document. Defaults to None.
+
+    Returns:
+        Optional[TJsonResponse[int]]:
+            For JSONPath (`path` starts with `$`):
+                Returns a list of integer replies for every possible path, indicating the length of the array,
+                or None for JSON values matching the path that are not an array.
+                If `path` doesn't exist, an empty array will be returned.
+            For legacy path (`path` doesn't starts with `$`):
+                Returns the length of the array at `path`.
+                If multiple paths match, the length of the first array match is returned.
+                If the JSON value at `path` is not a array or if `path` doesn't exist, an error is raised.
+            If `key` doesn't exist, None is returned.
+
+    Examples:
+        >>> from glide import json
+        >>> await json.set(client, "doc", "$", '{"a": [1, 2, 3], "b": {"a": [1, 2], "c": {"a": 42}}}')
+            b'OK'  # JSON is successfully set for doc
+        >>> await json.arrlen(client, "doc", "$")
+            [None]  # No array at the root path.
+        >>> await json.arrlen(client, "doc", "$.a")
+            [3]  # Retrieves the length of the array at path $.a.
+        >>> await json.arrlen(client, "doc", "$..a")
+            [3, 2, None]  # Retrieves lengths of arrays found at all levels of the path `..a`.
+        >>> await json.arrlen(client, "doc", "..a")
+            3  # Legacy path retrieves the first array match at path `..a`.
+        >>> await json.arrlen(client, "non_existing_key", "$.a")
+            None  # Returns None because the key does not exist.
+
+        >>> await json.set(client, "doc", "$", '[1, 2, 3, 4]')
+            b'OK'  # JSON is successfully set for doc
+        >>> await json.arrlen(client, "doc")
+            4  # Retrieves lengths of arrays in root.
+    """
+    args = ["JSON.ARRLEN", key]
+    if path:
+        args.append(path)
+    return cast(
+        Optional[TJsonResponse[int]],
+        await client.custom_command(args),
+    )
+
+
 async def delete(
     client: TGlideClient,
     key: TEncodable,
