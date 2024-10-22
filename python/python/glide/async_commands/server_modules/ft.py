@@ -16,7 +16,7 @@ from glide.async_commands.server_modules.ft_options.ft_create_options import (
 from glide.async_commands.server_modules.ft_options.ft_search_options import (
     FtSeachOptions,
 )
-from glide.constants import TOK, TEncodable
+from glide.constants import TOK, FtInfoResponse, TEncodable
 from glide.glide_client import TGlideClient
 
 
@@ -183,20 +183,7 @@ async def aliasupdate(
     return cast(TOK, await client.custom_command(args))
 
 
-async def info(client: TGlideClient, indexName: TEncodable) -> Mapping[
-    TEncodable,
-    Union[
-        TEncodable,
-        int,
-        List[TEncodable],
-        List[
-            Mapping[
-                TEncodable,
-                Union[TEncodable, Mapping[TEncodable, Union[TEncodable, int]]],
-            ]
-        ],
-    ],
-]:
+async def info(client: TGlideClient, indexName: TEncodable) -> FtInfoResponse:
     """
     Returns information about a given index.
 
@@ -205,28 +192,12 @@ async def info(client: TGlideClient, indexName: TEncodable) -> Mapping[
         indexName (TEncodable): The index name for which the information has to be returned.
 
     Returns:
-        Mapping[TEncodable, Union[TEncodable, int, List[TEncodable], List[Mapping[TEncodable, Union[TEncodable, Mapping[TEncodable, Union[TEncodable, int]]]]]]]: Nested maps with info about the index. See example for more details.
+        FtInfoResponse: Nested maps with info about the index. See example for more details. See `FtInfoResponse`.
 
     Examples:
         >>> from glide.async_commands.server_modules import ft
         >>> result = await ft.info(glide_client, "myIndex")
-            Mapping[TEncodable, Union[TEncodable, int, List[TEncodable], List[Mapping[TEncodable, Union[TEncodable, Mapping[TEncodable, Union[TEncodable, int]]]]]]]: A map with info about the index.
+            : A map with info about the index.
     """
     args: List[TEncodable] = [CommandNames.FT_INFO, indexName]
-    return cast(
-        Mapping[
-            TEncodable,
-            Union[
-                TEncodable,
-                int,
-                List[TEncodable],
-                List[
-                    Mapping[
-                        TEncodable,
-                        Union[TEncodable, Mapping[TEncodable, Union[TEncodable, int]]],
-                    ]
-                ],
-            ],
-        ],
-        await client.custom_command(args),
-    )
+    return cast(FtInfoResponse, await client.custom_command(args))

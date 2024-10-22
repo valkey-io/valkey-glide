@@ -23,8 +23,15 @@ from glide.glide_client import GlideClusterClient
 
 @pytest.mark.asyncio
 class TestFt:
-    SearchResultFieldDataType = Mapping[
+    SearchResultField = Mapping[
         TEncodable, Union[TEncodable, Mapping[TEncodable, Union[TEncodable, int]]]
+    ]
+
+    SerchResultFieldsList = List[
+        Mapping[
+            TEncodable,
+            Union[TEncodable, Mapping[TEncodable, Union[TEncodable, int]]],
+        ]
     ]
 
     @pytest.mark.parametrize("cluster_mode", [True])
@@ -120,36 +127,25 @@ class TestFt:
             self, glide_client=glide_client, index_name=indexName
         )
         result = await ft.info(glide_client, indexName)
-        assert await ft.dropindex(glide_client, indexName=indexName)
+        assert await ft.dropindex(glide_client, indexName=indexName) == OK
 
         assert indexName.encode() == result.get(b"index_name")
         assert b"JSON" == result.get(b"key_type")
         assert [b"key-prefix"] == result.get(b"key_prefixes")
 
         # Get vector and text fields from the fields array.
-        fields: List[
-            Mapping[
-                TEncodable,
-                Union[TEncodable, Mapping[TEncodable, Union[TEncodable, int]]],
-            ]
-        ] = cast(
-            List[
-                Mapping[
-                    TEncodable,
-                    Union[TEncodable, Mapping[TEncodable, Union[TEncodable, int]]],
-                ]
-            ],
-            result.get(b"fields"),
+        fields: TestFt.SerchResultFieldsList = cast(
+            TestFt.SerchResultFieldsList, result.get(b"fields")
         )
         assert len(fields) == 2
-        textField: TestFt.SearchResultFieldDataType = {}
-        vectorField: TestFt.SearchResultFieldDataType = {}
+        textField: TestFt.SearchResultField = {}
+        vectorField: TestFt.SearchResultField = {}
         if fields[0].get(b"type") == b"VECTOR":
-            vectorField = cast(TestFt.SearchResultFieldDataType, fields[0])
-            textField = cast(TestFt.SearchResultFieldDataType, fields[1])
+            vectorField = cast(TestFt.SearchResultField, fields[0])
+            textField = cast(TestFt.SearchResultField, fields[1])
         else:
-            vectorField = cast(TestFt.SearchResultFieldDataType, fields[1])
-            textField = cast(TestFt.SearchResultFieldDataType, fields[0])
+            vectorField = cast(TestFt.SearchResultField, fields[1])
+            textField = cast(TestFt.SearchResultField, fields[0])
 
         # Compare vector field arguments
         assert b"$.vec" == vectorField.get(b"identifier")
