@@ -25,6 +25,7 @@ public class Json {
     private static final String JSON_ARRAPPEND = JSON_PREFIX + "ARRAPPEND";
     private static final String JSON_ARRINSERT = JSON_PREFIX + "ARRINSERT";
     private static final String JSON_ARRLEN = JSON_PREFIX + "ARRLEN";
+    private static final String JSON_TOGGLE = JSON_PREFIX + "TOGGLE";
 
     private Json() {}
 
@@ -700,6 +701,118 @@ public class Json {
     public static CompletableFuture<Long> arrlen(
             @NonNull BaseClient client, @NonNull GlideString key) {
         return executeCommand(client, new GlideString[] {gs(JSON_ARRLEN), key});
+    }
+
+    /**
+     * Toggles a Boolean value stored at the root within the JSON document stored at <code>key</code>.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @return Returns an <code>Object[]</code> with a list of integers for the root, with the toggled
+     *     boolean value, or <code>null</code> for JSON values matching the root that are not boolean.
+     *     If <code>key</code> doesn't exist, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", ".", true).get();
+     * var res = Json.toggle(client, "doc").get();
+     * assert res.equals(false);
+     * res = Json.toggle(client, "doc").get();
+     * assert res.equals(true);
+     * }</pre>
+     */
+    public static CompletableFuture<Object> toggle(@NonNull BaseClient client, @NonNull String key) {
+        return executeCommand(client, new String[] {JSON_TOGGLE, key});
+    }
+
+    /**
+     * Toggles a Boolean value stored at the root within the JSON document stored at <code>key</code>.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @return Returns an <code>Object[]</code> with a list of integers for the root, with the toggled
+     *     boolean value, or <code>null</code> for JSON values matching the root that are not boolean.
+     *     If <code>key</code> doesn't exist, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", ".", true).get();
+     * var res = Json.toggle(client, gs("doc")).get();
+     * assert res.equals(false);
+     * res = Json.toggle(client, gs("doc")).get();
+     * assert res.equals(true);
+     * }</pre>
+     */
+    public static CompletableFuture<Object> toggle(
+            @NonNull BaseClient client, @NonNull GlideString key) {
+        return executeCommand(client, new ArgsBuilder().add(gs(JSON_TOGGLE)).add(key).toArray());
+    }
+
+    /**
+     * Toggles a Boolean value stored at the specified <code>path</code> within the JSON document
+     * stored at <code>key</code>.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document. Default to the root if not specified.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
+     *           Returns an <code>Object[]</code> with a list of integers for every possible path,
+     *           with the toggled boolean value, or <code>null</code> for JSON values matching the
+     *           path that are not boolean.
+     *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
+     *           Returns the value of the toggled boolean in <code>path</code>. If <code>path</code>
+     *           doesn't exist or the value at <code>path</code> isn't a boolean, an error is raised.
+     *     </ul>
+     *     If <code>key</code> doesn't exist, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "{\"bool\": true, \"nested\": {\"bool\": false, \"nested\": {\"bool\": 10}}}").get();
+     * var res = Json.toggle(client, "doc", "$.bool").get();
+     * assert Arrays.equals((Object[]) res, new int[] {[false, true, null]});
+     * res = Json.toggle(client, "doc", "bool").get();
+     * assert res.equals(true);
+     * var getResult = Json.get(client, "doc", "$").get();
+     * assert getResult.equals("{\"bool\": true, \"nested\": {\"bool\": true, \"nested\": {\"bool\": 10}}}");
+     * }</pre>
+     */
+    public static CompletableFuture<Object> toggle(
+            @NonNull BaseClient client, @NonNull String key, @NonNull String path) {
+        return executeCommand(client, new String[] {JSON_TOGGLE, key, path});
+    }
+
+    /**
+     * Toggles a Boolean value stored at the specified <code>path</code> within the JSON document
+     * stored at <code>key</code>.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document. Default to the root if not specified.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
+     *           Returns an <code>Object[]</code> with a list of integers for every possible path,
+     *           with the toggled boolean value, or <code>null</code> for JSON values matching the
+     *           path that are not boolean.
+     *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
+     *           Returns the value of the toggled boolean in <code>path</code>. If <code>path</code>
+     *           doesn't exist or the value at <code>path</code> isn't a boolean, an error is raised.
+     *     </ul>
+     *     If <code>key</code> doesn't exist, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "{\"bool\": true, \"nested\": {\"bool\": false, \"nested\": {\"bool\": 10}}}").get();
+     * var res = Json.toggle(client, gs("doc"), gs("$.bool")).get();
+     * assert Arrays.equals((Object[]) res, new int[] {false, true, null});
+     * res = Json.toggle(client, gs("doc"), gs("bool")).get();
+     * assert res.equals(true);
+     * var getResult = Json.get(client, "doc", "$").get();
+     * assert getResult.equals("{\"bool\": true, \"nested\": {\"bool\": true, \"nested\": {\"bool\": 10}}}");
+     * }</pre>
+     */
+    public static CompletableFuture<Object> toggle(
+            @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString path) {
+        return executeCommand(
+                client, new ArgsBuilder().add(gs(JSON_TOGGLE)).add(key).add(path).toArray());
     }
 
     /**
