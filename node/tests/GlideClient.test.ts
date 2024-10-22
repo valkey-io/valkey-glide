@@ -40,7 +40,6 @@ import {
     flushAndCloseClient,
     generateLuaLibCode,
     getClientConfigurationOption,
-    getServerVersion,
     parseCommandLineArgs,
     parseEndpoints,
     transactionTest,
@@ -59,12 +58,10 @@ describe("GlideClient", () => {
         const standaloneAddresses =
             parseCommandLineArgs()["standalone-endpoints"];
         cluster = standaloneAddresses
-            ? await ValkeyCluster.initFromExistingCluster(
-                  false,
+            ? await RedisCluster.initFromExistingCluster(
                   parseEndpoints(standaloneAddresses),
-                  getServerVersion,
               )
-            : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
+            : await RedisCluster.createCluster(false, 1, 1);
     }, 20000);
 
     afterEach(async () => {
@@ -133,6 +130,47 @@ describe("GlideClient", () => {
                 expect.not.stringContaining("# Latencystats"),
             );
         },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "check that blocking commands returns never timeout_%p",
+        async (protocol) => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    protocol,
+                    300,
+                ),
+            );
+
+            const promiseList = [
+                client.blmove(
+                    "source",
+                    "destination",
+                    ListDirection.LEFT,
+                    ListDirection.LEFT,
+                    0.1,
+                ),
+                client.bzpopmax(["key1", "key2"], 0),
+                client.bzpopmin(["key1", "key2"], 0),
+            ];
+
+            try {
+                for (const promise of promiseList) {
+                    const timeoutPromise = new Promise((resolve) => {
+                        setTimeout(resolve, 500);
+                    });
+                    await Promise.race([promise, timeoutPromise]);
+                }
+            } finally {
+                for (const promise of promiseList) {
+                    await Promise.resolve([promise]);
+                }
+
+                client.close();
+            }
+        },
+        5000,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
