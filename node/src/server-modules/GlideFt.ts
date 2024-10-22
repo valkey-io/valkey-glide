@@ -65,13 +65,8 @@ export class GlideFt {
             }
 
             if (f.type === "VECTOR") {
-                // VectorField attributes
-                if (f.algorithm) {
-                    args.push(f.algorithm);
-                }
-
                 if (f.attributes) {
-                    const attributes: GlideString[] = [];
+                    const attributes: GlideString[] = [f.attributes.algorithm];
 
                     // all VectorFieldAttributes attributes
                     if (f.attributes.dim) {

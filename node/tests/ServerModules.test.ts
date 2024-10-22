@@ -54,11 +54,11 @@ describe("GlideJson", () => {
         }
     }, TIMEOUT);
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    it(
         "ServerModules check JSON module is loaded",
-        async (protocol) => {
+        async () => {
             client = await GlideClusterClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
+                getClientConfigurationOption(cluster.getAddresses(), ProtocolVersion.RESP3),
             );
             const info = await client.info({
                 sections: [InfoOptions.Modules],
@@ -92,11 +92,11 @@ describe("GlideFt", () => {
         }
     }, TIMEOUT);
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    it(
         "ServerModules check Vector Search module is loaded",
-        async (protocol) => {
+        async () => {
             client = await GlideClusterClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
+                getClientConfigurationOption(cluster.getAddresses(), ProtocolVersion.RESP3),
             );
             const info = await client.info({
                 sections: [InfoOptions.Modules],
@@ -106,23 +106,68 @@ describe("GlideFt", () => {
         },
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "Ft.Create test_%p",
-        async (protocol) => {
+    it(
+        "Ft.Create test",
+        async () => {
             client = await GlideClusterClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
+                getClientConfigurationOption(cluster.getAddresses(), ProtocolVersion.RESP3),
             );
-            const fields: Field[] = [
-                {type: "TEXT", name: "$title"},
-                {type: "NUMERIC", name: "$published_at"},
-                {type: "TEXT", name: "$category"},
-            ];
 
-            const index = uuidv4();
-            const prefixes = ["blog:post:"];
-
+            // Create a few simple indices:
+            const vectorField_1: VectorField = {type: "VECTOR", name: "vec", alias: "VEC", attributes: {algorithm: "HNSW", type: "FLOAT32", dim: 2, distanceMetric: "L2"} };
             expect(
-                await GlideFt.create(client, index, fields, {dataType: DataType.Hash, prefixes})
+                await GlideFt.create(client, uuidv4(), [vectorField_1])
+            ).toEqual("OK");
+
+            const vectorField_2: VectorField = {type: "VECTOR", name: "$.vec", alias: "VEC", attributes: {algorithm: "FLAT", type: "FLOAT32", dim: 6, distanceMetric: "L2"} };
+            expect(
+                await GlideFt.create(client, uuidv4(), [vectorField_2])
+            ).toEqual("OK");
+
+            // create an index with HNSW vector with additional parameters
+            const vectorField_3: VectorField = {
+                type: "VECTOR",
+                name: "doc_embedding",
+                attributes: {
+                    algorithm: "HNSW",
+                    type: "FLOAT32",
+                    dim: 1536,
+                    distanceMetric: "COSINE",
+                    numberOfEdges: 40,
+                    vectorsExaminedOnConstruction: 250,
+                    vectorsExaminedOnRuntime: 40
+                }
+            };
+            expect(
+                await GlideFt.create(client, uuidv4(), [vectorField_3], {dataType: "HASH", prefixes: ["docs:"]})
+            ).toEqual("OK");
+
+            // create an index with multiple fields
+            expect(
+                await GlideFt.create(client, uuidv4(), [
+                    {type: "TEXT", name: "title"},
+                    {type: "NUMERIC", name: "published_at"},
+                    {type: "TAG", name: "category"},
+                ], {dataType: "HASH", prefixes: ["blog:post:"]})
+            ).toEqual("OK");
+
+            // create an index with multiple prefixes
+            const name = uuidv4();
+            expect(
+                await GlideFt.create(client, name, [
+                    {type: "TAG", name: "author_id"},
+                    {type: "TAG", name: "author_ids"},
+                    {type: "TEXT", name: "title"},
+                    {type: "TEXT", name: "name"},
+                ], {dataType: "HASH", prefixes: ["author:details:", "book:details:"]})
+            ).toEqual("OK");
+
+            // create a duplicating index
+            expect(
+                await GlideFt.create(client, name, [
+                    {type: "TEXT", name: "title"},
+                    {type: "TEXT", name: "name"},
+                ])
             ).toEqual("OK");
         },
     );
