@@ -2,7 +2,11 @@ name: Semgrep
 
 on:
     # Scan changed files in PRs (diff-aware scanning):
+<<<<<<< HEAD
     pull_request:
+=======
+    pull_request: {}
+>>>>>>> bcc6b00b (CI - Minimal and full CI matrix impl (#2051))
     # Scan on-demand through GitHub Actions interface:
     workflow_dispatch:
         inputs:
@@ -10,10 +14,14 @@ on:
                 description: "The branch to run against the semgrep tool"
                 required: true
     push:
+<<<<<<< HEAD
         branches:
             - main
             - release-*
             - v*
+=======
+        branches: ["main"]
+>>>>>>> bcc6b00b (CI - Minimal and full CI matrix impl (#2051))
     # Schedule the CI job (this method uses cron syntax):
     schedule:
         - cron: "0 8 * * *" # Sets Semgrep to scan every day at 08:00 UTC.
@@ -34,6 +42,12 @@ jobs:
 
         steps:
             # Fetch project source with GitHub Actions Checkout.
+<<<<<<< HEAD
             - uses: actions/checkout@v4
             # Run the "semgrep ci" command on the command line of the docker image.
             - run: semgrep ci --config auto --no-suppress-errors --exclude-rule generic.secrets.security.detected-private-key.detected-private-key
+=======
+            - uses: actions/checkout@v3
+            # Run the "semgrep ci" command on the command line of the docker image.
+            - run: semgrep ci --config auto --no-suppress-errors
+>>>>>>> bcc6b00b (CI - Minimal and full CI matrix impl (#2051))
