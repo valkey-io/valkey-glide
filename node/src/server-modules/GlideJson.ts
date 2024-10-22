@@ -231,7 +231,7 @@ export class GlideJson {
     ): Promise<ReturnTypeJson<boolean>> {
         const args = ["JSON.TOGGLE", key];
 
-        if (options !== undefined) {
+        if (options) {
             args.push(options.path);
         }
 
@@ -266,7 +266,7 @@ export class GlideJson {
     ): Promise<number> {
         const args = ["JSON.DEL", key];
 
-        if (options !== undefined) {
+        if (options) {
             args.push(options.path);
         }
 
@@ -302,7 +302,7 @@ export class GlideJson {
     ): Promise<number> {
         const args = ["JSON.FORGET", key];
 
-        if (options !== undefined) {
+        if (options) {
             args.push(options.path);
         }
 

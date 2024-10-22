@@ -337,13 +337,13 @@ describe("Server Module Tests", () => {
             expect(await GlideJson.del(client, key, { path: "$..path" })).toBe(
                 0,
             );
-            expect(await GlideJson.del(client, key, { path: "$..path" })).toBe(
+            expect(await GlideJson.del(client, key, { path: "..path" })).toBe(
                 0,
             );
 
             // deleting existing paths
             expect(await GlideJson.del(client, key, { path: "$..a" })).toBe(2);
-            expect(await GlideJson.get(client, key, { paths: ["..a"] })).toBe(
+            expect(await GlideJson.get(client, key, { paths: ["$..a"] })).toBe(
                 "[]",
             );
             expect(
@@ -427,14 +427,14 @@ describe("Server Module Tests", () => {
                 await GlideJson.forget(client, key, { path: "$..path" }),
             ).toBe(0);
             expect(
-                await GlideJson.forget(client, key, { path: "$..path" }),
+                await GlideJson.forget(client, key, { path: "..path" }),
             ).toBe(0);
 
             // deleting existing paths
             expect(await GlideJson.forget(client, key, { path: "$..a" })).toBe(
                 2,
             );
-            expect(await GlideJson.get(client, key, { paths: ["..a"] })).toBe(
+            expect(await GlideJson.get(client, key, { paths: ["$..a"] })).toBe(
                 "[]",
             );
             expect(
