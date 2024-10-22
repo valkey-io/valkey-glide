@@ -7,8 +7,13 @@
         "TARGET": "x86_64-unknown-linux-gnu",
         "PACKAGE_MANAGERS": [
             "pypi",
-            "npm",
-            "maven"
+            "npm"
+        ],
+        "run": [
+            "always",
+            "python",
+            "node",
+            "java"
         ]
     },
     {
@@ -23,10 +28,14 @@
         "TARGET": "aarch64-unknown-linux-gnu",
         "PACKAGE_MANAGERS": [
             "pypi",
-            "npm",
-            "maven"
+            "npm"
         ],
-        "CONTAINER": "2_28"
+        "CONTAINER": "2_28",
+        "run": [
+            "python",
+            "node",
+            "java"
+        ]
     },
     {
         "OS": "macos",
@@ -36,8 +45,12 @@
         "TARGET": "x86_64-apple-darwin",
         "PACKAGE_MANAGERS": [
             "pypi",
-            "npm",
-            "maven"
+            "npm"
+        ],
+        "run": [
+            "python",
+            "node",
+            "java"
         ]
     },
     {
@@ -48,8 +61,12 @@
         "TARGET": "aarch64-apple-darwin",
         "PACKAGE_MANAGERS": [
             "pypi",
-            "npm",
-            "maven"
+            "npm"
+        ],
+        "run": [
+            "python",
+            "node",
+            "java"
         ]
     },
     {
@@ -66,6 +83,9 @@
         "CONTAINER_OPTIONS": "--user root --privileged --rm",
         "PACKAGE_MANAGERS": [
             "npm"
+        ],
+        "run": [
+            "node"
         ]
     },
     {
@@ -78,6 +98,9 @@
         "CONTAINER_OPTIONS": "--user root --privileged",
         "PACKAGE_MANAGERS": [
             "npm"
+        ],
+        "run": [
+            "node"
         ]
     }
 ]
