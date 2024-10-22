@@ -411,7 +411,7 @@ async def objlen(
 ) -> Optional[Union[int, List[int]]]:
     """
     Retrieves the number of key-value pairs in the object values at the specified `path` within the JSON document stored at `key`.
-    
+
     Args:
         client (TGlideClient): The client to execute the command.
         key (TEncodable): The key of the JSON document.
@@ -450,6 +450,7 @@ async def objlen(
         Optional[Union[int, List[int]]],
         await client.custom_command(args),
     )
+
 
 async def toggle(
     client: TGlideClient,
