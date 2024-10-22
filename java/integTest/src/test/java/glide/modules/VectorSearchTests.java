@@ -254,7 +254,7 @@ public class VectorSearchTests {
                                                     (byte) 0xBF
                                                 })))
                         .get());
-
+        Thread.sleep(DATA_PROCESSING_TIMEOUT); // let server digest the data and update index
         var ftsearch =
                 FT.search(
                                 client,
@@ -775,5 +775,123 @@ public class VectorSearchTests {
         var exception = assertThrows(ExecutionException.class, () -> FT.info(client, index).get());
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getMessage().contains("Index not found"));
+    }
+
+    @SneakyThrows
+    @Test
+    public void ft_aliasadd_aliasdel_aliasupdate() {
+
+        var alias1 = "alias1";
+        var alias2 = "a2";
+        var indexName = "{" + UUID.randomUUID() + "-index}";
+
+        // create some indices
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                indexName,
+                                new FieldInfo[] {
+                                    new FieldInfo("vec", VectorFieldFlat.builder(DistanceMetric.L2, 2).build())
+                                })
+                        .get());
+
+        assertEquals(OK, FT.aliasadd(client, alias1, indexName).get());
+
+        // error with adding the same alias to the same index
+        var exception =
+                assertThrows(ExecutionException.class, () -> FT.aliasadd(client, alias1, indexName).get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(exception.getMessage().contains("Alias already exists"));
+
+        assertEquals(OK, FT.aliasupdate(client, alias2, indexName).get());
+        assertEquals(OK, FT.aliasdel(client, alias2).get());
+
+        // with GlideString:
+        assertEquals(OK, FT.aliasupdate(client, gs(alias1), gs(indexName)).get());
+        assertEquals(OK, FT.aliasdel(client, gs(alias1)).get());
+        assertEquals(OK, FT.aliasadd(client, gs(alias2), gs(indexName)).get());
+        assertEquals(OK, FT.aliasdel(client, gs(alias2)).get());
+
+        // exception with calling `aliasdel` on an alias that doesn't exist
+        exception = assertThrows(ExecutionException.class, () -> FT.aliasdel(client, alias2).get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(exception.getMessage().contains("Alias does not exist"));
+
+        // exception with calling `aliasadd` with a nonexisting index
+        exception =
+                assertThrows(
+                        ExecutionException.class, () -> FT.aliasadd(client, alias1, "nonexistent_index").get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(exception.getMessage().contains("Index does not exist"));
+    }
+
+    @SneakyThrows
+    @Test
+    public void ft_explain_and_explaincli() {
+        String prefix = "{" + UUID.randomUUID() + "}:";
+        String index = prefix + "index";
+
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {
+                                    new FieldInfo("vec", "VEC", VectorFieldHnsw.builder(DistanceMetric.L2, 2).build())
+                                },
+                                FTCreateOptions.builder()
+                                        .indexType(IndexType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
+                        .get());
+
+        assertEquals(
+                1L,
+                client
+                        .hset(
+                                gs(prefix + 0),
+                                Map.of(
+                                        gs("vec"),
+                                        gs(
+                                                new byte[] {
+                                                    (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0,
+                                                    (byte) 0
+                                                })))
+                        .get());
+        assertEquals(
+                1L,
+                client
+                        .hset(
+                                gs(prefix + 1),
+                                Map.of(
+                                        gs("vec"),
+                                        gs(
+                                                new byte[] {
+                                                    (byte) 0,
+                                                    (byte) 0,
+                                                    (byte) 0,
+                                                    (byte) 0,
+                                                    (byte) 0,
+                                                    (byte) 0,
+                                                    (byte) 0x80,
+                                                    (byte) 0xBF
+                                                })))
+                        .get());
+
+        assertTrue(
+                FT.explain(client, index, "*=>[KNN 2 @VEC $query_vec]", 12.2).get().contains("Vector"));
+
+        assertTrue(FT.explain(client, index, "*=>[KNN 2 @VEC $query_vec]").get().contains("Vector"));
+
+        Object[] meow = FT.explaincli(client, gs(index), gs("*=>[KNN 2 @VEC $query_vec]")).get();
+
+        for (int i = 0; i < meow.length; i++) {
+            System.out.println("This is i: " + i + meow[i]);
+        }
+        // assertTrue(FT.explaincli(client, index, "*=>[KNN 2 @VEC
+        // $query_vec]").get().contains("Vector"));
+
+        // with GlideString
     }
 }
