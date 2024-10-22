@@ -112,7 +112,18 @@ jobs:
               if: ${{ !contains(matrix.build.RUNNER, 'self-hosted') }}
               uses: actions/setup-python@v5
               with:
+<<<<<<< HEAD
                   python-version: "3.12"
+=======
+                  python-version: "3.10"
+
+            - name: Set up Python older versions for MacOS
+              if: startsWith(matrix.build.NAMED_OS, 'darwin')
+              run: |
+                  brew update
+                  brew install python@3.9
+
+>>>>>>> bcc6b00b (CI - Minimal and full CI matrix impl (#2051))
 
             - name: Setup Python for self-hosted Ubuntu runners
               if: contains(matrix.build.RUNNER, 'self-hosted')

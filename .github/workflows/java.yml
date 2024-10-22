@@ -28,48 +28,46 @@ on:
             - .github/workflows/install-valkey/action.yml
             - .github/json_matrices/build-matrix.json
     workflow_dispatch:
+        inputs:
+            full-matrix:
+                description: "Run the full matrix"
+                required: false
+                default: "false"
+
+    schedule:
+        - cron: "0 0 * * *"
 
 concurrency:
     group: java-${{ github.head_ref || github.ref }}
     cancel-in-progress: true
 
 jobs:
-    load-engine-matrix:
+    get-matrices:
         runs-on: ubuntu-latest
+        # Avoid running on schedule for forks
+        if: (github.repository_owner == 'valkey-io' || github.event_name != 'schedule')
         outputs:
-            matrix: ${{ steps.load-engine-matrix.outputs.matrix }}
+            engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
+            host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
+            version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
         steps:
-            - name: Checkout
-              uses: actions/checkout@v4
+            - uses: actions/checkout@v4
+            - id: get-matrices
+              uses: ./.github/workflows/create-test-matrices
+              with:
+                  language-name: java
+                  dispatch-run-full-matrix: ${{ github.event.inputs.full-matrix || 'false' }}
 
-            - name: Load the engine matrix
-              id: load-engine-matrix
-              shell: bash
-              run: echo "matrix=$(jq -c . < .github/json_matrices/engine-matrix.json)" >> $GITHUB_OUTPUT
-
-    build-and-test-java-client:
-        needs: load-engine-matrix
+    test-java:
+        needs: get-matrices
         timeout-minutes: 35
         strategy:
             # Run all jobs
             fail-fast: false
             matrix:
-                java:
-                    # - 11
-                    - 17
-                engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
-                host:
-                    - {
-                          OS: ubuntu,
-                          RUNNER: ubuntu-latest,
-                          TARGET: x86_64-unknown-linux-gnu,
-                      }
-                    # - {
-                    #     OS: macos,
-                    #     RUNNER: macos-latest,
-                    #     TARGET: aarch64-apple-darwin
-                    # }
-
+                java: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output) }}
+                engine: ${{ fromJson(needs.get-matrices.outputs.engine-matrix-output) }}
+                host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output).include }}
         runs-on: ${{ matrix.host.RUNNER }}
 
         steps:
@@ -124,14 +122,14 @@ jobs:
                       java/client/build/reports/spotbugs/**
 
     build-amazonlinux-latest:
-        if: github.repository_owner == 'valkey-io'
+        if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && github.event.inputs.full-matrix == 'true')
+        needs: get-matrices
         strategy:
             # Run all jobs
             fail-fast: false
             matrix:
-                java:
-                    # - 11
-                    - 17
+                java: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output) }}
+                engine: ${{ fromJson(needs.get-matrices.outputs.engine-matrix-output) }}
         runs-on: ubuntu-latest
         container: amazonlinux:latest
         timeout-minutes: 35
@@ -158,7 +156,7 @@ jobs:
                   os: "amazon-linux"
                   target: "x86_64-unknown-linux-gnu"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
-                  engine-version: "7.2.5"
+                  engine-version: ${{ matrix.engine.version }}
 
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
@@ -179,7 +177,7 @@ jobs:
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: test-reports-${{ matrix.java }}-amazon-linux
+                  name: test-reports-${{ matrix.java }}-${{ matrix.engine }}-amazon-linux
                   path: |
                       java/client/build/reports/**
                       java/integTest/build/reports/**

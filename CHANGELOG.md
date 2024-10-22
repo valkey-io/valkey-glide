@@ -1,4 +1,5 @@
 #### Changes
+<<<<<<< HEAD
 * Python: Python: FT.PROFILE command added ([#2543](https://github.com/valkey-io/valkey-glide/pull/2543))
 * Python: Python: FT.AGGREGATE command added([#2530](https://github.com/valkey-io/valkey-glide/pull/2530))
 * Python: Add JSON.OBJLEN command ([#2495](https://github.com/valkey-io/valkey-glide/pull/2495))
@@ -58,6 +59,9 @@
 * Node: Add `JSON.STRLEN` and `JSON.STRAPPEND` command ([#2537](https://github.com/valkey-io/valkey-glide/pull/2537))
 * Node: Add `FT.SEARCH` ([#2551](https://github.com/valkey-io/valkey-glide/pull/2551))
 * Python: Fix example ([#2556](https://github.com/valkey-io/valkey-glide/issues/2556))
+=======
+* Python: Add JSON.ARRLEN command ([#2403](https://github.com/valkey-io/valkey-glide/pull/2403))
+>>>>>>> bcc6b00b (CI - Minimal and full CI matrix impl (#2051))
 
 #### Breaking Changes
 

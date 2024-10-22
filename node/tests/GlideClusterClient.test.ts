@@ -47,7 +47,6 @@ import {
     generateLuaLibCode,
     getClientConfigurationOption,
     getFirstResult,
-    getServerVersion,
     intoArray,
     intoString,
     parseCommandLineArgs,
@@ -68,13 +67,17 @@ describe("GlideClusterClient", () => {
         const clusterAddresses = parseCommandLineArgs()["cluster-endpoints"];
         // Connect to cluster or create a new one based on the parsed addresses
         cluster = clusterAddresses
-            ? await ValkeyCluster.initFromExistingCluster(
-                  true,
+            ? (await RedisCluster.initFromExistingCluster(
                   parseEndpoints(clusterAddresses),
-                  getServerVersion,
-              )
-            : // setting replicaCount to 1 to facilitate tests routed to replicas
-              await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
+              ))
+                ? await ValkeyCluster.initFromExistingCluster(
+                      true,
+                      parseEndpoints(clusterAddresses),
+                      getServerVersion,
+                  )
+                : // setting replicaCount to 1 to facilitate tests routed to replicas
+                  await RedisCluster.createCluster(true, 3, 1)
+            : await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
     }, 20000);
 
     afterEach(async () => {
@@ -370,6 +373,16 @@ describe("GlideClusterClient", () => {
             const client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
+            const lmpopArr = [];
+
+            if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                lmpopArr.push(
+                    client.lmpop(["abc", "def"], ListDirection.LEFT, 1),
+                );
+                lmpopArr.push(
+                    client.blmpop(["abc", "def"], ListDirection.RIGHT, 0.1, 1),
+                );
+            }
 
             const promises: Promise<unknown>[] = [
                 client.blpop(["abc", "zxy", "lkn"], 0.1),
@@ -391,10 +404,7 @@ describe("GlideClusterClient", () => {
                 client.sdiffstore("abc", ["zxy", "lkn"]),
                 client.sortStore("abc", "zyx"),
                 client.sortStore("abc", "zyx", { isAlpha: true }),
-                client.lmpop(["abc", "def"], ListDirection.LEFT, { count: 1 }),
-                client.blmpop(["abc", "def"], ListDirection.RIGHT, 0.1, {
-                    count: 1,
-                }),
+                ...lmpopArr,
                 client.bzpopmax(["abc", "def"], 0.5),
                 client.bzpopmin(["abc", "def"], 0.5),
                 client.xread({ abc: "0-0", zxy: "0-0", lkn: "0-0" }),

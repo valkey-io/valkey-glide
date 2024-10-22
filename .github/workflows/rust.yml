@@ -40,17 +40,26 @@ env:
 
 jobs:
     load-engine-matrix:
+<<<<<<< HEAD
       runs-on: ubuntu-latest
       outputs:
           matrix: ${{ steps.load-engine-matrix.outputs.matrix }}
       steps:
           - name: Checkout
             uses: actions/checkout@v4
+=======
+        runs-on: ubuntu-latest
+        outputs:
+            matrix: ${{ steps.load-engine-matrix.outputs.matrix }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+>>>>>>> bcc6b00b (CI - Minimal and full CI matrix impl (#2051))
 
-          - name: Load the engine matrix
-            id: load-engine-matrix
-            shell: bash
-            run: echo "matrix=$(jq -c . < .github/json_matrices/engine-matrix.json)" >> $GITHUB_OUTPUT
+            - name: Load the engine matrix
+              id: load-engine-matrix
+              shell: bash
+              run: echo "matrix=$(jq -c . < .github/json_matrices/engine-matrix.json)" >> $GITHUB_OUTPUT
 
     build:
         runs-on: ubuntu-latest

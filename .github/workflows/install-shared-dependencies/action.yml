@@ -23,13 +23,18 @@ inputs:
             - x86_64-unknown-linux-musl
     engine-version:
         description: "Engine version to install"
+<<<<<<< HEAD
         required: false
         type: string
+=======
+        required: true
+        type: string
+
+>>>>>>> bcc6b00b (CI - Minimal and full CI matrix impl (#2051))
     github-token:
         description: "GITHUB_TOKEN, GitHub App installation access token"
         required: true
         type: string
-
 
 runs:
     using: "composite"
@@ -47,7 +52,7 @@ runs:
           run: |
               sudo apt update -y
               sudo apt install -y git gcc pkg-config openssl libssl-dev
-          
+
         - name: Install software dependencies for Ubuntu MUSL
           shell: bash
           if: "${{ contains(inputs.target, 'musl') }}"
@@ -67,8 +72,8 @@ runs:
           if: "${{ !contains(inputs.target, 'musl') }}"
           uses: ./.github/workflows/install-rust-and-protoc
           with:
-            target: ${{ inputs.target }}
-            github-token: ${{ inputs.github-token }}
+              target: ${{ inputs.target }}
+              github-token: ${{ inputs.github-token }}
 
         - name: Install Valkey
           if: ${{ inputs.engine-version != '' }}
