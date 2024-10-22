@@ -249,18 +249,18 @@ describe("GlideJson", () => {
                     JSON.stringify(jsonValue),
                 ),
             ).toBe("OK");
-            expect(await GlideJson.toggle(client, key, "$..bool")).toEqual([
-                false,
-                true,
-                null,
-            ]);
-            expect(await GlideJson.toggle(client, key, "bool")).toBe(true);
             expect(
-                await GlideJson.toggle(client, key, "$.non_existing"),
+                await GlideJson.toggle(client, key, { path: "$..bool" }),
+            ).toEqual([false, true, null]);
+            expect(await GlideJson.toggle(client, key, { path: "bool" })).toBe(
+                true,
+            );
+            expect(
+                await GlideJson.toggle(client, key, { path: "$.non_existing" }),
             ).toEqual([]);
-            expect(await GlideJson.toggle(client, key, "$.nested")).toEqual([
-                null,
-            ]);
+            expect(
+                await GlideJson.toggle(client, key, { path: "$.nested" }),
+            ).toEqual([null]);
 
             // testing behavior with default pathing
             expect(await GlideJson.set(client, key2, ".", "true")).toBe("OK");
@@ -269,13 +269,13 @@ describe("GlideJson", () => {
 
             // expect request errors
             await expect(
-                GlideJson.toggle(client, key, "nested"),
+                GlideJson.toggle(client, key, { path: "nested" }),
             ).rejects.toThrow(RequestError);
             await expect(
-                GlideJson.toggle(client, key, ".non_existing"),
+                GlideJson.toggle(client, key, { path: ".non_existing" }),
             ).rejects.toThrow(RequestError);
             await expect(
-                GlideJson.toggle(client, "non_existing_key", "$"),
+                GlideJson.toggle(client, "non_existing_key", { path: "$" }),
             ).rejects.toThrow(RequestError);
         },
     );
