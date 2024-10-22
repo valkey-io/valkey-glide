@@ -43,6 +43,7 @@ class TestFtCreate:
             glide_client, index, fields, FtCreateOptions(DataType.HASH, prefixes)
         )
         assert result == OK
+        assert await ft.dropindex(glide_client, indexName=index) == OK
 
         # Create an index with multiple fields with JSON data type.
         index2 = str(uuid.uuid4())
@@ -50,6 +51,7 @@ class TestFtCreate:
             glide_client, index2, fields, FtCreateOptions(DataType.JSON, prefixes)
         )
         assert result == OK
+        assert await ft.dropindex(glide_client, indexName=index2) == OK
 
         # Create an index for vectors of size 2
         # FT.CREATE hash_idx1 ON HASH PREFIX 1 hash: SCHEMA vec AS VEC VECTOR HNSW 6 DIM 2 TYPE FLOAT32 DISTANCE_METRIC L2
@@ -71,6 +73,7 @@ class TestFtCreate:
             glide_client, index3, fields, FtCreateOptions(DataType.HASH, prefixes)
         )
         assert result == OK
+        assert await ft.dropindex(glide_client, indexName=index3) == OK
 
         # Create a 6-dimensional JSON index using the HNSW algorithm
         # FT.CREATE json_idx1 ON JSON PREFIX 1 json: SCHEMA $.vec AS VEC VECTOR HNSW 6 DIM 6 TYPE FLOAT32 DISTANCE_METRIC L2
@@ -92,12 +95,14 @@ class TestFtCreate:
             glide_client, index4, fields, FtCreateOptions(DataType.JSON, prefixes)
         )
         assert result == OK
+        assert await ft.dropindex(glide_client, indexName=index4) == OK
 
         # Create an index without FtCreateOptions
 
         index5 = str(uuid.uuid4())
         result = await ft.create(glide_client, index5, fields, FtCreateOptions())
         assert result == OK
+        assert await ft.dropindex(glide_client, indexName=index5) == OK
 
         # TO-DO:
         # Add additional tests from VSS documentation that require a combination of commands to run.
