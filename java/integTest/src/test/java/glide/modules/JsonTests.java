@@ -360,4 +360,37 @@ public class JsonTests {
         assertEquals(0L, Json.forget(client, key).get());
         assertNull(Json.get(client, key, new String[] {"$"}).get());
     }
+
+    @Test
+    @SneakyThrows
+    public void toggle() {
+        String key = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String doc = "{\"bool\": true, \"nested\": {\"bool\": false, \"nested\": {\"bool\": 10}}}";
+
+        assertEquals("OK", Json.set(client, key, "$", doc).get());
+
+        assertArrayEquals(
+                new Object[] {false, true, null}, (Object[]) Json.toggle(client, key, "$..bool").get());
+
+        assertEquals(true, Json.toggle(client, gs(key), gs("bool")).get());
+
+        assertArrayEquals(new Object[] {}, (Object[]) Json.toggle(client, key, "$.non_existing").get());
+        assertArrayEquals(new Object[] {null}, (Object[]) Json.toggle(client, key, "$.nested").get());
+
+        // testing behaviour with default path
+        assertEquals("OK", Json.set(client, key2, ".", "true").get());
+        assertEquals(false, Json.toggle(client, key2).get());
+        assertEquals(true, Json.toggle(client, gs(key2)).get());
+
+        // expect request errors
+        var exception =
+                assertThrows(ExecutionException.class, () -> Json.toggle(client, key, "nested").get());
+        exception =
+                assertThrows(
+                        ExecutionException.class, () -> Json.toggle(client, key, ".non_existing").get());
+        exception =
+                assertThrows(
+                        ExecutionException.class, () -> Json.toggle(client, "non_existing_key", "$").get());
+    }
 }
