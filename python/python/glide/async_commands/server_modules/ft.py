@@ -245,7 +245,7 @@ async def explain(
     Args:
         client (TGlideClient): The client to execute the command.
         indexName (TEncodable): The index name for which the query is written.
-        query (TEncodable): The query, as passed as a input to FT.SEARCH.
+        query (TEncodable): The search query, same as the query passed as an argument to FT.SEARCH.
 
     Returns:
         TEncodable: A string containing the parsed results representing the execution plan.
@@ -268,7 +268,7 @@ async def explaincli(
     Args:
         client (TGlideClient): The client to execute the command.
         indexName (TEncodable): The index name for which the query is written.
-        query (TEncodable): The query, as passed as a input to FT.SEARCH.
+        query (TEncodable): The search query, same as the query passed as an argument to FT.SEARCH.
 
     Returns:
         List[TEncodable]: An array containing the execution plan.
