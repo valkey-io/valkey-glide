@@ -145,6 +145,122 @@ class TestJson:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_json_mget(self, glide_client: TGlideClient):
+        key = get_random_string(5)
+        key1 = f"{{{key}}}1"
+        key2 = f"{{{key}}}2"
+        # The prefix ensures that both keys hash to the same slot
+
+        json1_value = {"a": 1.0, "b": {"a": 1, "b": 2.5, "c": True}}
+        json2_value = {"a": 3.0, "b": {"a": 1, "b": 4}}
+
+        assert (
+            await json.set(glide_client, key1, "$", OuterJson.dumps(json1_value)) == OK
+        )
+        assert (
+            await json.set(glide_client, key2, "$", OuterJson.dumps(json2_value)) == OK
+        )
+
+        result = await json.mget(
+            glide_client,
+            [key1, key2],
+            ["$"],
+        )
+        expected_result = [
+            b'[{"a":1.0,"b":{"a":1,"b":2.5,"c":true}}]',
+            b'[{"a":3.0,"b":{"a":1,"b":4}}]',
+        ]
+        assert result == expected_result
+
+        result = await json.mget(
+            glide_client,
+            [key1, key2],
+            ["."],
+        )
+        expected_result = [
+            b'{"a":1.0,"b":{"a":1,"b":2.5,"c":true}}',
+            b'{"a":3.0,"b":{"a":1,"b":4}}',
+        ]
+        assert result == expected_result
+
+        result = await json.mget(
+            glide_client,
+            [key1, key2],
+            ["$.a"],
+        )
+        expected_result = [b"[1.0]", b"[3.0]"]
+        assert result == expected_result
+
+        result = await json.mget(
+            glide_client,
+            [key1, key2],
+            ["$.b"],
+        )
+        expected_result = [b'[{"a":1,"b":2.5,"c":true}]', b'[{"a":1,"b":4}]']
+        assert result == expected_result
+
+        result = await json.mget(
+            glide_client,
+            [key1, key2],
+            ["$..b"],
+        )
+        expected_result = [b'[{"a":1,"b":2.5,"c":true},2.5]', b'[{"a":1,"b":4},4]']
+        assert result == expected_result
+
+        result = await json.mget(
+            glide_client,
+            [key1, key2],
+            [".b.b"],
+        )
+        expected_result = [b"2.5", b"4"]
+        assert result == expected_result
+
+        # Path doesn't exist
+        result = await json.mget(
+            glide_client,
+            [key1, key2],
+            ["$non_existing_path"],
+        )
+        expected_result = [b"[]", b"[]"]
+        assert result == expected_result
+
+        # Keys don't exist
+        result = await json.mget(
+            glide_client,
+            ["{non_existing_key}1", "{non_existing_key}2"],
+            ["$a"],
+        )
+        expected_result = [None, None]
+        assert result == expected_result
+
+        # Test with only one key
+        result = await json.mget(
+            glide_client,
+            [key1],
+            ["$.a"],
+        )
+        expected_result = [b"[1.0]"]
+        assert result == expected_result
+
+        # Value at path isnt an object
+        result = await json.mget(
+            glide_client,
+            [key1, key2],
+            ["$.e"],
+        )
+        expected_result = [b"[]", b"[]"]
+        assert result == expected_result
+
+        # No path given
+        result = await json.mget(
+            glide_client,
+            [key1, key2],
+        )
+        expected_result = [None]
+        assert result == expected_result
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_json_del(self, glide_client: TGlideClient):
         key = get_random_string(5)
 
