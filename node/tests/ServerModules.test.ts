@@ -314,6 +314,214 @@ describe("Server Module Tests", () => {
                 ).rejects.toThrow(RequestError);
             },
         );
+
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            "json.del tests",
+            async (protocol) => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+                const key = uuidv4();
+                const jsonValue = { a: 1.0, b: { a: 1, b: 2.5, c: true } };
+                // setup
+                expect(
+                    await GlideJson.set(
+                        client,
+                        key,
+                        "$",
+                        JSON.stringify(jsonValue),
+                    ),
+                ).toBe("OK");
+
+                // non-existing paths
+                expect(
+                    await GlideJson.del(client, key, { path: "$..path" }),
+                ).toBe(0);
+                expect(
+                    await GlideJson.del(client, key, { path: "..path" }),
+                ).toBe(0);
+
+                // deleting existing paths
+                expect(await GlideJson.del(client, key, { path: "$..a" })).toBe(
+                    2,
+                );
+                expect(
+                    await GlideJson.get(client, key, { paths: ["$..a"] }),
+                ).toBe("[]");
+                expect(
+                    await GlideJson.set(
+                        client,
+                        key,
+                        "$",
+                        JSON.stringify(jsonValue),
+                    ),
+                ).toBe("OK");
+                expect(await GlideJson.del(client, key, { path: "..a" })).toBe(
+                    2,
+                );
+                await expect(
+                    GlideJson.get(client, key, { paths: ["..a"] }),
+                ).rejects.toThrow(RequestError);
+
+                // verify result
+                const result = await GlideJson.get(client, key, {
+                    paths: ["$"],
+                });
+                expect(JSON.parse(result as string)).toEqual([
+                    { b: { b: 2.5, c: true } },
+                ]);
+
+                // test root deletion operations
+                expect(await GlideJson.del(client, key, { path: "$" })).toBe(1);
+
+                // reset and test dot deletion
+                expect(
+                    await GlideJson.set(
+                        client,
+                        key,
+                        "$",
+                        JSON.stringify(jsonValue),
+                    ),
+                ).toBe("OK");
+                expect(await GlideJson.del(client, key, { path: "." })).toBe(1);
+
+                // reset and test key deletion
+                expect(
+                    await GlideJson.set(
+                        client,
+                        key,
+                        "$",
+                        JSON.stringify(jsonValue),
+                    ),
+                ).toBe("OK");
+                expect(await GlideJson.del(client, key)).toBe(1);
+                expect(await GlideJson.del(client, key)).toBe(0);
+                expect(
+                    await GlideJson.get(client, key, { paths: ["$"] }),
+                ).toBeNull();
+
+                // non-existing keys
+                expect(
+                    await GlideJson.del(client, "non_existing_key", {
+                        path: "$",
+                    }),
+                ).toBe(0);
+                expect(
+                    await GlideJson.del(client, "non_existing_key", {
+                        path: ".",
+                    }),
+                ).toBe(0);
+            },
+        );
+
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            "json.forget tests",
+            async (protocol) => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+                const key = uuidv4();
+                const jsonValue = { a: 1.0, b: { a: 1, b: 2.5, c: true } };
+                // setup
+                expect(
+                    await GlideJson.set(
+                        client,
+                        key,
+                        "$",
+                        JSON.stringify(jsonValue),
+                    ),
+                ).toBe("OK");
+
+                // non-existing paths
+                expect(
+                    await GlideJson.forget(client, key, { path: "$..path" }),
+                ).toBe(0);
+                expect(
+                    await GlideJson.forget(client, key, { path: "..path" }),
+                ).toBe(0);
+
+                // deleting existing paths
+                expect(
+                    await GlideJson.forget(client, key, { path: "$..a" }),
+                ).toBe(2);
+                expect(
+                    await GlideJson.get(client, key, { paths: ["$..a"] }),
+                ).toBe("[]");
+                expect(
+                    await GlideJson.set(
+                        client,
+                        key,
+                        "$",
+                        JSON.stringify(jsonValue),
+                    ),
+                ).toBe("OK");
+                expect(
+                    await GlideJson.forget(client, key, { path: "..a" }),
+                ).toBe(2);
+                await expect(
+                    GlideJson.get(client, key, { paths: ["..a"] }),
+                ).rejects.toThrow(RequestError);
+
+                // verify result
+                const result = await GlideJson.get(client, key, {
+                    paths: ["$"],
+                });
+                expect(JSON.parse(result as string)).toEqual([
+                    { b: { b: 2.5, c: true } },
+                ]);
+
+                // test root deletion operations
+                expect(await GlideJson.forget(client, key, { path: "$" })).toBe(
+                    1,
+                );
+
+                // reset and test dot deletion
+                expect(
+                    await GlideJson.set(
+                        client,
+                        key,
+                        "$",
+                        JSON.stringify(jsonValue),
+                    ),
+                ).toBe("OK");
+                expect(await GlideJson.forget(client, key, { path: "." })).toBe(
+                    1,
+                );
+
+                // reset and test key deletion
+                expect(
+                    await GlideJson.set(
+                        client,
+                        key,
+                        "$",
+                        JSON.stringify(jsonValue),
+                    ),
+                ).toBe("OK");
+                expect(await GlideJson.forget(client, key)).toBe(1);
+                expect(await GlideJson.forget(client, key)).toBe(0);
+                expect(
+                    await GlideJson.get(client, key, { paths: ["$"] }),
+                ).toBeNull();
+
+                // non-existing keys
+                expect(
+                    await GlideJson.forget(client, "non_existing_key", {
+                        path: "$",
+                    }),
+                ).toBe(0);
+                expect(
+                    await GlideJson.forget(client, "non_existing_key", {
+                        path: ".",
+                    }),
+                ).toBe(0);
+            },
+        );
     });
 
     describe("GlideFt", () => {
