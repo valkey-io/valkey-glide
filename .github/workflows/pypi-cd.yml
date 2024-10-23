@@ -10,7 +10,8 @@ on:
             - .github/workflows/start-self-hosted-runner/action.yml
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/install-valkey/action.yml
-            - .github/json_matrices/build-matrix.json
+            - .github/json_matrices/**
+            - .github/workflows/create-test-matrices/action.yml
     push:
         tags:
             - "v*.*"
@@ -119,7 +120,6 @@ jobs:
               run: |
                   brew update
                   brew install python@3.9
-
 
             - name: Setup Python for self-hosted Ubuntu runners
               if: contains(matrix.build.OS, 'ubuntu') && contains(matrix.build.RUNNER, 'self-hosted')
