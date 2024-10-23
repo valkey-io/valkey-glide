@@ -1473,6 +1473,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
         b"FT.AGGREGATE" => Some(ExpectedReturnType::FTAggregateReturnType),
         b"FT.SEARCH" => Some(ExpectedReturnType::FTSearchReturnType),
         b"FT.INFO" => Some(ExpectedReturnType::FTInfoReturnType),
+        b"FT.EXPLAINCLI" => Some(ExpectedReturnType::ArrayOfStrings),
         _ => None,
     }
 }
