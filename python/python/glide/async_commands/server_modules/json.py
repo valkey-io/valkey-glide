@@ -152,7 +152,7 @@ async def mget(
     keys: List[TEncodable],
     paths: Optional[Union[TEncodable, List[TEncodable]]] = None,
     options: Optional[JsonGetOptions] = None,
-) -> Optional[List[bytes]]:
+) -> List[Optional[bytes]]:
     """
     Retrieves the JSON values at the specified `paths` stored at multiple `keys`.
 
@@ -165,7 +165,7 @@ async def mget(
         options (Optional[JsonGetOptions]): Options for formatting the byte representation of the JSON data. See `JsonGetOptions`.
 
     Returns:
-        Optional[List[bytes]]: A list of bytes representations of the returned values.
+        List[Optional[bytes]]: A list of bytes representations of the returned values.
             If a key doesn't exist, its corresponding entry will be `None`.
 
     Examples:
@@ -187,8 +187,7 @@ async def mget(
             paths = [paths]
         args.extend(paths)
 
-    results = await client.custom_command(args)
-    return [result if result is not None else None for result in results]
+    return cast(List[Optional[bytes]], await client.custom_command(args))
 
 
 async def arrinsert(

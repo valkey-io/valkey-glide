@@ -230,8 +230,7 @@ class TestJson:
             ["{non_existing_key}1", "{non_existing_key}2"],
             ["$a"],
         )
-        expected_result = [None, None]
-        assert result == expected_result
+        assert result == [None, None]
 
         # Test with only one key
         result = await json.mget(
@@ -256,8 +255,7 @@ class TestJson:
             glide_client,
             [key1, key2],
         )
-        expected_result = [None]
-        assert result == expected_result
+        assert result == [None]
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
