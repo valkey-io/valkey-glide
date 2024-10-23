@@ -192,7 +192,7 @@ export class GlideJson {
      * @param client - The client to execute the command.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
-     * - (Optional) The JSONPath to specify. Defaults to the root if not specified.
+     * - (Optional) path -  The JSONPath to specify. Defaults to the root if not specified.
      * @returns - For JSONPath (`path` starts with `$`), returns a list of boolean replies for every possible path, with the toggled boolean value,
      * or `null` for JSON values matching the path that are not boolean.
      * - For legacy path (`path` doesn't starts with `$`), returns the value of the toggled boolean in `path`.
@@ -244,7 +244,7 @@ export class GlideJson {
      * @param client - The client to execute the command.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
-     * - path (Optional) If `null`, deletes the entire JSON document at `key`.
+     * - (Optional) path - If `null`, deletes the entire JSON document at `key`.
      * @returns - The number of elements removed. If `key` or `path` doesn't exist, returns 0.
      *
      * @example
@@ -280,7 +280,7 @@ export class GlideJson {
      * @param client - The client to execute the command.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
-     * - path (Optional) If `null`, deletes the entire JSON document at `key`.
+     * - (Optional) path - If `null`, deletes the entire JSON document at `key`.
      * @returns - The number of elements removed. If `key` or `path` doesn't exist, returns 0.
      *
      * @example
