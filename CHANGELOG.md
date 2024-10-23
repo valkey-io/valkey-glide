@@ -5,6 +5,7 @@
 * Python: Add commands FT.ALIASADD, FT.ALIASDEL, FT.ALIASUPDATE([#2471](https://github.com/valkey-io/valkey-glide/pull/2471))
 * Python: Python FT.DROPINDEX command ([#2437](https://github.com/valkey-io/valkey-glide/pull/2437))
 * Python: Python: Added FT.CREATE command([#2413](https://github.com/valkey-io/valkey-glide/pull/2413))
+* Python: Add JSON.MGET command ([#2507](https://github.com/valkey-io/valkey-glide/pull/2507))
 * Python: Add JSON.ARRLEN command ([#2403](https://github.com/valkey-io/valkey-glide/pull/2403))
 * Python: Add JSON.CLEAR command ([#2418](https://github.com/valkey-io/valkey-glide/pull/2418))
 * Python: Add JSON.TYPE command ([#2409](https://github.com/valkey-io/valkey-glide/pull/2409))
