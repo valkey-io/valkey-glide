@@ -647,7 +647,7 @@ public class Json {
      * If the result is out of the range of 64-bit IEEE double, an error is raised.
      * @example
      *     <pre>{@code
-     * Json.set(client, "doc", "$", "{'a': [], 'b': [1], 'c': [1, 2], 'd': [1, 2, 3]}").get();
+     * Json.set(client, "doc", "$", "{\"a\": [], \"b\": [1], \"c\": [1, 2], \"d\": [1, 2, 3]}").get();
      * var res = Json.numincrby(client, "doc", "$.d[*]", 10.0).get();
      * assert res.equals("[11,12,13]"); // Increment each element in `d` array by 10.
      * res = Json.numincrby(client, "doc", ".c[1]", 10.0).get();
@@ -689,7 +689,7 @@ public class Json {
      * If the result is out of the range of 64-bit IEEE double, an error is raised.
      * @example
      *     <pre>{@code
-     * Json.set(client, "doc", "$", "{'a': [], 'b': [1], 'c': [1, 2], 'd': [1, 2, 3]}").get();
+     * Json.set(client, "doc", "$", "{\"a\": [], \"b\": [1], \"c\": [1, 2], \"d\": [1, 2, 3]}").get();
      * var res = Json.numincrby(client, gs("doc"), gs("$.d[*]"), 10.0).get();
      * assert res.equals(gs("[11,12,13]")); // Increment each element in `d` array by 10.
      * res = Json.numincrby(client, gs("doc"), gs(".c[1]"), 10.0).get();
@@ -731,7 +731,7 @@ public class Json {
      * If the result is out of the range of 64-bit IEEE double, an error is raised.
      * @example
      *     <pre>{@code
-     * Json.set(client, "doc", "$", "{'a': [], 'b': [1], 'c': [1, 2], 'd': [1, 2, 3]}").get();
+     * Json.set(client, "doc", "$", "{\"a\": [], \"b\": [1], \"c\": [1, 2], \"d\": [1, 2, 3]}").get();
      * var res = Json.numincrby(client, "doc", "$.d[*]", 10).get();
      * assert res.equals("[11,12,13]"); // Increment each element in `d` array by 10.
      * res = Json.numincrby(client, "doc", ".c[1]", 10).get();
@@ -773,7 +773,7 @@ public class Json {
      * If the result is out of the range of 64-bit IEEE double, an error is raised.
      * @example
      *     <pre>{@code
-     * Json.set(client, "doc", "$", "{'a': [], 'b': [1], 'c': [1, 2], 'd': [1, 2, 3]}").get();
+     * Json.set(client, "doc", "$", "{\"a\": [], \"b\": [1], \"c\": [1, 2], \"d\": [1, 2, 3]}").get();
      * var res = Json.numincrby(client, gs("doc"), gs("$.d[*]"), 10).get();
      * assert res.equals(gs("[11,12,13]")); // Increment each element in `d` array by 10.
      * res = Json.numincrby(client, gs("doc"), gs(".c[1]"), 10).get();
@@ -814,7 +814,7 @@ public class Json {
      * </ul>
      * @example
      *     <pre>{@code
-     * Json.set(client, "doc", "$", "{'a': [], 'b': [1], 'c': [1, 2], 'd': [1, 2, 3]}").get();
+     * Json.set(client, "doc", "$", "{\"a\": [], \"b\": [1], \"c\": [1, 2], \"d\": [1, 2, 3]}").get();
      * var res = Json.nummultby(client, "doc", "$.d[*]", 2.0).get();
      * assert res.equals("[2,4,6]"); // Multiplies each element in the `d` array by 2.
      * res = Json.numincrby(client, "doc", ".c[1]", 2.0).get();
@@ -855,7 +855,7 @@ public class Json {
      * </ul>
      * @example
      *     <pre>{@code
-     * Json.set(client, "doc", "$", "{'a': [], 'b': [1], 'c': [1, 2], 'd': [1, 2, 3]}").get();
+     * Json.set(client, "doc", "$", "{\"a\": [], \"b\": [1], \"c\": [1, 2], \"d\": [1, 2, 3]}").get();
      * var res = Json.nummultby(client, gs("doc"), gs("$.d[*]"), 2.0).get();
      * assert res.equals(gs("[2,4,6]")); // Multiplies each element in the `d` array by 2.
      * res = Json.numincrby(client, gs("doc"), gs(".c[1]"), 2.0).get();
@@ -896,7 +896,7 @@ public class Json {
      * </ul>
      * @example
      *     <pre>{@code
-     * Json.set(client, "doc", "$", "{'a': [], 'b': [1], 'c': [1, 2], 'd': [1, 2, 3]}").get();
+     * Json.set(client, "doc", "$", "{\"a\": [], \"b\": [1], \"c\": [1, 2], \"d\": [1, 2, 3]}").get();
      * var res = Json.nummultby(client, "doc", "$.d[*]", 2).get();
      * assert res.equals("[2,4,6]"); // Multiplies each element in the `d` array by 2.
      * res = Json.numincrby(client, "doc", ".c[1]", 2).get();
@@ -937,7 +937,7 @@ public class Json {
      * </ul>
      * @example
      *     <pre>{@code
-     * Json.set(client, "doc", "$", "{'a': [], 'b': [1], 'c': [1, 2], 'd': [1, 2, 3]}").get();
+     * Json.set(client, "doc", "$", "{\"a\": [], \"b\": [1], \"c\": [1, 2], \"d\": [1, 2, 3]}").get();
      * var res = Json.nummultby(client, gs("doc"), gs("$.d[*]"), 2).get();
      * assert res.equals(gs("[2,4,6]")); // Multiplies each element in the `d` array by 2.
      * res = Json.numincrby(client, gs("doc"), gs(".c[1]"), 2).get();
