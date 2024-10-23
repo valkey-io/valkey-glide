@@ -903,9 +903,8 @@ public class Json {
      * @return
      *     <ul>
      *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
-     *           Returns an <code>Object[]</code> with a list of integers for every possible path,
-     *           with the toggled boolean value, or <code>null</code> for JSON values matching the
-     *           path that are not boolean.
+     *           Returns a <code>Boolean[]</code> with the toggled boolean value for every possible
+     *           path, or <code>null</code> for JSON values matching the path that are not boolean.
      *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
      *           Returns the value of the toggled boolean in <code>path</code>. If <code>path</code>
      *           doesn't exist or the value at <code>path</code> isn't a boolean, an error is raised.
@@ -915,7 +914,7 @@ public class Json {
      *     <pre>{@code
      * Json.set(client, "doc", "$", "{\"bool\": true, \"nested\": {\"bool\": false, \"nested\": {\"bool\": 10}}}").get();
      * var res = Json.toggle(client, "doc", "$..bool").get();
-     * assert Arrays.equals((Object[]) res, new Object[] {0, 1, null});
+     * assert Arrays.equals((Boolean[]) res, new Boolean[] {false, true, null});
      * res = Json.toggle(client, "doc", "bool").get();
      * assert res.equals(true);
      * var getResult = Json.get(client, "doc", "$").get();
@@ -937,9 +936,8 @@ public class Json {
      * @return
      *     <ul>
      *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
-     *           Returns an <code>Object[]</code> with a list of integers for every possible path,
-     *           with the toggled boolean value, or <code>null</code> for JSON values matching the
-     *           path that are not boolean.
+     *           Returns a <code>Boolean[]</code> with the toggled boolean value for every possible
+     *           path, or <code>null</code> for JSON values matching the path that are not boolean.
      *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
      *           Returns the value of the toggled boolean in <code>path</code>. If <code>path</code>
      *           doesn't exist or the value at <code>path</code> isn't a boolean, an error is raised.
@@ -949,7 +947,7 @@ public class Json {
      *     <pre>{@code
      * Json.set(client, "doc", "$", "{\"bool\": true, \"nested\": {\"bool\": false, \"nested\": {\"bool\": 10}}}").get();
      * var res = Json.toggle(client, gs("doc"), gs("$..bool")).get();
-     * assert Arrays.equals((Object[]) res, new Object[] {0, 1, null});
+     * assert Arrays.equals((Boolean[]) res, new Boolean[] {false, true, null});
      * res = Json.toggle(client, gs("doc"), gs("bool")).get();
      * assert res.equals(true);
      * var getResult = Json.get(client, "doc", "$").get();
