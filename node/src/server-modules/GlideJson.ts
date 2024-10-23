@@ -344,13 +344,13 @@ export class GlideJson {
         client: BaseClient,
         key: GlideString,
         options?: { path: GlideString },
-    ): Promise<number> {
+    ): Promise<ReturnTypeJson<GlideString>> {
         const args = ["JSON.TYPE", key];
 
         if (options) {
             args.push(options.path);
         }
 
-        return _executeCommand<number>(client, args);
+        return _executeCommand<ReturnTypeJson<GlideString>>(client, args);
     }
 }

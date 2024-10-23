@@ -550,10 +550,20 @@ describe("Server Module Tests", () => {
                     "number",
                     "string",
                     "boolean",
-                    null,
+                    "null",
                     "object",
                     "array",
                 ]);
+                expect(
+                    await GlideJson.type(client, "non_existing", {
+                        path: "$[*]",
+                    }),
+                ).toBeNull();
+                expect(
+                    await GlideJson.type(client, key, {
+                        path: "$non_existing",
+                    }),
+                ).toEqual([]);
 
                 const key2 = uuidv4();
                 const jsonValue2 = { Name: "John", Age: 27 };
@@ -567,11 +577,17 @@ describe("Server Module Tests", () => {
                     ),
                 ).toBe("OK");
                 expect(
-                    await GlideJson.type(client, key, { path: "." }),
+                    await GlideJson.type(client, key2, { path: "." }),
                 ).toEqual("object");
                 expect(
-                    await GlideJson.type(client, key, { path: ".Age" }),
+                    await GlideJson.type(client, key2, { path: ".Age" }),
                 ).toEqual("integer");
+                expect(
+                    await GlideJson.type(client, key2, { path: ".Job" }),
+                ).toBeNull();
+                expect(
+                    await GlideJson.type(client, "non_existing", { path: "." }),
+                ).toBeNull();
             },
         );
     });
