@@ -17,8 +17,7 @@ runs:
           shell: bash
 
         - uses: actions/checkout@v4
-          with:
-              submodules: recursive
+          
 
         - uses: actions/cache@v3
           id: cache-redis

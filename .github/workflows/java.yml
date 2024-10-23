@@ -8,7 +8,7 @@ on:
             - v*
         paths:
             - glide-core/src/**
-            - submodules/**
+            - glide-core/redis-rs/redis/src/**
             - java/**
             - .github/workflows/java.yml
             - .github/workflows/install-shared-dependencies/action.yml
@@ -19,7 +19,7 @@ on:
     pull_request:
         paths:
             - glide-core/src/**
-            - submodules/**
+            - glide-core/redis-rs/redis/src/**
             - java/**
             - .github/workflows/java.yml
             - .github/workflows/install-shared-dependencies/action.yml
@@ -74,8 +74,7 @@ jobs:
 
         steps:
             - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
+              
 
             - uses: gradle/actions/wrapper-validation@v3
 
@@ -191,8 +190,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
+              
 
             - uses: ./.github/workflows/lint-rust
               with:
@@ -210,8 +208,7 @@ jobs:
               run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
 
             - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
+              
 
             - name: Set up JDK
               uses: actions/setup-java@v4

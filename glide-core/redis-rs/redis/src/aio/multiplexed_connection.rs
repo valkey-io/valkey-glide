@@ -23,7 +23,6 @@ use pin_project_lite::pin_project;
 use std::collections::VecDeque;
 use std::fmt;
 use std::fmt::Debug;
-use std::io;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
