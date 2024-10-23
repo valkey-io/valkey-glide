@@ -158,7 +158,7 @@ export class GlideFt {
 
         return _handleCustomCommand(client, args, {
             decoder: Decoder.String,
-        }) as Promise<"OK" | null>;
+        }) as Promise<"OK">;
     }
 }
 
