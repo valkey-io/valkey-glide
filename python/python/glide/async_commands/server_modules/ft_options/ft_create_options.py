@@ -7,7 +7,7 @@ from glide.async_commands.server_modules.ft_options.ft_constants import FtCreate
 from glide.constants import TEncodable
 
 
-class FieldType(Enum):
+private class FieldType(Enum):
     """
     All possible values for the data type of field identifier for the SCHEMA option.
     """
@@ -18,7 +18,7 @@ class FieldType(Enum):
     """
     TAG = "TAG"
     """
-    If the field contains a tag field.     
+    If the field contains a tag field.
     """
     NUMERIC = "NUMERIC"
     """
