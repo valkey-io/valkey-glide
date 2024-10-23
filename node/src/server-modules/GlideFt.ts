@@ -44,7 +44,7 @@ export class GlideFt {
         indexName: GlideString,
         schema: Field[],
         options?: FtCreateOptions,
-    ): Promise<"OK" | null> {
+    ): Promise<"OK"> {
         const args: GlideString[] = ["FT.CREATE", indexName];
 
         if (options) {
