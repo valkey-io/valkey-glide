@@ -802,7 +802,7 @@ public class FT {
             @NonNull BaseClient client, @NonNull String indexName, @NonNull String query) {
         var args = concatenateArrays(new GlideString[] {gs("FT.EXPLAINCLI"), gs(indexName), gs(query)});
         return executeCommand(client, args, false)
-                .thenApply(result -> ((GlideString) result).toString());
+                .thenApply(result -> castArray(result, GlideString.class));
     }
 
     /**
