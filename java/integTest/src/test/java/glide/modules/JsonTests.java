@@ -510,9 +510,17 @@ public class JsonTests {
         result = Json.nummultby(client, key, "key4[1]", 1).get();
         assertEquals(result, "10"); // Expect 10 * 1 = 10
 
+        // Binary integer test
+        var binaryResult = Json.nummultby(client, gs(key), gs("key4[1]"), 1).get();
+        assertEquals(binaryResult, gs("10")); // Expect 10 * 1 = 10
+
         // Multiply a float value (key5) by 10.2 (a float number)
         result = Json.nummultby(client, key, "key5", 10.2).get();
         assertEquals(result, "0"); // Expect 0 * 10.2 = 0
+
+        // Binary float test
+        binaryResult = Json.nummultby(client, gs(key), gs("key5"), 10.2).get();
+        assertEquals(binaryResult, gs("0")); // Expect 0 * 10.2 = 0
 
         // Check for multiple path matches in legacy and assure that the result of the last updated value is returned
         // last updated value is key8.nested_key.key1: 690 * 2 = 1380
