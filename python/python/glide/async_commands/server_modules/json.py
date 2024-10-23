@@ -318,7 +318,7 @@ async def debug_fields(
         path (Optional[TEncodable]): The path within the JSON document. Defaults to root if not provided.
 
     Returns:
-        Optional[Union[bytes, List[bytes]]]:
+        Optional[Union[int, List[int]]]:
             For JSONPath (`path` starts with `$`):
                 Returns an array of integers. indicating the number of fields for each matched `path`.
                 If `path` doesn't exist, an empty array will be returned.
@@ -364,7 +364,7 @@ async def debug_memory(
         path (Optional[TEncodable]): The path within the JSON document. Defaults to root if not provided.
 
     Returns:
-        Optional[Union[bytes, List[bytes]]]:
+        Optional[Union[int, List[int]]]:
             For JSONPath (`path` starts with `$`):
                 Returns an array of integers. indicating the memory usage in bytes of a JSON value for each matched `path`.
                 If `path` doesn't exist, an empty array will be returned.
