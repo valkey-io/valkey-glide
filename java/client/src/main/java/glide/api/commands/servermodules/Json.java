@@ -856,8 +856,8 @@ public class Json {
      * @param client The client to execute the command.
      * @param key The key of the JSON document.
      * @return Returns the toggled boolean value at the root of the document, or <code>null</code> for
-     *     JSON values matching the root that are not boolean. If <code>key</code> doesn't exist, returns
-     *     <code>null</code>.
+     *     JSON values matching the root that are not boolean. If <code>key</code> doesn't exist,
+     *     returns <code>null</code>.
      * @example
      *     <pre>{@code
      * Json.set(client, "doc", ".", true).get();
@@ -877,8 +877,8 @@ public class Json {
      * @param client The client to execute the command.
      * @param key The key of the JSON document.
      * @return Returns the toggled boolean value at the root of the document, or <code>null</code> for
-     *     JSON values matching the root that are not boolean. If <code>key</code> doesn't exist, returns
-     *     <code>null</code>.
+     *     JSON values matching the root that are not boolean. If <code>key</code> doesn't exist,
+     *     returns <code>null</code>.
      * @example
      *     <pre>{@code
      * Json.set(client, "doc", ".", true).get();
