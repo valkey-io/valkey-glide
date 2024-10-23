@@ -308,4 +308,49 @@ export class GlideJson {
 
         return _executeCommand<number>(client, args);
     }
+
+    /**
+     * Reports the type of values at the given path.
+     *
+     * @param client - The client to execute the command.
+     * @param key - The key of the JSON document.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) path - If `null`, deletes the entire JSON document at `key`.
+     * @returns ReturnTypeJson:
+     *   - If one path is given:
+     *     - For JSONPath (path starts with `$`):
+     *       - Returns an array of strings that represents the type of value at each path.
+     *         The type is one of "null", "boolean", "string", "number", "integer", "object" and "array".
+     *       - If a path does not exist, its corresponding return value is `null`.
+     *       - Empty array if the document key does not exist.
+     *     - For legacy path (path doesn't start with `$`):
+     *       - String that represents the type of the value.
+     *       - `null` if the document key does not exist.
+     *       - `null` if the JSON path is invalid or does not exist.
+     *
+     * @example
+     * ```typescript
+     * console.log(await GlideJson.set(client, "doc", "$", "[1, 2.3, "foo", true, null, {}, []]"));
+     * // Output: 'OK' - Indicates successful setting of the value at path '$' in the key stored at `doc`.
+     * const result = await GlideJson.type(client, "doc", "$[*]");
+     * console.log(result);
+     * // Output: ["integer", "number", "string", "boolean", null, "object", "array"];
+     * console.log(await GlideJson.set(client, "doc2", ".", "{Name: 'John', Age: 27}"));
+     * console.log(await GlideJson.type(client, "doc2")); // Output: "object"
+     * console.log(await GlideJson.type(client, "doc2", ".Age")); // Output: "integer"
+     * ```
+     */
+    static async type(
+        client: BaseClient,
+        key: GlideString,
+        options?: { path: GlideString },
+    ): Promise<number> {
+        const args = ["JSON.TYPE", key];
+
+        if (options) {
+            args.push(options.path);
+        }
+
+        return _executeCommand<number>(client, args);
+    }
 }

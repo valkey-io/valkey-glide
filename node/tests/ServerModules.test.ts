@@ -522,6 +522,58 @@ describe("Server Module Tests", () => {
                 ).toBe(0);
             },
         );
+
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            "json.type tests",
+            async (protocol) => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+                const key = uuidv4();
+                const jsonValue = [1, 2.3, "foo", true, null, {}, []];
+                // setup
+                expect(
+                    await GlideJson.set(
+                        client,
+                        key,
+                        "$",
+                        JSON.stringify(jsonValue),
+                    ),
+                ).toBe("OK");
+                expect(
+                    await GlideJson.type(client, key, { path: "$[*]" }),
+                ).toEqual([
+                    "integer",
+                    "number",
+                    "string",
+                    "boolean",
+                    null,
+                    "object",
+                    "array",
+                ]);
+
+                const key2 = uuidv4();
+                const jsonValue2 = { Name: "John", Age: 27 };
+                // setup
+                expect(
+                    await GlideJson.set(
+                        client,
+                        key2,
+                        "$",
+                        JSON.stringify(jsonValue2),
+                    ),
+                ).toBe("OK");
+                expect(
+                    await GlideJson.type(client, key, { path: "." }),
+                ).toEqual("object");
+                expect(
+                    await GlideJson.type(client, key, { path: ".Age" }),
+                ).toEqual("integer");
+            },
+        );
     });
 
     describe("GlideFt", () => {
