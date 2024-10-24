@@ -22,7 +22,7 @@ import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.json.JsonGetOptions;
 import java.util.UUID;
 
-import glide.api.models.exceptions.RequestException;
+import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -294,110 +294,111 @@ public class JsonTests {
 
         // Test JSONPath
         // Increment integer value (key1) by 5
-        var result = Json.numincrby(client, key, "$.key1", 5).get();
-        assertEquals(result, "[6]");  // Expect 1 + 5 = 6
+        Object result = Json.numincrby(client, key, "$.key1", 5).get();
+        assertArrayEquals(new Object[] {6L}, (Object[]) result); // Expect 1 + 5 = 6
 
         // Increment float value (key2) by 2.5
         result = Json.numincrby(client, key, "$.key2", 2.5).get();
-        assertEquals(result, "[6]");  // Expect 3.5 + 2.5 = 6
+        assertArrayEquals(new Object[] {6.0}, (Object[]) result); // Expect 3.5 + 2.5 = 6
 
         // Increment nested object (key3.nested_key.key1[0]) by 7
         result = Json.numincrby(client, key, "$.key3.nested_key.key1[1]", 7).get();
-        assertEquals(result, "[12]");  // Expect 4 + 7 = 12
+        assertArrayEquals(new Object[] {12L}, (Object[]) result); // Expect 4 + 7 = 12
 
         // Increment array element (key4[1]) by 1
         result = Json.numincrby(client, key, "$.key4[1]", 1).get();
-        assertEquals(result, "[3]"); // Expect 2 + 1 = 3
+        assertArrayEquals(new Object[] {3L}, (Object[]) result); // Expect 2 + 1 = 3
 
         // Increment zero value (key5) by 10.23 (float number)
         result = Json.numincrby(client, key, "$.key5", 10.23).get();
-        assertEquals(result, "[10.23]"); // Expect 0 + 10.23 = 10.23
+        assertArrayEquals(new Object[] {10.23}, (Object[]) result); // Expect 0 + 10.23 = 10.23
 
         // Increment a string value (key6) by a number
         result = Json.numincrby(client, key, "$.key6", 99).get();
-        assertEquals(result, "[null]"); // Expect null
+        assertArrayEquals(new Object[] {null}, (Object[]) result); // Expect null
 
         // Increment a None value (key7) by a number
         result = Json.numincrby(client, key, "$.key7", 51).get();
-        assertEquals(result, "[null]"); // Expect null
+        assertArrayEquals(new Object[] {null}, (Object[]) result); // Expect null
 
         // Check increment for all numbers in the document using JSON Path (First Null: key3 as an entire object. Second Null: The path checks under key3, which is an object, for numeric values).
         result = Json.numincrby(client, key, "$..*", 5).get();
-        assertEquals(
-            result, "[11,11,null,null,15.23,null,null,null,1.7976931348623157e+308,null,null,9,17,6,8,8,null,74]"
-        );
+        Object[] expectedArray = new Object[] {11L,11.0,null,null,15.23,null,null,null,1.7976931348623157e+308,null,null,9L,17L,6L,8L,8L,null,74L};
+        assertArrayEquals(expectedArray, (Object[]) result);
 
         // Check for multiple path match in enhanced
         result = Json.numincrby(client, key, "$..key1", 1).get();
-        assertEquals(result, "[12,null,75]");
+        assertArrayEquals(new Object[] {12L, null, 75L}, (Object[]) result); // Expect null
 
         // Check for non existent path in JSONPath
         result = Json.numincrby(client, key, "$.key10", 51).get();
-        assertEquals(result, "[]"); // Expect Empty Array
+        assertArrayEquals(new Object[] {}, (Object[]) result); // Expect Empty Array
 
         // Check for non existent key in JSONPath
-        assertThrows(RequestException.class, () -> Json.numincrby(client, "non_existent_key", "$.key10", 51).get());
+        assertThrows(ExecutionException.class, () -> Json.numincrby(client, "non_existent_key", "$.key10", 51).get());
 
         // Check for Overflow in JSONPath
-        assertThrows(RequestException.class, () -> Json.numincrby(client, key, "$.key9", 1.7976931348623157e308).get());
+        assertThrows(ExecutionException.class, () -> Json.numincrby(client, key, "$.key9", 1.7976931348623157e308).get());
 
         // Decrement integer value (key1) by 12
         result = Json.numincrby(client, key, "$.key1", -12).get();
-        assertEquals(result, "[0]"); // Expect 12 - 12 = 0
+        assertArrayEquals(new Object[] {0L}, (Object[]) result); // Expect 12 - 12 = 0
 
         // Decrement integer value (key1) by 0.5
         result = Json.numincrby(client, key, "$.key1", -0.5).get();
-        assertEquals(result, "[-0.5]"); // Expect 0 - 0.5 = -0.5
+        assertArrayEquals(new Object[] {-0.5}, (Object[]) result); // Expect 0 - 0.5 = -0.5
 
         // Test Legacy Path
         // Increment float value (key1) by 5 (integer)
         result = Json.numincrby(client, key, "key1", 5).get();
-        assertEquals(result, "4.5"); // Expect -0.5 + 5 = 4.5
+        assertArrayEquals(new Object[] {4.5}, (Object[]) result); // Expect -0.5 + 5 = 4.5
 
         // Decrement float value (key1) by 5.5 (integer)
         result = Json.numincrby(client, key, "key1", -5.5).get();
-        assertEquals(result, "-1"); // Expect 4.5 - 5.5 = -1
+        assertArrayEquals(new Object[] {-1.0}, (Object[]) result); // Expect 4.5 - 5.5 = -1
 
         // Increment int value (key2) by 2.5 (a float number)
         result = Json.numincrby(client, key, "key2", 2.5).get();
-        assertEquals(result, "13.5"); // Expect 11 + 2.5 = 13.5
+        assertArrayEquals(new Object[] {13.5}, (Object[]) result); // Expect 11 + 2.5 = 13.5
 
         // Increment nested value (key3.nested_key.key1[0]) by 7
         result = Json.numincrby(client, key, "key3.nested_key.key1[0]", 7).get();
-        assertEquals(result, "16"); // Expect 9 + 7 = 16
+        assertArrayEquals(new Object[] {16L}, (Object[]) result); // Expect 9 + 7 = 16
 
         // Increment array element (key4[1]) by 1
         result = Json.numincrby(client, key, "key4[1]", 1).get();
-        assertEquals(result, "9"); // Expect 8 + 1 = 9
-
-        // Binary integer test
-        var binaryResult = Json.numincrby(client, gs(key), gs("key4[1]"), 1).get();
-        assertEquals(binaryResult, gs("9")); // Expect 8 + 1 = 9
+        assertArrayEquals(new Object[] {9L}, (Object[]) result); // Expect 8 + 1 = 9
 
         // Increment a float value (key5) by 10.2 (a float number)
         result = Json.numincrby(client, key, "key5", 10.2).get();
-        assertEquals(result, "25.43"); // Expect 15.23 + 10.2 = 25.43
-
-        // Binary float test
-        binaryResult = Json.numincrby(client, gs(key), gs("key5"), 10.2).get();
-        assertEquals(binaryResult, gs("25.43")); // Expect 15.23 + 10.2 = 25.43
+        assertArrayEquals(new Object[] {25.43}, (Object[]) result); // Expect 15.23 + 10.2 = 25.43
 
         // Check for multiple path match in legacy and assure that the result of the last updated value is returned
         result = Json.numincrby(client, key, "..key1", 1).get();
-        assertEquals(result, "76");
+        assertArrayEquals(new Object[] {76L}, (Object[]) result);
 
         // Check if the rest of the key1 path matches were updated and not only the last value
         result = Json.get(client, key, new String[] {"$..key1"}).get();
-        assertEquals(result, "[0,[16,17],76]");  // First is 0 as 0 + 0 = 0, Second doesn't change as its an array type (non-numeric), third is 76 as 0 + 76 = 0
+        assertEquals(result, "[0.0,[16,17],76]");  // First is 0 as 0 + 0 = 0, Second doesn't change as its an array type (non-numeric), third is 76 as 0 + 76 = 0
 
         // Check for non existent path in legacy
-        assertThrows(RequestException.class, () -> Json.numincrby(client, key, ".key10", 51).get());
+        assertThrows(ExecutionException.class, () -> Json.numincrby(client, key, ".key10", 51).get());
 
         // Check for non existent key in legacy
-        assertThrows(RequestException.class, () -> Json.numincrby(client, "non_existent_key", ".key10", 51).get());
+        assertThrows(ExecutionException.class, () -> Json.numincrby(client, "non_existent_key", ".key10", 51).get());
 
         // Check for Overflow in legacy
-        assertThrows(RequestException.class, () -> Json.numincrby(client, key, ".key9", 1.7976931348623157e308).get());
+        assertThrows(ExecutionException.class, () -> Json.numincrby(client, key, ".key9", 1.7976931348623157e308).get());
+
+        // Binary tests
+        // Binary integer test
+        Object binaryResult = Json.numincrby(client, gs(key), gs("key4[1]"), 1).get();
+        assertArrayEquals(new Object[] {10L}, (Object[]) result); // Expect 9 + 1 = 10
+
+        // Binary float test
+        binaryResult = Json.numincrby(client, gs(key), gs("key5"), 1.0).get();
+        assertArrayEquals(new Object[] {26.43}, (Object[]) result); // Expect 25.43 + 1.0 = 26.43
+
     }
 
     @Test
@@ -422,32 +423,32 @@ public class JsonTests {
 
         // Test JSONPath
         // Multiply integer value (key1) by 5
-        var result = Json.nummultby(client, key, "$.key1", 5).get();
-        assertEquals(result, "[5]"); // Expect 1 * 5 = 5
+        Object result = Json.nummultby(client, key, "$.key1", 5).get();
+        assertArrayEquals(new Object[] {5L}, (Object[]) result); // Expect 1 * 5 = 5
 
         // Multiply float value (key2) by 2.5
         result = Json.nummultby(client, key, "$.key2", 2.5).get();
-        assertEquals(result, "[8.75]"); // Expect 3.5 * 2.5 = 8.75
+        assertArrayEquals(new Object[] {8.75}, (Object[]) result); // Expect 3.5 * 2.5 = 8.75
 
         // Multiply nested object (key3.nested_key.key1[1]) by 7
         result = Json.nummultby(client, key, "$.key3.nested_key.key1[1]", 7).get();
-        assertEquals(result, "[35]"); // Expect 5 * 7 = 35
+        assertArrayEquals(new Object[] {35L}, (Object[]) result); // Expect 5 * 7 = 35
 
         // Multiply array element (key4[1]) by 1
         result = Json.nummultby(client, key, "$.key4[1]", 1).get();
-        assertEquals(result, "[2]"); // Expect 2 * 1 = 2
+        assertArrayEquals(new Object[] {2L}, (Object[]) result); // Expect 2 * 1 = 2
 
         // Multiply zero value (key5) by 10.23 (float number)
         result = Json.nummultby(client, key, "$.key5", 10.23).get();
-        assertEquals(result, "[0]"); // Expect 0 * 10.23 = 0
+        assertArrayEquals(new Object[] {0L}, (Object[]) result); // Expect 0 * 10.23 = 0
 
         // Multiply a string value (key6) by a number
         result = Json.nummultby(client, key, "$.key6", 99).get();
-        assertEquals(result, "[null]"); // Expect null
+        assertArrayEquals(new Object[] {null}, (Object[]) result); // Expect null
 
         // Multiply a None value (key7) by a number
         result = Json.nummultby(client, key, "$.key7", 51).get();
-        assertEquals(result, "[null]"); // Expect null
+        assertArrayEquals(new Object[] {null}, (Object[]) result); // Expect null
 
         // Check multiplication for all numbers in the document using JSON Path
         // key1: 5 * 5 = 25
@@ -461,83 +462,83 @@ public class JsonTests {
         // key8.nested_key.key1: 69 * 5 = 345
         // key9: 3.5953862697246314e307 * 5 = 1.7976931348623157e308
         result = Json.nummultby(client, key, "$..*", 5).get();
-        assertEquals(
-            result, "[25,43.75,null,null,0,null,null,null,1.7976931348623157e+308,null,null,20,175,5,10,15,null,345]"
-        );
+        Object[] expectedResult = new Object[] { 25L,43.75,null,null,0L,null,null,null,1.7976931348623157e+308,null,null,20L,175L,5L,10L,15L,null,345L };
+        assertArrayEquals(expectedResult, (Object[]) result);
 
         // Check for multiple path matches in JSONPath
         // key1: 25 * 2 = 50
         // key8.nested_key.key1: 345 * 2 = 690
         result = Json.nummultby(client, key, "$..key1", 2).get();
-        assertEquals(result, "[50,null,690]"); // After previous multiplications
+        assertArrayEquals(new Object[] {50L,null,690L}, (Object[]) result); // After previous multiplications
 
         // Check for non-existent path in JSONPath
         result = Json.nummultby(client, key, "$.key10", 51).get();
-        assertEquals(result, "[]"); // Expect Empty Array
+        assertArrayEquals(new Object[] {}, (Object[]) result); // Expect Empty Array
 
         // Check for non-existent key in JSONPath
-        assertThrows(RequestException.class, () -> Json.nummultby(client, "non_existent_key", "$.key10", 51).get());
+        assertThrows(ExecutionException.class, () -> Json.nummultby(client, "non_existent_key", "$.key10", 51).get());
 
         // Check for Overflow in JSONPath
-        assertThrows(RequestException.class, () -> Json.nummultby(client, key, "$.key9", 1.7976931348623157e308).get());
+        assertThrows(ExecutionException.class, () -> Json.nummultby(client, key, "$.key9", 1.7976931348623157e308).get());
 
         // Multiply integer value (key1) by -12
         result = Json.nummultby(client, key, "$.key1", -12).get();
-        assertEquals(result, "[-600]"); // Expect 50 * -12 = -600
+        assertArrayEquals(new Object[] {-600L}, (Object[]) result); // Expect 50 * -12 = -600
 
         // Multiply integer value (key1) by -0.5
         result = Json.nummultby(client, key, "$.key1", -0.5).get();
-        assertEquals(result, "[300]"); // Expect -600 * -0.5 = 300
+        assertArrayEquals(new Object[] {300.0}, (Object[]) result); // Expect -600 * -0.5 = 300
 
         // Test Legacy Path
         // Multiply int value (key1) by 5 (integer)
         result = Json.nummultby(client, key, "key1", 5).get();
-        assertEquals(result, "1500"); // Expect 300 * 5 = -1500
+        assertArrayEquals(new Object[] {1500L}, (Object[]) result); // Expect 300 * 5 = -1500
 
         // Multiply int value (key1) by -5.5 (float number)
         result = Json.nummultby(client, key, "key1", -5.5).get();
-        assertEquals(result, "-8250"); // Expect -150 * -5.5 = -8250
+        assertArrayEquals(new Object[] {-8250.0}, (Object[]) result); // Expect -150 * -5.5 = -8250
 
         // Multiply int float (key2) by 2.5 (a float number)
         result = Json.nummultby(client, key, "key2", 2.5).get();
-        assertEquals(result, "109.375"); // Expect 43.75 * 2.5 = 109.375
+        assertArrayEquals(new Object[] {109.375}, (Object[]) result); // Expect 43.75 * 2.5 = 109.375
 
         // Multiply nested value (key3.nested_key.key1[0]) by 7
         result = Json.nummultby(client, key, "key3.nested_key.key1[0]", 7).get();
-        assertEquals(result, "140"); // Expect 20 * 7 = 140
+        assertArrayEquals(new Object[] {140L}, (Object[]) result); // Expect 20 * 7 = 140
 
         // Multiply array element (key4[1]) by 1
         result = Json.nummultby(client, key, "key4[1]", 1).get();
-        assertEquals(result, "10"); // Expect 10 * 1 = 10
-
-        // Binary integer test
-        var binaryResult = Json.nummultby(client, gs(key), gs("key4[1]"), 1).get();
-        assertEquals(binaryResult, gs("10")); // Expect 10 * 1 = 10
+        assertArrayEquals(new Object[] {10L}, (Object[]) result); // Expect 10 * 1 = 10
 
         // Multiply a float value (key5) by 10.2 (a float number)
         result = Json.nummultby(client, key, "key5", 10.2).get();
-        assertEquals(result, "0"); // Expect 0 * 10.2 = 0
-
-        // Binary float test
-        binaryResult = Json.nummultby(client, gs(key), gs("key5"), 10.2).get();
-        assertEquals(binaryResult, gs("0")); // Expect 0 * 10.2 = 0
+        assertArrayEquals(new Object[] {0.0}, (Object[]) result); // Expect 0 * 10.2 = 0
 
         // Check for multiple path matches in legacy and assure that the result of the last updated value is returned
         // last updated value is key8.nested_key.key1: 690 * 2 = 1380
         result = Json.nummultby(client, key, "..key1", 2).get();
-        assertEquals(result, "1380"); // Expect the last updated key1 value multiplied by 2
+        assertArrayEquals(new Object[] {1380L}, (Object[]) result); // Expect the last updated key1 value multiplied by 2
 
         // Check if the rest of the key1 path matches were updated and not only the last value
         result = Json.get(client, key, new String[] {"$..key1"}).get();
         assertEquals(result, "[-16500,[140,175],1380]");
 
         // Check for non-existent path in legacy
-        assertThrows(RequestException.class, () -> Json.nummultby(client, key, ".key10", 51).get());
+        assertThrows(ExecutionException.class, () -> Json.nummultby(client, key, ".key10", 51).get());
 
         // Check for non-existent key in legacy
-        assertThrows(RequestException.class, () -> Json.nummultby(client, "non_existent_key", ".key10", 51).get());
+        assertThrows(ExecutionException.class, () -> Json.nummultby(client, "non_existent_key", ".key10", 51).get());
 
         // Check for Overflow in legacy
-        assertThrows(RequestException.class, () -> Json.nummultby(client, key, ".key9", 1.7976931348623157e308).get());
+        assertThrows(ExecutionException.class, () -> Json.nummultby(client, key, ".key9", 1.7976931348623157e308).get());
+
+        // Binary tests
+        // Binary integer test
+        Object binaryResult = Json.nummultby(client, gs(key), gs("key4[1]"), 1).get();
+        assertArrayEquals(new Object[] {10L}, (Object[]) binaryResult); // Expect 10 * 1 = 10
+
+        // Binary float test
+        binaryResult = Json.nummultby(client, gs(key), gs("key5"), 10.2).get();
+        assertArrayEquals(new Object[] {0.0}, (Object[]) binaryResult); // Expect 0 * 10.2 = 0
     }
 }

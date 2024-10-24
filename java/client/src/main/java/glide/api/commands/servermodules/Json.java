@@ -738,7 +738,7 @@ public class Json {
      * assert res.equals("12"); // Increment the second element in the `c` array by 10.
      * }</pre>
      */
-    public static CompletableFuture<String> numincrby(
+    public static CompletableFuture<Object> numincrby(
         @NonNull BaseClient client,
         @NonNull String key,
         @NonNull String path,
