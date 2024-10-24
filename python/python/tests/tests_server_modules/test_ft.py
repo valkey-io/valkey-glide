@@ -182,7 +182,9 @@ class TestFt:
             name="$.vec",
             algorithm=VectorAlgorithm.HNSW,
             attributes=VectorFieldAttributesHnsw(
-                dimensions=2, distance_metric=DistanceMetricType.L2, type=VectorType.FLOAT32
+                dimensions=2,
+                distance_metric=DistanceMetricType.L2,
+                type=VectorType.FLOAT32,
             ),
             alias="VEC",
         )
