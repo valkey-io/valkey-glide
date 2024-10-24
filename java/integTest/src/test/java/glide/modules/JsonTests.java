@@ -412,6 +412,27 @@ public class JsonTests {
 
     @Test
     @SneakyThrows
+    public void objlen() {
+        String key = UUID.randomUUID().toString();
+
+        String doc = "{\"a\": 1.0, \"b\": {\"a\": {\"x\": 1, \"y\": 2}, \"b\": 2.5, \"c\": true}}";
+        assertEquals("OK", Json.set(client, key, "$", doc).get());
+
+        var res = Json.objlen(client, key, "$..").get();
+        assertArrayEquals(new Object[] {2L, 3L, 2L}, (Object[]) res);
+
+        res = Json.objlen(client, gs(key), gs("..b")).get();
+        assertEquals(3L, res);
+
+        // without path
+        res = Json.objlen(client, key).get();
+        assertEquals(2L, res);
+        res = Json.objlen(client, gs(key)).get();
+        assertEquals(2L, res);
+    }
+
+    @Test
+    @SneakyThrows
     public void json_del() {
         String key = UUID.randomUUID().toString();
         assertEquals(
@@ -428,6 +449,27 @@ public class JsonTests {
         assertEquals(1L, Json.del(client, gs(key), gs("$")).get());
         assertEquals(0L, Json.del(client, key).get());
         assertNull(Json.get(client, key, new String[] {"$"}).get());
+    }
+
+    @Test
+    @SneakyThrows
+    public void objkeys() {
+        String key = UUID.randomUUID().toString();
+
+        String doc = "{\"a\": 1.0, \"b\": {\"a\": {\"x\": 1, \"y\": 2}, \"b\": 2.5, \"c\": true}}";
+        assertEquals("OK", Json.set(client, key, "$", doc).get());
+
+        var res = Json.objkeys(client, key, "..").get();
+        assertArrayEquals(new Object[] {"a", "b"}, res);
+
+        res = Json.objkeys(client, gs(key), gs("$..b")).get();
+        assertArrayEquals(new Object[][] {{gs("a"), gs("b"), gs("c")}, {}}, res);
+
+        // without path
+        res = Json.objkeys(client, key).get();
+        assertArrayEquals(new Object[] {"a", "b"}, res);
+        res = Json.objkeys(client, gs(key)).get();
+        assertArrayEquals(new Object[] {gs("a"), gs("b")}, res);
     }
 
     @Test

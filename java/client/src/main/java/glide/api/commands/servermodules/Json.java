@@ -26,6 +26,8 @@ public class Json {
     private static final String JSON_ARRINSERT = JSON_PREFIX + "ARRINSERT";
     private static final String JSON_ARRLEN = JSON_PREFIX + "ARRLEN";
     private static final String JSON_ARRTRIM = JSON_PREFIX + "ARRTRIM";
+    private static final String JSON_OBJLEN = JSON_PREFIX + "OBJLEN";
+    private static final String JSON_OBJKEYS = JSON_PREFIX + "OBJKEYS";
     private static final String JSON_DEL = JSON_PREFIX + "DEL";
     private static final String JSON_FORGET = JSON_PREFIX + "FORGET";
     private static final String JSON_TOGGLE = JSON_PREFIX + "TOGGLE";
@@ -811,6 +813,245 @@ public class Json {
     }
 
     /**
+     * Retrieves the number of key-value pairs in the object values at the specified <code>path</code>
+     * within the JSON document stored at <code>key</code>.<br>
+     * Equivalent to {@link #objlen(BaseClient, String, String)} with <code>path</code> set to <code>
+     * "."</code>.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @return The object length stored at the root of the document. If document root is not an
+     *     object, an error is raised.<br>
+     *     If <code>key</code> doesn't exist, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "{\"a\": 1.0, \"b\": {\"a\": {\"x\": 1, \"y\": 2}, \"b\": 2.5, \"c\": true}}").get();
+     * var res = Json.objlen(client, "doc").get();
+     * assert res == 2; // the size of object matching the path `.`, which has 2 keys: 'a' and 'b'.
+     * }</pre>
+     */
+    public static CompletableFuture<Long> objlen(@NonNull BaseClient client, @NonNull String key) {
+        return executeCommand(client, new String[] {JSON_OBJLEN, key});
+    }
+
+    /**
+     * Retrieves the number of key-value pairs in the object values at the specified <code>path</code>
+     * within the JSON document stored at <code>key</code>.<br>
+     * Equivalent to {@link #objlen(BaseClient, GlideString, GlideString)} with <code>path</code> set
+     * to <code>gs(".")</code>.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @return The object length stored at the root of the document. If document root is not an
+     *     object, an error is raised.<br>
+     *     If <code>key</code> doesn't exist, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "{\"a\": 1.0, \"b\": {\"a\": {\"x\": 1, \"y\": 2}, \"b\": 2.5, \"c\": true}}").get();
+     * var res = Json.objlen(client, gs("doc"), gs(".")).get();
+     * assert res == 2; // the size of object matching the path `.`, which has 2 keys: 'a' and 'b'.
+     * }</pre>
+     */
+    public static CompletableFuture<Long> objlen(
+            @NonNull BaseClient client, @NonNull GlideString key) {
+        return executeCommand(client, new GlideString[] {gs(JSON_OBJLEN), key});
+    }
+
+    /**
+     * Retrieves the number of key-value pairs in the object values at the specified <code>path</code>
+     * within the JSON document stored at <code>key</code>.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
+     *           Returns an <code>Object[]</code> with a list of long integers for every possible
+     *           path, indicating the number of key-value pairs for each matching object, or <code>
+     *           null
+     *           </code> for JSON values matching the path that are not an object. If <code>path
+     *           </code> does not exist, an empty array will be returned.
+     *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
+     *           Returns the number of key-value pairs for the object value matching the path. If
+     *           multiple paths are matched, returns the length of the first matching object. If
+     *           <code>path</code> doesn't exist or the value at <code>path</code> is not an array, an
+     *           error is raised.
+     *     </ul>
+     *     If <code>key</code> doesn't exist, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "{\"a\": 1.0, \"b\": {\"a\": {\"x\": 1, \"y\": 2}, \"b\": 2.5, \"c\": true}}").get();
+     * var res = Json.objlen(client, "doc", ".").get(); // legacy path - command returns first value as `Long`
+     * assert res == 2L; // the size of object matching the path `.`, which has 2 keys: 'a' and 'b'.
+     *
+     * res = Json.objlen(client, "doc", "$.b").get(); // JSONPath - command returns an array
+     * assert Arrays.equals((Object[]) res, new Object[] { 3L }); // the length of the objects at path `$.b`
+     * }</pre>
+     */
+    public static CompletableFuture<Object> objlen(
+            @NonNull BaseClient client, @NonNull String key, @NonNull String path) {
+        return executeCommand(client, new String[] {JSON_OBJLEN, key, path});
+    }
+
+    /**
+     * Retrieves the number of key-value pairs in the object values at the specified <code>path</code>
+     * within the JSON document stored at <code>key</code>.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
+     *           Returns an <code>Object[]</code> with a list of long integers for every possible
+     *           path, indicating the number of key-value pairs for each matching object, or <code>
+     *           null
+     *           </code> for JSON values matching the path that are not an object. If <code>path
+     *           </code> does not exist, an empty array will be returned.
+     *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
+     *           Returns the number of key-value pairs for the object value matching the path. If
+     *           multiple paths are matched, returns the length of the first matching object. If
+     *           <code>path</code> doesn't exist or the value at <code>path</code> is not an array, an
+     *           error is raised.
+     *     </ul>
+     *     If <code>key</code> doesn't exist, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "{\"a\": 1.0, \"b\": {\"a\": {\"x\": 1, \"y\": 2}, \"b\": 2.5, \"c\": true}}").get();
+     * var res = Json.objlen(client, gs("doc"), gs(".")).get(); // legacy path - command returns first value as `Long`
+     * assert res == 2L; // the size of object matching the path `.`, which has 2 keys: 'a' and 'b'.
+     *
+     * res = Json.objlen(client, gs("doc"), gs("$.b")).get(); // JSONPath - command returns an array
+     * assert Arrays.equals((Object[]) res, new Object[] { 3L }); // the length of the objects at path `$.b`
+     * }</pre>
+     */
+    public static CompletableFuture<Object> objlen(
+            @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString path) {
+        return executeCommand(client, new GlideString[] {gs(JSON_OBJLEN), key, path});
+    }
+
+    /**
+     * Retrieves the key names in the object values at the specified <code>path</code> within the JSON
+     * document stored at <code>key</code>.<br>
+     * Equivalent to {@link #objkeys(BaseClient, String, String)} with <code>path</code> set to <code>
+     * "."</code>.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @return The object length stored at the root of the document. If document root is not an
+     *     object, an error is raised.<br>
+     *     If <code>key</code> doesn't exist, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "{\"a\": 1.0, \"b\": {\"a\": {\"x\": 1, \"y\": 2}, \"b\": 2.5, \"c\": true}}").get();
+     * var res = Json.objkeys(client, "doc").get();
+     * assert Arrays.equals((Object[]) res, new Object[] { "a", "b" }); // the keys of the object matching the path `.`, which has 2 keys: 'a' and 'b'.
+     * }</pre>
+     */
+    public static CompletableFuture<Object[]> objkeys(
+            @NonNull BaseClient client, @NonNull String key) {
+        return executeCommand(client, new String[] {JSON_OBJKEYS, key});
+    }
+
+    /**
+     * Retrieves the key names in the object values at the specified <code>path</code> within the JSON
+     * document stored at <code>key</code>.<br>
+     * Equivalent to {@link #objkeys(BaseClient, GlideString, GlideString)} with <code>path</code> set
+     * to <code>gs(".")</code>.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @return The object length stored at the root of the document. If document root is not an
+     *     object, an error is raised.<br>
+     *     If <code>key</code> doesn't exist, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "{\"a\": 1.0, \"b\": {\"a\": {\"x\": 1, \"y\": 2}, \"b\": 2.5, \"c\": true}}").get();
+     * var res = Json.objkeys(client, gs("doc"), gs(".")).get();
+     * assert Arrays.equals((Object[]) res, new Object[] { gs("a"), gs("b") }); // the keys of the object matching the path `.`, which has 2 keys: 'a' and 'b'.
+     * }</pre>
+     */
+    public static CompletableFuture<Object[]> objkeys(
+            @NonNull BaseClient client, @NonNull GlideString key) {
+        return executeCommand(client, new GlideString[] {gs(JSON_OBJKEYS), key});
+    }
+
+    /**
+     * Retrieves the key names in the object values at the specified <code>path</code> within the JSON
+     * document stored at <code>key</code>.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
+     *           Returns an <code>Object[][]</code> with each nested array containing key names for
+     *           each matching object for every possible path, indicating the list of object keys for
+     *           each matching object, or <code>null</code> for JSON values matching the path that are
+     *           not an object. If <code>path</code> does not exist, an empty sub-array will be
+     *           returned.
+     *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
+     *           Returns an array of object keys for the object value matching the path. If multiple
+     *           paths are matched, returns the length of the first matching object. If <code>path
+     *           </code> doesn't exist or the value at <code>path</code> is not an array, an error is
+     *           raised.
+     *     </ul>
+     *     If <code>key</code> doesn't exist, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "{\"a\": 1.0, \"b\": {\"a\": {\"x\": 1, \"y\": 2}, \"b\": 2.5, \"c\": true}}").get();
+     * var res = Json.objkeys(client, "doc", ".").get(); // legacy path - command returns array for first matched object
+     * assert Arrays.equals((Object[]) res, new Object[] { "a", "b" }); // key names for the object matching the path `.` as it is the only match.
+     *
+     * res = Json.objkeys(client, "doc", "$.b").get(); // JSONPath - command returns an array for each matched object
+     * assert Arrays.equals((Object[]) res, new Object[][] { { "a", "b", "c" } }); // key names as a nested list for objects matching the JSONPath `$.b`.
+     * }</pre>
+     */
+    public static CompletableFuture<Object[]> objkeys(
+            @NonNull BaseClient client, @NonNull String key, @NonNull String path) {
+        return executeCommand(client, new String[] {JSON_OBJKEYS, key, path});
+    }
+
+    /**
+     * Retrieves the key names in the object values at the specified <code>path</code> within the JSON
+     * document stored at <code>key</code>.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
+     *           Returns an <code>Object[][]</code> with each nested array containing key names for
+     *           each matching object for every possible path, indicating the list of object keys for
+     *           each matching object, or <code>null</code> for JSON values matching the path that are
+     *           not an object. If <code>path</code> does not exist, an empty sub-array will be
+     *           returned.
+     *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
+     *           Returns an array of object keys for the object value matching the path. If multiple
+     *           paths are matched, returns the length of the first matching object. If <code>path
+     *           </code> doesn't exist or the value at <code>path</code> is not an array, an error is
+     *           raised.
+     *     </ul>
+     *     If <code>key</code> doesn't exist, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "{\"a\": 1.0, \"b\": {\"a\": {\"x\": 1, \"y\": 2}, \"b\": 2.5, \"c\": true}}").get();
+     * var res = Json.objkeys(client, gs("doc"), gs(".")).get(); // legacy path - command returns array for first matched object
+     * assert Arrays.equals((Object[]) res, new Object[] { "a", "b" }); // key names for the object matching the path `.` as it is the only match.
+     *
+     * res = Json.objkeys(client, gs("doc"), gs("$.b")).get(); // JSONPath - command returns an array for each matched object
+     * assert Arrays.equals((Object[]) res, new Object[][] { { "a", "b", "c" } }); // key names as a nested list for objects matching the JSONPath `$.b`.
+     * }</pre>
+     */
+    public static CompletableFuture<Object[]> objkeys(
+            @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString path) {
+        return executeCommand(client, new GlideString[] {gs(JSON_OBJKEYS), key, path});
+    }
+
+    /**
      * Deletes the JSON document stored at <code>key</code>.
      *
      * @param client The Valkey GLIDE client to execute the command.
@@ -818,9 +1059,9 @@ public class Json {
      * @return The number of elements deleted. 0 if the key does not exist.
      * @example
      *     <pre>{@code
-     * Json.set(client, "doc", ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}");
+     * Json.set(client, "doc", ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}}");
      * Long result = Json.del(client, "doc").get();
-     * assertEquals(result, 1L);
+     * assert result == 1L;
      * }</pre>
      */
     public static CompletableFuture<Long> del(@NonNull BaseClient client, @NonNull String key) {
@@ -835,9 +1076,9 @@ public class Json {
      * @return The number of elements deleted. 0 if the key does not exist.
      * @example
      *     <pre>{@code
-     * Json.set(client, "doc", ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}");
+     * Json.set(client, "doc", ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}}");
      * Long result = Json.del(client, gs("doc")).get();
-     * assertEquals(result, 1L);
+     * assert result == 1L;
      * }</pre>
      */
     public static CompletableFuture<Long> del(@NonNull BaseClient client, @NonNull GlideString key) {
@@ -845,17 +1086,19 @@ public class Json {
     }
 
     /**
-     * Deletes the JSON value at the specified <code>path</code> within the JSON document stored at <code>key</code>.
+     * Deletes the JSON value at the specified <code>path</code> within the JSON document stored at
+     * <code>key</code>.
      *
      * @param client The Valkey GLIDE client to execute the command.
      * @param key The <code>key</code> of the JSON document.
      * @param path Represents the path within the JSON document where the value will be deleted.
-     * @return The number of elements deleted. 0 if the key does not exist, or if the JSON path is invalid or does not exist.
+     * @return The number of elements deleted. 0 if the key does not exist, or if the JSON path is
+     *     invalid or does not exist.
      * @example
      *     <pre>{@code
-     * Json.set(client, "doc", ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}");
+     * Json.set(client, "doc", ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}}");
      * Long result = Json.del(client, "doc", "$..a").get();
-     * assertEquals(result, 2L);
+     * assert result == 2L;
      * }</pre>
      */
     public static CompletableFuture<Long> del(
@@ -864,17 +1107,19 @@ public class Json {
     }
 
     /**
-     * Deletes the JSON value at the specified <code>path</code> within the JSON document stored at <code>key</code>.
+     * Deletes the JSON value at the specified <code>path</code> within the JSON document stored at
+     * <code>key</code>.
      *
      * @param client The Valkey GLIDE client to execute the command.
      * @param key The <code>key</code> of the JSON document.
      * @param path Represents the path within the JSON document where the value will be deleted.
-     * @return The number of elements deleted. 0 if the key does not exist, or if the JSON path is invalid or does not exist.
+     * @return The number of elements deleted. 0 if the key does not exist, or if the JSON path is
+     *     invalid or does not exist.
      * @example
      *     <pre>{@code
-     * Json.set(client, "doc", ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}");
+     * Json.set(client, "doc", ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}}");
      * Long result = Json.del(client, gs("doc"), gs("$..a")).get();
-     * assertEquals(result, 2L);
+     * assert result == 2L;
      * }</pre>
      */
     public static CompletableFuture<Long> del(
@@ -890,9 +1135,9 @@ public class Json {
      * @return The number of elements deleted. 0 if the key does not exist.
      * @example
      *     <pre>{@code
-     * Json.set(client, "doc", ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}");
+     * Json.set(client, "doc", ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}}");
      * Long result = Json.forget(client, "doc").get();
-     * assertEquals(result, 1L);
+     * assert result == 1L;
      * }</pre>
      */
     public static CompletableFuture<Long> forget(@NonNull BaseClient client, @NonNull String key) {
@@ -907,9 +1152,9 @@ public class Json {
      * @return The number of elements deleted. 0 if the key does not exist.
      * @example
      *     <pre>{@code
-     * Json.set(client, "doc", ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}");
+     * Json.set(client, "doc", ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}}");
      * Long result = Json.forget(client, gs("doc")).get();
-     * assertEquals(result, 1L);
+     * assert result == 1L;
      * }</pre>
      */
     public static CompletableFuture<Long> forget(
@@ -918,17 +1163,19 @@ public class Json {
     }
 
     /**
-     * Deletes the JSON value at the specified <code>path</code> within the JSON document stored at <code>key</code>.
+     * Deletes the JSON value at the specified <code>path</code> within the JSON document stored at
+     * <code>key</code>.
      *
      * @param client The Valkey GLIDE client to execute the command.
      * @param key The <code>key</code> of the JSON document.
      * @param path Represents the path within the JSON document where the value will be deleted.
-     * @return The number of elements deleted. 0 if the key does not exist, or if the JSON path is invalid or does not exist.
+     * @return The number of elements deleted. 0 if the key does not exist, or if the JSON path is
+     *     invalid or does not exist.
      * @example
      *     <pre>{@code
-     * Json.set(client, "doc", ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}");
+     * Json.set(client, "doc", ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}}");
      * Long result = Json.forget(client, "doc", "$..a").get();
-     * assertEquals(result, 2L);
+     * assert result == 2L;
      * }</pre>
      */
     public static CompletableFuture<Long> forget(
@@ -937,17 +1184,19 @@ public class Json {
     }
 
     /**
-     * Deletes the JSON value at the specified <code>path</code> within the JSON document stored at <code>key</code>.
+     * Deletes the JSON value at the specified <code>path</code> within the JSON document stored at
+     * <code>key</code>.
      *
      * @param client The Valkey GLIDE client to execute the command.
      * @param key The <code>key</code> of the JSON document.
      * @param path Represents the path within the JSON document where the value will be deleted.
-     * @return The number of elements deleted. 0 if the key does not exist, or if the JSON path is invalid or does not exist.
+     * @return The number of elements deleted. 0 if the key does not exist, or if the JSON path is
+     *     invalid or does not exist.
      * @example
      *     <pre>{@code
-     * Json.set(client, "doc", ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}");
+     * Json.set(client, "doc", ".", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}}");
      * Long result = Json.forget(client, gs("doc"), gs("$..a")).get();
-     * assertEquals(result, 2L);
+     * assert result == 2L;
      * }</pre>
      */
     public static CompletableFuture<Long> forget(
