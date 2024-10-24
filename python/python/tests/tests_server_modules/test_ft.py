@@ -211,19 +211,19 @@ class TestFt:
         # FT.EXPLAIN on a search query containing numeric field.
         query = "@price:[0 10]"
         result = await ft.explain(glide_client, indexName=indexName, query=query)
-        resultString = result.decode(encoding="utf-8")
+        resultString = cast(bytes, result).decode(encoding="utf-8")
         assert "price" in resultString and "0" in resultString and "10" in resultString
 
         # FT.EXPLAIN on a search query containing numeric field and having bytes type input to the command.
         result = await ft.explain(
             glide_client, indexName=indexName.encode(), query=query.encode()
         )
-        resultString = result.decode(encoding="utf-8")
+        resultString = cast(bytes, result).decode(encoding="utf-8")
         assert "price" in resultString and "0" in resultString and "10" in resultString
 
         # FT.EXPLAIN on a search query that returns all data.
         result = await ft.explain(glide_client, indexName=indexName, query="*")
-        resultString = result.decode(encoding="utf-8")
+        resultString = cast(bytes, result).decode(encoding="utf-8")
         assert "*" in resultString
 
         assert await ft.dropindex(glide_client, indexName=indexName)
@@ -245,7 +245,7 @@ class TestFt:
         result = await ft.explaincli(glide_client, indexName=indexName, query=query)
         resultStringArr = []
         for i in result:
-            resultStringArr.append(i.decode(encoding="utf-8").strip())
+            resultStringArr.append(cast(bytes, i).decode(encoding="utf-8").strip())
         assert (
             "price" in resultStringArr
             and "0" in resultStringArr
@@ -258,7 +258,7 @@ class TestFt:
         )
         resultStringArr = []
         for i in result:
-            resultStringArr.append(i.decode(encoding="utf-8").strip())
+            resultStringArr.append(cast(bytes, i).decode(encoding="utf-8").strip())
         assert (
             "price" in resultStringArr
             and "0" in resultStringArr
@@ -269,7 +269,7 @@ class TestFt:
         result = await ft.explaincli(glide_client, indexName=indexName, query="*")
         resultStringArr = []
         for i in result:
-            resultStringArr.append(i.decode(encoding="utf-8").strip())
+            resultStringArr.append(cast(bytes, i).decode(encoding="utf-8").strip())
         assert "*" in resultStringArr
 
         assert await ft.dropindex(glide_client, indexName=indexName)
