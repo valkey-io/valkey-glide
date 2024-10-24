@@ -253,7 +253,7 @@ async def explain(
     Examples:
         >>> from glide import ft
         >>> result = await ft.explain(glide_client, indexName="myIndex", query="@price:[0 10]")
-            b'Field {\n  price\n  0\n  10\n}\n': Parsed results.
+            b'Field {\n  price\n  0\n  10\n}\n' # Parsed results.
     """
     args: List[TEncodable] = [CommandNames.FT_EXPLAIN, indexName, query]
     return cast(TEncodable, await client.custom_command(args))
@@ -276,7 +276,7 @@ async def explaincli(
     Examples:
         >>> from glide import ft
         >>> result = await ft.explaincli(glide_client, indexName="myIndex", query="@price:[0 10]")
-            [b'Field {', b'  price', b'  0', b'  10', b'}', b'']: Parsed results.
+            [b'Field {', b'  price', b'  0', b'  10', b'}', b''] # Parsed results.
     """
     args: List[TEncodable] = [CommandNames.FT_EXPLAINCLI, indexName, query]
     return cast(List[TEncodable], await client.custom_command(args))
