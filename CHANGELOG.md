@@ -17,6 +17,7 @@
 * Java: Added `FT.ALIASADD`, `FT.ALIASDEL`, `FT.ALIASUPDATE` ([#2442](https://github.com/valkey-io/valkey-glide/pull/2442))
 * Core: Update routing for commands from server modules ([#2461](https://github.com/valkey-io/valkey-glide/pull/2461))
 * Node: Added `JSON.SET` and `JSON.GET` ([#2427](https://github.com/valkey-io/valkey-glide/pull/2427))
+* Java: Added `JSON.NUMINCRBY` and `JSON.NUMMULTBY` ([#2511](https://github.com/valkey-io/valkey-glide/pull/2511))
 
 #### Breaking Changes
 
