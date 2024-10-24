@@ -8,6 +8,7 @@ import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleM
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -434,5 +435,102 @@ public class JsonTests {
         exception =
                 assertThrows(
                         ExecutionException.class, () -> Json.toggle(client, "non_existing_key", "$").get());
+    }
+
+    @Test
+    @SneakyThrows
+    public void json_resp() {
+        String key = UUID.randomUUID().toString();
+        String jsonValue =
+                "{\"obj\":{\"a\":1, \"b\":2}, \"arr\":[1,2,3], \"str\": \"foo\", \"bool\": true, \"int\":"
+                        + " 42, \"float\": 3.14, \"nullVal\": null}";
+        assertEquals(OK, Json.set(client, key, "$", jsonValue).get());
+
+        Object actualResult1 = Json.resp(client, key, "$.*").get();
+        Object[] expectedResult1 =
+                new Object[] {
+                    new Object[] {"{", "a", 1L, "b", 2L}, // leading "{" indicates JSON objects
+                    new Object[] {"[", 1L, 2L, 3L}, // leading "[" indicates JSON arrays
+                    "foo",
+                    "true",
+                    42L,
+                    3.14,
+                    null
+                };
+        assertInstanceOf(Object[].class, actualResult1);
+        assertArrayEquals(expectedResult1, (Object[]) actualResult1);
+
+        // multiple path match, the first will be returned
+        Object actualResult2 = Json.resp(client, key, "*").get();
+        Object[] expectedResult2 = new Object[] {"{", "a", 1L, "b", 2L};
+        assertInstanceOf(Object[].class, actualResult2);
+        assertArrayEquals(expectedResult2, (Object[]) actualResult2);
+
+        Object actualResult3 = Json.resp(client, key, "$").get();
+        Object[] expectedResult3 =
+                new Object[] {
+                    new Object[] {
+                        "{",
+                        "obj",
+                        new Object[] {"{", "a", 1L, "b", 2L},
+                        "arr",
+                        new Object[] {"[", 1L, 2L, 3L},
+                        "str",
+                        "foo",
+                        "bool",
+                        "true",
+                        "int",
+                        42L,
+                        "float",
+                        3.14,
+                        "nullVal",
+                        null
+                    }
+                };
+        assertInstanceOf(Object[].class, actualResult3);
+        assertArrayEquals(expectedResult3, (Object[]) actualResult3);
+
+        Object actualResult4 = Json.resp(client, key, ".").get();
+        Object[] expectedResult4 =
+                new Object[] {
+                    "{",
+                    "obj",
+                    new Object[] {"{", "a", 1L, "b", 2L},
+                    "arr",
+                    new Object[] {"[", 1L, 2L, 3L},
+                    "str",
+                    "foo",
+                    "bool",
+                    "true",
+                    "int",
+                    42L,
+                    "float",
+                    3.14,
+                    "nullVal",
+                    null
+                };
+        assertInstanceOf(Object[].class, actualResult4);
+        assertArrayEquals(expectedResult4, (Object[]) actualResult4);
+        // resp without path defaults to the same behavior of passing "." as path
+        Object actualResult4WithoutPath = Json.resp(client, key).get();
+        assertArrayEquals(expectedResult4, (Object[]) actualResult4WithoutPath);
+        assertArrayEquals(expectedResult4, (Object[]) actualResult4WithoutPath);
+
+        Object actualResult5 = Json.resp(client, gs(key), gs("$.str")).get();
+        Object[] expectedResult5 = new Object[] {gs("foo")};
+        assertInstanceOf(Object[].class, actualResult5);
+        assertArrayEquals(expectedResult5, (Object[]) actualResult5);
+
+        Object actualResult6 = Json.resp(client, key, ".str").get();
+        String expectedResult6 = "foo";
+        assertEquals(expectedResult6, actualResult6);
+
+        assertArrayEquals(new Object[] {}, (Object[]) Json.resp(client, key, "$.nonexistent").get());
+
+        assertThrows(ExecutionException.class, () -> Json.resp(client, key, "nonexistent").get());
+
+        assertNull(Json.resp(client, "nonexistent_key", "$").get());
+        assertNull(Json.resp(client, "nonexistent_key", ".").get());
+        assertNull(Json.resp(client, "nonexistent_key").get());
     }
 }
