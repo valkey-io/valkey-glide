@@ -74,3 +74,18 @@ TXInfoStreamFullResponse = Mapping[
         List[Mapping[bytes, Union[bytes, int, List[List[Union[bytes, int]]]]]],
     ],
 ]
+
+FtInfoResponse = Mapping[
+    TEncodable,
+    Union[
+        TEncodable,
+        int,
+        List[TEncodable],
+        List[
+            Mapping[
+                TEncodable,
+                Union[TEncodable, Mapping[TEncodable, Union[TEncodable, int]]],
+            ]
+        ],
+    ],
+]

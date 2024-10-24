@@ -8,6 +8,8 @@ class CommandNames:
 
     FT_CREATE = "FT.CREATE"
     FT_DROPINDEX = "FT.DROPINDEX"
+    FT_SEARCH = "FT.SEARCH"
+    FT_INFO = "FT.INFO"
     FT_ALIASADD = "FT.ALIASADD"
     FT_ALIASDEL = "FT.ALIASDEL"
     FT_ALIASUPDATE = "FT.ALIASUPDATE"
@@ -15,7 +17,7 @@ class CommandNames:
 
 class FtCreateKeywords:
     """
-    Keywords used in the FT.CREATE command statment.
+    Keywords used in the FT.CREATE command.
     """
 
     SCHEMA = "SCHEMA"
@@ -34,3 +36,16 @@ class FtCreateKeywords:
     M = "M"
     EF_CONSTRUCTION = "EF_CONSTRUCTION"
     EF_RUNTIME = "EF_RUNTIME"
+
+
+class FtSeachKeywords:
+    """
+    Keywords used in the FT.SEARCH command.
+    """
+
+    RETURN = "RETURN"
+    TIMEOUT = "TIMEOUT"
+    PARAMS = "PARAMS"
+    LIMIT = "LIMIT"
+    COUNT = "COUNT"
+    AS = "AS"

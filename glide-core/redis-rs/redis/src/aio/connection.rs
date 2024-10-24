@@ -7,7 +7,7 @@ use crate::connection::{
     resp2_is_pub_sub_state_cleared, resp3_is_pub_sub_state_cleared, ConnectionAddr, ConnectionInfo,
     Msg, RedisConnectionInfo,
 };
-#[cfg(any(feature = "tokio-comp"))]
+#[cfg(feature = "tokio-comp")]
 use crate::parser::ValueCodec;
 use crate::types::{ErrorKind, FromRedisValue, RedisError, RedisFuture, RedisResult, Value};
 use crate::{from_owned_redis_value, ProtocolVersion, ToRedisArgs};
@@ -49,27 +49,6 @@ fn assert_sync<T: Sync>() {}
 #[allow(unused)]
 fn test() {
     assert_sync::<Connection>();
-}
-
-impl<C> Connection<C> {
-    pub(crate) fn map<D>(self, f: impl FnOnce(C) -> D) -> Connection<D> {
-        let Self {
-            con,
-            buf,
-            decoder,
-            db,
-            pubsub,
-            protocol,
-        } = self;
-        Connection {
-            con: f(con),
-            buf,
-            decoder,
-            db,
-            pubsub,
-            protocol,
-        }
-    }
 }
 
 impl<C> Connection<C>
@@ -188,17 +167,6 @@ where
         // cancelled *and* all unsubscribe messages were received.
         Ok(())
     }
-}
-
-pub(crate) async fn connect<C>(
-    connection_info: &ConnectionInfo,
-    socket_addr: Option<SocketAddr>,
-) -> RedisResult<Connection<C>>
-where
-    C: Unpin + RedisRuntime + AsyncRead + AsyncWrite + Send,
-{
-    let (con, _ip) = connect_simple::<C>(connection_info, socket_addr).await?;
-    Connection::new(&connection_info.redis, con).await
 }
 
 impl<C> ConnectionLike for Connection<C>

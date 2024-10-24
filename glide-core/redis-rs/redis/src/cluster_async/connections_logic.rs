@@ -5,7 +5,7 @@ use super::{
     Connect,
 };
 use crate::{
-    aio::{ConnectionLike, DisconnectNotifier, Runtime},
+    aio::{ConnectionLike, DisconnectNotifier},
     client::GlideConnectionOptions,
     cluster::get_connection_info,
     cluster_client::ClusterParams,
@@ -462,9 +462,7 @@ async fn check_connection<C>(conn: &mut C, timeout: std::time::Duration) -> Redi
 where
     C: ConnectionLike + Send + 'static,
 {
-    Runtime::locate()
-        .timeout(timeout, crate::cmd("PING").query_async::<_, String>(conn))
-        .await??;
+    tokio::time::timeout(timeout, crate::cmd("PING").query_async::<_, String>(conn)).await??;
     Ok(())
 }
 

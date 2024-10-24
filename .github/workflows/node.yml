@@ -8,7 +8,7 @@ on:
             - v*
         paths:
             - glide-core/src/**
-            - submodules/**
+            - glide-core/redis-rs/redis/src/**
             - node/**
             - utils/cluster_manager.py
             - .github/workflows/node.yml
@@ -22,7 +22,7 @@ on:
     pull_request:
         paths:
             - glide-core/src/**
-            - submodules/**
+            - glide-core/redis-rs/redis/src/**
             - node/**
             - utils/cluster_manager.py
             - .github/workflows/node.yml
@@ -67,8 +67,7 @@ jobs:
 
         steps:
             - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
+              
 
             - name: Use Node.js 16.x
               uses: actions/setup-node@v3
@@ -125,8 +124,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
+              
 
             - uses: ./.github/workflows/lint-rust
               with:
@@ -239,8 +237,7 @@ jobs:
                   apk add git
 
             - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
+              
 
             - name: Setup musl on Linux
               uses: ./.github/workflows/setup-musl-on-linux
@@ -287,8 +284,7 @@ jobs:
               run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
 
             - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
+              
 
             - name: Use Node.js 18.x
               uses: actions/setup-node@v4
