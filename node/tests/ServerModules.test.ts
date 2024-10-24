@@ -672,7 +672,7 @@ describe("Server Module Tests", () => {
                 ).toEqual(["foo"]);
                 expect(
                     await GlideJson.resp(client, key, { path: ".str" }),
-                ).toEqual(["foo"]);
+                ).toEqual("foo");
 
                 // setup new json value
                 const jsonValue2 = {
