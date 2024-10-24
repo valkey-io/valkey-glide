@@ -7,7 +7,7 @@ from glide.async_commands.server_modules.ft_options.ft_constants import FtCreate
 from glide.constants import TEncodable
 
 
-private class FieldType(Enum):
+class FieldType(Enum):
     """
     All possible values for the data type of field identifier for the SCHEMA option.
     """
@@ -219,7 +219,9 @@ class VectorFieldAttributes(ABC):
     """
 
     @abstractmethod
-    def __init__(self, dimensions: int, distance_metric: DistanceMetricType, type: VectorType):
+    def __init__(
+        self, dimensions: int, distance_metric: DistanceMetricType, type: VectorType
+    ):
         """
         Initialize a new vector field attributes instance.
 
@@ -303,7 +305,7 @@ class VectorFieldAttributesHnsw(VectorFieldAttributes):
         vectors_examined_on_runtime: Optional[int] = None,
     ):
         """
-        Initialize a new TagField instance.
+        Initialize a new HNSW vector field attributes instance.
 
         Args:
             dimensions (int): Number of dimensions in the vector.
@@ -333,9 +335,16 @@ class VectorFieldAttributesHnsw(VectorFieldAttributes):
         if self.number_of_edges:
             args.extend([FtCreateKeywords.M, str(self.number_of_edges)])
         if self.number_of_edvectors_examined_on_constructionges:
-            args.extend([FtCreateKeywords.EF_CONSTRUCTION, str(self.number_of_edvectors_examined_on_constructionges)])
+            args.extend(
+                [
+                    FtCreateKeywords.EF_CONSTRUCTION,
+                    str(self.number_of_edvectors_examined_on_constructionges),
+                ]
+            )
         if self.vectors_examined_on_runtime:
-            args.extend([FtCreateKeywords.EF_RUNTIME, str(self.vectors_examined_on_runtime)])
+            args.extend(
+                [FtCreateKeywords.EF_RUNTIME, str(self.vectors_examined_on_runtime)]
+            )
         return args
 
 
