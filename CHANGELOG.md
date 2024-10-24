@@ -1,4 +1,5 @@
 #### Changes
+* Python: FT.EXPLAIN and FT.EXPLAINCLI commands added([#2508](https://github.com/valkey-io/valkey-glide/pull/2508))
 * Python: Python FT.INFO command added([#2429](https://github.com/valkey-io/valkey-glide/pull/2494))
 * Python: Add FT.SEARCH command([#2470](https://github.com/valkey-io/valkey-glide/pull/2470))
 * Python: Add commands FT.ALIASADD, FT.ALIASDEL, FT.ALIASUPDATE([#2471](https://github.com/valkey-io/valkey-glide/pull/2471))

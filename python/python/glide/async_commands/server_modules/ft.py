@@ -234,3 +234,49 @@ async def info(client: TGlideClient, indexName: TEncodable) -> FtInfoResponse:
     """
     args: List[TEncodable] = [CommandNames.FT_INFO, indexName]
     return cast(FtInfoResponse, await client.custom_command(args))
+
+
+async def explain(
+    client: TGlideClient, indexName: TEncodable, query: TEncodable
+) -> TEncodable:
+    """
+    Parse a query and return information about how that query was parsed.
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+        indexName (TEncodable): The index name for which the query is written.
+        query (TEncodable): The search query, same as the query passed as an argument to FT.SEARCH.
+
+    Returns:
+        TEncodable: A string containing the parsed results representing the execution plan.
+
+    Examples:
+        >>> from glide import ft
+        >>> result = await ft.explain(glide_client, indexName="myIndex", query="@price:[0 10]")
+            b'Field {\n  price\n  0\n  10\n}\n' # Parsed results.
+    """
+    args: List[TEncodable] = [CommandNames.FT_EXPLAIN, indexName, query]
+    return cast(TEncodable, await client.custom_command(args))
+
+
+async def explaincli(
+    client: TGlideClient, indexName: TEncodable, query: TEncodable
+) -> List[TEncodable]:
+    """
+    Same as the FT.EXPLAIN command except that the results are displayed in a different format. More useful with cli.
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+        indexName (TEncodable): The index name for which the query is written.
+        query (TEncodable): The search query, same as the query passed as an argument to FT.SEARCH.
+
+    Returns:
+        List[TEncodable]: An array containing the execution plan.
+
+    Examples:
+        >>> from glide import ft
+        >>> result = await ft.explaincli(glide_client, indexName="myIndex", query="@price:[0 10]")
+            [b'Field {', b'  price', b'  0', b'  10', b'}', b''] # Parsed results.
+    """
+    args: List[TEncodable] = [CommandNames.FT_EXPLAINCLI, indexName, query]
+    return cast(List[TEncodable], await client.custom_command(args))

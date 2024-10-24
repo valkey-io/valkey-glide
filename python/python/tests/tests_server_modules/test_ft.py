@@ -9,6 +9,7 @@ from glide.async_commands.server_modules.ft_options.ft_create_options import (
     DistanceMetricType,
     Field,
     FtCreateOptions,
+    NumericField,
     TextField,
     VectorAlgorithm,
     VectorField,
@@ -107,10 +108,10 @@ class TestFt:
     ):
         # Helper function used for creating a basic index with hash data type with one text field.
         fields: List[Field] = []
-        text_field_title: TextField = TextField("$title")
+        text_field_title: TextField = TextField("title")
         fields.append(text_field_title)
 
-        prefix = "{json-search-" + str(uuid.uuid4()) + "}:"
+        prefix = "{hash-search-" + str(uuid.uuid4()) + "}:"
         prefixes: List[TEncodable] = []
         prefixes.append(prefix)
 
@@ -197,4 +198,106 @@ class TestFt:
             indexName=index_name,
             schema=fields,
             options=FtCreateOptions(DataType.JSON, prefixes=prefixes),
+        )
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_ft_explain(self, glide_client: GlideClusterClient):
+        indexName = str(uuid.uuid4())
+        await TestFt._create_test_index_for_ft_explain_commands(
+            self=self, glide_client=glide_client, index_name=indexName
+        )
+
+        # FT.EXPLAIN on a search query containing numeric field.
+        query = "@price:[0 10]"
+        result = await ft.explain(glide_client, indexName=indexName, query=query)
+        resultString = cast(bytes, result).decode(encoding="utf-8")
+        assert "price" in resultString and "0" in resultString and "10" in resultString
+
+        # FT.EXPLAIN on a search query containing numeric field and having bytes type input to the command.
+        result = await ft.explain(
+            glide_client, indexName=indexName.encode(), query=query.encode()
+        )
+        resultString = cast(bytes, result).decode(encoding="utf-8")
+        assert "price" in resultString and "0" in resultString and "10" in resultString
+
+        # FT.EXPLAIN on a search query that returns all data.
+        result = await ft.explain(glide_client, indexName=indexName, query="*")
+        resultString = cast(bytes, result).decode(encoding="utf-8")
+        assert "*" in resultString
+
+        assert await ft.dropindex(glide_client, indexName=indexName)
+
+        # FT.EXPLAIN on a missing index throws an error.
+        with pytest.raises(RequestError):
+            await ft.explain(glide_client, str(uuid.uuid4()), "*")
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_ft_explaincli(self, glide_client: GlideClusterClient):
+        indexName = str(uuid.uuid4())
+        await TestFt._create_test_index_for_ft_explain_commands(
+            self=self, glide_client=glide_client, index_name=indexName
+        )
+
+        # FT.EXPLAINCLI on a search query containing numeric field.
+        query = "@price:[0 10]"
+        result = await ft.explaincli(glide_client, indexName=indexName, query=query)
+        resultStringArr = []
+        for i in result:
+            resultStringArr.append(cast(bytes, i).decode(encoding="utf-8").strip())
+        assert (
+            "price" in resultStringArr
+            and "0" in resultStringArr
+            and "10" in resultStringArr
+        )
+
+        # FT.EXPLAINCLI on a search query containing numeric field and having bytes type input to the command.
+        result = await ft.explaincli(
+            glide_client, indexName=indexName.encode(), query=query.encode()
+        )
+        resultStringArr = []
+        for i in result:
+            resultStringArr.append(cast(bytes, i).decode(encoding="utf-8").strip())
+        assert (
+            "price" in resultStringArr
+            and "0" in resultStringArr
+            and "10" in resultStringArr
+        )
+
+        # FT.EXPLAINCLI on a search query that returns all data.
+        result = await ft.explaincli(glide_client, indexName=indexName, query="*")
+        resultStringArr = []
+        for i in result:
+            resultStringArr.append(cast(bytes, i).decode(encoding="utf-8").strip())
+        assert "*" in resultStringArr
+
+        assert await ft.dropindex(glide_client, indexName=indexName)
+
+        # FT.EXPLAINCLI on a missing index throws an error.
+        with pytest.raises(RequestError):
+            await ft.explaincli(glide_client, str(uuid.uuid4()), "*")
+
+    async def _create_test_index_for_ft_explain_commands(
+        self, glide_client: GlideClusterClient, index_name: TEncodable
+    ):
+        # Helper function used for creating an index having hash data type, one text field and one numeric field.
+        fields: List[Field] = []
+        numeric_field: NumericField = NumericField("price")
+        text_field: TextField = TextField("title")
+        fields.append(text_field)
+        fields.append(numeric_field)
+
+        prefix = "{hash-search-" + str(uuid.uuid4()) + "}:"
+        prefixes: List[TEncodable] = []
+        prefixes.append(prefix)
+
+        assert (
+            await ft.create(
+                glide_client,
+                index_name,
+                fields,
+                FtCreateOptions(DataType.HASH, prefixes),
+            )
+            == OK
         )

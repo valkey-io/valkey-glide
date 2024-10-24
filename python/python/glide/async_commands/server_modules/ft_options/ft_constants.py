@@ -13,6 +13,8 @@ class CommandNames:
     FT_ALIASADD = "FT.ALIASADD"
     FT_ALIASDEL = "FT.ALIASDEL"
     FT_ALIASUPDATE = "FT.ALIASUPDATE"
+    FT_EXPLAIN = "FT.EXPLAIN"
+    FT_EXPLAINCLI = "FT.EXPLAINCLI"
 
 
 class FtCreateKeywords:
