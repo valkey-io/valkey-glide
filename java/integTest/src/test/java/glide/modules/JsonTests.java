@@ -323,6 +323,95 @@ public class JsonTests {
 
     @Test
     @SneakyThrows
+    public void arrtrim() {
+        String key = UUID.randomUUID().toString();
+
+        String doc =
+                "{\"a\": [0, 1, 2, 3, 4, 5, 6, 7, 8], \"b\": {\"a\": [0, 9, 10, 11, 12, 13], \"c\": {\"a\":"
+                        + " 42}}}";
+        assertEquals("OK", Json.set(client, key, "$", doc).get());
+
+        // Basic trim
+        var res = Json.arrtrim(client, key, "$..a", 1, 7).get();
+        assertArrayEquals(new Object[] {7L, 5L, null}, (Object[]) res);
+
+        String getResult = Json.get(client, key, new String[] {"$..a"}).get();
+        String expectedGetResult = "[[1, 2, 3, 4, 5, 6, 7], [9, 10, 11, 12, 13], 42]";
+        assertEquals(JsonParser.parseString(expectedGetResult), JsonParser.parseString(getResult));
+
+        // Test end >= size (should be treated as size-1)
+        res = Json.arrtrim(client, key, "$.a", 0, 10).get();
+        assertArrayEquals(new Object[] {7L}, (Object[]) res);
+        res = Json.arrtrim(client, key, ".a", 0, 10).get();
+        assertEquals(7L, res);
+
+        // Test negative start (should be treated as 0)
+        res = Json.arrtrim(client, key, "$.a", -1, 5).get();
+        assertArrayEquals(new Object[] {6L}, (Object[]) res);
+        res = Json.arrtrim(client, key, ".a", -1, 5).get();
+        assertEquals(6L, res);
+
+        // Test start >= size (should empty the array)
+        res = Json.arrtrim(client, key, "$.a", 7, 10).get();
+        assertArrayEquals(new Object[] {0L}, (Object[]) res);
+
+        assertEquals("OK", Json.set(client, key, ".a", "[\"a\", \"b\", \"c\"]").get());
+        res = Json.arrtrim(client, key, ".a", 7, 10).get();
+        assertEquals(0L, res);
+
+        // Test start > end (should empty the array)
+        res = Json.arrtrim(client, key, "$..a", 2, 1).get();
+        assertArrayEquals(new Object[] {0L, 0L, null}, (Object[]) res);
+
+        assertEquals("OK", Json.set(client, key, ".a", "[\"a\", \"b\", \"c\", \"d\"]").get());
+        res = Json.arrtrim(client, key, "..a", 2, 1).get();
+        assertEquals(0L, res);
+
+        // Multiple path match
+        assertEquals("OK", Json.set(client, key, "$", doc).get());
+        res = Json.arrtrim(client, key, "..a", 1, 10).get();
+        assertEquals(5L, res); // Redis returns 5; EC2 returns 8
+
+        getResult = Json.get(client, key, new String[] {"$..a"}).get();
+        expectedGetResult = "[[1,2,3,4,5,6,7,8], [9,10,11,12,13], 42]";
+        assertEquals(JsonParser.parseString(expectedGetResult), JsonParser.parseString(getResult));
+
+        // Test with non-existing path
+        var exception =
+                assertThrows(
+                        ExecutionException.class, () -> Json.arrtrim(client, key, ".non_existing", 0, 1).get());
+
+        res = Json.arrtrim(client, key, "$.non_existing", 0, 1).get();
+        assertArrayEquals(new Object[] {}, (Object[]) res);
+
+        // Test with non-array path
+        res = Json.arrtrim(client, key, "$", 0, 1).get();
+        assertArrayEquals(new Object[] {null}, (Object[]) res);
+
+        exception =
+                assertThrows(ExecutionException.class, () -> Json.arrtrim(client, key, ".", 0, 1).get());
+
+        // Test with non-existing key
+        exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> Json.arrtrim(client, "non_existing_key", "$", 0, 1).get());
+
+        exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> Json.arrtrim(client, "non_existing_key", ".", 0, 1).get());
+
+        // Test with empty array
+        assertEquals("OK", Json.set(client, key, "$.empty", "[]").get());
+        res = Json.arrtrim(client, key, "$.empty", 0, 1).get();
+        assertArrayEquals(new Object[] {0L}, (Object[]) res);
+        res = Json.arrtrim(client, key, ".empty", 0, 1).get();
+        assertEquals(0L, res);
+    }
+
+    @Test
+    @SneakyThrows
     public void json_del() {
         String key = UUID.randomUUID().toString();
         assertEquals(
