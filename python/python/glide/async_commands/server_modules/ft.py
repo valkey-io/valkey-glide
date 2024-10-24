@@ -3,7 +3,7 @@
 module for `vector search` commands.
 """
 
-from typing import List, Mapping, Optional, Union, cast
+from typing import Any, List, Mapping, Optional, Union, cast
 
 from glide.async_commands.server_modules.ft_options.ft_constants import (
     CommandNames,
@@ -239,8 +239,13 @@ async def info(client: TGlideClient, indexName: TEncodable) -> FtInfoResponse:
     return cast(FtInfoResponse, await client.custom_command(args))
 
 
-async def aggregate(client: TGlideClient, indexName: TEncodable, query: TEncodable, options: Optional[FtAggregateOptions]):
+async def aggregate(
+    client: TGlideClient,
+    indexName: TEncodable,
+    query: TEncodable,
+    options: Optional[FtAggregateOptions]
+) -> List[Mapping[TEncodable, Any]]:
     args: List[TEncodable] = [CommandNames.FT_AGGREGATE, indexName, query]
     if options:
         args.extend(options.toArgs())
-    return cast(Mapping, client.custom_command(args))
+    return cast(List[Mapping[TEncodable, Any]], client.custom_command(args))
