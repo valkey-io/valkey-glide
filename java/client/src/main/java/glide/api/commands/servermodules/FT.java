@@ -285,6 +285,7 @@ public class FT {
     /**
      * Deletes an index and associated content. Indexed document keys are unaffected.
      *
+     * @param client The client to execute the command.
      * @param indexName The index name.
      * @return <code>"OK"</code>.
      * @example
@@ -300,6 +301,7 @@ public class FT {
     /**
      * Deletes an index and associated content. Indexed document keys are unaffected.
      *
+     * @param client The client to execute the command.
      * @param indexName The index name.
      * @return <code>"OK"</code>.
      * @example

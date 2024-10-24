@@ -92,10 +92,10 @@ export class GlideFt {
                         const attributes: GlideString[] = [];
 
                         // all VectorFieldAttributes attributes
-                        if (f.attributes.dimension) {
+                        if (f.attributes.dimensions) {
                             attributes.push(
                                 "DIM",
-                                f.attributes.dimension.toString(),
+                                f.attributes.dimensions.toString(),
                             );
                         }
 
@@ -111,6 +111,8 @@ export class GlideFt {
                                 "TYPE",
                                 f.attributes.type.toString(),
                             );
+                        } else {
+                            attributes.push("TYPE", "FLOAT32");
                         }
 
                         if (f.attributes.initialCap) {
@@ -155,6 +157,31 @@ export class GlideFt {
                 // no-op
             }
         });
+
+        return _handleCustomCommand(client, args, {
+            decoder: Decoder.String,
+        }) as Promise<"OK">;
+    }
+
+    /**
+     * Deletes an index and associated content. Indexed document keys are unaffected.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name.
+     *
+     * @returns "OK"
+     *
+     * @example
+     * ```typescript
+     * // Example usage of FT.DROPINDEX to drop an index
+     * await GlideFt.dropindex(client, "json_idx1"); // "OK"
+     * ```
+     */
+    static async dropindex(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+    ): Promise<"OK"> {
+        const args: GlideString[] = ["FT.DROPINDEX", indexName];
 
         return _handleCustomCommand(client, args, {
             decoder: Decoder.String,
