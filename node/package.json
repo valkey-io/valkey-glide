@@ -20,7 +20,7 @@
         "glide-rs"
     ],
     "scripts": {
-        "build": "npm run build-internal && npm run build-protobuf && npm run build-external",
+        "build": "npm run prereq && npm run build-internal && npm run build-protobuf && npm run build-external",
         "build:release": "npm run build-internal:release && npm run build-protobuf && npm run build-external:release",
         "build:benchmark": "npm run build-internal:benchmark && npm run build-protobuf && npm run build-external",
         "build-internal": "cd rust-client && npm run build",
@@ -30,14 +30,17 @@
         "build-external:release": "rm -rf build-ts && tsc --stripInternal",
         "build-protobuf": "npm run compile-protobuf-files && npm run fix-protobuf-file",
         "compile-protobuf-files": "cd src && pbjs -t static-module -o ProtobufMessage.js ../../glide-core/src/protobuf/*.proto && pbts -o ProtobufMessage.d.ts ProtobufMessage.js",
+        "clean": "rm -rf build-ts rust-client/target docs glide-logs rust-client/glide-rs.*.node rust-client/index.* src/ProtobufMessage.*",
         "fix-protobuf-file": "replace 'this\\.encode\\(message, writer\\)\\.ldelim' 'this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim' src/ProtobufMessage.js",
         "test": "npm run build-test-utils && jest --verbose --runInBand --testPathIgnorePatterns='ServerModules'",
-        "test-modules": "npm run build-test-utils && jest --verbose --runInBand --testPathPattern='ServerModules'",
+        "test-minimum": "npm run build-test-utils && jest --verbose --runInBand --testNamePattern='^(.(?!(GlideJson|GlideFt|pubsub|kill)))*$'",
+        "test-modules": "npm run build-test-utils && jest --verbose --runInBand --testNamePattern='(GlideJson|GlideFt)'",
         "build-test-utils": "cd ../utils && npm i && npm run build",
         "lint:fix": "npm run install-linting && npx eslint -c ../eslint.config.mjs --fix && npm run prettier:format",
         "lint": "npm run install-linting && npx eslint -c ../eslint.config.mjs && npm run prettier:check:ci",
         "install-linting": "cd ../ & npm install",
         "prepack": "npmignore --auto",
+        "prereq": "git submodule update --init --recursive && npm install",
         "prettier:check:ci": "npx prettier --check . --ignore-unknown '!**/*.{js,d.ts}'",
         "prettier:format": "npx prettier --write . --ignore-unknown '!**/*.{js,d.ts}'"
     },
