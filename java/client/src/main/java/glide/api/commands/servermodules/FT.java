@@ -698,6 +698,186 @@ public class FT {
     }
 
     /**
+     * Parse a query and return information about how that query was parsed.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name to search into.
+     * @param query The text query to search.
+     * @return A <code>string</code> representing the execution plan.
+     * @example
+     *     <pre>{@code
+     * FT.explain(client, "myIndex", "*=>[KNN 2 @VEC $query_vec]").get();   // "Vector"
+     * }</pre>
+     */
+    public static CompletableFuture<String> explain(
+            @NonNull BaseClient client, @NonNull String indexName, @NonNull String query) {
+        var args = concatenateArrays(new GlideString[] {gs("FT.EXPLAIN"), gs(indexName), gs(query)});
+        return executeCommand(client, args, false)
+                .thenApply(result -> ((GlideString) result).toString());
+    }
+
+    /**
+     * Parse a query and return information about how that query was parsed.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name to search into.
+     * @param query The text query to search.
+     * @return A <code>string</code> representing the execution plan.
+     * @example
+     *     <pre>{@code
+     * FT.explain(client, gs("myIndex"), gs("*=>[KNN 2 @VEC $query_vec]")).get();   // "Vector"
+     * }</pre>
+     */
+    public static CompletableFuture<GlideString> explain(
+            @NonNull BaseClient client, @NonNull GlideString indexName, @NonNull GlideString query) {
+        var args = concatenateArrays(new GlideString[] {gs("FT.EXPLAIN"), indexName, query});
+        return executeCommand(client, args, false);
+    }
+
+    /**
+     * Parse a query and return information about how that query was parsed.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name to search into.
+     * @param query The text query to search.
+     * @param dialect The dialect version under which to execute the query. If not specified, the
+     *     query executes under the default dialect version set during module initial loading.
+     * @return A <code>string</code> representing the execution plan.
+     * @example
+     *     <pre>{@code
+     * FT.explain(client, "myIndex", "*=>[KNN 2 @VEC $query_vec]", 12.2).get();   // "Vector"
+     * }</pre>
+     */
+    public static CompletableFuture<String> explain(
+            @NonNull BaseClient client,
+            @NonNull String indexName,
+            @NonNull String query,
+            @NonNull Double dialect) {
+        var args =
+                concatenateArrays(
+                        new GlideString[] {gs("FT.EXPLAIN"), gs(indexName), gs(query), gs(dialect.toString())});
+        return executeCommand(client, args, false)
+                .thenApply(result -> ((GlideString) result).toString());
+    }
+
+    /**
+     * Parse a query and return information about how that query was parsed.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name to search into.
+     * @param query The text query to search.
+     * @param dialect The dialect version under which to execute the query. If not specified, the
+     *     query executes under the default dialect version set during module initial loading.
+     * @return A <code>string</code> representing the execution plan.
+     * @example
+     *     <pre>{@code
+     * FT.explain(client, gs("myIndex"), gs("*=>[KNN 2 @VEC $query_vec]"), 12.2).get();   // "Vector"
+     * }</pre>
+     */
+    public static CompletableFuture<GlideString> explain(
+            @NonNull BaseClient client,
+            @NonNull GlideString indexName,
+            @NonNull GlideString query,
+            @NonNull Double dialect) {
+        var args =
+                concatenateArrays(
+                        new GlideString[] {gs("FT.EXPLAIN"), indexName, query, gs(dialect.toString())});
+        return executeCommand(client, args, false);
+    }
+
+    /**
+     * Same as the {@see FT.EXPLAIN} except that the results are displayed in a different format. More useful with cli.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name to search into.
+     * @param query The text query to search.
+     * @return A <code>string</code> representing the execution plan.
+     * @example
+     *     <pre>{@code
+     * FT.explaincli(client, "myIndex", "*=>[KNN 2 @VEC $query_vec]").get();   // "Vector"
+     * }</pre>
+     */
+    public static CompletableFuture<String[]> explaincli(
+            @NonNull BaseClient client, @NonNull String indexName, @NonNull String query) {
+        CompletableFuture<GlideString[]> r = explaincli(client, gs(indexName), gs(query));
+        return r.thenApply(ret -> Arrays.stream(ret).map(e -> e.getString()).toArray(String[]::new));
+    }
+
+    /**
+     * Return the execution plan for a complex query but formatted for easier reading without using
+     * redis-cli --raw
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name to search into.
+     * @param query The text query to search.
+     * @return A <code>string</code> representing the execution plan.
+     * @example
+     *     <pre>{@code
+     * FT.explaincli(client, gs("myIndex"), gs("*=>[KNN 2 @VEC $query_vec]")).get();   // "Vector"
+     * }</pre>
+     */
+    public static CompletableFuture<GlideString[]> explaincli(
+            @NonNull BaseClient client, @NonNull GlideString indexName, @NonNull GlideString query) {
+        var args = concatenateArrays(new GlideString[] {gs("FT.EXPLAINCLI"), indexName, query});
+        CompletableFuture<GlideString[]> result =
+                ((GlideClusterClient) client)
+                        .customCommand(args)
+                        .thenApply(ClusterValue::getSingleValue)
+                        .thenApply(ret -> (Object[]) ret)
+                        .thenApply(ret -> castArray(ret, GlideString.class));
+        return result;
+    }
+
+    /**
+     * Return the execution plan for a complex query but formatted for easier reading without using
+     * redis-cli --raw
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name to search into.
+     * @param query The text query to search.
+     * @param dialect The dialect version under which to execute the query. If not specified, the
+     *     query executes under the default dialect version set during module initial loading.
+     * @return A <code>string</code> representing the execution plan.
+     * @example
+     *     <pre>{@code
+     * FT.explaincli(client, "myIndex", "*=>[KNN 2 @VEC $query_vec]", 12.2).get();   // "Vector"
+     * }</pre>
+     */
+    public static CompletableFuture<String[]> explaincli(
+            @NonNull BaseClient client, @NonNull String indexName, @NonNull String query, @NonNull Double dialect) {
+        CompletableFuture<GlideString[]> result = explaincli(client, gs(indexName), gs(query), dialect);
+        return result.thenApply(ret -> Arrays.stream(ret).map(e -> e.getString()).toArray(String[]::new));
+    }
+
+    /**
+     * Return the execution plan for a complex query but formatted for easier reading without using
+     * redis-cli --raw.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name to search into.
+     * @param query The text query to search.
+     * @param dialect The dialect version under which to execute the query. If not specified, the
+     *     query executes under the default dialect version set during module initial loading.
+     * @param options The additional parameter for the command - see {@link FTCreateOptions}.
+     * @return A <code>string</code> representing the execution plan.
+     * @example
+     *     <pre>{@code
+     * FT.explaincli(client, gs("myIndex"), gs("*=>[KNN 2 @VEC $query_vec]"), 12.2).get();   // "Vector"
+     * }</pre>
+     */
+    public static CompletableFuture<GlideString[]> explaincli(
+            @NonNull BaseClient client, @NonNull GlideString indexName, @NonNull GlideString query, @NonNull Double dialect) {
+        var args = concatenateArrays(new GlideString[] {gs("FT.EXPLAINCLI"), indexName, query, gs(dialect.toString())});
+        CompletableFuture<GlideString[]> result =
+                ((GlideClusterClient) client)
+                        .customCommand(args)
+                        .thenApply(ClusterValue::getSingleValue)
+                        .thenApply(ret -> (Object[]) ret)
+                        .thenApply(ret -> castArray(ret, GlideString.class));
+        return result;
+    }
+
+    /**
      * A wrapper for custom command API.
      *
      * @param client The client to execute the command.

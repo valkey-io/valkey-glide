@@ -825,4 +825,70 @@ public class VectorSearchTests {
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getMessage().contains("Index does not exist"));
     }
+
+    @SneakyThrows
+    @Test
+    public void ft_explain_and_explaincli() {
+        String prefix = "{" + UUID.randomUUID() + "}:";
+        String index = prefix + "index";
+
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {
+                                    new FieldInfo("vec", "VEC", VectorFieldHnsw.builder(DistanceMetric.L2, 2).build())
+                                },
+                                FTCreateOptions.builder()
+                                        .indexType(IndexType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
+                        .get());
+
+        assertEquals(
+                1L,
+                client
+                        .hset(
+                                gs(prefix + 0),
+                                Map.of(
+                                        gs("vec"),
+                                        gs(
+                                                new byte[] {
+                                                    (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0,
+                                                    (byte) 0
+                                                })))
+                        .get());
+        assertEquals(
+                1L,
+                client
+                        .hset(
+                                gs(prefix + 1),
+                                Map.of(
+                                        gs("vec"),
+                                        gs(
+                                                new byte[] {
+                                                    (byte) 0,
+                                                    (byte) 0,
+                                                    (byte) 0,
+                                                    (byte) 0,
+                                                    (byte) 0,
+                                                    (byte) 0,
+                                                    (byte) 0x80,
+                                                    (byte) 0xBF
+                                                })))
+                        .get());
+
+        assertTrue(
+                FT.explain(client, index, "*=>[KNN 2 @VEC $query_vec]", 12.2).get().contains("Vector"));
+
+        assertTrue(FT.explain(client, index, "*=>[KNN 2 @VEC $query_vec]").get().contains("Vector"));
+
+        Object[] meow = FT.explaincli(client, gs(index), gs("*=>[KNN 2 @VEC $query_vec]")).get();
+
+        // assertTrue(FT.explaincli(client, index, "*=>[KNN 2 @VEC
+        // $query_vec]").get().contains("Vector"));
+
+        // with GlideString
+    }
 }
