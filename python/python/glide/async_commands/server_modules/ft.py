@@ -31,8 +31,8 @@ async def create(
 
     Args:
         client (TGlideClient): The client to execute the command.
-        indexName (TEncodable): The index name for the index to be created
-        schema (List[Field]): The fields of the index schema, specifying the fields and their types.
+        indexName (TEncodable): The index name.
+        schema (List[Field]): Fields to populate into the index. Equivalent to `SCHEMA` block in the module API.
         options (Optional[FtCreateOptions]): Optional arguments for the FT.CREATE command. See `FtCreateOptions`.
 
     Returns:
@@ -40,13 +40,9 @@ async def create(
 
     Examples:
         >>> from glide import ft
-        >>> schema: List[Field] = []
-        >>> field: TextField = TextField("title")
-        >>> schema.append(field)
-        >>> prefixes: List[str] = []
-        >>> prefixes.append("blog:post:")
-        >>> index = "idx"
-        >>> result = await ft.create(glide_client, index, schema, FtCreateOptions(DataType.HASH, prefixes))
+        >>> schema: List[Field] = [TextField("title")]
+        >>> prefixes: List[str] = ["blog:post:"]
+        >>> result = await ft.create(glide_client, "my_idx1", schema, FtCreateOptions(DataType.HASH, prefixes))
             'OK'  # Indicates successful creation of index named 'idx'
     """
     args: List[TEncodable] = [CommandNames.FT_CREATE, indexName]
