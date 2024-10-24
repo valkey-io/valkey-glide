@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 import lombok.Builder;
+import lombok.NonNull;
 
 /**
  * Additional arguments for {@link FT#aggregate(BaseClient, String, String, FTAggregateOptions)}
@@ -79,19 +80,19 @@ public class FTAggregateOptions {
             return this;
         }
 
-        public FTAggregateOptionsBuilder loadFields(String[] fields) {
+        public FTAggregateOptionsBuilder loadFields(@NonNull String[] fields) {
             loadFields = toGlideStringArray(fields);
             loadAll = false;
             return this;
         }
 
-        public FTAggregateOptionsBuilder loadFields(GlideString[] fields) {
+        public FTAggregateOptionsBuilder loadFields(@NonNull GlideString[] fields) {
             loadFields = fields;
             loadAll = false;
             return this;
         }
 
-        public FTAggregateOptionsBuilder addExpression(FTAggregateExpression expression) {
+        public FTAggregateOptionsBuilder addExpression(@NonNull FTAggregateExpression expression) {
             if (expressions == null) expressions = new ArrayList<>();
             expressions.add(expression);
             return this;
@@ -138,11 +139,11 @@ public class FTAggregateOptions {
     public static class Filter extends FTAggregateExpression {
         private final GlideString expression;
 
-        public Filter(GlideString expression) {
+        public Filter(@NonNull GlideString expression) {
             this.expression = expression;
         }
 
-        public Filter(String expression) {
+        public Filter(@NonNull String expression) {
             this.expression = gs(expression);
         }
 
@@ -160,22 +161,22 @@ public class FTAggregateOptions {
         private final GlideString[] properties;
         private final Reducer[] reducers;
 
-        public GroupBy(GlideString[] properties, Reducer[] reducers) {
+        public GroupBy(@NonNull GlideString[] properties, @NonNull Reducer[] reducers) {
             this.properties = properties;
             this.reducers = reducers;
         }
 
-        public GroupBy(String[] properties, Reducer[] reducers) {
+        public GroupBy(@NonNull String[] properties, @NonNull Reducer[] reducers) {
             this.properties = toGlideStringArray(properties);
             this.reducers = reducers;
         }
 
-        public GroupBy(GlideString[] properties) {
+        public GroupBy(@NonNull GlideString[] properties) {
             this.properties = properties;
             this.reducers = new Reducer[0];
         }
 
-        public GroupBy(String[] properties) {
+        public GroupBy(@NonNull String[] properties) {
             this.properties = toGlideStringArray(properties);
             this.reducers = new Reducer[0];
         }
@@ -199,25 +200,25 @@ public class FTAggregateOptions {
             private final GlideString[] args;
             private final String alias;
 
-            public Reducer(String function, GlideString[] args, String alias) {
+            public Reducer(@NonNull String function, @NonNull GlideString[] args, @NonNull String alias) {
                 this.function = function;
                 this.args = args;
                 this.alias = alias;
             }
 
-            public Reducer(String function, GlideString[] args) {
+            public Reducer(@NonNull String function, @NonNull GlideString[] args) {
                 this.function = function;
                 this.args = args;
                 this.alias = null;
             }
 
-            public Reducer(String function, String[] args, String alias) {
+            public Reducer(@NonNull String function, @NonNull String[] args, @NonNull String alias) {
                 this.function = function;
                 this.args = toGlideStringArray(args);
                 this.alias = alias;
             }
 
-            public Reducer(String function, String[] args) {
+            public Reducer(@NonNull String function, @NonNull String[] args) {
                 this.function = function;
                 this.args = toGlideStringArray(args);
                 this.alias = null;
@@ -240,12 +241,12 @@ public class FTAggregateOptions {
         private final SortProperty[] properties;
         private final Integer max;
 
-        public SortBy(SortProperty[] properties) {
+        public SortBy(@NonNull SortProperty[] properties) {
             this.properties = properties;
             this.max = null;
         }
 
-        public SortBy(SortProperty[] properties, int max) {
+        public SortBy(@NonNull SortProperty[] properties, int max) {
             this.properties = properties;
             this.max = max;
         }
@@ -273,12 +274,12 @@ public class FTAggregateOptions {
             private final GlideString property;
             private final SortOrder order;
 
-            public SortProperty(GlideString property, SortOrder order) {
+            public SortProperty(@NonNull GlideString property, @NonNull SortOrder order) {
                 this.property = property;
                 this.order = order;
             }
 
-            public SortProperty(String property, SortOrder order) {
+            public SortProperty(@NonNull String property, @NonNull SortOrder order) {
                 this.property = gs(property);
                 this.order = order;
             }
@@ -297,12 +298,12 @@ public class FTAggregateOptions {
         private final GlideString expression;
         private final GlideString alias;
 
-        public Apply(GlideString expression, GlideString alias) {
+        public Apply(@NonNull GlideString expression, @NonNull GlideString alias) {
             this.expression = expression;
             this.alias = alias;
         }
 
-        public Apply(String expression, String alias) {
+        public Apply(@NonNull String expression, @NonNull String alias) {
             this.expression = gs(expression);
             this.alias = gs(alias);
         }
