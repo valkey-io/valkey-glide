@@ -1,9 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
-import static glide.TestConfiguration.CLUSTER_PORTS;
 import static glide.TestConfiguration.SERVER_VERSION;
-import static glide.TestConfiguration.STANDALONE_PORTS;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
@@ -103,9 +101,6 @@ import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MaxLen;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
-import glide.api.models.configuration.GlideClientConfiguration;
-import glide.api.models.configuration.GlideClusterClientConfiguration;
-import glide.api.models.configuration.NodeAddress;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.util.Arrays;
@@ -149,19 +144,10 @@ public class SharedCommandTests {
     @SneakyThrows
     public static void init() {
         standaloneClient =
-                GlideClient.createClient(
-                                GlideClientConfiguration.builder()
-                                        .address(NodeAddress.builder().port(STANDALONE_PORTS[0]).build())
-                                        .requestTimeout(5000)
-                                        .build())
-                        .get();
+                GlideClient.createClient(commonClientConfig().requestTimeout(5000).build()).get();
 
         clusterClient =
-                GlideClusterClient.createClient(
-                                GlideClusterClientConfiguration.builder()
-                                        .address(NodeAddress.builder().port(CLUSTER_PORTS[0]).build())
-                                        .requestTimeout(5000)
-                                        .build())
+                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(5000).build())
                         .get();
 
         clients = List.of(Arguments.of(standaloneClient), Arguments.of(clusterClient));
@@ -1133,6 +1119,7 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void non_UTF8_GlideString_map_of_arrays(BaseClient client) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"));
         byte[] nonUTF8Bytes = new byte[] {(byte) 0xEE};
         GlideString key = gs(UUID.randomUUID().toString());
         GlideString nonUTF8Key = gs(new byte[] {(byte) 0xFE});

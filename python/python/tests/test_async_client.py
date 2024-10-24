@@ -1,4 +1,5 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+# mypy: disable_error_code="arg-type"
 
 from __future__ import annotations
 
@@ -309,6 +310,40 @@ class TestCommands:
         result = cast(Dict[bytes, bytes], await glide_client.custom_command(["HELLO"]))
 
         assert int(result[b"proto"]) == 2
+
+    # Testing the inflight_requests_limit parameter in glide. Sending the allowed amount + 1 of requests
+    # to glide, using blocking commands, and checking the N+1 request returns immediately with error.
+    @pytest.mark.parametrize("cluster_mode", [False, True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.parametrize("inflight_requests_limit", [5, 100, 1500])
+    async def test_inflight_request_limit(
+        self, cluster_mode, protocol, inflight_requests_limit, request
+    ):
+        key1 = f"{{nonexistinglist}}:1-{get_random_string(10)}"
+        test_client = await create_client(
+            request=request,
+            protocol=protocol,
+            cluster_mode=cluster_mode,
+            inflight_requests_limit=inflight_requests_limit,
+        )
+
+        tasks = []
+        for i in range(inflight_requests_limit + 1):
+            coro = test_client.blpop([key1], 0)
+            task = asyncio.create_task(coro)
+            tasks.append(task)
+
+        done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+
+        for task in done:
+            with pytest.raises(RequestError) as e:
+                await task
+            assert "maximum inflight requests" in str(e)
+
+        for task in pending:
+            task.cancel()
+
+        await test_client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -9691,7 +9726,7 @@ class TestClusterRoutes:
         route_class = SlotKeyRoute if is_slot_key else SlotIdRoute
         route_second_arg = "foo" if is_slot_key else 4000
         primary_res = await glide_client.custom_command(
-            ["CLUSTER", "NODES"], route_class(SlotType.PRIMARY, route_second_arg)
+            ["CLUSTER", "NODES"], route_class(SlotType.PRIMARY, route_second_arg)  # type: ignore
         )
         assert isinstance(primary_res, bytes)
         primary_res = primary_res.decode()
@@ -9704,7 +9739,7 @@ class TestClusterRoutes:
                 expected_primary_node_id = node_line.split(" ")[0]
 
         replica_res = await glide_client.custom_command(
-            ["CLUSTER", "NODES"], route_class(SlotType.REPLICA, route_second_arg)
+            ["CLUSTER", "NODES"], route_class(SlotType.REPLICA, route_second_arg)  # type: ignore
         )
         assert isinstance(replica_res, bytes)
         replica_res = replica_res.decode()

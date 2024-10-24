@@ -2,10 +2,13 @@ name: Go CI
 
 on:
     push:
-        branches: [ "main" ]
+        branches:
+            - main
+            - release-*
+            - v*
         paths:
             - glide-core/src/**
-            - submodules/**
+            - glide-core/redis-rs/redis/src/**
             - go/**
             - .github/workflows/go.yml
             - .github/workflows/install-shared-dependencies/action.yml
@@ -16,7 +19,7 @@ on:
     pull_request:
         paths:
             - glide-core/src/**
-            - submodules/**
+            - glide-core/redis-rs/redis/src/**
             - go/**
             - .github/workflows/go.yml
             - .github/workflows/install-shared-dependencies/action.yml
@@ -70,8 +73,7 @@ jobs:
 
         steps:
             - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
+              
 
             - name: Set up Go ${{ matrix.go }}
               uses: actions/setup-go@v5
@@ -201,8 +203,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
+              
 
             - uses: ./.github/workflows/lint-rust
               with:

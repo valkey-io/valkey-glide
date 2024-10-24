@@ -2,10 +2,13 @@ name: Java CI
 
 on:
     push:
-        branches: ["main"]
+        branches:
+            - main
+            - release-*
+            - v*
         paths:
             - glide-core/src/**
-            - submodules/**
+            - glide-core/redis-rs/redis/src/**
             - java/**
             - .github/workflows/java.yml
             - .github/workflows/install-shared-dependencies/action.yml
@@ -16,7 +19,7 @@ on:
     pull_request:
         paths:
             - glide-core/src/**
-            - submodules/**
+            - glide-core/redis-rs/redis/src/**
             - java/**
             - .github/workflows/java.yml
             - .github/workflows/install-shared-dependencies/action.yml
@@ -57,10 +60,10 @@ jobs:
                 engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
                 host:
                     - {
-                        OS: ubuntu,
-                        RUNNER: ubuntu-latest,
-                        TARGET: x86_64-unknown-linux-gnu
-                    }
+                          OS: ubuntu,
+                          RUNNER: ubuntu-latest,
+                          TARGET: x86_64-unknown-linux-gnu,
+                      }
                     # - {
                     #     OS: macos,
                     #     RUNNER: macos-latest,
@@ -71,8 +74,7 @@ jobs:
 
         steps:
             - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
+              
 
             - uses: gradle/actions/wrapper-validation@v3
 
@@ -188,10 +190,47 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
+              
 
             - uses: ./.github/workflows/lint-rust
               with:
                   cargo-toml-folder: ./java
               name: lint java rust
+
+    test-modules:
+        if: (github.repository_owner == 'valkey-io' && github.event_name == 'workflow_dispatch') || github.event.pull_request.head.repo.owner.login == 'valkey-io'
+        environment: AWS_ACTIONS
+        name: Modules Tests
+        runs-on: [self-hosted, linux, ARM64]
+        timeout-minutes: 15
+        steps:
+            - name: Setup self-hosted runner access
+              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
+
+            - uses: actions/checkout@v4
+              
+
+            - name: Set up JDK
+              uses: actions/setup-java@v4
+              with:
+                  distribution: "temurin"
+                  java-version: 17
+
+            - name: Install protoc (protobuf)
+              uses: arduino/setup-protoc@v3
+              with:
+                  version: "26.1"
+                  repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Test java wrapper
+              working-directory: java
+              run: ./gradlew :integTest:modulesTest -Dcluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -Dtls=true
+
+            - name: Upload test reports
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: test-reports-modules
+                  path: |
+                      java/integTest/build/reports/**

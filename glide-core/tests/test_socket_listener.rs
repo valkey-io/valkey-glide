@@ -172,7 +172,7 @@ mod socket_listener {
     }
 
     fn read_from_socket(buffer: &mut Vec<u8>, socket: &mut UnixStream) -> usize {
-        buffer.resize(100, 0_u8);
+        buffer.resize(300, 0_u8);
         socket.read(buffer).unwrap()
     }
 
@@ -346,6 +346,23 @@ mod socket_listener {
         )
     }
 
+    fn write_blpop(
+        buffer: &mut Vec<u8>,
+        socket: &mut UnixStream,
+        callback_index: u32,
+        key: &str,
+        timeout: u32,
+    ) {
+        write_command_request(
+            buffer,
+            socket,
+            callback_index,
+            vec![key.to_string().into(), timeout.to_string().into()],
+            RequestType::BLPop.into(),
+            false,
+        )
+    }
+
     fn parse_header(buffer: &[u8]) -> (u32, usize) {
         u32::decode_var(buffer).unwrap()
     }
@@ -501,8 +518,10 @@ mod socket_listener {
     #[rstest]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_working_after_socket_listener_was_dropped() {
-        let socket_path =
-            get_socket_path_from_name("test_working_after_socket_listener_was_dropped".to_string());
+        let socket_path = get_socket_path_from_name(format!(
+            "{}_test_working_after_socket_listener_was_dropped",
+            std::process::id()
+        ));
         close_socket(&socket_path);
         // create a socket listener and drop it, to simulate a panic in a previous iteration.
         Builder::new_current_thread()
@@ -511,6 +530,8 @@ mod socket_listener {
             .unwrap()
             .block_on(async {
                 let _ = UnixListener::bind(socket_path.clone()).unwrap();
+                // UDS sockets require explicit removal of the socket file
+                close_socket(&socket_path);
             });
 
         const CALLBACK_INDEX: u32 = 99;
@@ -537,9 +558,10 @@ mod socket_listener {
     #[rstest]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_multiple_listeners_competing_for_the_socket() {
-        let socket_path = get_socket_path_from_name(
-            "test_multiple_listeners_competing_for_the_socket".to_string(),
-        );
+        let socket_path = get_socket_path_from_name(format!(
+            "{}_test_multiple_listeners_competing_for_the_socket",
+            std::process::id()
+        ));
         close_socket(&socket_path);
         let server = Arc::new(RedisServer::new(ServerType::Tcp { tls: false }));
 
@@ -1031,6 +1053,41 @@ mod socket_listener {
         for i in 0..NUMBER_OF_THREADS {
             assert_eq!(State::ReceivedValue, results[i]);
         }
+    }
+
+    // This test checks that the inflight requests limit is working. Using the default value (1000),
+    // sending this amount + 1 of blocking commands and assert the +1 request ID to return with error while
+    // the prev requests still block in the server after the first blocking request.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_limiting_inflight_requests(
+        #[values(RedisType::Cluster, RedisType::Standalone)] use_cluster: RedisType,
+    ) {
+        let default_max_inflight_requests = 1000;
+        let test_basics = setup_test_basics(Tls::NoTls, TestServer::Unique, use_cluster);
+
+        let mut write_blpop_socket = test_basics.socket.try_clone().unwrap();
+
+        for i in 0..(default_max_inflight_requests + 1) {
+            let mut buffer = Vec::with_capacity(1);
+            write_blpop(
+                &mut buffer,
+                &mut write_blpop_socket,
+                i,
+                "nonexistingkeylist",
+                0,
+            );
+        }
+
+        // Assert the last request failes with RequestError as glide already reached default_max_inflight_requests
+        let mut buffer = Vec::with_capacity(1);
+        assert_error_response(
+            &mut buffer,
+            &mut write_blpop_socket,
+            default_max_inflight_requests,
+            ResponseType::RequestError,
+        );
     }
 
     #[rstest]

@@ -2,11 +2,14 @@ name: C# tests
 
 on:
     push:
-        branches: ["main"]
+        branches:
+            - main
+            - release-*
+            - v*
         paths:
             - csharp/**
             - glide-core/src/**
-            - submodules/**
+            - glide-core/redis-rs/redis/src/**
             - .github/workflows/csharp.yml
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
@@ -17,7 +20,7 @@ on:
         paths:
             - csharp/**
             - glide-core/src/**
-            - submodules/**
+            - glide-core/redis-rs/redis/src/**
             - .github/workflows/csharp.yml
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
@@ -73,8 +76,7 @@ jobs:
 
         steps:
             - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
+              
 
             - name: Set up dotnet ${{ matrix.dotnet }}
               uses: actions/setup-dotnet@v4
@@ -119,8 +121,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
+              
 
             - uses: ./.github/workflows/lint-rust
               with:
