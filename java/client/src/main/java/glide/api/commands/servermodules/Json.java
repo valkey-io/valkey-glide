@@ -2,6 +2,7 @@
 package glide.api.commands.servermodules;
 
 import static glide.api.models.GlideString.gs;
+import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 
 import glide.api.BaseClient;
@@ -22,6 +23,7 @@ public class Json {
     private static final String JSON_PREFIX = "JSON.";
     private static final String JSON_SET = JSON_PREFIX + "SET";
     private static final String JSON_GET = JSON_PREFIX + "GET";
+    private static final String JSON_MGET = JSON_PREFIX + "MGET";
     private static final String JSON_ARRAPPEND = JSON_PREFIX + "ARRAPPEND";
     private static final String JSON_ARRINSERT = JSON_PREFIX + "ARRINSERT";
     private static final String JSON_ARRLEN = JSON_PREFIX + "ARRLEN";
@@ -189,11 +191,12 @@ public class Json {
      *           <ul>
      *             <li>For JSONPath (path starts with <code>$</code>): Returns a stringified JSON list
      *                 replies for every possible path, or a string representation of an empty array,
-     *                 if path doesn't exist. If <code>key</code> doesn't exist, returns None.
+     *                 if path doesn't exist. If <code>key</code> doesn't exist, returns <code>null
+     *                 </code>.
      *             <li>For legacy path (path doesn't start with <code>$</code>): Returns a string
      *                 representation of the value in <code>paths</code>. If <code>paths</code>
      *                 doesn't exist, an error is raised. If <code>key</code> doesn't exist, returns
-     *                 None.
+     *                 <code>null</code>.
      *           </ul>
      *       <li>If multiple paths are given: Returns a stringified JSON, in which each path is a key,
      *           and it's corresponding value, is the value as if the path was executed in the command
@@ -226,11 +229,12 @@ public class Json {
      *           <ul>
      *             <li>For JSONPath (path starts with <code>$</code>): Returns a stringified JSON list
      *                 replies for every possible path, or a string representation of an empty array,
-     *                 if path doesn't exist. If <code>key</code> doesn't exist, returns None.
+     *                 if path doesn't exist. If <code>key</code> doesn't exist, returns <code>null
+     *                 </code>.
      *             <li>For legacy path (path doesn't start with <code>$</code>): Returns a string
      *                 representation of the value in <code>paths</code>. If <code>paths</code>
      *                 doesn't exist, an error is raised. If <code>key</code> doesn't exist, returns
-     *                 None.
+     *                 <code>null</code>.
      *           </ul>
      *       <li>If multiple paths are given: Returns a stringified JSON, in which each path is a key,
      *           and it's corresponding value, is the value as if the path was executed in the command
@@ -317,11 +321,12 @@ public class Json {
      *           <ul>
      *             <li>For JSONPath (path starts with <code>$</code>): Returns a stringified JSON list
      *                 replies for every possible path, or a string representation of an empty array,
-     *                 if path doesn't exist. If <code>key</code> doesn't exist, returns None.
+     *                 if path doesn't exist. If <code>key</code> doesn't exist, returns <code>null
+     *                 </code>.
      *             <li>For legacy path (path doesn't start with <code>$</code>): Returns a string
      *                 representation of the value in <code>paths</code>. If <code>paths</code>
      *                 doesn't exist, an error is raised. If <code>key</code> doesn't exist, returns
-     *                 None.
+     *                 <code>null</code>.
      *           </ul>
      *       <li>If multiple paths are given: Returns a stringified JSON, in which each path is a key,
      *           and it's corresponding value, is the value as if the path was executed in the command
@@ -363,11 +368,12 @@ public class Json {
      *           <ul>
      *             <li>For JSONPath (path starts with <code>$</code>): Returns a stringified JSON list
      *                 replies for every possible path, or a string representation of an empty array,
-     *                 if path doesn't exist. If <code>key</code> doesn't exist, returns None.
+     *                 if path doesn't exist. If <code>key</code> doesn't exist, returns <code>null
+     *                 </code>.
      *             <li>For legacy path (path doesn't start with <code>$</code>): Returns a string
      *                 representation of the value in <code>paths</code>. If <code>paths</code>
      *                 doesn't exist, an error is raised. If <code>key</code> doesn't exist, returns
-     *                 None.
+     *                 <code>null</code>.
      *           </ul>
      *       <li>If multiple paths are given: Returns a stringified JSON, in which each path is a key,
      *           and it's corresponding value, is the value as if the path was executed in the command
@@ -394,6 +400,77 @@ public class Json {
         return executeCommand(
                 client,
                 new ArgsBuilder().add(gs(JSON_GET)).add(key).add(options.toArgs()).add(paths).toArray());
+    }
+
+    /**
+     * Retrieves the JSON values at the specified <code>path</code> stored at multiple <code>keys
+     * </code>.
+     *
+     * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
+     *     map to different hash slots.
+     * @param client The client to execute the command.
+     * @param keys The keys of the JSON documents.
+     * @param path The path within the JSON documents.
+     * @return An array with requested values for each key.
+     *     <ul>
+     *       <li>For JSONPath (path starts with <code>$</code>): Returns a stringified JSON list
+     *           replies for every possible path, or a string representation of an empty array, if
+     *           path doesn't exist.
+     *       <li>For legacy path (path doesn't start with <code>$</code>): Returns a string
+     *           representation of the value in <code>path</code>. If <code>path</code> doesn't exist,
+     *           the corresponding array element will be <code>null</code>.
+     *     </ul>
+     *     If a <code>key</code> doesn't exist, the corresponding array element will be <code>null
+     *     </code>.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc1", "$", "{\"a\": 1, \"b\": [\"one\", \"two\"]}").get();
+     * Json.set(client, "doc2", "$", "{\"a\": 1, \"c\": false}").get();
+     * var res = Json.mget(client, new String[] { "doc1", "doc2", "doc3" }, "$.c").get();
+     * assert Arrays.equals(res, new String[] { "[]", "[false]", null });
+     * }</pre>
+     */
+    public static CompletableFuture<String[]> mget(
+            @NonNull BaseClient client, @NonNull String[] keys, @NonNull String path) {
+        return Json.<Object[]>executeCommand(
+                        client, concatenateArrays(new String[] {JSON_MGET}, keys, new String[] {path}))
+                .thenApply(res -> castArray(res, String.class));
+    }
+
+    /**
+     * Retrieves the JSON values at the specified <code>path</code> stored at multiple <code>keys
+     * </code>.
+     *
+     * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
+     *     map to different hash slots.
+     * @param client The client to execute the command.
+     * @param keys The keys of the JSON documents.
+     * @param path The path within the JSON documents.
+     * @return An array with requested values for each key.
+     *     <ul>
+     *       <li>For JSONPath (path starts with <code>$</code>): Returns a stringified JSON list
+     *           replies for every possible path, or a string representation of an empty array, if
+     *           path doesn't exist.
+     *       <li>For legacy path (path doesn't start with <code>$</code>): Returns a string
+     *           representation of the value in <code>path</code>. If <code>path</code> doesn't exist,
+     *           the corresponding array element will be <code>null</code>.
+     *     </ul>
+     *     If a <code>key</code> doesn't exist, the corresponding array element will be <code>null
+     *     </code>.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc1", "$", "{\"a\": 1, \"b\": [\"one\", \"two\"]}").get();
+     * Json.set(client, "doc2", "$", "{\"a\": 1, \"c\": false}").get();
+     * var res = Json.mget(client, new GlideString[] { "doc1", "doc2", "doc3" }, gs("$.c")).get();
+     * assert Arrays.equals(res, new GlideString[] { gs("[]"), gs("[false]"), null });
+     * }</pre>
+     */
+    public static CompletableFuture<GlideString[]> mget(
+            @NonNull BaseClient client, @NonNull GlideString[] keys, @NonNull GlideString path) {
+        return Json.<Object[]>executeCommand(
+                        client,
+                        concatenateArrays(new GlideString[] {gs(JSON_MGET)}, keys, new GlideString[] {path}))
+                .thenApply(res -> castArray(res, GlideString.class));
     }
 
     /**
