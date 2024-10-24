@@ -5,6 +5,11 @@ from glide.constants import TEncodable
 from glide.async_commands.server_modules.ft_options.ft_constants import FtAggregateKeywords
 from enum import Enum
 
+class SortOrder(Enum):
+    ASC = "ASC"
+    DESC = "DESC"
+
+
 class FtAggregateClause(ABC):
     @abstractmethod
     def __init__(self):
@@ -84,11 +89,6 @@ class GroupBy(FtAggregateClause):
             for reducer in self.reducers:
                 args.extend(reducer.toArgs())
         return args
-
-
-class SortOrder(Enum):
-    ASC = "ASC"
-    DESC = "DESC"
 
 
 class SortByProperty():

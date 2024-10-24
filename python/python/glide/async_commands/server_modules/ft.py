@@ -243,4 +243,4 @@ async def aggregate(client: TGlideClient, indexName: TEncodable, query: TEncodab
     args: List[TEncodable] = [CommandNames.FT_AGGREGATE, indexName, query]
     if options:
         args.extend(options.toArgs())
-    return cast(List, client.custom_command(args))
+    return cast(Mapping, client.custom_command(args))
