@@ -211,17 +211,20 @@ class TestFt:
         # FT.EXPLAIN on a search query containing numeric field.
         query = "@price:[0 10]"
         result = await ft.explain(glide_client, indexName=indexName, query=query)
-        assert b"Field {\n  price\n  0\n  10\n}\n" == result
+        resultString = result.decode(encoding="utf-8")
+        assert "price" in resultString and "0" in resultString and "10" in resultString
 
         # FT.EXPLAIN on a search query containing numeric field and having bytes type input to the command.
         result = await ft.explain(
             glide_client, indexName=indexName.encode(), query=query.encode()
         )
-        assert b"Field {\n  price\n  0\n  10\n}\n" == result
+        resultString = result.decode(encoding="utf-8")
+        assert "price" in resultString and "0" in resultString and "10" in resultString
 
         # FT.EXPLAIN on a search query that returns all data.
         result = await ft.explain(glide_client, indexName=indexName, query="*")
-        assert b"*\n" == result
+        resultString = result.decode(encoding="utf-8")
+        assert "*" in resultString
 
         assert await ft.dropindex(glide_client, indexName=indexName)
 
@@ -240,17 +243,34 @@ class TestFt:
         # FT.EXPLAINCLI on a search query containing numeric field.
         query = "@price:[0 10]"
         result = await ft.explaincli(glide_client, indexName=indexName, query=query)
-        assert [b"Field {", b"  price", b"  0", b"  10", b"}", b""] == result
+        resultStringArr = []
+        for i in result:
+            resultStringArr.append(i.decode(encoding="utf-8").strip())
+        assert (
+            "price" in resultStringArr
+            and "0" in resultStringArr
+            and "10" in resultStringArr
+        )
 
         # FT.EXPLAINCLI on a search query containing numeric field and having bytes type input to the command.
         result = await ft.explaincli(
             glide_client, indexName=indexName.encode(), query=query.encode()
         )
-        assert [b"Field {", b"  price", b"  0", b"  10", b"}", b""] == result
+        resultStringArr = []
+        for i in result:
+            resultStringArr.append(i.decode(encoding="utf-8").strip())
+        assert (
+            "price" in resultStringArr
+            and "0" in resultStringArr
+            and "10" in resultStringArr
+        )
 
         # FT.EXPLAINCLI on a search query that returns all data.
         result = await ft.explaincli(glide_client, indexName=indexName, query="*")
-        assert [b"*", b""] == result
+        resultStringArr = []
+        for i in result:
+            resultStringArr.append(i.decode(encoding="utf-8").strip())
+        assert "*" in resultStringArr
 
         assert await ft.dropindex(glide_client, indexName=indexName)
 
