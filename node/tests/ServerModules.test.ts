@@ -793,13 +793,13 @@ describe("Server Module Tests", () => {
                 ]),
             ).toEqual("OK");
 
-            const before = await client.customCommand(["FT_LIST"]);
+            const before = await client.customCommand(["FT._LIST"]);
             expect(before).toContain(index);
 
             // DROP it
             expect(await GlideFt.dropindex(client, index)).toEqual("OK");
 
-            const after = await client.customCommand(["FT_LIST"]);
+            const after = await client.customCommand(["FT._LIST"]);
             expect(after).not.toContain(index);
 
             // dropping the index again results in an error
