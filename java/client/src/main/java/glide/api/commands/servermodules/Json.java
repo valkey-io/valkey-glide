@@ -10,8 +10,6 @@ import glide.api.GlideClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.commands.ConditionalChange;
-import glide.api.models.commands.json.JsonArrPopOptions;
-import glide.api.models.commands.json.JsonArrPopOptionsBinary;
 import glide.api.models.commands.json.JsonGetOptions;
 import glide.api.models.commands.json.JsonGetOptionsBinary;
 import glide.utils.ArgsBuilder;
@@ -712,7 +710,7 @@ public class Json {
 
     /**
      * Pops the last element from the array stored in the root of the JSON document stored at <code>
-     * key</code>. Equivalent to {@link #arrpop(BaseClient, String, JsonArrPopOptions)} with <code>
+     * key</code>. Equivalent to {@link #arrpop(BaseClient, String, String)} with <code>
      * path</code> set to <code>"."</code>.
      *
      * @param client The Valkey GLIDE client to execute the command.
@@ -735,9 +733,9 @@ public class Json {
     }
 
     /**
-     * Pops the last element from the array stored in the root of the JSON document stored at <code>
-     * key</code>. Equivalent to {@link #arrpop(BaseClient, String, JsonArrPopOptions)} with <code>
-     * path</code> set to <code>"."</code>.
+     * Pops the last element from the array located in the root of the JSON document stored at <code>
+     * key</code>. Equivalent to {@link #arrpop(BaseClient, GlideString, GlideString)} with <code>
+     * path</code> set to <code>gs(".")</code>.
      *
      * @param client The Valkey GLIDE client to execute the command.
      * @param key The <code>key</code> of the JSON document.
@@ -760,12 +758,84 @@ public class Json {
     }
 
     /**
-     * Pops the last element from the array stored in the root of the JSON document stored at <code>
-     * key</code>.
+     * Pops the last element from the array located at <code>path</code> in the JSON document stored
+     * at <code>key</code>.
      *
      * @param client The Valkey GLIDE client to execute the command.
      * @param key The <code>key</code> of the JSON document.
-     * @param options Options including the path and optional index, see {@link JsonArrPopOptions}.
+     * @param path The path within the JSON document.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
+     *           Returns an array with a strings for every possible path, representing the popped JSON
+     *           values, or <code>null</code> for JSON values matching the path that are not an array
+     *           or an empty array. If a value is not an array, its corresponding return value is
+     *           <code>"null"</code>.
+     *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
+     *           Returns a string representing the popped JSON value, or <code>null</code> if the
+     *           array at <code>path</code> is empty. If multiple paths are matched, the value from
+     *           the first matching array that is not empty is returned. If <code>path</code> doesn't
+     *           exist or the value at <code>path</code> is not an array, an error is raised.
+     *     </ul>
+     *     If <code>key</code> doesn't exist, an error is raised.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "[1, 2, true, {\"a\": 42, \"b\": 33}, \"tree\"]").get();
+     * var res = Json.arrpop(client, "doc", "$").get();
+     * assert Arrays.equals((Object[]) res, new Object[] { "\"tree\"" });
+     * res = Json.arrpop(client, "doc", ".").get();
+     * assert res.equals("{\"a\": 42, \"b\": 33}");
+     * }</pre>
+     */
+    public static CompletableFuture<Object> arrpop(
+            @NonNull BaseClient client, @NonNull String key, @NonNull String path) {
+        return executeCommand(client, new String[] {JSON_ARRPOP, key, path});
+    }
+
+    /**
+     * Pops the last element from the array located at <code>path</code> in the JSON document stored
+     * at <code>key</code>.
+     *
+     * @param client The Valkey GLIDE client to execute the command.
+     * @param key The <code>key</code> of the JSON document.
+     * @param path The path within the JSON document.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
+     *           Returns an array with a strings for every possible path, representing the popped JSON
+     *           values, or <code>null</code> for JSON values matching the path that are not an array
+     *           or an empty array. If a value is not an array, its corresponding return value is
+     *           <code>"null"</code>.
+     *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
+     *           Returns a string representing the popped JSON value, or <code>null</code> if the
+     *           array at <code>path</code> is empty. If multiple paths are matched, the value from
+     *           the first matching array that is not empty is returned. If <code>path</code> doesn't
+     *           exist or the value at <code>path</code> is not an array, an error is raised.
+     *     </ul>
+     *     If <code>key</code> doesn't exist, an error is raised.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "[1, 2, true, {\"a\": 42, \"b\": 33}, \"tree\"]").get();
+     * var res = Json.arrpop(client, gs("doc"), gs("$")).get();
+     * assert Arrays.equals((Object[]) res, new Object[] { gs("\"tree\"") });
+     * res = Json.arrpop(client, gs("doc"), gs(".")).get();
+     * assert res.equals(gs("{\"a\": 42, \"b\": 33}"));
+     * }</pre>
+     */
+    public static CompletableFuture<Object> arrpop(
+            @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString path) {
+        return executeCommand(client, new GlideString[] {gs(JSON_ARRPOP), key, path});
+    }
+
+    /**
+     * Pops an element from the array located at <code>path</code> in the JSON document stored at
+     * <code>key</code>.
+     *
+     * @param client The Valkey GLIDE client to execute the command.
+     * @param key The <code>key</code> of the JSON document.
+     * @param path The path within the JSON document.
+     * @param index The index of the element to pop. Out of boundary indexes are rounded to their
+     *     respective array boundaries.
      * @return
      *     <ul>
      *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
@@ -784,34 +854,28 @@ public class Json {
      *     <pre>{@code
      * String doc = "{\"a\": [1, 2, true], \"b\": {\"a\": [3, 4, [\"value\", 3, false], 5], \"c\": {\"a\": 42}}}";
      * Json.set(client, "doc", "$", doc).get();
-     * var res = Json.arrpop(client, "doc", JsonArrPopOptions.builder().path("$.a").index(1).build()).get();
+     * var res = Json.arrpop(client, "doc", "$.a", 1).get();
      * assert res.equals("2"); // Pop second element from array at path `$.a`
      *
-     * res = Json.arrpop(client, "doc", JsonArrPopOptions.build().path("$..a").build()).get();
-     * assert Arrays.equals(new Object[] { "true", "5", null }); / Pop last elements from all arrays matching path `..a`
-     *
-     * res = Json.arrpop(client, "doc", JsonArrPopOptions.build().path("..a").build()).get();
-     * assert res.equals("1"); // First match popped (from array at path `$.a`)
-     *
      * Json.set(client, "doc", "$", "[[], [\"a\"], [\"a\", \"b\", \"c\"]]").get();
-     * res = Json.arrpop(client, "doc", JsonArrPopOptions.builder().path(".").index(-1).build()).get());
+     * res = Json.arrpop(client, "doc", ".", -1).get());
      * assert res.equals("[\"a\", \"b\", \"c\"]"); // Pop last elements at path `.`
      * }</pre>
      */
     public static CompletableFuture<Object> arrpop(
-            @NonNull BaseClient client, @NonNull String key, @NonNull JsonArrPopOptions options) {
-        return executeCommand(
-                client, concatenateArrays(new String[] {JSON_ARRPOP, key}, options.toArgs()));
+            @NonNull BaseClient client, @NonNull String key, @NonNull String path, long index) {
+        return executeCommand(client, new String[] {JSON_ARRPOP, key, path, Long.toString(index)});
     }
 
     /**
-     * Pops the last element from the array stored in the root of the JSON document stored at <code>
-     * key</code>.
+     * Pops an element from the array located at <code>path</code> in the JSON document stored at
+     * <code>key</code>.
      *
      * @param client The Valkey GLIDE client to execute the command.
      * @param key The <code>key</code> of the JSON document.
-     * @param options Options including the path and optional index, see {@link
-     *     JsonArrPopOptionsBinary}.
+     * @param path The path within the JSON document.
+     * @param index The index of the element to pop. Out of boundary indexes are rounded to their
+     *     respective array boundaries.
      * @return
      *     <ul>
      *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
@@ -830,26 +894,18 @@ public class Json {
      *     <pre>{@code
      * String doc = "{\"a\": [1, 2, true], \"b\": {\"a\": [3, 4, [\"value\", 3, false], 5], \"c\": {\"a\": 42}}}";
      * Json.set(client, "doc", "$", doc).get();
-     * var res = Json.arrpop(client, gs("doc"), JsonArrPopOptionsBinary.builder().path(gs("$.a")).index(1).build()).get();
-     * assert res.equals(gs("2")); // Pop second element from array at path `$.a`
-     *
-     * res = Json.arrpop(client, gs("doc"), JsonArrPopOptionsBinary.build().path(gs("$..a")).build()).get();
-     * assert Arrays.equals(new Object[] { gs("true"), gs("5"), null }); / Pop last elements from all arrays matching path `..a`
-     *
-     * res = Json.arrpop(client, gs("doc"), JsonArrPopOptionsBinary.build().path(gs("..a")).build()).get();
-     * assert res.equals(gs("1")); // First match popped (from array at path `$.a`)
+     * var res = Json.arrpop(client, gs("doc"), gs("$.a"), 1).get();
+     * assert res.equals("2"); // Pop second element from array at path `$.a`
      *
      * Json.set(client, "doc", "$", "[[], [\"a\"], [\"a\", \"b\", \"c\"]]").get();
-     * res = Json.arrpop(client, gs("doc"), JsonArrPopOptionsBinary.builder().path(gs(".")).index(-1).build()).get());
+     * res = Json.arrpop(client, gs("doc"), gs("."), -1).get());
      * assert res.equals(gs("[\"a\", \"b\", \"c\"]")); // Pop last elements at path `.`
      * }</pre>
      */
     public static CompletableFuture<Object> arrpop(
-            @NonNull BaseClient client,
-            @NonNull GlideString key,
-            @NonNull JsonArrPopOptionsBinary options) {
+            @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString path, long index) {
         return executeCommand(
-                client, concatenateArrays(new GlideString[] {gs(JSON_ARRPOP), key}, options.toArgs()));
+                client, new GlideString[] {gs(JSON_ARRPOP), key, path, gs(Long.toString(index))});
     }
 
     /**
