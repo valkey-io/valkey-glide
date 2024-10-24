@@ -483,6 +483,16 @@ public class FT {
      * @param options Querying and profiling parameters - see {@link FTProfileOptions}.
      * @return A two-element array. The first element contains results of query being profiled, the
      *     second element stores profiling information.
+     * @example
+     *     <pre>{@code
+     * var options = FTSearchOptions.builder().params(Map.of(
+     *         gs("query_vec"),
+     *         gs(new byte[] { (byte) 0, (byte) 0, (byte) 0, (byte) 0 })))
+     *     .build();
+     * var result = FT.profile(client, "myIndex", new FTProfileOptions("*=>[KNN 2 @VEC $query_vec]", options)).get();
+     * // result[0] contains `FT.SEARCH` response with the given options and query
+     * // result[1] contains profiling data as a `Map<GlideString, Long>`
+     * }</pre>
      */
     public static CompletableFuture<Object[]> profile(
             @NonNull BaseClient client, @NonNull String indexName, @NonNull FTProfileOptions options) {
@@ -497,6 +507,13 @@ public class FT {
      * @param options Querying and profiling parameters - see {@link FTProfileOptions}.
      * @return A two-element array. The first element contains results of query being profiled, the
      *     second element stores profiling information.
+     * @example
+     *     <pre>{@code
+     * var commandLine = new String[] { "*", "LOAD", "1", "__key", "GROUPBY", "1", "@condition", "REDUCE", "COUNT", "0", "AS", "bicylces" };
+     * var result = FT.profile(client, gs("myIndex"), new FTProfileOptions(QueryType.AGGREGATE, commandLine)).get();
+     * // result[0] contains `FT.AGGREGATE` response with the given command line
+     * // result[1] contains profiling data as a `Map<GlideString, Long>`
+     * }</pre>
      */
     public static CompletableFuture<Object[]> profile(
             @NonNull BaseClient client,
