@@ -828,67 +828,55 @@ public class VectorSearchTests {
 
     @SneakyThrows
     @Test
-    public void ft_explain_and_explaincli() {
-        String prefix = "{" + UUID.randomUUID() + "}:";
-        String index = prefix + "index";
+    public void ft_explain() {
+
+        String indexName = UUID.randomUUID().toString();
+        createIndexHelper(indexName);
+
+        // FT.EXPLAIN on a search query containing numeric field.
+        String query = "@price:[0 10]";
+        var result = FT.explain(client, indexName, query);
+        assertTrue(result.contains("price"));
+        assertTrue(result.contains("0"));
+        assertTrue(result.contains("10"));
+
+        // FT.EXPLAIN on a search query containing numeric field and having bytes type input to the
+        // command.
+
+        // FT.EXPLAIN on a search query that returns all data.
+
+        // FT.EXPLAIN on a missing index throws an error.
+    }
+
+    @SneakyThrows
+    @Test
+    public void ft_explaincli() {
+        // with GlideString
+
+        String indexName = UUID.randomUUID().toString();
+
+        // make index
+
+    }
+
+    private void createIndexHelper(String indexName) {
+        FieldInfo numericField = new FieldInfo("price", new NumericField());
+        FieldInfo textField = new FieldInfo("title", new TextField());
+
+        FieldInfo[] fields = new FieldInfo[] {numericField, textField};
+
+        String prefix = "{hash-search-" + str(UUID.randomUUID().toString()) + "}:";
+        String[] prefixes = new String[] {prefix};
 
         assertEquals(
                 OK,
                 FT.create(
-                                client,
-                                index,
-                                new FieldInfo[] {
-                                    new FieldInfo("vec", "VEC", VectorFieldHnsw.builder(DistanceMetric.L2, 2).build())
-                                },
-                                FTCreateOptions.builder()
-                                        .indexType(IndexType.HASH)
-                                        .prefixes(new String[] {prefix})
-                                        .build())
-                        .get());
-
-        assertEquals(
-                1L,
-                client
-                        .hset(
-                                gs(prefix + 0),
-                                Map.of(
-                                        gs("vec"),
-                                        gs(
-                                                new byte[] {
-                                                    (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0,
-                                                    (byte) 0
-                                                })))
-                        .get());
-        assertEquals(
-                1L,
-                client
-                        .hset(
-                                gs(prefix + 1),
-                                Map.of(
-                                        gs("vec"),
-                                        gs(
-                                                new byte[] {
-                                                    (byte) 0,
-                                                    (byte) 0,
-                                                    (byte) 0,
-                                                    (byte) 0,
-                                                    (byte) 0,
-                                                    (byte) 0,
-                                                    (byte) 0x80,
-                                                    (byte) 0xBF
-                                                })))
-                        .get());
-
-        assertTrue(
-                FT.explain(client, index, "*=>[KNN 2 @VEC $query_vec]", 12.2).get().contains("Vector"));
-
-        assertTrue(FT.explain(client, index, "*=>[KNN 2 @VEC $query_vec]").get().contains("Vector"));
-
-        Object[] meow = FT.explaincli(client, gs(index), gs("*=>[KNN 2 @VEC $query_vec]")).get();
-
-        // assertTrue(FT.explaincli(client, index, "*=>[KNN 2 @VEC
-        // $query_vec]").get().contains("Vector"));
-
-        // with GlideString
+                        client,
+                        indexName,
+                        fields,
+                        FtCreateOptions.builder()
+                                .indexType(IndexType.HASH)
+                                .prefixes(new String[] {prefix})
+                                .build()));
     }
 }
