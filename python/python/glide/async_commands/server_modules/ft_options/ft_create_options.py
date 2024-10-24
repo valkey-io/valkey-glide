@@ -334,11 +334,11 @@ class VectorFieldAttributesHnsw(VectorFieldAttributes):
             args.extend([FtCreateKeywords.INITIAL_CAP, str(self.initial_cap)])
         if self.number_of_edges:
             args.extend([FtCreateKeywords.M, str(self.number_of_edges)])
-        if self.number_of_edvectors_examined_on_constructionges:
+        if self.vectors_examined_on_construction:
             args.extend(
                 [
                     FtCreateKeywords.EF_CONSTRUCTION,
-                    str(self.number_of_edvectors_examined_on_constructionges),
+                    str(self.vectors_examined_on_construction),
                 ]
             )
         if self.vectors_examined_on_runtime:
