@@ -629,7 +629,7 @@ describe("Server Module Tests", () => {
                 attributes: {
                     algorithm: "HNSW",
                     type: "FLOAT32",
-                    dimension: 2,
+                    dimensions: 2,
                     distanceMetric: "L2",
                 },
             };
@@ -649,7 +649,7 @@ describe("Server Module Tests", () => {
                             attributes: {
                                 algorithm: "HNSW",
                                 type: "FLOAT32",
-                                dimension: 6,
+                                dimensions: 6,
                                 distanceMetric: "L2",
                                 numberOfEdges: 32,
                             },
@@ -669,7 +669,7 @@ describe("Server Module Tests", () => {
                 attributes: {
                     algorithm: "FLAT",
                     type: "FLOAT32",
-                    dimension: 6,
+                    dimensions: 6,
                     distanceMetric: "L2",
                 },
             };
@@ -684,7 +684,7 @@ describe("Server Module Tests", () => {
                 attributes: {
                     algorithm: "HNSW",
                     type: "FLOAT32",
-                    dimension: 1536,
+                    dimensions: 1536,
                     distanceMetric: "COSINE",
                     numberOfEdges: 40,
                     vectorsExaminedOnConstruction: 250,
@@ -764,6 +764,51 @@ describe("Server Module Tests", () => {
                 ).rejects.toThrow();
             } catch (e) {
                 expect((e as Error).message).toContain("already exists");
+            }
+        });
+
+        it("Ft.DROPINDEX test", async () => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+
+            // create an index
+            const index = uuidv4();
+            expect(
+                await GlideFt.create(client, index, [
+                    {
+                        type: "VECTOR",
+                        name: "vec",
+                        attributes: {
+                            algorithm: "HNSW",
+                            distanceMetric: "L2",
+                            dimensions: 2,
+                        },
+                    },
+                    { type: "NUMERIC", name: "published_at" },
+                    { type: "TAG", name: "category" },
+                ]),
+            ).toEqual("OK");
+
+            const before = await client.customCommand(["FT_LIST"]);
+            expect(before).toContain(index);
+
+            // DROP it
+            expect(await GlideFt.dropindex(client, index)).toEqual("OK");
+
+            const after = await client.customCommand(["FT_LIST"]);
+            expect(after).not.toContain(index);
+
+            // dropping the index again results in an error
+            try {
+                expect(
+                    await GlideFt.dropindex(client, index),
+                ).rejects.toThrow();
+            } catch (e) {
+                expect((e as Error).message).toContain("Index does not exist");
             }
         });
     });
