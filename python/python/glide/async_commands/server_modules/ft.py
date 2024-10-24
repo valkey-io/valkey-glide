@@ -32,7 +32,7 @@ async def create(
     Args:
         client (TGlideClient): The client to execute the command.
         indexName (TEncodable): The index name.
-        schema (List[Field]): Fields to populate into the index. Equivalent to `SCHEMA` in the server API.
+        schema (List[Field]): Fields to populate into the index. Equivalent to `SCHEMA` block in the module API.
         options (Optional[FtCreateOptions]): Optional arguments for the FT.CREATE command. See `FtCreateOptions`.
 
     Returns:

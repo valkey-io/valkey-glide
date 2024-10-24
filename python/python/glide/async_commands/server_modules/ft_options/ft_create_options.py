@@ -226,9 +226,9 @@ class VectorFieldAttributes(ABC):
         Initialize a new vector field attributes instance.
 
         Args:
-            dimensions (int): Number of dimensions in the vector.
-            distance_metric (DistanceMetricType): The distance metric used in vector type field. Can be one of [L2 | IP | COSINE].
-            type (VectorType): Vector type. The only supported type is FLOAT32. See `VectorType`.
+            dimensions (int): Number of dimensions in the vector. Equivalent to `DIM` on the module API.
+            distance_metric (DistanceMetricType): The distance metric used in vector type field. Can be one of `[L2 | IP | COSINE]`. Equivalent to `DISTANCE_METRIC` on the module API.
+            type (VectorType): Vector type. The only supported type is `FLOAT32`. Equivalent to `TYPE` on the module API.
         """
         self.dimensions = dimensions
         self.distance_metric = distance_metric
@@ -268,10 +268,10 @@ class VectorFieldAttributesFlat(VectorFieldAttributes):
         Initialize a new flat vector field attributes instance.
 
         Args:
-            dimensions (int): Number of dimensions in the vector.
-            distance_metric (DistanceMetricType): The distance metric used in vector type field. Can be one of [L2 | IP | COSINE]. See `DistanceMetricType`.
-            type (VectorType): Vector type. The only supported type is FLOAT32. See `VectorType`.
-            initial_cap (Optional[int]): Initial vector capacity in the index affecting memory allocation size of the index. Defaults to 1024.
+            dimensions (int): Number of dimensions in the vector. Equivalent to `DIM` on the module API.
+            distance_metric (DistanceMetricType): The distance metric used in vector type field. Can be one of `[L2 | IP | COSINE]`. Equivalent to `DISTANCE_METRIC` on the module API.
+            type (VectorType): Vector type. The only supported type is `FLOAT32`. Equivalent to `TYPE` on the module API.
+            initial_cap (Optional[int]): Initial vector capacity in the index affecting memory allocation size of the index. Defaults to `1024`. Equivalent to `INITIAL_CAP` on the module API.
         """
         super().__init__(dimensions, distance_metric, type)
         self.initial_cap = initial_cap
@@ -308,13 +308,13 @@ class VectorFieldAttributesHnsw(VectorFieldAttributes):
         Initialize a new HNSW vector field attributes instance.
 
         Args:
-            dimensions (int): Number of dimensions in the vector.
-            distance_metric (DistanceMetricType): The distance metric used in vector type field. Can be one of [L2 | IP | COSINE]. See `DistanceMetricType`.
-            type (VectorType): Vector type. The only supported type is FLOAT32. See `VectorType`.
-            initial_cap (Optional[int]): Initial vector capacity in the index affecting memory allocation size of the index. Defaults to 1024.
-            number_of_edges (Optional[int]): Number of maximum allowed outgoing edges for each node in the graph in each layer. Default is 16, maximum is 512. Equivalent to `M` on the server API.
-            vectors_examined_on_construction (Optional[int]): Controls the number of vectors examined during index construction. Default value is 200, Maximum value is 4096. Equivalent to `EF_CONSTRUCTION` on the server API.
-            vectors_examined_on_runtime (Optional[int]): Controls the number of vectors examined during query operations. Default value is 10, Maximum value is 4096. Equivalent to `EF_RUNTIME` on the server API.
+            dimensions (int): Number of dimensions in the vector. Equivalent to `DIM` on the module API.
+            distance_metric (DistanceMetricType): The distance metric used in vector type field. Can be one of `[L2 | IP | COSINE]`. Equivalent to `DISTANCE_METRIC` on the module API.
+            type (VectorType): Vector type. The only supported type is `FLOAT32`. Equivalent to `TYPE` on the module API.
+            initial_cap (Optional[int]): Initial vector capacity in the index affecting memory allocation size of the index. Defaults to `1024`. Equivalent to `INITIAL_CAP` on the module API.
+            number_of_edges (Optional[int]): Number of maximum allowed outgoing edges for each node in the graph in each layer. Default is `16`, maximum is `512`. Equivalent to `M` on the module API.
+            vectors_examined_on_construction (Optional[int]): Controls the number of vectors examined during index construction. Default value is `200`, Maximum value is `4096`. Equivalent to `EF_CONSTRUCTION` on the module API.
+            vectors_examined_on_runtime (Optional[int]): Controls the number of vectors examined during query operations. Default value is `10`, Maximum value is `4096`. Equivalent to `EF_RUNTIME` on the module API.
         """
         super().__init__(dimensions, distance_metric, type)
         self.initial_cap = initial_cap

@@ -239,9 +239,9 @@ public class FTCreateOptions {
          * Init a builder.
          *
          * @param distanceMetric {@link DistanceMetric} to measure the degree of similarity between two
-         *     vectors. Equivalent to <code>DISTANCE_METRIC</code> on the server API.
+         *     vectors. Equivalent to <code>DISTANCE_METRIC</code> on the module API.
          * @param dimensions Vector dimension, specified as a positive integer. Maximum: 32768.
-         *     Equivalent to <code>DIM</code> on the server API.
+         *     Equivalent to <code>DIM</code> on the module API.
          */
         public static VectorFieldHnswBuilder builder(
                 @NonNull DistanceMetric distanceMetric, int dimensions) {
@@ -262,7 +262,7 @@ public class FTCreateOptions {
         /**
          * Number of maximum allowed outgoing edges for each node in the graph in each layer. On layer
          * zero the maximal number of outgoing edges is doubled. Default is 16 Maximum is 512.
-         * Equivalent to <code>M</code> on the server API.
+         * Equivalent to <code>M</code> on the module API.
          */
         public VectorFieldHnswBuilder numberOfEdges(int numberOfEdges) {
             params.put(VectorAlgorithmParam.M, Integer.toString(numberOfEdges));
@@ -272,7 +272,7 @@ public class FTCreateOptions {
         /**
          * (Optional) The number of vectors examined during index construction. Higher values for this
          * parameter will improve recall ratio at the expense of longer index creation times. Default
-         * value is 200. Maximum value is 4096. Equivalent to <code>EF_CONSTRUCTION</code> on the server
+         * value is 200. Maximum value is 4096. Equivalent to <code>EF_CONSTRUCTION</code> on the module
          * API.
          */
         public VectorFieldHnswBuilder vectorsExaminedOnConstruction(int vectorsExaminedOnConstruction) {
@@ -285,7 +285,7 @@ public class FTCreateOptions {
          * (Optional) The number of vectors examined during query operations. Higher values for this
          * parameter can yield improved recall at the expense of longer query times. The value of this
          * parameter can be overriden on a per-query basis. Default value is 10. Maximum value is 4096.
-         * Equivalent to <code>EF_RUNTIME</code> on the server API.
+         * Equivalent to <code>EF_RUNTIME</code> on the module API.
          */
         public VectorFieldHnswBuilder vectorsExaminedOnRuntime(int vectorsExaminedOnRuntime) {
             params.put(VectorAlgorithmParam.EF_RUNTIME, Integer.toString(vectorsExaminedOnRuntime));
@@ -308,9 +308,9 @@ public class FTCreateOptions {
          * Init a builder.
          *
          * @param distanceMetric {@link DistanceMetric} to measure the degree of similarity between two
-         *     vectors. Equivalent to <code>DISTANCE_METRIC</code> on the server API.
+         *     vectors. Equivalent to <code>DISTANCE_METRIC</code> on the module API.
          * @param dimensions Vector dimension, specified as a positive integer. Maximum: 32768.
-         *     Equivalent to <code>DIM</code> on the server API.
+         *     Equivalent to <code>DIM</code> on the module API.
          */
         public static VectorFieldFlatBuilder builder(
                 @NonNull DistanceMetric distanceMetric, int dimensions) {
@@ -340,7 +340,7 @@ public class FTCreateOptions {
 
         /**
          * Initial vector capacity in the index affecting memory allocation size of the index. Defaults
-         * to 1024. Equivalent to <code>INITIAL_CAP</code> on the server API.
+         * to 1024. Equivalent to <code>INITIAL_CAP</code> on the module API.
          */
         @SuppressWarnings("unchecked")
         public T initialCapacity(int initialCapacity) {

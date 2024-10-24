@@ -27,7 +27,8 @@ public class FT {
      *
      * @param client The client to execute the command.
      * @param indexName The index name.
-     * @param schema Fields to populate into the index. Equivalent to `SCHEMA` in the server API.
+     * @param schema Fields to populate into the index. Equivalent to `SCHEMA` block in the module
+     *     API.
      * @return <code>"OK"</code>.
      * @example
      *     <pre>{@code
@@ -56,7 +57,8 @@ public class FT {
      *
      * @param client The client to execute the command.
      * @param indexName The index name.
-     * @param schema Fields to populate into the index. Equivalent to `SCHEMA` in the server API.
+     * @param schema Fields to populate into the index. Equivalent to `SCHEMA` block in the module
+     *     API.
      * @param options Additional parameters for the command - see {@link FTCreateOptions}.
      * @return <code>"OK"</code>.
      * @example
@@ -66,7 +68,7 @@ public class FT {
      *     new FieldInfo[] { new FieldInfo("$.vec", "VEC",
      *         VectorFieldHnsw.builder(DistanceMetric.L2, 6).numberOfEdges(32).build())
      *     },
-     *     FTCreateOptions.builder().indexType(JSON).prefixes(new String[] {"json:"}).build(),
+     *     FTCreateOptions.builder().dataType(JSON).prefixes(new String[] {"json:"}).build(),
      * ).get();
      * }</pre>
      */
@@ -83,7 +85,8 @@ public class FT {
      *
      * @param client The client to execute the command.
      * @param indexName The index name.
-     * @param schema Fields to populate into the index. Equivalent to `SCHEMA` in the server API.
+     * @param schema Fields to populate into the index. Equivalent to `SCHEMA` block in the module
+     *     API.
      * @return <code>"OK"</code>.
      * @example
      *     <pre>{@code
@@ -112,7 +115,8 @@ public class FT {
      *
      * @param client The client to execute the command.
      * @param indexName The index name.
-     * @param schema Fields to populate into the index. Equivalent to `SCHEMA` in the server API.
+     * @param schema Fields to populate into the index. Equivalent to `SCHEMA` block in the module
+     *     API.
      * @param options Additional parameters for the command - see {@link FTCreateOptions}.
      * @return <code>OK</code>.
      * @example
@@ -122,7 +126,7 @@ public class FT {
      *     new FieldInfo[] { new FieldInfo(gs("$.vec"), gs("VEC"),
      *         VectorFieldHnsw.builder(DistanceMetric.L2, 6).numberOfEdges(32).build())
      *     },
-     *     FTCreateOptions.builder().indexType(JSON).prefixes(new String[] {"json:"}).build(),
+     *     FTCreateOptions.builder().dataType(JSON).prefixes(new String[] {"json:"}).build(),
      * ).get();
      * }</pre>
      */
