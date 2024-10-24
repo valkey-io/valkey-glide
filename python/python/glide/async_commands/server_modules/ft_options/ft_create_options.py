@@ -47,7 +47,10 @@ class VectorAlgorithm(Enum):
 
 class DistanceMetricType(Enum):
     """
-    The metric options for the distance in vector type field.
+    Distance metrics to measure the degree of similarity between two vectors.
+
+    The above metrics calculate distance between two vectors, where the smaller the value is, the
+    closer the two vectors are in the vector space.
     """
 
     L2 = "L2"
@@ -77,7 +80,7 @@ class VectorType(Enum):
 
 class Field(ABC):
     """
-    Abstract base class for defining fields in a schema.
+    Abstract base class for a vector search field.
     """
 
     @abstractmethod
@@ -116,7 +119,7 @@ class Field(ABC):
 
 class TextField(Field):
     """
-    Class for defining text fields in a schema.
+    Field contains any blob of data.
     """
 
     def __init__(self, name: TEncodable, alias: Optional[TEncodable] = None):
@@ -142,7 +145,11 @@ class TextField(Field):
 
 class TagField(Field):
     """
-    Class for defining tag fields in a schema.
+    Tag fields are similar to full-text fields, but they interpret the text as a simple list of
+    tags delimited by a separator character.
+
+    For `HASH fields, separator default is a comma `,`. For `JSON` fields, there is no
+    default separator; you must declare one explicitly if needed.
     """
 
     def __init__(
@@ -182,7 +189,7 @@ class TagField(Field):
 
 class NumericField(Field):
     """
-    Class for defining the numeric fields in a schema.
+    Field contains a number.
     """
 
     def __init__(self, name: TEncodable, alias: Optional[TEncodable] = None):
@@ -212,16 +219,16 @@ class VectorFieldAttributes(ABC):
     """
 
     @abstractmethod
-    def __init__(self, dim: int, distance_metric: DistanceMetricType, type: VectorType):
+    def __init__(self, dimensions: int, distance_metric: DistanceMetricType, type: VectorType):
         """
         Initialize a new vector field attributes instance.
 
         Args:
-            dim (int): Number of dimensions in the vector.
+            dimensions (int): Number of dimensions in the vector.
             distance_metric (DistanceMetricType): The distance metric used in vector type field. Can be one of [L2 | IP | COSINE].
             type (VectorType): Vector type. The only supported type is FLOAT32. See `VectorType`.
         """
-        self.dim = dim
+        self.dimensions = dimensions
         self.distance_metric = distance_metric
         self.type = type
 
@@ -234,8 +241,8 @@ class VectorFieldAttributes(ABC):
             List[TEncodable]: A list of arguments.
         """
         args: List[TEncodable] = []
-        if self.dim:
-            args.extend([FtCreateKeywords.DIM, str(self.dim)])
+        if self.dimensions:
+            args.extend([FtCreateKeywords.DIM, str(self.dimensions)])
         if self.distance_metric:
             args.extend([FtCreateKeywords.DISTANCE_METRIC, self.distance_metric.name])
         if self.type:
@@ -250,7 +257,7 @@ class VectorFieldAttributesFlat(VectorFieldAttributes):
 
     def __init__(
         self,
-        dim: int,
+        dimensions: int,
         distance_metric: DistanceMetricType,
         type: VectorType,
         initial_cap: Optional[int] = None,
@@ -259,12 +266,12 @@ class VectorFieldAttributesFlat(VectorFieldAttributes):
         Initialize a new flat vector field attributes instance.
 
         Args:
-            dim (int): Number of dimensions in the vector.
+            dimensions (int): Number of dimensions in the vector.
             distance_metric (DistanceMetricType): The distance metric used in vector type field. Can be one of [L2 | IP | COSINE]. See `DistanceMetricType`.
             type (VectorType): Vector type. The only supported type is FLOAT32. See `VectorType`.
             initial_cap (Optional[int]): Initial vector capacity in the index affecting memory allocation size of the index. Defaults to 1024.
         """
-        super().__init__(dim, distance_metric, type)
+        super().__init__(dimensions, distance_metric, type)
         self.initial_cap = initial_cap
 
     def toArgs(self) -> List[TEncodable]:
@@ -287,31 +294,31 @@ class VectorFieldAttributesHnsw(VectorFieldAttributes):
 
     def __init__(
         self,
-        dim: int,
+        dimensions: int,
         distance_metric: DistanceMetricType,
         type: VectorType,
         initial_cap: Optional[int] = None,
-        m: Optional[int] = None,
-        ef_contruction: Optional[int] = None,
-        ef_runtime: Optional[int] = None,
+        number_of_edges: Optional[int] = None,
+        vectors_examined_on_construction: Optional[int] = None,
+        vectors_examined_on_runtime: Optional[int] = None,
     ):
         """
         Initialize a new TagField instance.
 
         Args:
-            dim (int): Number of dimensions in the vector.
+            dimensions (int): Number of dimensions in the vector.
             distance_metric (DistanceMetricType): The distance metric used in vector type field. Can be one of [L2 | IP | COSINE]. See `DistanceMetricType`.
             type (VectorType): Vector type. The only supported type is FLOAT32. See `VectorType`.
             initial_cap (Optional[int]): Initial vector capacity in the index affecting memory allocation size of the index. Defaults to 1024.
-            m (Optional[int]): Number of maximum allowed outgoing edges for each node in the graph in each layer. Default is 16, maximum is 512.
-            ef_contruction (Optional[int]): Controls the number of vectors examined during index construction. Default value is 200, Maximum value is 4096.
-            ef_runtime (Optional[int]): Controls the number of vectors examined during query operations. Default value is 10, Maximum value is 4096.
+            number_of_edges (Optional[int]): Number of maximum allowed outgoing edges for each node in the graph in each layer. Default is 16, maximum is 512. Equivalent to `M` on the server API.
+            vectors_examined_on_construction (Optional[int]): Controls the number of vectors examined during index construction. Default value is 200, Maximum value is 4096. Equivalent to `EF_CONSTRUCTION` on the server API.
+            vectors_examined_on_runtime (Optional[int]): Controls the number of vectors examined during query operations. Default value is 10, Maximum value is 4096. Equivalent to `EF_RUNTIME` on the server API.
         """
-        super().__init__(dim, distance_metric, type)
+        super().__init__(dimensions, distance_metric, type)
         self.initial_cap = initial_cap
-        self.m = m
-        self.ef_contruction = ef_contruction
-        self.ef_runtime = ef_runtime
+        self.number_of_edges = number_of_edges
+        self.vectors_examined_on_construction = vectors_examined_on_construction
+        self.vectors_examined_on_runtime = vectors_examined_on_runtime
 
     def toArgs(self) -> List[TEncodable]:
         """
@@ -323,12 +330,12 @@ class VectorFieldAttributesHnsw(VectorFieldAttributes):
         args = super().toArgs()
         if self.initial_cap:
             args.extend([FtCreateKeywords.INITIAL_CAP, str(self.initial_cap)])
-        if self.m:
-            args.extend([FtCreateKeywords.M, str(self.m)])
-        if self.ef_contruction:
-            args.extend([FtCreateKeywords.EF_CONSTRUCTION, str(self.ef_contruction)])
-        if self.ef_runtime:
-            args.extend([FtCreateKeywords.EF_RUNTIME, str(self.ef_runtime)])
+        if self.number_of_edges:
+            args.extend([FtCreateKeywords.M, str(self.number_of_edges)])
+        if self.number_of_edvectors_examined_on_constructionges:
+            args.extend([FtCreateKeywords.EF_CONSTRUCTION, str(self.number_of_edvectors_examined_on_constructionges)])
+        if self.vectors_examined_on_runtime:
+            args.extend([FtCreateKeywords.EF_RUNTIME, str(self.vectors_examined_on_runtime)])
         return args
 
 
@@ -375,16 +382,16 @@ class VectorField(Field):
 
 class DataType(Enum):
     """
-    Options for the type of data for which the index is being created.
+    Type of the index dataset.
     """
 
     HASH = "HASH"
     """
-    If the created index will index HASH data.
+    Data stored in hashes, so field identifiers are field names within the hashes.
     """
     JSON = "JSON"
     """
-    If the created index will index JSON document data.
+    Data stored as a JSON document, so field identifiers are JSON Path expressions.
     """
 
 
@@ -403,8 +410,8 @@ class FtCreateOptions:
         Initialize the FT.CREATE optional fields.
 
         Args:
-            data_type (Optional[DataType]): The type of data to be indexed using FT.CREATE. See `DataType`.
-            prefixes (Optional[List[TEncodable]]): The prefix of the key to be indexed.
+            data_type (Optional[DataType]): The index data type. If not defined a `HASH` index is created. See `DataType`.
+            prefixes (Optional[List[TEncodable]]): A list of prefixes of index definitions.
         """
         self.data_type = data_type
         self.prefixes = prefixes
