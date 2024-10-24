@@ -27,8 +27,9 @@ public class FT {
      *
      * @param client The client to execute the command.
      * @param indexName The index name.
-     * @param fields Fields to populate into the index.
-     * @return <code>OK</code>.
+     * @param schema Fields to populate into the index. Equivalent to `SCHEMA` block in the module
+     *     API.
+     * @return <code>"OK"</code>.
      * @example
      *     <pre>{@code
      * // Create an index for vectors of size 2:
@@ -44,11 +45,11 @@ public class FT {
      * }</pre>
      */
     public static CompletableFuture<String> create(
-            @NonNull BaseClient client, @NonNull String indexName, @NonNull FieldInfo[] fields) {
+            @NonNull BaseClient client, @NonNull String indexName, @NonNull FieldInfo[] schema) {
         // Node: bug in meme DB - command fails if cmd is too short even though all mandatory args are
         // present
         // TODO confirm is it fixed or not and update docs if needed
-        return create(client, indexName, fields, FTCreateOptions.builder().build());
+        return create(client, indexName, schema, FTCreateOptions.builder().build());
     }
 
     /**
@@ -56,9 +57,10 @@ public class FT {
      *
      * @param client The client to execute the command.
      * @param indexName The index name.
-     * @param fields Fields to populate into the index.
+     * @param schema Fields to populate into the index. Equivalent to `SCHEMA` block in the module
+     *     API.
      * @param options Additional parameters for the command - see {@link FTCreateOptions}.
-     * @return <code>OK</code>.
+     * @return <code>"OK"</code>.
      * @example
      *     <pre>{@code
      * // Create a 6-dimensional JSON index using the HNSW algorithm:
@@ -66,16 +68,16 @@ public class FT {
      *     new FieldInfo[] { new FieldInfo("$.vec", "VEC",
      *         VectorFieldHnsw.builder(DistanceMetric.L2, 6).numberOfEdges(32).build())
      *     },
-     *     FTCreateOptions.builder().indexType(JSON).prefixes(new String[] {"json:"}).build(),
+     *     FTCreateOptions.builder().dataType(JSON).prefixes(new String[] {"json:"}).build(),
      * ).get();
      * }</pre>
      */
     public static CompletableFuture<String> create(
             @NonNull BaseClient client,
             @NonNull String indexName,
-            @NonNull FieldInfo[] fields,
+            @NonNull FieldInfo[] schema,
             @NonNull FTCreateOptions options) {
-        return create(client, gs(indexName), fields, options);
+        return create(client, gs(indexName), schema, options);
     }
 
     /**
@@ -83,8 +85,9 @@ public class FT {
      *
      * @param client The client to execute the command.
      * @param indexName The index name.
-     * @param fields Fields to populate into the index.
-     * @return <code>OK</code>.
+     * @param schema Fields to populate into the index. Equivalent to `SCHEMA` block in the module
+     *     API.
+     * @return <code>"OK"</code>.
      * @example
      *     <pre>{@code
      * // Create an index for vectors of size 2:
@@ -100,11 +103,11 @@ public class FT {
      * }</pre>
      */
     public static CompletableFuture<String> create(
-            @NonNull BaseClient client, @NonNull GlideString indexName, @NonNull FieldInfo[] fields) {
+            @NonNull BaseClient client, @NonNull GlideString indexName, @NonNull FieldInfo[] schema) {
         // Node: bug in meme DB - command fails if cmd is too short even though all mandatory args are
         // present
         // TODO confirm is it fixed or not and update docs if needed
-        return create(client, indexName, fields, FTCreateOptions.builder().build());
+        return create(client, indexName, schema, FTCreateOptions.builder().build());
     }
 
     /**
@@ -112,7 +115,8 @@ public class FT {
      *
      * @param client The client to execute the command.
      * @param indexName The index name.
-     * @param fields Fields to populate into the index.
+     * @param schema Fields to populate into the index. Equivalent to `SCHEMA` block in the module
+     *     API.
      * @param options Additional parameters for the command - see {@link FTCreateOptions}.
      * @return <code>OK</code>.
      * @example
@@ -122,21 +126,21 @@ public class FT {
      *     new FieldInfo[] { new FieldInfo(gs("$.vec"), gs("VEC"),
      *         VectorFieldHnsw.builder(DistanceMetric.L2, 6).numberOfEdges(32).build())
      *     },
-     *     FTCreateOptions.builder().indexType(JSON).prefixes(new String[] {"json:"}).build(),
+     *     FTCreateOptions.builder().dataType(JSON).prefixes(new String[] {"json:"}).build(),
      * ).get();
      * }</pre>
      */
     public static CompletableFuture<String> create(
             @NonNull BaseClient client,
             @NonNull GlideString indexName,
-            @NonNull FieldInfo[] fields,
+            @NonNull FieldInfo[] schema,
             @NonNull FTCreateOptions options) {
         var args =
                 Stream.of(
                                 new GlideString[] {gs("FT.CREATE"), indexName},
                                 options.toArgs(),
                                 new GlideString[] {gs("SCHEMA")},
-                                Arrays.stream(fields)
+                                Arrays.stream(schema)
                                         .map(FieldInfo::toArgs)
                                         .flatMap(Arrays::stream)
                                         .toArray(GlideString[]::new))
