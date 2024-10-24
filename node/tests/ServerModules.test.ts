@@ -522,6 +522,74 @@ describe("Server Module Tests", () => {
                 ).toBe(0);
             },
         );
+
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            "json.type tests",
+            async (protocol) => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+                const key = uuidv4();
+                const jsonValue = [1, 2.3, "foo", true, null, {}, []];
+                // setup
+                expect(
+                    await GlideJson.set(
+                        client,
+                        key,
+                        "$",
+                        JSON.stringify(jsonValue),
+                    ),
+                ).toBe("OK");
+                expect(
+                    await GlideJson.type(client, key, { path: "$[*]" }),
+                ).toEqual([
+                    "integer",
+                    "number",
+                    "string",
+                    "boolean",
+                    "null",
+                    "object",
+                    "array",
+                ]);
+                expect(
+                    await GlideJson.type(client, "non_existing", {
+                        path: "$[*]",
+                    }),
+                ).toBeNull();
+                expect(
+                    await GlideJson.type(client, key, {
+                        path: "$non_existing",
+                    }),
+                ).toEqual([]);
+
+                const key2 = uuidv4();
+                const jsonValue2 = { Name: "John", Age: 27 };
+                // setup
+                expect(
+                    await GlideJson.set(
+                        client,
+                        key2,
+                        "$",
+                        JSON.stringify(jsonValue2),
+                    ),
+                ).toBe("OK");
+                expect(
+                    await GlideJson.type(client, key2, { path: "." }),
+                ).toEqual("object");
+                expect(
+                    await GlideJson.type(client, key2, { path: ".Age" }),
+                ).toEqual("integer");
+                expect(
+                    await GlideJson.type(client, key2, { path: ".Job" }),
+                ).toBeNull();
+                expect(
+                    await GlideJson.type(client, "non_existing", { path: "." }),
+                ).toBeNull();
+            },
+        );
     });
 
     describe("GlideFt", () => {
