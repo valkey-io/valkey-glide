@@ -191,11 +191,12 @@ public class Json {
      *           <ul>
      *             <li>For JSONPath (path starts with <code>$</code>): Returns a stringified JSON list
      *                 replies for every possible path, or a string representation of an empty array,
-     *                 if path doesn't exist. If <code>key</code> doesn't exist, returns null.
+     *                 if path doesn't exist. If <code>key</code> doesn't exist, returns <code>null
+     *                 </code>.
      *             <li>For legacy path (path doesn't start with <code>$</code>): Returns a string
      *                 representation of the value in <code>paths</code>. If <code>paths</code>
      *                 doesn't exist, an error is raised. If <code>key</code> doesn't exist, returns
-     *                 null.
+     *                 <code>null</code>.
      *           </ul>
      *       <li>If multiple paths are given: Returns a stringified JSON, in which each path is a key,
      *           and it's corresponding value, is the value as if the path was executed in the command
@@ -228,11 +229,12 @@ public class Json {
      *           <ul>
      *             <li>For JSONPath (path starts with <code>$</code>): Returns a stringified JSON list
      *                 replies for every possible path, or a string representation of an empty array,
-     *                 if path doesn't exist. If <code>key</code> doesn't exist, returns null.
+     *                 if path doesn't exist. If <code>key</code> doesn't exist, returns <code>null
+     *                 </code>.
      *             <li>For legacy path (path doesn't start with <code>$</code>): Returns a string
      *                 representation of the value in <code>paths</code>. If <code>paths</code>
      *                 doesn't exist, an error is raised. If <code>key</code> doesn't exist, returns
-     *                 null.
+     *                 <code>null</code>.
      *           </ul>
      *       <li>If multiple paths are given: Returns a stringified JSON, in which each path is a key,
      *           and it's corresponding value, is the value as if the path was executed in the command
@@ -319,11 +321,12 @@ public class Json {
      *           <ul>
      *             <li>For JSONPath (path starts with <code>$</code>): Returns a stringified JSON list
      *                 replies for every possible path, or a string representation of an empty array,
-     *                 if path doesn't exist. If <code>key</code> doesn't exist, returns null.
+     *                 if path doesn't exist. If <code>key</code> doesn't exist, returns <code>null
+     *                 </code>.
      *             <li>For legacy path (path doesn't start with <code>$</code>): Returns a string
      *                 representation of the value in <code>paths</code>. If <code>paths</code>
      *                 doesn't exist, an error is raised. If <code>key</code> doesn't exist, returns
-     *                 null.
+     *                 <code>null</code>.
      *           </ul>
      *       <li>If multiple paths are given: Returns a stringified JSON, in which each path is a key,
      *           and it's corresponding value, is the value as if the path was executed in the command
@@ -365,11 +368,12 @@ public class Json {
      *           <ul>
      *             <li>For JSONPath (path starts with <code>$</code>): Returns a stringified JSON list
      *                 replies for every possible path, or a string representation of an empty array,
-     *                 if path doesn't exist. If <code>key</code> doesn't exist, returns null.
+     *                 if path doesn't exist. If <code>key</code> doesn't exist, returns <code>null
+     *                 </code>.
      *             <li>For legacy path (path doesn't start with <code>$</code>): Returns a string
      *                 representation of the value in <code>paths</code>. If <code>paths</code>
      *                 doesn't exist, an error is raised. If <code>key</code> doesn't exist, returns
-     *                 null.
+     *                 <code>null</code>.
      *           </ul>
      *       <li>If multiple paths are given: Returns a stringified JSON, in which each path is a key,
      *           and it's corresponding value, is the value as if the path was executed in the command
@@ -1217,7 +1221,7 @@ public class Json {
      * @param client The Valkey GLIDE client to execute the command.
      * @param key The <code>key</code> of the JSON document.
      * @return Returns the JSON document in its RESP form.
-     *     If <code>key</code> doesn't exist, null is returned.
+     *     If <code>key</code> doesn't exist, <code>null</code> is returned.
      * @example
      *     <pre>{@code
      * Json.set(client, "doc", ".", "{\"a\": [1, 2, 3], \"b\": {\"b1\": 1}, \"c\": 42}");
@@ -1245,7 +1249,7 @@ public class Json {
      * @param client The Valkey GLIDE client to execute the command.
      * @param key The <code>key</code> of the JSON document.
      * @return Returns the JSON document in its RESP form.
-     *     If <code>key</code> doesn't exist, null is returned.
+     *     If <code>key</code> doesn't exist, <code>null</code> is returned.
      * @example
      *     <pre>{@code
      * Json.set(client, "doc", ".", "{\"a\": [1, 2, 3], \"b\": {\"b1\": 1}, \"c\": 42}");
@@ -1286,7 +1290,7 @@ public class Json {
      *           paths match, the value of the first JSON value match is returned. If <code>path
      *           </code> doesn't exist, an error is raised.
      *     </ul>
-     *     If <code>key</code> doesn't exist, null is returned.
+     *     If <code>key</code> doesn't exist, <code>null</code> is returned.
      * @example
      *     <pre>{@code
      * Json.set(client, "doc", ".", "{\"a\": [1, 2, 3], \"b\": {\"a\": [1, 2], \"c\": {\"a\": 42}}}");
@@ -1323,7 +1327,7 @@ public class Json {
      *           paths match, the value of the first JSON value match is returned. If <code>path
      *           </code> doesn't exist, an error is raised.
      *     </ul>
-     *     If <code>key</code> doesn't exist, null is returned.
+     *     If <code>key</code> doesn't exist, <code>null</code> is returned.
      * @example
      *     <pre>{@code
      * Json.set(client, "doc", ".", "{\"a\": [1, 2, 3], \"b\": {\"a\": [1, 2], \"c\": {\"a\": 42}}}");
