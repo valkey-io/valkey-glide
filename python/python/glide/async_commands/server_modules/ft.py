@@ -16,6 +16,9 @@ from glide.async_commands.server_modules.ft_options.ft_create_options import (
 from glide.async_commands.server_modules.ft_options.ft_search_options import (
     FtSeachOptions,
 )
+from glide.async_commands.server_modules.ft_options.ft_aggregate_options import (
+    FtAggregateOptions,
+)
 from glide.constants import TOK, FtInfoResponse, TEncodable
 from glide.glide_client import TGlideClient
 
@@ -234,3 +237,10 @@ async def info(client: TGlideClient, indexName: TEncodable) -> FtInfoResponse:
     """
     args: List[TEncodable] = [CommandNames.FT_INFO, indexName]
     return cast(FtInfoResponse, await client.custom_command(args))
+
+
+async def aggregate(client: TGlideClient, indexName: TEncodable, query: TEncodable, options: Optional[FtAggregateOptions]):
+    args: List[TEncodable] = [CommandNames.FT_AGGREGATE, indexName, query]
+    if options:
+        args.extend(options.toArgs())
+    return cast(List, client.custom_command(args))

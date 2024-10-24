@@ -13,6 +13,7 @@ class CommandNames:
     FT_ALIASADD = "FT.ALIASADD"
     FT_ALIASDEL = "FT.ALIASDEL"
     FT_ALIASUPDATE = "FT.ALIASUPDATE"
+    FT_AGGREGATE = "FT.AGGREGATE"
 
 
 class FtCreateKeywords:
@@ -49,3 +50,17 @@ class FtSeachKeywords:
     LIMIT = "LIMIT"
     COUNT = "COUNT"
     AS = "AS"
+
+
+class FtAggregateKeywords:
+    LIMIT = "LIMIT"
+    FILTER = "FILTER"
+    GROUPBY = "GROUPBY"
+    REDUCE = "REDUCE"
+    AS = "AS"
+    SORTBY = "SORTBY"
+    MAX = "MAX"
+    APPLY = "APPLY"
+    LOAD = "LOAD"
+    TIMEOUT = "TIMEOUT"
+    PARAMS = "PARAMS"
