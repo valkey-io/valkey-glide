@@ -1216,7 +1216,7 @@ public class Json {
     }
 
     /**
-     * Retrieve the JSON document stored at <code>key</code>. The returning result is in the Valkey or Redis OSS Serialization Protocol (RESP).
+     * Retrieves the JSON document stored at <code>key</code>. The returning result is in the Valkey or Redis OSS Serialization Protocol (RESP).
      *
      * @param client The Valkey GLIDE client to execute the command.
      * @param key The <code>key</code> of the JSON document.
@@ -1244,7 +1244,7 @@ public class Json {
     }
 
     /**
-     * Retrieve the JSON document stored at <code>key</code>. The returning result is in the Valkey or Redis OSS Serialization Protocol (RESP).
+     * Retrieves the JSON document stored at <code>key</code>. The returning result is in the Valkey or Redis OSS Serialization Protocol (RESP).
      *
      * @param client The Valkey GLIDE client to execute the command.
      * @param key The <code>key</code> of the JSON document.
