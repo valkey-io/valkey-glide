@@ -315,9 +315,8 @@ export class GlideJson {
      * @param client - The client to execute the command.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
-     * - (Optional) path - If `null`, deletes the entire JSON document at `key`.
+     * - (Optional) path - defaults to root if not provided.
      * @returns ReturnTypeJson:
-     *   - If one path is given:
      *     - For JSONPath (path starts with `$`):
      *       - Returns an array of strings that represents the type of value at each path.
      *         The type is one of "null", "boolean", "string", "number", "integer", "object" and "array".
