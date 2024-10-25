@@ -102,10 +102,10 @@ jobs:
 
           ### NodeJS ###
 
-            - name: Set up Node.js 16.x
+            - name: Set up Node.js 22.x
               uses: actions/setup-node@v4
               with:
-                  node-version: 16.x
+                  node-version: 22.x
 
             - name: Create package.json file for the Node wrapper 
               uses: ./.github/workflows/node-create-package-file
