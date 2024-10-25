@@ -341,6 +341,8 @@ public class JsonTests {
         assertEquals(1L, Json.clear(client, gs(key)).get());
         doc = Json.get(client, key, new String[] {"$"}).get();
         assertEquals("[{}]", doc);
+
+        assertThrows(ExecutionException.class, () -> Json.clear(client, UUID.randomUUID().toString()));
     }
 
     @Test
