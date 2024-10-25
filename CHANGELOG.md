@@ -10,6 +10,7 @@
 * Python: Add JSON.TYPE command ([#2409](https://github.com/valkey-io/valkey-glide/pull/2409))
 * Python: Add JSON.NUMINCRBY command ([#2448](https://github.com/valkey-io/valkey-glide/pull/2448))
 * Python: Add JSON.NUMMULTBY command ([#2458](https://github.com/valkey-io/valkey-glide/pull/2458))
+* Python: Add JSON.DEBUG_MEMORY and JSON_DEBUG_FIELDS commands ([#2481](https://github.com/valkey-io/valkey-glide/pull/2481))
 * Java: Added `FT.CREATE` ([#2414](https://github.com/valkey-io/valkey-glide/pull/2414))
 * Java: Added `FT.INFO` ([#2405](https://github.com/valkey-io/valkey-glide/pull/2441))
 * Java: Added `FT.DROPINDEX` ([#2440](https://github.com/valkey-io/valkey-glide/pull/2440))
