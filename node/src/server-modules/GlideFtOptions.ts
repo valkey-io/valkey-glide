@@ -31,7 +31,7 @@ export type TagField = BaseField & {
     type: "TAG";
     /** Specify how text in the attribute is split into individual tags. Must be a single character. */
     separator?: GlideString;
-    /** Preserve the original letter cases of tags. If set to `False`, characters are converted to lowercase by default. */
+    /** Preserve the original letter cases of tags. If set to `false`, characters are converted to lowercase by default. */
     caseSensitive?: boolean;
 };
 
