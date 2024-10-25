@@ -708,7 +708,7 @@ public class FT {
      * @param indexName The index name to search into.
      * @param query The text query to search. It is the same as the query passed as an argument to
      *     {@link FT#search(BaseClient, String, String)}.
-     * @return A <code>string</code> representing the execution plan.
+     * @return A <code>String</code> representing the execution plan.
      * @example
      *     <pre>{@code
      * FT.explain(client, "myIndex", "@price:[0 10]").get();
@@ -734,7 +734,7 @@ public class FT {
      * @param indexName The index name to search into.
      * @param query The text query to search. It is the same as the query passed as an argument to
      *     {@link FT#search(BaseClient, String, String)}.
-     * @return A <code>string</code> representing the execution plan.
+     * @return A <code>GlideString</code> representing the execution plan.
      * @example
      *     <pre>{@code
      * FT.explain(client, "myIndex", "@price:[0 10]").get();
@@ -760,7 +760,7 @@ public class FT {
      * @param indexName The index name to search into.
      * @param query The text query to search. It is the same as the query passed as an argument to
      *     {@link FT#search(BaseClient, String, String)}.
-     * @return A <code>string array</code> representing the execution plan.
+     * @return A <code>String[[</code> representing the execution plan.
      * @example
      *     <pre>{@code
      * FT.explaincli(client, "myIndex",  "@price:[0 10]").get();
@@ -787,7 +787,7 @@ public class FT {
      * @param indexName The index name to search into.
      * @param query The text query to search. It is the same as the query passed as an argument to
      *     {@link FT#search(BaseClient, String, String)}.
-     * @return A <code>string array</code> representing the execution plan.
+     * @return A <code>GlideString[]</code> representing the execution plan.
      * @example
      *     <pre>{@code
      * FT.explaincli(client, "myIndex",  "@price:[0 10]").get();

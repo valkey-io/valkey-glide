@@ -26,6 +26,7 @@ import glide.api.models.commands.FT.FTAggregateOptions.SortBy;
 import glide.api.models.commands.FT.FTAggregateOptions.SortBy.SortOrder;
 import glide.api.models.commands.FT.FTAggregateOptions.SortBy.SortProperty;
 import glide.api.models.commands.FT.FTCreateOptions;
+import glide.api.models.commands.FT.FTCreateOptions.DataType;
 import glide.api.models.commands.FT.FTCreateOptions.DistanceMetric;
 import glide.api.models.commands.FT.FTCreateOptions.FieldInfo;
 import glide.api.models.commands.FT.FTCreateOptions.NumericField;
@@ -38,6 +39,7 @@ import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.exceptions.RequestException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -872,7 +874,7 @@ public class VectorSearchTests {
 
         // search query containing numeric field.
         String query = "@price:[0 10]";
-        String result[] = FT.explaincli(client, indexName, query).get();
+        String[] result = FT.explaincli(client, indexName, query).get();
         List<String> resultList = new ArrayList<>();
 
         for (String r : result) {
@@ -883,7 +885,7 @@ public class VectorSearchTests {
         assertTrue(resultList.contains("0"));
         assertTrue(resultList.contains("10"));
 
-        GlideString resultGS[] = FT.explaincli(client, gs(indexName), gs(query)).get();
+        GlideString[] resultGS = FT.explaincli(client, gs(indexName), gs(query)).get();
         List<String> resultListGS = new ArrayList<>();
         for (GlideString r : resultGS) {
             resultListGS.add(r.toString().trim()); // trim to remove any excess white space
@@ -893,14 +895,14 @@ public class VectorSearchTests {
         assertTrue((resultListGS).contains("0"));
         assertTrue((resultListGS).contains("10"));
 
-        resultListGS.clear();
+        List<String> resultListGS2 = new ArrayList<>();
 
         // search query that returns all data.
         resultGS = FT.explaincli(client, gs(indexName), gs("*")).get();
         for (GlideString r : resultGS) {
-            resultListGS.add(r.toString().trim()); // trim to remove any excess white space
+            resultListGS2.add(r.toString().trim()); // trim to remove any excess white space
         }
-        assertTrue((resultListGS).contains("*"));
+        assertTrue((resultListGS2).contains("*"));
 
         assertEquals(OK, FT.dropindex(client, indexName).get());
 
