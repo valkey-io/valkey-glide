@@ -449,12 +449,14 @@ public class JsonTests {
         Object actualResult1 = Json.resp(client, key, "$.*").get();
         Object[] expectedResult1 =
                 new Object[] {
-                    new Object[] {"{", "a", 1L, "b", 2L}, // leading "{" indicates JSON objects
+                    new Object[] {
+                        "{", new Object[] {"a", 1L}, new Object[] {"b", 2L} // leading "{" indicates JSON objects
+                    },
                     new Object[] {"[", 1L, 2L, 3L}, // leading "[" indicates JSON arrays
                     "foo",
                     "true",
                     42L,
-                    3.14,
+                    "3.14",
                     null
                 };
         assertInstanceOf(Object[].class, actualResult1);
@@ -462,7 +464,7 @@ public class JsonTests {
 
         // multiple path match, the first will be returned
         Object actualResult2 = Json.resp(client, key, "*").get();
-        Object[] expectedResult2 = new Object[] {"{", "a", 1L, "b", 2L};
+        Object[] expectedResult2 = new Object[] {"{", new Object[] {"a", 1L}, new Object[] {"b", 2L}};
         assertInstanceOf(Object[].class, actualResult2);
         assertArrayEquals(expectedResult2, (Object[]) actualResult2);
 
@@ -471,20 +473,15 @@ public class JsonTests {
                 new Object[] {
                     new Object[] {
                         "{",
-                        "obj",
-                        new Object[] {"{", "a", 1L, "b", 2L},
-                        "arr",
-                        new Object[] {"[", 1L, 2L, 3L},
-                        "str",
-                        "foo",
-                        "bool",
-                        "true",
-                        "int",
-                        42L,
-                        "float",
-                        3.14,
-                        "nullVal",
-                        null
+                        new Object[] {
+                            "obj", new Object[] {"{", new Object[] {"a", 1L}, new Object[] {"b", 2L}}
+                        },
+                        new Object[] {"arr", new Object[] {"[", 1L, 2L, 3L}},
+                        new Object[] {"str", "foo"},
+                        new Object[] {"bool", "true"},
+                        new Object[] {"int", 42L},
+                        new Object[] {"float", "3.14"},
+                        new Object[] {"nullVal", null}
                     }
                 };
         assertInstanceOf(Object[].class, actualResult3);
@@ -494,20 +491,13 @@ public class JsonTests {
         Object[] expectedResult4 =
                 new Object[] {
                     "{",
-                    "obj",
-                    new Object[] {"{", "a", 1L, "b", 2L},
-                    "arr",
-                    new Object[] {"[", 1L, 2L, 3L},
-                    "str",
-                    "foo",
-                    "bool",
-                    "true",
-                    "int",
-                    42L,
-                    "float",
-                    3.14,
-                    "nullVal",
-                    null
+                    new Object[] {"obj", new Object[] {"{", new Object[] {"a", 1L}, new Object[] {"b", 2L}}},
+                    new Object[] {"arr", new Object[] {"[", 1L, 2L, 3L}},
+                    new Object[] {"str", "foo"},
+                    new Object[] {"bool", "true"},
+                    new Object[] {"int", 42L},
+                    new Object[] {"float", "3.14"},
+                    new Object[] {"nullVal", null}
                 };
         assertInstanceOf(Object[].class, actualResult4);
         assertArrayEquals(expectedResult4, (Object[]) actualResult4);
