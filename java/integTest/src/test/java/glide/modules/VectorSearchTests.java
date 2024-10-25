@@ -929,7 +929,7 @@ public class VectorSearchTests {
                                 indexName,
                                 fields,
                                 FTCreateOptions.builder()
-                                        .indexType(IndexType.HASH)
+                                        .dataType(DataType.HASH)
                                         .prefixes(new String[] {prefix})
                                         .build())
                         .get());
