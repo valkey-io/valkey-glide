@@ -31,7 +31,7 @@ export type TagField = BaseField & {
     type: "TAG";
     /** Specify how text in the attribute is split into individual tags. Must be a single character. */
     separator?: GlideString;
-    /** Preserve the original letter cases of tags. If set to False, characters are converted to lowercase by default. */
+    /** Preserve the original letter cases of tags. If set to `false`, characters are converted to lowercase by default. */
     caseSensitive?: boolean;
 };
 
@@ -57,16 +57,16 @@ export type VectorField = BaseField & {
  * Base class for defining vector field attributes to be used after the vector algorithm name.
  */
 export interface VectorFieldAttributes {
-    /** Number of dimensions in the vector. Equivalent to DIM in the option. */
-    dimension: number;
+    /** Number of dimensions in the vector. Equivalent to `DIM` in the module API. */
+    dimensions: number;
     /**
-     * The distance metric used in vector type field. Can be one of [L2 | IP | COSINE].
+     * The distance metric used in vector type field. Can be one of `[L2 | IP | COSINE]`. Equivalent to `DISTANCE_METRIC` in the module API.
      */
     distanceMetric: "L2" | "IP" | "COSINE";
     /** Vector type. The only supported type is FLOAT32. */
-    type: "FLOAT32";
+    type?: "FLOAT32";
     /**
-     * Initial vector capacity in the index affecting memory allocation size of the index. Defaults to 1024.
+     * Initial vector capacity in the index affecting memory allocation size of the index. Defaults to `1024`. Equivalent to `INITIAL_CAP` in the module API.
      */
     initialCap?: number;
 }
@@ -90,18 +90,18 @@ export type VectorFieldAttributesFlat = VectorFieldAttributes & {
 export type VectorFieldAttributesHnsw = VectorFieldAttributes & {
     algorithm: "HNSW";
     /**
-     * Number of maximum allowed outgoing edges for each node in the graph in each layer. Default is 16, maximum is 512.
-     * Equivalent to the `m` attribute.
+     * Number of maximum allowed outgoing edges for each node in the graph in each layer. Default is `16`, maximum is `512`.
+     * Equivalent to `M` in the module API.
      */
     numberOfEdges?: number;
     /**
-     * Controls the number of vectors examined during index construction. Default value is 200, Maximum value is 4096.
-     * Equivalent to the `efContruction` attribute.
+     * Controls the number of vectors examined during index construction. Default value is `200`, Maximum value is `4096`.
+     * Equivalent to `EF_CONSTRUCTION` in the module API.
      */
     vectorsExaminedOnConstruction?: number;
     /**
-     * Controls the number of vectors examined during query operations. Default value is 10, Maximum value is 4096.
-     * Equivalent to the `efRuntime` attribute.
+     * Controls the number of vectors examined during query operations. Default value is `10`, Maximum value is `4096`.
+     * Equivalent to `EF_RUNTIME` in the module API.
      */
     vectorsExaminedOnRuntime?: number;
 };
