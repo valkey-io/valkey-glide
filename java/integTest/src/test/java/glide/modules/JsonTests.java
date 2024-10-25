@@ -323,6 +323,28 @@ public class JsonTests {
 
     @Test
     @SneakyThrows
+    public void clear() {
+        String key = UUID.randomUUID().toString();
+        String json =
+                "{\"obj\": {\"a\":1, \"b\":2}, \"arr\":[1, 2, 3], \"str\": \"foo\", \"bool\": true,"
+                        + " \"int\": 42, \"float\": 3.14, \"nullVal\": null}";
+
+        assertEquals("OK", Json.set(client, key, "$", json).get());
+
+        assertEquals(6L, Json.clear(client, "doc", "$.*").get());
+        var doc = Json.get(client, key, new String[] {"$"}).get();
+        assertEquals(
+                "[{\"obj\":{},\"arr\":[],\"str\":\"\",\"bool\":false,\"int\":0,\"float\":0.0,\"nullVal\":null}]",
+                doc);
+        assertEquals(0L, Json.clear(client, gs("doc"), gs(".*")).get());
+
+        assertEquals(1L, Json.clear(client, gs("doc")).get());
+        doc = Json.get(client, key, new String[] {"$"}).get();
+        assertEquals("[{}]", doc);
+    }
+
+    @Test
+    @SneakyThrows
     public void objlen() {
         String key = UUID.randomUUID().toString();
 
