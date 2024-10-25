@@ -370,7 +370,7 @@ public class JsonTests {
         // Multiple path match
         assertEquals("OK", Json.set(client, key, "$", doc).get());
         res = Json.arrtrim(client, key, "..a", 1, 10).get();
-        assertEquals(5L, res); // Redis returns 5; EC2 returns 8
+        assertEquals(8L, res);
 
         getResult = Json.get(client, key, new String[] {"$..a"}).get();
         expectedGetResult = "[[1,2,3,4,5,6,7,8], [9,10,11,12,13], 42]";
