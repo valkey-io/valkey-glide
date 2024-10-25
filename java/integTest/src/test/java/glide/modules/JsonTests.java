@@ -19,6 +19,7 @@ import glide.api.models.GlideString;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.json.JsonDebugType;
 import glide.api.models.commands.json.JsonGetOptions;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
@@ -293,6 +294,35 @@ public class JsonTests {
                         + "}";
 
         assertEquals(JsonParser.parseString(expected), JsonParser.parseString(doc));
+    }
+
+    @Test
+    @SneakyThrows
+    public void debug() {
+        String key = UUID.randomUUID().toString();
+
+        var doc =
+                "{ \"key1\": 1, \"key2\": 3.5, \"key3\": {\"nested_key\": {\"key1\": [4, 5]}}, \"key4\":"
+                        + " [1, 2, 3], \"key5\": 0, \"key6\": \"hello\", \"key7\": null, \"key8\":"
+                        + " {\"nested_key\": {\"key1\": 3.5953862697246314e307}}, \"key9\":"
+                        + " 3.5953862697246314e307, \"key10\": true }";
+        assertEquals("OK", Json.set(client, key, "$", doc).get());
+
+        assertArrayEquals(
+                new Object[] {1L},
+                (Object[]) Json.debug(client, JsonDebugType.FIELDS, key, "$.key1").get());
+
+        assertEquals(
+                2L, Json.debug(client, JsonDebugType.FIELDS, gs(key), gs(".key3.nested_key.key1")).get());
+
+        assertArrayEquals(
+                new Object[] {16L},
+                (Object[]) Json.debug(client, JsonDebugType.MEMORY, key, "$.key4[2]").get());
+
+        assertEquals(16L, Json.debug(client, JsonDebugType.MEMORY, gs(key), gs(".key6")).get());
+
+        assertEquals(504L, Json.debug(client, JsonDebugType.MEMORY, key).get());
+        assertEquals(19L, Json.debug(client, JsonDebugType.FIELDS, gs(key)).get());
     }
 
     @Test
