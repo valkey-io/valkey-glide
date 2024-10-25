@@ -12,6 +12,7 @@ import glide.api.models.GlideString;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.json.JsonGetOptions;
 import glide.api.models.commands.json.JsonGetOptionsBinary;
+import glide.api.models.commands.json.JsonScalar;
 import glide.utils.ArgsBuilder;
 import java.util.concurrent.CompletableFuture;
 import lombok.NonNull;
@@ -26,6 +27,7 @@ public class Json {
     private static final String JSON_NUMMULTBY = JSON_PREFIX + "NUMMULTBY";
     private static final String JSON_ARRAPPEND = JSON_PREFIX + "ARRAPPEND";
     private static final String JSON_ARRINSERT = JSON_PREFIX + "ARRINSERT";
+    private static final String JSON_ARRINDEX = JSON_PREFIX + "ARRINDEX";
     private static final String JSON_ARRLEN = JSON_PREFIX + "ARRLEN";
     private static final String[] JSON_DEBUG_MEMORY = new String[] {JSON_PREFIX + "DEBUG", "MEMORY"};
     private static final String[] JSON_DEBUG_FIELDS = new String[] {JSON_PREFIX + "DEBUG", "FIELDS"};
@@ -600,6 +602,162 @@ public class Json {
                         .add(Integer.toString(index))
                         .add(values)
                         .toArray());
+    }
+
+    /**
+     * Searches for the first occurrence of a <code>scalar</code> JSON value in the arrays at the
+     * path.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @param scalar The scalar value to search for; JSON scalar refers to values that are not objects
+     *     or arrays.
+     * @return An array of integers. Each value is the index of the matching element in the array at
+     *     the path. The value is -1 if not found. If there are no values in the array, the return
+     *     value will be <code>null</code>
+     * @example
+     *     <pre>{@code
+     * }</pre>
+     */
+    public static CompletableFuture<Integer[]> arrindex(
+            @NonNull BaseClient client,
+            @NonNull String key,
+            @NonNull String path,
+            @NonNull JsonScalar scalar) {
+        return executeCommand(
+                client, concatenateArrays(new String[] {JSON_ARRINDEX, key, path, scalar.toString()}));
+    }
+
+    /**
+     * Searches for the first occurrence of a <code>scalar</code> JSON value in the arrays at the
+     * path.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @param scalar The scalar value to search for; JSON scalar refers to values that are not objects
+     *     or arrays.
+     * @return An array of integers. Each value is the index of the matching element in the array at
+     *     the path. The value is -1 if not found. If there are no values in the array, the return
+     *     value will be <code>null</code>
+     * @example
+     *     <pre>{@code
+     * }</pre>
+     */
+    public static CompletableFuture<Integer[]> arrindex(
+            @NonNull BaseClient client,
+            @NonNull GlideString key,
+            @NonNull GlideString path,
+            @NonNull JsonScalar scalar) {
+        return executeCommand(
+                client, new ArgsBuilder().add(gs(JSON_ARRINDEX)).add(key).add(path).add(scalar).toArray());
+    }
+
+    /**
+     * Searches for the first occurrence of a <code>scalar</code> JSON value in the arrays at the
+     * path.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @param scalar The scalar value to search for; JSON scalar refers to values that are not objects
+     *     or arrays.
+     * @param start The starting index, otherwise it will be defaulted to `0`.
+     * @return An array of integers. Each value is the index of the matching element in the array at
+     *     the path. The value is -1 if not found. If there are no values in the array, the return
+     *     value will be <code>null</code>
+     * @example
+     *     <pre>{@code
+     * }</pre>
+     */
+    public static CompletableFuture<Integer[]> arrindex(
+            @NonNull BaseClient client,
+            @NonNull String key,
+            @NonNull String path,
+            @NonNull JsonScalar scalar, @NonNull Integer start) {
+        return executeCommand(
+                client, concatenateArrays(new String[] {JSON_ARRINDEX, key, path, scalar.toString(), start.toString()}));
+    }
+
+    /**
+     * Searches for the first occurrence of a <code>scalar</code> JSON value in the arrays at the
+     * path.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @param scalar The scalar value to search for; JSON scalar refers to values that are not objects
+     *     or arrays.
+     * @param start The starting index, otherwise it will be defaulted to `0`.
+     * @return An array of integers. Each value is the index of the matching element in the array at
+     *     the path. The value is -1 if not found. If there are no values in the array, the return
+     *     value will be <code>null</code>
+     * @example
+     *     <pre>{@code
+     * }</pre>
+     */
+    public static CompletableFuture<Integer[]> arrindex(
+            @NonNull BaseClient client,
+            @NonNull GlideString key,
+            @NonNull GlideString path,
+            @NonNull JsonScalar scalar, @NonNull Integer start) {
+        return executeCommand(
+                client, new ArgsBuilder().add(gs(JSON_ARRINDEX)).add(key).add(path).add(scalar).add(start.toString()).toArray());
+    }
+
+    /**
+     * Searches for the first occurrence of a <code>scalar</code> JSON value in the arrays at the
+     * path.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @param scalar The scalar value to search for; JSON scalar refers to values that are not objects
+     *     or arrays.
+     * @param start The starting index, otherwise it will be defaulted to `0`.
+     * @param end The ending index. It will default to `0` if not provided. The last element is included. `0` or `-1` means the last element is included.
+     * @return An array of integers. Each value is the index of the matching element in the array at
+     *     the path. The value is -1 if not found. If there are no values in the array, the return
+     *     value will be <code>null</code>
+     * @example
+     *     <pre>{@code
+     * }</pre>
+     */
+    public static CompletableFuture<Integer[]> arrindex(
+            @NonNull BaseClient client,
+            @NonNull String key,
+            @NonNull String path,
+            @NonNull JsonScalar scalar, @NonNull Integer start, @NonNull Integer end) {
+        return executeCommand(
+                client, concatenateArrays(new String[] {JSON_ARRINDEX, key, path, scalar.toString(), start.toString(), end.toString()}));
+    }
+
+    /**
+     * Searches for the first occurrence of a <code>scalar</code> JSON value in the arrays at the
+     * path.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @param scalar The scalar value to search for; JSON scalar refers to values that are not objects
+     *     or arrays.
+     * @param start The starting index, otherwise it will be defaulted to `0`.
+     * @param end The ending index. It will default to `0` if not provided. The last element is included. `0` or `-1` means the last element is included.
+     * @return An array of integers. Each value is the index of the matching element in the array at
+     *     the path. The value is -1 if not found. If there are no values in the array, the return
+     *     value will be <code>null</code>
+     * @example
+     *     <pre>{@code
+     * }</pre>
+     */
+    public static CompletableFuture<Integer[]> arrindex(
+            @NonNull BaseClient client,
+            @NonNull GlideString key,
+            @NonNull GlideString path,
+            @NonNull JsonScalar scalar, @NonNull Integer start, @NonNull Integer end) {
+        return executeCommand(
+                client, new ArgsBuilder().add(gs(JSON_ARRINDEX)).add(key).add(path).add(scalar).add(start.toString()).add(end.toString()).toArray());
     }
 
     /**
