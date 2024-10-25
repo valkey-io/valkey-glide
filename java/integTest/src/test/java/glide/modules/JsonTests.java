@@ -450,7 +450,9 @@ public class JsonTests {
         Object[] expectedResult1 =
                 new Object[] {
                     new Object[] {
-                        "{", new Object[] {"a", 1L}, new Object[] {"b", 2L} // leading "{" indicates JSON objects
+                        "{",
+                        new Object[] {"a", 1L},
+                        new Object[] {"b", 2L} // leading "{" indicates JSON objects
                     },
                     new Object[] {"[", 1L, 2L, 3L}, // leading "[" indicates JSON arrays
                     "foo",
