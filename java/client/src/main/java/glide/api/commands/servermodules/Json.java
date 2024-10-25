@@ -25,6 +25,7 @@ public class Json {
     private static final String JSON_ARRAPPEND = JSON_PREFIX + "ARRAPPEND";
     private static final String JSON_ARRINSERT = JSON_PREFIX + "ARRINSERT";
     private static final String JSON_ARRLEN = JSON_PREFIX + "ARRLEN";
+    private static final String JSON_ARRTRIM = JSON_PREFIX + "ARRTRIM";
     private static final String JSON_OBJLEN = JSON_PREFIX + "OBJLEN";
     private static final String JSON_OBJKEYS = JSON_PREFIX + "OBJKEYS";
     private static final String JSON_DEL = JSON_PREFIX + "DEL";
@@ -711,6 +712,112 @@ public class Json {
     public static CompletableFuture<Long> arrlen(
             @NonNull BaseClient client, @NonNull GlideString key) {
         return executeCommand(client, new GlideString[] {gs(JSON_ARRLEN), key});
+    }
+
+    /**
+     * Trims an array at the specified <code>path</code> within the JSON document started at <code>key
+     * </code> so that it becomes a subarray [<code>start</code>, <code>end</code>], both inclusive.
+     * <br>
+     * If <code>start</code> < 0, it is treated as 0.<br>
+     * If <code>end</code> >= size (size of the array), it is treated as size -1.<br>
+     * If <code>start</code> >= size or <code>start</code> > <code>end</code>, the array is emptied
+     * and 0 is return.<br>
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @param start The index of the first element to keep, inclusive.
+     * @param end The index of the last element to keep, inclusive.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
+     *           Returns an <code>Object[]</code> with a list of integers for every possible path,
+     *           indicating the new length of the array, or <code>null</code> for JSON values matching
+     *           the path that are not an array. If the array is empty, its corresponding return value
+     *           is 0. If <code>path</code> doesn't exist, an empty array will be return. If an index
+     *           argument is out of bounds, an error is raised.
+     *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
+     *           Returns an integer representing the new length of the array. If the array is empty,
+     *           its corresponding return value is 0. If multiple paths match, the length of the first
+     *           trimmed array match is returned. If <code>path</code> doesn't exist, or the value at
+     *           <code>path</code> is not an array, an error is raised. If an index argument is out of
+     *           bounds, an error is raised.
+     *     </ul>
+     *     If <code>key</code> doesn't exist, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "{[], [\"a\"], [\"a\", \"b\"], [\"a\", \"b\", \"c\"]}").get();
+     * var res = Json.arrtrim(client, "doc", "$[*]", 0, 1).get();
+     * assert Arrays.equals((Object[]) res, new Object[] { 0, 1, 2, 2 }); // New lengths of arrays after trimming
+     *
+     * Json.set(client, "doc", "$", "{\"children\": [\"John\", \"Jack\", \"Tom\", \"Bob\", \"Mike\"]}").get();
+     * res = Json.arrtrim(client, "doc", ".children", 0, 1).get();
+     * assert res == 2; // new length after trimming
+     * }</pre>
+     */
+    public static CompletableFuture<Object> arrtrim(
+            @NonNull BaseClient client, @NonNull String key, @NonNull String path, int start, int end) {
+        return executeCommand(
+                client,
+                new String[] {JSON_ARRTRIM, key, path, Integer.toString(start), Integer.toString(end)});
+    }
+
+    /**
+     * Trims an array at the specified <code>path</code> within the JSON document started at <code>key
+     * </code> so that it becomes a subarray [<code>start</code>, <code>end</code>], both inclusive.
+     * <br>
+     * If <code>start</code> < 0, it is treated as 0.<br>
+     * If <code>end</code> >= size (size of the array), it is treated as size -1.<br>
+     * If <code>start</code> >= size or <code>start</code> > <code>end</code>, the array is emptied
+     * and 0 is return.<br>
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @param start The index of the first element to keep, inclusive.
+     * @param end The index of the last element to keep, inclusive.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
+     *           Returns an <code>Object[]</code> with a list of integers for every possible path,
+     *           indicating the new length of the array, or <code>null</code> for JSON values matching
+     *           the path that are not an array. If the array is empty, its corresponding return value
+     *           is 0. If <code>path</code> doesn't exist, an empty array will be return. If an index
+     *           argument is out of bounds, an error is raised.
+     *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
+     *           Returns an integer representing the new length of the array. If the array is empty,
+     *           its corresponding return value is 0. If multiple paths match, the length of the first
+     *           trimmed array match is returned. If <code>path</code> doesn't exist, or the value at
+     *           <code>path</code> is not an array, an error is raised. If an index argument is out of
+     *           bounds, an error is raised.
+     *     </ul>
+     *     If <code>key</code> doesn't exist, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "{[], [\"a\"], [\"a\", \"b\"], [\"a\", \"b\", \"c\"]}").get();
+     * var res = Json.arrtrim(client, gs("doc"), gs("$[*]"), 0, 1).get();
+     * assert Arrays.equals((Object[]) res, new Object[] { 0, 1, 2, 2 }); // New lengths of arrays after trimming
+     *
+     * Json.set(client, "doc", "$", "{\"children\": [\"John\", \"Jack\", \"Tom\", \"Bob\", \"Mike\"]}").get();
+     * res = Json.arrtrim(client, gs("doc"), gs(".children"), 0, 1).get();
+     * assert res == 2; // new length after trimming
+     * }</pre>
+     */
+    public static CompletableFuture<Object> arrtrim(
+            @NonNull BaseClient client,
+            @NonNull GlideString key,
+            @NonNull GlideString path,
+            int start,
+            int end) {
+        return executeCommand(
+                client,
+                new ArgsBuilder()
+                        .add(gs(JSON_ARRTRIM))
+                        .add(key)
+                        .add(path)
+                        .add(Integer.toString(start))
+                        .add(Integer.toString(end))
+                        .toArray());
     }
 
     /**
