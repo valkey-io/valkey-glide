@@ -331,14 +331,14 @@ public class JsonTests {
 
         assertEquals("OK", Json.set(client, key, "$", json).get());
 
-        assertEquals(6L, Json.clear(client, "doc", "$.*").get());
+        assertEquals(6L, Json.clear(client, key, "$.*").get());
         var doc = Json.get(client, key, new String[] {"$"}).get();
         assertEquals(
                 "[{\"obj\":{},\"arr\":[],\"str\":\"\",\"bool\":false,\"int\":0,\"float\":0.0,\"nullVal\":null}]",
                 doc);
-        assertEquals(0L, Json.clear(client, gs("doc"), gs(".*")).get());
+        assertEquals(0L, Json.clear(client, gs(key), gs(".*")).get());
 
-        assertEquals(1L, Json.clear(client, gs("doc")).get());
+        assertEquals(1L, Json.clear(client, gs(key)).get());
         doc = Json.get(client, key, new String[] {"$"}).get();
         assertEquals("[{}]", doc);
     }
