@@ -109,7 +109,7 @@ public class FTProfileOptions {
      */
     public FTProfileOptions(
             @NonNull GlideString query, @NonNull FTSearchOptions options, boolean limited) {
-        queryType = QueryType.AGGREGATE;
+        queryType = QueryType.SEARCH;
         commandLine = concatenateArrays(new GlideString[] {query}, options.toArgs());
         this.limited = limited;
     }
