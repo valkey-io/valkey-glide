@@ -1217,9 +1217,18 @@ public class Json {
 
     /**
      * Retrieves the JSON document stored at <code>key</code>. The returning result is in the Valkey or Redis OSS Serialization Protocol (RESP).
+     * <ul>
+     *     <li>JSON null is mapped to the RESP Null Bulk String.</li>
+     *     <li>JSON Booleans are mapped to RESP Simple string.</li>
+     *     <li>JSON integers are mapped to RESP Integers.</li>
+     *     <li>JSON doubles are mapped to RESP Bulk Strings.</li>
+     *     <li>JSON strings are mapped to RESP Bulk Strings.</li>
+     *     <li>JSON arrays are represented as RESP arrays, where the first element is the simple string [, followed by the array's elements.</li>
+     *     <li>JSON objects are represented as RESP object, where the first element is the simple string {, followed by key-value pairs, each of which is a RESP bulk string.</li>
+     * </ul>
      *
      * @param client The Valkey GLIDE client to execute the command.
-     * @param key The <code>key</code> of the JSON document.
+     * @param key The key of the JSON document.
      * @return Returns the JSON document in its RESP form.
      *     If <code>key</code> doesn't exist, <code>null</code> is returned.
      * @example
@@ -1228,12 +1237,9 @@ public class Json {
      * Object actualResult = Json.resp(client, "doc").get();
      * Object[] expectedResult = new Object[] {
      *     "{",
-     *     "a",
-     *     new Object[] {"[", 1L, 2L, 3L},
-     *     "b",
-     *     new Object[] {"{", "b1", 1L},
-     *     "c",
-     *     42L
+     *     new Object[] {"a", new Object[] {"[", 1L, 2L, 3L}},
+     *     new Object[] {"b", new Object[] {"{", new Object[] {"b1", 1L}}},
+     *     new Object[] {"c", 42L}
      * };
      * assertInstanceOf(Object[].class, actualResult);
      * assertArrayEquals(expectedResult, (Object[]) actualResult);
@@ -1245,9 +1251,18 @@ public class Json {
 
     /**
      * Retrieves the JSON document stored at <code>key</code>. The returning result is in the Valkey or Redis OSS Serialization Protocol (RESP).
+     * <ul>
+     *     <li>JSON null is mapped to the RESP Null Bulk String.</li>
+     *     <li>JSON Booleans are mapped to RESP Simple string.</li>
+     *     <li>JSON integers are mapped to RESP Integers.</li>
+     *     <li>JSON doubles are mapped to RESP Bulk Strings.</li>
+     *     <li>JSON strings are mapped to RESP Bulk Strings.</li>
+     *     <li>JSON arrays are represented as RESP arrays, where the first element is the simple string [, followed by the array's elements.</li>
+     *     <li>JSON objects are represented as RESP object, where the first element is the simple string {, followed by key-value pairs, each of which is a RESP bulk string.</li>
+     * </ul>
      *
      * @param client The Valkey GLIDE client to execute the command.
-     * @param key The <code>key</code> of the JSON document.
+     * @param key The key of the JSON document.
      * @return Returns the JSON document in its RESP form.
      *     If <code>key</code> doesn't exist, <code>null</code> is returned.
      * @example
@@ -1255,13 +1270,10 @@ public class Json {
      * Json.set(client, "doc", ".", "{\"a\": [1, 2, 3], \"b\": {\"b1\": 1}, \"c\": 42}");
      * Object actualResultBinary = Json.resp(client, gs("doc")).get();
      * Object[] expectedResultBinary = new Object[] {
-     *     gs("{"),
-     *     gs("a"),
-     *     new Object[] {gs("["), 1L, 2L, 3L},
-     *     gs("b"),
-     *     new Object[] {gs("{"), gs("b1"), 1L},
-     *     gs("c"),
-     *     42L
+     *     "{",
+     *     new Object[] {gs("a"), new Object[] {gs("["), 1L, 2L, 3L}},
+     *     new Object[] {gs("b"), new Object[] {gs("{"), new Object[] {gs("b1"), 1L}}},
+     *     new Object[] {gs("c"), 42L}
      * };
      * assertInstanceOf(Object[].class, actualResultBinary);
      * assertArrayEquals(expectedResultBinary, (Object[]) actualResultBinary);
@@ -1276,6 +1288,18 @@ public class Json {
      * Retrieve the JSON value at the specified <code>path</code> within the JSON document stored at
      * <code>key</code>. The returning result is in the Valkey or Redis OSS Serialization Protocol
      * (RESP).
+     *
+     * <ul>
+     *   <li>JSON null is mapped to the RESP Null Bulk String.
+     *   <li>JSON Booleans are mapped to RESP Simple string.
+     *   <li>JSON integers are mapped to RESP Integers.
+     *   <li>JSON doubles are mapped to RESP Bulk Strings.
+     *   <li>JSON strings are mapped to RESP Bulk Strings.
+     *   <li>JSON arrays are represented as RESP arrays, where the first element is the simple string
+     *       [, followed by the array's elements.
+     *   <li>JSON objects are represented as RESP object, where the first element is the simple string
+     *       {, followed by key-value pairs, each of which is a RESP bulk string.
+     * </ul>
      *
      * @param client The Valkey GLIDE client to execute the command.
      * @param key The key of the JSON document.
@@ -1298,7 +1322,7 @@ public class Json {
      * Object[] expectedResult = new Object[] {
      *                 new Object[] {"[", 1L, 2L, 3L},
      *                 new Object[] {"[", 1L, 2L},
-     *                 42L}
+     *                 42L};
      * assertArrayEquals(expectedResult, (Object[]) actualResult);
      * // legacy path only returns the first JSON value match
      * assertArrayEquals(new Object[] {"[", 1L, 2L, 3L}, (Object[]) Json.resp(client, key, "..a").get());
@@ -1313,6 +1337,18 @@ public class Json {
      * Retrieve the JSON value at the specified <code>path</code> within the JSON document stored at
      * <code>key</code>. The returning result is in the Valkey or Redis OSS Serialization Protocol
      * (RESP).
+     *
+     * <ul>
+     *   <li>JSON null is mapped to the RESP Null Bulk String.
+     *   <li>JSON Booleans are mapped to RESP Simple string.
+     *   <li>JSON integers are mapped to RESP Integers.
+     *   <li>JSON doubles are mapped to RESP Bulk Strings.
+     *   <li>JSON strings are mapped to RESP Bulk Strings.
+     *   <li>JSON arrays are represented as RESP arrays, where the first element is the simple string
+     *       [, followed by the array's elements.
+     *   <li>JSON objects are represented as RESP object, where the first element is the simple string
+     *       {, followed by key-value pairs, each of which is a RESP bulk string.
+     * </ul>
      *
      * @param client The Valkey GLIDE client to execute the command.
      * @param key The key of the JSON document.
@@ -1335,7 +1371,7 @@ public class Json {
      * Object[] expectedResult = new Object[] {
      *                 new Object[] {gs("["), 1L, 2L, 3L},
      *                 new Object[] {gs("["), 1L, 2L},
-     *                 42L}
+     *                 42L};
      * assertArrayEquals(expectedResult, (Object[]) actualResult);
      * // legacy path only returns the first JSON value match
      * assertArrayEquals(new Object[] {gs("["), 1L, 2L, 3L}, (Object[]) Json.resp(client, gs(key), gs("..a")).get());
