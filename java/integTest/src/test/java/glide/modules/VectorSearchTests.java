@@ -852,12 +852,6 @@ public class VectorSearchTests {
         result = resultGS.toString();
         assertTrue(result.contains("*"));
 
-        // with dialect option
-        result = FT.explain(client, indexName, query, 1.2).get();
-        assertTrue(result.contains("price"));
-        assertTrue(result.contains("0"));
-        assertTrue(result.contains("10"));
-
         assertEquals(OK, FT.dropindex(client, indexName).get());
 
         // missing index throws an error.
@@ -907,16 +901,6 @@ public class VectorSearchTests {
             resultListGS.add(r.toString().trim()); // trim to remove any excess white space
         }
         assertTrue((resultListGS).contains("*"));
-
-        // with dialect option
-        resultList.clear();
-        result = FT.explaincli(client, indexName, query, 1.2).get();
-        for (String r : result) {
-            resultList.add(r.trim()); // trim to remove any excess white space
-        }
-        assertTrue(resultList.contains("price"));
-        assertTrue(resultList.contains("0"));
-        assertTrue(resultList.contains("10"));
 
         assertEquals(OK, FT.dropindex(client, indexName).get());
 
