@@ -797,7 +797,7 @@ public class Json {
      */
     public static CompletableFuture<Object> arrtrim(
             @NonNull BaseClient client,
-            @NonNull String key,
+            @NonNull GlideString key,
             @NonNull GlideString path,
             int start,
             int end) {
