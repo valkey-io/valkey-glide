@@ -707,7 +707,7 @@ public class FT {
      * @return A <code>string</code> representing the execution plan.
      * @example
      *     <pre>{@code
-     * FT.explain(client, "myIndex", "@price:[0 10]").get();   
+     * FT.explain(client, "myIndex", "@price:[0 10]").get();
      * // the result can look like (the result is a string):
      * //  Field {
      * //    price
@@ -733,13 +733,13 @@ public class FT {
      * @return A <code>string</code> representing the execution plan.
      * @example
      *     <pre>{@code
-     * FT.explain(client, "myIndex", "@price:[0 10]").get();   
+     * FT.explain(client, "myIndex", "@price:[0 10]").get();
      * // the result can look like (the result is a string):
      * //  Field {
      * //    price
      * //    0
      * //    10
-     * // }     
+     * // }
      * }</pre>
      */
     public static CompletableFuture<GlideString> explain(
@@ -759,13 +759,13 @@ public class FT {
      * @return A <code>string array</code> representing the execution plan.
      * @example
      *     <pre>{@code
-     * FT.explaincli(client, "myIndex",  "@price:[0 10]").get();   
+     * FT.explaincli(client, "myIndex",  "@price:[0 10]").get();
      * // the output can look like this (the result is an array)
      * //  Field {
      * //    price
      * //    0
      * //    10
-     * // } 
+     * // }
      * }</pre>
      */
     public static CompletableFuture<String[]> explaincli(
@@ -786,13 +786,13 @@ public class FT {
      * @return A <code>string array</code> representing the execution plan.
      * @example
      *     <pre>{@code
-     * FT.explaincli(client, "myIndex",  "@price:[0 10]").get();   
+     * FT.explaincli(client, "myIndex",  "@price:[0 10]").get();
      * // the output can look like this (the result is an array)
      * //  Field {
      * //    price
      * //    0
      * //    10
-     * // } 
+     * // }
      * }</pre>
      */
     public static CompletableFuture<GlideString[]> explaincli(
