@@ -394,21 +394,35 @@ public class TestUtilities {
         return script.replace("$timeout", Integer.toString(timeout));
     }
 
-    public static void waitForNotBusy(BaseClient client) {
+    /**
+     * Lock test until server completes a script/function execution.
+     *
+     * @param function true if need to kill a function, false to kill a script.
+     */
+    @SneakyThrows
+    public static void waitForNotBusy(BaseClient client, boolean function) {
         // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
         // test to fail.
         boolean isBusy = true;
+        int timeout = 10000; // 10 sec - to avoid infinite locking
         do {
+            if (timeout <= 0) fail();
             try {
                 if (client instanceof GlideClusterClient) {
-                    ((GlideClusterClient) client).functionKill().get();
+                    if (function) ((GlideClusterClient) client).functionKill().get();
+                    else ((GlideClusterClient) client).scriptKill().get();
                 } else if (client instanceof GlideClient) {
-                    ((GlideClient) client).functionKill().get();
+                    if (function) ((GlideClient) client).functionKill().get();
+                    else ((GlideClient) client).scriptKill().get();
                 }
+                timeout -= 100;
             } catch (Exception busy) {
                 // should throw `notbusy` error, because the function should be killed before
                 if (busy.getMessage().toLowerCase().contains("notbusy")) {
                     isBusy = false;
+                } else {
+                    Thread.sleep(100);
+                    timeout -= 100;
                 }
             }
         } while (isBusy);

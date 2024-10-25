@@ -784,7 +784,7 @@ public class CommandTests {
 
                 assertTrue(functionKilled);
             } finally {
-                waitForNotBusy(regularClient);
+                waitForNotBusy(regularClient, true);
             }
         }
     }
@@ -835,7 +835,7 @@ public class CommandTests {
 
                 assertTrue(functionKilled);
             } finally {
-                waitForNotBusy(regularClient);
+                waitForNotBusy(regularClient, true);
             }
         }
     }
@@ -1681,7 +1681,7 @@ public class CommandTests {
 
                 assertTrue(scriptKilled);
             } finally {
-                waitForNotBusy(regularClient);
+                waitForNotBusy(regularClient, false);
             }
         }
 

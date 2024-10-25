@@ -1808,7 +1808,7 @@ public class CommandTests {
 
                 assertTrue(functionKilled);
             } finally {
-                waitForNotBusy(clusterClient);
+                waitForNotBusy(clusterClient, true);
             }
         }
     }
@@ -1863,7 +1863,7 @@ public class CommandTests {
 
                 assertTrue(functionKilled);
             } finally {
-                waitForNotBusy(clusterClient);
+                waitForNotBusy(clusterClient, true);
             }
         }
     }
@@ -1915,7 +1915,7 @@ public class CommandTests {
 
                 assertTrue(functionKilled);
             } finally {
-                waitForNotBusy(clusterClient);
+                waitForNotBusy(clusterClient, true);
             }
         }
     }
@@ -1969,7 +1969,7 @@ public class CommandTests {
 
                 assertTrue(functionKilled);
             } finally {
-                waitForNotBusy(clusterClient);
+                waitForNotBusy(clusterClient, true);
             }
         }
     }
@@ -3276,7 +3276,7 @@ public class CommandTests {
 
                 assertTrue(scriptKilled);
             } finally {
-                waitForNotBusy(clusterClient);
+                waitForNotBusy(clusterClient, false);
             }
         }
 
