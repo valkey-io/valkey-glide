@@ -109,7 +109,7 @@ cd python
 python3 -m venv .env
 source .env/bin/activate
 pip install -r requirements.txt
-pip install -r python/dev_requirements.txt
+pip install -r dev_requirements.txt
 ```
 
 ## Build the package (in release mode):
@@ -117,7 +117,7 @@ pip install -r python/dev_requirements.txt
 ```bash
 maturin develop --release --strip
 ```
-    
+
 > **Note:** to build the wrapper binary with debug symbols remove the `--strip` flag.
 
 > **Note 2:** for a faster build time, execute `maturin develop` without the release flag. This will perform an unoptimized build, which is suitable for developing tests. Keep in mind that performance is significantly affected in an unoptimized build, so it's required to include the `--release` flag when measuring performance.
@@ -156,8 +156,8 @@ pytest --asyncio-mode=auto --cluster-endpoints=localhost:7000 --standalone-endpo
 # Generate protobuf files
 ---
 
-During the initial build, Python protobuf files were created in `python/python/glide/protobuf`. If modifications are made 
-to the protobuf definition files (`.proto` files located in `glide-core/src/protofuf`), it becomes necessary to 
+During the initial build, Python protobuf files were created in `python/python/glide/protobuf`. If modifications are made
+to the protobuf definition files (`.proto` files located in `glide-core/src/protofuf`), it becomes necessary to
 regenerate the Python protobuf files. To do so, run:
 
 ```bash
