@@ -30,6 +30,7 @@ public class Json {
     private static final String JSON_DEL = JSON_PREFIX + "DEL";
     private static final String JSON_FORGET = JSON_PREFIX + "FORGET";
     private static final String JSON_TOGGLE = JSON_PREFIX + "TOGGLE";
+    private static final String JSON_CLEAR = JSON_PREFIX + "CLEAR";
 
     private Json() {}
 
@@ -1207,6 +1208,125 @@ public class Json {
             @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString path) {
         return executeCommand(
                 client, new ArgsBuilder().add(gs(JSON_TOGGLE)).add(key).add(path).toArray());
+    }
+
+    /**
+     * Clears an array or an object at the root of the JSON document stored at <code>key</code>.<br>
+     * Equivalent to {@link #clear(BaseClient, String, String)} with <code>path</code> set to <code>
+     * "."</code>.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @return <code>1</code> if the document wasn't empty or <code>0</code> if it was.<br>
+     *     If <code>key</code> doesn't exist, an error is raised.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "{\"a\":1, \"b\":2}").get();
+     * long res = Json.clear(client, "doc").get();
+     * assert res == 1;
+     *
+     * var doc = Json.get(client, "doc", "$").get();
+     * assert doc.equals("[{}]");
+     *
+     * res = Json.clear(client, "doc").get();
+     * assert res == 0; // the doc is already empty
+     * }</pre>
+     */
+    public static CompletableFuture<Long> clear(@NonNull BaseClient client, @NonNull String key) {
+        return executeCommand(client, new String[] {JSON_CLEAR, key});
+    }
+
+    /**
+     * Clears an array or an object at the root of the JSON document stored at <code>key</code>.<br>
+     * Equivalent to {@link #clear(BaseClient, GlideString, GlideString)} with <code>path</code> set
+     * to <code>"."</code>.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @return <code>1</code> if the document wasn't empty or <code>0</code> if it was.<br>
+     *     If <code>key</code> doesn't exist, an error is raised.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "{\"a\":1, \"b\":2}").get();
+     * long res = Json.clear(client, gs("doc")).get();
+     * assert res == 1;
+     *
+     * var doc = Json.get(client, "doc", "$").get();
+     * assert doc.equals("[{}]");
+     *
+     * res = Json.clear(client, gs("doc")).get();
+     * assert res == 0; // the doc is already empty
+     * }</pre>
+     */
+    public static CompletableFuture<Long> clear(
+            @NonNull BaseClient client, @NonNull GlideString key) {
+        return executeCommand(client, new GlideString[] {gs(JSON_CLEAR), key});
+    }
+
+    /**
+     * Clears arrays or objects at the specified <code>path</code> within the JSON document stored at
+     * <code>key</code>.<br>
+     * Numeric values are set to <code>0</code>, and boolean values are set to <code>false</code>, and
+     * string values are converted to empty strings.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @return The number of containers cleared, numeric values zeroed, and booleans toggled to <code>
+     *     false</code>, and string values converted to empty strings.<br>
+     *     If <code>path</code> doesn't exist, or the value at <code>path</code> is already empty
+     *     (e.g., an empty array, object, or string), 0 is returned. If <code>key</code> doesn't
+     *     exist, an error is raised.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "{\"obj\": {\"a\":1, \"b\":2}, \"arr\":[1, 2, 3], \"str\": \"foo\", \"bool\": true,
+     *     \"int\": 42, \"float\": 3.14, \"nullVal\": null}").get();
+     * long res = Json.clear(client, "doc", "$.*").get();
+     * assert res == 6; // 6 values are cleared (arrays/objects/strings/numbers/booleans), but `null` remains as is.
+     *
+     * var doc = Json.get(client, "doc", "$").get();
+     * assert doc.equals("[{\"obj\":{},\"arr\":[],\"str\":\"\",\"bool\":false,\"int\":0,\"float\":0.0,\"nullVal\":null}]");
+     *
+     * res = Json.clear(client, "doc", "$.*").get();
+     * assert res == 0; // containers are already empty and the values are defaults
+     * }</pre>
+     */
+    public static CompletableFuture<Long> clear(
+            @NonNull BaseClient client, @NonNull String key, @NonNull String path) {
+        return executeCommand(client, new String[] {JSON_CLEAR, key, path});
+    }
+
+    /**
+     * Clears arrays or objects at the specified <code>path</code> within the JSON document stored at
+     * <code>key</code>.<br>
+     * Numeric values are set to <code>0</code>, and boolean values are set to <code>false</code>, and
+     * string values are converted to empty strings.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @return The number of containers cleared, numeric values zeroed, and booleans toggled to <code>
+     *     false</code>, and string values converted to empty strings.<br>
+     *     If <code>path</code> doesn't exist, or the value at <code>path</code> is already empty
+     *     (e.g., an empty array, object, or string), 0 is returned. If <code>key</code> doesn't
+     *     exist, an error is raised.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "{\"obj\": {\"a\":1, \"b\":2}, \"arr\":[1, 2, 3], \"str\": \"foo\", \"bool\": true,
+     *     \"int\": 42, \"float\": 3.14, \"nullVal\": null}").get();
+     * long res = Json.clear(client, gs("doc"), gs("$.*")).get();
+     * assert res == 6; // 6 values are cleared (arrays/objects/strings/numbers/booleans), but `null` remains as is.
+     *
+     * var doc = Json.get(client, "doc", "$").get();
+     * assert doc.equals("[{\"obj\":{},\"arr\":[],\"str\":\"\",\"bool\":false,\"int\":0,\"float\":0.0,\"nullVal\":null}]");
+     *
+     * res = Json.clear(client, gs("doc"), gs("$.*")).get();
+     * assert res == 0; // containers are already empty and the values are defaults
+     * }</pre>
+     */
+    public static CompletableFuture<Long> clear(
+            @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString path) {
+        return executeCommand(client, new GlideString[] {gs(JSON_CLEAR), key, path});
     }
 
     /**
