@@ -712,8 +712,8 @@ public class Json {
      * Trims an array at the specified <code>path</code> within the JSON document started at <code>key
      * </code> so that it becomes a subarray [<code>start</code>, <code>end</code>], both inclusive.
      * <br>
-     * If <code>start</code> < 0, it is treated as 0. <br>
-     * If <code>end</code> >= size (size of the array), it is treated as size -1. <br>
+     * If <code>start</code> < 0, it is treated as 0.<br>
+     * If <code>end</code> >= size (size of the array), it is treated as size -1.<br>
      * If <code>start</code> >= size or <code>start</code> > <code>end</code>, the array is emptied
      * and 0 is return.<br>
      *
@@ -743,6 +743,7 @@ public class Json {
      * Json.set(client, "doc", "$", "{[], [\"a\"], [\"a\", \"b\"], [\"a\", \"b\", \"c\"]}").get();
      * var res = Json.arrtrim(client, "doc", "$[*]", 0, 1).get();
      * assert Arrays.equals((Object[]) res, new Object[] { 0, 1, 2, 2 }); // New lengths of arrays after trimming
+     *
      * Json.set(client, "doc", "$", "{\"children\": [\"John\", \"Jack\", \"Tom\", \"Bob\", \"Mike\"]}").get();
      * res = Json.arrtrim(client, "doc", ".children", 0, 1).get();
      * assert res == 2; // new length after trimming
@@ -759,8 +760,8 @@ public class Json {
      * Trims an array at the specified <code>path</code> within the JSON document started at <code>key
      * </code> so that it becomes a subarray [<code>start</code>, <code>end</code>], both inclusive.
      * <br>
-     * If <code>start</code> < 0, it is treated as 0. <br>
-     * If <code>end</code> >= size (size of the array), it is treated as size -1. <br>
+     * If <code>start</code> < 0, it is treated as 0.<br>
+     * If <code>end</code> >= size (size of the array), it is treated as size -1.<br>
      * If <code>start</code> >= size or <code>start</code> > <code>end</code>, the array is emptied
      * and 0 is return.<br>
      *
@@ -790,6 +791,7 @@ public class Json {
      * Json.set(client, "doc", "$", "{[], [\"a\"], [\"a\", \"b\"], [\"a\", \"b\", \"c\"]}").get();
      * var res = Json.arrtrim(client, gs("doc"), gs("$[*]"), 0, 1).get();
      * assert Arrays.equals((Object[]) res, new Object[] { 0, 1, 2, 2 }); // New lengths of arrays after trimming
+     *
      * Json.set(client, "doc", "$", "{\"children\": [\"John\", \"Jack\", \"Tom\", \"Bob\", \"Mike\"]}").get();
      * res = Json.arrtrim(client, gs("doc"), gs(".children"), 0, 1).get();
      * assert res == 2; // new length after trimming
