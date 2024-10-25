@@ -30,6 +30,8 @@ public class Json {
     private static final String JSON_DEL = JSON_PREFIX + "DEL";
     private static final String JSON_FORGET = JSON_PREFIX + "FORGET";
     private static final String JSON_TOGGLE = JSON_PREFIX + "TOGGLE";
+    private static final String JSON_RESP = JSON_PREFIX + "RESP";
+    private static final String JSON_TYPE = JSON_PREFIX + "TYPE";
 
     private Json() {}
 
@@ -189,11 +191,12 @@ public class Json {
      *           <ul>
      *             <li>For JSONPath (path starts with <code>$</code>): Returns a stringified JSON list
      *                 replies for every possible path, or a string representation of an empty array,
-     *                 if path doesn't exist. If <code>key</code> doesn't exist, returns None.
+     *                 if path doesn't exist. If <code>key</code> doesn't exist, returns <code>null
+     *                 </code>.
      *             <li>For legacy path (path doesn't start with <code>$</code>): Returns a string
      *                 representation of the value in <code>paths</code>. If <code>paths</code>
      *                 doesn't exist, an error is raised. If <code>key</code> doesn't exist, returns
-     *                 None.
+     *                 <code>null</code>.
      *           </ul>
      *       <li>If multiple paths are given: Returns a stringified JSON, in which each path is a key,
      *           and it's corresponding value, is the value as if the path was executed in the command
@@ -226,11 +229,12 @@ public class Json {
      *           <ul>
      *             <li>For JSONPath (path starts with <code>$</code>): Returns a stringified JSON list
      *                 replies for every possible path, or a string representation of an empty array,
-     *                 if path doesn't exist. If <code>key</code> doesn't exist, returns None.
+     *                 if path doesn't exist. If <code>key</code> doesn't exist, returns <code>null
+     *                 </code>.
      *             <li>For legacy path (path doesn't start with <code>$</code>): Returns a string
      *                 representation of the value in <code>paths</code>. If <code>paths</code>
      *                 doesn't exist, an error is raised. If <code>key</code> doesn't exist, returns
-     *                 None.
+     *                 <code>null</code>.
      *           </ul>
      *       <li>If multiple paths are given: Returns a stringified JSON, in which each path is a key,
      *           and it's corresponding value, is the value as if the path was executed in the command
@@ -317,11 +321,12 @@ public class Json {
      *           <ul>
      *             <li>For JSONPath (path starts with <code>$</code>): Returns a stringified JSON list
      *                 replies for every possible path, or a string representation of an empty array,
-     *                 if path doesn't exist. If <code>key</code> doesn't exist, returns None.
+     *                 if path doesn't exist. If <code>key</code> doesn't exist, returns <code>null
+     *                 </code>.
      *             <li>For legacy path (path doesn't start with <code>$</code>): Returns a string
      *                 representation of the value in <code>paths</code>. If <code>paths</code>
      *                 doesn't exist, an error is raised. If <code>key</code> doesn't exist, returns
-     *                 None.
+     *                 <code>null</code>.
      *           </ul>
      *       <li>If multiple paths are given: Returns a stringified JSON, in which each path is a key,
      *           and it's corresponding value, is the value as if the path was executed in the command
@@ -363,11 +368,12 @@ public class Json {
      *           <ul>
      *             <li>For JSONPath (path starts with <code>$</code>): Returns a stringified JSON list
      *                 replies for every possible path, or a string representation of an empty array,
-     *                 if path doesn't exist. If <code>key</code> doesn't exist, returns None.
+     *                 if path doesn't exist. If <code>key</code> doesn't exist, returns <code>null
+     *                 </code>.
      *             <li>For legacy path (path doesn't start with <code>$</code>): Returns a string
      *                 representation of the value in <code>paths</code>. If <code>paths</code>
      *                 doesn't exist, an error is raised. If <code>key</code> doesn't exist, returns
-     *                 None.
+     *                 <code>null</code>.
      *           </ul>
      *       <li>If multiple paths are given: Returns a stringified JSON, in which each path is a key,
      *           and it's corresponding value, is the value as if the path was executed in the command
@@ -1207,6 +1213,173 @@ public class Json {
             @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString path) {
         return executeCommand(
                 client, new ArgsBuilder().add(gs(JSON_TOGGLE)).add(key).add(path).toArray());
+    }
+
+    /**
+     * Retrieves the JSON document stored at <code>key</code>. The returning result is in the Valkey or Redis OSS Serialization Protocol (RESP).
+     * <ul>
+     *     <li>JSON null is mapped to the RESP Null Bulk String.</li>
+     *     <li>JSON Booleans are mapped to RESP Simple string.</li>
+     *     <li>JSON integers are mapped to RESP Integers.</li>
+     *     <li>JSON doubles are mapped to RESP Bulk Strings.</li>
+     *     <li>JSON strings are mapped to RESP Bulk Strings.</li>
+     *     <li>JSON arrays are represented as RESP arrays, where the first element is the simple string [, followed by the array's elements.</li>
+     *     <li>JSON objects are represented as RESP object, where the first element is the simple string {, followed by key-value pairs, each of which is a RESP bulk string.</li>
+     * </ul>
+     *
+     * @param client The Valkey GLIDE client to execute the command.
+     * @param key The key of the JSON document.
+     * @return Returns the JSON document in its RESP form.
+     *     If <code>key</code> doesn't exist, <code>null</code> is returned.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", ".", "{\"a\": [1, 2, 3], \"b\": {\"b1\": 1}, \"c\": 42}");
+     * Object actualResult = Json.resp(client, "doc").get();
+     * Object[] expectedResult = new Object[] {
+     *     "{",
+     *     new Object[] {"a", new Object[] {"[", 1L, 2L, 3L}},
+     *     new Object[] {"b", new Object[] {"{", new Object[] {"b1", 1L}}},
+     *     new Object[] {"c", 42L}
+     * };
+     * assertInstanceOf(Object[].class, actualResult);
+     * assertArrayEquals(expectedResult, (Object[]) actualResult);
+     * }</pre>
+     */
+    public static CompletableFuture<Object> resp(@NonNull BaseClient client, @NonNull String key) {
+        return executeCommand(client, new String[] {JSON_RESP, key});
+    }
+
+    /**
+     * Retrieves the JSON document stored at <code>key</code>. The returning result is in the Valkey or Redis OSS Serialization Protocol (RESP).
+     * <ul>
+     *     <li>JSON null is mapped to the RESP Null Bulk String.</li>
+     *     <li>JSON Booleans are mapped to RESP Simple string.</li>
+     *     <li>JSON integers are mapped to RESP Integers.</li>
+     *     <li>JSON doubles are mapped to RESP Bulk Strings.</li>
+     *     <li>JSON strings are mapped to RESP Bulk Strings.</li>
+     *     <li>JSON arrays are represented as RESP arrays, where the first element is the simple string [, followed by the array's elements.</li>
+     *     <li>JSON objects are represented as RESP object, where the first element is the simple string {, followed by key-value pairs, each of which is a RESP bulk string.</li>
+     * </ul>
+     *
+     * @param client The Valkey GLIDE client to execute the command.
+     * @param key The key of the JSON document.
+     * @return Returns the JSON document in its RESP form.
+     *     If <code>key</code> doesn't exist, <code>null</code> is returned.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", ".", "{\"a\": [1, 2, 3], \"b\": {\"b1\": 1}, \"c\": 42}");
+     * Object actualResultBinary = Json.resp(client, gs("doc")).get();
+     * Object[] expectedResultBinary = new Object[] {
+     *     "{",
+     *     new Object[] {gs("a"), new Object[] {gs("["), 1L, 2L, 3L}},
+     *     new Object[] {gs("b"), new Object[] {gs("{"), new Object[] {gs("b1"), 1L}}},
+     *     new Object[] {gs("c"), 42L}
+     * };
+     * assertInstanceOf(Object[].class, actualResultBinary);
+     * assertArrayEquals(expectedResultBinary, (Object[]) actualResultBinary);
+     * }</pre>
+     */
+    public static CompletableFuture<Object> resp(
+            @NonNull BaseClient client, @NonNull GlideString key) {
+        return executeCommand(client, new GlideString[] {gs(JSON_RESP), key});
+    }
+
+    /**
+     * Retrieve the JSON value at the specified <code>path</code> within the JSON document stored at
+     * <code>key</code>. The returning result is in the Valkey or Redis OSS Serialization Protocol
+     * (RESP).
+     *
+     * <ul>
+     *   <li>JSON null is mapped to the RESP Null Bulk String.
+     *   <li>JSON Booleans are mapped to RESP Simple string.
+     *   <li>JSON integers are mapped to RESP Integers.
+     *   <li>JSON doubles are mapped to RESP Bulk Strings.
+     *   <li>JSON strings are mapped to RESP Bulk Strings.
+     *   <li>JSON arrays are represented as RESP arrays, where the first element is the simple string
+     *       [, followed by the array's elements.
+     *   <li>JSON objects are represented as RESP object, where the first element is the simple string
+     *       {, followed by key-value pairs, each of which is a RESP bulk string.
+     * </ul>
+     *
+     * @param client The Valkey GLIDE client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>): Returns a list of
+     *           replies for every possible path, indicating the RESP form of the JSON value. If
+     *           <code>path</code> doesn't exist, returns an empty list.
+     *       <li>For legacy path (<code>path</code> doesn't starts with <code>$</code>): Returns a
+     *           single reply for the JSON value at the specified path, in its RESP form. If multiple
+     *           paths match, the value of the first JSON value match is returned. If <code>path
+     *           </code> doesn't exist, an error is raised.
+     *     </ul>
+     *     If <code>key</code> doesn't exist, <code>null</code> is returned.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", ".", "{\"a\": [1, 2, 3], \"b\": {\"a\": [1, 2], \"c\": {\"a\": 42}}}");
+     * Object actualResult = Json.resp(client, "doc", "$..a").get(); // JSONPath returns all possible paths
+     * Object[] expectedResult = new Object[] {
+     *                 new Object[] {"[", 1L, 2L, 3L},
+     *                 new Object[] {"[", 1L, 2L},
+     *                 42L};
+     * assertArrayEquals(expectedResult, (Object[]) actualResult);
+     * // legacy path only returns the first JSON value match
+     * assertArrayEquals(new Object[] {"[", 1L, 2L, 3L}, (Object[]) Json.resp(client, key, "..a").get());
+     * }</pre>
+     */
+    public static CompletableFuture<Object> resp(
+            @NonNull BaseClient client, @NonNull String key, @NonNull String path) {
+        return executeCommand(client, new String[] {JSON_RESP, key, path});
+    }
+
+    /**
+     * Retrieve the JSON value at the specified <code>path</code> within the JSON document stored at
+     * <code>key</code>. The returning result is in the Valkey or Redis OSS Serialization Protocol
+     * (RESP).
+     *
+     * <ul>
+     *   <li>JSON null is mapped to the RESP Null Bulk String.
+     *   <li>JSON Booleans are mapped to RESP Simple string.
+     *   <li>JSON integers are mapped to RESP Integers.
+     *   <li>JSON doubles are mapped to RESP Bulk Strings.
+     *   <li>JSON strings are mapped to RESP Bulk Strings.
+     *   <li>JSON arrays are represented as RESP arrays, where the first element is the simple string
+     *       [, followed by the array's elements.
+     *   <li>JSON objects are represented as RESP object, where the first element is the simple string
+     *       {, followed by key-value pairs, each of which is a RESP bulk string.
+     * </ul>
+     *
+     * @param client The Valkey GLIDE client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>): Returns a list of
+     *           replies for every possible path, indicating the RESP form of the JSON value. If
+     *           <code>path</code> doesn't exist, returns an empty list.
+     *       <li>For legacy path (<code>path</code> doesn't starts with <code>$</code>): Returns a
+     *           single reply for the JSON value at the specified path, in its RESP form. If multiple
+     *           paths match, the value of the first JSON value match is returned. If <code>path
+     *           </code> doesn't exist, an error is raised.
+     *     </ul>
+     *     If <code>key</code> doesn't exist, <code>null</code> is returned.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", ".", "{\"a\": [1, 2, 3], \"b\": {\"a\": [1, 2], \"c\": {\"a\": 42}}}");
+     * Object actualResult = Json.resp(client, gs("doc"), gs("$..a")).get(); // JSONPath returns all possible paths
+     * Object[] expectedResult = new Object[] {
+     *                 new Object[] {gs("["), 1L, 2L, 3L},
+     *                 new Object[] {gs("["), 1L, 2L},
+     *                 42L};
+     * assertArrayEquals(expectedResult, (Object[]) actualResult);
+     * // legacy path only returns the first JSON value match
+     * assertArrayEquals(new Object[] {gs("["), 1L, 2L, 3L}, (Object[]) Json.resp(client, gs(key), gs("..a")).get());
+     * }</pre>
+     */
+    public static CompletableFuture<Object> resp(
+            @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString path) {
+        return executeCommand(client, new GlideString[] {gs(JSON_RESP), key, path});
     }
 
     /**
