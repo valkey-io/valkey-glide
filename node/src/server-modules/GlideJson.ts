@@ -354,8 +354,15 @@ export class GlideJson {
     }
 
     /**
-     * Retrieve the JSON value at the specified `path` within the JSON document stored at
-     * `key`. The returning result is in the Valkey or Redis OSS Serialization Protocol (RESP).
+     * Retrieve the JSON value at the specified `path` within the JSON document stored at `key`.
+     * The returning result is in the Valkey or Redis OSS Serialization Protocol (RESP).
+     * JSON null is mapped to the RESP Null Bulk String.
+     * JSON Booleans are mapped to RESP Simple string.
+     * JSON integers are mapped to RESP Integers.
+     * JSON doubles are mapped to RESP Bulk Strings.
+     * JSON strings are mapped to RESP Bulk Strings.
+     * JSON arrays are represented as RESP arrays, where the first element is the simple string [, followed by the array's elements.
+     * JSON objects are represented as RESP object, where the first element is the simple string {, followed by key-value pairs, each of which is a RESP bulk string.
      *
      * @param client - The client to execute the command.
      * @param key - The key of the JSON document.
