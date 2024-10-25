@@ -19,7 +19,6 @@ import glide.api.models.GlideString;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
-import glide.api.models.commands.json.JsonDebugType;
 import glide.api.models.commands.json.JsonGetOptions;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
@@ -308,21 +307,17 @@ public class JsonTests {
                         + " 3.5953862697246314e307, \"key10\": true }";
         assertEquals("OK", Json.set(client, key, "$", doc).get());
 
-        assertArrayEquals(
-                new Object[] {1L},
-                (Object[]) Json.debug(client, JsonDebugType.FIELDS, key, "$.key1").get());
+        assertArrayEquals(new Object[] {1L}, (Object[]) Json.debugFields(client, key, "$.key1").get());
 
-        assertEquals(
-                2L, Json.debug(client, JsonDebugType.FIELDS, gs(key), gs(".key3.nested_key.key1")).get());
+        assertEquals(2L, Json.debugFields(client, gs(key), gs(".key3.nested_key.key1")).get());
 
         assertArrayEquals(
-                new Object[] {16L},
-                (Object[]) Json.debug(client, JsonDebugType.MEMORY, key, "$.key4[2]").get());
+                new Object[] {16L}, (Object[]) Json.debugMemory(client, key, "$.key4[2]").get());
 
-        assertEquals(16L, Json.debug(client, JsonDebugType.MEMORY, gs(key), gs(".key6")).get());
+        assertEquals(16L, Json.debugMemory(client, gs(key), gs(".key6")).get());
 
-        assertEquals(504L, Json.debug(client, JsonDebugType.MEMORY, key).get());
-        assertEquals(19L, Json.debug(client, JsonDebugType.FIELDS, gs(key)).get());
+        assertEquals(504L, Json.debugMemory(client, key).get());
+        assertEquals(19L, Json.debugFields(client, gs(key)).get());
     }
 
     @Test
