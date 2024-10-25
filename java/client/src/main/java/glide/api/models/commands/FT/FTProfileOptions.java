@@ -8,68 +8,18 @@ import glide.api.commands.servermodules.FT;
 import glide.api.models.GlideString;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Stream;
 import lombok.NonNull;
 
 /** Mandatory parameters for {@link FT#profile} command. */
 public class FTProfileOptions {
     private final QueryType queryType;
     private final boolean limited;
-    private final GlideString[] query;
+    private final GlideString[] commandLine;
 
     /** Query type being profiled. */
-    public enum QueryType {
+    enum QueryType {
         SEARCH,
         AGGREGATE
-    }
-
-    /**
-     * Profile a query given as an array of module command line arguments.
-     *
-     * @param queryType The query type.
-     * @param commandLine Command arguments (not including index name).
-     */
-    public FTProfileOptions(@NonNull QueryType queryType, @NonNull GlideString[] commandLine) {
-        this(queryType, commandLine, false);
-    }
-
-    /**
-     * Profile a query given as an array of module command line arguments.
-     *
-     * @param queryType The query type.
-     * @param commandLine Command arguments (not including index name).
-     */
-    public FTProfileOptions(@NonNull QueryType queryType, @NonNull String[] commandLine) {
-        this(queryType, commandLine, false);
-    }
-
-    /**
-     * Profile a query given as an array of module command line arguments.
-     *
-     * @param queryType The query type.
-     * @param commandLine Command arguments (not including index name).
-     * @param limited Either provide a full verbose output or some brief version (limited).
-     */
-    public FTProfileOptions(
-            @NonNull QueryType queryType, @NonNull GlideString[] commandLine, boolean limited) {
-        this.queryType = queryType;
-        this.query = commandLine;
-        this.limited = limited;
-    }
-
-    /**
-     * Profile a query given as an array of module command line arguments.
-     *
-     * @param queryType The query type.
-     * @param commandLine Command arguments (not including index name).
-     * @param limited Either provide a full verbose output or some brief version (limited).
-     */
-    public FTProfileOptions(
-            @NonNull QueryType queryType, @NonNull String[] commandLine, boolean limited) {
-        this(
-                queryType,
-                Stream.of(commandLine).map(GlideString::gs).toArray(GlideString[]::new),
-                limited);
     }
 
     /**
@@ -89,7 +39,7 @@ public class FTProfileOptions {
      * @param options {@link FT#aggregate} options.
      */
     public FTProfileOptions(@NonNull GlideString query, @NonNull FTAggregateOptions options) {
-        this(QueryType.AGGREGATE, concatenateArrays(new GlideString[] {query}, options.toArgs()));
+        this(query, options, false);
     }
 
     /**
@@ -109,7 +59,7 @@ public class FTProfileOptions {
      * @param options {@link FT#search} options.
      */
     public FTProfileOptions(@NonNull GlideString query, @NonNull FTSearchOptions options) {
-        this(QueryType.SEARCH, concatenateArrays(new GlideString[] {query}, options.toArgs()));
+        this(query, options, false);
     }
 
     /**
@@ -133,10 +83,9 @@ public class FTProfileOptions {
      */
     public FTProfileOptions(
             @NonNull GlideString query, @NonNull FTAggregateOptions options, boolean limited) {
-        this(
-                QueryType.AGGREGATE,
-                concatenateArrays(new GlideString[] {query}, options.toArgs()),
-                limited);
+        queryType = QueryType.AGGREGATE;
+        commandLine = concatenateArrays(new GlideString[] {query}, options.toArgs());
+        this.limited = limited;
     }
 
     /**
@@ -160,7 +109,9 @@ public class FTProfileOptions {
      */
     public FTProfileOptions(
             @NonNull GlideString query, @NonNull FTSearchOptions options, boolean limited) {
-        this(QueryType.SEARCH, concatenateArrays(new GlideString[] {query}, options.toArgs()), limited);
+        queryType = QueryType.AGGREGATE;
+        commandLine = concatenateArrays(new GlideString[] {query}, options.toArgs());
+        this.limited = limited;
     }
 
     /** Convert to module API. */
@@ -169,7 +120,7 @@ public class FTProfileOptions {
         args.add(gs(queryType.toString()));
         if (limited) args.add(gs("LIMITED"));
         args.add(gs("QUERY"));
-        args.addAll(List.of(query));
+        args.addAll(List.of(commandLine));
         return args.toArray(GlideString[]::new);
     }
 }
