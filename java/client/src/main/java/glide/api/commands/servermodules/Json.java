@@ -822,7 +822,7 @@ public class Json {
                         .add(Integer.toString(end))
                         .toArray());
     }
-  
+
     /**
      * Increments or decrements the JSON value(s) at the specified <code>path</code> by <code>number
      * </code> within the JSON document stored at <code>key</code>.
@@ -862,7 +862,7 @@ public class Json {
             @NonNull BaseClient client, @NonNull String key, @NonNull String path, Number number) {
         return executeCommand(client, new String[] {JSON_NUMINCRBY, key, path, number.toString()});
     }
-  
+
     /**
      * Increments or decrements the JSON value(s) at the specified <code>path</code> by <code>number
      * </code> within the JSON document stored at <code>key</code>.
@@ -906,7 +906,7 @@ public class Json {
         return executeCommand(
                 client, new GlideString[] {gs(JSON_NUMINCRBY), key, path, gs(number.toString())});
     }
-  
+
     /**
      * Multiplies the JSON value(s) at the specified <code>path</code> by <code>number</code> within
      * the JSON document stored at <code>key</code>.
@@ -945,7 +945,7 @@ public class Json {
             @NonNull BaseClient client, @NonNull String key, @NonNull String path, Number number) {
         return executeCommand(client, new String[] {JSON_NUMMULTBY, key, path, number.toString()});
     }
-  
+
     /**
      * Multiplies the JSON value(s) at the specified <code>path</code> by <code>number</code> within
      * the JSON document stored at <code>key</code>.
@@ -989,7 +989,7 @@ public class Json {
         return executeCommand(
                 client, new GlideString[] {gs(JSON_NUMMULTBY), key, path, gs(number.toString())});
     }
-  
+
     /**
      * Retrieves the number of key-value pairs in the object values at the specified <code>path</code>
      * within the JSON document stored at <code>key</code>.<br>
@@ -1071,7 +1071,7 @@ public class Json {
             @NonNull BaseClient client, @NonNull String key, @NonNull String path) {
         return executeCommand(client, new String[] {JSON_OBJLEN, key, path});
     }
-      
+
     /**
      * Retrieves the number of key-value pairs in the object values at the specified <code>path</code>
      * within the JSON document stored at <code>key</code>.

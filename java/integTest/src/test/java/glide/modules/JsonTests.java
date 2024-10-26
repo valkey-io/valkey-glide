@@ -321,7 +321,7 @@ public class JsonTests {
         res = Json.arrlen(client, key).get();
         assertEquals(5L, res);
     }
-  
+
     @Test
     @SneakyThrows
     public void clear() {
@@ -346,7 +346,7 @@ public class JsonTests {
         assertThrows(
                 ExecutionException.class, () -> Json.clear(client, UUID.randomUUID().toString()).get());
     }
-  
+
     @Test
     @SneakyThrows
     void test_json_numincrby() {
