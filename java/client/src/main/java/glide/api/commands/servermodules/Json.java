@@ -717,12 +717,12 @@ public class Json {
      * @param number The number to increment or decrement by.
      * @return <ul>
      *     <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
-     *         Returns a bytes string representation of an array of bulk strings, indicating the new values after incrementing for each matched <code>path</code>.<br>
+     *         Returns a string representation of an array of strings, indicating the new values after incrementing for each matched <code>path</code>.<br>
      *         If a value is not a number, its corresponding return value will be <code>null</code>.<br>
      *         If <code>path</code> doesn't exist, a byte string representation of an empty array will be returned.
      *     </li>
      *     <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
-     *         Returns a bytes string representation of the resulting value after the increment or decrement.<br>
+     *         Returns a string representation of the resulting value after the increment or decrement.<br>
      *         If multiple paths match, the result of the last updated value is returned.<br>
      *         If the value at the <code>path</code> is not a number or <code>path</code> doesn't exist, an error is raised.
      *     </li>
@@ -731,7 +731,7 @@ public class Json {
      * If the result is out of the range of 64-bit IEEE double, an error is raised.
      * @example
      *     <pre>{@code
-     * Json.set(client, "doc", "$", "{\"a\": [], \"b\": [1], \"c\": [1, 2], \"d\": [1, 2, 3]}").get();
+     * Json.set(client, "doc", "$", "{\"c\": [1, 2], \"d\": [1, 2, 3]}").get();
      * var res = Json.numincrby(client, "doc", "$.d[*]", 10.0).get();
      * assert res.equals("[11,12,13]"); // Increment each element in `d` array by 10.
      * res = Json.numincrby(client, "doc", ".c[1]", 10.0).get();
@@ -742,10 +742,10 @@ public class Json {
         @NonNull BaseClient client,
         @NonNull String key,
         @NonNull String path,
-        double number) {
+        Number number) {
         return executeCommand(
             client,
-            new String[] {JSON_NUMINCRBY, key, path, Double.toString(number)}
+            new String[] {JSON_NUMINCRBY, key, path, number.toString()}
         );
     }
 
@@ -759,12 +759,12 @@ public class Json {
      * @param number The number to increment or decrement by.
      * @return <ul>
      *     <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
-     *         Returns a bytes string representation of an array of bulk strings, indicating the new values after incrementing for each matched <code>path</code>.<br>
+     *         Returns a <code>GlideString</code> representation of an array of strings, indicating the new values after incrementing for each matched <code>path</code>.<br>
      *         If a value is not a number, its corresponding return value will be <code>null</code>.<br>
      *         If <code>path</code> doesn't exist, a byte string representation of an empty array will be returned.
      *     </li>
      *     <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
-     *         Returns a bytes string representation of the resulting value after the increment or decrement.<br>
+     *         Returns a <code>GlideString</code> representation of the resulting value after the increment or decrement.<br>
      *         If multiple paths match, the result of the last updated value is returned.<br>
      *         If the value at the <code>path</code> is not a number or <code>path</code> doesn't exist, an error is raised.
      *     </li>
@@ -773,7 +773,7 @@ public class Json {
      * If the result is out of the range of 64-bit IEEE double, an error is raised.
      * @example
      *     <pre>{@code
-     * Json.set(client, "doc", "$", "{\"a\": [], \"b\": [1], \"c\": [1, 2], \"d\": [1, 2, 3]}").get();
+     * Json.set(client, "doc", "$", "{\"c\": [1, 2], \"d\": [1, 2, 3]}").get();
      * var res = Json.numincrby(client, gs("doc"), gs("$.d[*]"), 10.0).get();
      * assert res.equals(gs("[11,12,13]")); // Increment each element in `d` array by 10.
      * res = Json.numincrby(client, gs("doc"), gs(".c[1]"), 10.0).get();
@@ -784,94 +784,10 @@ public class Json {
         @NonNull BaseClient client,
         @NonNull GlideString key,
         @NonNull GlideString path,
-        double number) {
+        Number number) {
         return executeCommand(
             client,
-            new GlideString[] {gs(JSON_NUMINCRBY), key, path, gs(Double.toString(number))}
-        );
-    }
-
-    /**
-     * Increments or decrements the JSON value(s) at the specified <code>path</code> by <code>number</code>
-     * within the JSON document stored at <code>key</code>.
-     *
-     * @param client The client to execute the command.
-     * @param key The key of the JSON document.
-     * @param path The path within the JSON document.
-     * @param number The number to increment or decrement by.
-     * @return <ul>
-     *     <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
-     *         Returns a bytes string representation of an array of bulk strings, indicating the new values after incrementing for each matched <code>path</code>.<br>
-     *         If a value is not a number, its corresponding return value will be <code>null</code>.<br>
-     *         If <code>path</code> doesn't exist, a byte string representation of an empty array will be returned.
-     *     </li>
-     *     <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
-     *         Returns a bytes string representation of the resulting value after the increment or decrement.<br>
-     *         If multiple paths match, the result of the last updated value is returned.<br>
-     *         If the value at the <code>path</code> is not a number or <code>path</code> doesn't exist, an error is raised.
-     *     </li>
-     * </ul>
-     * If <code>key</code> does not exist, an error is raised.<br>
-     * If the result is out of the range of 64-bit IEEE double, an error is raised.
-     * @example
-     *     <pre>{@code
-     * Json.set(client, "doc", "$", "{\"a\": [], \"b\": [1], \"c\": [1, 2], \"d\": [1, 2, 3]}").get();
-     * var res = Json.numincrby(client, "doc", "$.d[*]", 10).get();
-     * assert res.equals("[11,12,13]"); // Increment each element in `d` array by 10.
-     * res = Json.numincrby(client, "doc", ".c[1]", 10).get();
-     * assert res.equals("12"); // Increment the second element in the `c` array by 10.
-     * }</pre>
-     */
-    public static CompletableFuture<Object> numincrby(
-        @NonNull BaseClient client,
-        @NonNull String key,
-        @NonNull String path,
-        long number) {
-        return executeCommand(
-            client,
-            new String[] {JSON_NUMINCRBY, key, path, Long.toString(number)}
-        );
-    }
-
-    /**
-     * Increments or decrements the JSON value(s) at the specified <code>path</code> by <code>number</code>
-     * within the JSON document stored at <code>key</code>.
-     *
-     * @param client The client to execute the command.
-     * @param key The key of the JSON document.
-     * @param path The path within the JSON document.
-     * @param number The number to increment or decrement by.
-     * @return <ul>
-     *     <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
-     *         Returns a bytes string representation of an array of bulk strings, indicating the new values after incrementing for each matched <code>path</code>.<br>
-     *         If a value is not a number, its corresponding return value will be <code>null</code>.<br>
-     *         If <code>path</code> doesn't exist, a byte string representation of an empty array will be returned.
-     *     </li>
-     *     <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
-     *         Returns a bytes string representation of the resulting value after the increment or decrement.<br>
-     *         If multiple paths match, the result of the last updated value is returned.<br>
-     *         If the value at the <code>path</code> is not a number or <code>path</code> doesn't exist, an error is raised.
-     *     </li>
-     * </ul>
-     * If <code>key</code> does not exist, an error is raised.<br>
-     * If the result is out of the range of 64-bit IEEE double, an error is raised.
-     * @example
-     *     <pre>{@code
-     * Json.set(client, "doc", "$", "{\"a\": [], \"b\": [1], \"c\": [1, 2], \"d\": [1, 2, 3]}").get();
-     * var res = Json.numincrby(client, gs("doc"), gs("$.d[*]"), 10).get();
-     * assert res.equals(gs("[11,12,13]")); // Increment each element in `d` array by 10.
-     * res = Json.numincrby(client, gs("doc"), gs(".c[1]"), 10).get();
-     * assert res.equals(gs("12")); // Increment the second element in the `c` array by 10.
-     * }</pre>
-     */
-    public static CompletableFuture<GlideString> numincrby(
-        @NonNull BaseClient client,
-        @NonNull GlideString key,
-        @NonNull GlideString path,
-        long number) {
-        return executeCommand(
-            client,
-            new GlideString[] {gs(JSON_NUMINCRBY), key, path, gs(Long.toString(number))}
+            new GlideString[] {gs(JSON_NUMINCRBY), key, path, gs(number.toString())}
         );
     }
 
@@ -884,21 +800,21 @@ public class Json {
      * @param number The number to multiply by.
      * @return <ul>
      *     <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
-     *         Returns a bytes string representation of an array of bulk strings, indicating the new values after multiplication for each matched <code>path</code>.<br>
+     *         Returns a string representation of an array of strings, indicating the new values after multiplication for each matched <code>path</code>.<br>
      *         If a value is not a number, its corresponding return value will be <code>null</code>.<br>
      *         If <code>path</code> doesn't exist, a byte string representation of an empty array will be returned.
      *     </li>
      *     <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
-     *         Returns a bytes string representation of the resulting value after multiplication.<br>
+     *         Returns a string representation of the resulting value after multiplication.<br>
      *         If multiple paths match, the result of the last updated value is returned.<br>
      *         If the value at the <code>path</code> is not a number or <code>path</code> doesn't exist, an error is raised.
      *     </li>
-     *     If <code>key</code> does not exist, an error is raised.<br>
-     *     If the result is out of the range of 64-bit IEEE double, an error is raised.
      * </ul>
+     * If <code>key</code> does not exist, an error is raised.<br>
+     * If the result is out of the range of 64-bit IEEE double, an error is raised.
      * @example
      *     <pre>{@code
-     * Json.set(client, "doc", "$", "{\"a\": [], \"b\": [1], \"c\": [1, 2], \"d\": [1, 2, 3]}").get();
+     * Json.set(client, "doc", "$", "{\"c\": [1, 2], \"d\": [1, 2, 3]}").get();
      * var res = Json.nummultby(client, "doc", "$.d[*]", 2.0).get();
      * assert res.equals("[2,4,6]"); // Multiplies each element in the `d` array by 2.
      * res = Json.nummultby(client, "doc", ".c[1]", 2.0).get();
@@ -909,10 +825,10 @@ public class Json {
         @NonNull BaseClient client,
         @NonNull String key,
         @NonNull String path,
-        double number) {
+        Number number) {
         return executeCommand(
             client,
-            new String[] {JSON_NUMMULTBY, key, path, Double.toString(number)}
+            new String[] {JSON_NUMMULTBY, key, path, number.toString()}
         );
     }
 
@@ -925,21 +841,21 @@ public class Json {
      * @param number The number to multiply by.
      * @return <ul>
      *     <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
-     *         Returns a bytes string representation of an array of bulk strings, indicating the new values after multiplication for each matched <code>path</code>.<br>
+     *         Returns a <code>GlideString</code> representation of an array of strings, indicating the new values after multiplication for each matched <code>path</code>.<br>
      *         If a value is not a number, its corresponding return value will be <code>null</code>.<br>
      *         If <code>path</code> doesn't exist, a byte string representation of an empty array will be returned.
      *     </li>
      *     <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
-     *         Returns a bytes string representation of the resulting value after multiplication.<br>
+     *         Returns a <code>GlideString</code> representation of the resulting value after multiplication.<br>
      *         If multiple paths match, the result of the last updated value is returned.<br>
      *         If the value at the <code>path</code> is not a number or <code>path</code> doesn't exist, an error is raised.
      *     </li>
-     *     If <code>key</code> does not exist, an error is raised.<br>
-     *     If the result is out of the range of 64-bit IEEE double, an error is raised.
      * </ul>
+     * If <code>key</code> does not exist, an error is raised.<br>
+     * If the result is out of the range of 64-bit IEEE double, an error is raised.
      * @example
      *     <pre>{@code
-     * Json.set(client, "doc", "$", "{\"a\": [], \"b\": [1], \"c\": [1, 2], \"d\": [1, 2, 3]}").get();
+     * Json.set(client, "doc", "$", "{\"c\": [1, 2], \"d\": [1, 2, 3]}").get();
      * var res = Json.nummultby(client, gs("doc"), gs("$.d[*]"), 2.0).get();
      * assert res.equals(gs("[2,4,6]")); // Multiplies each element in the `d` array by 2.
      * res = Json.nummultby(client, gs("doc"), gs(".c[1]"), 2.0).get();
@@ -950,92 +866,10 @@ public class Json {
         @NonNull BaseClient client,
         @NonNull GlideString key,
         @NonNull GlideString path,
-        double number) {
+        Number number) {
         return executeCommand(
             client,
-            new GlideString[] {gs(JSON_NUMMULTBY), key, path, gs(Double.toString(number))}
-        );
-    }
-
-    /**
-     * Multiplies the JSON value(s) at the specified <code>path</code> by <code>number</code> within the JSON document stored at <code>key</code>.
-     *
-     * @param client The client to execute the command.
-     * @param key The key of the JSON document.
-     * @param path The path within the JSON document.
-     * @param number The number to multiply by.
-     * @return <ul>
-     *     <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
-     *         Returns a bytes string representation of an array of bulk strings, indicating the new values after multiplication for each matched <code>path</code>.<br>
-     *         If a value is not a number, its corresponding return value will be <code>null</code>.<br>
-     *         If <code>path</code> doesn't exist, a byte string representation of an empty array will be returned.
-     *     </li>
-     *     <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
-     *         Returns a bytes string representation of the resulting value after multiplication.<br>
-     *         If multiple paths match, the result of the last updated value is returned.<br>
-     *         If the value at the <code>path</code> is not a number or <code>path</code> doesn't exist, an error is raised.
-     *     </li>
-     *     If <code>key</code> does not exist, an error is raised.<br>
-     *     If the result is out of the range of 64-bit IEEE double, an error is raised.
-     * </ul>
-     * @example
-     *     <pre>{@code
-     * Json.set(client, "doc", "$", "{\"a\": [], \"b\": [1], \"c\": [1, 2], \"d\": [1, 2, 3]}").get();
-     * var res = Json.nummultby(client, "doc", "$.d[*]", 2).get();
-     * assert res.equals("[2,4,6]"); // Multiplies each element in the `d` array by 2.
-     * res = Json.nummultby(client, "doc", ".c[1]", 2).get();
-     * assert res.equals("12"); // Multiplies the second element in the `c` array by 2.
-     * }</pre>
-     */
-    public static CompletableFuture<String> nummultby(
-        @NonNull BaseClient client,
-        @NonNull String key,
-        @NonNull String path,
-        long number) {
-        return executeCommand(
-            client,
-            new String[] {JSON_NUMMULTBY, key, path, Long.toString(number)}
-        );
-    }
-
-    /**
-     * Multiplies the JSON value(s) at the specified <code>path</code> by <code>number</code> within the JSON document stored at <code>key</code>.
-     *
-     * @param client The client to execute the command.
-     * @param key The key of the JSON document.
-     * @param path The path within the JSON document.
-     * @param number The number to multiply by.
-     * @return <ul>
-     *     <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
-     *         Returns a bytes string representation of an array of bulk strings, indicating the new values after multiplication for each matched <code>path</code>.<br>
-     *         If a value is not a number, its corresponding return value will be <code>null</code>.<br>
-     *         If <code>path</code> doesn't exist, a byte string representation of an empty array will be returned.
-     *     </li>
-     *     <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
-     *         Returns a bytes string representation of the resulting value after multiplication.<br>
-     *         If multiple paths match, the result of the last updated value is returned.<br>
-     *         If the value at the <code>path</code> is not a number or <code>path</code> doesn't exist, an error is raised.
-     *     </li>
-     *     If <code>key</code> does not exist, an error is raised.<br>
-     *     If the result is out of the range of 64-bit IEEE double, an error is raised.
-     * </ul>
-     * @example
-     *     <pre>{@code
-     * Json.set(client, "doc", "$", "{\"a\": [], \"b\": [1], \"c\": [1, 2], \"d\": [1, 2, 3]}").get();
-     * var res = Json.nummultby(client, gs("doc"), gs("$.d[*]"), 2).get();
-     * assert res.equals(gs("[2,4,6]")); // Multiplies each element in the `d` array by 2.
-     * res = Json.nummultby(client, gs("doc"), gs(".c[1]"), 2).get();
-     * assert res.equals(gs("12")); // Multiplies the second element in the `c` array by 2.
-     * }</pre>
-     */
-    public static CompletableFuture<GlideString> nummultby(
-        @NonNull BaseClient client,
-        @NonNull GlideString key,
-        @NonNull GlideString path,
-        long number) {
-        return executeCommand(
-            client,
-            new GlideString[] {gs(JSON_NUMMULTBY), key, path, gs(Long.toString(number))}
+            new GlideString[] {gs(JSON_NUMMULTBY), key, path, gs(number.toString())}
         );
     }
 
