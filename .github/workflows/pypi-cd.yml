@@ -112,16 +112,10 @@ jobs:
               if: ${{ !contains(matrix.build.RUNNER, 'self-hosted') }}
               uses: actions/setup-python@v5
               with:
-                  python-version: "3.10"
-
-            - name: Set up Python older versions for MacOS
-              if: startsWith(matrix.build.NAMED_OS, 'darwin')
-              run: |
-                  brew update
-                  brew install python@3.8 python@3.9
+                  python-version: "3.12"
 
             - name: Setup Python for self-hosted Ubuntu runners
-              if: contains(matrix.build.OS, 'ubuntu') && contains(matrix.build.RUNNER, 'self-hosted')
+              if: contains(matrix.build.RUNNER, 'self-hosted')
               run: |
                   sudo apt update -y
                   sudo apt upgrade -y
@@ -140,7 +134,7 @@ jobs:
                   target: ${{ matrix.build.TARGET }}
                   publish: "true"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
-                  engine-version: "7.2.5"
+                  engine-version: "7.2"
 
             - name: Include protobuf files in the package
               working-directory: ./python
@@ -186,7 +180,7 @@ jobs:
               with:
                   working-directory: ./python
                   target: ${{ matrix.build.TARGET }}
-                  args: --release --strip --out wheels -i  ${{ github.event_name != 'pull_request' && 'python3.8 python3.9 python3.10 python3.11 python3.12' || 'python3.10' }}
+                  args: --release --strip --out wheels -i  ${{ github.event_name != 'pull_request' && 'python3.8 python3.9 python3.10 python3.11 python3.12' || 'python3.12' }}
 
             - name: Upload Python wheels
               if: github.event_name != 'pull_request'
@@ -241,7 +235,7 @@ jobs:
             - name: Install ValKey
               uses: ./.github/workflows/install-valkey
               with:
-                  version: "8.0.0"
+                  version: "8.0"
 
             - name: Check if RC and set a distribution tag for the package
               shell: bash
