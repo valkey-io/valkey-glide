@@ -5,6 +5,7 @@ import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
+import static glide.api.models.commands.FT.FTCreateOptions.DataType;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -27,7 +28,6 @@ import glide.api.models.commands.FT.FTAggregateOptions.SortBy.SortProperty;
 import glide.api.models.commands.FT.FTCreateOptions;
 import glide.api.models.commands.FT.FTCreateOptions.DistanceMetric;
 import glide.api.models.commands.FT.FTCreateOptions.FieldInfo;
-import glide.api.models.commands.FT.FTCreateOptions.IndexType;
 import glide.api.models.commands.FT.FTCreateOptions.NumericField;
 import glide.api.models.commands.FT.FTCreateOptions.TagField;
 import glide.api.models.commands.FT.FTCreateOptions.TextField;
@@ -99,7 +99,7 @@ public class VectorSearchTests {
                                             "$.vec", "VEC", VectorFieldFlat.builder(DistanceMetric.L2, 6).build())
                                 },
                                 FTCreateOptions.builder()
-                                        .indexType(IndexType.JSON)
+                                        .dataType(DataType.JSON)
                                         .prefixes(new String[] {"json:"})
                                         .build())
                         .get());
@@ -120,7 +120,7 @@ public class VectorSearchTests {
                                                     .build())
                                 },
                                 FTCreateOptions.builder()
-                                        .indexType(IndexType.HASH)
+                                        .dataType(DataType.HASH)
                                         .prefixes(new String[] {"docs:"})
                                         .build())
                         .get());
@@ -137,7 +137,7 @@ public class VectorSearchTests {
                                     new FieldInfo("category", new TagField())
                                 },
                                 FTCreateOptions.builder()
-                                        .indexType(IndexType.HASH)
+                                        .dataType(DataType.HASH)
                                         .prefixes(new String[] {"blog:post:"})
                                         .build())
                         .get());
@@ -156,7 +156,7 @@ public class VectorSearchTests {
                                     new FieldInfo("name", new TextField())
                                 },
                                 FTCreateOptions.builder()
-                                        .indexType(IndexType.HASH)
+                                        .dataType(DataType.HASH)
                                         .prefixes(new String[] {"author:details:", "book:details:"})
                                         .build())
                         .get());
@@ -217,7 +217,7 @@ public class VectorSearchTests {
                                     new FieldInfo("vec", "VEC", VectorFieldHnsw.builder(DistanceMetric.L2, 2).build())
                                 },
                                 FTCreateOptions.builder()
-                                        .indexType(IndexType.HASH)
+                                        .dataType(DataType.HASH)
                                         .prefixes(new String[] {prefix})
                                         .build())
                         .get());
@@ -365,7 +365,7 @@ public class VectorSearchTests {
                                     new FieldInfo("$.condition", "condition", new TagField(',')),
                                 },
                                 FTCreateOptions.builder()
-                                        .indexType(IndexType.JSON)
+                                        .dataType(DataType.JSON)
                                         .prefixes(new String[] {prefixBicycles})
                                         .build())
                         .get());
@@ -567,7 +567,7 @@ public class VectorSearchTests {
                                     new FieldInfo("votes", new NumericField()),
                                 },
                                 FTCreateOptions.builder()
-                                        .indexType(IndexType.HASH)
+                                        .dataType(DataType.HASH)
                                         .prefixes(new String[] {prefixMovies})
                                         .build())
                         .get());
@@ -739,7 +739,7 @@ public class VectorSearchTests {
                                     new FieldInfo("$.name", new TextField()),
                                 },
                                 FTCreateOptions.builder()
-                                        .indexType(IndexType.JSON)
+                                        .dataType(DataType.JSON)
                                         .prefixes(new String[] {"123"})
                                         .build())
                         .get());
