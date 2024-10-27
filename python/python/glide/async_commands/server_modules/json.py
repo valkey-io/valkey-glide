@@ -1,5 +1,5 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-"""module for `JSON` commands.
+"""Glide module for `JSON` commands.
 
     Examples:
 

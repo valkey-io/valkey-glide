@@ -187,7 +187,7 @@ class TestJson:
         json_value = {"a": 1.0, "b": {"a": 1, "b": 2.5, "c": True}}
         assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
 
-        # Non-exiseting paths
+        # Non-existing paths
         assert await json.forget(glide_client, key, "$..path") == 0
         assert await json.forget(glide_client, key, "..path") == 0
 
