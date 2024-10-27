@@ -36,6 +36,7 @@
 * Python: Add `JSON.STRAPPEND` , `JSON.STRLEN` commands ([#2372](https://github.com/valkey-io/valkey-glide/pull/2372))
 * Python: Add `JSON.OBJKEYS` command ([#2395](https://github.com/valkey-io/valkey-glide/pull/2395))
 * Python: Add `JSON.ARRINSERT` command ([#2464](https://github.com/valkey-io/valkey-glide/pull/2464))
+* Python: Add `JSON.ARRTRIM` command ([#2457](https://github.com/valkey-io/valkey-glide/pull/2457))
 
 #### Breaking Changes
 

@@ -1191,3 +1191,106 @@ class TestJson:
         # Test for non-existent key
         result = await json.debug_memory(glide_client, "non_existent_key", ".key10")
         assert result == None
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @typing.no_type_check
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_json_arrtrim(self, glide_client: TGlideClient):
+        key = get_random_string(5)
+
+        # Test with enhanced path syntax
+        json_value = '{"a": [0, 1, 2, 3, 4, 5, 6, 7, 8], "b": {"a": [0, 9, 10, 11, 12, 13], "c": {"a": 42}}}'
+        assert await json.set(glide_client, key, "$", json_value) == OK
+
+        # Basic trim
+        assert await json.arrtrim(glide_client, key, "$..a", 1, 7) == [7, 5, None]
+        assert OuterJson.loads(await json.get(glide_client, key, "$..a")) == [
+            [1, 2, 3, 4, 5, 6, 7],
+            [9, 10, 11, 12, 13],
+            42,
+        ]
+
+        # Test negative start (should be treated as 0)
+        assert await json.arrtrim(glide_client, key, "$.a", -1, 5) == [6]
+        assert OuterJson.loads(await json.get(glide_client, key, "$.a")) == [
+            [1, 2, 3, 4, 5, 6]
+        ]
+        assert await json.arrtrim(glide_client, key, ".a", -1, 5) == 6
+        assert OuterJson.loads(await json.get(glide_client, key, ".a")) == [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+        ]
+
+        # Test end >= size (should be treated as size-1)
+        assert await json.arrtrim(glide_client, key, "$.a", 0, 10) == [6]
+        assert OuterJson.loads(await json.get(glide_client, key, "$.a")) == [
+            [1, 2, 3, 4, 5, 6]
+        ]
+
+        assert await json.arrtrim(glide_client, key, ".a", 0, 10) == 6
+        assert OuterJson.loads(await json.get(glide_client, key, ".a")) == [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+        ]
+
+        # Test start >= size (should empty the array)
+        assert await json.arrtrim(glide_client, key, "$.a", 7, 10) == [0]
+        assert OuterJson.loads(await json.get(glide_client, key, "$.a")) == [[]]
+
+        assert await json.set(glide_client, key, ".a", '["a", "b", "c"]') == OK
+        assert await json.arrtrim(glide_client, key, ".a", 7, 10) == 0
+        assert OuterJson.loads(await json.get(glide_client, key, ".a")) == []
+
+        # Test start > end (should empty the array)
+        assert await json.arrtrim(glide_client, key, "$..a", 2, 1) == [0, 0, None]
+        assert OuterJson.loads(await json.get(glide_client, key, "$..a")) == [
+            [],
+            [],
+            42,
+        ]
+        assert await json.set(glide_client, key, "..a", '["a", "b", "c", "d"]') == OK
+        assert await json.arrtrim(glide_client, key, "..a", 2, 1) == 0
+        assert OuterJson.loads(await json.get(glide_client, key, ".a")) == []
+
+        # Multiple path match
+        assert await json.set(glide_client, key, "$", json_value) == OK
+        assert await json.arrtrim(glide_client, key, "..a", 1, 10) == 8
+        assert OuterJson.loads(await json.get(glide_client, key, "$..a")) == [
+            [1, 2, 3, 4, 5, 6, 7, 8],
+            [9, 10, 11, 12, 13],
+            42,
+        ]
+
+        # Test with non-existent path
+        with pytest.raises(RequestError):
+            await json.arrtrim(glide_client, key, ".non_existent", 0, 1)
+
+        assert await json.arrtrim(glide_client, key, "$.non_existent", 0, 1) == []
+
+        # Test with non-array path
+        assert await json.arrtrim(glide_client, key, "$", 0, 1) == [None]
+
+        with pytest.raises(RequestError):
+            await json.arrtrim(glide_client, key, ".", 0, 1)
+
+        # Test with non-existent key
+        with pytest.raises(RequestError):
+            await json.arrtrim(glide_client, "non_existent_key", "$", 0, 1)
+
+        # Test with non-existent key
+        with pytest.raises(RequestError):
+            await json.arrtrim(glide_client, "non_existent_key", ".", 0, 1)
+
+        # Test empty array
+        assert await json.set(glide_client, key, "$.empty", "[]") == OK
+        assert await json.arrtrim(glide_client, key, "$.empty", 0, 1) == [0]
+        assert await json.arrtrim(glide_client, key, ".empty", 0, 1) == 0
+        assert OuterJson.loads(await json.get(glide_client, key, "$.empty")) == [[]]
