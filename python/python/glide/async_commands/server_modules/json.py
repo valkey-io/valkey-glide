@@ -408,7 +408,7 @@ async def objlen(
     client: TGlideClient,
     key: TEncodable,
     path: Optional[TEncodable] = None,
-) -> Optional[Union[int, List[int]]]:
+) -> Optional[TJsonResponse[int]]:
     """
     Retrieves the number of key-value pairs in the object values at the specified `path` within the JSON document stored at `key`.
 
@@ -418,7 +418,7 @@ async def objlen(
         path (Optional[TEncodable]): Represents the path within the JSON document where the key names will be retrieved.
             Defaults to None.If not provided, the root of the document is used, equivalent to setting the path to ".".
     Returns:
-        Optional[Union[int, List[int]]]:
+        Optional[TJsonResponse[int]]:
             For JSONPath (`path` starts with `$`):
                 Returns a list of integers representing the number of key-value pairs for each matching object.
                 If a value matching the path is not an object, None is returned.
@@ -447,7 +447,7 @@ async def objlen(
     if path:
         args.append(path)
     return cast(
-        Optional[Union[int, List[int]]],
+        Optional[TJsonResponse[int]],
         await client.custom_command(args),
     )
 

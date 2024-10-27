@@ -321,6 +321,9 @@ class TestJson:
         assert await json.objlen(glide_client, "non_exiting_key", "$") == None
         assert await json.objlen(glide_client, "non_exiting_key", ".") == None
 
+        assert await json.set(glide_client, key, "$", '{"a": 1, "b": 2, "c":3, "d":4}')
+        assert await json.objlen(glide_client, key) == 4
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_json_arrlen(self, glide_client: TGlideClient):
