@@ -54,6 +54,36 @@ class JsonGetOptions:
         return args
 
 
+class JsonArrIndexOptions:
+    """
+    Options for the `JSON.ARRINDEX` command.
+
+    Args:
+        start (int): The inclusive start index from which the search begins. Defaults to None.
+        end (Optional[int]): The exclusive end index where the search stops. Defaults to None.
+
+    Note:
+        - If `start` is greater than `end`, the command returns `-1` to indicate that the value was not found.
+        - Indices that exceed the array bounds are automatically adjusted to the nearest valid position.
+    """
+
+    def __init__(self, start: int, end: Optional[int] = None):
+        self.start = start
+        self.end = end
+
+    def to_args(self) -> List[TEncodable]:
+        """
+        Get the options as a list of arguments for the JSON.ARRINDEX command.
+
+        Returns:
+            List[TEncodable]: A list containing the start and end indices if specified.
+        """
+        args = [str(self.start)]
+        if self.end is not None:
+            args.append(str(self.end))
+        return args
+
+
 async def set(
     client: TGlideClient,
     key: TEncodable,
@@ -145,6 +175,78 @@ async def get(
         args.extend(paths)
 
     return cast(TJsonResponse[Optional[bytes]], await client.custom_command(args))
+
+
+async def arrindex(
+    client: TGlideClient,
+    key: TEncodable,
+    path: TEncodable,
+    value: TEncodable,
+    options: Optional[JsonArrIndexOptions] = None,
+) -> TJsonResponse[int]:
+    """
+    Searches for the first occurrence of a scalar JSON value (i.e., a value that is neither an object nor an array) within arrays at the specified `path` in the JSON document stored at `key`.
+
+    If specified, `options.start` and `options.end` define an inclusive-to-exclusive search range within the array.
+    (Where `options.start` is inclusive and `options.end` is exclusive).
+
+    Out-of-range indices adjust to the nearest valid position, and negative values count from the end (e.g., `-1` is the last element, `-2` the second last).
+
+    Setting `options.end` to `0` behaves like `-1`, extending the range to the array's end (inclusive).
+
+    If `options.start` exceeds `options.end`, `-1` is returned, indicating that the value was not found.
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+        key (TEncodable): The key of the JSON document.
+        path (TEncodable): The path within the JSON document.
+        value (TEncodable): The value to search for within the arrays.
+        options (Optional[JsonArrIndexOptions]): Options specifying an inclusive `start` index and an optional exclusive `end` index for a range-limited search.
+            Defaults to the full array if not provided. See `JsonArrIndexOptions`.
+
+    Returns:
+        Optional[Union[int, List[int]]]:
+            For JSONPath (`path` starts with `$`):
+                Returns an array of integers for every possible path, indicating of the first occurrence of `value` within the array,
+                or None for JSON values matching the path that are not an array.
+                A returned value of `-1` indicates that the value was not found in that particular array.
+                If `path` does not exist, an empty array will be returned.
+            For legacy path (`path` doesn't start with `$`):
+                Returns an integer representing the index of the first occurrence of `value` within the array at the specified path.
+                A returned value of `-1` indicates that the value was not found in that particular array.
+                If multiple paths match, the index of the value from the first matching array is returned.
+                If the JSON value at the `path` is not an array or if `path` does not exist, an error is raised.
+            If `key` does not exist, an error is raised.
+
+    Examples:
+        >>> from glide import json
+        >>> await json.set(client, "doc", "$", '[[], ["a"], ["a", "b"], ["a", "b", "c"]]')
+            'OK'
+        >>> await json.arrindex(client, "doc", "$[*]", '"b"')
+            [-1, -1, 1, 1]
+        >>> await json.set(client, "doc", ".", '{"children": ["John", "Jack", "Tom", "Bob", "Mike"]}')
+            'OK'
+        >>> await json.arrindex(client, "doc", ".children", '"Tom"')
+            2
+        >>> await json.set(client, "doc", "$", '{"fruits": ["apple", "banana", "cherry", "banana", "grape"]}')
+            'OK'
+        >>> await json.arrindex(client, "doc", "$.fruits", '"banana"', JsonArrIndexOptions(start=2, end=4))
+            3
+        >>> await json.set(client, "k", ".", '[1, 2, "a", 4, "a", 6, 7, "b"]')
+            'OK'
+        >>> await json.arrindex(client, "k", ".", '"b"', JsonArrIndexOptions(start=4, end=0))
+            7  # "b" found at index 7 within the specified range, treating end=0 as the entire array's end.
+        >>> await json.arrindex(client, "k", ".", '"b"', JsonArrIndexOptions(start=4, end=-1))
+            7  # "b" found at index 7, with end=-1 covering the full array to its last element.
+        >>> await json.arrindex(client, "k", ".", '"b"', JsonArrIndexOptions(start=4, end=7))
+            -1  # "b" not found within the range from index 4 to exclusive end at index 7.
+    """
+    args = ["JSON.ARRINDEX", key, path, value]
+
+    if options:
+        args.extend(options.to_args())
+
+    return cast(TJsonResponse[int], await client.custom_command(args))
 
 
 async def arrappend(
