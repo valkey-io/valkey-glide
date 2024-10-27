@@ -513,8 +513,6 @@ async def objkeys(
     """
     Retrieves key names in the object values at the specified `path` within the JSON document stored at `key`.
 
-    See https://valkey.io/commands/json.objkeys/ for more details.
-
     Args:
         client (TGlideClient): The client to execute the command.
         key (TEncodable): The key of the JSON document.
@@ -526,10 +524,12 @@ async def objkeys(
             For JSONPath (`path` starts with `$`):
                 Returns a list of arrays containing key names for each matching object.
                 If a value matching the path is not an object, an empty array is returned.
+                If `path` doesn't exist, an empty array is returned.
             For legacy path (`path` starts with `.`):
                 Returns a list of key names for the object value matching the path.
                 If multiple objects match the path, the key names of the first object are returned.
                 If a value matching the path is not an object, an error is raised.
+                If `path` doesn't exist, None is returned.
             If `key` doesn't exist, None is returned.
 
     Examples:
