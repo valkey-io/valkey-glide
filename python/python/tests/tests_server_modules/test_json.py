@@ -144,41 +144,77 @@ class TestJson:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_del(self, glide_client: TGlideClient):
+    async def test_json_del(self, glide_client: TGlideClient):
         key = get_random_string(5)
 
         json_value = {"a": 1.0, "b": {"a": 1, "b": 2.5, "c": True}}
         assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
 
+        # Non-exiseting paths
+        assert await json.delete(glide_client, key, "$..path") == 0
+        assert await json.delete(glide_client, key, "..path") == 0
+
         assert await json.delete(glide_client, key, "$..a") == 2
         assert await json.get(glide_client, key, "$..a") == b"[]"
+
+        assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
+
+        assert await json.delete(glide_client, key, "..a") == 2
+        with pytest.raises(RequestError):
+            assert await json.get(glide_client, key, "..a")
 
         result = await json.get(glide_client, key, "$")
         assert isinstance(result, bytes)
         assert OuterJson.loads(result) == [{"b": {"b": 2.5, "c": True}}]
 
         assert await json.delete(glide_client, key, "$") == 1
+        assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
+        assert await json.delete(glide_client, key, ".") == 1
+        assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
+        assert await json.delete(glide_client, key) == 1
         assert await json.delete(glide_client, key) == 0
         assert await json.get(glide_client, key, "$") == None
 
+        # Non-existing keys
+        assert await json.delete(glide_client, "non_existing_key", "$") == 0
+        assert await json.delete(glide_client, "non_existing_key", ".") == 0
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_forget(self, glide_client: TGlideClient):
+    async def test_json_forget(self, glide_client: TGlideClient):
         key = get_random_string(5)
 
         json_value = {"a": 1.0, "b": {"a": 1, "b": 2.5, "c": True}}
         assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
 
+        # Non-existing paths
+        assert await json.forget(glide_client, key, "$..path") == 0
+        assert await json.forget(glide_client, key, "..path") == 0
+
         assert await json.forget(glide_client, key, "$..a") == 2
         assert await json.get(glide_client, key, "$..a") == b"[]"
+
+        assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
+
+        assert await json.forget(glide_client, key, "..a") == 2
+        with pytest.raises(RequestError):
+            assert await json.get(glide_client, key, "..a")
 
         result = await json.get(glide_client, key, "$")
         assert isinstance(result, bytes)
         assert OuterJson.loads(result) == [{"b": {"b": 2.5, "c": True}}]
 
         assert await json.forget(glide_client, key, "$") == 1
+        assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
+        assert await json.forget(glide_client, key, ".") == 1
+        assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
+        assert await json.forget(glide_client, key) == 1
         assert await json.forget(glide_client, key) == 0
         assert await json.get(glide_client, key, "$") == None
+
+        # Non-existing keys
+        assert await json.forget(glide_client, "non_existing_key", "$") == 0
+        assert await json.forget(glide_client, "non_existing_key", ".") == 0
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -189,10 +225,14 @@ class TestJson:
 
         assert await json.toggle(glide_client, key, "$..bool") == [False, True, None]
         assert await json.toggle(glide_client, key, "bool") is True
+        assert await json.toggle(glide_client, key, "$.not_existing") == []
 
         assert await json.toggle(glide_client, key, "$.nested") == [None]
         with pytest.raises(RequestError):
             assert await json.toggle(glide_client, key, "nested")
+
+        with pytest.raises(RequestError):
+            assert await json.toggle(glide_client, key, ".not_existing")
 
         with pytest.raises(RequestError):
             assert await json.toggle(glide_client, "non_exiting_key", "$")
@@ -470,7 +510,7 @@ class TestJson:
         assert result == b"76"
 
         # Check if the rest of the key1 path matches were updated and not only the last value
-        result = await json.get(glide_client, key, "$..key1")
+        result = await json.get(glide_client, key, "$..key1")  # type: ignore
         assert (
             result == b"[0,[16,17],76]"
         )  # First is 0 as 0 + 0 = 0, Second doesn't change as its an array type (non-numeric), third is 76 as 0 + 76 = 0
@@ -610,7 +650,7 @@ class TestJson:
         assert result == b"1380"  # Expect the last updated key1 value multiplied by 2
 
         # Check if the rest of the key1 path matches were updated and not only the last value
-        result = await json.get(glide_client, key, "$..key1")
+        result = await json.get(glide_client, key, "$..key1")  # type: ignore
         assert result == b"[-16500,[140,175],1380]"
 
         # Check for non-existent path in legacy
@@ -624,3 +664,71 @@ class TestJson:
         # Check for Overflow in legacy
         with pytest.raises(RequestError):
             await json.nummultby(glide_client, key, ".key9", 1.7976931348623157e308)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_json_strlen(self, glide_client: TGlideClient):
+        key = get_random_string(10)
+        json_value = {"a": "foo", "nested": {"a": "hello"}, "nested2": {"a": 31}}
+        assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
+
+        assert await json.strlen(glide_client, key, "$..a") == [3, 5, None]
+        assert await json.strlen(glide_client, key, "a") == 3
+
+        assert await json.strlen(glide_client, key, "$.nested") == [None]
+        with pytest.raises(RequestError):
+            assert await json.strlen(glide_client, key, "nested")
+
+        with pytest.raises(RequestError):
+            assert await json.strlen(glide_client, key)
+
+        assert await json.strlen(glide_client, key, "$.non_existing_path") == []
+        with pytest.raises(RequestError):
+            await json.strlen(glide_client, key, ".non_existing_path")
+
+        assert await json.strlen(glide_client, "non_exiting_key", ".") is None
+        assert await json.strlen(glide_client, "non_exiting_key", "$") is None
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_json_strappend(self, glide_client: TGlideClient):
+        key = get_random_string(10)
+        json_value = {"a": "foo", "nested": {"a": "hello"}, "nested2": {"a": 31}}
+        assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
+
+        assert await json.strappend(glide_client, key, '"bar"', "$..a") == [6, 8, None]
+        assert await json.strappend(glide_client, key, OuterJson.dumps("foo"), "a") == 9
+
+        json_str = await json.get(glide_client, key, ".")
+        assert isinstance(json_str, bytes)
+        assert OuterJson.loads(json_str) == {
+            "a": "foobarfoo",
+            "nested": {"a": "hellobar"},
+            "nested2": {"a": 31},
+        }
+
+        assert await json.strappend(
+            glide_client, key, OuterJson.dumps("bar"), "$.nested"
+        ) == [None]
+
+        with pytest.raises(RequestError):
+            await json.strappend(glide_client, key, OuterJson.dumps("bar"), ".nested")
+
+        with pytest.raises(RequestError):
+            await json.strappend(glide_client, key, OuterJson.dumps("bar"))
+
+        assert (
+            await json.strappend(
+                glide_client, key, OuterJson.dumps("try"), "$.non_existing_path"
+            )
+            == []
+        )
+        with pytest.raises(RequestError):
+            await json.strappend(
+                glide_client, key, OuterJson.dumps("try"), "non_existing_path"
+            )
+
+        with pytest.raises(RequestError):
+            await json.strappend(
+                glide_client, "non_exiting_key", OuterJson.dumps("try")
+            )
