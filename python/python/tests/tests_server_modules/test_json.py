@@ -230,8 +230,7 @@ class TestJson:
             [key1, key2],
             ".non_existing_path",
         )
-        expected_result = [None, None]
-        assert result == expected_result
+        assert result == [None, None]
 
         # Keys don't exist
         result = await json.mget(
