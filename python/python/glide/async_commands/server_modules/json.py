@@ -150,42 +150,42 @@ async def get(
 async def mget(
     client: TGlideClient,
     keys: List[TEncodable],
-    paths: Optional[Union[TEncodable, List[TEncodable]]] = None,
-    options: Optional[JsonGetOptions] = None,
+    path: Optional[TEncodable] = None,
 ) -> List[Optional[bytes]]:
     """
-    Retrieves the JSON values at the specified `paths` stored at multiple `keys`.
+    Retrieves the JSON values at the specified `path` stored at multiple `keys`.
 
-    See https://valkey.io/commands/json.mget/ for more details.
-
+    Note:
+        When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
     Args:
         client (TGlideClient): The Redis client to execute the command.
         keys (List[TEncodable]): A list of keys for the JSON documents.
-        paths (Optional[Union[TEncodable, List[TEncodable]]]): The path or list of paths within the JSON documents. Default is root `$`.
-        options (Optional[JsonGetOptions]): Options for formatting the byte representation of the JSON data. See `JsonGetOptions`.
+        path (Optional[TEncodable]): The path within the JSON documents. Default is root `$`.
 
     Returns:
-        List[Optional[bytes]]: A list of bytes representations of the returned values.
-            If a key doesn't exist, its corresponding entry will be `None`.
+        List[Optional[bytes]]:
+            For JSONPath (`path` starts with `$`):
+                Returns a list of byte representations of the values found at the given path for each key. If the path does not exist,
+                the entry will be an empty array.
+            For legacy path (`path` starts with `.`):
+                                Returns a string representation of the value at the specified path. If the path does not exist, the entry will be None.
+            If a key doesn't exist, the corresponding list element will also be `None`.
+
 
     Examples:
         >>> from glide import json as redisJson
         >>> import json
-        >>> json_strs = await redisJson.mget(client, ["doc1", "doc2"], ["$"])
+        >>> json_strs = await redisJson.mget(client, ["doc1", "doc2"], "$")
         >>> [json.loads(js) for js in json_strs]  # Parse JSON strings to Python data
             [[{"a": 1.0, "b": 2}], [{"a": 2.0, "b": {"a": 3.0, "b" : 4.0}}]]  # JSON objects retrieved from keys `doc1` and `doc2`
-        >>> await redisJson.mget(client, ["doc1", "doc2"], ["$.a"])
+        >>> await redisJson.mget(client, ["doc1", "doc2"], "$.a")
             [b"[1.0]", b"[2.0]"]  # Returns values at path '$.a' for the JSON documents stored at `doc1` and `doc2`.
-        >>> await redisJson.mget(client, ["doc1"], ["$.non_existing_path"])
+        >>> await redisJson.mget(client, ["doc1"], "$.non_existing_path")
             [None]  # Returns an empty array since the path '$.non_existing_path' does not exist in the JSON document stored at `doc1`.
     """
     args = ["JSON.MGET"] + keys
-    if options:
-        args.extend(options.get_options())
-    if paths:
-        if isinstance(paths, (str, bytes)):
-            paths = [paths]
-        args.extend(paths)
+    if path:
+        args.append(path)
 
     return cast(List[Optional[bytes]], await client.custom_command(args))
 
