@@ -260,10 +260,10 @@ async def arrtrim(
     end: int,
 ) -> TJsonResponse[int]:
     """
-    Trims an array at the specified `path` within the JSON document stored at `key` so that it becomes a subarray [start, end], both inclusive.\n
-    If `start` < 0, it is treated as 0.\n
-    If `end` >= size (size of the array), it is treated as size-1.\n
-    If `start` >= size or `start` > `end`, the array is emptied and 0 is returned.\n
+    Trims an array at the specified `path` within the JSON document stored at `key` so that it becomes a subarray [start, end], both inclusive.›
+    If `start` < 0, it is treated as 0.
+    If `end` >= size (size of the array), it is treated as size-1.
+    If `start` >= size or `start` > `end`, the array is emptied and 0 is returned.
 
     Args:
         client (TGlideClient): The client to execute the command.

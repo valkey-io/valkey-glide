@@ -1193,6 +1193,7 @@ class TestJson:
         assert result == None
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
+    @typing.no_type_check
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_json_arrtrim(self, glide_client: TGlideClient):
         key = get_random_string(5)
