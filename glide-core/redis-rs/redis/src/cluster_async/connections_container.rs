@@ -6,6 +6,22 @@ use dashmap::DashMap;
 use futures::FutureExt;
 use rand::seq::IteratorRandom;
 use std::net::IpAddr;
+use telemetrylib::Telemetry;
+
+/// Count the number of connections in a connections_map object
+macro_rules! count_connections {
+    ($conn_map:expr) => {{
+        let mut count = 0usize;
+        for a in $conn_map {
+            count = count.saturating_add(if a.management_connection.is_some() {
+                2
+            } else {
+                1
+            });
+        }
+        count
+    }};
+}
 
 /// A struct that encapsulates a network connection along with its associated IP address.
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -66,6 +82,15 @@ where
         }
     }
 
+    /// Return the number of underlying connections managed by this instance of ClusterNode
+    pub fn connections_count(&self) -> usize {
+        if self.management_connection.is_some() {
+            2
+        } else {
+            1
+        }
+    }
+
     pub(crate) fn get_connection(&self, conn_type: &ConnectionType) -> Connection {
         match conn_type {
             ConnectionType::User => self.user_connection.conn.clone(),
@@ -106,6 +131,13 @@ pub(crate) struct ConnectionsContainer<Connection> {
     topology_hash: TopologyHash,
 }
 
+impl<Connection> Drop for ConnectionsContainer<Connection> {
+    fn drop(&mut self) {
+        let count = count_connections!(&self.connection_map);
+        Telemetry::decr_total_connections(count);
+    }
+}
+
 impl<Connection> Default for ConnectionsContainer<Connection> {
     fn default() -> Self {
         Self {
@@ -129,8 +161,14 @@ where
         read_from_replica_strategy: ReadFromReplicaStrategy,
         topology_hash: TopologyHash,
     ) -> Self {
+        let connection_map = connection_map.0;
+
+        // Update the telemetry with the number of connections
+        let count = count_connections!(&connection_map);
+        Telemetry::incr_total_connections(count);
+
         Self {
-            connection_map: connection_map.0,
+            connection_map,
             slot_map,
             read_from_replica_strategy,
             topology_hash,
@@ -275,18 +313,37 @@ where
         node: ClusterNode<Connection>,
     ) -> String {
         let address = address.into();
-        self.connection_map.insert(address.clone(), node);
+
+        // Increase the total number of connections
+        Telemetry::incr_total_connections(node.connections_count());
+
+        self.connection_map
+            .insert(address.clone(), node)
+            .map(|old_conn| {
+                // old_conn is dropped here -> decrease the count by the number of connections
+                // held by `old_conn`
+                // Increase the total number of connections
+                Telemetry::decr_total_connections(old_conn.connections_count());
+                old_conn
+            });
         address
     }
 
     pub(crate) fn remove_node(&self, address: &String) -> Option<ClusterNode<Connection>> {
-        self.connection_map
-            .remove(address)
-            .map(|(_key, value)| value)
+        if let Some((_key, old_conn)) = self.connection_map.remove(address) {
+            Telemetry::decr_total_connections(old_conn.connections_count());
+            Some(old_conn)
+        } else {
+            None
+        }
     }
 
     pub(crate) fn len(&self) -> usize {
         self.connection_map.len()
+    }
+
+    pub(crate) fn connection_map(&self) -> &DashMap<String, ClusterNode<Connection>> {
+        &self.connection_map
     }
 
     pub(crate) fn get_current_topology_hash(&self) -> TopologyHash {

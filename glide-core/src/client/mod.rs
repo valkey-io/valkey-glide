@@ -31,21 +31,22 @@ pub const DEFAULT_CONNECTION_ATTEMPT_TIMEOUT: Duration = Duration::from_millis(2
 pub const DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL: Duration = Duration::from_secs(60);
 pub const INTERNAL_CONNECTION_TIMEOUT: Duration = Duration::from_millis(250);
 pub const FINISHED_SCAN_CURSOR: &str = "finished";
-// The value of 1000 for the maximum number of inflight requests is determined based on Little's Law in queuing theory:
-//
-// Expected maximum request rate: 50,000 requests/second
-// Expected response time: 1 millisecond
-//
-// According to Little's Law, the maximum number of inflight requests required to fully utilize the maximum request rate is:
-//   (50,000 requests/second) × (1 millisecond / 1000 milliseconds) = 50 requests
-//
-// The value of 1000 provides a buffer for bursts while still allowing full utilization of the maximum request rate.
+
+/// The value of 1000 for the maximum number of inflight requests is determined based on Little's Law in queuing theory:
+///
+/// Expected maximum request rate: 50,000 requests/second
+/// Expected response time: 1 millisecond
+///
+/// According to Little's Law, the maximum number of inflight requests required to fully utilize the maximum request rate is:
+///   (50,000 requests/second) × (1 millisecond / 1000 milliseconds) = 50 requests
+///
+/// The value of 1000 provides a buffer for bursts while still allowing full utilization of the maximum request rate.
 pub const DEFAULT_MAX_INFLIGHT_REQUESTS: u32 = 1000;
 
-// The connection check interval is currently not exposed to the user via ConnectionRequest,
-// as improper configuration could negatively impact performance or pub/sub resiliency.
-// A 3-second interval provides a reasonable balance between connection validation
-// and performance overhead.
+/// The connection check interval is currently not exposed to the user via ConnectionRequest,
+/// as improper configuration could negatively impact performance or pub/sub resiliency.
+/// A 3-second interval provides a reasonable balance between connection validation
+/// and performance overhead.
 pub const CONNECTION_CHECKS_INTERVAL: Duration = Duration::from_secs(3);
 
 pub(super) fn get_port(address: &NodeAddress) -> u16 {

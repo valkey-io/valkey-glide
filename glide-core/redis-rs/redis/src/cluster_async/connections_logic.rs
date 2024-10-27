@@ -1,5 +1,3 @@
-use std::net::SocketAddr;
-
 use super::{
     connections_container::{ClusterNode, ConnectionWithIp},
     Connect,
@@ -11,6 +9,7 @@ use crate::{
     cluster_client::ClusterParams,
     ErrorKind, RedisError, RedisResult,
 };
+use std::net::SocketAddr;
 
 use futures::prelude::*;
 use futures_util::{future::BoxFuture, join};
@@ -113,6 +112,7 @@ where
     C: ConnectionLike + Connect + Send + Sync + 'static + Clone,
 {
     match future::join(
+        // User connection
         create_connection(
             addr,
             params.clone(),
@@ -120,6 +120,7 @@ where
             false,
             glide_connection_options.clone(),
         ),
+        // Management connection
         create_connection(
             addr,
             params.clone(),
@@ -387,15 +388,15 @@ where
     if is_management {
         glide_connection_options.disconnect_notifier = None;
     }
-    C::connect(
+    let conn = C::connect(
         info,
         response_timeout,
         connection_timeout,
         socket_addr,
         glide_connection_options,
     )
-    .await
-    .map(|conn| conn.into())
+    .await?;
+    Ok(conn.into())
 }
 
 /// The function returns None if the checked connection/s are healthy. Otherwise, it returns the type of the unhealthy connection/s.
