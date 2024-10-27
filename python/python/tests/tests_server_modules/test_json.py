@@ -510,7 +510,7 @@ class TestJson:
         assert result == b"76"
 
         # Check if the rest of the key1 path matches were updated and not only the last value
-        result = await json.get(glide_client, key, "$..key1")
+        result = await json.get(glide_client, key, "$..key1")  # type: ignore
         assert (
             result == b"[0,[16,17],76]"
         )  # First is 0 as 0 + 0 = 0, Second doesn't change as its an array type (non-numeric), third is 76 as 0 + 76 = 0
@@ -650,7 +650,7 @@ class TestJson:
         assert result == b"1380"  # Expect the last updated key1 value multiplied by 2
 
         # Check if the rest of the key1 path matches were updated and not only the last value
-        result = await json.get(glide_client, key, "$..key1")
+        result = await json.get(glide_client, key, "$..key1")  # type: ignore
         assert result == b"[-16500,[140,175],1380]"
 
         # Check for non-existent path in legacy
