@@ -469,7 +469,7 @@ public class JsonTests {
 
         // Binary no path
         assertEquals("OK", Json.set(client, key, "$", "'\"hi\"'").get());
-        assertEquals(5L, (Long) Json.strappend(client, gs(key), gs("foo")).get());
+        assertEquals(5L, Json.strappend(client, gs(key), gs("foo")).get());
         jsonStr = Json.get(client, key, new String[] {"."}).get();
         assertEquals("\"hifoo\"", jsonStr);
     }
@@ -502,6 +502,6 @@ public class JsonTests {
 
         // Binary no path
         assertEquals("OK", Json.set(client, key, "$", "'\"hi\"'").get());
-        assertEquals(2L, (Long) Json.strlen(client, gs(key)).get());
+        assertEquals(2L, Json.strlen(client, gs(key)).get());
     }
 }

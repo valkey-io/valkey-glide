@@ -1235,8 +1235,10 @@ public class Json {
      * Json.set(client, "doc", "$", "{\"a\":\"foo\", \"nested\": {\"a\": \"hello\"}, \"nested2\": {\"a\": 31}}").get();
      * var res = Json.strappend(client, "doc", "baz", "$..a").get();
      * assert Arrays.equals((Object[]) res, new Object[] {6L, 8L, null}); // The new length of the string values at path '$..a' in the key stored at `doc` after the append operation.
+     *
      * res = Json.strappend(client, "doc", '"foo"', "nested.a").get();
      * assert (Long) res == 11L; // The length of the string value after appending "foo" to the string at path 'nested.array' in the key stored at `doc`.
+     *
      * var getResult = Json.get(client, "doc", "$").get();
      * assert getResult.equals("[{\"a\":\"foobaz\", \"nested\": {\"a\": \"hellobazfoo\"}, \"nested2\": {\"a\": 31}}]"); // The updated JSON value in the key stored at `doc`.
      * }</pre>
@@ -1271,8 +1273,10 @@ public class Json {
      * Json.set(client, "doc", "$", "{\"a\":\"foo\", \"nested\": {\"a\": \"hello\"}, \"nested2\": {\"a\": 31}}").get();
      * var res = Json.strappend(client, gs("doc"), gs("baz"), gs("$..a")).get();
      * assert Arrays.equals((Object[]) res, new Object[] {6L, 8L, null}); // The new length of the string values at path '$..a' in the key stored at `doc` after the append operation.
+     *
      * res = Json.strappend(client, gs("doc"), gs("'\"foo\"'"), gs("nested.a")).get();
      * assert (Long) res == 11L; // The length of the string value after appending "foo" to the string at path 'nested.array' in the key stored at `doc`.
+     *
      * var getResult = Json.get(client, gs("doc"), gs("$")).get();
      * assert getResult.equals("[{\"a\":\"foobaz\", \"nested\": {\"a\": \"hellobazfoo\"}, \"nested2\": {\"a\": 31}}]"); // The updated JSON value in the key stored at `doc`.
      * }</pre>
@@ -1297,12 +1301,13 @@ public class Json {
      *     <pre>{@code
      * Json.set(client, "doc", "$", "'\"foo\"'").get();
      * var res = Json.strappend(client, "doc", "'\"baz\"'").get();
-     * assert (Long) res == 6L; // The length of the string value after appending "foo" to the string at root in the key stored at `doc`.
+     * assert res == 6L; // The length of the string value after appending "foo" to the string at root in the key stored at `doc`.
+     *
      * var getResult = Json.get(client, "doc").get();
      * assert getResult.equals("\"foobaz\""); // The updated JSON value in the key stored at `doc`.
      * }</pre>
      */
-    public static CompletableFuture<Object> strappend(
+    public static CompletableFuture<Long> strappend(
         @NonNull BaseClient client, @NonNull String key, @NonNull String value) {
         return executeCommand(
             client, new ArgsBuilder().add(JSON_STRAPPEND).add(key).add(value).toArray());
@@ -1322,12 +1327,13 @@ public class Json {
      *     <pre>{@code
      * Json.set(client, "doc", "$", "'\"foo\"'").get();
      * var res = Json.strappend(client, gs("doc"), gs("'\"baz\"'")).get();
-     * assert (Long) res == 6L; // The length of the string value after appending "foo" to the string at root in the key stored at `doc`.
+     * assert res == 6L; // The length of the string value after appending "foo" to the string at root in the key stored at `doc`.
+     *
      * var getResult = Json.get(client, gs("$"), gs("doc")).get();
      * assert getResult.equals("\"foobaz\""); // The updated JSON value in the key stored at `doc`.
      * }</pre>
      */
-    public static CompletableFuture<Object> strappend(
+    public static CompletableFuture<Long> strappend(
         @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString value) {
         return executeCommand(
             client, new ArgsBuilder().add(gs(JSON_STRAPPEND)).add(key).add(value).toArray());
@@ -1355,12 +1361,15 @@ public class Json {
      * Json.set(client, "doc", "$", "{\"a\":\"foo\", \"nested\": {\"a\": \"hello\"}, \"nested2\": {\"a\": 31}}").get();
      * var res = Json.strlen(client, "doc", "$..a").get();
      * assert Arrays.equals((Object[]) res, new Object[] {3L, 5L, null}); // The length of the string values at path '$..a' in the key stored at `doc`.
+     *
      * res = Json.strlen(client, "doc", "nested.a").get();
      * assert (Long) res == 5L; // The length of the JSON value at path 'nested.a' in the key stored at `doc`.
+     *
      * res = Json.strlen(client, "doc", "$").get();
      * assert Arrays.equals((Object[]) res, new Object[] {null}); // Returns an array with null since the value at root path does in the JSON document stored at `doc` is not a string.
+     *
      * res = Json.strlen(client, "non_existing_key", ".").get();
-     * assert res.equals(null); // `key` doesn't exist.
+     * assert res == null; // `key` doesn't exist.
      * }</pre>
      */
     public static CompletableFuture<Object> strlen(
@@ -1391,12 +1400,15 @@ public class Json {
      * Json.set(client, "doc", "$", "{\"a\":\"foo\", \"nested\": {\"a\": \"hello\"}, \"nested2\": {\"a\": 31}}").get();
      * var res = Json.strlen(client, gs("doc"), gs("$..a")).get();
      * assert Arrays.equals((Object[]) res, new Object[] {3L, 5L, null}); // The length of the string values at path '$..a' in the key stored at `doc`.
+     *
      * res = Json.strlen(client, gs("doc"), gs("nested.a")).get();
      * assert (Long) res == 5L; // The length of the JSON value at path 'nested.a' in the key stored at `doc`.
+     *
      * res = Json.strlen(client, gs("doc"), gs("$")).get();
      * assert Arrays.equals((Object[]) res, new Object[] {null}); // Returns an array with null since the value at root path does in the JSON document stored at `doc` is not a string.
+     *
      * res = Json.strlen(client, gs("non_existing_key"), gs(".")).get();
-     * assert res.equals(null); // `key` doesn't exist.
+     * assert res == null; // `key` doesn't exist.
      * }</pre>
      */
     public static CompletableFuture<Object> strlen(
@@ -1418,12 +1430,13 @@ public class Json {
      *     <pre>{@code
      * Json.set(client, "doc", "$", "\"Hello\"").get();
      * var res = Json.strlen(client, "doc").get();
-     * assert (Long) res == 5L; // The length of the JSON value at the root in the key stored at `doc`.
+     * assert res == 5L; // The length of the JSON value at the root in the key stored at `doc`.
+     *
      * res = Json.strlen(client, "non_existing_key").get();
-     * assert res.equals(null); // `key` doesn't exist.
+     * assert res == null; // `key` doesn't exist.
      * }</pre>
      */
-    public static CompletableFuture<Object> strlen(
+    public static CompletableFuture<Long> strlen(
         @NonNull BaseClient client, @NonNull String key) {
         return executeCommand(
             client, new ArgsBuilder().add(JSON_STRLEN).add(key).toArray());
@@ -1442,12 +1455,13 @@ public class Json {
      *     <pre>{@code
      * Json.set(client, "doc", "$", "\"Hello\"").get();
      * var res = Json.strlen(client, gs("doc")).get();
-     * assert (Long) res == 5L; // The length of the JSON value at the root in the key stored at `doc`.
+     * assert res == 5L; // The length of the JSON value at the root in the key stored at `doc`.
+     *
      * res = Json.strlen(client, gs("non_existing_key")).get();
-     * assert res.equals(null); // `key` doesn't exist.
+     * assert res == null; // `key` doesn't exist.
      * }</pre>
      */
-    public static CompletableFuture<Object> strlen(
+    public static CompletableFuture<Long> strlen(
         @NonNull BaseClient client, @NonNull GlideString key) {
         return executeCommand(
             client, new ArgsBuilder().add(gs(JSON_STRLEN)).add(key).toArray());
