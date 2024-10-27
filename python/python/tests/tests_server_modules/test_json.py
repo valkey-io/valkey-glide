@@ -1,6 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import json as OuterJson
+import typing
 
 import pytest
 from glide.async_commands.core import ConditionalChange, InfoSection
@@ -144,41 +145,116 @@ class TestJson:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_del(self, glide_client: TGlideClient):
+    async def test_json_del(self, glide_client: TGlideClient):
         key = get_random_string(5)
 
         json_value = {"a": 1.0, "b": {"a": 1, "b": 2.5, "c": True}}
         assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
 
+        # Non-exiseting paths
+        assert await json.delete(glide_client, key, "$..path") == 0
+        assert await json.delete(glide_client, key, "..path") == 0
+
         assert await json.delete(glide_client, key, "$..a") == 2
         assert await json.get(glide_client, key, "$..a") == b"[]"
+
+        assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
+
+        assert await json.delete(glide_client, key, "..a") == 2
+        with pytest.raises(RequestError):
+            assert await json.get(glide_client, key, "..a")
 
         result = await json.get(glide_client, key, "$")
         assert isinstance(result, bytes)
         assert OuterJson.loads(result) == [{"b": {"b": 2.5, "c": True}}]
 
         assert await json.delete(glide_client, key, "$") == 1
+        assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
+        assert await json.delete(glide_client, key, ".") == 1
+        assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
+        assert await json.delete(glide_client, key) == 1
         assert await json.delete(glide_client, key) == 0
         assert await json.get(glide_client, key, "$") == None
 
+        # Non-existing keys
+        assert await json.delete(glide_client, "non_existing_key", "$") == 0
+        assert await json.delete(glide_client, "non_existing_key", ".") == 0
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_forget(self, glide_client: TGlideClient):
+    async def test_json_forget(self, glide_client: TGlideClient):
         key = get_random_string(5)
 
         json_value = {"a": 1.0, "b": {"a": 1, "b": 2.5, "c": True}}
         assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
 
+        # Non-existing paths
+        assert await json.forget(glide_client, key, "$..path") == 0
+        assert await json.forget(glide_client, key, "..path") == 0
+
         assert await json.forget(glide_client, key, "$..a") == 2
         assert await json.get(glide_client, key, "$..a") == b"[]"
+
+        assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
+
+        assert await json.forget(glide_client, key, "..a") == 2
+        with pytest.raises(RequestError):
+            assert await json.get(glide_client, key, "..a")
 
         result = await json.get(glide_client, key, "$")
         assert isinstance(result, bytes)
         assert OuterJson.loads(result) == [{"b": {"b": 2.5, "c": True}}]
 
         assert await json.forget(glide_client, key, "$") == 1
+        assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
+        assert await json.forget(glide_client, key, ".") == 1
+        assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
+        assert await json.forget(glide_client, key) == 1
         assert await json.forget(glide_client, key) == 0
         assert await json.get(glide_client, key, "$") == None
+
+        # Non-existing keys
+        assert await json.forget(glide_client, "non_existing_key", "$") == 0
+        assert await json.forget(glide_client, "non_existing_key", ".") == 0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_json_objkeys(self, glide_client: TGlideClient):
+        key = get_random_string(5)
+
+        json_value = {"a": 1.0, "b": {"a": {"x": 1, "y": 2}, "b": 2.5, "c": True}}
+        assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
+
+        keys = await json.objkeys(glide_client, key, "$")
+        assert keys == [[b"a", b"b"]]
+
+        keys = await json.objkeys(glide_client, key, ".")
+        assert keys == [b"a", b"b"]
+
+        keys = await json.objkeys(glide_client, key, "$..")
+        assert keys == [[b"a", b"b"], [b"a", b"b", b"c"], [b"x", b"y"]]
+
+        keys = await json.objkeys(glide_client, key, "..")
+        assert keys == [b"a", b"b"]
+
+        keys = await json.objkeys(glide_client, key, "$..b")
+        assert keys == [[b"a", b"b", b"c"], []]
+
+        keys = await json.objkeys(glide_client, key, "..b")
+        assert keys == [b"a", b"b", b"c"]
+
+        # path doesn't exist
+        assert await json.objkeys(glide_client, key, "$.non_existing_path") == []
+        assert await json.objkeys(glide_client, key, "non_existing_path") == None
+
+        # Value at path isnt an object
+        assert await json.objkeys(glide_client, key, "$.a") == [[]]
+        with pytest.raises(RequestError):
+            assert await json.objkeys(glide_client, key, ".a")
+
+        # Non-existing key
+        assert await json.objkeys(glide_client, "non_exiting_key", "$") == None
+        assert await json.objkeys(glide_client, "non_exiting_key", ".") == None
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -189,10 +265,14 @@ class TestJson:
 
         assert await json.toggle(glide_client, key, "$..bool") == [False, True, None]
         assert await json.toggle(glide_client, key, "bool") is True
+        assert await json.toggle(glide_client, key, "$.not_existing") == []
 
         assert await json.toggle(glide_client, key, "$.nested") == [None]
         with pytest.raises(RequestError):
             assert await json.toggle(glide_client, key, "nested")
+
+        with pytest.raises(RequestError):
+            assert await json.toggle(glide_client, key, ".not_existing")
 
         with pytest.raises(RequestError):
             assert await json.toggle(glide_client, "non_exiting_key", "$")
@@ -517,7 +597,7 @@ class TestJson:
         assert result == b"76"
 
         # Check if the rest of the key1 path matches were updated and not only the last value
-        result = await json.get(glide_client, key, "$..key1")
+        result = await json.get(glide_client, key, "$..key1")  # type: ignore
         assert (
             result == b"[0,[16,17],76]"
         )  # First is 0 as 0 + 0 = 0, Second doesn't change as its an array type (non-numeric), third is 76 as 0 + 76 = 0
@@ -657,7 +737,7 @@ class TestJson:
         assert result == b"1380"  # Expect the last updated key1 value multiplied by 2
 
         # Check if the rest of the key1 path matches were updated and not only the last value
-        result = await json.get(glide_client, key, "$..key1")
+        result = await json.get(glide_client, key, "$..key1")  # type: ignore
         assert result == b"[-16500,[140,175],1380]"
 
         # Check for non-existent path in legacy
@@ -671,3 +751,490 @@ class TestJson:
         # Check for Overflow in legacy
         with pytest.raises(RequestError):
             await json.nummultby(glide_client, key, ".key9", 1.7976931348623157e308)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_json_strlen(self, glide_client: TGlideClient):
+        key = get_random_string(10)
+        json_value = {"a": "foo", "nested": {"a": "hello"}, "nested2": {"a": 31}}
+        assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
+
+        assert await json.strlen(glide_client, key, "$..a") == [3, 5, None]
+        assert await json.strlen(glide_client, key, "a") == 3
+
+        assert await json.strlen(glide_client, key, "$.nested") == [None]
+        with pytest.raises(RequestError):
+            assert await json.strlen(glide_client, key, "nested")
+
+        with pytest.raises(RequestError):
+            assert await json.strlen(glide_client, key)
+
+        assert await json.strlen(glide_client, key, "$.non_existing_path") == []
+        with pytest.raises(RequestError):
+            await json.strlen(glide_client, key, ".non_existing_path")
+
+        assert await json.strlen(glide_client, "non_exiting_key", ".") is None
+        assert await json.strlen(glide_client, "non_exiting_key", "$") is None
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_json_strappend(self, glide_client: TGlideClient):
+        key = get_random_string(10)
+        json_value = {"a": "foo", "nested": {"a": "hello"}, "nested2": {"a": 31}}
+        assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
+
+        assert await json.strappend(glide_client, key, '"bar"', "$..a") == [6, 8, None]
+        assert await json.strappend(glide_client, key, OuterJson.dumps("foo"), "a") == 9
+
+        json_str = await json.get(glide_client, key, ".")
+        assert isinstance(json_str, bytes)
+        assert OuterJson.loads(json_str) == {
+            "a": "foobarfoo",
+            "nested": {"a": "hellobar"},
+            "nested2": {"a": 31},
+        }
+
+        assert await json.strappend(
+            glide_client, key, OuterJson.dumps("bar"), "$.nested"
+        ) == [None]
+
+        with pytest.raises(RequestError):
+            await json.strappend(glide_client, key, OuterJson.dumps("bar"), ".nested")
+
+        with pytest.raises(RequestError):
+            await json.strappend(glide_client, key, OuterJson.dumps("bar"))
+
+        assert (
+            await json.strappend(
+                glide_client, key, OuterJson.dumps("try"), "$.non_existing_path"
+            )
+            == []
+        )
+        with pytest.raises(RequestError):
+            await json.strappend(
+                glide_client, key, OuterJson.dumps("try"), "non_existing_path"
+            )
+
+        with pytest.raises(RequestError):
+            await json.strappend(
+                glide_client, "non_exiting_key", OuterJson.dumps("try")
+            )
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @typing.no_type_check  # since this is a complex test, skip typing to be more effective
+    async def test_json_arrinsert(self, glide_client: TGlideClient):
+        key = get_random_string(10)
+
+        assert (
+            await json.set(
+                glide_client,
+                key,
+                "$",
+                """
+            {
+                "a": [],
+                "b": { "a": [1, 2, 3, 4] },
+                "c": { "a": "not an array" },
+                "d": [{ "a": ["x", "y"] }, { "a": [["foo"]] }],
+                "e": [{ "a": 42 }, { "a": {} }],
+                "f": { "a": [true, false, null] }
+            }
+            """,
+            )
+            == OK
+        )
+
+        # Insert different types of values into the matching paths
+        result = await json.arrinsert(
+            glide_client,
+            key,
+            "$..a",
+            0,
+            ['"string_value"', "123", '{"key": "value"}', "true", "null", '["bar"]'],
+        )
+        assert result == [6, 10, None, 8, 7, None, None, 9]
+
+        updated_doc = await json.get(glide_client, key)
+
+        expected_doc = {
+            "a": ["string_value", 123, {"key": "value"}, True, None, ["bar"]],
+            "b": {
+                "a": [
+                    "string_value",
+                    123,
+                    {"key": "value"},
+                    True,
+                    None,
+                    ["bar"],
+                    1,
+                    2,
+                    3,
+                    4,
+                ],
+            },
+            "c": {"a": "not an array"},
+            "d": [
+                {
+                    "a": [
+                        "string_value",
+                        123,
+                        {"key": "value"},
+                        True,
+                        None,
+                        ["bar"],
+                        "x",
+                        "y",
+                    ]
+                },
+                {
+                    "a": [
+                        "string_value",
+                        123,
+                        {"key": "value"},
+                        True,
+                        None,
+                        ["bar"],
+                        ["foo"],
+                    ]
+                },
+            ],
+            "e": [{"a": 42}, {"a": {}}],
+            "f": {
+                "a": [
+                    "string_value",
+                    123,
+                    {"key": "value"},
+                    True,
+                    None,
+                    ["bar"],
+                    True,
+                    False,
+                    None,
+                ]
+            },
+        }
+
+        assert OuterJson.loads(updated_doc) == expected_doc
+
+        # Insert into a specific index (non-zero)
+        result = await json.arrinsert(
+            glide_client,
+            key,
+            "$..a",
+            2,
+            ['"insert_at_2"'],
+        )
+        assert result == [7, 11, None, 9, 8, None, None, 10]
+
+        # Check document after insertion at index 2
+        updated_doc_at_2 = await json.get(glide_client, key)
+        expected_doc["a"].insert(2, "insert_at_2")
+        expected_doc["b"]["a"].insert(2, "insert_at_2")
+        expected_doc["d"][0]["a"].insert(2, "insert_at_2")
+        expected_doc["d"][1]["a"].insert(2, "insert_at_2")
+        expected_doc["f"]["a"].insert(2, "insert_at_2")
+        assert OuterJson.loads(updated_doc_at_2) == expected_doc
+
+        # Insert with a legacy path
+        result = await json.arrinsert(
+            glide_client,
+            key,
+            "..a",  # legacy path
+            0,
+            ['"legacy_value"'],
+        )
+        assert (
+            result == 8
+        )  # Returns length of the first modified array (in this case, 'a')
+
+        # Check document after insertion at root legacy path (all matching arrays should be updated)
+        updated_doc_legacy = await json.get(glide_client, key)
+
+        # Update `expected_doc` with the new value inserted at index 0 of all matching arrays
+        expected_doc["a"].insert(0, "legacy_value")
+        expected_doc["b"]["a"].insert(0, "legacy_value")
+        expected_doc["d"][0]["a"].insert(0, "legacy_value")
+        expected_doc["d"][1]["a"].insert(0, "legacy_value")
+        expected_doc["f"]["a"].insert(0, "legacy_value")
+
+        assert OuterJson.loads(updated_doc_legacy) == expected_doc
+
+        # Insert with an index out of range for some arrays
+        with pytest.raises(RequestError):
+            await json.arrinsert(
+                glide_client,
+                key,
+                "$..a",
+                10,  # Index out of range for some paths but valid for others
+                ['"out_of_range_value"'],
+            )
+
+        with pytest.raises(RequestError):
+            await json.arrinsert(
+                glide_client,
+                key,
+                "..a",
+                10,  # Index out of range for some paths but valid for others
+                ['"out_of_range_value"'],
+            )
+
+        # Negative index insertion (should insert from the end of the array)
+        result = await json.arrinsert(
+            glide_client,
+            key,
+            "$..a",
+            -1,
+            ['"negative_index_value"'],
+        )
+        assert result == [9, 13, None, 11, 10, None, None, 12]  # Update valid paths
+
+        # Check document after negative index insertion
+        updated_doc_negative = await json.get(glide_client, key)
+        expected_doc["a"].insert(-1, "negative_index_value")
+        expected_doc["b"]["a"].insert(-1, "negative_index_value")
+        expected_doc["d"][0]["a"].insert(-1, "negative_index_value")
+        expected_doc["d"][1]["a"].insert(-1, "negative_index_value")
+        expected_doc["f"]["a"].insert(-1, "negative_index_value")
+        assert OuterJson.loads(updated_doc_negative) == expected_doc
+
+        # Non-existing path
+        with pytest.raises(RequestError):
+            await json.arrinsert(glide_client, key, ".path", 5, ['"value"'])
+
+        await json.arrinsert(glide_client, key, "$.path", 5, ['"value"']) == []
+
+        # Key doesnt exist
+        with pytest.raises(RequestError):
+            await json.arrinsert(glide_client, "non_existent_key", "$", 5, ['"value"'])
+
+        with pytest.raises(RequestError):
+            await json.arrinsert(glide_client, "non_existent_key", ".", 5, ['"value"'])
+
+        # value at path is not an array
+        with pytest.raises(RequestError):
+            await json.arrinsert(glide_client, key, ".e", 5, ['"value"'])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_json_debug_fields(self, glide_client: TGlideClient):
+        key = get_random_string(10)
+
+        json_value = {
+            "key1": 1,
+            "key2": 3.5,
+            "key3": {"nested_key": {"key1": [4, 5]}},
+            "key4": [1, 2, 3],
+            "key5": 0,
+            "key6": "hello",
+            "key7": None,
+            "key8": {"nested_key": {"key1": 3.5953862697246314e307}},
+            "key9": 3.5953862697246314e307,
+            "key10": True,
+        }
+
+        assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
+
+        # Test JSONPath - Fields Subcommand
+        # Test integer
+        result = await json.debug_fields(glide_client, key, "$.key1")
+        assert result == [1]
+
+        # Test float
+        result = await json.debug_fields(glide_client, key, "$.key2")
+        assert result == [1]
+
+        # Test Nested Value
+        result = await json.debug_fields(glide_client, key, "$.key3")
+        assert result == [4]
+
+        result = await json.debug_fields(glide_client, key, "$.key3.nested_key.key1")
+        assert result == [2]
+
+        # Test Array
+        result = await json.debug_fields(glide_client, key, "$.key4[2]")
+        assert result == [1]
+
+        # Test String
+        result = await json.debug_fields(glide_client, key, "$.key6")
+        assert result == [1]
+
+        # Test Null
+        result = await json.debug_fields(glide_client, key, "$.key7")
+        assert result == [1]
+
+        # Test Bool
+        result = await json.debug_fields(glide_client, key, "$.key10")
+        assert result == [1]
+
+        # Test all keys
+        result = await json.debug_fields(glide_client, key, "$[*]")
+        assert result == [1, 1, 4, 3, 1, 1, 1, 2, 1, 1]
+
+        # Test multiple paths
+        result = await json.debug_fields(glide_client, key, "$..key1")
+        assert result == [1, 2, 1]
+
+        # Test for non-existent path
+        result = await json.debug_fields(glide_client, key, "$.key11")
+        assert result == []
+
+        # Test for non-existent key
+        result = await json.debug_fields(glide_client, "non_existent_key", "$.key10")
+        assert result == None
+
+        # Test no provided path
+        # Total Fields (19) - breakdown:
+        # Top-Level Fields: 10
+        # Fields within key3: 4 ($.key3, $.key3.nested_key, $.key3.nested_key.key1, $.key3.nested_key.key1)
+        # Fields within key4: 3 ($.key4[0], $.key4[1], $.key4[2])
+        # Fields within key8: 2 ($.key8, $.key8.nested_key)
+        result = await json.debug_fields(glide_client, key)
+        assert result == 19
+
+        # Test legacy path - Fields Subcommand
+        # Test integer
+        result = await json.debug_fields(glide_client, key, ".key1")
+        assert result == 1
+
+        # Test float
+        result = await json.debug_fields(glide_client, key, ".key2")
+        assert result == 1
+
+        # Test Nested Value
+        result = await json.debug_fields(glide_client, key, ".key3")
+        assert result == 4
+
+        result = await json.debug_fields(glide_client, key, ".key3.nested_key.key1")
+        assert result == 2
+
+        # Test Array
+        result = await json.debug_fields(glide_client, key, ".key4[2]")
+        assert result == 1
+
+        # Test String
+        result = await json.debug_fields(glide_client, key, ".key6")
+        assert result == 1
+
+        # Test Null
+        result = await json.debug_fields(glide_client, key, ".key7")
+        assert result == 1
+
+        # Test Bool
+        result = await json.debug_fields(glide_client, key, ".key10")
+        assert result == 1
+
+        # Test multiple paths
+        result = await json.debug_fields(glide_client, key, "..key1")
+        assert result == 1  # Returns number of fields of the first JSON value
+
+        # Test for non-existent path
+        with pytest.raises(RequestError):
+            await json.debug_fields(glide_client, key, ".key11")
+
+        # Test for non-existent key
+        result = await json.debug_fields(glide_client, "non_existent_key", ".key10")
+        assert result == None
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_json_debug_memory(self, glide_client: TGlideClient):
+        key = get_random_string(10)
+
+        json_value = {
+            "key1": 1,
+            "key2": 3.5,
+            "key3": {"nested_key": {"key1": [4, 5]}},
+            "key4": [1, 2, 3],
+            "key5": 0,
+            "key6": "hello",
+            "key7": None,
+            "key8": {"nested_key": {"key1": 3.5953862697246314e307}},
+            "key9": 3.5953862697246314e307,
+            "key10": True,
+        }
+
+        assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
+        # Test JSONPath - Memory Subcommand
+        # Test integer
+        result = await json.debug_memory(glide_client, key, "$.key1")
+        assert result == [16]
+        # Test float
+        result = await json.debug_memory(glide_client, key, "$.key2")
+        assert result == [16]
+        # Test Nested Value
+        result = await json.debug_memory(glide_client, key, "$.key3.nested_key.key1[0]")
+        assert result == [16]
+        # Test Array
+        result = await json.debug_memory(glide_client, key, "$.key4")
+        assert result == [16 * 4]
+
+        result = await json.debug_memory(glide_client, key, "$.key4[2]")
+        assert result == [16]
+        # Test String
+        result = await json.debug_memory(glide_client, key, "$.key6")
+        assert result == [16]
+        # Test Null
+        result = await json.debug_memory(glide_client, key, "$.key7")
+        assert result == [16]
+        # Test Bool
+        result = await json.debug_memory(glide_client, key, "$.key10")
+        assert result == [16]
+        # Test all keys
+        result = await json.debug_memory(glide_client, key, "$[*]")
+        assert result == [16, 16, 110, 64, 16, 16, 16, 101, 39, 16]
+        # Test multiple paths
+        result = await json.debug_memory(glide_client, key, "$..key1")
+        assert result == [16, 48, 39]
+        # Test for non-existent path
+        result = await json.debug_memory(glide_client, key, "$.key11")
+        assert result == []
+        # Test for non-existent key
+        result = await json.debug_memory(glide_client, "non_existent_key", "$.key10")
+        assert result == None
+        # Test no provided path
+        # Total Memory (504 bytes) - visual breakdown:
+        # ├── Root Object Overhead (129 bytes)
+        # └── JSON Elements (374 bytes)
+        #    ├── key1: 16 bytes
+        #    ├── key2: 16 bytes
+        #    ├── key3: 110 bytes
+        #    ├── key4: 64 bytes
+        #    ├── key5: 16 bytes
+        #    ├── key6: 16 bytes
+        #    ├── key7: 16 bytes
+        #    ├── key8: 101 bytes
+        #    └── key9: 39 bytes
+        result = await json.debug_memory(glide_client, key)
+        assert result == 504
+        # Test Legacy Path - Memory Subcommand
+        # Test integer
+        result = await json.debug_memory(glide_client, key, ".key1")
+        assert result == 16
+        # Test float
+        result = await json.debug_memory(glide_client, key, ".key2")
+        assert result == 16
+        # Test Nested Value
+        result = await json.debug_memory(glide_client, key, ".key3.nested_key.key1[0]")
+        assert result == 16
+        # Test Array
+        result = await json.debug_memory(glide_client, key, ".key4[2]")
+        assert result == 16
+        # Test String
+        result = await json.debug_memory(glide_client, key, ".key6")
+        assert result == 16
+        # Test Null
+        result = await json.debug_memory(glide_client, key, ".key7")
+        assert result == 16
+        # Test Bool
+        result = await json.debug_memory(glide_client, key, ".key10")
+        assert result == 16
+        # Test multiple paths
+        result = await json.debug_memory(glide_client, key, "..key1")
+        assert result == 16  # Returns the memory usage of the first JSON value
+        # Test for non-existent path
+        with pytest.raises(RequestError):
+            await json.debug_memory(glide_client, key, ".key11")
+        # Test for non-existent key
+        result = await json.debug_memory(glide_client, "non_existent_key", ".key10")
+        assert result == None

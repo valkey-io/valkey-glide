@@ -37,7 +37,6 @@ from glide.async_commands.server_modules.ft_options.ft_create_options import (
     DataType,
     DistanceMetricType,
     Field,
-    FieldType,
     FtCreateOptions,
     NumericField,
     TagField,
@@ -104,6 +103,7 @@ from glide.config import (
 from glide.constants import (
     OK,
     TOK,
+    FtInfoResponse,
     TClusterResponse,
     TEncodable,
     TFunctionListResponse,
@@ -170,6 +170,7 @@ __all__ = [
     "TResult",
     "TXInfoStreamFullResponse",
     "TXInfoStreamResponse",
+    "FtInfoResponse",
     # Commands
     "BitEncoding",
     "BitFieldGet",
@@ -259,7 +260,6 @@ __all__ = [
     "DataType",
     "DistanceMetricType",
     "Field",
-    "FieldType",
     "FtCreateOptions",
     "NumericField",
     "TagField",
