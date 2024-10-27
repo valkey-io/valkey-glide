@@ -505,6 +505,55 @@ async def strlen(
     )
 
 
+async def objkeys(
+    client: TGlideClient,
+    key: TEncodable,
+    path: Optional[TEncodable] = None,
+) -> Optional[Union[List[bytes], List[List[bytes]]]]:
+    """
+    Retrieves key names in the object values at the specified `path` within the JSON document stored at `key`.
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+        key (TEncodable): The key of the JSON document.
+        path (Optional[TEncodable]): Represents the path within the JSON document where the key names will be retrieved.
+            Defaults to None.
+
+    Returns:
+        Optional[Union[List[bytes], List[List[bytes]]]]:
+            For JSONPath (`path` starts with `$`):
+                Returns a list of arrays containing key names for each matching object.
+                If a value matching the path is not an object, an empty array is returned.
+                If `path` doesn't exist, an empty array is returned.
+            For legacy path (`path` starts with `.`):
+                Returns a list of key names for the object value matching the path.
+                If multiple objects match the path, the key names of the first object are returned.
+                If a value matching the path is not an object, an error is raised.
+                If `path` doesn't exist, None is returned.
+            If `key` doesn't exist, None is returned.
+
+    Examples:
+        >>> from glide import json
+        >>> await json.set(client, "doc", "$", '{"a": 1.0, "b": {"a": {"x": 1, "y": 2}, "b": 2.5, "c": true}}')
+            b'OK'  # Indicates successful setting of the value at the root path '$' in the key `doc`.
+        >>> await json.objkeys(client, "doc", "$")
+            [[b"a", b"b"]]  # Returns a list of arrays containing the key names for objects matching the path '$'.
+        >>> await json.objkeys(client, "doc", ".")
+            [b"a", b"b"]  # Returns key names for the object matching the path '.' as it is the only match.
+        >>> await json.objkeys(client, "doc", "$.b")
+            [[b"a", b"b", b"c"]]  # Returns key names as a nested list for objects matching the JSONPath '$.b'.
+        >>> await json.objkeys(client, "doc", ".b")
+            [b"a", b"b", b"c"]  # Returns key names for the nested object at path '.b'.
+    """
+    args = ["JSON.OBJKEYS", key]
+    if path:
+        args.append(path)
+    return cast(
+        Optional[Union[List[bytes], List[List[bytes]]]],
+        await client.custom_command(args),
+    )
+
+
 async def toggle(
     client: TGlideClient,
     key: TEncodable,

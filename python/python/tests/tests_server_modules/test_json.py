@@ -218,6 +218,45 @@ class TestJson:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_json_objkeys(self, glide_client: TGlideClient):
+        key = get_random_string(5)
+
+        json_value = {"a": 1.0, "b": {"a": {"x": 1, "y": 2}, "b": 2.5, "c": True}}
+        assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
+
+        keys = await json.objkeys(glide_client, key, "$")
+        assert keys == [[b"a", b"b"]]
+
+        keys = await json.objkeys(glide_client, key, ".")
+        assert keys == [b"a", b"b"]
+
+        keys = await json.objkeys(glide_client, key, "$..")
+        assert keys == [[b"a", b"b"], [b"a", b"b", b"c"], [b"x", b"y"]]
+
+        keys = await json.objkeys(glide_client, key, "..")
+        assert keys == [b"a", b"b"]
+
+        keys = await json.objkeys(glide_client, key, "$..b")
+        assert keys == [[b"a", b"b", b"c"], []]
+
+        keys = await json.objkeys(glide_client, key, "..b")
+        assert keys == [b"a", b"b", b"c"]
+
+        # path doesn't exist
+        assert await json.objkeys(glide_client, key, "$.non_existing_path") == []
+        assert await json.objkeys(glide_client, key, "non_existing_path") == None
+
+        # Value at path isnt an object
+        assert await json.objkeys(glide_client, key, "$.a") == [[]]
+        with pytest.raises(RequestError):
+            assert await json.objkeys(glide_client, key, ".a")
+
+        # Non-existing key
+        assert await json.objkeys(glide_client, "non_exiting_key", "$") == None
+        assert await json.objkeys(glide_client, "non_exiting_key", ".") == None
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_json_toggle(self, glide_client: TGlideClient):
         key = get_random_string(10)
         json_value = {"bool": True, "nested": {"bool": False, "nested": {"bool": 10}}}
