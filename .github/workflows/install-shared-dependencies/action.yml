@@ -39,7 +39,7 @@ runs:
           if: "${{ inputs.os == 'macos' }}"
           run: |
               brew update
-              brew install git gcc pkgconfig openssl coreutils
+              brew install git openssl coreutils
 
         - name: Install software dependencies for Ubuntu GNU
           shell: bash
