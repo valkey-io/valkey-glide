@@ -558,29 +558,41 @@ public class JsonTests {
         String jsonValue = "{\"a\": \"foo\", \"nested\": {\"a\": \"hello\"}, \"nested2\": {\"a\": 31}}";
         assertEquals("OK", Json.set(client, key, "$", jsonValue).get());
 
-        assertArrayEquals(new Object[] {6L, 8L, null}, (Object[]) Json.strappend(client, key, "'\"bar\"'", "$..a").get());
+        assertArrayEquals(
+                new Object[] {6L, 8L, null},
+                (Object[]) Json.strappend(client, key, "'\"bar\"'", "$..a").get());
         assertEquals(9L, (Long) Json.strappend(client, key, "foo", "a").get());
 
         String jsonStr = Json.get(client, key, new String[] {"."}).get();
-        assertEquals("{ \"a\": \"foobarfoo\", \"nested\": {\"a\": \"hellobar\"}, \"nested2\": {\"a\": 31}}", jsonStr);
+        assertEquals(
+                "{ \"a\": \"foobarfoo\", \"nested\": {\"a\": \"hellobar\"}, \"nested2\": {\"a\": 31}}",
+                jsonStr);
 
         assertNull(Json.strappend(client, key, "bar", "$.nested").get());
 
-        assertThrows(ExecutionException.class, () -> Json.strappend(client, key, "bar", ".nested").get());
+        assertThrows(
+                ExecutionException.class, () -> Json.strappend(client, key, "bar", ".nested").get());
 
         assertThrows(ExecutionException.class, () -> Json.strappend(client, key, "bar").get());
 
-        assertArrayEquals(new Object[] {}, (Object[]) Json.strappend(client, key, "try", "$.non_existing_path").get());
+        assertArrayEquals(
+                new Object[] {},
+                (Object[]) Json.strappend(client, key, "try", "$.non_existing_path").get());
 
-        assertThrows(ExecutionException.class, () -> Json.strappend(client, key, "try", "non_existing_path").get());
+        assertThrows(
+                ExecutionException.class,
+                () -> Json.strappend(client, key, "try", "non_existing_path").get());
 
-        assertThrows(ExecutionException.class, () -> Json.strappend(client, "non_existing_key", "try").get());
+        assertThrows(
+                ExecutionException.class, () -> Json.strappend(client, "non_existing_key", "try").get());
 
         // Binary test
         // Binary with path
         assertEquals(12L, (Long) Json.strappend(client, gs(key), gs("foo"), gs("a")).get());
         jsonStr = Json.get(client, key, new String[] {"."}).get();
-        assertEquals("{ \"a\": \"foobarfoofoo\", \"nested\": {\"a\": \"hellobar\"}, \"nested2\": {\"a\": 31}}", jsonStr);
+        assertEquals(
+                "{ \"a\": \"foobarfoofoo\", \"nested\": {\"a\": \"hellobar\"}, \"nested2\": {\"a\": 31}}",
+                jsonStr);
 
         // Binary no path
         assertEquals("OK", Json.set(client, key, "$", "'\"hi\"'").get());
@@ -596,7 +608,8 @@ public class JsonTests {
         String jsonValue = "{\"a\": \"foo\", \"nested\": {\"a\": \"hello\"}, \"nested2\": {\"a\": 31}}";
         assertEquals("OK", Json.set(client, key, "$", jsonValue).get());
 
-        assertArrayEquals(new Object[] {3L, 5L, null}, (Object[]) Json.strlen(client, key, "$..a").get());
+        assertArrayEquals(
+                new Object[] {3L, 5L, null}, (Object[]) Json.strlen(client, key, "$..a").get());
         assertEquals(3L, (Long) Json.strlen(client, key, "a").get());
 
         assertNull(Json.strlen(client, key, "$.nested").get());
@@ -605,8 +618,10 @@ public class JsonTests {
 
         assertThrows(ExecutionException.class, () -> Json.strlen(client, key).get());
 
-        assertArrayEquals(new Object[] {}, (Object[]) Json.strlen(client, key, "$.non_existing_path").get());
-        assertThrows(ExecutionException.class, () -> Json.strlen(client, key, ".non_existing_path").get());
+        assertArrayEquals(
+                new Object[] {}, (Object[]) Json.strlen(client, key, "$.non_existing_path").get());
+        assertThrows(
+                ExecutionException.class, () -> Json.strlen(client, key, ".non_existing_path").get());
 
         assertNull(Json.strlen(client, "non_exiting_key", ".").get());
         assertNull(Json.strlen(client, "non_exiting_key", "$").get());

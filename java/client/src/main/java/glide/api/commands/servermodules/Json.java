@@ -1326,24 +1326,30 @@ public class Json {
     }
 
     /**
-     * Appends the specified <code>value</code> to the string stored at the specified <code>path</code> within the JSON document stored at <code>key</code>.
+     * Appends the specified <code>value</code> to the string stored at the specified <code>path
+     * </code> within the JSON document stored at <code>key</code>.
      *
      * @param client The client to execute the command.
      * @param key The key of the JSON document.
-     * @param value The value to append to the string. Must be wrapped with single quotes. For example, to append "foo", pass '"foo"'.
+     * @param value The value to append to the string. Must be wrapped with single quotes. For
+     *     example, to append "foo", pass '"foo"'.
      * @param path The path within the JSON document.
      * @return
      *     <ul>
      *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
-     *           Returns a list of integer replies for every possible path, indicating the length of the resulting string after appending <code>value</code>,
-     *           or <code>null</code> for JSON values matching the path that are not string.<br>
+     *           Returns a list of integer replies for every possible path, indicating the length of
+     *           the resulting string after appending <code>value</code>, or <code>null</code> for
+     *           JSON values matching the path that are not string.<br>
      *           If <code>key</code> doesn't exist, an error is raised.
      *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
-     *           Returns the length of the resulting string after appending <code>value</code> to the string at <code>path</code>.<br>
+     *           Returns the length of the resulting string after appending <code>value</code> to the
+     *           string at <code>path</code>.<br>
      *           If multiple paths match, the length of the last updated string is returned.<br>
-     *           If the JSON value at <code>path</code> is not a string of if <code>path</code> doesn't exist, an error is raised.<br>
+     *           If the JSON value at <code>path</code> is not a string of if <code>path</code>
+     *           doesn't exist, an error is raised.<br>
      *           If <code>key</code> doesn't exist, an error is raised.
      *     </ul>
+     *
      * @example
      *     <pre>{@code
      * Json.set(client, "doc", "$", "{\"a\":\"foo\", \"nested\": {\"a\": \"hello\"}, \"nested2\": {\"a\": 31}}").get();
@@ -1358,30 +1364,39 @@ public class Json {
      * }</pre>
      */
     public static CompletableFuture<Object> strappend(
-        @NonNull BaseClient client, @NonNull String key, @NonNull String value, @NonNull String path) {
+            @NonNull BaseClient client,
+            @NonNull String key,
+            @NonNull String value,
+            @NonNull String path) {
         return executeCommand(
-            client, new ArgsBuilder().add(JSON_STRAPPEND).add(key).add(path).add(value).toArray());
+                client, new ArgsBuilder().add(JSON_STRAPPEND).add(key).add(path).add(value).toArray());
     }
 
     /**
-     * Appends the specified <code>value</code> to the string stored at the specified <code>path</code> within the JSON document stored at <code>key</code>.
+     * Appends the specified <code>value</code> to the string stored at the specified <code>path
+     * </code> within the JSON document stored at <code>key</code>.
      *
      * @param client The client to execute the command.
      * @param key The key of the JSON document.
-     * @param value The value to append to the string. Must be wrapped with single quotes. For example, to append "foo", pass '"foo"'.
+     * @param value The value to append to the string. Must be wrapped with single quotes. For
+     *     example, to append "foo", pass '"foo"'.
      * @param path The path within the JSON document.
      * @return
      *     <ul>
      *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
-     *           Returns a list of integer replies for every possible path, indicating the length of the resulting string after appending <code>value</code>,
-     *           or <code>null</code> for JSON values matching the path that are not string.<br>
+     *           Returns a list of integer replies for every possible path, indicating the length of
+     *           the resulting string after appending <code>value</code>, or <code>null</code> for
+     *           JSON values matching the path that are not string.<br>
      *           If <code>key</code> doesn't exist, an error is raised.
      *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
-     *           Returns the length of the resulting string after appending <code>value</code> to the string at <code>path</code>.<br>
+     *           Returns the length of the resulting string after appending <code>value</code> to the
+     *           string at <code>path</code>.<br>
      *           If multiple paths match, the length of the last updated string is returned.<br>
-     *           If the JSON value at <code>path</code> is not a string of if <code>path</code> doesn't exist, an error is raised.<br>
+     *           If the JSON value at <code>path</code> is not a string of if <code>path</code>
+     *           doesn't exist, an error is raised.<br>
      *           If <code>key</code> doesn't exist, an error is raised.
      *     </ul>
+     *
      * @example
      *     <pre>{@code
      * Json.set(client, "doc", "$", "{\"a\":\"foo\", \"nested\": {\"a\": \"hello\"}, \"nested2\": {\"a\": 31}}").get();
@@ -1396,19 +1411,24 @@ public class Json {
      * }</pre>
      */
     public static CompletableFuture<Object> strappend(
-        @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString value, @NonNull GlideString path) {
+            @NonNull BaseClient client,
+            @NonNull GlideString key,
+            @NonNull GlideString value,
+            @NonNull GlideString path) {
         return executeCommand(
-            client, new ArgsBuilder().add(gs(JSON_STRAPPEND)).add(key).add(path).add(value).toArray());
+                client, new ArgsBuilder().add(gs(JSON_STRAPPEND)).add(key).add(path).add(value).toArray());
     }
 
     /**
-     * Appends the specified <code>value</code> to the string stored at the root within the JSON document stored at <code>key</code>.
+     * Appends the specified <code>value</code> to the string stored at the root within the JSON
+     * document stored at <code>key</code>.
      *
      * @param client The client to execute the command.
      * @param key The key of the JSON document.
-     * @param value The value to append to the string. Must be wrapped with single quotes. For example, to append "foo", pass '"foo"'.
-     * @return
-     *     Returns the length of the resulting string after appending <code>value</code> to the string at the root.<br>
+     * @param value The value to append to the string. Must be wrapped with single quotes. For
+     *     example, to append "foo", pass '"foo"'.
+     * @return Returns the length of the resulting string after appending <code>value</code> to the
+     *     string at the root.<br>
      *     If the JSON value at root is not a string, an error is raised.<br>
      *     If <code>key</code> doesn't exist, an error is raised.
      * @example
@@ -1422,19 +1442,21 @@ public class Json {
      * }</pre>
      */
     public static CompletableFuture<Long> strappend(
-        @NonNull BaseClient client, @NonNull String key, @NonNull String value) {
+            @NonNull BaseClient client, @NonNull String key, @NonNull String value) {
         return executeCommand(
-            client, new ArgsBuilder().add(JSON_STRAPPEND).add(key).add(value).toArray());
+                client, new ArgsBuilder().add(JSON_STRAPPEND).add(key).add(value).toArray());
     }
 
     /**
-     * Appends the specified <code>value</code> to the string stored at the root within the JSON document stored at <code>key</code>.
+     * Appends the specified <code>value</code> to the string stored at the root within the JSON
+     * document stored at <code>key</code>.
      *
      * @param client The client to execute the command.
      * @param key The key of the JSON document.
-     * @param value The value to append to the string. Must be wrapped with single quotes. For example, to append "foo", pass '"foo"'.
-     * @return
-     *     Returns the length of the resulting string after appending <code>value</code> to the string at the root.<br>
+     * @param value The value to append to the string. Must be wrapped with single quotes. For
+     *     example, to append "foo", pass '"foo"'.
+     * @return Returns the length of the resulting string after appending <code>value</code> to the
+     *     string at the root.<br>
      *     If the JSON value at root is not a string, an error is raised.<br>
      *     If <code>key</code> doesn't exist, an error is raised.
      * @example
@@ -1448,13 +1470,14 @@ public class Json {
      * }</pre>
      */
     public static CompletableFuture<Long> strappend(
-        @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString value) {
+            @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString value) {
         return executeCommand(
-            client, new ArgsBuilder().add(gs(JSON_STRAPPEND)).add(key).add(value).toArray());
+                client, new ArgsBuilder().add(gs(JSON_STRAPPEND)).add(key).add(value).toArray());
     }
 
     /**
-     * Returns the length of the JSON string value stored at the specified <code>path</code> within the JSON document stored at <code>key</code>.
+     * Returns the length of the JSON string value stored at the specified <code>path</code> within
+     * the JSON document stored at <code>key</code>.
      *
      * @param client The client to execute the command.
      * @param key The key of the JSON document.
@@ -1462,14 +1485,18 @@ public class Json {
      * @return
      *     <ul>
      *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
-     *           Returns a list of integer replies for every possible path, indicating the length of the JSON string value,
-     *           or <code>null</code> for JSON values matching the path that are not string.
+     *           Returns a list of integer replies for every possible path, indicating the length of
+     *           the JSON string value, or <code>null</code> for JSON values matching the path that
+     *           are not string.
      *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
-     *           Returns the length of the JSON value at <code>path</code> or <code>null</code> if <code>key</code> doesn't exist.<br>
+     *           Returns the length of the JSON value at <code>path</code> or <code>null</code> if
+     *           <code>key</code> doesn't exist.<br>
      *           If multiple paths match, the length of the first matched string is returned.<br>
-     *           If the JSON value at <code>path</code> is not a string of if <code>path</code> doesn't exist, an error is raised.
-     *       If <code>key</code> doesn't exist, <code>null</code> is returned.
+     *           If the JSON value at <code>path</code> is not a string of if <code>path</code>
+     *           doesn't exist, an error is raised. If <code>key</code> doesn't exist, <code>null
+     *           </code> is returned.
      *     </ul>
+     *
      * @example
      *     <pre>{@code
      * Json.set(client, "doc", "$", "{\"a\":\"foo\", \"nested\": {\"a\": \"hello\"}, \"nested2\": {\"a\": 31}}").get();
@@ -1487,13 +1514,13 @@ public class Json {
      * }</pre>
      */
     public static CompletableFuture<Object> strlen(
-        @NonNull BaseClient client, @NonNull String key, @NonNull String path) {
-        return executeCommand(
-            client, new ArgsBuilder().add(JSON_STRLEN).add(key).add(path).toArray());
+            @NonNull BaseClient client, @NonNull String key, @NonNull String path) {
+        return executeCommand(client, new ArgsBuilder().add(JSON_STRLEN).add(key).add(path).toArray());
     }
 
     /**
-     * Returns the length of the JSON string value stored at the specified <code>path</code> within the JSON document stored at <code>key</code>.
+     * Returns the length of the JSON string value stored at the specified <code>path</code> within
+     * the JSON document stored at <code>key</code>.
      *
      * @param client The client to execute the command.
      * @param key The key of the JSON document.
@@ -1501,14 +1528,18 @@ public class Json {
      * @return
      *     <ul>
      *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
-     *           Returns a list of integer replies for every possible path, indicating the length of the JSON string value,
-     *           or <code>null</code> for JSON values matching the path that are not string.
+     *           Returns a list of integer replies for every possible path, indicating the length of
+     *           the JSON string value, or <code>null</code> for JSON values matching the path that
+     *           are not string.
      *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
-     *           Returns the length of the JSON value at <code>path</code> or <code>null</code> if <code>key</code> doesn't exist.<br>
+     *           Returns the length of the JSON value at <code>path</code> or <code>null</code> if
+     *           <code>key</code> doesn't exist.<br>
      *           If multiple paths match, the length of the first matched string is returned.<br>
-     *           If the JSON value at <code>path</code> is not a string of if <code>path</code> doesn't exist, an error is raised.
-     *       If <code>key</code> doesn't exist, <code>null</code> is returned.
+     *           If the JSON value at <code>path</code> is not a string of if <code>path</code>
+     *           doesn't exist, an error is raised. If <code>key</code> doesn't exist, <code>null
+     *           </code> is returned.
      *     </ul>
+     *
      * @example
      *     <pre>{@code
      * Json.set(client, "doc", "$", "{\"a\":\"foo\", \"nested\": {\"a\": \"hello\"}, \"nested2\": {\"a\": 31}}").get();
@@ -1526,18 +1557,18 @@ public class Json {
      * }</pre>
      */
     public static CompletableFuture<Object> strlen(
-        @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString path) {
+            @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString path) {
         return executeCommand(
-            client, new ArgsBuilder().add(gs(JSON_STRLEN)).add(key).add(path).toArray());
+                client, new ArgsBuilder().add(gs(JSON_STRLEN)).add(key).add(path).toArray());
     }
 
     /**
-     * Returns the length of the JSON string value stored at the root within the JSON document stored at <code>key</code>.
+     * Returns the length of the JSON string value stored at the root within the JSON document stored
+     * at <code>key</code>.
      *
      * @param client The client to execute the command.
      * @param key The key of the JSON document.
-     * @return
-     *     Returns the length of the JSON value at the root.<br>
+     * @return Returns the length of the JSON value at the root.<br>
      *     If the JSON value is not a string, an error is raised.<br>
      *     If <code>key</code> doesn't exist, <code>null</code> is returned.
      * @example
@@ -1550,19 +1581,17 @@ public class Json {
      * assert res == null; // `key` doesn't exist.
      * }</pre>
      */
-    public static CompletableFuture<Long> strlen(
-        @NonNull BaseClient client, @NonNull String key) {
-        return executeCommand(
-            client, new ArgsBuilder().add(JSON_STRLEN).add(key).toArray());
+    public static CompletableFuture<Long> strlen(@NonNull BaseClient client, @NonNull String key) {
+        return executeCommand(client, new ArgsBuilder().add(JSON_STRLEN).add(key).toArray());
     }
 
     /**
-     * Returns the length of the JSON string value stored at the root within the JSON document stored at <code>key</code>.
+     * Returns the length of the JSON string value stored at the root within the JSON document stored
+     * at <code>key</code>.
      *
      * @param client The client to execute the command.
      * @param key The key of the JSON document.
-     * @return
-     *     Returns the length of the JSON value at the root.<br>
+     * @return Returns the length of the JSON value at the root.<br>
      *     If the JSON value is not a string, an error is raised.<br>
      *     If <code>key</code> doesn't exist, <code>null</code> is returned.
      * @example
@@ -1576,11 +1605,10 @@ public class Json {
      * }</pre>
      */
     public static CompletableFuture<Long> strlen(
-        @NonNull BaseClient client, @NonNull GlideString key) {
-        return executeCommand(
-            client, new ArgsBuilder().add(gs(JSON_STRLEN)).add(key).toArray());
+            @NonNull BaseClient client, @NonNull GlideString key) {
+        return executeCommand(client, new ArgsBuilder().add(gs(JSON_STRLEN)).add(key).toArray());
     }
-  
+
     /**
      * Clears an array and an object at the root of the JSON document stored at <code>key</code>.<br>
      * Equivalent to {@link #clear(BaseClient, String, String)} with <code>path</code> set to <code>
