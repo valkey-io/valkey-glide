@@ -998,6 +998,9 @@ class TestJson:
         assert result == [1]
 
         # Test Nested Value
+        result = await json.debug_fields(glide_client, key, "$.key3")
+        assert result == [4]
+
         result = await json.debug_fields(glide_client, key, "$.key3.nested_key.key1")
         assert result == [2]
 
@@ -1052,6 +1055,9 @@ class TestJson:
         assert result == 1
 
         # Test Nested Value
+        result = await json.debug_fields(glide_client, key, ".key3")
+        assert result == 4
+
         result = await json.debug_fields(glide_client, key, ".key3.nested_key.key1")
         assert result == 2
 
@@ -1113,6 +1119,9 @@ class TestJson:
         result = await json.debug_memory(glide_client, key, "$.key3.nested_key.key1[0]")
         assert result == [16]
         # Test Array
+        result = await json.debug_memory(glide_client, key, "$.key4")
+        assert result == [16 * 4]
+
         result = await json.debug_memory(glide_client, key, "$.key4[2]")
         assert result == [16]
         # Test String
