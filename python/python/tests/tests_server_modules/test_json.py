@@ -164,7 +164,7 @@ class TestJson:
         result = await json.mget(
             glide_client,
             [key1, key2],
-            ["$"],
+            "$",
         )
         expected_result = [
             b'[{"a":1.0,"b":{"a":1,"b":2.5,"c":true}}]',
@@ -175,7 +175,7 @@ class TestJson:
         result = await json.mget(
             glide_client,
             [key1, key2],
-            ["."],
+            ".",
         )
         expected_result = [
             b'{"a":1.0,"b":{"a":1,"b":2.5,"c":true}}',
@@ -186,7 +186,7 @@ class TestJson:
         result = await json.mget(
             glide_client,
             [key1, key2],
-            ["$.a"],
+            "$.a",
         )
         expected_result = [b"[1.0]", b"[3.0]"]
         assert result == expected_result
@@ -194,7 +194,7 @@ class TestJson:
         result = await json.mget(
             glide_client,
             [key1, key2],
-            ["$.b"],
+            "$.b",
         )
         expected_result = [b'[{"a":1,"b":2.5,"c":true}]', b'[{"a":1,"b":4}]']
         assert result == expected_result
@@ -202,7 +202,7 @@ class TestJson:
         result = await json.mget(
             glide_client,
             [key1, key2],
-            ["$..b"],
+            "$..b",
         )
         expected_result = [b'[{"a":1,"b":2.5,"c":true},2.5]', b'[{"a":1,"b":4},4]']
         assert result == expected_result
@@ -210,25 +210,34 @@ class TestJson:
         result = await json.mget(
             glide_client,
             [key1, key2],
-            [".b.b"],
+            ".b.b",
         )
         expected_result = [b"2.5", b"4"]
         assert result == expected_result
 
-        # Path doesn't exist
+        # JSONPath doesn't exist
         result = await json.mget(
             glide_client,
             [key1, key2],
-            ["$non_existing_path"],
+            "$non_existing_path",
         )
         expected_result = [b"[]", b"[]"]
+        assert result == expected_result
+
+        # Legacy path doesn't exist
+        result = await json.mget(
+            glide_client,
+            [key1, key2],
+            ".non_existing_path",
+        )
+        expected_result = [None, None]
         assert result == expected_result
 
         # Keys don't exist
         result = await json.mget(
             glide_client,
             ["{non_existing_key}1", "{non_existing_key}2"],
-            ["$a"],
+            "$a",
         )
         assert result == [None, None]
 
@@ -236,18 +245,9 @@ class TestJson:
         result = await json.mget(
             glide_client,
             [key1],
-            ["$.a"],
+            "$.a",
         )
         expected_result = [b"[1.0]"]
-        assert result == expected_result
-
-        # Value at path isnt an object
-        result = await json.mget(
-            glide_client,
-            [key1, key2],
-            ["$.e"],
-        )
-        expected_result = [b"[]", b"[]"]
         assert result == expected_result
 
         # No path given
