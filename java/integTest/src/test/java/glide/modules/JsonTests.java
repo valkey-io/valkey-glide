@@ -567,7 +567,8 @@ public class JsonTests {
         assertEquals(
                 "{\"a\":\"foobarfoo\",\"nested\":{\"a\":\"hellobar\"},\"nested2\":{\"a\":31}}", jsonStr);
 
-        assertArrayEquals(new Object[] {null}, (Object[]) Json.strappend(client, key, "\"bar\"", "$.nested").get());
+        assertArrayEquals(
+                new Object[] {null}, (Object[]) Json.strappend(client, key, "\"bar\"", "$.nested").get());
 
         assertThrows(
                 ExecutionException.class, () -> Json.strappend(client, key, "\"bar\"", ".nested").get());
@@ -583,7 +584,8 @@ public class JsonTests {
                 () -> Json.strappend(client, key, "\"try\"", "non_existing_path").get());
 
         assertThrows(
-                ExecutionException.class, () -> Json.strappend(client, "non_existing_key", "\"try\"").get());
+                ExecutionException.class,
+                () -> Json.strappend(client, "non_existing_key", "\"try\"").get());
 
         // Binary test
         // Binary with path
