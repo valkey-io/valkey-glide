@@ -350,20 +350,22 @@ class TestFt:
         assert await ft.dropindex(glide_client, indexName=indexBicycles) == OK
 
         resultSet = set(result)
-        expectedResultSet = set([
-            {
-                b"condition": b"refurbished",
-                b"bicycles": b"1" if (protocol == ProtocolVersion.RESP2) else 1.0,
-            },
-            {
-                b"condition": b"new",
-                b"bicycles": b"5" if (protocol == ProtocolVersion.RESP2) else 5.0,
-            },
-            {
-                b"condition": b"used",
-                b"bicycles": b"4" if (protocol == ProtocolVersion.RESP2) else 4.0,
-            },
-        ])
+        expectedResultSet = set(
+            [
+                {
+                    b"condition": b"refurbished",
+                    b"bicycles": b"1" if (protocol == ProtocolVersion.RESP2) else 1.0,
+                },
+                {
+                    b"condition": b"new",
+                    b"bicycles": b"5" if (protocol == ProtocolVersion.RESP2) else 5.0,
+                },
+                {
+                    b"condition": b"used",
+                    b"bicycles": b"4" if (protocol == ProtocolVersion.RESP2) else 4.0,
+                },
+            ]
+        )
         assert resultSet == expectedResultSet
 
     @pytest.mark.parametrize("cluster_mode", [True])
@@ -417,22 +419,42 @@ class TestFt:
         )
         assert await ft.dropindex(glide_client, indexName=indexMovies) == OK
         resultSet = set(result)
-        expectedResultSet = set([{
-            b'genre': b'Drama',
-            b'nb_of_movies': b'1' if (protocol == ProtocolVersion.RESP2) else 1.0,
-            b'nb_of_votes': b'1563839' if (protocol == ProtocolVersion.RESP2) else 1563839.0,
-            b'avg_rating': b'10' if (protocol == ProtocolVersion.RESP2) else 10.0
-        }, {
-            b'genre': b'Action',
-            b'nb_of_movies': b'2' if (protocol == ProtocolVersion.RESP2) else 2.0,
-            b'nb_of_votes': b'2033895' if (protocol == ProtocolVersion.RESP2) else 2033895.0,
-            b'avg_rating': b'9' if (protocol == ProtocolVersion.RESP2) else 9.0
-        }, {
-            b'genre': b'Thriller',
-            b'nb_of_movies': b'1' if (protocol == ProtocolVersion.RESP2) else 1.0,
-            b'nb_of_votes': b'559490' if (protocol == ProtocolVersion.RESP2) else 559490.0,
-            b'avg_rating': b'9' if (protocol == ProtocolVersion.RESP2) else 9.0
-        }])
+        expectedResultSet = set(
+            [
+                {
+                    b"genre": b"Drama",
+                    b"nb_of_movies": (
+                        b"1" if (protocol == ProtocolVersion.RESP2) else 1.0
+                    ),
+                    b"nb_of_votes": (
+                        b"1563839" if (protocol == ProtocolVersion.RESP2) else 1563839.0
+                    ),
+                    b"avg_rating": (
+                        b"10" if (protocol == ProtocolVersion.RESP2) else 10.0
+                    ),
+                },
+                {
+                    b"genre": b"Action",
+                    b"nb_of_movies": (
+                        b"2" if (protocol == ProtocolVersion.RESP2) else 2.0
+                    ),
+                    b"nb_of_votes": (
+                        b"2033895" if (protocol == ProtocolVersion.RESP2) else 2033895.0
+                    ),
+                    b"avg_rating": b"9" if (protocol == ProtocolVersion.RESP2) else 9.0,
+                },
+                {
+                    b"genre": b"Thriller",
+                    b"nb_of_movies": (
+                        b"1" if (protocol == ProtocolVersion.RESP2) else 1.0
+                    ),
+                    b"nb_of_votes": (
+                        b"559490" if (protocol == ProtocolVersion.RESP2) else 559490.0
+                    ),
+                    b"avg_rating": b"9" if (protocol == ProtocolVersion.RESP2) else 9.0,
+                },
+            ]
+        )
         assert expectedResultSet == resultSet
 
     async def _create_index_for_ft_aggregate_with_bicycles_data(
