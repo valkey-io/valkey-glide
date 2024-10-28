@@ -188,27 +188,22 @@ public class JsonTests {
                         Json.arrappend(client, gs(key), gs("$.c"), new GlideString[] {gs("\"value\"")}).get());
 
         // Legacy path, path doesn't exist
-        var exception =
-                assertThrows(
-                        ExecutionException.class,
-                        () -> Json.arrappend(client, key, ".c", new String[] {"\"value\""}).get());
+        assertThrows(
+                ExecutionException.class,
+                () -> Json.arrappend(client, key, ".c", new String[] {"\"value\""}).get());
 
         // Legacy path, the JSON value at path is not a array
-        exception =
-                assertThrows(
-                        ExecutionException.class,
-                        () -> Json.arrappend(client, key, ".a", new String[] {"\"value\""}).get());
+        assertThrows(
+                ExecutionException.class,
+                () -> Json.arrappend(client, key, ".a", new String[] {"\"value\""}).get());
 
-        exception =
-                assertThrows(
-                        ExecutionException.class,
-                        () ->
-                                Json.arrappend(client, "non_existing_key", "$.b", new String[] {"\"six\""}).get());
+        assertThrows(
+                ExecutionException.class,
+                () -> Json.arrappend(client, "non_existing_key", "$.b", new String[] {"\"six\""}).get());
 
-        exception =
-                assertThrows(
-                        ExecutionException.class,
-                        () -> Json.arrappend(client, "non_existing_key", ".b", new String[] {"\"six\""}).get());
+        assertThrows(
+                ExecutionException.class,
+                () -> Json.arrappend(client, "non_existing_key", ".b", new String[] {"\"six\""}).get());
     }
 
     @Test
@@ -311,7 +306,7 @@ public class JsonTests {
         assertArrayEquals(new Object[] {3L, 2L, null}, (Object[]) res);
 
         // Legacy path retrieves the first array match at ..a
-        res = Json.arrlen(client, key, "..a").get();
+        res = Json.arrlen(client, gs(key), gs("..a")).get();
         assertEquals(3L, res);
 
         doc = "[1, 2, true, null, \"tree\"]";
@@ -320,6 +315,42 @@ public class JsonTests {
         // no path
         res = Json.arrlen(client, key).get();
         assertEquals(5L, res);
+        res = Json.arrlen(client, gs(key)).get();
+        assertEquals(5L, res);
+    }
+
+    @Test
+    @SneakyThrows
+    public void arrpop() {
+        String key = UUID.randomUUID().toString();
+        String doc =
+                "{\"a\": [1, 2, true], \"b\": {\"a\": [3, 4, [\"value\", 3, false], 5], \"c\": {\"a\":"
+                        + " 42}}}";
+        assertEquals(OK, Json.set(client, key, "$", doc).get());
+
+        var res = Json.arrpop(client, key, "$.a", 1).get();
+        assertArrayEquals(new Object[] {"2"}, (Object[]) res);
+
+        res = Json.arrpop(client, gs(key), gs("$..a")).get();
+        assertArrayEquals(new Object[] {gs("true"), gs("5"), null}, (Object[]) res);
+
+        res = Json.arrpop(client, key, "..a").get();
+        assertEquals("1", res);
+
+        // Even if only one array element was returned, ensure second array at `..a` was popped
+        doc = Json.get(client, key, new String[] {"$..a"}).get();
+        assertEquals("[[],[3,4],42]", doc);
+
+        // Out of index
+        res = Json.arrpop(client, key, "$..a", 10).get();
+        assertArrayEquals(new Object[] {null, "4", null}, (Object[]) res);
+
+        // pop without options
+        assertEquals(OK, Json.set(client, key, "$", doc).get());
+        res = Json.arrpop(client, key).get();
+        assertEquals("42", res);
+        res = Json.arrpop(client, gs(key)).get();
+        assertEquals(gs("[3,4]"), res);
     }
 
     @Test
@@ -541,14 +572,10 @@ public class JsonTests {
         assertEquals(true, Json.toggle(client, gs(key2)).get());
 
         // expect request errors
-        var exception =
-                assertThrows(ExecutionException.class, () -> Json.toggle(client, key, "nested").get());
-        exception =
-                assertThrows(
-                        ExecutionException.class, () -> Json.toggle(client, key, ".non_existing").get());
-        exception =
-                assertThrows(
-                        ExecutionException.class, () -> Json.toggle(client, "non_existing_key", "$").get());
+        assertThrows(ExecutionException.class, () -> Json.toggle(client, key, "nested").get());
+        assertThrows(ExecutionException.class, () -> Json.toggle(client, key, ".non_existing").get());
+        assertThrows(
+                ExecutionException.class, () -> Json.toggle(client, "non_existing_key", "$").get());
     }
 
     @Test
