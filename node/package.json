@@ -40,7 +40,7 @@
         "lint": "npm run install-linting && npx eslint -c ../eslint.config.mjs && npm run prettier:check:ci",
         "install-linting": "cd ../ & npm install",
         "prepack": "npmignore --auto",
-        "prereq": "git submodule update --init --recursive && npm install",
+        "prereq": "npm install",
         "prettier:check:ci": "npx prettier --check . --ignore-unknown '!**/*.{js,d.ts}'",
         "prettier:format": "npx prettier --write . --ignore-unknown '!**/*.{js,d.ts}'"
     },

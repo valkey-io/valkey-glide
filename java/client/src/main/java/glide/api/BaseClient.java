@@ -1255,7 +1255,11 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 HRandField,
                 new String[] {key, Long.toString(count)},
-                response -> castArray(handleArrayResponse(response), String.class));
+                (Response response) -> {
+                    var data = handleArrayOrNullResponse(response);
+                    // adopt for https://github.com/redis/redis/pull/9178 and always return an []
+                    return data == null ? new String[0] : castArray(data, String.class);
+                });
     }
 
     @Override
@@ -1264,7 +1268,11 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 HRandField,
                 new GlideString[] {key, GlideString.of(count)},
-                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
+                (Response response) -> {
+                    var data = handleArrayOrNullResponseBinary(response);
+                    // adopt for https://github.com/redis/redis/pull/9178 and always return an []
+                    return data == null ? new GlideString[0] : castArray(data, GlideString.class);
+                });
     }
 
     @Override
@@ -1273,7 +1281,11 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 HRandField,
                 new String[] {key, Long.toString(count), WITH_VALUES_VALKEY_API},
-                response -> castArrayofArrays(handleArrayResponse(response), String.class));
+                (Response response) -> {
+                    var data = handleArrayOrNullResponse(response);
+                    // adopt for https://github.com/redis/redis/pull/9178 and always return an []
+                    return data == null ? new String[0][] : castArrayofArrays(data, String.class);
+                });
     }
 
     @Override
@@ -1282,7 +1294,11 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 HRandField,
                 new GlideString[] {key, GlideString.of(count), GlideString.of(WITH_VALUES_VALKEY_API)},
-                response -> castArrayofArrays(handleArrayResponseBinary(response), GlideString.class));
+                (Response response) -> {
+                    var data = handleArrayOrNullResponseBinary(response);
+                    // adopt for https://github.com/redis/redis/pull/9178 and always return an []
+                    return data == null ? new GlideString[0][] : castArrayofArrays(data, GlideString.class);
+                });
     }
 
     @Override
@@ -2555,7 +2571,11 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 ZRandMember,
                 new String[] {key, Long.toString(count)},
-                response -> castArray(handleArrayResponse(response), String.class));
+                (Response response) -> {
+                    var data = handleArrayOrNullResponse(response);
+                    // adopt for https://github.com/redis/redis/pull/9178 and always return an []
+                    return data == null ? new String[0] : castArray(data, String.class);
+                });
     }
 
     @Override
@@ -2564,7 +2584,11 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 ZRandMember,
                 new GlideString[] {key, gs(Long.toString(count))},
-                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
+                (Response response) -> {
+                    var data = handleArrayOrNullResponseBinary(response);
+                    // adopt for https://github.com/redis/redis/pull/9178 and always return an []
+                    return data == null ? new GlideString[0] : castArray(data, GlideString.class);
+                });
     }
 
     @Override
@@ -2574,7 +2598,11 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 ZRandMember,
                 arguments,
-                response -> castArray(handleArrayResponse(response), Object[].class));
+                (Response response) -> {
+                    var data = handleArrayOrNullResponse(response);
+                    // adopt for https://github.com/redis/redis/pull/9178 and always return an []
+                    return data == null ? new Object[0][] : castArrayofArrays(data, Object.class);
+                });
     }
 
     @Override
@@ -2585,7 +2613,11 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 ZRandMember,
                 arguments,
-                response -> castArray(handleArrayResponseBinary(response), Object[].class));
+                (Response response) -> {
+                    var data = handleArrayOrNullResponseBinary(response);
+                    // adopt for https://github.com/redis/redis/pull/9178 and always return an []
+                    return data == null ? new Object[0][] : castArrayofArrays(data, Object.class);
+                });
     }
 
     @Override

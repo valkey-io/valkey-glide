@@ -2375,7 +2375,11 @@ export class BaseClient {
         count: number,
         options?: DecoderOption,
     ): Promise<GlideString[]> {
-        return this.createWritePromise(createHRandField(key, count), options);
+        return this.createWritePromise<GlideString[]>(
+            createHRandField(key, count),
+            options,
+        ).then((res) => (res == null ? [] : res));
+        // adopt for https://github.com/redis/redis/pull/9178 and always return an []
     }
 
     /**
@@ -2405,10 +2409,11 @@ export class BaseClient {
         count: number,
         options?: DecoderOption,
     ): Promise<[GlideString, GlideString][]> {
-        return this.createWritePromise(
+        return this.createWritePromise<[GlideString, GlideString][]>(
             createHRandField(key, count, true),
             options,
-        );
+        ).then((res) => (res == null ? [] : res));
+        // adopt for https://github.com/redis/redis/pull/9178 and always return an []
     }
 
     /** Inserts all the specified values at the head of the list stored at `key`.
@@ -4664,7 +4669,11 @@ export class BaseClient {
         count: number,
         options?: DecoderOption,
     ): Promise<GlideString[]> {
-        return this.createWritePromise(createZRandMember(key, count), options);
+        return this.createWritePromise<GlideString[]>(
+            createZRandMember(key, count),
+            options,
+        ).then((res) => (res == null ? [] : res));
+        // adopt for https://github.com/redis/redis/pull/9178 and always return an []
     }
 
     /**
@@ -4697,10 +4706,11 @@ export class BaseClient {
         count: number,
         options?: DecoderOption,
     ): Promise<KeyWeight[]> {
-        return this.createWritePromise(
+        return this.createWritePromise<KeyWeight[]>(
             createZRandMember(key, count, true),
             options,
-        );
+        ).then((res) => (res == null ? [] : res));
+        // adopt for https://github.com/redis/redis/pull/9178 and always return an []
     }
 
     /**

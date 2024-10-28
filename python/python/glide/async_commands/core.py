@@ -1194,10 +1194,9 @@ class CoreCommands(Protocol):
             >>> await client.hrandfield_count("non_existing_hash", 3)
                 []  # Empty list
         """
-        return cast(
-            List[bytes],
-            await self._execute_command(RequestType.HRandField, [key, str(count)]),
-        )
+        res = await self._execute_command(RequestType.HRandField, [key, str(count)])
+        # adopt for https://github.com/redis/redis/pull/9178 and always return an []
+        return cast(List[bytes], [] if res == None else res)
 
     async def hrandfield_withvalues(
         self, key: TEncodable, count: int
@@ -1222,12 +1221,11 @@ class CoreCommands(Protocol):
             >>> await client.hrandfield_withvalues("my_hash", -3)
                 [[b"field1", b"value1"], [b"field1", b"value1"], [b"field2", b"value2"]]
         """
-        return cast(
-            List[List[bytes]],
-            await self._execute_command(
-                RequestType.HRandField, [key, str(count), "WITHVALUES"]
-            ),
+        res = await self._execute_command(
+            RequestType.HRandField, [key, str(count), "WITHVALUES"]
         )
+        # adopt for https://github.com/redis/redis/pull/9178 and always return an []
+        return cast(List[List[bytes]], [] if res == None else res)
 
     async def hstrlen(self, key: TEncodable, field: TEncodable) -> int:
         """
@@ -5214,10 +5212,9 @@ class CoreCommands(Protocol):
                 []  # "non_existing_sorted_set" is not an existing key, so an empty list was returned.
         """
         args: List[TEncodable] = [key, str(count)]
-        return cast(
-            List[bytes],
-            await self._execute_command(RequestType.ZRandMember, args),
-        )
+        res = await self._execute_command(RequestType.ZRandMember, args)
+        # adopt for https://github.com/redis/redis/pull/9178 and always return an []
+        return cast(List[bytes], [] if res == None else res)
 
     async def zrandmember_withscores(
         self, key: TEncodable, count: int
@@ -5247,10 +5244,9 @@ class CoreCommands(Protocol):
                 []  # "non_existing_sorted_set" is not an existing key, so an empty list was returned.
         """
         args: List[TEncodable] = [key, str(count), "WITHSCORES"]
-        return cast(
-            List[List[Union[bytes, float]]],
-            await self._execute_command(RequestType.ZRandMember, args),
-        )
+        res = await self._execute_command(RequestType.ZRandMember, args)
+        # adopt for https://github.com/redis/redis/pull/9178 and always return an []
+        return cast(List[List[Union[bytes, float]]], [] if res == None else res)
 
     async def zmpop(
         self,
