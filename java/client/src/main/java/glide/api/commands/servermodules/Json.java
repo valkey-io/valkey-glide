@@ -25,6 +25,8 @@ public class Json {
     private static final String JSON_ARRAPPEND = JSON_PREFIX + "ARRAPPEND";
     private static final String JSON_ARRINSERT = JSON_PREFIX + "ARRINSERT";
     private static final String JSON_ARRLEN = JSON_PREFIX + "ARRLEN";
+    private static final String[] JSON_DEBUG_MEMORY = new String[] {JSON_PREFIX + "DEBUG", "MEMORY"};
+    private static final String[] JSON_DEBUG_FIELDS = new String[] {JSON_PREFIX + "DEBUG", "FIELDS"};
     private static final String JSON_ARRPOP = JSON_PREFIX + "ARRPOP";
     private static final String JSON_ARRTRIM = JSON_PREFIX + "ARRTRIM";
     private static final String JSON_OBJLEN = JSON_PREFIX + "OBJLEN";
@@ -714,6 +716,232 @@ public class Json {
     public static CompletableFuture<Long> arrlen(
             @NonNull BaseClient client, @NonNull GlideString key) {
         return executeCommand(client, new GlideString[] {gs(JSON_ARRLEN), key});
+    }
+
+    /**
+     * Reports memory usage in bytes of a JSON object at the specified <code>path</code> within the
+     * JSON document stored at <code>key</code>.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
+     *           Returns an <code>Object[]</code> with a list of numbers for every possible path,
+     *           indicating the memory usage. If <code>path</code> does not exist, an empty array will
+     *           be returned.
+     *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
+     *           Returns an integer representing the memory usage. If multiple paths are matched,
+     *           returns the data of the first matching object. If <code>path</code> doesn't exist, an
+     *           error is raised.
+     *     </ul>
+     *     If <code>key</code> doesn't exist, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "[1, 2.3, \"foo\", true, null, {}, [], {\"a\":1, \"b\":2}, [1, 2, 3]]").get();
+     * var res = Json.debugMemory(client, "doc", "..").get();
+     * assert res == 258L;
+     * }</pre>
+     */
+    public static CompletableFuture<Object> debugMemory(
+            @NonNull BaseClient client, @NonNull String key, @NonNull String path) {
+        return executeCommand(client, concatenateArrays(JSON_DEBUG_MEMORY, new String[] {key, path}));
+    }
+
+    /**
+     * Reports the number of fields at the specified <code>path</code> within the JSON document stored
+     * at <code>key</code>.<br>
+     * Each non-container JSON value counts as one field. Objects and arrays recursively count one
+     * field for each of their containing JSON values. Each container value, except the root
+     * container, counts as one additional field.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
+     *           Returns an <code>Object[]</code> with a list of numbers for every possible path,
+     *           indicating the number of fields. If <code>path</code> does not exist, an empty array
+     *           will be returned.
+     *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
+     *           Returns an integer representing the number of fields. If multiple paths are matched,
+     *           returns the data of the first matching object. If <code>path</code> doesn't exist, an
+     *           error is raised.
+     *     </ul>
+     *     If <code>key</code> doesn't exist, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "[1, 2.3, \"foo\", true, null, {}, [], {\"a\":1, \"b\":2}, [1, 2, 3]]").get();
+     * var res = Json.debugFields(client, "doc", "$[*]").get();
+     * assert Arrays.equals((Object[]) res, new Object[] {1, 1, 1, 1, 1, 0, 0, 2, 3});
+     * }</pre>
+     */
+    public static CompletableFuture<Object> debugFields(
+            @NonNull BaseClient client, @NonNull String key, @NonNull String path) {
+        return executeCommand(client, concatenateArrays(JSON_DEBUG_FIELDS, new String[] {key, path}));
+    }
+
+    /**
+     * Reports memory usage in bytes of a JSON object at the specified <code>path</code> within the
+     * JSON document stored at <code>key</code>.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
+     *           Returns an <code>Object[]</code> with a list of numbers for every possible path,
+     *           indicating the memory usage. If <code>path</code> does not exist, an empty array will
+     *           be returned.
+     *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
+     *           Returns an integer representing the memory usage. If multiple paths are matched,
+     *           returns the data of the first matching object. If <code>path</code> doesn't exist, an
+     *           error is raised.
+     *     </ul>
+     *     If <code>key</code> doesn't exist, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "[1, 2.3, \"foo\", true, null, {}, [], {\"a\":1, \"b\":2}, [1, 2, 3]]").get();
+     * var res = Json.debugMemory(client, gs("doc"), gs("..")).get();
+     * assert res == 258L;
+     * }</pre>
+     */
+    public static CompletableFuture<Object> debugMemory(
+            @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString path) {
+        return executeCommand(
+                client, new ArgsBuilder().add(JSON_DEBUG_MEMORY).add(key).add(path).toArray());
+    }
+
+    /**
+     * Reports the number of fields at the specified <code>path</code> within the JSON document stored
+     * at <code>key</code>.<br>
+     * Each non-container JSON value counts as one field. Objects and arrays recursively count one
+     * field for each of their containing JSON values. Each container value, except the root
+     * container, counts as one additional field.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
+     *           Returns an <code>Object[]</code> with a list of numbers for every possible path,
+     *           indicating the number of fields. If <code>path</code> does not exist, an empty array
+     *           will be returned.
+     *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
+     *           Returns an integer representing the number of fields. If multiple paths are matched,
+     *           returns the data of the first matching object. If <code>path</code> doesn't exist, an
+     *           error is raised.
+     *     </ul>
+     *     If <code>key</code> doesn't exist, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "[1, 2.3, \"foo\", true, null, {}, [], {\"a\":1, \"b\":2}, [1, 2, 3]]").get();
+     * var res = Json.debugFields(client, gs("doc"), gs("$[*]")).get();
+     * assert Arrays.equals((Object[]) res, new Object[] {1, 1, 1, 1, 1, 0, 0, 2, 3});
+     * }</pre>
+     */
+    public static CompletableFuture<Object> debugFields(
+            @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString path) {
+        return executeCommand(
+                client, new ArgsBuilder().add(JSON_DEBUG_FIELDS).add(key).add(path).toArray());
+    }
+
+    /**
+     * Reports memory usage in bytes of a JSON object at the specified <code>path</code> within the
+     * JSON document stored at <code>key</code>.<br>
+     * Equivalent to {@link #debugMemory(BaseClient, String, String)} with <code>path</code> set to
+     * <code>".."</code>.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @return The total memory usage in bytes of the entire JSON document.<br>
+     *     If <code>key</code> doesn't exist, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "[1, 2.3, \"foo\", true, null, {}, [], {\"a\":1, \"b\":2}, [1, 2, 3]]").get();
+     * var res = Json.debugMemory(client, "doc").get();
+     * assert res == 258L;
+     * }</pre>
+     */
+    public static CompletableFuture<Long> debugMemory(
+            @NonNull BaseClient client, @NonNull String key) {
+        return executeCommand(client, concatenateArrays(JSON_DEBUG_MEMORY, new String[] {key}));
+    }
+
+    /**
+     * Reports the number of fields at the specified <code>path</code> within the JSON document stored
+     * at <code>key</code>.<br>
+     * Each non-container JSON value counts as one field. Objects and arrays recursively count one
+     * field for each of their containing JSON values. Each container value, except the root
+     * container, counts as one additional field.<br>
+     * Equivalent to {@link #debugFields(BaseClient, String, String)} with <code>path</code> set to
+     * <code>".."</code>.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @return The total number of fields in the entire JSON document.<br>
+     *     If <code>key</code> doesn't exist, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "[1, 2.3, \"foo\", true, null, {}, [], {\"a\":1, \"b\":2}, [1, 2, 3]]").get();
+     * var res = Json.debugFields(client, "doc").get();
+     * assert res == 14L;
+     * }</pre>
+     */
+    public static CompletableFuture<Long> debugFields(
+            @NonNull BaseClient client, @NonNull String key) {
+        return executeCommand(client, concatenateArrays(JSON_DEBUG_FIELDS, new String[] {key}));
+    }
+
+    /**
+     * Reports memory usage in bytes of a JSON object at the specified <code>path</code> within the
+     * JSON document stored at <code>key</code>.<br>
+     * Equivalent to {@link #debugMemory(BaseClient, GlideString, GlideString)} with <code>path</code>
+     * set to <code>gs("..")</code>.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @return The total memory usage in bytes of the entire JSON document.<br>
+     *     If <code>key</code> doesn't exist, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "[1, 2.3, \"foo\", true, null, {}, [], {\"a\":1, \"b\":2}, [1, 2, 3]]").get();
+     * var res = Json.debugMemory(client, gs("doc")).get();
+     * assert res == 258L;
+     * }</pre>
+     */
+    public static CompletableFuture<Long> debugMemory(
+            @NonNull BaseClient client, @NonNull GlideString key) {
+        return executeCommand(client, new ArgsBuilder().add(JSON_DEBUG_MEMORY).add(key).toArray());
+    }
+
+    /**
+     * Reports the number of fields at the specified <code>path</code> within the JSON document stored
+     * at <code>key</code>.<br>
+     * Each non-container JSON value counts as one field. Objects and arrays recursively count one
+     * field for each of their containing JSON values. Each container value, except the root
+     * container, counts as one additional field.<br>
+     * Equivalent to {@link #debugFields(BaseClient, GlideString, GlideString)} with <code>path</code>
+     * set to <code>gs("..")</code>.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @return The total number of fields in the entire JSON document.<br>
+     *     If <code>key</code> doesn't exist, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "[1, 2.3, \"foo\", true, null, {}, [], {\"a\":1, \"b\":2}, [1, 2, 3]]").get();
+     * var res = Json.debugFields(client, gs("doc")).get();
+     * assert res == 14L;
+     * }</pre>
+     */
+    public static CompletableFuture<Long> debugFields(
+            @NonNull BaseClient client, @NonNull GlideString key) {
+        return executeCommand(client, new ArgsBuilder().add(JSON_DEBUG_FIELDS).add(key).toArray());
     }
 
     /**
