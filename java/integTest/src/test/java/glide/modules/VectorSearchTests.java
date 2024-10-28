@@ -39,13 +39,14 @@ import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.exceptions.RequestException;
 import java.util.ArrayList;
-import java.util.Collection;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -875,21 +876,18 @@ public class VectorSearchTests {
         // search query containing numeric field.
         String query = "@price:[0 10]";
         String[] result = FT.explaincli(client, indexName, query).get();
-        List<String> resultList = new ArrayList<>();
-
-        for (String r : result) {
-            resultList.add(r.trim()); // trim to remove any excess white space
-        }
+        List<String> resultList = Arrays.stream(result).map(String::trim).collect(Collectors.toList());
 
         assertTrue(resultList.contains("price"));
         assertTrue(resultList.contains("0"));
         assertTrue(resultList.contains("10"));
 
         GlideString[] resultGS = FT.explaincli(client, gs(indexName), gs(query)).get();
-        List<String> resultListGS = new ArrayList<>();
-        for (GlideString r : resultGS) {
-            resultListGS.add(r.toString().trim()); // trim to remove any excess white space
-        }
+        List<String> resultListGS =
+                Arrays.stream(resultGS)
+                        .map(GlideString::toString)
+                        .map(String::trim)
+                        .collect(Collectors.toList());
 
         assertTrue((resultListGS).contains("price"));
         assertTrue((resultListGS).contains("0"));
