@@ -52,14 +52,14 @@ class FtAggregateLimit(FtAggregateClause):
         return [FtAggregateKeywords.LIMIT, str(self.offset), str(self.count)]
 
 
-class Filter(FtAggregateClause):
+class FtAggregateFilter(FtAggregateClause):
     """
     A clause for filtering the results using predicate expression relating to values in each result. It is applied post query and relate to the current state of the pipeline.
     """
 
     def __init__(self, expression: TEncodable):
         """
-        Initialize a new Filter instance.
+        Initialize a new FtAggregateFilter instance.
 
         Args:
             expression (TEncodable): The expression to filter the results.
@@ -76,7 +76,7 @@ class Filter(FtAggregateClause):
         return [FtAggregateKeywords.FILTER, self.expression]
 
 
-class Reducer:
+class FtAggregateReducer:
     """
     A clause for reducing the matching results in each group using a reduction function. The matching results are reduced into a single record.
     """
@@ -88,7 +88,7 @@ class Reducer:
         name: Optional[TEncodable] = None,
     ):
         """
-        Initialize a new Reducer instance.
+        Initialize a new FtAggregateReducer instance.
 
         Args:
             function (TEncodable): The reduction function names for the respective group.
@@ -116,14 +116,16 @@ class Reducer:
         return args
 
 
-class GroupBy(FtAggregateClause):
+class FtAggregateGroupBy(FtAggregateClause):
     """
     A clause for grouping the results in the pipeline based on one or more properties.
     """
 
-    def __init__(self, properties: List[TEncodable], reducers: List[Reducer]):
+    def __init__(
+        self, properties: List[TEncodable], reducers: List[FtAggregateReducer]
+    ):
         """
-        Initialize a new GroupBy instance.
+        Initialize a new FtAggregateGroupBy instance.
 
         Args:
             properties (List[TEncodable]): The list of properties to be used for grouping the results in the pipeline.
@@ -133,7 +135,10 @@ class GroupBy(FtAggregateClause):
         self.reducers = reducers
 
     def to_args(self) -> List[TEncodable]:
-        args = [FtAggregateKeywords.GROUPBY, str(len(self.properties))] + self.properties
+        args = [
+            FtAggregateKeywords.GROUPBY,
+            str(len(self.properties)),
+        ] + self.properties
         if self.reducers:
             for reducer in self.reducers:
                 args.extend(reducer.to_args())
@@ -155,14 +160,14 @@ class SortOrder(Enum):
     """
 
 
-class SortByProperty:
+class FtAggregateSortProperty:
     """
     This class represents the a single property for the SortBy clause.
     """
 
     def __init__(self, property: TEncodable, order: SortOrder):
         """
-        Initialize a new SortByProperty instance.
+        Initialize a new FtAggregateSortProperty instance.
 
         Args:
             property (TEncodable): The sorting parameter.
@@ -181,17 +186,19 @@ class SortByProperty:
         return [self.property, self.order.value]
 
 
-class SortBy(FtAggregateClause):
+class FtAggregateSortBy(FtAggregateClause):
     """
     A clause for sorting the pipeline up until the point of SORTBY, using a list of properties.
     """
 
-    def __init__(self, properties: List[SortByProperty], max: Optional[int] = None):
+    def __init__(
+        self, properties: List[FtAggregateSortProperty], max: Optional[int] = None
+    ):
         """
-        Initialize a new SortBy instance.
+        Initialize a new FtAggregateSortBy instance.
 
         Args:
-            properties (List[SortByProperty]): A list of sorting parameters for the sort operation.
+            properties (List[FtAggregateSortProperty]): A list of sorting parameters for the sort operation.
             max: (Optional[int]): The MAX value for optimizing the sorting, by sorting only for the n-largest elements.
         """
         self.properties = properties
@@ -204,7 +211,10 @@ class SortBy(FtAggregateClause):
         Returns:
             List[TEncodable]: A list of arguments for the SortBy clause.
         """
-        args = [FtAggregateKeywords.SORTBY, str(len(self.properties) * 2)]
+        args: List[TEncodable] = [
+            FtAggregateKeywords.SORTBY,
+            str(len(self.properties) * 2),
+        ]
         for property in self.properties:
             args.extend(property.to_args())
         if self.max:
@@ -212,14 +222,14 @@ class SortBy(FtAggregateClause):
         return args
 
 
-class Apply(FtAggregateClause):
+class FtAggregateApply(FtAggregateClause):
     """
     A clause for applying a 1-to-1 transformation on one or more properties and stores the result as a new property down the pipeline or replaces any property using this transformation.
     """
 
     def __init__(self, expression: TEncodable, name: TEncodable):
         """
-        Initialize a new Apply instance.
+        Initialize a new FtAggregateApply instance.
 
         Args:
             expression (TEncodable): The expression to be transformed.

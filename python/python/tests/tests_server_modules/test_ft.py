@@ -7,13 +7,13 @@ import pytest
 from glide.async_commands.server_modules import ft
 from glide.async_commands.server_modules import json as GlideJson
 from glide.async_commands.server_modules.ft_options.ft_aggregate_options import (
-    Apply,
+    FtAggregateApply,
     FtAggregateClause,
+    FtAggregateGroupBy,
     FtAggregateOptions,
-    GroupBy,
-    Reducer,
-    SortBy,
-    SortByProperty,
+    FtAggregateReducer,
+    FtAggregateSortBy,
+    FtAggregateSortProperty,
     SortOrder,
 )
 from glide.async_commands.server_modules.ft_options.ft_create_options import (
@@ -344,7 +344,11 @@ class TestFt:
             query="*",
             options=FtAggregateOptions(
                 loadFields=["__key"],
-                clauses=[GroupBy(["@condition"], [Reducer("COUNT", [], "bicycles")])],
+                clauses=[
+                    FtAggregateGroupBy(
+                        ["@condition"], [FtAggregateReducer("COUNT", [], "bicycles")]
+                    )
+                ],
             ),
         )
         assert await ft.dropindex(glide_client, indexName=indexBicycles) == OK
@@ -364,7 +368,8 @@ class TestFt:
                     b"condition": b"used",
                     b"bicycles": b"4" if (protocol == ProtocolVersion.RESP2) else 4.0,
                 },
-            ], key = lambda x: (x[b"condition"], x[b"bicycles"])
+            ],
+            key=lambda x: (x[b"condition"], x[b"bicycles"]),
         )
         assert sortedResult == expectedResult
 
@@ -399,26 +404,34 @@ class TestFt:
             options=FtAggregateOptions(
                 loadAll=True,
                 clauses=[
-                    Apply(expression="ceil(@rating)", name="r_rating"),
-                    GroupBy(
+                    FtAggregateApply(expression="ceil(@rating)", name="r_rating"),
+                    FtAggregateGroupBy(
                         ["@genre"],
                         [
-                            Reducer("COUNT", [], "nb_of_movies"),
-                            Reducer("SUM", ["votes"], "nb_of_votes"),
-                            Reducer("AVG", ["r_rating"], "avg_rating"),
+                            FtAggregateReducer("COUNT", [], "nb_of_movies"),
+                            FtAggregateReducer("SUM", ["votes"], "nb_of_votes"),
+                            FtAggregateReducer("AVG", ["r_rating"], "avg_rating"),
                         ],
                     ),
-                    SortBy(
+                    FtAggregateSortBy(
                         properties=[
-                            SortByProperty("@avg_rating", SortOrder.DESC),
-                            SortByProperty("@nb_of_votes", SortOrder.DESC),
+                            FtAggregateSortProperty("@avg_rating", SortOrder.DESC),
+                            FtAggregateSortProperty("@nb_of_votes", SortOrder.DESC),
                         ]
                     ),
                 ],
             ),
         )
         assert await ft.dropindex(glide_client, indexName=indexMovies) == OK
-        sortedResult = sorted(result, key=lambda x: (x[b"genre"], x[b"nb_of_movies"], x[b"nb_of_votes"], x[b"avg_rating"]))
+        sortedResult = sorted(
+            result,
+            key=lambda x: (
+                x[b"genre"],
+                x[b"nb_of_movies"],
+                x[b"nb_of_votes"],
+                x[b"avg_rating"],
+            ),
+        )
         expectedResultSet = sorted(
             [
                 {
@@ -453,7 +466,13 @@ class TestFt:
                     ),
                     b"avg_rating": b"9" if (protocol == ProtocolVersion.RESP2) else 9.0,
                 },
-            ], key=lambda x: (x[b"genre"], x[b"nb_of_movies"], x[b"nb_of_votes"], x[b"avg_rating"]) 
+            ],
+            key=lambda x: (
+                x[b"genre"],
+                x[b"nb_of_movies"],
+                x[b"nb_of_votes"],
+                x[b"avg_rating"],
+            ),
         )
         assert expectedResultSet == sortedResult
 

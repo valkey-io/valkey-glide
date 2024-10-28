@@ -34,15 +34,15 @@ from glide.async_commands.core import (
 )
 from glide.async_commands.server_modules import ft, json
 from glide.async_commands.server_modules.ft_options.ft_aggregate_options import (
-    Apply,
-    Filter,
+    FtAggregateApply,
     FtAggregateClause,
+    FtAggregateFilter,
+    FtAggregateGroupBy,
     FtAggregateLimit,
     FtAggregateOptions,
-    GroupBy,
-    Reducer,
-    SortBy,
-    SortByProperty,
+    FtAggregateReducer,
+    FtAggregateSortBy,
+    FtAggregateSortProperty,
     SortOrder,
 )
 from glide.async_commands.server_modules.ft_options.ft_create_options import (
@@ -285,14 +285,14 @@ __all__ = [
     "FtSearchLimit",
     "ReturnField",
     "FtSeachOptions",
-    "Apply",
-    "Filter",
+    "FtAggregateApply",
+    "FtAggregateFilter",
     "FtAggregateClause",
     "FtAggregateLimit",
     "FtAggregateOptions",
-    "GroupBy",
-    "Reducer",
-    "SortBy",
-    "SortByProperty",
+    "FtAggregateGroupBy",
+    "FtAggregateReducer",
+    "FtAggregateSortBy",
+    "FtAggregateSortProperty",
     "SortOrder",
 ]
