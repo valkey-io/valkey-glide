@@ -2551,9 +2551,9 @@ public class Json {
      * @param path Represents the path within the JSON document where the type will be retrieved.
      * @return
      *     <ul>
-     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>): Returns a list of byte
-     *           string replies for every possible path, indicating the type of the JSON value. If
-     *           `path` doesn't exist, an empty array will be returned.
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>): Returns a list of string
+     *           replies for every possible path, indicating the type of the JSON value. If `path`
+     *           doesn't exist, an empty array will be returned.
      *       <li>For legacy path (<code>path</code> doesn't starts with <code>$</code>): Returns the
      *           type of the JSON value at `path`. If multiple paths match, the type of the first JSON
      *           value match is returned. If `path` doesn't exist, <code>null</code> will be returned.
@@ -2582,9 +2582,9 @@ public class Json {
      * @param path Represents the path within the JSON document where the type will be retrieved.
      * @return
      *     <ul>
-     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>): Returns a list of byte
-     *           string replies for every possible path, indicating the type of the JSON value. If
-     *           `path` doesn't exist, an empty array will be returned.
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>): Returns a list of string
+     *           replies for every possible path, indicating the type of the JSON value. If `path`
+     *           doesn't exist, an empty array will be returned.
      *       <li>For legacy path (<code>path</code> doesn't starts with <code>$</code>): Returns the
      *           type of the JSON value at `path`. If multiple paths match, the type of the first JSON
      *           value match is returned. If `path` doesn't exist, <code>null</code> will be returned.
