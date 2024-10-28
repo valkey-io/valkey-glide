@@ -572,15 +572,16 @@ async def objlen(
         client (TGlideClient): The client to execute the command.
         key (TEncodable): The key of the JSON document.
         path (Optional[TEncodable]): The path within the JSON document. Defaults to None.
+
     Returns:
         Optional[TJsonResponse[int]]:
             For JSONPath (`path` starts with `$`):
                 Returns a list of integer replies for every possible path, indicating the length of the object,
-                or None for JSON values matching the path that are not an array.
+                or None for JSON values matching the path that are not an object.
                 If `path` doesn't exist, an empty array will be returned.
             For legacy path (`path` doesn't starts with `$`):
                 Returns the length of the object at `path`.
-                If multiple paths match, the length of the first array match is returned.
+                If multiple paths match, the length of the first object match is returned.
                 If the JSON value at `path` is not an object or if `path` doesn't exist, an error is raised.
             If `key` doesn't exist, None is returned.
 
@@ -600,7 +601,7 @@ async def objlen(
         >>> await json.objlen(client, "doc", "$..a")
             2  # Returns the number of key-value pairs for the object matching the path '$..a', which has 2 keys: 'x' and 'y'.
         >>> await json.objlen(client, "doc")
-            2  # Returns the number of key-value pairs for the object matching the path '.', which has 2 keys: 'a' and 'b'.
+            [None, 2]  # Returns the number of key-value pairs for the object matching the path '.', which has 2 keys: 'a' and 'b'.
     """
     args = ["JSON.OBJLEN", key]
     if path:
