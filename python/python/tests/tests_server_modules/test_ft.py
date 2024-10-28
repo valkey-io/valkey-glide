@@ -1,15 +1,28 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+import time
 import uuid
 from typing import List, Mapping, Union, cast
 
 import pytest
 from glide.async_commands.server_modules import ft
+from glide.async_commands.server_modules import json as GlideJson
+from glide.async_commands.server_modules.ft_options.ft_aggregate_options import (
+    Apply,
+    FtAggregateClause,
+    FtAggregateOptions,
+    GroupBy,
+    Reducer,
+    SortBy,
+    SortByProperty,
+    SortOrder,
+)
 from glide.async_commands.server_modules.ft_options.ft_create_options import (
     DataType,
     DistanceMetricType,
     Field,
     FtCreateOptions,
     NumericField,
+    TagField,
     TextField,
     VectorAlgorithm,
     VectorField,
@@ -34,6 +47,8 @@ class TestFt:
             Union[TEncodable, Mapping[TEncodable, Union[TEncodable, int]]],
         ]
     ]
+
+    sleep_wait_time = 1  # This value is in seconds
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -302,4 +317,409 @@ class TestFt:
                 FtCreateOptions(DataType.HASH, prefixes),
             )
             == OK
+        )
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_ft_aggregate_with_bicycles_data(
+        self, glide_client: GlideClusterClient, protocol
+    ):
+        prefixBicycles = "{bicycles}:"
+        indexBicycles = prefixBicycles + str(uuid.uuid4())
+        await TestFt._create_index_for_ft_aggregate_with_bicycles_data(
+            self=self,
+            glide_client=glide_client,
+            index_name=indexBicycles,
+            prefix=prefixBicycles,
+        )
+        await TestFt._create_json_keys_for_ft_aggregate_with_bicycles_data(
+            self=self, glide_client=glide_client, prefix=prefixBicycles
+        )
+        time.sleep(self.sleep_wait_time)
+
+        # Run FT.AGGREGATE command with the following arguments: ['FT.AGGREGATE', '{bicycles}:1e15faab-a870-488e-b6cd-f2b76c6916a3', '*', 'LOAD', '1', '__key', 'GROUPBY', '1', '@condition', 'REDUCE', 'COUNT', '0', 'AS', 'bicycles']
+        result = await ft.aggregate(
+            glide_client,
+            indexName=indexBicycles,
+            query="*",
+            options=FtAggregateOptions(
+                loadFields=["__key"],
+                clauses=[GroupBy(["@condition"], [Reducer("COUNT", [], "bicycles")])],
+            ),
+        )
+        assert await ft.dropindex(glide_client, indexName=indexBicycles) == OK
+        if protocol == ProtocolVersion.RESP2:
+            for e in result:
+                if e.get(b"condition") == b"new":
+                    assert e.get(b"bicycles") == b"5"
+                elif e.get(b"condition") == b"refurbished":
+                    assert e.get(b"bicycles") == b"1"
+                elif e.get(b"condition") == b"used":
+                    assert e.get(b"bicycles") == b"4"
+        elif protocol == ProtocolVersion.RESP3:
+            for e in result:
+                if e.get(b"condition") == b"new":
+                    assert cast(float, e.get(b"bicycles")) == 5.0
+                elif e.get(b"condition") == b"refurbished":
+                    assert cast(float, e.get(b"bicycles")) == 1.0
+                elif e.get(b"condition") == b"used":
+                    assert cast(float, e.get(b"bicycles")) == 4.0
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_ft_aggregate_with_movies_data(
+        self, glide_client: GlideClusterClient, protocol
+    ):
+        prefixMovies = "{movies}:"
+        indexMovies = prefixMovies + str(uuid.uuid4())
+        # Create index for movies data.
+        await TestFt._create_index_for_ft_aggregate_with_movies_data(
+            self=self,
+            glide_client=glide_client,
+            index_name=indexMovies,
+            prefix=prefixMovies,
+        )
+        # Set JSON keys with movies data.
+        await TestFt._create_hash_keys_for_ft_aggregate_with_movies_data(
+            self=self, glide_client=glide_client, prefix=prefixMovies
+        )
+        # Wait for index to be updated.
+        time.sleep(self.sleep_wait_time)
+
+        # Run FT.AGGREGATE command with the following arguments:
+        # ['FT.AGGREGATE', '{movies}:5a0e6257-3488-4514-96f2-f4c80f6cb0a9', '*', 'LOAD', '*', 'APPLY', 'ceil(@rating)', 'AS', 'r_rating', 'GROUPBY', '1', '@genre', 'REDUCE', 'COUNT', '0', 'AS', 'nb_of_movies', 'REDUCE', 'SUM', '1', 'votes', 'AS', 'nb_of_votes', 'REDUCE', 'AVG', '1', 'r_rating', 'AS', 'avg_rating', 'SORTBY', '4', '@avg_rating', 'DESC', '@nb_of_votes', 'DESC']
+
+        result = await ft.aggregate(
+            glide_client,
+            indexName=indexMovies,
+            query="*",
+            options=FtAggregateOptions(
+                loadAll=True,
+                clauses=[
+                    Apply(expression="ceil(@rating)", name="r_rating"),
+                    GroupBy(
+                        ["@genre"],
+                        [
+                            Reducer("COUNT", [], "nb_of_movies"),
+                            Reducer("SUM", ["votes"], "nb_of_votes"),
+                            Reducer("AVG", ["r_rating"], "avg_rating"),
+                        ],
+                    ),
+                    SortBy(
+                        properties=[
+                            SortByProperty("@avg_rating", SortOrder.DESC),
+                            SortByProperty("@nb_of_votes", SortOrder.DESC),
+                        ]
+                    ),
+                ],
+            ),
+        )
+        assert await ft.dropindex(glide_client, indexName=indexMovies) == OK
+
+        if protocol == ProtocolVersion.RESP2:
+            for e in result:
+                if e.get(b"genre") == b"Drama":
+                    assert (
+                        e.get(b"nb_of_movies") == b"1"
+                        and e.get(b"nb_of_votes") == b"1563839"
+                        and e.get(b"avg_rating") == b"10"
+                    )
+                if e.get(b"genre") == b"Action":
+                    assert (
+                        e.get(b"nb_of_movies") == b"2"
+                        and e.get(b"nb_of_votes") == b"2033895"
+                        and e.get(b"avg_rating") == b"9"
+                    )
+                if e.get(b"genre") == b"Thriller":
+                    assert (
+                        e.get(b"nb_of_movies") == b"1"
+                        and e.get(b"nb_of_votes") == b"559490"
+                        and e.get(b"avg_rating") == b"9"
+                    )
+        elif protocol == ProtocolVersion.RESP3:
+            for e in result:
+                if e.get(b"genre") == b"Drama":
+                    assert (
+                        cast(float, e.get(b"nb_of_movies")) == 1.0
+                        and cast(float, e.get(b"nb_of_votes")) == 1563839.0
+                        and cast(float, e.get(b"avg_rating")) == 10.0
+                    )
+                if e.get(b"genre") == b"Action":
+                    assert (
+                        cast(float, e.get(b"nb_of_movies")) == 2.0
+                        and cast(float, e.get(b"nb_of_votes")) == 2033895.0
+                        and cast(float, e.get(b"avg_rating")) == 9.0
+                    )
+                if e.get(b"genre") == b"Thriller":
+                    assert (
+                        cast(float, e.get(b"nb_of_movies")) == 1.0
+                        and cast(float, e.get(b"nb_of_votes")) == 559490.0
+                        and cast(float, e.get(b"avg_rating")) == 9.0
+                    )
+
+    async def _create_index_for_ft_aggregate_with_bicycles_data(
+        self, glide_client: GlideClusterClient, index_name: TEncodable, prefix
+    ):
+        fields: List[Field] = [
+            TextField("$.model", "model"),
+            TextField("$.description", "description"),
+            NumericField("$.price", "price"),
+            TagField("$.condition", "condition", ","),
+        ]
+        assert (
+            await ft.create(
+                glide_client,
+                index_name,
+                fields,
+                FtCreateOptions(DataType.JSON, prefixes=[prefix]),
+            )
+            == OK
+        )
+
+    async def _create_json_keys_for_ft_aggregate_with_bicycles_data(
+        self, glide_client: GlideClusterClient, prefix
+    ):
+        assert (
+            await GlideJson.set(
+                glide_client,
+                prefix + "0",
+                ".",
+                '{"brand": "Velorim", "model": "Jigger", "price": 270, "description":'
+                + ' "Small and powerful, the Jigger is the best ride for the smallest of tikes!'
+                + " This is the tiniest kids\\u2019 pedal bike on the market available without a"
+                + " coaster brake, the Jigger is the vehicle of choice for the rare tenacious"
+                + ' little rider raring to go.", "condition": "new"}',
+            )
+            == OK
+        )
+
+        assert (
+            await GlideJson.set(
+                glide_client,
+                prefix + "1",
+                ".",
+                '{"brand": "Bicyk", "model": "Hillcraft", "price": 1200, "description":'
+                + ' "Kids want to ride with as little weight as possible. Especially on an'
+                + ' incline! They may be at the age when a 27.5\\" wheel bike is just too clumsy'
+                + ' coming off a 24\\" bike. The Hillcraft 26 is just the solution they need!",'
+                + ' "condition": "used"}',
+            )
+            == OK
+        )
+
+        assert (
+            await GlideJson.set(
+                glide_client,
+                prefix + "2",
+                ".",
+                '{"brand": "Nord", "model": "Chook air 5", "price": 815, "description":'
+                + ' "The Chook Air 5  gives kids aged six years and older a durable and'
+                + " uberlight mountain bike for their first experience on tracks and easy"
+                + " cruising through forests and fields. The lower  top tube makes it easy to"
+                + " mount and dismount in any situation, giving your kids greater safety on the"
+                + ' trails.", "condition": "used"}',
+            )
+            == OK
+        )
+
+        assert (
+            await GlideJson.set(
+                glide_client,
+                prefix + "3",
+                ".",
+                '{"brand": "Eva", "model": "Eva 291", "price": 3400, "description": "The'
+                + " sister company to Nord, Eva launched in 2005 as the first and only"
+                + " women-dedicated bicycle brand. Designed by women for women, allEva bikes are"
+                + " optimized for the feminine physique using analytics from a body metrics"
+                + " database. If you like 29ers, try the Eva 291. It\\u2019s a brand new bike for"
+                + " 2022.. This full-suspension, cross-country ride has been designed for"
+                + " velocity. The 291 has 100mm of front and rear travel, a superlight aluminum"
+                + ' frame and fast-rolling 29-inch wheels. Yippee!", "condition": "used"}',
+            )
+            == OK
+        )
+
+        assert (
+            await GlideJson.set(
+                glide_client,
+                prefix + "4",
+                ".",
+                '{"brand": "Noka Bikes", "model": "Kahuna", "price": 3200, "description":'
+                + ' "Whether you want to try your hand at XC racing or are looking for a lively'
+                + " trail bike that's just as inspiring on the climbs as it is over rougher"
+                + " ground, the Wilder is one heck of a bike built specifically for short women."
+                + " Both the frames and components have been tweaked to include a women\\u2019s"
+                + ' saddle, different bars and unique colourway.", "condition": "used"}',
+            )
+            == OK
+        )
+
+        assert (
+            await GlideJson.set(
+                glide_client,
+                prefix + "5",
+                ".",
+                '{"brand": "Breakout", "model": "XBN 2.1 Alloy", "price": 810,'
+                + ' "description": "The XBN 2.1 Alloy is our entry-level road bike \\u2013 but'
+                + " that\\u2019s not to say that it\\u2019s a basic machine. With an internal"
+                + " weld aluminium frame, a full carbon fork, and the slick-shifting Claris gears"
+                + " from Shimano\\u2019s, this is a bike which doesn\\u2019t break the bank and"
+                + ' delivers craved performance.", "condition": "new"}',
+            )
+            == OK
+        )
+
+        assert (
+            await GlideJson.set(
+                glide_client,
+                prefix + "6",
+                ".",
+                '{"brand": "ScramBikes", "model": "WattBike", "price": 2300,'
+                + ' "description": "The WattBike is the best e-bike for people who still feel'
+                + " young at heart. It has a Bafang 1000W mid-drive system and a 48V 17.5AH"
+                + " Samsung Lithium-Ion battery, allowing you to ride for more than 60 miles on"
+                + " one charge. It\\u2019s great for tackling hilly terrain or if you just fancy"
+                + " a more leisurely ride. With three working modes, you can choose between"
+                + ' E-bike, assisted bicycle, and normal bike modes.", "condition": "new"}',
+            )
+            == OK
+        )
+
+        assert (
+            await GlideJson.set(
+                glide_client,
+                prefix + "7",
+                ".",
+                '{"brand": "Peaknetic", "model": "Secto", "price": 430, "description":'
+                + ' "If you struggle with stiff fingers or a kinked neck or back after a few'
+                " minutes on the road, this lightweight, aluminum bike alleviates those issues"
+                " and allows you to enjoy the ride. From the ergonomic grips to the"
+                " lumbar-supporting seat position, the Roll Low-Entry offers incredible"
+                " comfort. The rear-inclined seat tube facilitates stability by allowing you to"
+                " put a foot on the ground to balance at a stop, and the low step-over frame"
+                " makes it accessible for all ability and mobility levels. The saddle is very"
+                " soft, with a wide back to support your hip joints and a cutout in the center"
+                " to redistribute that pressure. Rim brakes deliver satisfactory braking"
+                " control, and the wide tires provide a smooth, stable ride on paved roads and"
+                " gravel. Rack and fender mounts facilitate setting up the Roll Low-Entry as"
+                " your preferred commuter, and the BMX-like handlebar offers space for mounting"
+                ' a flashlight, bell, or phone holder.", "condition": "new"}',
+            )
+            == OK
+        )
+
+        assert (
+            await GlideJson.set(
+                glide_client,
+                prefix + "8",
+                ".",
+                '{"brand": "nHill", "model": "Summit", "price": 1200, "description":'
+                + ' "This budget mountain bike from nHill performs well both on bike paths and'
+                + " on the trail. The fork with 100mm of travel absorbs rough terrain. Fat Kenda"
+                + " Booster tires give you grip in corners and on wet trails. The Shimano Tourney"
+                + " drivetrain offered enough gears for finding a comfortable pace to ride"
+                + " uphill, and the Tektro hydraulic disc brakes break smoothly. Whether you want"
+                + " an affordable bike that you can take to work, but also take trail in"
+                + " mountains on the weekends or you\\u2019re just after a stable, comfortable"
+                + ' ride for the bike path, the Summit gives a good value for money.",'
+                + ' "condition": "new"}',
+            )
+            == OK
+        )
+
+        assert (
+            await GlideJson.set(
+                glide_client,
+                prefix + "9",
+                ".",
+                '{"model": "ThrillCycle", "brand": "BikeShind", "price": 815,'
+                + ' "description": "An artsy,  retro-inspired bicycle that\\u2019s as'
+                + " functional as it is pretty: The ThrillCycle steel frame offers a smooth ride."
+                + " A 9-speed drivetrain has enough gears for coasting in the city, but we"
+                + " wouldn\\u2019t suggest taking it to the mountains. Fenders protect you from"
+                + " mud, and a rear basket lets you transport groceries, flowers and books. The"
+                + " ThrillCycle comes with a limited lifetime warranty, so this little guy will"
+                + ' last you long past graduation.", "condition": "refurbished"}',
+            )
+            == OK
+        )
+
+    async def _create_index_for_ft_aggregate_with_movies_data(
+        self, glide_client: GlideClusterClient, index_name: TEncodable, prefix
+    ):
+        fields: List[Field] = [
+            TextField("title"),
+            NumericField("release_year"),
+            NumericField("rating"),
+            TagField("genre"),
+            NumericField("votes"),
+        ]
+        assert (
+            await ft.create(
+                glide_client,
+                index_name,
+                fields,
+                FtCreateOptions(DataType.HASH, prefixes=[prefix]),
+            )
+            == OK
+        )
+
+    async def _create_hash_keys_for_ft_aggregate_with_movies_data(
+        self, glide_client: GlideClusterClient, prefix
+    ):
+        await glide_client.hset(
+            prefix + "11002",
+            {
+                "title": "Star Wars: Episode V - The Empire Strikes Back",
+                "plot": "After the Rebels are brutally overpowered by the Empire on the ice planet Hoth,"
+                + " Luke Skywalker begins Jedi training with Yoda, while his friends are"
+                + " pursued by Darth Vader and a bounty hunter named Boba Fett all over the"
+                + " galaxy.",
+                "release_year": "1980",
+                "genre": "Action",
+                "rating": "8.7",
+                "votes": "1127635",
+                "imdb_id": "tt0080684",
+            },
+        )
+
+        await glide_client.hset(
+            prefix + "11003",
+            {
+                "title": "The Godfather",
+                "plot": "The aging patriarch of an organized crime dynasty transfers control of his"
+                + " clandestine empire to his reluctant son.",
+                "release_year": "1972",
+                "genre": "Drama",
+                "rating": "9.2",
+                "votes": "1563839",
+                "imdb_id": "tt0068646",
+            },
+        )
+
+        await glide_client.hset(
+            prefix + "11004",
+            {
+                "title": "Heat",
+                "plot": "A group of professional bank robbers start to feel the heat from police when they"
+                + " unknowingly leave a clue at their latest heist.",
+                "release_year": "1995",
+                "genre": "Thriller",
+                "rating": "8.2",
+                "votes": "559490",
+                "imdb_id": "tt0113277",
+            },
+        )
+
+        await glide_client.hset(
+            prefix + "11005",
+            {
+                "title": "Star Wars: Episode VI - Return of the Jedi",
+                "plot": "The Rebels dispatch to Endor to destroy the second Empire's Death Star.",
+                "release_year": "1983",
+                "genre": "Action",
+                "rating": "8.3",
+                "votes": "906260",
+                "imdb_id": "tt0086190",
+            },
         )

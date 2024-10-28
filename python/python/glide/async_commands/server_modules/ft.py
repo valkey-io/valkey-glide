@@ -3,8 +3,11 @@
 module for `vector search` commands.
 """
 
-from typing import List, Mapping, Optional, Union, cast
+from typing import Any, List, Mapping, Optional, Union, cast
 
+from glide.async_commands.server_modules.ft_options.ft_aggregate_options import (
+    FtAggregateOptions,
+)
 from glide.async_commands.server_modules.ft_options.ft_constants import (
     CommandNames,
     FtCreateKeywords,
@@ -276,3 +279,31 @@ async def explaincli(
     """
     args: List[TEncodable] = [CommandNames.FT_EXPLAINCLI, indexName, query]
     return cast(List[TEncodable], await client.custom_command(args))
+
+
+async def aggregate(
+    client: TGlideClient,
+    indexName: TEncodable,
+    query: TEncodable,
+    options: Optional[FtAggregateOptions],
+) -> List[Mapping[TEncodable, Any]]:
+    """
+    A superset of the FT.SEARCH command, it allows substantial additional processing of the keys selected by the query expression.
+    Args:
+        client (TGlideClient): The client to execute the command.
+        indexName (TEncodable): The index name for which the query is written.
+        query (TEncodable): The search query, same as the query passed as an argument to FT.SEARCH.
+        options (Optional[FtAggregateOptions]): The optional arguments for the command.
+    Returns:
+        List[Mapping[TEncodable, Any]]: An array containing a mapping of field name and associated value as returned after the last stage of the command.
+    Examples:
+        For this example to work ensure that the test data is setup.
+        You can get the test data from the `/python/python/tests/tests_server_modules/test_ft.py` file containing the test cases for FT.AGGREGATE command.
+        >>> from glide import ft
+        >>> result = await ft.aggregate(glide_client, myIndex"", "*", FtAggregateOptions(loadFields=["__key"], clauses=[GroupBy(["@condition"], [Reducer("COUNT", [], "bicycles")])]))
+            [{b'condition': b'refurbished', b'bicycles': b'1'}, {b'condition': b'new', b'bicycles': b'5'}, {b'condition': b'used', b'bicycles': b'4'}]
+    """
+    args: List[TEncodable] = [CommandNames.FT_AGGREGATE, indexName, query]
+    if options:
+        args.extend(options.toArgs())
+    return cast(List[Mapping[TEncodable, Any]], await client.custom_command(args))
