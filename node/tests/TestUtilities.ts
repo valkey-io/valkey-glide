@@ -1675,7 +1675,7 @@ export async function transactionTest(
     }
 
     baseTransaction.wait(1, 200);
-    responseData.push(["wait(1, 200)", 1]);
+    responseData.push(["wait(1, 200)", gte(version, "7.0.0") ? 1 : 0]);
     return responseData;
 }
 
