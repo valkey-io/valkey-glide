@@ -13,6 +13,7 @@ import glide.api.models.GlideString;
 import glide.api.models.commands.FT.FTAggregateOptions;
 import glide.api.models.commands.FT.FTCreateOptions;
 import glide.api.models.commands.FT.FTCreateOptions.FieldInfo;
+import glide.api.models.commands.FT.FTProfileOptions;
 import glide.api.models.commands.FT.FTSearchOptions;
 import java.util.Arrays;
 import java.util.Map;
@@ -285,6 +286,7 @@ public class FT {
     /**
      * Deletes an index and associated content. Indexed document keys are unaffected.
      *
+     * @param client The client to execute the command.
      * @param indexName The index name.
      * @return <code>"OK"</code>.
      * @example
@@ -300,6 +302,7 @@ public class FT {
     /**
      * Deletes an index and associated content. Indexed document keys are unaffected.
      *
+     * @param client The client to execute the command.
      * @param indexName The index name.
      * @return <code>"OK"</code>.
      * @example
@@ -476,6 +479,54 @@ public class FT {
                         new GlideString[] {gs("FT.AGGREGATE"), indexName, query}, options.toArgs());
         return FT.<Object[]>executeCommand(client, args, false)
                 .thenApply(res -> castArray(res, Map.class));
+    }
+
+    /**
+     * Runs a search or aggregation query and collects performance profiling information.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name.
+     * @param options Querying and profiling parameters - see {@link FTProfileOptions}.
+     * @return A two-element array. The first element contains results of query being profiled, the
+     *     second element stores profiling information.
+     * @example
+     *     <pre>{@code
+     * var options = FTSearchOptions.builder().params(Map.of(
+     *         gs("query_vec"),
+     *         gs(new byte[] { (byte) 0, (byte) 0, (byte) 0, (byte) 0 })))
+     *     .build();
+     * var result = FT.profile(client, "myIndex", new FTProfileOptions("*=>[KNN 2 @VEC $query_vec]", options)).get();
+     * // result[0] contains `FT.SEARCH` response with the given options and query
+     * // result[1] contains profiling data as a `Map<GlideString, Long>`
+     * }</pre>
+     */
+    public static CompletableFuture<Object[]> profile(
+            @NonNull BaseClient client, @NonNull String indexName, @NonNull FTProfileOptions options) {
+        return profile(client, gs(indexName), options);
+    }
+
+    /**
+     * Runs a search or aggregation query and collects performance profiling information.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name.
+     * @param options Querying and profiling parameters - see {@link FTProfileOptions}.
+     * @return A two-element array. The first element contains results of query being profiled, the
+     *     second element stores profiling information.
+     * @example
+     *     <pre>{@code
+     * var commandLine = new String[] { "*", "LOAD", "1", "__key", "GROUPBY", "1", "@condition", "REDUCE", "COUNT", "0", "AS", "bicylces" };
+     * var result = FT.profile(client, gs("myIndex"), new FTProfileOptions(QueryType.AGGREGATE, commandLine)).get();
+     * // result[0] contains `FT.AGGREGATE` response with the given command line
+     * // result[1] contains profiling data as a `Map<GlideString, Long>`
+     * }</pre>
+     */
+    public static CompletableFuture<Object[]> profile(
+            @NonNull BaseClient client,
+            @NonNull GlideString indexName,
+            @NonNull FTProfileOptions options) {
+        var args = concatenateArrays(new GlideString[] {gs("FT.PROFILE"), indexName}, options.toArgs());
+        return executeCommand(client, args, false);
     }
 
     /**
@@ -697,7 +748,6 @@ public class FT {
     public static CompletableFuture<String> aliasupdate(
             @NonNull BaseClient client, @NonNull GlideString aliasName, @NonNull GlideString indexName) {
         var args = new GlideString[] {gs("FT.ALIASUPDATE"), aliasName, indexName};
-
         return executeCommand(client, args, false);
     }
 
