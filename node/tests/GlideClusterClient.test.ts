@@ -246,7 +246,7 @@ describe("GlideClusterClient", () => {
             expect(await client.set(key, value)).toEqual("OK");
             // Since DUMP gets binary results, we cannot use the default decoder (string) here, so we expected to get an error.
             await expect(client.customCommand(["DUMP", key])).rejects.toThrow(
-                "invalid utf-8 sequence of 1 bytes from index 9",
+                "invalid utf-8 sequence of",
             );
 
             const dumpResult = await client.customCommand(["DUMP", key], {
@@ -391,10 +391,6 @@ describe("GlideClusterClient", () => {
                 client.sdiffstore("abc", ["zxy", "lkn"]),
                 client.sortStore("abc", "zyx"),
                 client.sortStore("abc", "zyx", { isAlpha: true }),
-                client.lmpop(["abc", "def"], ListDirection.LEFT, { count: 1 }),
-                client.blmpop(["abc", "def"], ListDirection.RIGHT, 0.1, {
-                    count: 1,
-                }),
                 client.bzpopmax(["abc", "def"], 0.5),
                 client.bzpopmin(["abc", "def"], 0.5),
                 client.xread({ abc: "0-0", zxy: "0-0", lkn: "0-0" }),
@@ -437,6 +433,12 @@ describe("GlideClusterClient", () => {
                     client.lcs("abc", "xyz"),
                     client.lcsLen("abc", "xyz"),
                     client.lcsIdx("abc", "xyz"),
+                    client.lmpop(["abc", "def"], ListDirection.LEFT, {
+                        count: 1,
+                    }),
+                    client.blmpop(["abc", "def"], ListDirection.RIGHT, 0.1, {
+                        count: 1,
+                    }),
                 );
             }
 

@@ -6433,7 +6433,7 @@ export function runBaseTests(config: {
                     expect(
                         await client.bzpopmax(
                             [key3],
-                            cluster.checkIfServerVersionLessThan("6.0.0")
+                            cluster.checkIfServerVersionLessThan("7.0.0")
                                 ? 1.0
                                 : 0.001,
                         ),
@@ -6483,7 +6483,7 @@ export function runBaseTests(config: {
                     expect(
                         await client.bzpopmin(
                             [key3],
-                            cluster.checkIfServerVersionLessThan("6.0.0")
+                            cluster.checkIfServerVersionLessThan("7.0.0")
                                 ? 1.0
                                 : 0.001,
                         ),
@@ -7526,7 +7526,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `xinfo stream xinfosream test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
+            await runTest(async (client: BaseClient, cluster) => {
                 const key = uuidv4();
                 const groupName = `group-${uuidv4()}`;
                 const consumerName = `consumer-${uuidv4()}`;
@@ -7642,9 +7642,12 @@ export function runBaseTests(config: {
                 //   ]
                 // }
                 expect(fullResult.length).toEqual(2);
-                expect(fullResult["recorded-first-entry-id"]).toEqual(
-                    streamId1_0,
-                );
+
+                if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                    expect(fullResult["recorded-first-entry-id"]).toEqual(
+                        streamId1_0,
+                    );
+                }
 
                 // Only the first entry will be returned since we passed count: 1
                 expect(fullResult.entries).toEqual([expectedFirstEntry]);
@@ -10660,7 +10663,7 @@ export function runBaseTests(config: {
                 expect(result[0].pending).toEqual(1);
                 expect(result[0].idle).toBeGreaterThan(0);
 
-                if (cluster.checkIfServerVersionLessThan("7.2.0")) {
+                if (!cluster.checkIfServerVersionLessThan("7.2.0")) {
                     expect(result[0].inactive).toBeGreaterThan(0);
                 }
 
