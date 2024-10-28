@@ -25,12 +25,14 @@ public class Json {
     private static final String JSON_ARRAPPEND = JSON_PREFIX + "ARRAPPEND";
     private static final String JSON_ARRINSERT = JSON_PREFIX + "ARRINSERT";
     private static final String JSON_ARRLEN = JSON_PREFIX + "ARRLEN";
+    private static final String JSON_ARRPOP = JSON_PREFIX + "ARRPOP";
     private static final String JSON_ARRTRIM = JSON_PREFIX + "ARRTRIM";
     private static final String JSON_OBJLEN = JSON_PREFIX + "OBJLEN";
     private static final String JSON_OBJKEYS = JSON_PREFIX + "OBJKEYS";
     private static final String JSON_DEL = JSON_PREFIX + "DEL";
     private static final String JSON_FORGET = JSON_PREFIX + "FORGET";
     private static final String JSON_TOGGLE = JSON_PREFIX + "TOGGLE";
+    private static final String JSON_CLEAR = JSON_PREFIX + "CLEAR";
     private static final String JSON_RESP = JSON_PREFIX + "RESP";
     private static final String JSON_TYPE = JSON_PREFIX + "TYPE";
 
@@ -715,6 +717,206 @@ public class Json {
     }
 
     /**
+     * Pops the last element from the array stored in the root of the JSON document stored at <code>
+     * key</code>. Equivalent to {@link #arrpop(BaseClient, String, String)} with <code>
+     * path</code> set to <code>"."</code>.
+     *
+     * @param client The Valkey GLIDE client to execute the command.
+     * @param key The <code>key</code> of the JSON document.
+     * @return Returns a string representing the popped JSON value, or <code>null</code> if the array
+     *     at document root is empty.<br>
+     *     If the JSON value at document root is not an array or if <code>key</code> doesn't exist, an
+     *     error is raised.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "[1, 2, true, {\"a\": 42, \"b\": 33}, \"tree\"]").get();
+     * var res = Json.arrpop(client, "doc").get();
+     * assert res.equals("\"tree\"");
+     * res = Json.arrpop(client, "doc").get();
+     * assert res.equals("{\"a\": 42, \"b\": 33}");
+     * }</pre>
+     */
+    public static CompletableFuture<String> arrpop(@NonNull BaseClient client, @NonNull String key) {
+        return executeCommand(client, new String[] {JSON_ARRPOP, key});
+    }
+
+    /**
+     * Pops the last element from the array located in the root of the JSON document stored at <code>
+     * key</code>. Equivalent to {@link #arrpop(BaseClient, GlideString, GlideString)} with <code>
+     * path</code> set to <code>gs(".")</code>.
+     *
+     * @param client The Valkey GLIDE client to execute the command.
+     * @param key The <code>key</code> of the JSON document.
+     * @return Returns a string representing the popped JSON value, or <code>null</code> if the array
+     *     at document root is empty.<br>
+     *     If the JSON value at document root is not an array or if <code>key</code> doesn't exist, an
+     *     error is raised.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "[1, 2, true, {\"a\": 42, \"b\": 33}, \"tree\"]").get();
+     * var res = Json.arrpop(client, gs("doc")).get();
+     * assert res.equals(gs("\"tree\""));
+     * res = Json.arrpop(client, gs("doc")).get();
+     * assert res.equals(gs("{\"a\": 42, \"b\": 33}"));
+     * }</pre>
+     */
+    public static CompletableFuture<GlideString> arrpop(
+            @NonNull BaseClient client, @NonNull GlideString key) {
+        return executeCommand(client, new GlideString[] {gs(JSON_ARRPOP), key});
+    }
+
+    /**
+     * Pops the last element from the array located at <code>path</code> in the JSON document stored
+     * at <code>key</code>.
+     *
+     * @param client The Valkey GLIDE client to execute the command.
+     * @param key The <code>key</code> of the JSON document.
+     * @param path The path within the JSON document.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
+     *           Returns an array with a strings for every possible path, representing the popped JSON
+     *           values, or <code>null</code> for JSON values matching the path that are not an array
+     *           or an empty array. If a value is not an array, its corresponding return value is
+     *           <code>"null"</code>.
+     *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
+     *           Returns a string representing the popped JSON value, or <code>null</code> if the
+     *           array at <code>path</code> is empty. If multiple paths are matched, the value from
+     *           the first matching array that is not empty is returned. If <code>path</code> doesn't
+     *           exist or the value at <code>path</code> is not an array, an error is raised.
+     *     </ul>
+     *     If <code>key</code> doesn't exist, an error is raised.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "[1, 2, true, {\"a\": 42, \"b\": 33}, \"tree\"]").get();
+     * var res = Json.arrpop(client, "doc", "$").get();
+     * assert Arrays.equals((Object[]) res, new Object[] { "\"tree\"" });
+     * res = Json.arrpop(client, "doc", ".").get();
+     * assert res.equals("{\"a\": 42, \"b\": 33}");
+     * }</pre>
+     */
+    public static CompletableFuture<Object> arrpop(
+            @NonNull BaseClient client, @NonNull String key, @NonNull String path) {
+        return executeCommand(client, new String[] {JSON_ARRPOP, key, path});
+    }
+
+    /**
+     * Pops the last element from the array located at <code>path</code> in the JSON document stored
+     * at <code>key</code>.
+     *
+     * @param client The Valkey GLIDE client to execute the command.
+     * @param key The <code>key</code> of the JSON document.
+     * @param path The path within the JSON document.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
+     *           Returns an array with a strings for every possible path, representing the popped JSON
+     *           values, or <code>null</code> for JSON values matching the path that are not an array
+     *           or an empty array. If a value is not an array, its corresponding return value is
+     *           <code>"null"</code>.
+     *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
+     *           Returns a string representing the popped JSON value, or <code>null</code> if the
+     *           array at <code>path</code> is empty. If multiple paths are matched, the value from
+     *           the first matching array that is not empty is returned. If <code>path</code> doesn't
+     *           exist or the value at <code>path</code> is not an array, an error is raised.
+     *     </ul>
+     *     If <code>key</code> doesn't exist, an error is raised.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "[1, 2, true, {\"a\": 42, \"b\": 33}, \"tree\"]").get();
+     * var res = Json.arrpop(client, gs("doc"), gs("$")).get();
+     * assert Arrays.equals((Object[]) res, new Object[] { gs("\"tree\"") });
+     * res = Json.arrpop(client, gs("doc"), gs(".")).get();
+     * assert res.equals(gs("{\"a\": 42, \"b\": 33}"));
+     * }</pre>
+     */
+    public static CompletableFuture<Object> arrpop(
+            @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString path) {
+        return executeCommand(client, new GlideString[] {gs(JSON_ARRPOP), key, path});
+    }
+
+    /**
+     * Pops an element from the array located at <code>path</code> in the JSON document stored at
+     * <code>key</code>.
+     *
+     * @param client The Valkey GLIDE client to execute the command.
+     * @param key The <code>key</code> of the JSON document.
+     * @param path The path within the JSON document.
+     * @param index The index of the element to pop. Out of boundary indexes are rounded to their
+     *     respective array boundaries.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
+     *           Returns an array with a strings for every possible path, representing the popped JSON
+     *           values, or <code>null</code> for JSON values matching the path that are not an array
+     *           or an empty array. If a value is not an array, its corresponding return value is
+     *           <code>"null"</code>.
+     *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
+     *           Returns a string representing the popped JSON value, or <code>null</code> if the
+     *           array at <code>path</code> is empty. If multiple paths are matched, the value from
+     *           the first matching array that is not empty is returned. If <code>path</code> doesn't
+     *           exist or the value at <code>path</code> is not an array, an error is raised.
+     *     </ul>
+     *     If <code>key</code> doesn't exist, an error is raised.
+     * @example
+     *     <pre>{@code
+     * String doc = "{\"a\": [1, 2, true], \"b\": {\"a\": [3, 4, [\"value\", 3, false], 5], \"c\": {\"a\": 42}}}";
+     * Json.set(client, "doc", "$", doc).get();
+     * var res = Json.arrpop(client, "doc", "$.a", 1).get();
+     * assert res.equals("2"); // Pop second element from array at path `$.a`
+     *
+     * Json.set(client, "doc", "$", "[[], [\"a\"], [\"a\", \"b\", \"c\"]]").get();
+     * res = Json.arrpop(client, "doc", ".", -1).get());
+     * assert res.equals("[\"a\", \"b\", \"c\"]"); // Pop last elements at path `.`
+     * }</pre>
+     */
+    public static CompletableFuture<Object> arrpop(
+            @NonNull BaseClient client, @NonNull String key, @NonNull String path, long index) {
+        return executeCommand(client, new String[] {JSON_ARRPOP, key, path, Long.toString(index)});
+    }
+
+    /**
+     * Pops an element from the array located at <code>path</code> in the JSON document stored at
+     * <code>key</code>.
+     *
+     * @param client The Valkey GLIDE client to execute the command.
+     * @param key The <code>key</code> of the JSON document.
+     * @param path The path within the JSON document.
+     * @param index The index of the element to pop. Out of boundary indexes are rounded to their
+     *     respective array boundaries.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
+     *           Returns an array with a strings for every possible path, representing the popped JSON
+     *           values, or <code>null</code> for JSON values matching the path that are not an array
+     *           or an empty array. If a value is not an array, its corresponding return value is
+     *           <code>"null"</code>.
+     *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
+     *           Returns a string representing the popped JSON value, or <code>null</code> if the
+     *           array at <code>path</code> is empty. If multiple paths are matched, the value from
+     *           the first matching array that is not empty is returned. If <code>path</code> doesn't
+     *           exist or the value at <code>path</code> is not an array, an error is raised.
+     *     </ul>
+     *     If <code>key</code> doesn't exist, an error is raised.
+     * @example
+     *     <pre>{@code
+     * String doc = "{\"a\": [1, 2, true], \"b\": {\"a\": [3, 4, [\"value\", 3, false], 5], \"c\": {\"a\": 42}}}";
+     * Json.set(client, "doc", "$", doc).get();
+     * var res = Json.arrpop(client, gs("doc"), gs("$.a"), 1).get();
+     * assert res.equals("2"); // Pop second element from array at path `$.a`
+     *
+     * Json.set(client, "doc", "$", "[[], [\"a\"], [\"a\", \"b\", \"c\"]]").get();
+     * res = Json.arrpop(client, gs("doc"), gs("."), -1).get());
+     * assert res.equals(gs("[\"a\", \"b\", \"c\"]")); // Pop last elements at path `.`
+     * }</pre>
+     */
+    public static CompletableFuture<Object> arrpop(
+            @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString path, long index) {
+        return executeCommand(
+                client, new GlideString[] {gs(JSON_ARRPOP), key, path, gs(Long.toString(index))});
+    }
+
+    /**
      * Trims an array at the specified <code>path</code> within the JSON document started at <code>key
      * </code> so that it becomes a subarray [<code>start</code>, <code>end</code>], both inclusive.
      * <br>
@@ -1320,6 +1522,123 @@ public class Json {
             @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString path) {
         return executeCommand(
                 client, new ArgsBuilder().add(gs(JSON_TOGGLE)).add(key).add(path).toArray());
+    }
+
+    /**
+     * Clears an array and an object at the root of the JSON document stored at <code>key</code>.<br>
+     * Equivalent to {@link #clear(BaseClient, String, String)} with <code>path</code> set to <code>
+     * "."</code>.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @return <code>1</code> if the document wasn't empty or <code>0</code> if it was.<br>
+     *     If <code>key</code> doesn't exist, an error is raised.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "{\"a\":1, \"b\":2}").get();
+     * long res = Json.clear(client, "doc").get();
+     * assert res == 1;
+     *
+     * var doc = Json.get(client, "doc", "$").get();
+     * assert doc.equals("[{}]");
+     *
+     * res = Json.clear(client, "doc").get();
+     * assert res == 0; // the doc is already empty
+     * }</pre>
+     */
+    public static CompletableFuture<Long> clear(@NonNull BaseClient client, @NonNull String key) {
+        return executeCommand(client, new String[] {JSON_CLEAR, key});
+    }
+
+    /**
+     * Clears an array and an object at the root of the JSON document stored at <code>key</code>.<br>
+     * Equivalent to {@link #clear(BaseClient, GlideString, GlideString)} with <code>path</code> set
+     * to <code>"."</code>.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @return <code>1</code> if the document wasn't empty or <code>0</code> if it was.<br>
+     *     If <code>key</code> doesn't exist, an error is raised.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "{\"a\":1, \"b\":2}").get();
+     * long res = Json.clear(client, gs("doc")).get();
+     * assert res == 1;
+     *
+     * var doc = Json.get(client, "doc", "$").get();
+     * assert doc.equals("[{}]");
+     *
+     * res = Json.clear(client, gs("doc")).get();
+     * assert res == 0; // the doc is already empty
+     * }</pre>
+     */
+    public static CompletableFuture<Long> clear(
+            @NonNull BaseClient client, @NonNull GlideString key) {
+        return executeCommand(client, new GlideString[] {gs(JSON_CLEAR), key});
+    }
+
+    /**
+     * Clears arrays and objects at the specified <code>path</code> within the JSON document stored at
+     * <code>key</code>.<br>
+     * Numeric values are set to <code>0</code>, boolean values are set to <code>false</code>, and
+     * string values are converted to empty strings.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @return The number of containers cleared.<br>
+     *     If <code>path</code> doesn't exist, or the value at <code>path</code> is already cleared
+     *     (e.g., an empty array, object, or string), 0 is returned. If <code>key</code> doesn't
+     *     exist, an error is raised.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "{\"obj\": {\"a\":1, \"b\":2}, \"arr\":[1, 2, 3], \"str\": \"foo\", \"bool\": true,
+     *     \"int\": 42, \"float\": 3.14, \"nullVal\": null}").get();
+     * long res = Json.clear(client, "doc", "$.*").get();
+     * assert res == 6; // 6 values are cleared: "obj", "arr", "str", "bool", "int", and "float"; "nullVal" is not clearable.
+     *
+     * var doc = Json.get(client, "doc", "$").get();
+     * assert doc.equals("[{\"obj\":{},\"arr\":[],\"str\":\"\",\"bool\":false,\"int\":0,\"float\":0.0,\"nullVal\":null}]");
+     *
+     * res = Json.clear(client, "doc", "$.*").get();
+     * assert res == 0; // containers are already empty and nothing is cleared
+     * }</pre>
+     */
+    public static CompletableFuture<Long> clear(
+            @NonNull BaseClient client, @NonNull String key, @NonNull String path) {
+        return executeCommand(client, new String[] {JSON_CLEAR, key, path});
+    }
+
+    /**
+     * Clears arrays and objects at the specified <code>path</code> within the JSON document stored at
+     * <code>key</code>.<br>
+     * Numeric values are set to <code>0</code>, boolean values are set to <code>false</code>, and
+     * string values are converted to empty strings.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @return The number of containers cleared.<br>
+     *     If <code>path</code> doesn't exist, or the value at <code>path</code> is already cleared
+     *     (e.g., an empty array, object, or string), 0 is returned. If <code>key</code> doesn't
+     *     exist, an error is raised.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "{\"obj\": {\"a\":1, \"b\":2}, \"arr\":[1, 2, 3], \"str\": \"foo\", \"bool\": true,
+     *     \"int\": 42, \"float\": 3.14, \"nullVal\": null}").get();
+     * long res = Json.clear(client, gs("doc"), gs("$.*")).get();
+     * assert res == 6; // 6 values are cleared: "obj", "arr", "str", "bool", "int", and "float"; "nullVal" is not clearable.
+     *
+     * var doc = Json.get(client, "doc", "$").get();
+     * assert doc.equals("[{\"obj\":{},\"arr\":[],\"str\":\"\",\"bool\":false,\"int\":0,\"float\":0.0,\"nullVal\":null}]");
+     *
+     * res = Json.clear(client, gs("doc"), gs("$.*")).get();
+     * assert res == 0; // containers are already empty and nothing is cleared
+     * }</pre>
+     */
+    public static CompletableFuture<Long> clear(
+            @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString path) {
+        return executeCommand(client, new GlideString[] {gs(JSON_CLEAR), key, path});
     }
 
     /**
