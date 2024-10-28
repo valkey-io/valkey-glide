@@ -37,6 +37,7 @@
 * Node: Added `JSON.TYPE` ([#2510](https://github.com/valkey-io/valkey-glide/pull/2510))
 * Java: Added `JSON.RESP` ([#2513](https://github.com/valkey-io/valkey-glide/pull/2513))
 * Node: Added `FT.DROPINDEX` ([#2516](https://github.com/valkey-io/valkey-glide/pull/2516))
+* Node: Added `JSON.RESP` ([#2517](https://github.com/valkey-io/valkey-glide/pull/2517))
 * Python: Add `JSON.STRAPPEND` , `JSON.STRLEN` commands ([#2372](https://github.com/valkey-io/valkey-glide/pull/2372))
 * Python: Add `JSON.OBJKEYS` command ([#2395](https://github.com/valkey-io/valkey-glide/pull/2395))
 * Python: Add `JSON.ARRINSERT` command ([#2464](https://github.com/valkey-io/valkey-glide/pull/2464))

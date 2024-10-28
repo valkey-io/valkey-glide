@@ -352,4 +352,52 @@ export class GlideJson {
 
         return _executeCommand<ReturnTypeJson<GlideString>>(client, args);
     }
+
+    /**
+     * Retrieve the JSON value at the specified `path` within the JSON document stored at `key`.
+     * The returning result is in the Valkey or Redis OSS Serialization Protocol (RESP).
+     * JSON null is mapped to the RESP Null Bulk String.
+     * JSON Booleans are mapped to RESP Simple string.
+     * JSON integers are mapped to RESP Integers.
+     * JSON doubles are mapped to RESP Bulk Strings.
+     * JSON strings are mapped to RESP Bulk Strings.
+     * JSON arrays are represented as RESP arrays, where the first element is the simple string [, followed by the array's elements.
+     * JSON objects are represented as RESP object, where the first element is the simple string {, followed by key-value pairs, each of which is a RESP bulk string.
+     *
+     * @param client - The client to execute the command.
+     * @param key - The key of the JSON document.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) path - The path within the JSON document, Defaults to root if not provided.
+     * @returns ReturnTypeJson:
+     *     - For JSONPath (path starts with `$`):
+     *       - Returns an array of replies for every possible path, indicating the RESP form of the JSON value.
+     *         If `path` doesn't exist, returns an empty array.
+     *     - For legacy path (path doesn't start with `$`):
+     *       - Returns a single reply for the JSON value at the specified `path`, in its RESP form.
+     *         If multiple paths match, the value of the first JSON value match is returned. If `path` doesn't exist, an error is raised.
+     *     - If `key` doesn't exist, `null` is returned.
+     *
+     * @example
+     * ```typescript
+     * console.log(await GlideJson.set(client, "doc", ".", "{a: [1, 2, 3], b: {a: [1, 2], c: {a: 42}}}"));
+     * // Output: 'OK' - Indicates successful setting of the value at path '.' in the key stored at `doc`.
+     * const result = await GlideJson.resp(client, "doc", "$..a");
+     * console.log(result);
+     * // Output: [ ["[", 1L, 2L, 3L], ["[", 1L, 2L], [42L]];
+     * console.log(await GlideJson.type(client, "doc", "..a")); // Output: ["[", 1L, 2L, 3L]
+     * ```
+     */
+    static async resp(
+        client: BaseClient,
+        key: GlideString,
+        options?: { path: GlideString },
+    ): Promise<ReturnTypeJson<GlideString>> {
+        const args = ["JSON.RESP", key];
+
+        if (options) {
+            args.push(options.path);
+        }
+
+        return _executeCommand<ReturnTypeJson<GlideString>>(client, args);
+    }
 }
