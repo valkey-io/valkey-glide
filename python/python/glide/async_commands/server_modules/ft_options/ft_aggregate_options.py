@@ -133,9 +133,7 @@ class GroupBy(FtAggregateClause):
         self.reducers = reducers
 
     def to_args(self) -> List[TEncodable]:
-        args = [FtAggregateKeywords.GROUPBY, str(len(self.properties))] + [
-            self.properties
-        ]
+        args = [FtAggregateKeywords.GROUPBY, str(len(self.properties))] + self.properties
         if self.reducers:
             for reducer in self.reducers:
                 args.extend(reducer.to_args())
