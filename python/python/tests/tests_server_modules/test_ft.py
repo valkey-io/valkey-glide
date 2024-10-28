@@ -348,7 +348,6 @@ class TestFt:
             ),
         )
         assert await ft.dropindex(glide_client, indexName=indexBicycles) == OK
-
         resultSet = set(result)
         expectedResultSet = set(
             [
@@ -366,6 +365,9 @@ class TestFt:
                 },
             ]
         )
+
+        print("result ===")
+        print(resultSet)
         assert resultSet == expectedResultSet
 
     @pytest.mark.parametrize("cluster_mode", [True])
@@ -419,6 +421,8 @@ class TestFt:
         )
         assert await ft.dropindex(glide_client, indexName=indexMovies) == OK
         resultSet = set(result)
+        print("result ===")
+        print(resultSet)
         expectedResultSet = set(
             [
                 {
