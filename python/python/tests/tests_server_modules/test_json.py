@@ -359,6 +359,56 @@ class TestJson:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_json_objlen(self, glide_client: TGlideClient):
+        key = get_random_string(5)
+
+        json_value = {"a": 1.0, "b": {"a": {"x": 1, "y": 2}, "b": 2.5, "c": True}}
+
+        assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
+
+        len = await json.objlen(glide_client, key, "$")
+        assert len == [2]
+
+        len = await json.objlen(glide_client, key, ".")
+        assert len == 2
+
+        len = await json.objlen(glide_client, key, "$..")
+        assert len == [2, 3, 2]
+
+        len = await json.objlen(glide_client, key, "..")
+        assert len == 2
+
+        len = await json.objlen(glide_client, key, "$..b")
+        assert len == [3, None]
+
+        len = await json.objlen(glide_client, key, "..b")
+        assert len == 3
+
+        len = await json.objlen(glide_client, key, "..a")
+        assert len == 2
+
+        len = await json.objlen(glide_client, key)
+        assert len == 2
+
+        # path doesn't exist
+        assert await json.objlen(glide_client, key, "$.non_existing_path") == []
+        with pytest.raises(RequestError):
+            await json.objlen(glide_client, key, "non_existing_path")
+
+        # Value at path isnt an object
+        assert await json.objlen(glide_client, key, "$.a") == [None]
+        with pytest.raises(RequestError):
+            await json.objlen(glide_client, key, ".a")
+
+        # Non-existing key
+        assert await json.objlen(glide_client, "non_exiting_key", "$") == None
+        assert await json.objlen(glide_client, "non_exiting_key", ".") == None
+
+        assert await json.set(glide_client, key, "$", '{"a": 1, "b": 2, "c":3, "d":4}')
+        assert await json.objlen(glide_client, key) == 4
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_json_arrlen(self, glide_client: TGlideClient):
         key = get_random_string(5)
 
