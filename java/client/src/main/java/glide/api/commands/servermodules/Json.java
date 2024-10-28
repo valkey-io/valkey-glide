@@ -854,6 +854,7 @@ public class Json {
      * Json.set(client, "doc", "$", "{\"c\": [1, 2], \"d\": [1, 2, 3]}").get();
      * var res = Json.numincrby(client, "doc", "$.d[*]", 10.0).get();
      * assert res.equals("[11,12,13]"); // Increment each element in `d` array by 10.
+     *
      * res = Json.numincrby(client, "doc", ".c[1]", 10.0).get();
      * assert res.equals("12"); // Increment the second element in the `c` array by 10.
      * }</pre>
@@ -894,6 +895,7 @@ public class Json {
      * Json.set(client, "doc", "$", "{\"c\": [1, 2], \"d\": [1, 2, 3]}").get();
      * var res = Json.numincrby(client, gs("doc"), gs("$.d[*]"), 10.0).get();
      * assert res.equals(gs("[11,12,13]")); // Increment each element in `d` array by 10.
+     *
      * res = Json.numincrby(client, gs("doc"), gs(".c[1]"), 10.0).get();
      * assert res.equals(gs("12")); // Increment the second element in the `c` array by 10.
      * }</pre>
@@ -937,6 +939,7 @@ public class Json {
      * Json.set(client, "doc", "$", "{\"c\": [1, 2], \"d\": [1, 2, 3]}").get();
      * var res = Json.nummultby(client, "doc", "$.d[*]", 2.0).get();
      * assert res.equals("[2,4,6]"); // Multiplies each element in the `d` array by 2.
+     *
      * res = Json.nummultby(client, "doc", ".c[1]", 2.0).get();
      * assert res.equals("12"); // Multiplies the second element in the `c` array by 2.
      * }</pre>
@@ -977,6 +980,7 @@ public class Json {
      * Json.set(client, "doc", "$", "{\"c\": [1, 2], \"d\": [1, 2, 3]}").get();
      * var res = Json.nummultby(client, gs("doc"), gs("$.d[*]"), 2.0).get();
      * assert res.equals(gs("[2,4,6]")); // Multiplies each element in the `d` array by 2.
+     *
      * res = Json.nummultby(client, gs("doc"), gs(".c[1]"), 2.0).get();
      * assert res.equals(gs("12")); // Multiplies the second element in the `c` array by 2.
      * }</pre>

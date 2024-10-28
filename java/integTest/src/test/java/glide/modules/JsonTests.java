@@ -375,7 +375,7 @@ public class JsonTests {
 
         // Increment float value (key2) by 2.5
         result = Json.numincrby(client, key, "$.key2", 2.5).get();
-        assertEquals("[6.0]", result); // Expect 3.5 + 2.5 = 6
+        assertEquals("[6]", result); // Expect 3.5 + 2.5 = 6
 
         // Increment nested object (key3.nested_key.key1[0]) by 7
         result = Json.numincrby(client, key, "$.key3.nested_key.key1[1]", 7).get();
@@ -434,32 +434,32 @@ public class JsonTests {
         // Test Legacy Path
         // Increment float value (key1) by 5 (integer)
         result = Json.numincrby(client, key, "key1", 5).get();
-        assertEquals("[4.5]", result); // Expect -0.5 + 5 = 4.5
+        assertEquals("4.5", result); // Expect -0.5 + 5 = 4.5
 
         // Decrement float value (key1) by 5.5 (integer)
         result = Json.numincrby(client, key, "key1", -5.5).get();
-        assertEquals("[-1.0]", result); // Expect 4.5 - 5.5 = -1
+        assertEquals("-1", result); // Expect 4.5 - 5.5 = -1
 
         // Increment int value (key2) by 2.5 (a float number)
         result = Json.numincrby(client, key, "key2", 2.5).get();
-        assertEquals("[13.5]", result); // Expect 11 + 2.5 = 13.5
+        assertEquals("13.5", result); // Expect 11 + 2.5 = 13.5
 
         // Increment nested value (key3.nested_key.key1[0]) by 7
         result = Json.numincrby(client, key, "key3.nested_key.key1[0]", 7).get();
-        assertEquals("[16]", result); // Expect 9 + 7 = 16
+        assertEquals("16", result); // Expect 9 + 7 = 16
 
         // Increment array element (key4[1]) by 1
         result = Json.numincrby(client, key, "key4[1]", 1).get();
-        assertEquals("[9]", result); // Expect 8 + 1 = 9
+        assertEquals("9", result); // Expect 8 + 1 = 9
 
         // Increment a float value (key5) by 10.2 (a float number)
         result = Json.numincrby(client, key, "key5", 10.2).get();
-        assertEquals("[25.43]", result); // Expect 15.23 + 10.2 = 25.43
+        assertEquals("25.43", result); // Expect 15.23 + 10.2 = 25.43
 
         // Check for multiple path match in legacy and assure that the result of the last updated value
         // is returned
         result = Json.numincrby(client, key, "..key1", 1).get();
-        assertEquals("[76L]", result);
+        assertEquals("76L", result);
 
         // Check if the rest of the key1 path matches were updated and not only the last value
         result = Json.get(client, key, new String[] {"$..key1"}).get();
@@ -484,11 +484,11 @@ public class JsonTests {
         // Binary tests
         // Binary integer test
         GlideString binaryResult = Json.numincrby(client, gs(key), gs("key4[1]"), 1).get();
-        assertEquals("[10L]", result); // Expect 9 + 1 = 10
+        assertEquals("10", result); // Expect 9 + 1 = 10
 
         // Binary float test
         binaryResult = Json.numincrby(client, gs(key), gs("key5"), 1.0).get();
-        assertEquals("[26.43]", result); // Expect 25.43 + 1.0 = 26.43
+        assertEquals("26.43", result); // Expect 25.43 + 1.0 = 26.43
     }
 
     @Test
@@ -582,38 +582,38 @@ public class JsonTests {
 
         // Multiply integer value (key1) by -0.5
         result = Json.nummultby(client, key, "$.key1", -0.5).get();
-        assertEquals("[300.0]", result); // Expect -600 * -0.5 = 300
+        assertEquals("[300]", result); // Expect -600 * -0.5 = 300
 
         // Test Legacy Path
         // Multiply int value (key1) by 5 (integer)
         result = Json.nummultby(client, key, "key1", 5).get();
-        assertEquals("[1500]", result); // Expect 300 * 5 = -1500
+        assertEquals("1500", result); // Expect 300 * 5 = -1500
 
         // Multiply int value (key1) by -5.5 (float number)
         result = Json.nummultby(client, key, "key1", -5.5).get();
-        assertEquals("[-8250.0]", result); // Expect -150 * -5.5 = -8250
+        assertEquals("-8250", result); // Expect -150 * -5.5 = -8250
 
         // Multiply int float (key2) by 2.5 (a float number)
         result = Json.nummultby(client, key, "key2", 2.5).get();
-        assertEquals("[109.375]", result); // Expect 43.75 * 2.5 = 109.375
+        assertEquals("109.375", result); // Expect 43.75 * 2.5 = 109.375
 
         // Multiply nested value (key3.nested_key.key1[0]) by 7
         result = Json.nummultby(client, key, "key3.nested_key.key1[0]", 7).get();
-        assertEquals("[140]", result); // Expect 20 * 7 = 140
+        assertEquals("140", result); // Expect 20 * 7 = 140
 
         // Multiply array element (key4[1]) by 1
         result = Json.nummultby(client, key, "key4[1]", 1).get();
-        assertEquals("[10]", result); // Expect 10 * 1 = 10
+        assertEquals("10", result); // Expect 10 * 1 = 10
 
         // Multiply a float value (key5) by 10.2 (a float number)
         result = Json.nummultby(client, key, "key5", 10.2).get();
-        assertEquals("[0.0]", result); // Expect 0 * 10.2 = 0
+        assertEquals("0", result); // Expect 0 * 10.2 = 0
 
         // Check for multiple path matches in legacy and assure that the result of the last updated
         // value is returned
         // last updated value is key8.nested_key.key1: 690 * 2 = 1380
         result = Json.nummultby(client, key, "..key1", 2).get();
-        assertEquals("[1380]", result); // Expect the last updated key1 value multiplied by 2
+        assertEquals("1380", result); // Expect the last updated key1 value multiplied by 2
 
         // Check if the rest of the key1 path matches were updated and not only the last value
         result = Json.get(client, key, new String[] {"$..key1"}).get();
@@ -635,11 +635,11 @@ public class JsonTests {
         // Binary tests
         // Binary integer test
         GlideString binaryResult = Json.nummultby(client, gs(key), gs("key4[1]"), 1).get();
-        assertEquals("[10]", binaryResult); // Expect 10 * 1 = 10
+        assertEquals("10", binaryResult); // Expect 10 * 1 = 10
 
         // Binary float test
         binaryResult = Json.nummultby(client, gs(key), gs("key5"), 10.2).get();
-        assertEquals("[0.0]", binaryResult); // Expect 0 * 10.2 = 0
+        assertEquals("0", binaryResult); // Expect 0 * 10.2 = 0
     }
 
     @Test
