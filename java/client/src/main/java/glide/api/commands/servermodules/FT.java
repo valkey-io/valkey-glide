@@ -757,7 +757,7 @@ public class FT {
      * @return A <code>String[]</code> representing the execution plan.
      * @example
      *     <pre>{@code
-     * var result = FT.explaincli(client, "myIndex",  "@price:[0 10]").get();
+     * String[] result = FT.explaincli(client, "myIndex",  "@price:[0 10]").get();
      * assert Arrays.equals(result, new String[]{
      *   "Field {",
      *   "  price",
@@ -786,13 +786,13 @@ public class FT {
      * @return A <code>GlideString[]</code> representing the execution plan.
      * @example
      *     <pre>{@code
-     * var result = FT.explaincli(client, "myIndex",  "@price:[0 10]").get();
+     * GlideString[] result = FT.explaincli(client, gs("myIndex"),  gs("@price:[0 10]")).get();
      * assert Arrays.equals(result, new GlideString[]{
-     *   "Field {",
-     *   "  price",
-     *   "  0",
-     *   "  10",
-     *   "}"
+     *   gs("Field {"),
+     *   gs("  price"),
+     *   gs("  0"),
+     *   gs("  10"),
+     *   gs("}")
      * });
      * }</pre>
      */
