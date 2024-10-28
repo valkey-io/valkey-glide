@@ -26,6 +26,7 @@ import glide.api.models.commands.FT.FTAggregateOptions.SortBy;
 import glide.api.models.commands.FT.FTAggregateOptions.SortBy.SortOrder;
 import glide.api.models.commands.FT.FTAggregateOptions.SortBy.SortProperty;
 import glide.api.models.commands.FT.FTCreateOptions;
+import glide.api.models.commands.FT.FTCreateOptions.DataType;
 import glide.api.models.commands.FT.FTCreateOptions.DistanceMetric;
 import glide.api.models.commands.FT.FTCreateOptions.FieldInfo;
 import glide.api.models.commands.FT.FTCreateOptions.NumericField;
@@ -38,11 +39,14 @@ import glide.api.models.commands.FT.FTSearchOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.exceptions.RequestException;
+import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -824,5 +828,107 @@ public class VectorSearchTests {
                         ExecutionException.class, () -> FT.aliasadd(client, alias1, "nonexistent_index").get());
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getMessage().contains("Index does not exist"));
+    }
+
+    @SneakyThrows
+    @Test
+    public void ft_explain() {
+
+        String indexName = UUID.randomUUID().toString();
+        createIndexHelper(indexName);
+
+        // search query containing numeric field.
+        String query = "@price:[0 10]";
+        String result = FT.explain(client, indexName, query).get();
+        assertTrue(result.contains("price"));
+        assertTrue(result.contains("0"));
+        assertTrue(result.contains("10"));
+
+        GlideString resultGS = FT.explain(client, gs(indexName), gs(query)).get();
+        assertTrue((resultGS).toString().contains("price"));
+        assertTrue((resultGS).toString().contains("0"));
+        assertTrue((resultGS).toString().contains("10"));
+
+        // search query that returns all data.
+        GlideString resultGSAllData = FT.explain(client, gs(indexName), gs("*")).get();
+        assertTrue(resultGSAllData.toString().contains("*"));
+
+        assertEquals(OK, FT.dropindex(client, indexName).get());
+
+        // missing index throws an error.
+        var exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> FT.explain(client, UUID.randomUUID().toString(), "*").get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(exception.getMessage().contains("Index not found"));
+    }
+
+    @SneakyThrows
+    @Test
+    public void ft_explaincli() {
+
+        String indexName = UUID.randomUUID().toString();
+        createIndexHelper(indexName);
+
+        // search query containing numeric field.
+        String query = "@price:[0 10]";
+        String[] result = FT.explaincli(client, indexName, query).get();
+        List<String> resultList = Arrays.stream(result).map(String::trim).collect(Collectors.toList());
+
+        assertTrue(resultList.contains("price"));
+        assertTrue(resultList.contains("0"));
+        assertTrue(resultList.contains("10"));
+
+        GlideString[] resultGS = FT.explaincli(client, gs(indexName), gs(query)).get();
+        List<String> resultListGS =
+                Arrays.stream(resultGS)
+                        .map(GlideString::toString)
+                        .map(String::trim)
+                        .collect(Collectors.toList());
+
+        assertTrue((resultListGS).contains("price"));
+        assertTrue((resultListGS).contains("0"));
+        assertTrue((resultListGS).contains("10"));
+
+        // search query that returns all data.
+        GlideString[] resultGSAllData = FT.explaincli(client, gs(indexName), gs("*")).get();
+        List<String> resultListGSAllData =
+                Arrays.stream(resultGSAllData)
+                        .map(GlideString::toString)
+                        .map(String::trim)
+                        .collect(Collectors.toList());
+        assertTrue((resultListGSAllData).contains("*"));
+
+        assertEquals(OK, FT.dropindex(client, indexName).get());
+
+        // missing index throws an error.
+        var exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> FT.explaincli(client, UUID.randomUUID().toString(), "*").get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(exception.getMessage().contains("Index not found"));
+    }
+
+    private void createIndexHelper(String indexName) throws ExecutionException, InterruptedException {
+        FieldInfo numericField = new FieldInfo("price", new NumericField());
+        FieldInfo textField = new FieldInfo("title", new TextField());
+
+        FieldInfo[] fields = new FieldInfo[] {numericField, textField};
+
+        String prefix = "{hash-search-" + UUID.randomUUID().toString() + "}:";
+
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                indexName,
+                                fields,
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
+                        .get());
     }
 }
