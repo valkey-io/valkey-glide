@@ -758,7 +758,7 @@ public class FT {
      * @example
      *     <pre>{@code
      * var result = FT.explaincli(client, "myIndex",  "@price:[0 10]").get();
-     * assert result.equals(new String[]{
+     * assert Arrays.equals(result, new String[]{
      *   "Field {",
      *   "  price",
      *   "  0",
@@ -787,7 +787,7 @@ public class FT {
      * @example
      *     <pre>{@code
      * var result = FT.explaincli(client, "myIndex",  "@price:[0 10]").get();
-     * assert result.equals(new GlideString[]{
+     * assert Arrays.equals(result, new GlideString[]{
      *   "Field {",
      *   "  price",
      *   "  0",
