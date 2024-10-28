@@ -567,34 +567,34 @@ public class JsonTests {
         assertEquals(
                 "{\"a\":\"foobarfoo\",\"nested\":{\"a\":\"hellobar\"},\"nested2\":{\"a\":31}}", jsonStr);
 
-        assertNull(Json.strappend(client, key, "bar", "$.nested").get());
+        assertArrayEquals(new Object[] {null}, (Object[]) Json.strappend(client, key, "\"bar\"", "$.nested").get());
 
         assertThrows(
-                ExecutionException.class, () -> Json.strappend(client, key, "bar", ".nested").get());
+                ExecutionException.class, () -> Json.strappend(client, key, "\"bar\"", ".nested").get());
 
-        assertThrows(ExecutionException.class, () -> Json.strappend(client, key, "bar").get());
+        assertThrows(ExecutionException.class, () -> Json.strappend(client, key, "\"bar\"").get());
 
         assertArrayEquals(
                 new Object[] {},
-                (Object[]) Json.strappend(client, key, "try", "$.non_existing_path").get());
+                (Object[]) Json.strappend(client, key, "\"try\"", "$.non_existing_path").get());
 
         assertThrows(
                 ExecutionException.class,
-                () -> Json.strappend(client, key, "try", "non_existing_path").get());
+                () -> Json.strappend(client, key, "\"try\"", "non_existing_path").get());
 
         assertThrows(
-                ExecutionException.class, () -> Json.strappend(client, "non_existing_key", "try").get());
+                ExecutionException.class, () -> Json.strappend(client, "non_existing_key", "\"try\"").get());
 
         // Binary test
         // Binary with path
-        assertEquals(12L, (Long) Json.strappend(client, gs(key), gs("foo"), gs("a")).get());
+        assertEquals(12L, (Long) Json.strappend(client, gs(key), gs("\"foo\""), gs("a")).get());
         jsonStr = Json.get(client, key, new String[] {"."}).get();
         assertEquals(
                 "{\"a\":\"foobarfoofoo\",\"nested\":{\"a\":\"hellobar\"},\"nested2\":{\"a\":31}}", jsonStr);
 
         // Binary no path
         assertEquals("OK", Json.set(client, key, "$", "\"hi\"").get());
-        assertEquals(5L, Json.strappend(client, gs(key), gs("foo")).get());
+        assertEquals(5L, Json.strappend(client, gs(key), gs("\"foo\"")).get());
         jsonStr = Json.get(client, key, new String[] {"."}).get();
         assertEquals("\"hifoo\"", jsonStr);
     }
@@ -629,7 +629,7 @@ public class JsonTests {
         assertEquals(3L, (Long) Json.strlen(client, gs(key), gs("a")).get());
 
         // Binary no path
-        assertEquals("OK", Json.set(client, key, "$", "'\"hi\"'").get());
+        assertEquals("OK", Json.set(client, key, "$", "\"hi\"").get());
         assertEquals(2L, Json.strlen(client, gs(key)).get());
     }
 
