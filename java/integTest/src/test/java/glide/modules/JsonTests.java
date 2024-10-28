@@ -293,6 +293,31 @@ public class JsonTests {
 
     @Test
     @SneakyThrows
+    public void debug() {
+        String key = UUID.randomUUID().toString();
+
+        var doc =
+                "{ \"key1\": 1, \"key2\": 3.5, \"key3\": {\"nested_key\": {\"key1\": [4, 5]}}, \"key4\":"
+                        + " [1, 2, 3], \"key5\": 0, \"key6\": \"hello\", \"key7\": null, \"key8\":"
+                        + " {\"nested_key\": {\"key1\": 3.5953862697246314e307}}, \"key9\":"
+                        + " 3.5953862697246314e307, \"key10\": true }";
+        assertEquals("OK", Json.set(client, key, "$", doc).get());
+
+        assertArrayEquals(new Object[] {1L}, (Object[]) Json.debugFields(client, key, "$.key1").get());
+
+        assertEquals(2L, Json.debugFields(client, gs(key), gs(".key3.nested_key.key1")).get());
+
+        assertArrayEquals(
+                new Object[] {16L}, (Object[]) Json.debugMemory(client, key, "$.key4[2]").get());
+
+        assertEquals(16L, Json.debugMemory(client, gs(key), gs(".key6")).get());
+
+        assertEquals(504L, Json.debugMemory(client, key).get());
+        assertEquals(19L, Json.debugFields(client, gs(key)).get());
+    }
+
+    @Test
+    @SneakyThrows
     public void arrlen() {
         String key = UUID.randomUUID().toString();
 
