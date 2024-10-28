@@ -380,7 +380,7 @@ public class JsonTests {
 
     @Test
     @SneakyThrows
-    void test_json_numincrby() {
+    void numincrby() {
         String key = UUID.randomUUID().toString();
 
         var jsonValue =
@@ -438,7 +438,7 @@ public class JsonTests {
 
         // Check for multiple path match in enhanced
         result = Json.numincrby(client, key, "$..key1", 1).get();
-        assertEquals("[12, null, 75]", result); // Expect null
+        assertEquals("[12,null,75]", result); // Expect null
 
         // Check for non existent path in JSONPath
         result = Json.numincrby(client, key, "$.key10", 51).get();
@@ -490,13 +490,13 @@ public class JsonTests {
         // Check for multiple path match in legacy and assure that the result of the last updated value
         // is returned
         result = Json.numincrby(client, key, "..key1", 1).get();
-        assertEquals("76L", result);
+        assertEquals("76", result);
 
         // Check if the rest of the key1 path matches were updated and not only the last value
         result = Json.get(client, key, new String[] {"$..key1"}).get();
         assertEquals(
-                result,
-                "[0.0,[16,17],76]"); // First is 0 as 0 + 0 = 0, Second doesn't change as its an array type
+                "[0,[16,17],76]",
+                result); // First is 0 as 0 + 0 = 0, Second doesn't change as its an array type
         // (non-numeric), third is 76 as 0 + 76 = 0
 
         // Check for non existent path in legacy
@@ -515,16 +515,16 @@ public class JsonTests {
         // Binary tests
         // Binary integer test
         GlideString binaryResult = Json.numincrby(client, gs(key), gs("key4[1]"), 1).get();
-        assertEquals("10", result); // Expect 9 + 1 = 10
+        assertEquals(gs("10"), binaryResult); // Expect 9 + 1 = 10
 
         // Binary float test
         binaryResult = Json.numincrby(client, gs(key), gs("key5"), 1.0).get();
-        assertEquals("26.43", result); // Expect 25.43 + 1.0 = 26.43
+        assertEquals(gs("26.43"), binaryResult); // Expect 25.43 + 1.0 = 26.43
     }
 
     @Test
     @SneakyThrows
-    void test_json_nummultby() {
+    void nummultby() {
         String key = UUID.randomUUID().toString();
         var jsonValue =
                 "{"
@@ -666,11 +666,11 @@ public class JsonTests {
         // Binary tests
         // Binary integer test
         GlideString binaryResult = Json.nummultby(client, gs(key), gs("key4[1]"), 1).get();
-        assertEquals("10", binaryResult); // Expect 10 * 1 = 10
+        assertEquals(gs("10"), binaryResult); // Expect 10 * 1 = 10
 
         // Binary float test
         binaryResult = Json.nummultby(client, gs(key), gs("key5"), 10.2).get();
-        assertEquals("0", binaryResult); // Expect 0 * 10.2 = 0
+        assertEquals(gs("0"), binaryResult); // Expect 0 * 10.2 = 0
     }
 
     @Test
