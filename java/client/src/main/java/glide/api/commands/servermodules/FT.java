@@ -714,13 +714,13 @@ public class FT {
      * @return A <code>String</code> representing the execution plan.
      * @example
      *     <pre>{@code
-     * var result = FT.explain(client, "myIndex", "@price:[0 10]").get();
-     * assertEquals(result, "Field {\n\tprice\n\t0\n\t10\n}");
+     * String result = FT.explain(client, "myIndex", "@price:[0 10]").get();
+     * assert result.equals("Field {\n\tprice\n\t0\n\t10\n}");
      * }</pre>
      */
     public static CompletableFuture<String> explain(
             @NonNull BaseClient client, @NonNull String indexName, @NonNull String query) {
-        var args = concatenateArrays(new GlideString[] {gs("FT.EXPLAIN"), gs(indexName), gs(query)});
+        GlideString[] args = {gs("FT.EXPLAIN"), gs(indexName), gs(query)};
         return FT.<GlideString>executeCommand(client, args, false).thenApply(GlideString::toString);
     }
 
@@ -735,14 +735,13 @@ public class FT {
      * @return A <code>GlideString</code> representing the execution plan.
      * @example
      *     <pre>{@code
-     * var result = FT.explain(client, gs("myIndex"), gs("@price:[0 10]")).get();
-     * result = result.toString();
-     * assertEquals(result, "Field {\n\tprice\n\t0\n\t10\n}");
+     * GlideString result = FT.explain(client, gs("myIndex"), gs("@price:[0 10]")).get();
+     * assert result.equals("Field {\n\tprice\n\t0\n\t10\n}");
      * }</pre>
      */
     public static CompletableFuture<GlideString> explain(
             @NonNull BaseClient client, @NonNull GlideString indexName, @NonNull GlideString query) {
-        var args = concatenateArrays(new GlideString[] {gs("FT.EXPLAIN"), indexName, query});
+        GlideString[] args = {gs("FT.EXPLAIN"), indexName, query};
         return executeCommand(client, args, false);
     }
 
@@ -759,12 +758,12 @@ public class FT {
      * @example
      *     <pre>{@code
      * var result = FT.explaincli(client, "myIndex",  "@price:[0 10]").get();
-     * assertArrayEquals(result, new String[]{
-     * "Field {",
-     * "  price",
-     * "  0",
-     * "  10",
-     * "}"
+     * assert result.equals(new String[]{
+     *   "Field {",
+     *   "  price",
+     *   "  0",
+     *   "  10",
+     *   "}"
      * });
      * }</pre>
      */
@@ -788,25 +787,20 @@ public class FT {
      * @example
      *     <pre>{@code
      * var result = FT.explaincli(client, "myIndex",  "@price:[0 10]").get();
-     * assertArrayEquals(result, new GlideString[]{
-     * "Field {",
-     * "  price",
-     * "  0",
-     * "  10",
-     * "}"
+     * assert result.equals(new GlideString[]{
+     *   "Field {",
+     *   "  price",
+     *   "  0",
+     *   "  10",
+     *   "}"
      * });
      * }</pre>
      */
     public static CompletableFuture<GlideString[]> explaincli(
             @NonNull BaseClient client, @NonNull GlideString indexName, @NonNull GlideString query) {
-        var args = concatenateArrays(new GlideString[] {gs("FT.EXPLAINCLI"), indexName, query});
-        CompletableFuture<GlideString[]> result =
-                ((GlideClusterClient) client)
-                        .customCommand(args)
-                        .thenApply(ClusterValue::getSingleValue)
-                        .thenApply(ret -> (Object[]) ret)
-                        .thenApply(ret -> castArray(ret, GlideString.class));
-        return result;
+        GlideString[] args = new GlideString[] {gs("FT.EXPLAINCLI"), indexName, query};
+        return FT.<Object[]>executeCommand(client, args, false)
+                .thenApply(ret -> castArray(ret, GlideString.class));
     }
 
     /**

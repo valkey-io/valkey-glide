@@ -38,7 +38,6 @@ import glide.api.models.commands.FT.FTSearchOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.exceptions.RequestException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -851,9 +850,8 @@ public class VectorSearchTests {
         assertTrue((resultGS).toString().contains("10"));
 
         // search query that returns all data.
-        resultGS = FT.explain(client, gs(indexName), gs("*")).get();
-        result = resultGS.toString();
-        assertTrue(result.contains("*"));
+        GlideString resultGSAllData = FT.explain(client, gs(indexName), gs("*")).get();
+        assertTrue(resultGSAllData.toString().contains("*"));
 
         assertEquals(OK, FT.dropindex(client, indexName).get());
 
@@ -893,14 +891,14 @@ public class VectorSearchTests {
         assertTrue((resultListGS).contains("0"));
         assertTrue((resultListGS).contains("10"));
 
-        List<String> resultListGS2 = new ArrayList<>();
-
         // search query that returns all data.
-        resultGS = FT.explaincli(client, gs(indexName), gs("*")).get();
-        for (GlideString r : resultGS) {
-            resultListGS2.add(r.toString().trim()); // trim to remove any excess white space
-        }
-        assertTrue((resultListGS2).contains("*"));
+        GlideString[] resultGSAllData = FT.explaincli(client, gs(indexName), gs("*")).get();
+        List<String> resultListGSAllData =
+                Arrays.stream(resultGSAllData)
+                        .map(GlideString::toString)
+                        .map(String::trim)
+                        .collect(Collectors.toList());
+        assertTrue((resultListGSAllData).contains("*"));
 
         assertEquals(OK, FT.dropindex(client, indexName).get());
 
@@ -913,8 +911,7 @@ public class VectorSearchTests {
         assertTrue(exception.getMessage().contains("Index not found"));
     }
 
-    @SneakyThrows
-    public void createIndexHelper(String indexName) {
+    private void createIndexHelper(String indexName) throws ExecutionException, InterruptedException {
         FieldInfo numericField = new FieldInfo("price", new NumericField());
         FieldInfo textField = new FieldInfo("title", new TextField());
 
