@@ -599,9 +599,9 @@ async def objlen(
         >>> await json.objlen(client, "doc", ".b")
             3  # Returns the length of the nested object at path '.b', which has 3 keys.
         >>> await json.objlen(client, "doc", "$..a")
-            2  # Returns the number of key-value pairs for the object matching the path '$..a', which has 2 keys: 'x' and 'y'.
+            [None, 2] 
         >>> await json.objlen(client, "doc")
-            [None, 2]  # Returns the number of key-value pairs for the object matching the path '.', which has 2 keys: 'a' and 'b'.
+            2  # Returns the number of key-value pairs for the object matching the path '.', which has 2 keys: 'a' and 'b'.
     """
     args = ["JSON.OBJLEN", key]
     if path:
