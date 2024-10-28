@@ -14,13 +14,6 @@ class FtAggregateClause(ABC):
     Abstract base class for the FT.AGGREGATE command clauses.
     """
 
-    @abstractmethod
-    def __init__(self):
-        """
-        Initialize a new FtAggregateClause instance.
-        """
-        pass
-
     def toArgs(self) -> List[TEncodable]:
         """
         Get the arguments for the clause of the FT.AGGREGATE command.
@@ -45,7 +38,6 @@ class FtAggregateLimit(FtAggregateClause):
             offset (int): Starting point from which the records have to be retained.
             count (int): The total number of records to be retained.
         """
-        super().__init__()
         self.offset = offset
         self.count = count
 
@@ -73,7 +65,6 @@ class Filter(FtAggregateClause):
         Args:
             expression (TEncodable): The expression to filter the results.
         """
-        super().__init__()
         self.expression = expression
 
     def toArgs(self) -> List[TEncodable]:
@@ -142,7 +133,6 @@ class GroupBy(FtAggregateClause):
             properties (List[TEncodable]): The list of properties to be used for grouping the results in the pipeline.
             reducers (Optional[List[Reducer]]): The list of functions that handles the group entries by performing multiple aggregate operations.
         """
-        super().__init__()
         self.properties = properties
         self.reducers = reducers
 
@@ -222,7 +212,6 @@ class SortBy(FtAggregateClause):
             properties (List[SortByProperty]): A list of sorting parameters for the sort operation.
             max: (Optional[int]): The MAX value for optimizing the sorting, by sorting only for the n-largest elements.
         """
-        super().__init__()
         self.properties = properties
         self.max = max
 
@@ -257,7 +246,6 @@ class Apply(FtAggregateClause):
             expression (TEncodable): The expression to be transformed.
             name (TEncodable): The new property name to store the result of apply. This name can be referenced by further APPLY/SORTBY/GROUPBY/REDUCE operations down the pipeline.
         """
-        super().__init__()
         self.expression = expression
         self.name = name
 
