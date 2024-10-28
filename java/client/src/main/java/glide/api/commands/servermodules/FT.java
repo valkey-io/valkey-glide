@@ -709,24 +709,19 @@ public class FT {
      * @param client The client to execute the command.
      * @param indexName The index name to search into.
      * @param query The text query to search. It is the same as the query passed as an argument to
-     *     {@link FT#search(BaseClient, String, String)}.
+     *     {@link FT#search(BaseClient, String, String)} and {@link FT#aggregate(BaseClient, String,
+     *     String)}.
      * @return A <code>String</code> representing the execution plan.
      * @example
      *     <pre>{@code
-     * FT.explain(client, "myIndex", "@price:[0 10]").get();
-     * // the result can look like (the result is a string):
-     * //  Field {
-     * //    price
-     * //    0
-     * //    10
-     * // }
+     * var result = FT.explain(client, "myIndex", "@price:[0 10]").get();
+     * assertEquals(result, "Field {\n\tprice\n\t0\n\t10\n}");
      * }</pre>
      */
     public static CompletableFuture<String> explain(
             @NonNull BaseClient client, @NonNull String indexName, @NonNull String query) {
         var args = concatenateArrays(new GlideString[] {gs("FT.EXPLAIN"), gs(indexName), gs(query)});
-        return executeCommand(client, args, false)
-                .thenApply(result -> ((GlideString) result).toString());
+        return FT.<GlideString>executeCommand(client, args, false).thenApply(GlideString::toString);
     }
 
     /**
@@ -735,17 +730,14 @@ public class FT {
      * @param client The client to execute the command.
      * @param indexName The index name to search into.
      * @param query The text query to search. It is the same as the query passed as an argument to
-     *     {@link FT#search(BaseClient, String, String)}.
+     *     {@link FT#search(BaseClient, GlideString, GlideString)} and {@link FT#aggregate(BaseClient,
+     *     GlideString, GlideString)}.
      * @return A <code>GlideString</code> representing the execution plan.
      * @example
      *     <pre>{@code
-     * FT.explain(client, "myIndex", "@price:[0 10]").get();
-     * // the result can look like (the result is a string):
-     * //  Field {
-     * //    price
-     * //    0
-     * //    10
-     * // }
+     * var result = FT.explain(client, gs("myIndex"), gs("@price:[0 10]")).get();
+     * result = result.toString();
+     * assertEquals(result, "Field {\n\tprice\n\t0\n\t10\n}");
      * }</pre>
      */
     public static CompletableFuture<GlideString> explain(
@@ -756,49 +748,53 @@ public class FT {
 
     /**
      * Same as the {@link FT#explain(BaseClient, String, String)} except that the results are
-     * displayed in a different format. More useful with cli.
+     * displayed in a different format.
      *
      * @param client The client to execute the command.
      * @param indexName The index name to search into.
      * @param query The text query to search. It is the same as the query passed as an argument to
-     *     {@link FT#search(BaseClient, String, String)}.
-     * @return A <code>String[[</code> representing the execution plan.
+     *     {@link FT#search(BaseClient, String, String)} and {@link FT#aggregate(BaseClient, String,
+     *     String)}.
+     * @return A <code>String[]</code> representing the execution plan.
      * @example
      *     <pre>{@code
-     * FT.explaincli(client, "myIndex",  "@price:[0 10]").get();
-     * // the output can look like this (the result is an array)
-     * //  Field {
-     * //    price
-     * //    0
-     * //    10
-     * // }
+     * var result = FT.explaincli(client, "myIndex",  "@price:[0 10]").get();
+     * assertArrayEquals(result, new String[]{
+     * "Field {",
+     * "  price",
+     * "  0",
+     * "  10",
+     * "}"
+     * });
      * }</pre>
      */
     public static CompletableFuture<String[]> explaincli(
             @NonNull BaseClient client, @NonNull String indexName, @NonNull String query) {
         CompletableFuture<GlideString[]> result = explaincli(client, gs(indexName), gs(query));
         return result.thenApply(
-                ret -> Arrays.stream(ret).map(e -> e.getString()).toArray(String[]::new));
+                ret -> Arrays.stream(ret).map(GlideString::toString).toArray(String[]::new));
     }
 
     /**
      * Same as the {@link FT#explain(BaseClient, String, String)} except that the results are
-     * displayed in a different format. More useful with cli.
+     * displayed in a different format.
      *
      * @param client The client to execute the command.
      * @param indexName The index name to search into.
      * @param query The text query to search. It is the same as the query passed as an argument to
-     *     {@link FT#search(BaseClient, String, String)}.
+     *     {@link FT#search(BaseClient, GlideString, GlideString)} and {@link FT#aggregate(BaseClient,
+     *     GlideString, GlideString)}.
      * @return A <code>GlideString[]</code> representing the execution plan.
      * @example
      *     <pre>{@code
-     * FT.explaincli(client, "myIndex",  "@price:[0 10]").get();
-     * // the output can look like this (the result is an array)
-     * //  Field {
-     * //    price
-     * //    0
-     * //    10
-     * // }
+     * var result = FT.explaincli(client, "myIndex",  "@price:[0 10]").get();
+     * assertArrayEquals(result, new GlideString[]{
+     * "Field {",
+     * "  price",
+     * "  0",
+     * "  10",
+     * "}"
+     * });
      * }</pre>
      */
     public static CompletableFuture<GlideString[]> explaincli(
