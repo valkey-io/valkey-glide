@@ -305,5 +305,5 @@ async def aggregate(
     """
     args: List[TEncodable] = [CommandNames.FT_AGGREGATE, indexName, query]
     if options:
-        args.extend(options.toArgs())
+        args.extend(options.to_args())
     return cast(List[Mapping[TEncodable, Any]], await client.custom_command(args))

@@ -13,8 +13,8 @@ class FtAggregateClause(ABC):
     """
     Abstract base class for the FT.AGGREGATE command clauses.
     """
-
-    def toArgs(self) -> List[TEncodable]:
+    @abstractmethod
+    def to_args(self) -> List[TEncodable]:
         """
         Get the arguments for the clause of the FT.AGGREGATE command.
 
@@ -41,14 +41,14 @@ class FtAggregateLimit(FtAggregateClause):
         self.offset = offset
         self.count = count
 
-    def toArgs(self) -> List[TEncodable]:
+    def to_args(self) -> List[TEncodable]:
         """
         Get the arguments for the Limit clause.
 
         Returns:
             List[TEncodable]: A list of Limit clause arguments.
         """
-        args = super().toArgs()
+        args = super().to_args()
         args.extend([FtAggregateKeywords.LIMIT, str(self.offset), str(self.count)])
         return args
 
@@ -67,14 +67,14 @@ class Filter(FtAggregateClause):
         """
         self.expression = expression
 
-    def toArgs(self) -> List[TEncodable]:
+    def to_args(self) -> List[TEncodable]:
         """
         Get the arguments for the Filter clause.
 
         Returns:
             List[TEncodable]: A list arguments for the filter clause.
         """
-        args = super().toArgs()
+        args = super().to_args()
         args.extend([FtAggregateKeywords.FILTER, self.expression])
         return args
 
@@ -102,17 +102,14 @@ class Reducer:
         self.args = args
         self.name = name
 
-    def toArgs(self) -> List[TEncodable]:
+    def to_args(self) -> List[TEncodable]:
         """
         Get the arguments for the Reducer.
 
         Returns:
             List[TEncodable]: A list of arguments for the reducer.
         """
-        args: List[TEncodable] = [FtAggregateKeywords.REDUCE, self.function]
-        args.append(str(len(self.args)))
-        if self.args:
-            args.extend(self.args)
+        args: List[TEncodable] = [FtAggregateKeywords.REDUCE, self.function, str(len(self.args))] + self.args
         if self.name:
             args.extend([FtAggregateKeywords.AS, self.name])
         return args
@@ -136,7 +133,7 @@ class GroupBy(FtAggregateClause):
         self.properties = properties
         self.reducers = reducers
 
-    def toArgs(self) -> List[TEncodable]:
+    def to_args(self) -> List[TEncodable]:
         """
         Get the arguments for the GroupBy clause.
 
@@ -144,14 +141,11 @@ class GroupBy(FtAggregateClause):
             List[TEncodable]: A list arguments for GroupBy clause.
         """
 
-        args = super().toArgs()
-        args.append(FtAggregateKeywords.GROUPBY)
-        if self.properties:
-            args.append(str(len(self.properties)))
-            args.extend(self.properties)
+        args = super().to_args()
+        args.extend([FtAggregateKeywords.GROUPBY, str(len(self.properties))] + [self.properties])
         if self.reducers:
             for reducer in self.reducers:
-                args.extend(reducer.toArgs())
+                args.extend(reducer.to_args())
         return args
 
 
@@ -186,7 +180,7 @@ class SortByProperty:
         self.property = property
         self.order = order
 
-    def toArgs(self) -> List[TEncodable]:
+    def to_args(self) -> List[TEncodable]:
         """
         Get the arguments for the SortBy clause property.
 
@@ -194,9 +188,7 @@ class SortByProperty:
             List[TEncodable]: A list of arguments for the SortBy clause property.
         """
         args: List[TEncodable] = []
-        args.append(self.property)
-        args.append(self.order.value)
-        return args
+        return [self.property, self.order.value]
 
 
 class SortBy(FtAggregateClause):
@@ -215,19 +207,17 @@ class SortBy(FtAggregateClause):
         self.properties = properties
         self.max = max
 
-    def toArgs(self) -> List[TEncodable]:
+    def to_args(self) -> List[TEncodable]:
         """
         Get the arguments for the SortBy clause.
 
         Returns:
             List[TEncodable]: A list of arguments for the SortBy clause.
         """
-        args = super().toArgs()
-        args.append(FtAggregateKeywords.SORTBY)
-        if self.properties:
-            args.append(str(len(self.properties) * 2))
-            for property in self.properties:
-                args.extend(property.toArgs())
+        args = super().to_args()
+        args.extend([FtAggregateKeywords.SORTBY, str(len(self.properties) * 2)])
+        for property in self.properties:
+            args.extend(property.to_args())
         if self.max:
             args.extend([FtAggregateKeywords.MAX, str(self.max)])
         return args
@@ -249,14 +239,14 @@ class Apply(FtAggregateClause):
         self.expression = expression
         self.name = name
 
-    def toArgs(self) -> List[TEncodable]:
+    def to_args(self) -> List[TEncodable]:
         """
         Get the arguments for the Apply clause.
 
         Returns:
             List[TEncodable]: A list of arguments for the Apply clause.
         """
-        args = super().toArgs()
+        args = super().to_args()
         args.extend(
             [
                 FtAggregateKeywords.APPLY,
@@ -297,7 +287,7 @@ class FtAggregateOptions:
         self.params = params
         self.clauses = clauses
 
-    def toArgs(self) -> List[TEncodable]:
+    def to_args(self) -> List[TEncodable]:
         """
         Get the optional arguments for the FT.AGGREGATE command.
 
@@ -318,5 +308,5 @@ class FtAggregateOptions:
                 args.extend([name, value])
         if self.clauses:
             for clause in self.clauses:
-                args.extend(clause.toArgs())
+                args.extend(clause.to_args())
         return args
