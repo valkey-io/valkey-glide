@@ -34,9 +34,8 @@ import {
     convertStringArrayToBuffer,
     createLongRunningLuaScript,
     createLuaLibWithLongRunningFunction,
-    DumpAndRestureTest,
+    DumpAndRestoreTest,
     encodableTransactionTest,
-    encodedTransactionTest,
     flushAndCloseClient,
     generateLuaLibCode,
     getClientConfigurationOption,
@@ -257,42 +256,40 @@ describe("GlideClient", () => {
         },
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `can send transactions_%p`,
-        async (protocol) => {
-            client = await GlideClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
-            );
-            const transaction = new Transaction();
-            const expectedRes = await transactionTest(
-                transaction,
-                cluster.getVersion(),
-            );
-            transaction.select(0);
-            const result = await client.exec(transaction);
-            expectedRes.push(["select(0)", "OK"]);
+    describe.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "Protocol is RESP2 = %s",
+        (protocol) => {
+            describe.each([Decoder.String, Decoder.Bytes])(
+                "Decoder String = %s",
+                (decoder) => {
+                    it(
+                        "can send transactions",
+                        async () => {
+                            client = await GlideClient.createClient(
+                                getClientConfigurationOption(
+                                    cluster.getAddresses(),
+                                    protocol,
+                                ),
+                            );
+                            const transaction = new Transaction();
+                            const expectedRes = await transactionTest(
+                                transaction,
+                                cluster.getVersion(),
+                                decoder,
+                            );
+                            transaction.select(0);
+                            const result = await client.exec(transaction, {
+                                decoder: Decoder.String,
+                            });
+                            expectedRes.push(["select(0)", "OK"]);
 
-            validateTransactionResponse(result, expectedRes);
-            client.close();
-        },
-    );
-
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `can get Bytes decoded transactions_%p`,
-        async (protocol) => {
-            client = await GlideClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
+                            validateTransactionResponse(result, expectedRes);
+                            client.close();
+                        },
+                        TIMEOUT,
+                    );
+                },
             );
-            const transaction = new Transaction();
-            const expectedRes = await encodedTransactionTest(transaction);
-            transaction.select(0);
-            const result = await client.exec(transaction, {
-                decoder: Decoder.Bytes,
-            });
-            expectedRes.push(["select(0)", "OK"]);
-
-            validateTransactionResponse(result, expectedRes);
-            client.close();
         },
     );
 
@@ -303,7 +300,7 @@ describe("GlideClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const bytesTransaction = new Transaction();
-            const expectedBytesRes = await DumpAndRestureTest(
+            const expectedBytesRes = await DumpAndRestoreTest(
                 bytesTransaction,
                 Buffer.from("value"),
             );
@@ -316,7 +313,7 @@ describe("GlideClient", () => {
             validateTransactionResponse(result, expectedBytesRes);
 
             const stringTransaction = new Transaction();
-            await DumpAndRestureTest(stringTransaction, "value");
+            await DumpAndRestoreTest(stringTransaction, "value");
             stringTransaction.select(0);
 
             // Since DUMP gets binary results, we cannot use the string decoder here, so we expected to get an error.
