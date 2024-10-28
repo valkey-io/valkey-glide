@@ -348,22 +348,23 @@ class TestFt:
             ),
         )
         assert await ft.dropindex(glide_client, indexName=indexBicycles) == OK
-        if protocol == ProtocolVersion.RESP2:
-            for e in result:
-                if e.get(b"condition") == b"new":
-                    assert e.get(b"bicycles") == b"5"
-                elif e.get(b"condition") == b"refurbished":
-                    assert e.get(b"bicycles") == b"1"
-                elif e.get(b"condition") == b"used":
-                    assert e.get(b"bicycles") == b"4"
-        elif protocol == ProtocolVersion.RESP3:
-            for e in result:
-                if e.get(b"condition") == b"new":
-                    assert cast(float, e.get(b"bicycles")) == 5.0
-                elif e.get(b"condition") == b"refurbished":
-                    assert cast(float, e.get(b"bicycles")) == 1.0
-                elif e.get(b"condition") == b"used":
-                    assert cast(float, e.get(b"bicycles")) == 4.0
+
+        resultSet = set(result)
+        expectedResultSet = [
+            {
+                b"condition": b"refurbished",
+                b"bicycles": b"1" if (protocol == ProtocolVersion.RESP2) else 1.0,
+            },
+            {
+                b"condition": b"new",
+                b"bicycles": b"5" if (protocol == ProtocolVersion.RESP2) else 5.0,
+            },
+            {
+                b"condition": b"used",
+                b"bicycles": b"4" if (protocol == ProtocolVersion.RESP2) else 4.0,
+            },
+        ]
+        assert resultSet == expectedResultSet
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -414,6 +415,7 @@ class TestFt:
                 ],
             ),
         )
+        resultSet = set(result)
         assert await ft.dropindex(glide_client, indexName=indexMovies) == OK
 
         if protocol == ProtocolVersion.RESP2:

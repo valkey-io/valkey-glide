@@ -13,6 +13,7 @@ class FtAggregateClause(ABC):
     """
     Abstract base class for the FT.AGGREGATE command clauses.
     """
+
     @abstractmethod
     def to_args(self) -> List[TEncodable]:
         """
@@ -48,9 +49,7 @@ class FtAggregateLimit(FtAggregateClause):
         Returns:
             List[TEncodable]: A list of Limit clause arguments.
         """
-        args = super().to_args()
-        args.extend([FtAggregateKeywords.LIMIT, str(self.offset), str(self.count)])
-        return args
+        return [FtAggregateKeywords.LIMIT, str(self.offset), str(self.count)]
 
 
 class Filter(FtAggregateClause):
@@ -74,9 +73,7 @@ class Filter(FtAggregateClause):
         Returns:
             List[TEncodable]: A list arguments for the filter clause.
         """
-        args = super().to_args()
-        args.extend([FtAggregateKeywords.FILTER, self.expression])
-        return args
+        return [FtAggregateKeywords.FILTER, self.expression]
 
 
 class Reducer:
@@ -109,7 +106,11 @@ class Reducer:
         Returns:
             List[TEncodable]: A list of arguments for the reducer.
         """
-        args: List[TEncodable] = [FtAggregateKeywords.REDUCE, self.function, str(len(self.args))] + self.args
+        args: List[TEncodable] = [
+            FtAggregateKeywords.REDUCE,
+            self.function,
+            str(len(self.args)),
+        ] + self.args
         if self.name:
             args.extend([FtAggregateKeywords.AS, self.name])
         return args
@@ -120,29 +121,21 @@ class GroupBy(FtAggregateClause):
     A clause for grouping the results in the pipeline based on one or more properties.
     """
 
-    def __init__(
-        self, properties: List[TEncodable], reducers: Optional[List[Reducer]] = None
-    ):
+    def __init__(self, properties: List[TEncodable], reducers: List[Reducer]):
         """
         Initialize a new GroupBy instance.
 
         Args:
             properties (List[TEncodable]): The list of properties to be used for grouping the results in the pipeline.
-            reducers (Optional[List[Reducer]]): The list of functions that handles the group entries by performing multiple aggregate operations.
+            reducers (List[Reducer]): The list of functions that handles the group entries by performing multiple aggregate operations.
         """
         self.properties = properties
         self.reducers = reducers
 
     def to_args(self) -> List[TEncodable]:
-        """
-        Get the arguments for the GroupBy clause.
-
-        Returns:
-            List[TEncodable]: A list arguments for GroupBy clause.
-        """
-
-        args = super().to_args()
-        args.extend([FtAggregateKeywords.GROUPBY, str(len(self.properties))] + [self.properties])
+        args = [FtAggregateKeywords.GROUPBY, str(len(self.properties))] + [
+            self.properties
+        ]
         if self.reducers:
             for reducer in self.reducers:
                 args.extend(reducer.to_args())
@@ -187,7 +180,6 @@ class SortByProperty:
         Returns:
             List[TEncodable]: A list of arguments for the SortBy clause property.
         """
-        args: List[TEncodable] = []
         return [self.property, self.order.value]
 
 
@@ -214,8 +206,7 @@ class SortBy(FtAggregateClause):
         Returns:
             List[TEncodable]: A list of arguments for the SortBy clause.
         """
-        args = super().to_args()
-        args.extend([FtAggregateKeywords.SORTBY, str(len(self.properties) * 2)])
+        args = [FtAggregateKeywords.SORTBY, str(len(self.properties) * 2)]
         for property in self.properties:
             args.extend(property.to_args())
         if self.max:
@@ -246,16 +237,12 @@ class Apply(FtAggregateClause):
         Returns:
             List[TEncodable]: A list of arguments for the Apply clause.
         """
-        args = super().to_args()
-        args.extend(
-            [
-                FtAggregateKeywords.APPLY,
-                self.expression,
-                FtAggregateKeywords.AS,
-                self.name,
-            ]
-        )
-        return args
+        return [
+            FtAggregateKeywords.APPLY,
+            self.expression,
+            FtAggregateKeywords.AS,
+            self.name,
+        ]
 
 
 class FtAggregateOptions:

@@ -296,9 +296,8 @@ async def aggregate(
         options (Optional[FtAggregateOptions]): The optional arguments for the command.
     Returns:
         List[Mapping[TEncodable, Any]]: An array containing a mapping of field name and associated value as returned after the last stage of the command.
+
     Examples:
-        For this example to work ensure that the test data is setup.
-        You can get the test data from the `/python/python/tests/tests_server_modules/test_ft.py` file containing the test cases for FT.AGGREGATE command.
         >>> from glide import ft
         >>> result = await ft.aggregate(glide_client, myIndex"", "*", FtAggregateOptions(loadFields=["__key"], clauses=[GroupBy(["@condition"], [Reducer("COUNT", [], "bicycles")])]))
             [{b'condition': b'refurbished', b'bicycles': b'1'}, {b'condition': b'new', b'bicycles': b'5'}, {b'condition': b'used', b'bicycles': b'4'}]
