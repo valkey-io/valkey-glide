@@ -269,7 +269,42 @@ export class GlideFt {
             >
         ).then(convertGlideRecordToRecord);
     }
-}
+
+    static async search(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        query: GlideString,
+        options?: {
+            returnFields?: {fieldIdentifier: GlideString, alias?: GlideString}[],
+            timeout?: number,
+            params?: GlideRecord<GlideString>,
+            limit?: {offset: number, count: number},
+            count?: boolean,
+        },
+    ): Promise<(GlideString | number)[]> {
+        const args: GlideString[] = ["FT.CREATE", indexName, query];
+
+        if (options) {
+            if (options.returnFields) {
+                args.push("RETURN");
+                options.returnFields.forEach(returnField => returnField.alias ? args.push(returnField.fieldIdentifier, "AS", returnField.alias) : args.push(returnField.fieldIdentifier));
+                args.push(options.returnFields.length.toString());
+            }
+
+            if (options.timeout) {
+                args.push("TIMEOUT", options.timeout.toString());
+            }
+
+            if (options.params) {
+                args.push("PARAMS");
+
+            }
+        }
+
+        return _handleCustomCommand(client, args, {
+            decoder: Decoder.String,
+        }) as Promise<(GlideString | number)[]>;
+    }
 
 /**
  * @internal
