@@ -348,8 +348,9 @@ class TestFt:
             ),
         )
         assert await ft.dropindex(glide_client, indexName=indexBicycles) == OK
-        resultSet = set(result)
-        expectedResultSet = set(
+        sortedResult = sorted(result, key=lambda x: (x[b"condition"], x[b"bicycles"]))
+
+        expectedResult = sorted(
             [
                 {
                     b"condition": b"refurbished",
@@ -363,12 +364,9 @@ class TestFt:
                     b"condition": b"used",
                     b"bicycles": b"4" if (protocol == ProtocolVersion.RESP2) else 4.0,
                 },
-            ]
+            ], key = lambda x: (x[b"condition"], x[b"bicycles"])
         )
-
-        print("result ===")
-        print(resultSet)
-        assert resultSet == expectedResultSet
+        assert sortedResult == expectedResult
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -420,10 +418,8 @@ class TestFt:
             ),
         )
         assert await ft.dropindex(glide_client, indexName=indexMovies) == OK
-        resultSet = set(result)
-        print("result ===")
-        print(resultSet)
-        expectedResultSet = set(
+        sortedResult = sorted(result, key=lambda x: (x[b"genre"], x[b"nb_of_movies"], x[b"nb_of_votes"], x[b"avg_rating"]))
+        expectedResultSet = sorted(
             [
                 {
                     b"genre": b"Drama",
@@ -457,9 +453,9 @@ class TestFt:
                     ),
                     b"avg_rating": b"9" if (protocol == ProtocolVersion.RESP2) else 9.0,
                 },
-            ]
+            ], key=lambda x: (x[b"genre"], x[b"nb_of_movies"], x[b"nb_of_votes"], x[b"avg_rating"]) 
         )
-        assert expectedResultSet == resultSet
+        assert expectedResultSet == sortedResult
 
     async def _create_index_for_ft_aggregate_with_bicycles_data(
         self, glide_client: GlideClusterClient, index_name: TEncodable, prefix
