@@ -743,6 +743,11 @@ describe("Server Module Tests", () => {
                         path: "$",
                     }),
                 ).toBeNull();
+                expect(
+                    await GlideJson.strlen(client, key, {
+                        path: "$.non_existing_path",
+                    }),
+                ).toEqual([]);
 
                 // error case
                 await expect(
@@ -751,16 +756,6 @@ describe("Server Module Tests", () => {
                 await expect(GlideJson.strlen(client, key)).rejects.toThrow(
                     RequestError,
                 );
-                expect(
-                    await GlideJson.strlen(client, key, {
-                        path: "$.non_existing_path",
-                    }),
-                ).toEqual([]);
-                await expect(
-                    GlideJson.strlen(client, key, {
-                        path: "$.non_existing_path",
-                    }),
-                ).rejects.toThrow(RequestError);
             },
         );
     });
