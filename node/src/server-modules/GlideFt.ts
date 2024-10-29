@@ -218,39 +218,39 @@ export class GlideFt {
      * const info = await GlideFt.info(client, "myIndex");
      * console.log(info); // Output:
      * // {
-     * //     "index_name": "bcd97d68-4180-4bc5-98fe-5125d0abbcb8",
-     * //     "index_status": "AVAILABLE",
-     * //     "key_type": "JSON",
-     * //     "creation_timestamp": 1728348101728771,
-     * //     "key_prefixes": [ "json:" ],
-     * //     "num_indexed_vectors": 0,
-     * //     "space_usage": 653471,
-     * //     "num_docs": 0,
-     * //     "vector_space_usage": 653471,
-     * //     "index_degradation_percentage": 0,
-     * //     "fulltext_space_usage": 0,
-     * //     "current_lag": 0,
-     * //     "fields": [
+     * //     index_name: 'myIndex',
+     * //     index_status: 'AVAILABLE',
+     * //     key_type: 'JSON',
+     * //     creation_timestamp: 1728348101728771,
+     * //     key_prefixes: [ 'json:' ],
+     * //     num_indexed_vectors: 0,
+     * //     space_usage: 653471,
+     * //     num_docs: 0,
+     * //     vector_space_usage: 653471,
+     * //     index_degradation_percentage: 0,
+     * //     fulltext_space_usage: 0,
+     * //     current_lag: 0,
+     * //     fields: [
      * //         {
-     * //             "identifier": "$.vec",
-     * //             "type": "VECTOR",
-     * //             "field_name": "VEC",
-     * //             "option": """,
-     * //             "vector_params": {
-     * //                 "data_type": "FLOAT32",
-     * //                 "initial_capacity": 1000,
-     * //                 "current_capacity": 1000,
-     * //                 "distance_metric": "L2",
-     * //                 "dimension": 6,
-     * //                 "block_size": 1024,
-     * //                 "algorithm": "FLAT"
+     * //             identifier: '$.vec',
+     * //             type: 'VECTOR',
+     * //             field_name: 'VEC',
+     * //             option: '',
+     * //             vector_params: {
+     * //                 data_type: 'FLOAT32',
+     * //                 initial_capacity: 1000,
+     * //                 current_capacity: 1000,
+     * //                 distance_metric: 'L2',
+     * //                 dimension: 6,
+     * //                 block_size: 1024,
+     * //                 algorithm: 'FLAT'
      * //             }
      * //         },
      * //         {
-     * //             "identifier": "name",
-     * //             "type": "TEXT",
-     * //             "field_name": "name",
-     * //             "option": ""
+     * //             identifier: 'name',
+     * //             type: 'TEXT',
+     * //             field_name: 'name',
+     * //             option: ''
      * //         },
      * //     ]
      * // }
