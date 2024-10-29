@@ -1,4 +1,5 @@
 #### Changes
+* Python: Python: FT.AGGREGATE command added([#2530](https://github.com/valkey-io/valkey-glide/pull/2530))
 * Python: Add JSON.OBJLEN command ([#2495](https://github.com/valkey-io/valkey-glide/pull/2495))
 * Python: FT.EXPLAIN and FT.EXPLAINCLI commands added([#2508](https://github.com/valkey-io/valkey-glide/pull/2508))
 * Python: Python FT.INFO command added([#2429](https://github.com/valkey-io/valkey-glide/pull/2494))
