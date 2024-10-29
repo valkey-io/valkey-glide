@@ -1808,7 +1808,7 @@ public class CommandTests {
 
                 assertTrue(functionKilled);
             } finally {
-                waitForNotBusy(clusterClient);
+                waitForNotBusy(clusterClient::functionKill);
             }
         }
     }
@@ -1863,7 +1863,7 @@ public class CommandTests {
 
                 assertTrue(functionKilled);
             } finally {
-                waitForNotBusy(clusterClient);
+                waitForNotBusy(clusterClient::functionKill);
             }
         }
     }
@@ -1915,7 +1915,7 @@ public class CommandTests {
 
                 assertTrue(functionKilled);
             } finally {
-                waitForNotBusy(clusterClient);
+                waitForNotBusy(clusterClient::functionKill);
             }
         }
     }
@@ -1969,7 +1969,7 @@ public class CommandTests {
 
                 assertTrue(functionKilled);
             } finally {
-                waitForNotBusy(clusterClient);
+                waitForNotBusy(clusterClient::functionKill);
             }
         }
     }
@@ -3276,7 +3276,7 @@ public class CommandTests {
 
                 assertTrue(scriptKilled);
             } finally {
-                waitForNotBusy(clusterClient);
+                waitForNotBusy(clusterClient::scriptKill);
             }
         }
 
@@ -3297,7 +3297,7 @@ public class CommandTests {
         String key = UUID.randomUUID().toString();
         RequestRoutingConfiguration.Route route =
                 new RequestRoutingConfiguration.SlotKeyRoute(key, PRIMARY);
-        String code = createLongRunningLuaScript(5, false);
+        String code = createLongRunningLuaScript(6, false);
         Script script = new Script(code, false);
 
         CompletableFuture<Object> promise = new CompletableFuture<>();
