@@ -1077,7 +1077,7 @@ public class JsonTests {
         String key = UUID.randomUUID().toString();
         String jsonValue =
                 "{\"key1\": \"value1\", \"key2\": 2, \"key3\": [1, 2, 3], \"key4\": {\"nested_key\":"
-                        + " {\"key1\": [4, 5]}}, \"key5\": null, \"key6\": true}";
+                        + " {\"key1\": [4, 5]}}, \"key5\": null, \"key6\": true, \"dec_key\": 2.3}";
         assertEquals(OK, Json.set(client, key, "$", jsonValue).get());
 
         assertArrayEquals(new Object[] {"object"}, (Object[]) Json.type(client, key, "$").get());
@@ -1106,7 +1106,7 @@ public class JsonTests {
         // Check for all types in the JSON document using JSON Path
         Object[] actualResult = (Object[]) Json.type(client, key, "$[*]").get();
         Object[] expectedResult =
-                new Object[] {"string", "integer", "array", "object", "null", "boolean"};
+                new Object[] {"string", "integer", "array", "object", "null", "boolean", "number"};
         assertArrayEquals(expectedResult, actualResult);
         // Check for all types in the JSON document using legacy path
         assertEquals("string", Json.type(client, key, "[*]").get());
