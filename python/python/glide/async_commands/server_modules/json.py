@@ -309,7 +309,7 @@ async def arrtrim(
     end: int,
 ) -> TJsonResponse[int]:
     """
-    Trims an array at the specified `path` within the JSON document stored at `key` so that it becomes a subarray [start, end], both inclusive.›
+    Trims an array at the specified `path` within the JSON document stored at `key` so that it becomes a subarray [start, end], both inclusive.
     If `start` < 0, it is treated as 0.
     If `end` >= size (size of the array), it is treated as size-1.
     If `start` >= size or `start` > `end`, the array is emptied and 0 is returned.
@@ -412,7 +412,7 @@ async def debug_fields(
     client: TGlideClient,
     key: TEncodable,
     path: Optional[TEncodable] = None,
-) -> Optional[Union[int, List[int]]]:
+) -> Optional[TJsonUniversalResponse[int]]:
     """
     Returns the number of fields of the JSON value at the specified `path` within the JSON document stored at `key`.
     - **Primitive Values**: Each non-container JSON value (e.g., strings, numbers, booleans, and null) counts as one field.
@@ -429,7 +429,7 @@ async def debug_fields(
         path (Optional[TEncodable]): The path within the JSON document. Defaults to root if not provided.
 
     Returns:
-        Optional[Union[int, List[int]]]:
+        Optional[TJsonUniversalResponse[int]]:
             For JSONPath (`path` starts with `$`):
                 Returns an array of integers, each indicating the number of fields for each matched `path`.
                 If `path` doesn't exist, an empty array will be returned.
@@ -460,14 +460,16 @@ async def debug_fields(
     if path:
         args.append(path)
 
-    return cast(Optional[Union[int, List[int]]], await client.custom_command(args))
+    return cast(
+        Optional[TJsonUniversalResponse[int]], await client.custom_command(args)
+    )
 
 
 async def debug_memory(
     client: TGlideClient,
     key: TEncodable,
     path: Optional[TEncodable] = None,
-) -> Optional[Union[int, List[int]]]:
+) -> Optional[TJsonUniversalResponse[int]]:
     """
     Reports memory usage in bytes of a JSON value at the specified `path` within the JSON document stored at `key`.
 
@@ -477,7 +479,7 @@ async def debug_memory(
         path (Optional[TEncodable]): The path within the JSON document. Defaults to None.
 
     Returns:
-        Optional[Union[int, List[int]]]:
+        Optional[TJsonUniversalResponse[int]]:
             For JSONPath (`path` starts with `$`):
                 Returns an array of integers, indicating the memory usage in bytes of a JSON value for each matched `path`.
                 If `path` doesn't exist, an empty array will be returned.
@@ -506,7 +508,9 @@ async def debug_memory(
     if path:
         args.append(path)
 
-    return cast(Optional[Union[int, List[int]]], await client.custom_command(args))
+    return cast(
+        Optional[TJsonUniversalResponse[int]], await client.custom_command(args)
+    )
 
 
 async def delete(
@@ -612,7 +616,7 @@ async def numincrby(
         >>> from glide import json
         >>> await json.set(client, "doc", "$", '{"a": [], "b": [1], "c": [1, 2], "d": [1, 2, 3]}')
             'OK'
-        >>> await json.numincrby(client, "doc", "$.d[*]", 10)›
+        >>> await json.numincrby(client, "doc", "$.d[*]", 10)
             b'[11,12,13]'  # Increment each element in `d` array by 10.
         >>> await json.numincrby(client, "doc", ".c[1]", 10)
             b'12'  # Increment the second element in the `c` array by 10.
@@ -720,7 +724,7 @@ async def objkeys(
     client: TGlideClient,
     key: TEncodable,
     path: Optional[TEncodable] = None,
-) -> Optional[Union[List[bytes], List[List[bytes]]]]:
+) -> Optional[TJsonUniversalResponse[List[bytes]]]:
     """
     Retrieves key names in the object values at the specified `path` within the JSON document stored at `key`.
 
@@ -731,7 +735,7 @@ async def objkeys(
             Defaults to None.
 
     Returns:
-        Optional[Union[List[bytes], List[List[bytes]]]]:
+        Optional[TJsonUniversalResponse[List[bytes]]]:
             For JSONPath (`path` starts with `$`):
                 Returns a list of arrays containing key names for each matching object.
                 If a value matching the path is not an object, an empty array is returned.
@@ -761,6 +765,61 @@ async def objkeys(
         args.append(path)
     return cast(
         Optional[Union[List[bytes], List[List[bytes]]]],
+        await client.custom_command(args),
+    )
+
+
+async def resp(
+    client: TGlideClient, key: TEncodable, path: Optional[TEncodable] = None
+) -> TJsonUniversalResponse[
+    Optional[Union[bytes, int, List[Optional[Union[bytes, int]]]]]
+]:
+    """
+    Retrieve the JSON value at the specified `path` within the JSON document stored at `key`.
+    The returning result is in the Valkey or Redis OSS Serialization Protocol (RESP).\n
+    JSON null is mapped to the RESP Null Bulk String.\n
+    JSON Booleans are mapped to RESP Simple string.\n
+    JSON integers are mapped to RESP Integers.\n
+    JSON doubles are mapped to RESP Bulk Strings.\n
+    JSON strings are mapped to RESP Bulk Strings.\n
+    JSON arrays are represented as RESP arrays, where the first element is the simple string [, followed by the array's elements.\n
+    JSON objects are represented as RESP object, where the first element is the simple string {, followed by key-value pairs, each of which is a RESP bulk string.\n
+
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+        key (TEncodable): The key of the JSON document.
+        path (Optional[TEncodable]): The path within the JSON document. Default to None.
+
+    Returns:
+        TJsonUniversalResponse[Optional[Union[bytes, int, List[Optional[Union[bytes, int]]]]]]
+            For JSONPath ('path' starts with '$'):
+                Returns a list of replies for every possible path, indicating the RESP form of the JSON value.
+                If `path` doesn't exist, returns an empty list.
+            For legacy path (`path` doesn't starts with `$`):
+                Returns a single reply for the JSON value at the specified path, in its RESP form.
+                This can be a bytes object, an integer, None, or a list representing complex structures.
+                If multiple paths match, the value of the first JSON value match is returned.
+                If `path` doesn't exist, an error is raised.
+            If `key` doesn't exist, an None is returned.
+
+    Examples:
+        >>> from glide import json
+        >>> await json.set(client, "doc", "$", '{"a": [1, 2, 3], "b": {"a": [1, 2], "c": {"a": 42}}}')
+            'OK'
+        >>> await json.resp(client, "doc", "$..a")
+            [[b"[", 1, 2, 3],[b"[", 1, 2],42]
+        >>> await json.resp(client, "doc", "..a")
+            [b"[", 1, 2, 3]
+    """
+    args = ["JSON.RESP", key]
+    if path:
+        args.append(path)
+
+    return cast(
+        TJsonUniversalResponse[
+            Optional[Union[bytes, int, List[Optional[Union[bytes, int]]]]]
+        ],
         await client.custom_command(args),
     )
 
@@ -859,61 +918,6 @@ async def strlen(
         await client.custom_command(
             ["JSON.STRLEN", key, path] if path else ["JSON.STRLEN", key]
         ),
-    )
-
-
-async def resp(
-    client: TGlideClient, key: TEncodable, path: Optional[TEncodable] = None
-) -> TJsonUniversalResponse[
-    Optional[Union[bytes, int, List[Optional[Union[bytes, int]]]]]
-]:
-    """
-    Retrieve the JSON value at the specified `path` within the JSON document stored at `key`.
-    The returning result is in the Valkey or Redis OSS Serialization Protocol (RESP).\n
-    JSON null is mapped to the RESP Null Bulk String.\n
-    JSON Booleans are mapped to RESP Simple string.\n
-    JSON integers are mapped to RESP Integers.\n
-    JSON doubles are mapped to RESP Bulk Strings.\n
-    JSON strings are mapped to RESP Bulk Strings.\n
-    JSON arrays are represented as RESP arrays, where the first element is the simple string [, followed by the array's elements.\n
-    JSON objects are represented as RESP object, where the first element is the simple string {, followed by key-value pairs, each of which is a RESP bulk string.\n
-
-
-    Args:
-        client (TGlideClient): The client to execute the command.
-        key (TEncodable): The key of the JSON document.
-        path (Optional[TEncodable]): The path within the JSON document. Default to None.
-
-    Returns:
-        TJsonUniversalResponse[Optional[Union[bytes, int, List[Optional[Union[bytes, int]]]]]]
-            For JSONPath ('path' starts with '$'):
-                Returns a list of replies for every possible path, indicating the RESP form of the JSON value.
-                If `path` doesn't exist, returns an empty list.
-            For legacy path (`path` doesn't starts with `$`):
-                Returns a single reply for the JSON value at the specified path, in its RESP form.
-                This can be a bytes object, an integer, None, or a list representing complex structures.
-                If multiple paths match, the value of the first JSON value match is returned.
-                If `path` doesn't exist, an error is raised.
-            If `key` doesn't exist, an None is returned.
-
-    Examples:
-        >>> from glide import json
-        >>> await json.set(client, "doc", "$", '{"a": [1, 2, 3], "b": {"a": [1, 2], "c": {"a": 42}}}')
-            'OK'
-        >>> await json.resp(client, "doc", "$..a")
-            [[b"[", 1, 2, 3],[b"[", 1, 2],42]
-        >>> await json.resp(client, "doc", "..a")
-            [b"[", 1, 2, 3]
-    """
-    args = ["JSON.RESP", key]
-    if path:
-        args.append(path)
-
-    return cast(
-        TJsonUniversalResponse[
-            Optional[Union[bytes, int, List[Optional[Union[bytes, int]]]]]
-        ],
-        await client.custom_command(args),
     )
 
 
