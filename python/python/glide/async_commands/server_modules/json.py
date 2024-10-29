@@ -153,7 +153,8 @@ async def arrappend(
     path: TEncodable,
     values: List[TEncodable],
 ) -> TJsonResponse[int]:
-    """Appends one or more `values` to the JSON array at the specified `path` within the JSON document stored at `key`.
+    """
+    Appends one or more `values` to the JSON array at the specified `path` within the JSON document stored at `key`.
 
     Args:
         client (TGlideClient): The client to execute the command.
@@ -183,8 +184,8 @@ async def arrappend(
             [3]  # Returns the new length of the array at path '$.b' after appending the value.
         >>> await valkeyJson.arrappend(client, "doc", ".b", ["four"])
             4 # Returns the new length of the array at path '.b' after appending the value.
-        >>> json.loads(await valkeyJson.get(client, "doc", "$"))
-            b'{"a": 1, "b": ["one", "two", "three", "four"]}'  # Returns the updated JSON document
+        >>> json.loads(await valkeyJson.get(client, "doc", "."))
+            {"a": 1, "b": ["one", "two", "three", "four"]}  # Returns the updated JSON document
     """
     args = ["JSON.ARRAPPEND", key]
     if path:
