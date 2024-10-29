@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from typing import List, Mapping, Optional
 
+from glide.async_commands.command_args import OrderBy
 from glide.async_commands.server_modules.ft_options.ft_constants import (
     FtAggregateKeywords,
 )
@@ -145,33 +146,18 @@ class FtAggregateGroupBy(FtAggregateClause):
         return args
 
 
-class SortOrder(Enum):
-    """
-    All possible values for the sort order for the SortBy clause.
-    """
-
-    ASC = "ASC"
-    """
-    For sorting the results in ascending order.
-    """
-    DESC = "DESC"
-    """
-    For sorting the results in descending order.
-    """
-
-
 class FtAggregateSortProperty:
     """
     This class represents the a single property for the SortBy clause.
     """
 
-    def __init__(self, property: TEncodable, order: SortOrder):
+    def __init__(self, property: TEncodable, order: OrderBy):
         """
         Initialize a new FtAggregateSortProperty instance.
 
         Args:
             property (TEncodable): The sorting parameter.
-            order (SortOrder): The order for the sorting. This option can be added for each property.
+            order (OrderBy): The order for the sorting. This option can be added for each property.
         """
         self.property = property
         self.order = order

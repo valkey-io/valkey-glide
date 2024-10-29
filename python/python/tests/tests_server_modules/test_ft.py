@@ -4,6 +4,7 @@ import uuid
 from typing import List, Mapping, Union, cast
 
 import pytest
+from glide.async_commands.command_args import OrderBy
 from glide.async_commands.server_modules import ft
 from glide.async_commands.server_modules import json as GlideJson
 from glide.async_commands.server_modules.ft_options.ft_aggregate_options import (
@@ -14,7 +15,6 @@ from glide.async_commands.server_modules.ft_options.ft_aggregate_options import 
     FtAggregateReducer,
     FtAggregateSortBy,
     FtAggregateSortProperty,
-    SortOrder,
 )
 from glide.async_commands.server_modules.ft_options.ft_create_options import (
     DataType,
@@ -415,8 +415,8 @@ class TestFt:
                     ),
                     FtAggregateSortBy(
                         properties=[
-                            FtAggregateSortProperty("@avg_rating", SortOrder.DESC),
-                            FtAggregateSortProperty("@nb_of_votes", SortOrder.DESC),
+                            FtAggregateSortProperty("@avg_rating", OrderBy.DESC),
+                            FtAggregateSortProperty("@nb_of_votes", OrderBy.DESC),
                         ]
                     ),
                 ],

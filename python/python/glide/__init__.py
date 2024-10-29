@@ -43,7 +43,6 @@ from glide.async_commands.server_modules.ft_options.ft_aggregate_options import 
     FtAggregateReducer,
     FtAggregateSortBy,
     FtAggregateSortProperty,
-    SortOrder,
 )
 from glide.async_commands.server_modules.ft_options.ft_create_options import (
     DataType,
@@ -294,5 +293,4 @@ __all__ = [
     "FtAggregateReducer",
     "FtAggregateSortBy",
     "FtAggregateSortProperty",
-    "SortOrder",
 ]
