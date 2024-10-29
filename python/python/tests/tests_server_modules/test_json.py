@@ -1331,7 +1331,7 @@ class TestJson:
         # multiple path match
         json_value = '[[], ["a"], ["a", "b"]]'
         assert await json.set(glide_client, key, "$", json_value) == OK
-        assert await json.arrappend(glide_client, key,['"c"'],  "[*]") == 1
+        assert await json.arrappend(glide_client, key, ['"c"'], "[*]") == 1
         result = await json.get(glide_client, key, "$")
         assert isinstance(result, bytes)
         assert OuterJson.loads(result) == [[["c"], ["a", "c"], ["a", "b", "c"]]]

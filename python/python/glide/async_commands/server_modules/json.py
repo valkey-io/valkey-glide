@@ -162,6 +162,7 @@ async def arrappend(
         values (TEncodable): The values to append to the JSON array at the specified path.
         path (Optional[TEncodable]): Represents the path within the JSON document where the `values` will be appended.
             Defaults to None.
+            **Beware**: For AWS ElastiCache/MemoryDB the `path` parameter is required and not optional.
 
     Returns:
         TJsonResponse[int]:
