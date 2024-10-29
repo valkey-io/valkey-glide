@@ -1,6 +1,8 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+import copy
 import json as OuterJson
+import random
 import typing
 
 import pytest
@@ -12,6 +14,19 @@ from glide.constants import OK
 from glide.exceptions import RequestError
 from glide.glide_client import TGlideClient
 from tests.test_async_client import get_random_string, parse_info_response
+
+
+def get_random_value(value_type="str"):
+    if value_type == "int":
+        return random.randint(1, 100)
+    elif value_type == "float":
+        return round(random.uniform(1, 100), 2)
+    elif value_type == "str":
+        return "".join(random.choices("abcdefghijklmnopqrstuvwxyz", k=5))
+    elif value_type == "bool":
+        return random.choice([True, False])
+    elif value_type == "null":
+        return None
 
 
 @pytest.mark.asyncio
@@ -1385,3 +1400,114 @@ class TestJson:
         result = await json.get(glide_client, key, "$")
         assert isinstance(result, bytes)
         assert OuterJson.loads(result) == [[["c"], ["a", "c"], ["a", "b", "c"]]]
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_json_resp(self, glide_client: TGlideClient):
+        key = get_random_string(5)
+
+        # Generate random JSON content with specified types
+        json_value = {
+            "obj": {"a": get_random_value("int"), "b": get_random_value("float")},
+            "arr": [get_random_value("int") for _ in range(3)],
+            "str": get_random_value("str"),
+            "bool": get_random_value("bool"),
+            "int": get_random_value("int"),
+            "float": get_random_value("float"),
+            "nullVal": get_random_value("null"),
+        }
+
+        json_value_expected = copy.deepcopy(json_value)
+        json_value_expected["obj"]["b"] = str(json_value["obj"]["b"]).encode()
+        json_value_expected["float"] = str(json_value["float"]).encode()
+        json_value_expected["str"] = str(json_value["str"]).encode()
+        json_value_expected["bool"] = str(json_value["bool"]).lower().encode()
+        assert (
+            await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == "OK"
+        )
+
+        assert await json.resp(glide_client, key, "$.*") == [
+            [
+                b"{",
+                [b"a", json_value_expected["obj"]["a"]],
+                [b"b", json_value_expected["obj"]["b"]],
+            ],
+            [b"[", *json_value_expected["arr"]],
+            json_value_expected["str"],
+            json_value_expected["bool"],
+            json_value_expected["int"],
+            json_value_expected["float"],
+            json_value_expected["nullVal"],
+        ]
+
+        # multiple path match, the first will be returned
+        assert await json.resp(glide_client, key, "*") == [
+            b"{",
+            [b"a", json_value_expected["obj"]["a"]],
+            [b"b", json_value_expected["obj"]["b"]],
+        ]
+
+        assert await json.resp(glide_client, key, "$") == [
+            [
+                b"{",
+                [
+                    b"obj",
+                    [
+                        b"{",
+                        [b"a", json_value_expected["obj"]["a"]],
+                        [b"b", json_value_expected["obj"]["b"]],
+                    ],
+                ],
+                [b"arr", [b"[", *json_value_expected["arr"]]],
+                [
+                    b"str",
+                    json_value_expected["str"],
+                ],
+                [
+                    b"bool",
+                    json_value_expected["bool"],
+                ],
+                [b"int", json_value["int"]],
+                [
+                    b"float",
+                    json_value_expected["float"],
+                ],
+                [b"nullVal", json_value["nullVal"]],
+            ],
+        ]
+
+        assert await json.resp(glide_client, key, "$.str") == [
+            json_value_expected["str"]
+        ]
+        assert await json.resp(glide_client, key, ".str") == json_value_expected["str"]
+
+        # Further tests with a new random JSON structure
+        json_value = {
+            "a": [random.randint(1, 10) for _ in range(3)],
+            "b": {
+                "a": [random.randint(1, 10) for _ in range(2)],
+                "c": {"a": random.randint(1, 10)},
+            },
+        }
+        assert (
+            await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == "OK"
+        )
+
+        # Multiple path match
+        assert await json.resp(glide_client, key, "$..a") == [
+            [b"[", *json_value["a"]],
+            [b"[", *json_value["b"]["a"]],
+            json_value["b"]["c"]["a"],
+        ]
+
+        assert await json.resp(glide_client, key, "..a") == [b"[", *json_value["a"]]
+
+        # Test for non-existent paths
+        assert await json.resp(glide_client, key, "$.nonexistent") == []
+        with pytest.raises(RequestError):
+            await json.resp(glide_client, key, "nonexistent")
+
+        # Test for non-existent key
+        assert await json.resp(glide_client, "nonexistent_key", "$") is None
+        assert await json.resp(glide_client, "nonexistent_key", ".") is None
+        assert await json.resp(glide_client, "nonexistent_key") is None
