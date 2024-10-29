@@ -100,8 +100,8 @@ export class GlideJson {
      * const result = await GlideJson.set("doc", "$", jsonStr);
      * console.log(result); // 'OK' - Indicates successful setting of the value at path '$' in the key stored at `doc`.
      *
-     * const jsonGetStr = await GlideJson.get(client, "doc", "$"); // Returns the value at path '$' in the JSON document stored at `doc` as JSON string.
-     * console.log(jsonGetStr); // '[{"a":1.0,"b":2}]'
+     * const jsonGetStr = await GlideJson.get(client, "doc", {path: "$"}); // Returns the value at path '$' in the JSON document stored at `doc` as JSON string.
+     * console.log(jsonGetStr); // '[{"a":1.0, "b":2}]'
      * console.log(JSON.stringify(jsonGetStr)); //  [{"a": 1.0, "b": 2}] # JSON object retrieved from the key `doc`
      * ```
      */
@@ -145,15 +145,15 @@ export class GlideJson {
      *
      * @example
      * ```typescript
-     * const jsonStr = await client.jsonGet('doc', '$');
+     * const jsonStr = await GlideJson.get('doc', {path: '$'});
      * console.log(JSON.parse(jsonStr as string));
      * // Output: [{"a": 1.0, "b" :2}] - JSON object retrieved from the key `doc`.
      *
-     * const jsonData = await client.jsonGet('doc', '$');
+     * const jsonData = await GlideJson.get(('doc', {path: '$'});
      * console.log(jsonData);
      * // Output: '[{"a":1.0,"b":2}]' - Returns the value at path '$' in the JSON document stored at `doc`.
      *
-     * const formattedJson = await client.jsonGet('doc', {
+     * const formattedJson = await GlideJson.get(('doc', {
      *     ['$.a', '$.b']
      *     indent: "  ",
      *     newline: "\n",
@@ -162,7 +162,7 @@ export class GlideJson {
      * console.log(formattedJson);
      * // Output: "{\n \"$.a\": [\n  1.0\n ],\n \"$.b\": [\n  2\n ]\n}" - Returns values at paths '$.a' and '$.b' with custom format.
      *
-     * const nonExistingPath = await client.jsonGet('doc', '$.non_existing_path');
+     * const nonExistingPath = await GlideJson.get(('doc', {path: '$.non_existing_path'});
      * console.log(nonExistingPath);
      * // Output: "[]" - Empty array since the path does not exist in the JSON document.
      * ```
@@ -220,7 +220,7 @@ export class GlideJson {
      *
      * // Without specifying a path, the path defaults to root.
      * console.log(await GlideJson.set(client, "doc2", ".", true)); // Output: "OK"
-     * console.log(await GlideJson.toggle(client,"doc2")); // Output: "false"
+     * console.log(await GlideJson.toggle(client, "doc2")); // Output: "false"
      * console.log(await GlideJson.toggle(client, "doc2")); // Output: "true"
      * ```
      */
@@ -251,9 +251,9 @@ export class GlideJson {
      * ```typescript
      * console.log(await GlideJson.set(client, "doc", "$", '{a: 1, nested: {a:2, b:3}}'));
      * // Output: "OK" - Indicates successful setting of the value at path '$' in the key stored at `doc`.
-     * console.log(await GlideJson.del(client, "doc", "$..a"));
+     * console.log(await GlideJson.del(client, "doc", {path: "$..a"}));
      * // Output: 2 - Indicates successful deletion of the specific values in the key stored at `doc`.
-     * console.log(await GlideJson.get(client, "doc", "$"));
+     * console.log(await GlideJson.get(client, "doc", {path: "$"}));
      * // Output: "[{nested: {b: 3}}]" - Returns the value at path '$' in the JSON document stored at `doc`.
      * console.log(await GlideJson.del(client, "doc"));
      * // Output: 1 - Deletes the entire JSON document stored at `doc`.
@@ -336,7 +336,7 @@ export class GlideJson {
      * // Output: ["integer", "number", "string", "boolean", null, "object", "array"];
      * console.log(await GlideJson.set(client, "doc2", ".", "{Name: 'John', Age: 27}"));
      * console.log(await GlideJson.type(client, "doc2")); // Output: "object"
-     * console.log(await GlideJson.type(client, "doc2", ".Age")); // Output: "integer"
+     * console.log(await GlideJson.type(client, "doc2", {path: ".Age"})); // Output: "integer"
      * ```
      */
     static async type(
@@ -381,10 +381,10 @@ export class GlideJson {
      * ```typescript
      * console.log(await GlideJson.set(client, "doc", ".", "{a: [1, 2, 3], b: {a: [1, 2], c: {a: 42}}}"));
      * // Output: 'OK' - Indicates successful setting of the value at path '.' in the key stored at `doc`.
-     * const result = await GlideJson.resp(client, "doc", "$..a");
+     * const result = await GlideJson.resp(client, "doc", {path: "$..a"});
      * console.log(result);
      * // Output: [ ["[", 1L, 2L, 3L], ["[", 1L, 2L], [42L]];
-     * console.log(await GlideJson.type(client, "doc", "..a")); // Output: ["[", 1L, 2L, 3L]
+     * console.log(await GlideJson.type(client, "doc", {path: "..a"})); // Output: ["[", 1L, 2L, 3L]
      * ```
      */
     static async resp(
@@ -399,5 +399,59 @@ export class GlideJson {
         }
 
         return _executeCommand<ReturnTypeJson<GlideString>>(client, args);
+    }
+
+    /**
+     * Returns the length of the JSON string value stored at the specified `path` within
+     * the JSON document stored at `key`.
+     *
+     * @param client - The client to execute the command.
+     * @param key - The key of the JSON document.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) path - The path within the JSON document, Defaults to root if not provided.
+     * @returns ReturnTypeJson:
+     *     - For JSONPath (path starts with `$`):
+     *       - Returns a list of integer replies for every possible path, indicating the length of
+     *         the JSON string value, or <code>null</code> for JSON values matching the path that
+     *         are not string.
+     *     - For legacy path (path doesn't start with `$`):
+     *       - Returns the length of the JSON value at `path` or `null` if `key` doesn't exist.
+     *       - If multiple paths match, the length of the first matched string is returned.
+     *       - If the JSON value at`path` is not a string or if `path` doesn't exist, an error is raised.
+     *       - If `key` doesn't exist, `null` is returned.
+     *
+     * @example
+     * ```typescript
+     * console.log(await GlideJson.set(client, "doc", "$", '{a:"foo", nested: {a: "hello"}, nested2: {a: 31}}"));
+     * // Output: 'OK' - Indicates successful setting of the value at path '$' in the key stored at `doc`.
+     * let result = await GlideJson.strlen(client, "doc", {path: "$..a"});
+     * console.log(result);
+     * // Output: [3, 5, null]; - The length of the string values at path '$..a' in the key stored at `doc`.
+     *
+     * result = await GlideJson.strlen(client, "doc", {path: "nested.a"});
+     * console.log(result);
+     * // Output: 5; - The length of the JSON value at path 'nested.a' in the key stored at `doc`.
+     *
+     * result = await GlideJson.strlen(client, "doc", {path: "$"});
+     * console.log(result);
+     * // Output: [null] - Returns an array with null since the value at root path does in the JSON document stored at `doc` is not a string.
+     *
+     * result = await GlideJson.strlen(client, "non_existent_key", {path: "."});
+     * console.log(result);
+     * // Output: null - return null if key does not exist.
+     * ```
+     */
+    static async strlen(
+        client: BaseClient,
+        key: GlideString,
+        options?: { path: GlideString },
+    ): Promise<ReturnTypeJson<number>> {
+        const args = ["JSON.STRLEN", key];
+
+        if (options) {
+            args.push(options.path);
+        }
+
+        return _executeCommand<ReturnTypeJson<number>>(client, args);
     }
 }

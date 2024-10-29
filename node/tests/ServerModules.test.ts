@@ -691,9 +691,79 @@ describe("Server Module Tests", () => {
                 expect(
                     await GlideJson.resp(client, "nonexistent_key"),
                 ).toBeNull();
-            });
-        },
-    );
+            },
+        );
+
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            "json.forget tests",
+            async (protocol) => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+                const key = uuidv4();
+                const jsonValue = {
+                    a: "foo",
+                    nested: { a: "hello" },
+                    nested2: { a: 31 },
+                };
+                // setup
+                expect(
+                    await GlideJson.set(
+                        client,
+                        key,
+                        "$",
+                        JSON.stringify(jsonValue),
+                    ),
+                ).toBe("OK");
+
+                expect(
+                    await GlideJson.strlen(client, key, { path: "$..a" }),
+                ).toEqual([3, 5, null]);
+                expect(await GlideJson.strlen(client, key, { path: "a" })).toBe(
+                    3,
+                );
+
+                expect(
+                    await GlideJson.strlen(client, key, { path: "$.nested" }),
+                ).toEqual([null]);
+                expect(
+                    await GlideJson.strlen(client, key, { path: "$..a" }),
+                ).toEqual([3, 5, null]);
+
+                expect(
+                    await GlideJson.strlen(client, "non_existing_key", {
+                        path: ".",
+                    }),
+                ).toBeNull();
+                expect(
+                    await GlideJson.strlen(client, "non_existing_key", {
+                        path: "$",
+                    }),
+                ).toBeNull();
+
+                // error case
+                await expect(
+                    GlideJson.strlen(client, key, { path: "nested" }),
+                ).rejects.toThrow(RequestError);
+                await expect(GlideJson.strlen(client, key)).rejects.toThrow(
+                    RequestError,
+                );
+                expect(
+                    await GlideJson.strlen(client, key, {
+                        path: "$.non_existing_path",
+                    }),
+                ).toEqual([]);
+                await expect(
+                    GlideJson.strlen(client, key, {
+                        path: "$.non_existing_path",
+                    }),
+                ).rejects.toThrow(RequestError);
+            },
+        );
+    });
 
     describe("GlideFt", () => {
         let client: GlideClusterClient;
