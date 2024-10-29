@@ -32,6 +32,7 @@ import {
 } from "./TestUtilities";
 
 const TIMEOUT = 50000;
+const DATA_PROCESSING_TIMEOUT = 1000;
 
 describe("Server Module Tests", () => {
     let cluster: ValkeyCluster;
@@ -890,7 +891,7 @@ describe("Server Module Tests", () => {
             expect(info).toContain("# search_index_stats");
         });
 
-        it("Ft.Create test", async () => {
+        it("FT.CREATE test", async () => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(
                     cluster.getAddresses(),
@@ -1044,7 +1045,7 @@ describe("Server Module Tests", () => {
             }
         });
 
-        it("Ft.DROPINDEX test", async () => {
+        it("FT.DROPINDEX test", async () => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(
                     cluster.getAddresses(),
@@ -1161,5 +1162,73 @@ describe("Server Module Tests", () => {
                 );
             },
         );
+
+        it("FT.SEARCH test", async () => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+
+            const prefix = "{" + uuidv4() + "}:";
+            const index = prefix + "index";
+
+            // setup a hash index:
+            expect(
+                await GlideFt.create(client, index, [
+                    {
+                        type: "VECTOR",
+                        name: "vec",
+                        alias: "VEC",
+                        attributes: {
+                            algorithm: "HNSW",
+                            distanceMetric: "L2",
+                            dimensions: 2,
+                        },
+                    },
+                ], {
+                    dataType: "HASH",
+                    prefixes: [prefix],
+                }),
+            ).toEqual("OK");
+
+            expect(await client.hset(Buffer.from(prefix + "0"), [
+                // vaue of <Buffer 00 00 00 00 00 00 00 00 00 00>
+                { field: "vec", value: Buffer.alloc(8) },
+            ])).toEqual(1);
+
+            const binaryValue2: Buffer = Buffer.alloc(10);
+            binaryValue2[8] = 0x80;
+            binaryValue2[9] = 0xBF;
+            expect(await client.hset(Buffer.from(prefix + "1"), [
+                // vaue of <Buffer 00 00 00 00 00 00 00 00 00 00 80 BF>
+                { field: "vec", value: binaryValue2 },
+            ])).toEqual(1);
+
+            // let server digest the data and update index
+            const sleep = new Promise((resolve) => setTimeout(resolve, DATA_PROCESSING_TIMEOUT));
+            await sleep;
+
+            const result = await GlideFt.search(
+                client,
+                index,
+                "*=>[KNN 2 @VEC $query_vec]",
+                {
+                    params: [{key: Buffer.from("query_vec"), value: Buffer.alloc(8)}]
+                }
+            );
+            console.log("search result: " + result);
+            // const expectedResult = [
+            //     2,
+            //     {
+            //         Buffer.from(prefix + "0"): {
+            //             Buffer.from("__VEC_score"):
+
+            //         }
+            //     },
+            // ];
+            // expect(result).toMatchObject(expectedResult);
+        });
     });
 });

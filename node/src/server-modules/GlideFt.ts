@@ -270,6 +270,14 @@ export class GlideFt {
         ).then(convertGlideRecordToRecord);
     }
 
+    /**
+     *
+     * @param client
+     * @param indexName
+     * @param query
+     * @param options
+     * @returns
+     */
     static async search(
         client: GlideClient | GlideClusterClient,
         indexName: GlideString,
@@ -280,31 +288,42 @@ export class GlideFt {
             params?: GlideRecord<GlideString>,
             limit?: {offset: number, count: number},
             count?: boolean,
-        },
+        } & DecoderOption,
     ): Promise<(GlideString | number)[]> {
         const args: GlideString[] = ["FT.CREATE", indexName, query];
 
         if (options) {
+            // RETURN
             if (options.returnFields) {
-                args.push("RETURN");
+                args.push("RETURN", options.returnFields.length.toString());
                 options.returnFields.forEach(returnField => returnField.alias ? args.push(returnField.fieldIdentifier, "AS", returnField.alias) : args.push(returnField.fieldIdentifier));
-                args.push(options.returnFields.length.toString());
             }
 
+            // TIMEOUT
             if (options.timeout) {
                 args.push("TIMEOUT", options.timeout.toString());
             }
 
+            // PARAMS
             if (options.params) {
-                args.push("PARAMS");
+                args.push("PARAMS", options.params.length.toString());
+                options.params.forEach(param => args.push(param.key, param.value));
+            }
 
+            // LIMIT
+            if (options.limit) {
+                args.push("LIMIT", options.limit.offset.toString(), options.limit.count.toString());
+            }
+
+            // COUNT
+            if (options.count) {
+                args.push("COUNT");
             }
         }
 
-        return _handleCustomCommand(client, args, {
-            decoder: Decoder.String,
-        }) as Promise<(GlideString | number)[]>;
+        return _handleCustomCommand(client, args, options) as Promise<(GlideString | number)[]>;
     }
+}
 
 /**
  * @internal
@@ -312,6 +331,8 @@ export class GlideFt {
 async function _handleCustomCommand(
     client: GlideClient | GlideClusterClient,
     args: GlideString[],
+    decoderOption: DecoderOption = {},
+) {
     decoderOption?: DecoderOption,
 ): Promise<GlideReturnType> {
     return client instanceof GlideClient
