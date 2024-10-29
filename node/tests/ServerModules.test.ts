@@ -12,6 +12,7 @@ import {
 import { v4 as uuidv4 } from "uuid";
 import {
     ConditionalChange,
+    Decoder,
     GlideClusterClient,
     GlideFt,
     GlideJson,
@@ -939,7 +940,7 @@ describe("Server Module Tests", () => {
                 expect(
                     await GlideFt.create(
                         client,
-                        index,
+                        Buffer.from(index),
                         [
                             {
                                 type: "VECTOR",
@@ -957,7 +958,7 @@ describe("Server Module Tests", () => {
                     ),
                 ).toEqual("OK");
 
-                const response = await GlideFt.info(client, index);
+                let response = await GlideFt.info(client, Buffer.from(index));
 
                 expect(response).toMatchObject({
                     index_name: index,
@@ -981,6 +982,13 @@ describe("Server Module Tests", () => {
                             },
                         },
                     ],
+                });
+
+                response = await GlideFt.info(client, index, {
+                    decoder: Decoder.Bytes,
+                });
+                expect(response).toMatchObject({
+                    index_name: Buffer.from(index),
                 });
 
                 expect(await GlideFt.dropindex(client, index)).toEqual("OK");
