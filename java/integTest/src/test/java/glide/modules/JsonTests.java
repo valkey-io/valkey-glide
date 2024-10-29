@@ -1070,4 +1070,45 @@ public class JsonTests {
         assertNull(Json.resp(client, "nonexistent_key", ".").get());
         assertNull(Json.resp(client, "nonexistent_key").get());
     }
+
+    @Test
+    @SneakyThrows
+    public void json_type() {
+        String key = UUID.randomUUID().toString();
+        String jsonValue =
+                "{\"key1\": \"value1\", \"key2\": 2, \"key3\": [1, 2, 3], \"key4\": {\"nested_key\":"
+                        + " {\"key1\": [4, 5]}}, \"key5\": null, \"key6\": true, \"dec_key\": 2.3}";
+        assertEquals(OK, Json.set(client, key, "$", jsonValue).get());
+
+        assertArrayEquals(new Object[] {"object"}, (Object[]) Json.type(client, key, "$").get());
+        assertArrayEquals(
+                new Object[] {gs("string"), gs("array")},
+                (Object[]) Json.type(client, gs(key), gs("$..key1")).get());
+        assertArrayEquals(new Object[] {"integer"}, (Object[]) Json.type(client, key, "$.key2").get());
+        assertArrayEquals(new Object[] {"array"}, (Object[]) Json.type(client, key, "$.key3").get());
+        assertArrayEquals(new Object[] {"object"}, (Object[]) Json.type(client, key, "$.key4").get());
+        assertArrayEquals(
+                new Object[] {"object"}, (Object[]) Json.type(client, key, "$.key4.nested_key").get());
+        assertArrayEquals(new Object[] {"null"}, (Object[]) Json.type(client, key, "$.key5").get());
+        assertArrayEquals(new Object[] {"boolean"}, (Object[]) Json.type(client, key, "$.key6").get());
+        // Check for non-existent path in enhanced mode $.key7
+        assertArrayEquals(new Object[] {}, (Object[]) Json.type(client, key, "$.key7").get());
+        // Check for non-existent path within an existing key (array bound)
+        assertArrayEquals(new Object[] {}, (Object[]) Json.type(client, key, "$.key3[3]").get());
+        // Legacy path (without $) - will return None for non-existing path
+        assertNull(Json.type(client, key, "key7").get());
+        // Check for multiple path match in legacy
+        assertEquals("string", Json.type(client, key, "..key1").get());
+        // Check for non-existent key with enhanced path
+        assertNull(Json.type(client, "non_existing_key", "$.key1").get());
+        // Check for non-existent key with legacy path
+        assertNull(Json.type(client, "non_existing_key", "key1").get());
+        // Check for all types in the JSON document using JSON Path
+        Object[] actualResult = (Object[]) Json.type(client, key, "$[*]").get();
+        Object[] expectedResult =
+                new Object[] {"string", "integer", "array", "object", "null", "boolean", "number"};
+        assertArrayEquals(expectedResult, actualResult);
+        // Check for all types in the JSON document using legacy path
+        assertEquals("string", Json.type(client, key, "[*]").get());
+    }
 }
