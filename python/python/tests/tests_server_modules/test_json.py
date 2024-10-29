@@ -1302,8 +1302,8 @@ class TestJson:
         initial_json_value = '{"a": 1, "b": ["one", "two"]}'
         assert await json.set(glide_client, key, "$", initial_json_value) == OK
 
-        assert await json.arrappend(glide_client, key, "$.b", ['"three"']) == [3]
-        assert await json.arrappend(glide_client, key, ".b", ['"four"', '"five"']) == 5
+        assert await json.arrappend(glide_client, key, ['"three"'], "$.b") == [3]
+        assert await json.arrappend(glide_client, key, ['"four"', '"five"'], ".b") == 5
 
         result = await json.get(glide_client, key, "$")
         assert isinstance(result, bytes)
@@ -1311,27 +1311,27 @@ class TestJson:
             {"a": 1, "b": ["one", "two", "three", "four", "five"]}
         ]
 
-        assert await json.arrappend(glide_client, key, "$.a", ['"value"']) == [None]
+        assert await json.arrappend(glide_client, key, ['"value"'], "$.a") == [None]
 
         # JSONPath, path doesnt exist
-        assert await json.arrappend(glide_client, key, "$.c", ['"value"']) == []
+        assert await json.arrappend(glide_client, key, ['"value"'], "$.c") == []
         # Legacy path, `path` doesnt exist
         with pytest.raises(RequestError):
-            await json.arrappend(glide_client, key, ".c", ['"value"'])
+            await json.arrappend(glide_client, key, ['"value"'], ".c")
 
         # Legacy path, the JSON value at `path` is not a array
         with pytest.raises(RequestError):
-            await json.arrappend(glide_client, key, ".a", ['"value"'])
+            await json.arrappend(glide_client, key, ['"value"'], ".a")
 
         with pytest.raises(RequestError):
-            await json.arrappend(glide_client, "non_existing_key", "$.b", ['"six"'])
+            await json.arrappend(glide_client, "non_existing_key", ['"six"'], "$.b")
         with pytest.raises(RequestError):
-            await json.arrappend(glide_client, "non_existing_key", ".b", ['"six"'])
+            await json.arrappend(glide_client, "non_existing_key", ['"six"'], ".b")
 
         # multiple path match
         json_value = '[[], ["a"], ["a", "b"]]'
         assert await json.set(glide_client, key, "$", json_value) == OK
-        assert await json.arrappend(glide_client, key, "[*]", ['"c"']) == 1
+        assert await json.arrappend(glide_client, key,['"c"'],  "[*]") == 1
         result = await json.get(glide_client, key, "$")
         assert isinstance(result, bytes)
         assert OuterJson.loads(result) == [[["c"], ["a", "c"], ["a", "b", "c"]]]
