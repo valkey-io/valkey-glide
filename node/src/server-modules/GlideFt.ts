@@ -321,6 +321,8 @@ export class GlideFt {
             }
         }
 
+        console.log(args);
+
         return _handleCustomCommand(client, args, options) as Promise<(number | GlideRecord<GlideString | GlideRecord<GlideString>>)[]>;
     }
 }

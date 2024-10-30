@@ -1200,9 +1200,9 @@ describe("Server Module Tests", () => {
                 { field: "vec", value: Buffer.alloc(8) },
             ])).toEqual(1);
 
-            const binaryValue2: Buffer = Buffer.alloc(10);
-            binaryValue2[8] = 0x80;
-            binaryValue2[9] = 0xBF;
+            const binaryValue2: Buffer = Buffer.alloc(12);
+            binaryValue2[10] = 0x80;
+            binaryValue2[11] = 0xBF;
             expect(await client.hset(Buffer.from(prefix + "1"), [
                 // vaue of <Buffer 00 00 00 00 00 00 00 00 00 00 80 BF>
                 { field: "vec", value: binaryValue2 },
@@ -1212,7 +1212,7 @@ describe("Server Module Tests", () => {
             const sleep = new Promise((resolve) => setTimeout(resolve, DATA_PROCESSING_TIMEOUT));
             await sleep;
 
-            const result = await GlideFt.search(
+            const result: (number | GlideRecord<GlideString | GlideRecord<GlideString>>)[] = await GlideFt.search(
                 client,
                 index,
                 "*=>[KNN 2 @VEC $query_vec]",
@@ -1226,21 +1226,21 @@ describe("Server Module Tests", () => {
                 1,
                 [
                     {
-                        "key":"{eac9b642-cabf-4d6c-8990-bb64c4524cc0}:0",
+                        "key": prefix + "0",
                         "value":[
                             {
                                 "key":"vec",
-                                "value":"\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000"
+                                "value":Buffer.alloc(8).toString(),
                             },
                             {
                                 "key":"__VEC_score",
-                                "value":"0"
+                                "value":"0",
                             }
                         ]
                     }
                 ]
             ];
-            expect(result).toMatchObject(expectedResult);
+            expect(result).toEqual(expectedResult);
         });
     });
 });
