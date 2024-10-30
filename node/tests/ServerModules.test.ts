@@ -815,7 +815,7 @@ describe("Server Module Tests", () => {
                         client,
                         key,
                         "$.empty",
-                        JSON.stringify("[]"),
+                        JSON.stringify([]),
                     ),
                 ).toBe("OK");
                 expect(
