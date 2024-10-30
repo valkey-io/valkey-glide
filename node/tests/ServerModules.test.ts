@@ -1257,5 +1257,94 @@ describe("Server Module Tests", () => {
             ];
             expect(result).toEqual(expectedResult);
         });
+
+        it("FT.SEARCH string test", async () => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+
+            const prefix = "{" + uuidv4() + "}:";
+            const index = prefix + "index";
+
+            // setup a hash index:
+            expect(
+                await GlideFt.create(client, index, [
+                    {
+                        type: "VECTOR",
+                        name: "vec",
+                        alias: "VEC",
+                        attributes: {
+                            algorithm: "FLAT",
+                            distanceMetric: "COSINE",
+                            dimensions: 2,
+                        },
+                    },
+                ], {
+                    dataType: "HASH",
+                    prefixes: [prefix],
+                }),
+            ).toEqual("OK");
+
+            expect(await client.hset(prefix + "0", [
+                // value of <Buffer 00 00 00 00 00 00 00 00 00>
+                { field: "vec", value: "hello" },
+            ])).toEqual(1);
+
+            expect(await client.hset(prefix + "1", [
+                // value of <Buffer 00 00 00 00 00 00 00 80 BF>
+                { field: "vec", value: "hello world" },
+            ])).toEqual(1);
+
+            // let server digest the data and update index
+            const sleep = new Promise((resolve) => setTimeout(resolve, DATA_PROCESSING_TIMEOUT));
+            await sleep;
+
+            const result: (number | GlideRecord<GlideString | GlideRecord<GlideString>>)[] = await GlideFt.search(
+                client,
+                index,
+                "*=>[KNN 2 @VEC $query_vec]",
+                {
+                    params: [{key: "query_vec", value: "hello"}],
+                    decoder: Decoder.String,
+                }
+            );
+
+            console.log("search result: " + JSON.stringify(result));
+            const expectedResult: (number | GlideRecord<GlideString | GlideRecord<GlideString>>)[] = [
+                2,
+                [
+                    {
+                        "key": prefix + "1",
+                        "value":[
+                            {
+                                "key": "vec",
+                                "value": "hello world",
+                            },
+                            {
+                                "key": "__VEC_score",
+                                "value": "1",
+                            }
+                        ]
+                    },
+                    {
+                        "key": prefix + "0",
+                        "value":[
+                            {
+                                "key": "vec",
+                                "value": "hello",
+                            },
+                            {
+                                "key": "__VEC_score",
+                                "value": "0",
+                            }
+                        ]
+                    },
+                ]
+            ];
+            expect(result).toEqual(expectedResult);
+        });
     });
 });
