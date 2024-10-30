@@ -1365,11 +1365,12 @@ describe("Server Module Tests", () => {
                         key: prefix + "1",
                         value: [
                             {
-                                key: "myarr",
+                                // TODO: FT.SEARCH does not consider alias: "myarr" and alias: "myval"
+                                key: "arr",
                                 value: "42",
                             },
                             {
-                                key: "myval",
+                                key: "val",
                                 value: "hello",
                             },
                         ],
