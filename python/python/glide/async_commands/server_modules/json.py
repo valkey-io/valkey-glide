@@ -71,12 +71,12 @@ class JsonArrIndexOptions:
         self.start = start
         self.end = end
 
-    def to_args(self) -> List[TEncodable]:
+    def to_args(self) -> List[str]:
         """
         Get the options as a list of arguments for the JSON.ARRINDEX command.
 
         Returns:
-            List[TEncodable]: A list containing the start and end indices if specified.
+            List[str]: A list containing the start and end indices if specified.
         """
         args = [str(self.start)]
         if self.end is not None:
