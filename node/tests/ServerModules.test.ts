@@ -790,9 +790,14 @@ describe("Server Module Tests", () => {
                     }),
                 ).toEqual([6, 8, null]);
                 expect(
-                    await GlideJson.strappend(client, key, JSON.parse("foo"), {
-                        path: "a",
-                    }),
+                    await GlideJson.strappend(
+                        client,
+                        key,
+                        JSON.stringify("foo"),
+                        {
+                            path: "a",
+                        },
+                    ),
                 ).toBe(9);
 
                 expect(await GlideJson.get(client, key, { path: "." })).toEqual(
@@ -804,28 +809,38 @@ describe("Server Module Tests", () => {
                 );
 
                 expect(
-                    await GlideJson.strappend(client, key, JSON.parse("bar"), {
-                        path: "$.nested",
-                    }),
-                ).toBeNull();
+                    await GlideJson.strappend(
+                        client,
+                        key,
+                        JSON.stringify("bar"),
+                        {
+                            path: "$.nested",
+                        },
+                    ),
+                ).toEqual([null]);
 
                 await expect(
-                    GlideJson.strappend(client, key, JSON.parse("bar"), {
+                    GlideJson.strappend(client, key, JSON.stringify("bar"), {
                         path: ".nested",
                     }),
                 ).rejects.toThrow(RequestError);
                 await expect(
-                    GlideJson.strappend(client, key, JSON.parse("bar")),
+                    GlideJson.strappend(client, key, JSON.stringify("bar")),
                 ).rejects.toThrow(RequestError);
 
                 expect(
-                    await GlideJson.strappend(client, key, JSON.parse("try"), {
-                        path: "$.non_existing_path",
-                    }),
+                    await GlideJson.strappend(
+                        client,
+                        key,
+                        JSON.stringify("try"),
+                        {
+                            path: "$.non_existing_path",
+                        },
+                    ),
                 ).toEqual([]);
 
                 await expect(
-                    GlideJson.strappend(client, key, JSON.parse("try"), {
+                    GlideJson.strappend(client, key, JSON.stringify("try"), {
                         path: ".non_existing_path",
                     }),
                 ).rejects.toThrow(RequestError);
@@ -833,7 +848,7 @@ describe("Server Module Tests", () => {
                     GlideJson.strappend(
                         client,
                         "non_existing_key",
-                        JSON.parse("try"),
+                        JSON.stringify("try"),
                     ),
                 ).rejects.toThrow(RequestError);
             },
