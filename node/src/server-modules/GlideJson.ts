@@ -373,6 +373,7 @@ export class GlideJson {
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
      * - (Optional) `path`: The path within the JSON document, Defaults to root if not provided.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns ReturnTypeJson:
      *     - For JSONPath (path starts with `$`):
      *       - Returns an array of replies for every possible path, indicating the RESP form of the JSON value.
@@ -468,7 +469,6 @@ export class GlideJson {
      * @param value - The value to append to the string. Must be wrapped with single quotes. For example, to append "foo", pass '"foo"'.
      * @param options - (Optional) Additional parameters:
      * - (Optional) `path`: The path within the JSON document, Defaults to root if not provided.
-     * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns ReturnTypeJson:
      *     - For JSONPath (path starts with `$`):
      *       - Returns a list of integer replies for every possible path, indicating the length of the resulting string after appending `value`,
