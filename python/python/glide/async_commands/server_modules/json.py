@@ -281,7 +281,7 @@ async def arrlen(
         >>> await json.arrlen(client, "doc", "$.a")
             [3]  # Retrieves the length of the array at path $.a.
         >>> await json.arrlen(client, "doc", "$..a")
-            [3, 2, None]  # Retrieves lengths of arrays found at all levels of the path `..a`.
+            [3, 2, None]  # Retrieves lengths of arrays found at all levels of the path `$..a`.
         >>> await json.arrlen(client, "doc", "..a")
             3  # Legacy path retrieves the first array match at path `..a`.
         >>> await json.arrlen(client, "non_existing_key", "$.a")
@@ -290,7 +290,7 @@ async def arrlen(
         >>> await json.set(client, "doc", "$", '[1, 2, 3, 4]')
             'OK'  # JSON is successfully set for doc
         >>> await json.arrlen(client, "doc")
-            4  # Retrieves lengths of arrays in root.
+            4  # Retrieves lengths of array in root.
     """
     args = ["JSON.ARRLEN", key]
     if path:
