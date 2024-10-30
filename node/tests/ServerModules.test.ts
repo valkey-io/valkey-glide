@@ -1213,7 +1213,8 @@ describe("Server Module Tests", () => {
             const sleep = new Promise((resolve) => setTimeout(resolve, DATA_PROCESSING_TIMEOUT));
             await sleep;
 
-            const binaryResult: (number | GlideRecord<GlideString | GlideRecord<GlideString>>)[] = await GlideFt.search(
+            // With the `COUNT` parameters - returns only the count
+            const binaryResultCount: (number | GlideRecord<GlideString | GlideRecord<GlideString>>)[] = await GlideFt.search(
                 client,
                 index,
                 "*=>[KNN 2 @VEC $query_vec]",
@@ -1224,7 +1225,18 @@ describe("Server Module Tests", () => {
                     decoder: Decoder.Bytes,
                 }
             );
-            console.log(JSON.stringify(binaryResult));
+            expect(binaryResultCount).toEqual([2]);
+
+            const binaryResult: (number | GlideRecord<GlideString | GlideRecord<GlideString>>)[] = await GlideFt.search(
+                client,
+                index,
+                "*=>[KNN 2 @VEC $query_vec]",
+                {
+                    params: [{key: "query_vec", value: binaryValue1}],
+                    timeout: 10000,
+                    decoder: Decoder.Bytes,
+                }
+            );
 
             const expectedBinaryResult: (number | GlideRecord<GlideString | GlideRecord<GlideString>>)[] = [
                 2,
