@@ -1047,7 +1047,7 @@ describe("Server Module Tests", () => {
             }
         });
 
-        it("FT.DROPINDEX binary test", async () => {
+        it("FT.DROPINDEX test", async () => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(
                     cluster.getAddresses(),
@@ -1165,7 +1165,7 @@ describe("Server Module Tests", () => {
             },
         );
 
-        it("FT.SEARCH test", async () => {
+        it("FT.SEARCH binary test", async () => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(
                     cluster.getAddresses(),

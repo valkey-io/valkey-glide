@@ -396,8 +396,6 @@ async function _handleCustomCommand(
     client: GlideClient | GlideClusterClient,
     args: GlideString[],
     decoderOption: DecoderOption = {},
-) {
-    decoderOption?: DecoderOption,
 ): Promise<GlideReturnType> {
     return client instanceof GlideClient
         ? (client as GlideClient).customCommand(args, decoderOption)
