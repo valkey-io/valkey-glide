@@ -1209,6 +1209,17 @@ describe("Server Module Tests", () => {
                 { field: "vec", value: binaryValue2 },
             ])).toEqual(1);
 
+            const stringValue1 = "AA";
+            expect(await client.hset(prefix + "2", [
+                { field: "vec", value: stringValue1 },
+            ])).toEqual(1);
+
+            const stringValue2 = "AC";
+            expect(await client.hset(prefix + "3", [
+                // value of <Buffer 00 00 00 00 00 00 00 80 BF>
+                { field: "vec", value: stringValue2 },
+            ])).toEqual(1);
+
             // let server digest the data and update index
             const sleep = new Promise((resolve) => setTimeout(resolve, DATA_PROCESSING_TIMEOUT));
             await sleep;
@@ -1276,10 +1287,10 @@ describe("Server Module Tests", () => {
                 index,
                 "*=>[KNN 2 @VEC $query_vec]",
                 {
-                    returnFields: [{fieldIdentifier: "vec", alias: "my_vector"}],
-                    params: [{key: "query_vec", value: binaryValue1}],
+                    returnFields: [{fieldIdentifier: "vec"}],
+                    params: [{key: "query_vec", value: stringValue1}],
                     timeout: 10000,
-                    limit: {offset: 0, count: 1},
+                    limit: {offset: 0, count: 2},
                     decoder: Decoder.String,
                 }
             );
