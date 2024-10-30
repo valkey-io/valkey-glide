@@ -37,7 +37,7 @@ class FtProfileOptions:
     def __init__(
         self,
         query: TEncodable,
-        queryType: Optional[QueryType] = None,
+        queryType: QueryType,
         queryOptions: Optional[Union[FtSeachOptions, FtAggregateOptions]] = None,
         limited: Optional[bool] = False,
     ):
