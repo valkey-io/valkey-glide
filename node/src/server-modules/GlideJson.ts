@@ -546,7 +546,9 @@ export class GlideJson {
      * // Output: [0, 1, 2, 2];
      * console.log(await GlideJson.get(client, "doc", "$"));
      * // Output: "[[],["a"],["a","b"],["a","b"]]" - Returns the value at path '$' in the JSON document stored at `doc`.
-     *
+     * ```
+     * @example
+     * ```typescript
      * console.log(await GlideJson.set(client, "doc", "$", "{"children": ["John", "Jack", "Tom", "Bob", "Mike"]}");
      * // Output: 'OK' - Indicates successful setting of the value at path '$' in the key stored at `doc`.
      * result = await GlideJson.arrtrim(client, "doc", ".children", 0, 1);

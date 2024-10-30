@@ -747,7 +747,7 @@ describe("Server Module Tests", () => {
                     await GlideJson.set(
                         client,
                         key,
-                        "$",
+                        ".a",
                         JSON.stringify(jsonValue2),
                     ),
                 ).toBe("OK");
@@ -764,7 +764,7 @@ describe("Server Module Tests", () => {
                     await GlideJson.set(
                         client,
                         key,
-                        "$",
+                        "..a",
                         JSON.stringify(jsonValue3),
                     ),
                 ).toBe("OK");
@@ -787,16 +787,10 @@ describe("Server Module Tests", () => {
 
                 // Test with non-existent path
                 await expect(
-                    GlideJson.arrtrim(client, key, ".non_existing", 0, 1),
+                    GlideJson.arrtrim(client, key, "nonexistent", 0, 1),
                 ).rejects.toThrow(RequestError);
                 expect(
-                    await GlideJson.arrtrim(
-                        client,
-                        key,
-                        "$.non_existinga",
-                        1,
-                        10,
-                    ),
+                    await GlideJson.arrtrim(client, key, "$.nonexistent", 0, 1),
                 ).toEqual([]);
 
                 // Test with non-array path
