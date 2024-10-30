@@ -42,10 +42,10 @@ runs:
           shell: bash
           run: |
               git config --global --add safe.directory "${{ inputs.workspace }}"
+              git fetch origin ${{ github.sha }}
+              git checkout ${{ github.sha }}
               git clean -xdf
               git reset --hard
-              git submodule sync
-              git submodule update --init --recursive
 
         - name: Set up access for musl on ARM
           shell: bash

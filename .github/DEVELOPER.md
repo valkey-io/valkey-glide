@@ -1,17 +1,25 @@
 # CI/CD Workflow Guide
 
-TODO: Add a description of the CI/CD workflow and its components.
-
 ### Overview
 
 Our CI/CD pipeline tests and builds our project across multiple languages, versions, and environments. This guide outlines the key components and processes of our workflow.
 
 ### Workflow Triggers
 
--   Push to `main` branch
 -   Pull requests
--   Scheduled runs (daily)
--   Manual trigger (workflow_dispatch)
+-   Pushes to `main` or release branches (PR merges)
+-   Scheduled runs (daily) - starts CI pipelines for all clients
+-   Manual trigger (`workflow_dispatch`) - a developer can start a client's pipeline or the scheduled one to run all pipelines on demand
+
+<img width="437" alt="Job triggers" src="https://github.com/user-attachments/assets/58bf2b76-d778-4e43-8891-5dcbf0ff9b72">
+
+### Test coverage
+
+There are two levels of testing: the basic one and full (_aka_ `full-matrix`).
+Basic amount of testing is executed on every open and merged PR. The full set of tests is executed by the scheduled job.
+A developer can select the level when starting a job, either scheduled or client's pipeline.
+
+<img width="264" alt="Matrices" src="https://github.com/user-attachments/assets/72857f80-078c-4e11-bcc6-75beb0125a9d">
 
 ### Language-Specific Workflows
 
@@ -24,9 +32,9 @@ Each language has its own workflow file with similar structure but language-spec
 While workflows are language-specific, the matrix files are shared across all workflows.
 Workflows are starting by loading the matrix files from the `.github/json_matrices` directory.
 
--   `engine-matrix.json`: Defines the versions of Valkey engine to test against.
+-   `engine-matrix.json`: Defines the versions of the engine to test against.
 -   `build-matrix.json`: Defines the host environments for testing.
--   `supported-languages-version.json`: Defines the supported versions of languages.
+-   `supported-languages-versions.json`: Defines the supported versions of languages.
 
 All matrices have a `run` like field which specifies if the configuration should be tested on every workflow run.
 This allows for flexible control over which configurations are tested in different scenarios, optimizing CI/CD performance and resource usage.
@@ -36,11 +44,15 @@ This allows for flexible control over which configurations are tested in differe
 Defines the versions of Valkey engine to test against:
 
 ```json
-[{ "type": "valkey", "version": "7.2.5", "run": "always" }]
+[
+    { "type": "valkey", "version": "7.2.5", "run": "always" }
+    // ... other configurations
+]
 ```
 
 -   `type`: The type of engine (e.g., Valkey, Redis).
--   `version`: The version of the engine.
+-   `version`: Specifies the engine version that the workflow should checkout.
+    For example, "7.2.5" represents a release tag, while "7.0" denotes a branch name. The workflow should use this parameter to checkout the specific release version or branch to build the engine with the appropriate version.
 -   `run`: Specifies if the engine version should be tested on every workflow.
 
 #### Build Matrix (build-matrix.json)
@@ -61,8 +73,8 @@ Defines the host environments for testing:
 
 -   `OS`: The operating system of the host.
 -   `RUNNER`: The GitHub runner to use.
--   `TARGET`: The target environment.
--   `run`: Specifies which language workflows should use this host configuration, always means run on each workflow trigger.
+-   `TARGET`: The target environment as defined in Rust. To see a list of available targets, run `rustup target list`.
+-   `run`: Specifies which language workflows should use this host configuration. The value `always` indicates that the configuration should be used for every workflow trigger.
 
 #### Supported Languages Version (supported-languages-version.json)
 
@@ -81,31 +93,31 @@ Defines the supported versions of languages:
 
 -   `language`: The language for which the version is supported.
 -   `versions`: The full versions supported of the language which will test against scheduled.
--   `always-run-versions`: The versions which will be tested in every workflow run.
+-   `always-run-versions`: The versions that will always be tested, regardless of the workflow trigger.
 
 #### Triggering Workflows
 
-Push to main or create a pull request to run workflows automatically.
-Use workflow_dispatch for manual triggers, accepting inputs of full-matrix which is a boolean value to run all configurations.
-Scheduled runs are triggered daily to ensure regular testing of all configurations.
+-   Push to `main` by merging a PR or create a new pull request to run workflows automatically.
+-   Use `workflow_dispatch` for manual triggers, accepting a boolean configuration parameter to run all configurations.
+-   Scheduled runs are triggered daily to ensure regular testing of all configurations.
 
 ### Mutual vs. Language-Specific Components
 
 #### Mutual
 
-`Matrix files` - `.github/json_matrices`
-`Shared dependencies installation` - `.github/workflows/install-shared-dependencies/action.yml`
-`Linting Rust` - `.github/workflows/lint-rust/action.yml`
+-   Matrix files - `.github/json_matrices/`
+-   Shared dependencies installation - `.github/workflows/install-shared-dependencies/action.yml`
+-   Rust linters - `.github/workflows/lint-rust/action.yml`
 
 #### Language-Specific
 
-`Package manager commands`
-`Testing frameworks`
-`Build processes`
+-   Package manager commands
+-   Testing frameworks
+-   Build processes
 
 ### Customizing Workflows
 
-Modify `[language].yml` files to adjust language-specific steps.
+Modify `<language>.yml` files to adjust language-specific steps.
 Update matrix files to change tested versions or environments.
 Adjust cron schedules in workflow files for different timing of scheduled runs.
 
