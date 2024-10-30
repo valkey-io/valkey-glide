@@ -1218,7 +1218,7 @@ describe("Server Module Tests", () => {
                 index,
                 "*=>[KNN 2 @VEC $query_vec]",
                 {
-                    params: [{key: "query_vec", value: Buffer.alloc(1)}],
+                    params: [{key: "query_vec", value: binaryValue1}],
                     decoder: Decoder.Bytes,
                 }
             );
@@ -1227,6 +1227,19 @@ describe("Server Module Tests", () => {
             const expectedResult: (number | GlideRecord<GlideString | GlideRecord<GlideString>>)[] = [
                 2,
                 [
+                    {
+                        "key": Buffer.from(prefix + "1"),
+                        "value":[
+                            {
+                                "key": Buffer.from("vec"),
+                                "value": binaryValue2,
+                            },
+                            {
+                                "key": Buffer.from("__VEC_score"),
+                                "value": Buffer.from("1"),
+                            }
+                        ]
+                    },
                     {
                         "key": Buffer.from(prefix + "0"),
                         "value":[
@@ -1240,19 +1253,6 @@ describe("Server Module Tests", () => {
                             }
                         ]
                     },
-                    {
-                        "key": Buffer.from(prefix + "1"),
-                        "value":[
-                            {
-                                "key": Buffer.from("vec"),
-                                "value": binaryValue2,
-                            },
-                            {
-                                "key": Buffer.from("__VEC_score"),
-                                "value": Buffer.from("1"),
-                            }
-                        ]
-                    }
                 ]
             ];
             expect(result).toEqual(expectedResult);
