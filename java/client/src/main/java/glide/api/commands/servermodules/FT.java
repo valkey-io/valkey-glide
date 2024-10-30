@@ -540,7 +540,7 @@ public class FT {
      * Map<String, Object> response = client.ftinfo("myIndex").get();
      * // the response contains data in the following format:
      * Map<String, Object> data = Map.of(
-     *     "index_name", gs("bcd97d68-4180-4bc5-98fe-5125d0abbcb8"),
+     *     "index_name", gs("myIndex"),
      *     "index_status", gs("AVAILABLE"),
      *     "key_type", gs("JSON"),
      *     "creation_timestamp", 1728348101728771L,
@@ -566,7 +566,7 @@ public class FT {
      *                 gs("dimension", 6L,
      *                 gs("block_size", 1024L,
      *                 gs("algorithm", gs("FLAT")
-     *           )
+     *             )
      *         ),
      *         Map.of(
      *             gs("identifier"), gs("name"),
@@ -599,7 +599,7 @@ public class FT {
      * Map<String, Object> response = client.ftinfo(gs("myIndex")).get();
      * // the response contains data in the following format:
      * Map<String, Object> data = Map.of(
-     *     "index_name", gs("bcd97d68-4180-4bc5-98fe-5125d0abbcb8"),
+     *     "index_name", gs("myIndex"),
      *     "index_status", gs("AVAILABLE"),
      *     "key_type", gs("JSON"),
      *     "creation_timestamp", 1728348101728771L,
@@ -625,7 +625,7 @@ public class FT {
      *                 gs("dimension", 6L,
      *                 gs("block_size", 1024L,
      *                 gs("algorithm", gs("FLAT")
-     *           )
+     *             )
      *         ),
      *         Map.of(
      *             gs("identifier"), gs("name"),

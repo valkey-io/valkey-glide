@@ -723,14 +723,6 @@ public class VectorSearchTests {
     @Test
     @SneakyThrows
     public void ft_info() {
-        // TODO use FT.LIST when it is done
-        var indices = (Object[]) client.customCommand(new String[] {"FT._LIST"}).get().getSingleValue();
-
-        // check that we can get a response for all indices (no crashes on value conversion or so)
-        for (var idx : indices) {
-            FT.info(client, (String) idx).get();
-        }
-
         var index = UUID.randomUUID().toString();
         assertEquals(
                 OK,

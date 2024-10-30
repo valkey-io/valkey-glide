@@ -2,12 +2,28 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { Decoder, DecoderOption, GlideString } from "../BaseClient";
+import {
+    convertGlideRecordToRecord,
+    Decoder,
+    DecoderOption,
+    GlideRecord,
+    GlideReturnType,
+    GlideString,
+} from "../BaseClient";
 import { GlideClient } from "../GlideClient";
 import { GlideClusterClient } from "../GlideClusterClient";
 import { Field, FtCreateOptions } from "./GlideFtOptions";
 
-/** Module for Vector Search commands */
+/** Data type of {@link GlideFt.info | info} command response. */
+type FtInfoReturnType = Record<
+    string,
+    | GlideString
+    | number
+    | GlideString[]
+    | Record<string, GlideString | Record<string, GlideString | number>[]>
+>;
+
+/** Module for Vector Search commands. */
 export class GlideFt {
     /**
      * Creates an index and initiates a backfill of that index.
@@ -187,16 +203,82 @@ export class GlideFt {
             decoder: Decoder.String,
         }) as Promise<"OK">;
     }
+
+    /**
+     * Returns information about a given index.
+     *
+     * @param client - The client to execute the command.
+     * @param indexName - The index name.
+     * @param options - (Optional) See {@link DecoderOption}.
+     *
+     * @returns Nested maps with info about the index. See example for more details.
+     *
+     * @example
+     * ```typescript
+     * const info = await GlideFt.info(client, "myIndex");
+     * console.log(info); // Output:
+     * // {
+     * //     index_name: 'myIndex',
+     * //     index_status: 'AVAILABLE',
+     * //     key_type: 'JSON',
+     * //     creation_timestamp: 1728348101728771,
+     * //     key_prefixes: [ 'json:' ],
+     * //     num_indexed_vectors: 0,
+     * //     space_usage: 653471,
+     * //     num_docs: 0,
+     * //     vector_space_usage: 653471,
+     * //     index_degradation_percentage: 0,
+     * //     fulltext_space_usage: 0,
+     * //     current_lag: 0,
+     * //     fields: [
+     * //         {
+     * //             identifier: '$.vec',
+     * //             type: 'VECTOR',
+     * //             field_name: 'VEC',
+     * //             option: '',
+     * //             vector_params: {
+     * //                 data_type: 'FLOAT32',
+     * //                 initial_capacity: 1000,
+     * //                 current_capacity: 1000,
+     * //                 distance_metric: 'L2',
+     * //                 dimension: 6,
+     * //                 block_size: 1024,
+     * //                 algorithm: 'FLAT'
+     * //             }
+     * //         },
+     * //         {
+     * //             identifier: 'name',
+     * //             type: 'TEXT',
+     * //             field_name: 'name',
+     * //             option: ''
+     * //         },
+     * //     ]
+     * // }
+     * ```
+     */
+    static async info(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        options?: DecoderOption,
+    ): Promise<FtInfoReturnType> {
+        const args: GlideString[] = ["FT.INFO", indexName];
+
+        return (
+            _handleCustomCommand(client, args, options) as Promise<
+                GlideRecord<GlideString>
+            >
+        ).then(convertGlideRecordToRecord);
+    }
 }
 
 /**
  * @internal
  */
-function _handleCustomCommand(
+async function _handleCustomCommand(
     client: GlideClient | GlideClusterClient,
     args: GlideString[],
-    decoderOption: DecoderOption,
-) {
+    decoderOption?: DecoderOption,
+): Promise<GlideReturnType> {
     return client instanceof GlideClient
         ? (client as GlideClient).customCommand(args, decoderOption)
         : (client as GlideClusterClient).customCommand(args, decoderOption);
