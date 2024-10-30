@@ -119,6 +119,7 @@ from glide.constants import (
     TOK,
     FtAggregateResponse,
     FtInfoResponse,
+    FtProfileResponse,
     FtSearchResponse,
     TClusterResponse,
     TEncodable,
@@ -192,6 +193,7 @@ __all__ = [
     "TXInfoStreamResponse",
     "FtAggregateResponse",
     "FtInfoResponse",
+    "FtProfileResponse",
     "FtSearchResponse",
     # Commands
     "BitEncoding",

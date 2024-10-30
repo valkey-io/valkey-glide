@@ -70,7 +70,10 @@ class FtProfileOptions:
             queryOptions (Optional[Union[FtSeachOptions, FtAggregateOptions]]): The arguments/options for the FT.AGGREGATE/FT.SEARCH command being profiled.
             limited (Optional[bool]): To provide some brief version of the output, otherwise a full verbose output is provided.
         """
-        return cls(query, None, queryOptions, limited)
+        queryType: QueryType = QueryType.SEARCH
+        if type(queryOptions) == FtAggregateOptions:
+            queryType = QueryType.AGGREGATE
+        return cls(query, queryType, queryOptions, limited)
 
     @classmethod
     def from_query_type(
@@ -94,28 +97,12 @@ class FtProfileOptions:
             List[TEncodable]: A list of remaining arguments for the FT.PROFILE command.
         """
         args: List[TEncodable] = []
-        if self.queryType:
-            args.extend([self.queryType.value, FtProfileKeywords.QUERY, self.query])
-        elif self.queryOptions:
-            if type(self.queryOptions).__name__ == FtAggregateOptions.__name__:
-                args.extend(
-                    [
-                        QueryType.AGGREGATE.value,
-                        FtProfileKeywords.QUERY,
-                        self.query,
-                    ]
-                    + cast(FtAggregateOptions, self.queryOptions).to_args()
-                )
-            elif type(self.queryOptions).__name__ == FtSeachOptions.__name__:
-                args.extend(
-                    [
-                        QueryType.SEARCH.value,
-                        FtProfileKeywords.QUERY,
-                        self.query,
-                    ]
-                    + cast(FtSeachOptions, self.queryOptions).toArgs()
-                )
-
         if self.limited:
             args.append(FtProfileKeywords.LIMITED)
+        args.extend([self.queryType.value, FtProfileKeywords.QUERY, self.query])
+        if self.queryOptions:
+            if type(self.queryOptions) == FtAggregateOptions:
+                args.extend(cast(FtAggregateOptions, self.queryOptions).to_args())
+            else:
+                args.extend(cast(FtSeachOptions, self.queryOptions).toArgs())
         return args

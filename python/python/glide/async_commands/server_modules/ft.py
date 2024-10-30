@@ -26,6 +26,7 @@ from glide.constants import (
     TOK,
     FtAggregateResponse,
     FtInfoResponse,
+    FtProfileResponse,
     FtSearchResponse,
     TEncodable,
 )
@@ -318,7 +319,7 @@ async def aggregate(
 
 async def profile(
     client: TGlideClient, indexName: TEncodable, options: FtProfileOptions
-) -> List[Union[FtSearchResponse, FtAggregateResponse, Any]]:
+) -> FtProfileResponse:
     """
     Runs a search or aggregation query and collects performance profiling information.
 
@@ -328,15 +329,12 @@ async def profile(
         options (FtProfileOptions): Options for the command.
 
     Returns:
-        List[Union[FtSearchResponse, FtAggregateResponse]]: A two-element array. The first element contains results of query being profiled, the second element stores profiling information.
+        FtProfileResponse: A two-element array. The first element contains results of query being profiled, the second element stores profiling information.
 
     Examples:
         >>> ftSearchOptions = FtSeachOptions(return_fields=[ReturnField(field_identifier="a", alias="a_new"), ReturnField(field_identifier="b", alias="b_new")])
         >>> ftProfileResult = await ft.profile(glide_client, "myIndex", FtProfileOptions.from_query_options(query="*", queryOptions=ftSearchOptions))
-            [[2, {b'{json-search-b9e65afb-a1c8-4ead-a89a-0036cee0561f}:d2c0bea7-45c9-4469-bef5-a7e665462e27': {b'a': b'11111', b'b': b'2'}, b'{json-search-b9e65afb-a1c8-4ead-a89a-0036cee0561f}:38e4b6dd-e30d-4a84-a9c7-16b1b1b0319a': {b'a': b'22222', b'b': b'2'}}], {b'all.count': 2, b'sync.time': 1, b'query.time': 7, b'result.count': 2, b'result.time': 0}]
+            [[2, {b'key1': {b'a': b'11111', b'b': b'2'}, b'key2': {b'a': b'22222', b'b': b'2'}}], {b'all.count': 2, b'sync.time': 1, b'query.time': 7, b'result.count': 2, b'result.time': 0}]
     """
     args: List[TEncodable] = [CommandNames.FT_PROFILE, indexName] + options.to_args()
-    return cast(
-        List[Union[FtSearchResponse, FtAggregateResponse, Any]],
-        await client.custom_command(args),
-    )
+    return cast(FtProfileResponse, await client.custom_command(args))
