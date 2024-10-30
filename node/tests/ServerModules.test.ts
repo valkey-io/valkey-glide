@@ -1195,16 +1195,17 @@ describe("Server Module Tests", () => {
                 }),
             ).toEqual("OK");
 
+            const binaryValue1 = Buffer.alloc(8);
             expect(await client.hset(Buffer.from(prefix + "0"), [
-                // vaue of <Buffer 00 00 00 00 00 00 00 00 00 00>
-                { field: "vec", value: Buffer.alloc(8) },
+                // value of <Buffer 00 00 00 00 00 00 00 00 00>
+                { field: "vec", value: binaryValue1 },
             ])).toEqual(1);
 
-            const binaryValue2: Buffer = Buffer.alloc(12);
-            binaryValue2[10] = 0x80;
-            binaryValue2[11] = 0xBF;
+            const binaryValue2: Buffer = Buffer.alloc(8);
+            binaryValue2[6] = 0x80;
+            binaryValue2[7] = 0xBF;
             expect(await client.hset(Buffer.from(prefix + "1"), [
-                // vaue of <Buffer 00 00 00 00 00 00 00 00 00 00 80 BF>
+                // value of <Buffer 00 00 00 00 00 00 00 80 BF>
                 { field: "vec", value: binaryValue2 },
             ])).toEqual(1);
 
@@ -1217,24 +1218,38 @@ describe("Server Module Tests", () => {
                 index,
                 "*=>[KNN 2 @VEC $query_vec]",
                 {
-                    params: [{key: Buffer.from("query_vec"), value: Buffer.alloc(8)}]
+                    params: [{key: "query_vec", value: Buffer.alloc(1)}],
+                    decoder: Decoder.Bytes,
                 }
             );
 
             console.log("search result: " + JSON.stringify(result));
             const expectedResult: (number | GlideRecord<GlideString | GlideRecord<GlideString>>)[] = [
-                1,
+                2,
                 [
                     {
-                        "key": prefix + "0",
+                        "key": Buffer.from(prefix + "0"),
                         "value":[
                             {
-                                "key":"vec",
-                                "value":Buffer.alloc(8).toString(),
+                                "key": Buffer.from("vec"),
+                                "value": binaryValue1,
                             },
                             {
-                                "key":"__VEC_score",
-                                "value":"0",
+                                "key": Buffer.from("__VEC_score"),
+                                "value": Buffer.from("0"),
+                            }
+                        ]
+                    },
+                    {
+                        "key": Buffer.from(prefix + "1"),
+                        "value":[
+                            {
+                                "key": Buffer.from("vec"),
+                                "value": binaryValue2,
+                            },
+                            {
+                                "key": Buffer.from("__VEC_score"),
+                                "value": Buffer.from("1"),
                             }
                         ]
                     }
