@@ -96,10 +96,10 @@ class FtProfileOptions:
         Returns:
             List[TEncodable]: A list of remaining arguments for the FT.PROFILE command.
         """
-        args: List[TEncodable] = []
+        args: List[TEncodable] = [self.queryType.value]
         if self.limited:
             args.append(FtProfileKeywords.LIMITED)
-        args.extend([self.queryType.value, FtProfileKeywords.QUERY, self.query])
+        args.extend([FtProfileKeywords.QUERY, self.query])
         if self.queryOptions:
             if type(self.queryOptions) == FtAggregateOptions:
                 args.extend(cast(FtAggregateOptions, self.queryOptions).to_args())
