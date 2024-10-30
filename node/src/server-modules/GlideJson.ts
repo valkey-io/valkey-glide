@@ -8,13 +8,14 @@ import { GlideClient } from "../GlideClient";
 import { GlideClusterClient, RouteOption } from "../GlideClusterClient";
 
 export type ReturnTypeJson<T> = T | (T | null)[];
+export type UniversalReturnTypeJson<T> = T | T[];
 
 /**
  * Represents options for formatting JSON data, to be used in the [JSON.GET](https://valkey.io/commands/json.get/) command.
  */
 export interface JsonGetOptions {
     /** The path or list of paths within the JSON document. Default is root `$`. */
-    paths?: GlideString[];
+    path?: GlideString | GlideString[];
     /** Sets an indentation string for nested levels. */
     indent?: GlideString;
     /** Sets a string that's printed at the end of each line. */
@@ -31,23 +32,27 @@ export interface JsonGetOptions {
 function _jsonGetOptionsToArgs(options: JsonGetOptions): GlideString[] {
     const result: GlideString[] = [];
 
-    if (options.paths !== undefined) {
-        result.push(...options.paths);
+    if (options.path) {
+        if (Array.isArray(options.path)) {
+            result.push(...options.path);
+        } else {
+            result.push(options.path);
+        }
     }
 
-    if (options.indent !== undefined) {
+    if (options.indent) {
         result.push("INDENT", options.indent);
     }
 
-    if (options.newline !== undefined) {
+    if (options.newline) {
         result.push("NEWLINE", options.newline);
     }
 
-    if (options.space !== undefined) {
+    if (options.space) {
         result.push("SPACE", options.space);
     }
 
-    if (options.noescape !== undefined) {
+    if (options.noescape) {
         result.push("NOESCAPE");
     }
 
@@ -391,14 +396,22 @@ export class GlideJson {
         client: BaseClient,
         key: GlideString,
         options?: { path: GlideString },
-    ): Promise<ReturnTypeJson<GlideString>> {
+    ): Promise<
+        UniversalReturnTypeJson<
+            (number | GlideString) | (number | GlideString | null) | null
+        >
+    > {
         const args = ["JSON.RESP", key];
 
         if (options) {
             args.push(options.path);
         }
 
-        return _executeCommand<ReturnTypeJson<GlideString>>(client, args);
+        return _executeCommand<
+            UniversalReturnTypeJson<
+                (number | GlideString) | (number | GlideString | null) | null
+            >
+        >(client, args);
     }
 
     /**
@@ -418,26 +431,22 @@ export class GlideJson {
      *       - Returns the length of the JSON value at `path` or `null` if `key` doesn't exist.
      *       - If multiple paths match, the length of the first matched string is returned.
      *       - If the JSON value at`path` is not a string or if `path` doesn't exist, an error is raised.
-     *       - If `key` doesn't exist, `null` is returned.
+     *     - If `key` doesn't exist, `null` is returned.
      *
      * @example
      * ```typescript
      * console.log(await GlideJson.set(client, "doc", "$", '{a:"foo", nested: {a: "hello"}, nested2: {a: 31}}"));
      * // Output: 'OK' - Indicates successful setting of the value at path '$' in the key stored at `doc`.
-     * let result = await GlideJson.strlen(client, "doc", {path: "$..a"});
-     * console.log(result);
+     * console.log(await GlideJson.strlen(client, "doc", {path: "$..a"}));
      * // Output: [3, 5, null]; - The length of the string values at path '$..a' in the key stored at `doc`.
      *
-     * result = await GlideJson.strlen(client, "doc", {path: "nested.a"});
-     * console.log(result);
+     * console.log(await GlideJson.strlen(client, "doc", {path: "nested.a"}));
      * // Output: 5; - The length of the JSON value at path 'nested.a' in the key stored at `doc`.
      *
-     * result = await GlideJson.strlen(client, "doc", {path: "$"});
-     * console.log(result);
+     * console.log(await GlideJson.strlen(client, "doc", {path: "$"}));
      * // Output: [null] - Returns an array with null since the value at root path does in the JSON document stored at `doc` is not a string.
      *
-     * result = await GlideJson.strlen(client, "non_existent_key", {path: "."});
-     * console.log(result);
+     * console.log(await GlideJson.strlen(client, "non_existent_key", {path: "."}));
      * // Output: null - return null if key does not exist.
      * ```
      */
@@ -451,6 +460,57 @@ export class GlideJson {
         if (options) {
             args.push(options.path);
         }
+
+        return _executeCommand<ReturnTypeJson<number>>(client, args);
+    }
+
+    /**
+     * Appends the specified `value` to the string stored at the specified `path` within the JSON document stored at `key`.
+     *
+     * @param client - The client to execute the command.
+     * @param key - The key of the JSON document.
+     * @param value - The value to append to the string. Must be wrapped with single quotes. For example, to append "foo", pass '"foo"'.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) path - The path within the JSON document, Defaults to root if not provided.
+     * @returns ReturnTypeJson:
+     *     - For JSONPath (path starts with `$`):
+     *       - Returns a list of integer replies for every possible path, indicating the length of the resulting string after appending `value`,
+               or None for JSON values matching the path that are not string.
+             - If `key` doesn't exist, an error is raised.
+     *     - For legacy path (path doesn't start with `$`):
+     *       - Returns the length of the resulting string after appending `value` to the string at `path`.
+             - If multiple paths match, the length of the last updated string is returned.
+             - If the JSON value at `path` is not a string of if `path` doesn't exist, an error is raised.
+             - If `key` doesn't exist, an error is raised.
+     *
+     * @example
+     * ```typescript
+     * console.log(await GlideJson.set(client, "doc", "$", '{a:"foo", nested: {a: "hello"}, nested2: {a: 31}}"));
+     * // Output: 'OK' - Indicates successful setting of the value at path '$' in the key stored at `doc`.
+     * console.log(await GlideJson.strappend(client, "doc", jsonpy.dumps("baz"), {path: "$..a"}))
+     * // Output: [6, 8, null] - The new length of the string values at path '$..a' in the key stored at `doc` after the append operation.
+     *
+     * console.log(await GlideJson.strappend(client, "doc", '"foo"', {path: "nested.a"}));
+     * // Output: 11 - The length of the string value after appending "foo" to the string at path 'nested.array' in the key stored at `doc`.
+     *
+     * const result = JSON.parse(await GlideJson.get(client, "doc", {path: "$"}));
+     * console.log(result);
+     * // Output: [{"a":"foobaz", "nested": {"a": "hellobazfoo"}, "nested2": {"a": 31}}] - The updated JSON value in the key stored at `doc`.
+     * ```
+     */
+    static async strappend(
+        client: BaseClient,
+        key: GlideString,
+        value: GlideString,
+        options?: { path: GlideString },
+    ): Promise<ReturnTypeJson<number>> {
+        const args = ["JSON.STRAPPEND", key];
+
+        if (options) {
+            args.push(options.path);
+        }
+
+        args.push(value);
 
         return _executeCommand<ReturnTypeJson<number>>(client, args);
     }
