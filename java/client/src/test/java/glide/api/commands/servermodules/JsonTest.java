@@ -517,7 +517,6 @@ class JsonTest {
         assertEquals(expectedResponseValue, actualResponseValue);
     }
 
-
     @Test
     @SneakyThrows
     void resp_without_path_returns_success() {
