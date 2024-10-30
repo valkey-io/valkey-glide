@@ -64,6 +64,7 @@ from glide.async_commands.server_modules.ft_options.ft_search_options import (
     FtSearchLimit,
     ReturnField,
 )
+from glide.async_commands.server_modules.json import JsonArrIndexOptions, JsonGetOptions
 from glide.async_commands.sorted_set import (
     AggregationType,
     GeoSearchByBox,
@@ -221,7 +222,6 @@ __all__ = [
     "InfBound",
     "InfoSection",
     "InsertPosition",
-    "json",
     "ft",
     "LexBoundary",
     "Limit",
@@ -250,6 +250,10 @@ __all__ = [
     "ClusterScanCursor"
     # PubSub
     "PubSubMsg",
+    # Json
+    "json",
+    "JsonGetOptions",
+    "JsonArrIndexOptions",
     # Logger
     "Logger",
     "LogLevel",
