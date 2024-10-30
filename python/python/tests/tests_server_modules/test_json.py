@@ -8,7 +8,7 @@ import typing
 import pytest
 from glide.async_commands.core import ConditionalChange, InfoSection
 from glide.async_commands.server_modules import json
-from glide.async_commands.server_modules.json import JsonGetOptions, JsonArrIndexOptions
+from glide.async_commands.server_modules.json import JsonArrIndexOptions, JsonGetOptions
 from glide.config import ProtocolVersion
 from glide.constants import OK
 from glide.exceptions import RequestError

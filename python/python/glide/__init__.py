@@ -59,12 +59,12 @@ from glide.async_commands.server_modules.ft_options.ft_create_options import (
     VectorFieldAttributesHnsw,
     VectorType,
 )
-from glide.async_commands.server_modules.json import JsonArrIndexOptions, JsonGetOptions
 from glide.async_commands.server_modules.ft_options.ft_search_options import (
     FtSeachOptions,
     FtSearchLimit,
     ReturnField,
 )
+from glide.async_commands.server_modules.json import JsonArrIndexOptions, JsonGetOptions
 from glide.async_commands.sorted_set import (
     AggregationType,
     GeoSearchByBox,
