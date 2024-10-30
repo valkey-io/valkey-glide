@@ -76,9 +76,9 @@ runs:
           shell: bash
           working-directory: ./node
           run: |
-              rm -rf node_modules && npm install --frozen-lockfile
+              rm -rf node_modules && rm -rf package-lock.json && npm install
               cd rust-client
-              npm install --frozen-lockfile
+              rm -rf node_modules && rm -rf package-lock.json && npm install
 
         - name: Build
           shell: bash

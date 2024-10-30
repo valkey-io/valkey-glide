@@ -69,9 +69,9 @@ runs:
               target: ${{ inputs.target }}
               github-token: ${{ inputs.github-token }}
 
-        - name: Install Valkey
-          if: ${{ inputs.engine-version != '' }}
-          uses: ./.github/workflows/install-valkey
+        - name: Install engine
+          if: "${{ inputs.engine-version }}"
+          uses: ./.github/workflows/install-engine
           with:
               engine-version: ${{ inputs.engine-version }}
               target: ${{ inputs.target }}

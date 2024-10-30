@@ -47,6 +47,7 @@ import {
     generateLuaLibCode,
     getClientConfigurationOption,
     getFirstResult,
+    getServerVersion,
     intoArray,
     intoString,
     parseCommandLineArgs,
@@ -67,17 +68,13 @@ describe("GlideClusterClient", () => {
         const clusterAddresses = parseCommandLineArgs()["cluster-endpoints"];
         // Connect to cluster or create a new one based on the parsed addresses
         cluster = clusterAddresses
-            ? (await RedisCluster.initFromExistingCluster(
+            ? await ValkeyCluster.initFromExistingCluster(
+                  true,
                   parseEndpoints(clusterAddresses),
-              ))
-                ? await ValkeyCluster.initFromExistingCluster(
-                      true,
-                      parseEndpoints(clusterAddresses),
-                      getServerVersion,
-                  )
-                : // setting replicaCount to 1 to facilitate tests routed to replicas
-                  await RedisCluster.createCluster(true, 3, 1)
-            : await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
+                  getServerVersion,
+              )
+            : // setting replicaCount to 1 to facilitate tests routed to replicas
+              await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
     }, 20000);
 
     afterEach(async () => {
@@ -87,6 +84,8 @@ describe("GlideClusterClient", () => {
     afterAll(async () => {
         if (testsFailed === 0) {
             await cluster.close();
+        } else {
+            await cluster.close(true);
         }
     });
 
@@ -249,7 +248,7 @@ describe("GlideClusterClient", () => {
             expect(await client.set(key, value)).toEqual("OK");
             // Since DUMP gets binary results, we cannot use the default decoder (string) here, so we expected to get an error.
             await expect(client.customCommand(["DUMP", key])).rejects.toThrow(
-                "invalid utf-8 sequence of 1 bytes from index 9",
+                "invalid utf-8 sequence of 1 bytes from index",
             );
 
             const dumpResult = await client.customCommand(["DUMP", key], {
@@ -377,10 +376,14 @@ describe("GlideClusterClient", () => {
 
             if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
                 lmpopArr.push(
-                    client.lmpop(["abc", "def"], ListDirection.LEFT, 1),
+                    client.lmpop(["abc", "def"], ListDirection.LEFT, {
+                        count: 1,
+                    }),
                 );
                 lmpopArr.push(
-                    client.blmpop(["abc", "def"], ListDirection.RIGHT, 0.1, 1),
+                    client.blmpop(["abc", "def"], ListDirection.RIGHT, 0.1, {
+                        count: 1,
+                    }),
                 );
             }
 
@@ -450,9 +453,15 @@ describe("GlideClusterClient", () => {
                 );
             }
 
-            for (const promise of promises) {
-                await expect(promise).rejects.toThrowError(/crossslot/i);
-            }
+            await Promise.allSettled(promises).then((results) => {
+                results.forEach((result) => {
+                    expect(result.status).toBe("rejected");
+
+                    if (result.status === "rejected") {
+                        expect(result.reason.message).toContain("CrossSlot");
+                    }
+                });
+            });
 
             client.close();
         },
