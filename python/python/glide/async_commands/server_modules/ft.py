@@ -16,10 +16,19 @@ from glide.async_commands.server_modules.ft_options.ft_create_options import (
     Field,
     FtCreateOptions,
 )
+from glide.async_commands.server_modules.ft_options.ft_profile_options import (
+    FtProfileOptions,
+)
 from glide.async_commands.server_modules.ft_options.ft_search_options import (
     FtSeachOptions,
 )
-from glide.constants import TOK, FtInfoResponse, TEncodable
+from glide.constants import (
+    TOK,
+    FtAggregateResponse,
+    FtInfoResponse,
+    FtSearchResponse,
+    TEncodable,
+)
 from glide.glide_client import TGlideClient
 
 
@@ -85,7 +94,7 @@ async def search(
     indexName: TEncodable,
     query: TEncodable,
     options: Optional[FtSeachOptions],
-) -> List[Union[int, Mapping[TEncodable, Mapping[TEncodable, TEncodable]]]]:
+) -> FtSearchResponse:
     """
     Uses the provided query expression to locate keys within an index. Once located, the count and/or the content of indexed fields within those keys can be returned.
 
@@ -96,7 +105,7 @@ async def search(
         options (Optional[FtSeachOptions]): The search options. See `FtSearchOptions`.
 
     Returns:
-        List[Union[int, Mapping[TEncodable, Mapping[TEncodable, TEncodable]]]]: A two element array, where first element is count of documents in result set, and the second element, which has the format Mapping[TEncodable, Mapping[TEncodable, TEncodable]] is a mapping between document names and map of their attributes.
+        FtSearchResponse: A two element array, where first element is count of documents in result set, and the second element, which has the format Mapping[TEncodable, Mapping[TEncodable, TEncodable]] is a mapping between document names and map of their attributes.
         If count(option in `FtSearchOptions`) is set to true or limit(option in `FtSearchOptions`) is set to FtSearchLimit(0, 0), the command returns array with only one element - the count of the documents.
 
     Examples:
@@ -111,10 +120,7 @@ async def search(
     args: List[TEncodable] = [CommandNames.FT_SEARCH, indexName, query]
     if options:
         args.extend(options.toArgs())
-    return cast(
-        List[Union[int, Mapping[TEncodable, Mapping[TEncodable, TEncodable]]]],
-        await client.custom_command(args),
-    )
+    return cast(FtSearchResponse, await client.custom_command(args))
 
 
 async def aliasadd(
@@ -286,23 +292,51 @@ async def aggregate(
     indexName: TEncodable,
     query: TEncodable,
     options: Optional[FtAggregateOptions],
-) -> List[Mapping[TEncodable, Any]]:
+) -> FtAggregateResponse:
     """
     A superset of the FT.SEARCH command, it allows substantial additional processing of the keys selected by the query expression.
+
     Args:
         client (TGlideClient): The client to execute the command.
         indexName (TEncodable): The index name for which the query is written.
         query (TEncodable): The search query, same as the query passed as an argument to FT.SEARCH.
         options (Optional[FtAggregateOptions]): The optional arguments for the command.
+
     Returns:
-        List[Mapping[TEncodable, Any]]: An array containing a mapping of field name and associated value as returned after the last stage of the command.
+        FtAggregateResponse: An array containing a mapping of field name and associated value as returned after the last stage of the command.
 
     Examples:
         >>> from glide import ft
-        >>> result = await ft.aggregate(glide_client, myIndex"", "*", FtAggregateOptions(loadFields=["__key"], clauses=[GroupBy(["@condition"], [Reducer("COUNT", [], "bicycles")])]))
+        >>> result = await ft.aggregate(glide_client, "myIndex", "*", FtAggregateOptions(loadFields=["__key"], clauses=[GroupBy(["@condition"], [Reducer("COUNT", [], "bicycles")])]))
             [{b'condition': b'refurbished', b'bicycles': b'1'}, {b'condition': b'new', b'bicycles': b'5'}, {b'condition': b'used', b'bicycles': b'4'}]
     """
     args: List[TEncodable] = [CommandNames.FT_AGGREGATE, indexName, query]
     if options:
         args.extend(options.to_args())
-    return cast(List[Mapping[TEncodable, Any]], await client.custom_command(args))
+    return cast(FtAggregateResponse, await client.custom_command(args))
+
+
+async def profile(
+    client: TGlideClient, indexName: TEncodable, options: FtProfileOptions
+) -> List[Union[FtSearchResponse, FtAggregateResponse, Any]]:
+    """
+    Runs a search or aggregation query and collects performance profiling information.
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+        indexName (TEncodable): The index name for which the FT.SEARCH/FT.AGGREGATE query is written.
+        options (FtProfileOptions): Options for the command.
+
+    Returns:
+        List[Union[FtSearchResponse, FtAggregateResponse]]: A two-element array. The first element contains results of query being profiled, the second element stores profiling information.
+
+    Examples:
+        >>> ftSearchOptions = FtSeachOptions(return_fields=[ReturnField(field_identifier="a", alias="a_new"), ReturnField(field_identifier="b", alias="b_new")])
+        >>> ftProfileResult = await ft.profile(glide_client, "myIndex", FtProfileOptions.from_query_options(query="*", queryOptions=ftSearchOptions))
+            [[2, {b'{json-search-b9e65afb-a1c8-4ead-a89a-0036cee0561f}:d2c0bea7-45c9-4469-bef5-a7e665462e27': {b'a': b'11111', b'b': b'2'}, b'{json-search-b9e65afb-a1c8-4ead-a89a-0036cee0561f}:38e4b6dd-e30d-4a84-a9c7-16b1b1b0319a': {b'a': b'22222', b'b': b'2'}}], {b'all.count': 2, b'sync.time': 1, b'query.time': 7, b'result.count': 2, b'result.time': 0}]
+    """
+    args: List[TEncodable] = [CommandNames.FT_PROFILE, indexName] + options.to_args()
+    return cast(
+        List[Union[FtSearchResponse, FtAggregateResponse, Any]],
+        await client.custom_command(args),
+    )
