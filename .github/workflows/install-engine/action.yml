@@ -1,4 +1,4 @@
-name: Install Valkey
+name: Install Engine
 
 inputs:
     engine-version:
@@ -19,16 +19,15 @@ inputs:
 
 env:
     CARGO_TERM_COLOR: always
-    VALKEY_MIN_VERSION: "7.2.5"
 
 runs:
     using: "composite"
 
+    # TODO: self-hosted runners are actually cloning the repo, using the cache from the previous run
+    # will not work as expected. We need to find a way to cache the valkey repo on the runner itself.
     steps:
-        - name:
-              Cache Valkey
-              # TODO: remove the musl ARM64 limitation when https://github.com/actions/runner/issues/801 is resolved
-          if: ${{ inputs.target != 'aarch64-unknown-linux-musl' }}
+        - name: Cache Valkey
+          if: ${{!contains(inputs.target, 'aarch64') }}
           uses: actions/cache@v4
           id: cache-valkey
           with:
@@ -36,22 +35,44 @@ runs:
                   ~/valkey
               key: valkey-${{ inputs.engine-version }}-${{ inputs.target }}
 
+        - name: Build Valkey for ARM
+          if: ${{ contains(inputs.target, 'aarch64') }}
+          shell: bash
+          working-directory: ~
+          run: |
+              cd ~
+              echo "Building valkey ${{ inputs.engine-version }}"
+              # check if the valkey repo is already cloned
+              if [[ ! -d valkey ]]; then
+                  git clone https://github.com/valkey-io/valkey.git
+              else
+                  # check if the branch=version is already checked out
+                  if [[ $(git branch --show-current) != ${{ inputs.engine-version }} ]]; then
+                      cd valkey
+                      make clean
+                      make distclean
+                      sudo rm -rf /usr/local/bin/redis-* /usr/local/bin/valkey-* ./valkey-* ./redis-* ./dump.rdb
+                      git fetch --all
+                      git checkout ${{ inputs.engine-version }}
+                      git pull
+                  fi
+              fi
+        # if no cache hit, build the engine
         - name: Build Valkey
-          if: ${{ steps.cache-valkey.outputs.cache-hit != 'true' }}
+          if: ${{ steps.cache-valkey.outputs.cache-hit != 'true' && !contains(inputs.target, 'aarch64') }}
           shell: bash
           run: |
               echo "Building valkey ${{ inputs.engine-version }}"
               cd ~
-              rm -rf valkey
               git clone https://github.com/valkey-io/valkey.git
               cd valkey
               git checkout ${{ inputs.engine-version }}
-              make BUILD_TLS=yes
 
-        - name: Install Valkey
+        - name: Install engine
           shell: bash
           run: |
               cd ~/valkey
+              make BUILD_TLS=yes
               if command -v sudo &> /dev/null
               then
                   echo "sudo command exists"
@@ -62,6 +83,8 @@ runs:
               fi
               echo 'export PATH=/usr/local/bin:$PATH' >>~/.bash_profile
 
+        # TODO: This seems redundant to me. Is it necessary? Do we check that the Python we install is the correct version?
+        # Why here and not elsewhere? All Git git repos were created equal
         - name: Verify Valkey installation and symlinks
           if: ${{ !contains(inputs.engine-version, '-rc') }}
           shell: bash
