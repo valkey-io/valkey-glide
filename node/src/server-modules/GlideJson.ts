@@ -134,7 +134,7 @@ export class GlideJson {
      * @param options - (Optional) Additional parameters:
      * - (Optional) Options for formatting the byte representation of the JSON data. See {@link JsonGetOptions}.
      * - (Optional) `decoder`: see {@link DecoderOption}.
-     * @returns ReturnTypeJson:
+     * @returns
      *   - If one path is given:
      *     - For JSONPath (path starts with `$`):
      *       - Returns a stringified JSON list of bytes replies for every possible path,
@@ -197,7 +197,7 @@ export class GlideJson {
      * @param client - The client to execute the command.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
-     * - (Optional) `path`:  The JSONPath to specify. Defaults to the root if not specified.
+     * - (Optional) `path`:  The JSONPath to specify. Defaults to root (`"."`) if not provided.
      * @returns - For JSONPath (`path` starts with `$`), returns a list of boolean replies for every possible path, with the toggled boolean value,
      * or `null` for JSON values matching the path that are not boolean.
      * - For legacy path (`path` doesn't starts with `$`), returns the value of the toggled boolean in `path`.
@@ -320,8 +320,8 @@ export class GlideJson {
      * @param client - The client to execute the command.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
-     * - (Optional) `path`: defaults to root if not provided.
-     * @returns ReturnTypeJson:
+     * - (Optional) `path`: Defaults to root (`"."`) if not provided.
+     * @returns
      *     - For JSONPath (path starts with `$`):
      *       - Returns an array of strings that represents the type of value at each path.
      *         The type is one of "null", "boolean", "string", "number", "integer", "object" and "array".
@@ -372,9 +372,9 @@ export class GlideJson {
      * @param client - The client to execute the command.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
-     * - (Optional) `path`: The path within the JSON document, Defaults to root if not provided.
+     * - (Optional) `path`: The path within the JSON document, defaults to root (`"."`) if not provided.
      * - (Optional) `decoder`: see {@link DecoderOption}.
-     * @returns ReturnTypeJson:
+     * @returns
      *     - For JSONPath (path starts with `$`):
      *       - Returns an array of replies for every possible path, indicating the RESP form of the JSON value.
      *         If `path` doesn't exist, returns an empty array.
@@ -419,7 +419,7 @@ export class GlideJson {
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
      * - (Optional) `path`: The path within the JSON document, Defaults to root (`"."`) if not provided.
-     * @returns ReturnTypeJson:
+     * @returns
      *     - For JSONPath (path starts with `$`):
      *       - Returns a list of integer replies for every possible path, indicating the length of
      *         the JSON string value, or <code>null</code> for JSON values matching the path that
@@ -468,8 +468,8 @@ export class GlideJson {
      * @param key - The key of the JSON document.
      * @param value - The value to append to the string. Must be wrapped with single quotes. For example, to append "foo", pass '"foo"'.
      * @param options - (Optional) Additional parameters:
-     * - (Optional) `path`: The path within the JSON document, Defaults to root if not provided.
-     * @returns ReturnTypeJson:
+     * - (Optional) `path`: The path within the JSON document, defaults to root (`"."`) if not provided.
+     * @returns
      *     - For JSONPath (path starts with `$`):
      *       - Returns a list of integer replies for every possible path, indicating the length of the resulting string after appending `value`,
      *         or None for JSON values matching the path that are not string.
