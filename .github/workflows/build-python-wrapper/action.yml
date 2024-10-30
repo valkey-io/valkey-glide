@@ -15,7 +15,7 @@ inputs:
         required: true
     engine-version:
         description: "Engine version to install"
-        required: true
+        required: false
         type: string
     publish:
         description: "Enable building the wrapper in release mode"

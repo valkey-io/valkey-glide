@@ -23,7 +23,7 @@ inputs:
             - x86_64-unknown-linux-musl
     engine-version:
         description: "Engine version to install"
-        required: true
+        required: false
         type: string
 
     github-token:
@@ -39,7 +39,7 @@ runs:
           if: "${{ inputs.os == 'macos' }}"
           run: |
               brew update
-              brew install git gcc pkgconfig openssl coreutils
+              brew install git openssl coreutils
 
         - name: Install software dependencies for Ubuntu GNU
           shell: bash
@@ -70,8 +70,9 @@ runs:
               target: ${{ inputs.target }}
               github-token: ${{ inputs.github-token }}
 
-        - name: Install Valkey
-          uses: ./.github/workflows/install-valkey
+        - name: Install engine
+          if: "${{ inputs.engine-version }}"
+          uses: ./.github/workflows/install-engine
           with:
               engine-version: ${{ inputs.engine-version }}
               target: ${{ inputs.target }}

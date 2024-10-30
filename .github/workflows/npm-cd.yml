@@ -10,8 +10,9 @@ on:
             - .github/workflows/start-self-hosted-runner/action.yml
             - .github/workflows/install-rust-and-protoc/action.yml
             - .github/workflows/install-shared-dependencies/action.yml
-            - .github/workflows/install-valkey/action.yml
-            - .github/json_matrices/build-matrix.json
+            - .github/workflows/install-engine/action.yml
+            - .github/json_matrices/**
+            - .github/workflows/create-test-matrices/action.yml
     push:
         tags:
             - "v*.*"
@@ -22,7 +23,7 @@ on:
                 required: true
 
 concurrency:
-    group: npm-${{ github.head_ref || github.ref }}
+    group: node-cd-${{ github.head_ref || github.ref }}-${{ toJson(inputs) }}
     cancel-in-progress: true
 
 permissions:
@@ -59,7 +60,7 @@ jobs:
               shell: bash
               run: |
                   # Get the matrix from the matrix.json file, without the object that has the IMAGE key
-                  export "PLATFORM_MATRIX=$(jq 'map(select(.PACKAGE_MANAGERS | contains(["npm"])))' < .github/json_matrices/build-matrix.json | jq -c .)"
+                  export "PLATFORM_MATRIX=$(jq 'map(select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["npm"]))))' < .github/json_matrices/build-matrix.json | jq -c .)"
                   echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
 
     publish-binaries:
@@ -153,7 +154,6 @@ jobs:
                   npm_scope: ${{ vars.NPM_SCOPE }}
                   publish: "true"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
-                  engine-version: "7.2.5"
 
             - name: Check if RC and set a distribution tag for the package
               shell: bash
@@ -185,7 +185,7 @@ jobs:
                   # 2>&1 1>&3- redirects stderr to stdout and then redirects the original stdout to another file descriptor,
                   # effectively separating stderr and stdout. The 3>&1 at the end redirects the original stdout back to the console.
                   # https://github.com/npm/npm/issues/118#issuecomment-325440 - ignoring notice messages since currentlly they are directed to stderr 
-                    { npm_publish_err=$(npm publish --tag ${{ env.NPM_TAG }} --access public 2>&1 1>&3- | grep -v "notice") ;} 3>&1
+                  { npm_publish_err=$(npm publish --tag ${{ env.NPM_TAG }} --access public 2>&1 1>&3- | grep -Ev "notice|ExperimentalWarning") ;} 3>&1
                   if [[ "$npm_publish_err" == *"You cannot publish over the previously published versions"* ]]
                   then
                     echo "Skipping publishing, package already published"
@@ -203,8 +203,11 @@ jobs:
               if: ${{ matrix.build.ARCH == 'arm64' }}
               shell: bash
               run: |
-                  git reset --hard
+                  echo "Resetting repository"
                   git clean -xdf
+                  git reset --hard
+                  git fetch
+                  git checkout ${{ github.sha }}
 
     publish-base-to-npm:
         if: github.event_name != 'pull_request'
@@ -218,9 +221,9 @@ jobs:
                   submodules: "true"
 
             - name: Install node
-              uses: actions/setup-node@v3
+              uses: actions/setup-node@v4
               with:
-                  node-version: "20"
+                  node-version: "latest"
                   registry-url: "https://registry.npmjs.org"
                   scope: "${{ vars.NPM_SCOPE }}"
                   always-auth: true
@@ -257,7 +260,6 @@ jobs:
                   os: ubuntu
                   target: "x86_64-unknown-linux-gnu"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
-                  engine-version: "7.2.5"
 
             - name: Check if RC and set a distribution tag for the package
               shell: bash
@@ -336,10 +338,10 @@ jobs:
                   arch: ${{ matrix.build.ARCH }}
 
             - name: Setup node
-              if: ${{ matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
-              uses: actions/setup-node@v3
+              if: ${{ !contains(matrix.build.TARGET, 'musl') }}
+              uses: actions/setup-node@v4
               with:
-                  node-version: "16"
+                  node-version: "latest"
                   registry-url: "https://registry.npmjs.org"
                   architecture: ${{ matrix.build.ARCH }}
                   scope: "${{ vars.NPM_SCOPE }}"

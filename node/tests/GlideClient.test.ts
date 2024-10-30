@@ -20,6 +20,7 @@ import {
     GlideClient,
     GlideRecord,
     GlideString,
+    ListDirection,
     ProtocolVersion,
     RequestError,
     Script,
@@ -34,12 +35,12 @@ import {
     convertStringArrayToBuffer,
     createLongRunningLuaScript,
     createLuaLibWithLongRunningFunction,
-    DumpAndRestureTest,
+    DumpAndRestoreTest,
     encodableTransactionTest,
-    encodedTransactionTest,
     flushAndCloseClient,
     generateLuaLibCode,
     getClientConfigurationOption,
+    getServerVersion,
     parseCommandLineArgs,
     parseEndpoints,
     transactionTest,
@@ -58,10 +59,12 @@ describe("GlideClient", () => {
         const standaloneAddresses =
             parseCommandLineArgs()["standalone-endpoints"];
         cluster = standaloneAddresses
-            ? await RedisCluster.initFromExistingCluster(
+            ? await ValkeyCluster.initFromExistingCluster(
+                  false,
                   parseEndpoints(standaloneAddresses),
+                  getServerVersion,
               )
-            : await RedisCluster.createCluster(false, 1, 1);
+            : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
     }, 20000);
 
     afterEach(async () => {
@@ -71,6 +74,8 @@ describe("GlideClient", () => {
     afterAll(async () => {
         if (testsFailed === 0) {
             await cluster.close();
+        } else {
+            await cluster.close(true);
         }
     }, TIMEOUT);
 
@@ -136,11 +141,9 @@ describe("GlideClient", () => {
         "check that blocking commands returns never timeout_%p",
         async (protocol) => {
             client = await GlideClient.createClient(
-                getClientConfigurationOption(
-                    cluster.getAddresses(),
-                    protocol,
-                    300,
-                ),
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    requestTimeout: 300,
+                }),
             );
 
             const promiseList = [
@@ -278,34 +281,18 @@ describe("GlideClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `can get Bytes decoded transactions_%p`,
-        async (protocol) => {
-            client = await GlideClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
-            );
-            const transaction = new Transaction();
-            const expectedRes = await encodedTransactionTest(transaction);
-            transaction.select(0);
-            const result = await client.exec(transaction, {
-                decoder: Decoder.Bytes,
-            });
-            expectedRes.push(["select(0)", "OK"]);
-
-            validateTransactionResponse(result, expectedRes);
-            client.close();
-        },
-    );
-
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `dump and restore transactions_%p`,
         async (protocol) => {
             client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const bytesTransaction = new Transaction();
-            const expectedBytesRes = await DumpAndRestureTest(
+            await client.set("key", "value");
+            const dumpValue: Buffer = (await client.dump("key")) as Buffer;
+            await client.del(["key"]);
+            const expectedBytesRes = await DumpAndRestoreTest(
                 bytesTransaction,
-                Buffer.from("value"),
+                dumpValue,
             );
             bytesTransaction.select(0);
             const result = await client.exec(bytesTransaction, {
@@ -316,14 +303,14 @@ describe("GlideClient", () => {
             validateTransactionResponse(result, expectedBytesRes);
 
             const stringTransaction = new Transaction();
-            await DumpAndRestureTest(stringTransaction, "value");
+            await DumpAndRestoreTest(stringTransaction, dumpValue);
             stringTransaction.select(0);
 
             // Since DUMP gets binary results, we cannot use the string decoder here, so we expected to get an error.
             await expect(
                 client.exec(stringTransaction, { decoder: Decoder.String }),
             ).rejects.toThrowError(
-                "invalid utf-8 sequence of 1 bytes from index 9",
+                /invalid utf-8 sequence of 1 bytes from index/,
             );
 
             client.close();
