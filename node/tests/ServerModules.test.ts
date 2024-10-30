@@ -379,7 +379,7 @@ describe("Server Module Tests", () => {
 
                 const key = uuidv4();
                 let doc =
-                    '{"a": [1, 2, true], "b": {"a": [3, 4, ["value", 3, false] ,5], "c": {"a": 42}}}';
+                    '{"a": [1, 2, true], "b": {"a": [3, 4, ["value", 3, false], 5], "c": {"a": 42}}}';
                 expect(await GlideJson.set(client, key, "$", doc)).toBe("OK");
 
                 let res = await GlideJson.arrpop(client, key, {

@@ -256,8 +256,7 @@ export class GlideJson {
      * - For JSONPath (path starts with `$`):
      *       Returns an array with a strings for every possible path, representing the popped JSON
      *       values, or `null` for JSON values matching the path that are not an array
-     *       or an empty array. If a value is not an array, its corresponding return value is
-     *       `"null"`.
+     *       or an empty array.
      * - For legacy path (path doesn't start with `$`):
      *       Returns a string representing the popped JSON value, or `null` if the
      *       array at `path` is empty. If multiple paths are matched, the value from
