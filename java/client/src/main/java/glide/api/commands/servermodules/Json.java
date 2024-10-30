@@ -2,6 +2,7 @@
 package glide.api.commands.servermodules;
 
 import static glide.api.models.GlideString.gs;
+import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 
 import glide.api.BaseClient;
@@ -618,15 +619,17 @@ public class Json {
      *     value will be <code>null</code>
      * @example
      *     <pre>{@code
+     * Json.set(client, "doc", "$", "{\"a\": [\"value\", 3], \"b\": {\"a\": [3, [\"value\", false], 5]}}").get();
+     * Long[] result = Json.arrindex(client, key, "$..a", new JsonScalar(3)).get();
+     * assertArrayEquals(new Long[] {Long.valueOf(1), Long.valueOf(0)}, result);
      * }</pre>
      */
-    public static CompletableFuture<Integer[]> arrindex(
+    public static CompletableFuture<Long[]> arrindex(
             @NonNull BaseClient client,
             @NonNull String key,
             @NonNull String path,
             @NonNull JsonScalar scalar) {
-        return executeCommand(
-                client, concatenateArrays(new String[] {JSON_ARRINDEX, key, path, scalar.toString()}));
+        return arrindex(client, gs(key), gs(path), scalar);
     }
 
     /**
@@ -643,15 +646,19 @@ public class Json {
      *     value will be <code>null</code>
      * @example
      *     <pre>{@code
+     * Json.set(client, "doc", "$", "{\"a\": [\"value\", 3], \"b\": {\"a\": [3, [\"value\", false], 5]}}").get();
+     * Long[] result = Json.arrindex(client, gs(key), gs("$..a"), new JsonScalar(3)).get();
+     * assertArrayEquals(new Long[] {Long.valueOf(1), Long.valueOf(0)}, result);
      * }</pre>
      */
-    public static CompletableFuture<Integer[]> arrindex(
+    public static CompletableFuture<Long[]> arrindex(
             @NonNull BaseClient client,
             @NonNull GlideString key,
             @NonNull GlideString path,
             @NonNull JsonScalar scalar) {
-        return executeCommand(
-                client, new ArgsBuilder().add(gs(JSON_ARRINDEX)).add(key).add(path).add(scalar).toArray());
+        return Json.<Object[]>executeCommand(
+                        client, new GlideString[] {gs(JSON_ARRINDEX), key, path, gs(scalar.toString())})
+                .thenApply(ret -> castArray(ret, Long.class));
     }
 
     /**
@@ -669,15 +676,18 @@ public class Json {
      *     value will be <code>null</code>
      * @example
      *     <pre>{@code
+     * Json.set(client, "doc", "$", "{\"a\": [\"value\", 3], \"b\": {\"a\": [3, [\"value\", false], 5]}}").get();
+     * Long[] result = Json.arrindex(client, key, "$..a", new JsonScalar(3), 1).get();
+     * assertArrayEquals(new Long[] {Long.valueOf(1), Long.valueOf(-1)}, result);
      * }</pre>
      */
-    public static CompletableFuture<Integer[]> arrindex(
+    public static CompletableFuture<Long[]> arrindex(
             @NonNull BaseClient client,
             @NonNull String key,
             @NonNull String path,
-            @NonNull JsonScalar scalar, @NonNull Integer start) {
-        return executeCommand(
-                client, concatenateArrays(new String[] {JSON_ARRINDEX, key, path, scalar.toString(), start.toString()}));
+            @NonNull JsonScalar scalar,
+            @NonNull Integer start) {
+        return arrindex(client, gs(key), gs(path), scalar, start);
     }
 
     /**
@@ -695,15 +705,23 @@ public class Json {
      *     value will be <code>null</code>
      * @example
      *     <pre>{@code
+     * Json.set(client, "doc", "$", "{\"a\": [\"value\", 3], \"b\": {\"a\": [3, [\"value\", false], 5]}}").get();
+     * Long[] result = Json.arrindex(client, gs(key), gs("$..a"), new JsonScalar(3), 1).get();
+     * assertArrayEquals(new Long[] {Long.valueOf(1), Long.valueOf(-1)}, result);
      * }</pre>
      */
-    public static CompletableFuture<Integer[]> arrindex(
+    public static CompletableFuture<Long[]> arrindex(
             @NonNull BaseClient client,
             @NonNull GlideString key,
             @NonNull GlideString path,
-            @NonNull JsonScalar scalar, @NonNull Integer start) {
-        return executeCommand(
-                client, new ArgsBuilder().add(gs(JSON_ARRINDEX)).add(key).add(path).add(scalar).add(start.toString()).toArray());
+            @NonNull JsonScalar scalar,
+            @NonNull Integer start) {
+        return Json.<Object[]>executeCommand(
+                        client,
+                        new GlideString[] {
+                            gs(JSON_ARRINDEX), key, path, gs(scalar.toString()), gs(start.toString())
+                        })
+                .thenApply(ret -> castArray(ret, Long.class));
     }
 
     /**
@@ -716,21 +734,26 @@ public class Json {
      * @param scalar The scalar value to search for; JSON scalar refers to values that are not objects
      *     or arrays.
      * @param start The starting index, otherwise it will be defaulted to `0`.
-     * @param end The ending index. It will default to `0` if not provided. The last element is included. `0` or `-1` means the last element is included.
+     * @param end The ending index. It will default to `0` if not provided. The last element is
+     *     included. `0` or `-1` means the last element is included.
      * @return An array of integers. Each value is the index of the matching element in the array at
      *     the path. The value is -1 if not found. If there are no values in the array, the return
      *     value will be <code>null</code>
      * @example
      *     <pre>{@code
+     * Json.set(client, "doc", "$", "{\"a\": [\"value\", 3, 3], \"b\": {\"a\": [3, [\"value\", false], 5]}}").get();
+     * Long[] result = Json.arrindex(client, key, "$..a", new JsonScalar(3), 2, 4).get();
+     * assertArrayEquals(new Long[] {Long.valueOf(2), Long.valueOf(-1)}, result);
      * }</pre>
      */
-    public static CompletableFuture<Integer[]> arrindex(
+    public static CompletableFuture<Long[]> arrindex(
             @NonNull BaseClient client,
             @NonNull String key,
             @NonNull String path,
-            @NonNull JsonScalar scalar, @NonNull Integer start, @NonNull Integer end) {
-        return executeCommand(
-                client, concatenateArrays(new String[] {JSON_ARRINDEX, key, path, scalar.toString(), start.toString(), end.toString()}));
+            @NonNull JsonScalar scalar,
+            @NonNull Integer start,
+            @NonNull Integer end) {
+        return arrindex(client, gs(key), gs(path), scalar, start, end);
     }
 
     /**
@@ -743,21 +766,36 @@ public class Json {
      * @param scalar The scalar value to search for; JSON scalar refers to values that are not objects
      *     or arrays.
      * @param start The starting index, otherwise it will be defaulted to `0`.
-     * @param end The ending index. It will default to `0` if not provided. The last element is included. `0` or `-1` means the last element is included.
+     * @param end The ending index. It will default to `0` if not provided. The last element is
+     *     included. `0` or `-1` means the last element is included.
      * @return An array of integers. Each value is the index of the matching element in the array at
      *     the path. The value is -1 if not found. If there are no values in the array, the return
      *     value will be <code>null</code>
      * @example
      *     <pre>{@code
+     * Json.set(client, "doc", "$", "{\"a\": [\"value\", 3, 3], \"b\": {\"a\": [3, [\"value\", false], 5]}}").get();
+     * Long[] result = Json.arrindex(client, gs(key), gs("$..a"), new JsonScalar(3), 2, 4).get();
+     * assertArrayEquals(new Long[] {Long.valueOf(2), Long.valueOf(-1)}, result);
      * }</pre>
      */
-    public static CompletableFuture<Integer[]> arrindex(
+    public static CompletableFuture<Long[]> arrindex(
             @NonNull BaseClient client,
             @NonNull GlideString key,
             @NonNull GlideString path,
-            @NonNull JsonScalar scalar, @NonNull Integer start, @NonNull Integer end) {
-        return executeCommand(
-                client, new ArgsBuilder().add(gs(JSON_ARRINDEX)).add(key).add(path).add(scalar).add(start.toString()).add(end.toString()).toArray());
+            @NonNull JsonScalar scalar,
+            @NonNull Integer start,
+            @NonNull Integer end) {
+        return Json.<Object[]>executeCommand(
+                        client,
+                        new GlideString[] {
+                            gs(JSON_ARRINDEX),
+                            key,
+                            path,
+                            gs(scalar.toString()),
+                            gs(start.toString()),
+                            gs(end.toString())
+                        })
+                .thenApply(ret -> castArray(ret, Long.class));
     }
 
     /**

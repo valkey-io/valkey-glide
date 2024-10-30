@@ -2,20 +2,28 @@
 package glide.api.models.commands.json;
 
 public class JsonScalar {
-    Object scalar;
+    private final Object value;
 
-    public JsonScalar(Object scalar) {
-        if (!(scalar instanceof String
-                || scalar instanceof Number
-                || scalar instanceof Boolean
-                || scalar == null)) {
+    public JsonScalar(Object value) {
+        if (!isValidScalar(value)) {
             throw new IllegalArgumentException(
-                    "Value must be a Json scalar (String, Number, Boolean, or null).");
+                    "Value must be a JSON scalar (String, Number, Boolean, or null).");
         }
-        this.scalar = scalar;
+        this.value = value;
+    }
+
+    private boolean isValidScalar(Object value) {
+        return value == null
+                || value instanceof String
+                || value instanceof Number
+                || value instanceof Boolean;
+    }
+
+    public Object getValue() {
+        return value;
     }
 
     public String toString() {
-        return scalar.toString();
+        return value.toString();
     }
 }

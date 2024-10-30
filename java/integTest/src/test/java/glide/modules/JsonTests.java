@@ -21,6 +21,7 @@ import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.json.JsonGetOptions;
+import glide.api.models.commands.json.JsonScalar;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
@@ -204,6 +205,65 @@ public class JsonTests {
         assertThrows(
                 ExecutionException.class,
                 () -> Json.arrappend(client, "non_existing_key", ".b", new String[] {"\"six\""}).get());
+    }
+
+    @Test
+    @SneakyThrows
+    public void arrindex() {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        String doc1 =
+                "{\"a\": [1, 3, true], \"b\": {\"a\": [3, 4, [\"value\", 3, false], 5], \"c\": {\"a\":"
+                        + " 42}}}";
+
+        String doc2 =
+                "{\"a\": [1, 3, true, \"foo\", \"meow\", \"m\", \"foo\", \"lol\", false], \"b\": {\"a\":"
+                        + " [3, 4, [\"value\", 3, false], 5], \"c\": {\"a\": 42}}}";
+
+        assertEquals("OK", Json.set(client, key1, "$", doc1).get());
+        assertArrayEquals(
+                new Long[] {Long.valueOf(2), Long.valueOf(-1), null},
+                Json.arrindex(client, key1, "$..a", new JsonScalar(true)).get());
+
+        assertArrayEquals(
+                new Long[] {Long.valueOf(1), Long.valueOf(0), null},
+                Json.arrindex(client, gs(key1), gs("$..a"), new JsonScalar(3)).get());
+
+        // not a json scalar - should give a illegal argument exception.
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> Json.arrindex(client, key1, "$..a", new JsonScalar(new String[] {"rar", "no"})));
+
+        assertEquals("OK", Json.set(client, key2, "$", doc2).get());
+        assertArrayEquals(
+                new Long[] {Long.valueOf(6), Long.valueOf(-1), null},
+                Json.arrindex(client, key2, "$..a", new JsonScalar("\"foo\""), 6, 8).get());
+
+        assertArrayEquals(
+                new Long[] {Long.valueOf(6), Long.valueOf(-1), null},
+                Json.arrindex(client, gs(key2), gs("$..a"), new JsonScalar("\"foo\""), 6, 8).get());
+
+        // value doesn't exist
+        assertArrayEquals(
+                new Long[] {null}, Json.arrindex(client, key1, "$..b", new JsonScalar(true), 1, 3).get());
+
+        String doc3 =
+                "{"
+                        + "\"arrayField\": [1, 2, 3],"
+                        + "\"stringField\": \"Hello, world!\","
+                        + "\"numberField\": 42,"
+                        + "\"booleanField\": true,"
+                        + "\"objectField\": {\"nestedKey\": \"value\"}"
+                        + "}";
+        String key3 = "meow";
+
+        assertEquals(OK, Json.set(client, key3, "$", doc3).get());
+
+        // wrong path description -> it should be throwing the WRONGTYPE ERROR but it is null right now.
+        assertArrayEquals(
+                new Long[] {null},
+                Json.arrindex(client, key3, "$.booleanField", new JsonScalar(true)).get());
     }
 
     @Test
