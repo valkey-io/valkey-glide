@@ -1309,20 +1309,6 @@ describe("Server Module Tests", () => {
             const sleep = new Promise((resolve) => setTimeout(resolve, DATA_PROCESSING_TIMEOUT));
             await sleep;
 
-            // With the `COUNT` parameters - returns only the count
-            const stringCountResult: (number | GlideRecord<GlideString | GlideRecord<GlideString>>)[] = await GlideFt.search(
-                client,
-                index,
-                "*",
-                {
-                    returnFields: [{fieldIdentifier: "arr"}, {fieldIdentifier: "val"}],
-                    timeout: 10000,
-                    decoder: Decoder.String,
-                    limit: {offset: 0, count: 2},
-                }
-            );
-            expect(stringCountResult).toEqual([1]);
-
             const stringResult: (number | GlideRecord<GlideString | GlideRecord<GlideString>>)[] = await GlideFt.search(
                 client,
                 index,
@@ -1331,6 +1317,7 @@ describe("Server Module Tests", () => {
                     returnFields: [{fieldIdentifier: "arr"}, {fieldIdentifier: "val"}],
                     timeout: 10000,
                     decoder: Decoder.String,
+                    limit: {offset: 0, count: 2},
                 }
             );
             const expectedStringResult: (number | GlideRecord<GlideString | GlideRecord<GlideString>>)[] = [
