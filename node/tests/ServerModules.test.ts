@@ -1213,18 +1213,20 @@ describe("Server Module Tests", () => {
             const sleep = new Promise((resolve) => setTimeout(resolve, DATA_PROCESSING_TIMEOUT));
             await sleep;
 
-            const result: (number | GlideRecord<GlideString | GlideRecord<GlideString>>)[] = await GlideFt.search(
+            const binaryResult: (number | GlideRecord<GlideString | GlideRecord<GlideString>>)[] = await GlideFt.search(
                 client,
                 index,
                 "*=>[KNN 2 @VEC $query_vec]",
                 {
                     params: [{key: "query_vec", value: binaryValue1}],
+                    timeout: 10000,
+                    count: true,
                     decoder: Decoder.Bytes,
                 }
             );
+            console.log(JSON.stringify(binaryResult));
 
-            console.log("search result: " + JSON.stringify(result));
-            const expectedResult: (number | GlideRecord<GlideString | GlideRecord<GlideString>>)[] = [
+            const expectedBinaryResult: (number | GlideRecord<GlideString | GlideRecord<GlideString>>)[] = [
                 2,
                 [
                     {
@@ -1255,86 +1257,31 @@ describe("Server Module Tests", () => {
                     },
                 ]
             ];
-            expect(result).toEqual(expectedResult);
-        });
+            expect(binaryResult).toEqual(expectedBinaryResult);
 
-        it("FT.SEARCH string test", async () => {
-            client = await GlideClusterClient.createClient(
-                getClientConfigurationOption(
-                    cluster.getAddresses(),
-                    ProtocolVersion.RESP3,
-                ),
-            );
-
-            const prefix = "{" + uuidv4() + "}:";
-            const index = prefix + "index";
-
-            // setup a hash index:
-            expect(
-                await GlideFt.create(client, index, [
-                    {
-                        type: "VECTOR",
-                        name: "vec",
-                        alias: "VEC",
-                        attributes: {
-                            algorithm: "FLAT",
-                            distanceMetric: "COSINE",
-                            dimensions: 2,
-                        },
-                    },
-                ], {
-                    dataType: "HASH",
-                    prefixes: [prefix],
-                }),
-            ).toEqual("OK");
-
-            expect(await client.hset(prefix + "0", [
-                // value of <Buffer 00 00 00 00 00 00 00 00 00>
-                { field: "vec", value: "hello" },
-            ])).toEqual(1);
-
-            expect(await client.hset(prefix + "1", [
-                // value of <Buffer 00 00 00 00 00 00 00 80 BF>
-                { field: "vec", value: "hello world" },
-            ])).toEqual(1);
-
-            // let server digest the data and update index
-            const sleep = new Promise((resolve) => setTimeout(resolve, DATA_PROCESSING_TIMEOUT));
-            await sleep;
-
-            const result: (number | GlideRecord<GlideString | GlideRecord<GlideString>>)[] = await GlideFt.search(
+            const stringResult: (number | GlideRecord<GlideString | GlideRecord<GlideString>>)[] = await GlideFt.search(
                 client,
                 index,
                 "*=>[KNN 2 @VEC $query_vec]",
                 {
-                    params: [{key: "query_vec", value: "hello"}],
+                    returnFields: [{fieldIdentifier: "vec", alias: "my_vector"}],
+                    params: [{key: "query_vec", value: binaryValue1}],
+                    timeout: 10000,
+                    limit: {offset: 0, count: 1},
                     decoder: Decoder.String,
                 }
             );
+            console.log(JSON.stringify(stringResult));
 
-            console.log("search result: " + JSON.stringify(result));
-            const expectedResult: (number | GlideRecord<GlideString | GlideRecord<GlideString>>)[] = [
+            const expectedStringResult: (number | GlideRecord<GlideString | GlideRecord<GlideString>>)[] = [
                 2,
                 [
-                    {
-                        "key": prefix + "1",
-                        "value":[
-                            {
-                                "key": "vec",
-                                "value": "hello world",
-                            },
-                            {
-                                "key": "__VEC_score",
-                                "value": "1",
-                            }
-                        ]
-                    },
                     {
                         "key": prefix + "0",
                         "value":[
                             {
                                 "key": "vec",
-                                "value": "hello",
+                                "value": binaryValue1.toString(),
                             },
                             {
                                 "key": "__VEC_score",
@@ -1344,7 +1291,8 @@ describe("Server Module Tests", () => {
                     },
                 ]
             ];
-            expect(result).toEqual(expectedResult);
+            expect(stringResult).toEqual(expectedStringResult);
+
         });
     });
 });
