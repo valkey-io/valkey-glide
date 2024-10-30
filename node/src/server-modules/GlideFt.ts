@@ -289,8 +289,8 @@ export class GlideFt {
             limit?: {offset: number, count: number},
             count?: boolean,
         } & DecoderOption,
-    ): Promise<(GlideString | number)[]> {
-        const args: GlideString[] = ["FT.CREATE", indexName, query];
+    ): Promise<(number | GlideRecord<GlideString | GlideRecord<GlideString>>)[]> {
+        const args: GlideString[] = ["FT.SEARCH", indexName, query];
 
         if (options) {
             // RETURN
@@ -306,7 +306,7 @@ export class GlideFt {
 
             // PARAMS
             if (options.params) {
-                args.push("PARAMS", options.params.length.toString());
+                args.push("PARAMS", (options.params.length * 2).toString());
                 options.params.forEach(param => args.push(param.key, param.value));
             }
 
@@ -321,7 +321,7 @@ export class GlideFt {
             }
         }
 
-        return _handleCustomCommand(client, args, options) as Promise<(GlideString | number)[]>;
+        return _handleCustomCommand(client, args, options) as Promise<(number | GlideRecord<GlideString | GlideRecord<GlideString>>)[]>;
     }
 }
 

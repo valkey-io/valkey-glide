@@ -16,6 +16,8 @@ import {
     GlideClusterClient,
     GlideFt,
     GlideJson,
+    GlideRecord,
+    GlideString,
     InfoOptions,
     JsonGetOptions,
     ProtocolVersion,
@@ -1218,17 +1220,27 @@ describe("Server Module Tests", () => {
                     params: [{key: Buffer.from("query_vec"), value: Buffer.alloc(8)}]
                 }
             );
-            console.log("search result: " + result);
-            // const expectedResult = [
-            //     2,
-            //     {
-            //         Buffer.from(prefix + "0"): {
-            //             Buffer.from("__VEC_score"):
 
-            //         }
-            //     },
-            // ];
-            // expect(result).toMatchObject(expectedResult);
+            console.log("search result: " + JSON.stringify(result));
+            const expectedResult: (number | GlideRecord<GlideString | GlideRecord<GlideString>>)[] = [
+                1,
+                [
+                    {
+                        "key":"{eac9b642-cabf-4d6c-8990-bb64c4524cc0}:0",
+                        "value":[
+                            {
+                                "key":"vec",
+                                "value":"\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000"
+                            },
+                            {
+                                "key":"__VEC_score",
+                                "value":"0"
+                            }
+                        ]
+                    }
+                ]
+            ];
+            expect(result).toMatchObject(expectedResult);
         });
     });
 });
