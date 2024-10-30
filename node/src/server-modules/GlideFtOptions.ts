@@ -2,7 +2,7 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { GlideString } from "../BaseClient";
+import { GlideRecord, GlideString } from "../BaseClient";
 
 interface BaseField {
     /** The name of the field. */
@@ -117,4 +117,40 @@ export interface FtCreateOptions {
     dataType: "JSON" | "HASH";
     /** The prefix of the key to be indexed. */
     prefixes?: GlideString[];
+}
+
+/**
+ * Represents the input options to be used in the FT.SEARCH command.
+ * All fields in this class are optional inputs for FT.SEARCH.
+ */
+export interface FTSearchOptions {
+    /**
+     * Add a field to be returned.
+     * @param fieldIdentifier field name to return.
+     * @param alias optional alias for the field name to return.
+     */
+    returnFields?: { fieldIdentifier: GlideString; alias?: GlideString }[];
+
+    /** Query timeout in milliseconds. */
+    timeout?: number;
+
+    /**
+     * Query parameters, which could be referenced in the query by `$` sign, followed by
+     * the parameter name.
+     */
+    params?: GlideRecord<GlideString>;
+
+    /**
+     * Configure query pagination. By default only first 10 documents are returned.
+     *
+     * @param offset Zero-based offset.
+     * @param count Number of elements to return.
+     */
+    limit?: { offset: number; count: number };
+
+    /**
+     * Once set, the query will return only the number of documents in the result set without actually
+     * returning them.
+     */
+    count?: boolean;
 }

@@ -12,7 +12,7 @@ import {
 } from "../BaseClient";
 import { GlideClient } from "../GlideClient";
 import { GlideClusterClient } from "../GlideClusterClient";
-import { Field, FtCreateOptions } from "./GlideFtOptions";
+import { Field, FtCreateOptions, FTSearchOptions } from "./GlideFtOptions";
 
 /** Data type of {@link GlideFt.info | info} command response. */
 type FtInfoReturnType = Record<
@@ -271,32 +271,88 @@ export class GlideFt {
     }
 
     /**
+     * Uses the provided query expression to locate keys within an index. Once located, the count
+     * and/or content of indexed fields within those keys can be returned.
      *
-     * @param client
-     * @param indexName
-     * @param query
-     * @param options
-     * @returns
+     * @param client The client to execute the command.
+     * @param indexName The index name to search into.
+     * @param query The text query to search.
+     * @param options - (Optional) See {@link FTSearchOptions} and {@link DecoderOption}.
+     *
+     * @returns A two-element array, where the first element is number of documents in the result set, and the
+     * second element, has the format: `GlideRecord<GlideString | GlideRecord<GlideString>>`:
+     * a mapping between document names and a map of their attributes.
+     *
+     * If `count` or `limit` with values `{offset: 0, count: 0}` is
+     * set, the command returns array with only one element: the number of documents.
+     *
+     * @example
+     * ```typescript
+     * //
+     * const vector = Buffer.alloc(24);
+     * const result = await GlideFt.search(client, "json_idx1", "*=>[KNN 2 @VEC $query_vec]", {params: [{key: "query_vec", value: vector}]});
+     * console.log(result); // Output:
+     * // {
+     * //   2,
+     * //   [
+     * //     {
+     * //       "key": "json:2",
+     * //       "value":[
+     * //         {
+     * //           "key": "$",
+     * //           "value": "{\"vec\":[1.1,1.2,1.3,1.4,1.5,1.6]}",
+     * //         },
+     * //         {
+     * //           "key": "__VEC_score",
+     * //           "value": "11.1100006104",
+     * //         }
+     * //       ]
+     * //     },
+     * //     {
+     * //       "key": "json:0",
+     * //       "value":[
+     * //         {
+     * //           "key": "$",
+     * //           "value": "{\"vec\":[1,2,3,4,5,6]}",
+     * //         },
+     * //         {
+     * //           "key": "__VEC_score",
+     * //           "value": "91",
+     * //         }
+     * //       ]
+     * //     }
+     * //   ]
+     * // }
+     * ```
      */
     static async search(
         client: GlideClient | GlideClusterClient,
         indexName: GlideString,
         query: GlideString,
-        options?: {
-            returnFields?: {fieldIdentifier: GlideString, alias?: GlideString}[],
-            timeout?: number,
-            params?: GlideRecord<GlideString>,
-            limit?: {offset: number, count: number},
-            count?: boolean,
-        } & DecoderOption,
-    ): Promise<(number | GlideRecord<GlideString | GlideRecord<GlideString>>)[]> {
+        options?: FTSearchOptions & DecoderOption,
+    ): Promise<
+        (number | GlideRecord<GlideString | GlideRecord<GlideString>>)[]
+    > {
         const args: GlideString[] = ["FT.SEARCH", indexName, query];
 
         if (options) {
             // RETURN
             if (options.returnFields) {
-                args.push("RETURN", options.returnFields.length.toString());
-                options.returnFields.forEach(returnField => returnField.alias ? args.push(returnField.fieldIdentifier, "AS", returnField.alias) : args.push(returnField.fieldIdentifier));
+                const returnFields: GlideString[] = [];
+                options.returnFields.forEach((returnField) =>
+                    returnField.alias
+                        ? returnFields.push(
+                              returnField.fieldIdentifier,
+                              "AS",
+                              returnField.alias,
+                          )
+                        : returnFields.push(returnField.fieldIdentifier),
+                );
+                args.push(
+                    "RETURN",
+                    returnFields.length.toString(),
+                    ...returnFields,
+                );
             }
 
             // TIMEOUT
@@ -307,12 +363,18 @@ export class GlideFt {
             // PARAMS
             if (options.params) {
                 args.push("PARAMS", (options.params.length * 2).toString());
-                options.params.forEach(param => args.push(param.key, param.value));
+                options.params.forEach((param) =>
+                    args.push(param.key, param.value),
+                );
             }
 
             // LIMIT
             if (options.limit) {
-                args.push("LIMIT", options.limit.offset.toString(), options.limit.count.toString());
+                args.push(
+                    "LIMIT",
+                    options.limit.offset.toString(),
+                    options.limit.count.toString(),
+                );
             }
 
             // COUNT
@@ -321,9 +383,9 @@ export class GlideFt {
             }
         }
 
-        console.log(args);
-
-        return _handleCustomCommand(client, args, options) as Promise<(number | GlideRecord<GlideString | GlideRecord<GlideString>>)[]>;
+        return _handleCustomCommand(client, args, options) as Promise<
+            (number | GlideRecord<GlideString | GlideRecord<GlideString>>)[]
+        >;
     }
 }
 
