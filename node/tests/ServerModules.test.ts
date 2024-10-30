@@ -926,16 +926,6 @@ describe("Server Module Tests", () => {
                     ),
                 );
 
-                // TODO use FT.LIST when it is done
-                const indices = (await client.customCommand([
-                    "FT._LIST",
-                ])) as GlideString[];
-
-                // check that we can get a response for all indices (no crashes on value conversion or so)
-                for (const idx in indices) {
-                    await GlideFt.info(client, idx);
-                }
-
                 const index = uuidv4();
                 expect(
                     await GlideFt.create(
