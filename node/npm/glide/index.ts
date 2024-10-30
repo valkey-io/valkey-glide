@@ -213,6 +213,8 @@ function initialize() {
         ReturnTypeMap,
         ClusterResponse,
         ReturnTypeAttribute,
+        ReturnTypeJson,
+        UniversalReturnTypeJson,
     } = nativeBinding;
 
     module.exports = {
@@ -347,6 +349,8 @@ function initialize() {
         ReturnTypeMap,
         ClusterResponse,
         ReturnTypeAttribute,
+        ReturnTypeJson,
+        UniversalReturnTypeJson,
     };
 
     globalObject = Object.assign(global, nativeBinding);
