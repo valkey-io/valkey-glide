@@ -106,7 +106,7 @@ export class GlideJson {
      * console.log(result); // 'OK' - Indicates successful setting of the value at path '$' in the key stored at `doc`.
      *
      * const jsonGetStr = await GlideJson.get(client, "doc", {path: "$"}); // Returns the value at path '$' in the JSON document stored at `doc` as JSON string.
-     * console.log(jsonGetStr); // '[{"a":1.0, "b":2}]'
+     * console.log(jsonGetStr); // '[{"a":1.0,"b":2}]'
      * console.log(JSON.stringify(jsonGetStr)); //  [{"a": 1.0, "b": 2}] # JSON object retrieved from the key `doc`
      * ```
      */
@@ -197,7 +197,7 @@ export class GlideJson {
      * @param client - The client to execute the command.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
-     * - (Optional) path -  The JSONPath to specify. Defaults to the root if not specified.
+     * - (Optional) `path`:  The JSONPath to specify. Defaults to the root if not specified.
      * @returns - For JSONPath (`path` starts with `$`), returns a list of boolean replies for every possible path, with the toggled boolean value,
      * or `null` for JSON values matching the path that are not boolean.
      * - For legacy path (`path` doesn't starts with `$`), returns the value of the toggled boolean in `path`.
@@ -249,7 +249,7 @@ export class GlideJson {
      * @param client - The client to execute the command.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
-     * - (Optional) path - If `null`, deletes the entire JSON document at `key`.
+     * - (Optional) `path`: If `null`, deletes the entire JSON document at `key`.
      * @returns - The number of elements removed. If `key` or `path` doesn't exist, returns 0.
      *
      * @example
@@ -285,7 +285,7 @@ export class GlideJson {
      * @param client - The client to execute the command.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
-     * - (Optional) path - If `null`, deletes the entire JSON document at `key`.
+     * - (Optional) `path`: If `null`, deletes the entire JSON document at `key`.
      * @returns - The number of elements removed. If `key` or `path` doesn't exist, returns 0.
      *
      * @example
@@ -320,7 +320,7 @@ export class GlideJson {
      * @param client - The client to execute the command.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
-     * - (Optional) path - defaults to root if not provided.
+     * - (Optional) `path`: defaults to root if not provided.
      * @returns ReturnTypeJson:
      *     - For JSONPath (path starts with `$`):
      *       - Returns an array of strings that represents the type of value at each path.
@@ -372,7 +372,7 @@ export class GlideJson {
      * @param client - The client to execute the command.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
-     * - (Optional) path - The path within the JSON document, Defaults to root if not provided.
+     * - (Optional) `path`: The path within the JSON document, Defaults to root if not provided.
      * @returns ReturnTypeJson:
      *     - For JSONPath (path starts with `$`):
      *       - Returns an array of replies for every possible path, indicating the RESP form of the JSON value.
@@ -388,14 +388,14 @@ export class GlideJson {
      * // Output: 'OK' - Indicates successful setting of the value at path '.' in the key stored at `doc`.
      * const result = await GlideJson.resp(client, "doc", {path: "$..a"});
      * console.log(result);
-     * // Output: [ ["[", 1L, 2L, 3L], ["[", 1L, 2L], [42L]];
-     * console.log(await GlideJson.type(client, "doc", {path: "..a"})); // Output: ["[", 1L, 2L, 3L]
+     * // Output: [ ["[", 1, 2, 3], ["[", 1, 2], [42]];
+     * console.log(await GlideJson.type(client, "doc", {path: "..a"})); // Output: ["[", 1, 2, 3]
      * ```
      */
     static async resp(
         client: BaseClient,
         key: GlideString,
-        options?: { path: GlideString },
+        options?: { path: GlideString } & DecoderOption,
     ): Promise<
         UniversalReturnTypeJson<
             (number | GlideString) | (number | GlideString | null) | null
@@ -407,11 +407,7 @@ export class GlideJson {
             args.push(options.path);
         }
 
-        return _executeCommand<
-            UniversalReturnTypeJson<
-                (number | GlideString) | (number | GlideString | null) | null
-            >
-        >(client, args);
+        return _executeCommand(client, args, options);
     }
 
     /**
@@ -421,7 +417,7 @@ export class GlideJson {
      * @param client - The client to execute the command.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
-     * - (Optional) path - The path within the JSON document, Defaults to root if not provided.
+     * - (Optional) `path`: The path within the JSON document, Defaults to root (`"."`) if not provided.
      * @returns ReturnTypeJson:
      *     - For JSONPath (path starts with `$`):
      *       - Returns a list of integer replies for every possible path, indicating the length of
@@ -438,10 +434,10 @@ export class GlideJson {
      * console.log(await GlideJson.set(client, "doc", "$", '{a:"foo", nested: {a: "hello"}, nested2: {a: 31}}"));
      * // Output: 'OK' - Indicates successful setting of the value at path '$' in the key stored at `doc`.
      * console.log(await GlideJson.strlen(client, "doc", {path: "$..a"}));
-     * // Output: [3, 5, null]; - The length of the string values at path '$..a' in the key stored at `doc`.
+     * // Output: [3, 5, null] - The length of the string values at path '$..a' in the key stored at `doc`.
      *
      * console.log(await GlideJson.strlen(client, "doc", {path: "nested.a"}));
-     * // Output: 5; - The length of the JSON value at path 'nested.a' in the key stored at `doc`.
+     * // Output: 5 - The length of the JSON value at path 'nested.a' in the key stored at `doc`.
      *
      * console.log(await GlideJson.strlen(client, "doc", {path: "$"}));
      * // Output: [null] - Returns an array with null since the value at root path does in the JSON document stored at `doc` is not a string.
@@ -461,7 +457,7 @@ export class GlideJson {
             args.push(options.path);
         }
 
-        return _executeCommand<ReturnTypeJson<number>>(client, args);
+        return _executeCommand(client, args);
     }
 
     /**
@@ -471,17 +467,18 @@ export class GlideJson {
      * @param key - The key of the JSON document.
      * @param value - The value to append to the string. Must be wrapped with single quotes. For example, to append "foo", pass '"foo"'.
      * @param options - (Optional) Additional parameters:
-     * - (Optional) path - The path within the JSON document, Defaults to root if not provided.
+     * - (Optional) `path`: The path within the JSON document, Defaults to root if not provided.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns ReturnTypeJson:
      *     - For JSONPath (path starts with `$`):
      *       - Returns a list of integer replies for every possible path, indicating the length of the resulting string after appending `value`,
-               or None for JSON values matching the path that are not string.
-             - If `key` doesn't exist, an error is raised.
+     *         or None for JSON values matching the path that are not string.
+     *       - If `key` doesn't exist, an error is raised.
      *     - For legacy path (path doesn't start with `$`):
      *       - Returns the length of the resulting string after appending `value` to the string at `path`.
-             - If multiple paths match, the length of the last updated string is returned.
-             - If the JSON value at `path` is not a string of if `path` doesn't exist, an error is raised.
-             - If `key` doesn't exist, an error is raised.
+     *       - If multiple paths match, the length of the last updated string is returned.
+     *       - If the JSON value at `path` is not a string of if `path` doesn't exist, an error is raised.
+     *       - If `key` doesn't exist, an error is raised.
      *
      * @example
      * ```typescript
