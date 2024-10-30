@@ -16,7 +16,6 @@ import {
     GlideClusterClient,
     GlideFt,
     GlideJson,
-    GlideString,
     InfoOptions,
     JsonGetOptions,
     ProtocolVersion,
