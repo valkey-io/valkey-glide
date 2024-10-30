@@ -9,8 +9,9 @@ on:
             - .github/workflows/build-python-wrapper/action.yml
             - .github/workflows/start-self-hosted-runner/action.yml
             - .github/workflows/install-shared-dependencies/action.yml
-            - .github/workflows/install-valkey/action.yml
-            - .github/json_matrices/build-matrix.json
+            - .github/workflows/install-engine/action.yml
+            - .github/json_matrices/**
+            - .github/workflows/create-test-matrices/action.yml
     push:
         tags:
             - "v*.*"
@@ -41,7 +42,7 @@ jobs:
               shell: bash
               run: |
                   # Get the matrix from the matrix.json file, without the object that has the IMAGE key
-                  export "PLATFORM_MATRIX=$(jq 'map(select(.PACKAGE_MANAGERS | contains(["pypi"])))' < .github/json_matrices/build-matrix.json | jq -c .)"
+                  export "PLATFORM_MATRIX=$(jq 'map(select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["pypi"]))))' < .github/json_matrices/build-matrix.json | jq -c .)"
                   echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
 
     start-self-hosted-runner:
@@ -114,13 +115,6 @@ jobs:
               with:
                   python-version: "3.12"
 
-            - name: Setup Python for self-hosted Ubuntu runners
-              if: contains(matrix.build.RUNNER, 'self-hosted')
-              run: |
-                  sudo apt update -y
-                  sudo apt upgrade -y
-                  sudo apt install python3 python3-venv python3-pip -y
-
             - name: Update package version in config.toml
               uses: ./.github/workflows/update-glide-version
               with:
@@ -134,7 +128,6 @@ jobs:
                   target: ${{ matrix.build.TARGET }}
                   publish: "true"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
-                  engine-version: "7.2"
 
             - name: Include protobuf files in the package
               working-directory: ./python
@@ -150,7 +143,7 @@ jobs:
               with:
                   working-directory: ./python
                   target: ${{ matrix.build.TARGET }}
-                  args: --release --strip --out wheels -i ${{ github.event_name != 'pull_request' && 'python3.8 python3.9 python3.10 python3.11 python3.12' || 'python3.10' }}
+                  args: --release --strip --out wheels -i ${{ github.event_name != 'pull_request' && 'python3.8 python3.9 python3.10 python3.11 python3.12 python3.13' || 'python3.12' }}
                   manylinux: auto
                   container: ${{ matrix.build.CONTAINER != '' && matrix.build.CONTAINER || '2014' }}
                   before-script-linux: |
@@ -178,9 +171,10 @@ jobs:
               if: startsWith(matrix.build.NAMED_OS, 'darwin')
               uses: PyO3/maturin-action@v1
               with:
+                  maturin-version: latest
                   working-directory: ./python
                   target: ${{ matrix.build.TARGET }}
-                  args: --release --strip --out wheels -i  ${{ github.event_name != 'pull_request' && 'python3.8 python3.9 python3.10 python3.11 python3.12' || 'python3.12' }}
+                  args: --release --strip --out wheels -i  ${{ github.event_name != 'pull_request' && 'python3.8 python3.9 python3.10 python3.11 python3.12 python3.13' || 'python3.12' }}
 
             - name: Upload Python wheels
               if: github.event_name != 'pull_request'
@@ -220,10 +214,6 @@ jobs:
             matrix:
                 build: ${{ fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX) }}
         steps:
-            - name: Setup self-hosted runner access
-              if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-gnu' }}
-              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
-
             - name: checkout
               uses: actions/checkout@v4
 
@@ -232,8 +222,8 @@ jobs:
               with:
                   python-version: 3.12
 
-            - name: Install ValKey
-              uses: ./.github/workflows/install-valkey
+            - name: Install engine
+              uses: ./.github/workflows/install-engine
               with:
                   version: "8.0"
 
