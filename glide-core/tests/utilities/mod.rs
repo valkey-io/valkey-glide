@@ -734,7 +734,7 @@ pub async fn kill_connection(client: &mut impl glide_core::client::GlideClientFo
             &client_kill_cmd,
             Some(RoutingInfo::MultiNode((
                 MultipleNodeRoutingInfo::AllNodes,
-                None,
+                Some(redis::cluster_routing::ResponsePolicy::AllSucceeded),
             ))),
         )
         .await
