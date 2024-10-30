@@ -1047,7 +1047,7 @@ describe("Server Module Tests", () => {
             }
         });
 
-        it("FT.DROPINDEX test", async () => {
+        it("FT.DROPINDEX binary test", async () => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(
                     cluster.getAddresses(),
@@ -1209,17 +1209,6 @@ describe("Server Module Tests", () => {
                 { field: "vec", value: binaryValue2 },
             ])).toEqual(1);
 
-            const stringValue1 = "AA";
-            expect(await client.hset(prefix + "2", [
-                { field: "vec", value: stringValue1 },
-            ])).toEqual(1);
-
-            const stringValue2 = "AC";
-            expect(await client.hset(prefix + "3", [
-                // value of <Buffer 00 00 00 00 00 00 00 80 BF>
-                { field: "vec", value: stringValue2 },
-            ])).toEqual(1);
-
             // let server digest the data and update index
             const sleep = new Promise((resolve) => setTimeout(resolve, DATA_PROCESSING_TIMEOUT));
             await sleep;
@@ -1281,41 +1270,83 @@ describe("Server Module Tests", () => {
                 ]
             ];
             expect(binaryResult).toEqual(expectedBinaryResult);
+        });
 
+        it("FT.SEARCH string test", async () => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+
+            const prefix = "{" + uuidv4() + "}:";
+            const index = prefix + "index";
+
+            // set string values
+            expect(await GlideJson.set(client, prefix + "1", "$", "[{\"arr\": [1, 2, 3]}, {\"val\": \"hello\"}, {\"val\": \"world\"}]")).toEqual("OK");
+
+            // setup a json index:
+            expect(
+                await GlideFt.create(client, index, [
+                    {
+                        type: "NUMERIC",
+                        name: "$..arr",
+                        alias: "arr",
+                    },
+                    {
+                        type: "TEXT",
+                        name: "$..val",
+                        alias: "val,"
+                    }
+                ], {
+                    dataType: "JSON",
+                    prefixes: [prefix],
+                }),
+            ).toEqual("OK");
+
+            // let server digest the data and update index
+            const sleep = new Promise((resolve) => setTimeout(resolve, DATA_PROCESSING_TIMEOUT));
+            await sleep;
+
+            // With the `COUNT` parameters - returns only the count
             const stringResult: (number | GlideRecord<GlideString | GlideRecord<GlideString>>)[] = await GlideFt.search(
                 client,
                 index,
-                "*=>[KNN 2 @VEC $query_vec]",
+                "*",
                 {
-                    returnFields: [{fieldIdentifier: "vec"}],
-                    params: [{key: "query_vec", value: stringValue1}],
+                    returnFields: [{fieldIdentifier: "arr"}, {fieldIdentifier: "val"}],
                     timeout: 10000,
-                    limit: {offset: 0, count: 2},
                     decoder: Decoder.String,
+                    limit: {offset: 0, count: 2},
                 }
             );
+
             console.log(JSON.stringify(stringResult));
 
             const expectedStringResult: (number | GlideRecord<GlideString | GlideRecord<GlideString>>)[] = [
                 2,
                 [
                     {
-                        "key": prefix + "0",
+                        "key": prefix + "1",
                         "value":[
                             {
-                                "key": "vec",
-                                "value": binaryValue1.toString(),
+                                "key": "arr",
+                                "value": "[1,2,3]",
+                            },
+                            {
+                                "key": "val",
+                                "value": "hello",
                             },
                             {
                                 "key": "__VEC_score",
-                                "value": "0",
+                                "value": "1",
                             }
                         ]
                     },
                 ]
             ];
             expect(stringResult).toEqual(expectedStringResult);
-
         });
     });
 });
