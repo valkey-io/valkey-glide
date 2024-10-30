@@ -1297,7 +1297,7 @@ describe("Server Module Tests", () => {
                     {
                         type: "TEXT",
                         name: "$..val",
-                        alias: "val,"
+                        alias: "val",
                     }
                 ], {
                     dataType: "JSON",
@@ -1310,7 +1310,7 @@ describe("Server Module Tests", () => {
             await sleep;
 
             // With the `COUNT` parameters - returns only the count
-            const stringResult: (number | GlideRecord<GlideString | GlideRecord<GlideString>>)[] = await GlideFt.search(
+            const stringCountResult: (number | GlideRecord<GlideString | GlideRecord<GlideString>>)[] = await GlideFt.search(
                 client,
                 index,
                 "*",
@@ -1321,11 +1321,20 @@ describe("Server Module Tests", () => {
                     limit: {offset: 0, count: 2},
                 }
             );
+            expect(stringCountResult).toEqual([1]);
 
-            console.log(JSON.stringify(stringResult));
-
+            const stringResult: (number | GlideRecord<GlideString | GlideRecord<GlideString>>)[] = await GlideFt.search(
+                client,
+                index,
+                "*",
+                {
+                    returnFields: [{fieldIdentifier: "arr"}, {fieldIdentifier: "val"}],
+                    timeout: 10000,
+                    decoder: Decoder.String,
+                }
+            );
             const expectedStringResult: (number | GlideRecord<GlideString | GlideRecord<GlideString>>)[] = [
-                2,
+                1,
                 [
                     {
                         "key": prefix + "1",
@@ -1337,10 +1346,6 @@ describe("Server Module Tests", () => {
                             {
                                 "key": "val",
                                 "value": "hello",
-                            },
-                            {
-                                "key": "__VEC_score",
-                                "value": "1",
                             }
                         ]
                     },
