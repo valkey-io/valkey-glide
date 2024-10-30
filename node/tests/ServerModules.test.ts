@@ -1284,7 +1284,7 @@ describe("Server Module Tests", () => {
             const index = prefix + "index";
 
             // set string values
-            expect(await GlideJson.set(client, prefix + "1", "$", "[{\"arr\": [1, 2, 3]}, {\"val\": \"hello\"}, {\"val\": \"world\"}]")).toEqual("OK");
+            expect(await GlideJson.set(client, prefix + "1", "$", "[{\"arr\": 42}, {\"val\": \"hello\"}, {\"val\": \"world\"}]")).toEqual("OK");
 
             // setup a json index:
             expect(
@@ -1332,7 +1332,7 @@ describe("Server Module Tests", () => {
                         "value":[
                             {
                                 "key": "arr",
-                                "value": "[1,2,3]",
+                                "value": "42",
                             },
                             {
                                 "key": "val",
