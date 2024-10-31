@@ -534,6 +534,8 @@ func (suite *GlideTestSuite) TestAppend_existingAndNonExistingKeys() {
 }
 
 func (suite *GlideTestSuite) TestLCS_existingAndNonExistingKeys() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key1 := "{key}" + uuid.New().String()
 		key2 := "{key}" + uuid.New().String()

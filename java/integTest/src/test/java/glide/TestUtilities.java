@@ -27,6 +27,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import lombok.NonNull;
 import lombok.SneakyThrows;
@@ -394,17 +396,18 @@ public class TestUtilities {
         return script.replace("$timeout", Integer.toString(timeout));
     }
 
-    public static void waitForNotBusy(BaseClient client) {
+    /**
+     * Lock test until server completes a script/function execution.
+     *
+     * @param lambda Client api reference to use for checking the server.
+     */
+    public static void waitForNotBusy(Supplier<CompletableFuture<?>> lambda) {
         // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
         // test to fail.
         boolean isBusy = true;
         do {
             try {
-                if (client instanceof GlideClusterClient) {
-                    ((GlideClusterClient) client).functionKill().get();
-                } else if (client instanceof GlideClient) {
-                    ((GlideClient) client).functionKill().get();
-                }
+                lambda.get().get();
             } catch (Exception busy) {
                 // should throw `notbusy` error, because the function should be killed before
                 if (busy.getMessage().toLowerCase().contains("notbusy")) {
