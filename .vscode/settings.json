@@ -58,5 +58,6 @@
         "black"
     ],
     "rust-analyzer.cargo.features": "all",
-    "dotnet.defaultSolution": "csharp/csharp.sln"
+    "dotnet.defaultSolution": "csharp/csharp.sln",
+    "java.compile.nullAnalysis.mode": "automatic"
 }
