@@ -370,10 +370,11 @@ export class GlideJson {
     static async arrindex(
         client: BaseClient,
         key: GlideString,
+        path: GlideString,
         scalar: GlideString | number | boolean | null,
-        options?: { start: number; end: number },
+        options?: { start: number; end?: number },
     ): Promise<ReturnTypeJson<number>> {
-        const args = ["JSON.ARRINDEX", key];
+        const args = ["JSON.ARRINDEX", key, path];
 
         if (typeof scalar === `number`) {
             args.push(scalar.toString());
@@ -381,10 +382,12 @@ export class GlideJson {
             args.push(scalar ? `true` : `false`);
         } else if (scalar !== null) {
             args.push(scalar);
+        } else {
+            args.push(`null`);
         }
 
-        if (options?.start) args.push(options?.start.toString());
-        if (options?.end) args.push(options?.end.toString());
+        if (options?.start !== undefined) args.push(options?.start.toString());
+        if (options?.end !== undefined) args.push(options?.end.toString());
 
         return _executeCommand(client, args);
     }
