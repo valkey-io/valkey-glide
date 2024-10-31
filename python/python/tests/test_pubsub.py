@@ -2471,7 +2471,7 @@ class TestPubSub:
         This test verifies that the pubsub_shardchannels command correctly returns
         the active sharded channels matching a specified pattern.
         """
-        client1, client2, client = None, None, None
+        pub_sub, client1, client2, client = None, None, None, None
         try:
             channel1 = "test_shardchannel1"
             channel2 = "test_shardchannel2"
@@ -2505,10 +2505,6 @@ class TestPubSub:
             client1, client2 = await create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub
             )
-
-            min_version = "7.0.0"
-            if await check_if_server_version_lt(client1, min_version):
-                pytest.skip(reason=f"Valkey version required >= {min_version}")
 
             assert type(client2) == GlideClusterClient
 
@@ -2595,10 +2591,6 @@ class TestPubSub:
             client1, client2 = await create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub1, pub_sub2
             )
-
-            min_version = "7.0.0"
-            if await check_if_server_version_lt(client1, min_version):
-                pytest.skip(reason=f"Valkey version required >= {min_version}")
 
             client3, client4 = await create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub3

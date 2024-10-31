@@ -156,7 +156,7 @@ jobs:
             matrix:
                 python: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output) }}
                 engine: ${{ fromJson(needs.get-matrices.outputs.engine-matrix-output) }}
-                host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output).include }}
+                host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
         steps:
             - uses: actions/checkout@v4
               with:
