@@ -339,7 +339,7 @@ export class GlideJson {
      * const result = await GlideJson.type(client, "doc", "$[*]");
      * console.log(result);
      * // Output: ["integer", "number", "string", "boolean", null, "object", "array"];
-     * console.log(await GlideJson.set(client, "doc2", ".", '{Name: 'John', Age: 27}'));
+     * console.log(await GlideJson.set(client, "doc2", ".", "{Name: 'John', Age: 27}"));
      * console.log(await GlideJson.type(client, "doc2")); // Output: "object"
      * console.log(await GlideJson.type(client, "doc2", {path: ".Age"})); // Output: "integer"
      * ```
