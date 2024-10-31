@@ -295,15 +295,6 @@ export type FtAggregateOptions = {
 }
     );
 
-/** The {@link GlideFt.aggregate | FT.AGGREGATE} clause type. */
-export enum FtAggregateClauseType {
-    LIMIT = "LIMIT",
-    FILTER = "FILTER",
-    GROUPBY = "GROUPBY",
-    SORTBY = "SORTBY",
-    APPLY = "APPLY",
-}
-
 export type FtAggregateClause =
     | FtAggregateLimit
     | FtAggregateFilter
@@ -313,7 +304,7 @@ export type FtAggregateClause =
 
 /** A clause for limiting the number of retained records. */
 export interface FtAggregateLimit {
-    type: FtAggregateClauseType.LIMIT;
+    type: "LIMIT";
     /** Starting point from which the records have to be retained. */
     offset: number;
     /** The total number of records to be retained. */
@@ -325,14 +316,14 @@ export interface FtAggregateLimit {
  * It is applied post query and relate to the current state of the pipeline.
  */
 export interface FtAggregateFilter {
-    type: FtAggregateClauseType.FILTER;
+    type: "FILTER";
     /** The expression to filter the results. */
     expression: GlideString;
 }
 
 /** A clause for grouping the results in the pipeline based on one or more properties. */
 export interface FtAggregateGroupBy {
-    type: FtAggregateClauseType.GROUPBY;
+    type: "GROUPBY";
     /** The list of properties to be used for grouping the results in the pipeline. */
     properties: GlideString[];
     /** The list of functions that handles the group entries by performing multiple aggregate operations. */
@@ -354,7 +345,7 @@ export interface FtAggregateReducer {
 
 /** A clause for sorting the pipeline up until the point of SORTBY, using a list of properties. */
 export interface FtAggregateSortBy {
-    type: FtAggregateClauseType.SORTBY;
+    type: "SORTBY";
     /** A list of sorting parameters for the sort operation. */
     properties: FtAggregateSortProperty[];
     /** The MAX value for optimizing the sorting, by sorting only for the n-largest elements. */
@@ -374,7 +365,7 @@ export interface FtAggregateSortProperty {
  * as a new property down the pipeline or replaces any property using this transformation.
  */
 export interface FtAggregateApply {
-    type: FtAggregateClauseType.APPLY;
+    type: "APPLY";
     /** The transformation expression. */
     expression: GlideString;
     /** The new property name to store the result of apply. This name can be referenced by further operations down the pipeline. */

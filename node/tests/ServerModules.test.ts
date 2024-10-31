@@ -16,7 +16,6 @@ import {
     Decoder,
     FtAggregateOptions,
     FtSearchReturnType,
-    FtAggregateClauseType,
     FtAggregateOptions,
     GlideClusterClient,
     GlideFt,
@@ -2648,7 +2647,7 @@ describe("Server Module Tests", () => {
                     loadFields: ["__key"],
                     clauses: [
                         {
-                            type: FtAggregateClauseType.GROUPBY,
+                            type: "GROUPBY",
                             properties: ["@condition"],
                             reducers: [
                                 {
@@ -2746,12 +2745,12 @@ describe("Server Module Tests", () => {
                     loadAll: true,
                     clauses: [
                         {
-                            type: FtAggregateClauseType.APPLY,
+                            type: "APPLY",
                             expression: "ceil(@rating)",
                             name: "r_rating",
                         },
                         {
-                            type: FtAggregateClauseType.GROUPBY,
+                            type: "GROUPBY",
                             properties: ["@genre"],
                             reducers: [
                                 {
@@ -2772,7 +2771,7 @@ describe("Server Module Tests", () => {
                             ],
                         },
                         {
-                            type: FtAggregateClauseType.SORTBY,
+                            type: "SORTBY",
                             properties: [
                                 { property: "@avg_rating", order: "DESC" },
                                 { property: "@nb_of_votes", order: "DESC" },
