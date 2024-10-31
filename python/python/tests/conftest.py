@@ -282,21 +282,21 @@ async def test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
 
 
 @pytest.fixture(autouse=True)
-async def skip_by_version(request):
+async def skip_if_version_below(request):
     """
     Skip test(s) if server version is below than given parameter. Can skip a complete test suite.
 
     Example:
 
-      @pytest.mark.skip_version('7.0.0')
+      @pytest.mark.skip_if_version_below('7.0.0')
       async def test_meow_meow(...):
           ...
     """
-    if request.node.get_closest_marker("skip_version"):
-        version = request.node.get_closest_marker("skip_version").args[0]
+    if request.node.get_closest_marker("skip_if_version_below"):
+        min_version = request.node.get_closest_marker("skip_if_version_below").args[0]
         client = await create_client(request, False)
-        if await check_if_server_version_lt(client, version):
+        if await check_if_server_version_lt(client, min_version):
             pytest.skip(
-                reason=f"This feature added in version {version}",
+                reason=f"This feature added in version {min_version}",
                 allow_module_level=True,
             )

@@ -469,7 +469,7 @@ class TestPubSub:
             await client_cleanup(listening_client, pub_sub if cluster_mode else None)
             await client_cleanup(publishing_client, None)
 
-    @pytest.mark.skip_version("7.0.0")
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
@@ -532,7 +532,7 @@ class TestPubSub:
             await client_cleanup(listening_client, pub_sub if cluster_mode else None)
             await client_cleanup(publishing_client, None)
 
-    @pytest.mark.skip_version("7.0.0")
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     async def test_sharded_pubsub_co_existence(self, request, cluster_mode: bool):
         """
@@ -603,7 +603,7 @@ class TestPubSub:
             await client_cleanup(listening_client, pub_sub if cluster_mode else None)
             await client_cleanup(publishing_client, None)
 
-    @pytest.mark.skip_version("7.0.0")
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
@@ -1164,7 +1164,7 @@ class TestPubSub:
             )
             await client_cleanup(client_dont_care, None)
 
-    @pytest.mark.skip_version("7.0.0")
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
@@ -1297,7 +1297,7 @@ class TestPubSub:
             )
             await client_cleanup(publishing_client, None)
 
-    @pytest.mark.skip_version("7.0.0")
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
@@ -1520,7 +1520,7 @@ class TestPubSub:
                 listening_client_sharded, pub_sub_sharded if cluster_mode else None
             )
 
-    @pytest.mark.skip_version("7.0.0")
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
@@ -1784,7 +1784,7 @@ class TestPubSub:
                 client_pattern, pub_sub_pattern if cluster_mode else None
             )
 
-    @pytest.mark.skip_version("7.0.0")
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
@@ -2005,7 +2005,7 @@ class TestPubSub:
             await client_cleanup(listening_client, pub_sub if cluster_mode else None)
             await client_cleanup(publishing_client, None)
 
-    @pytest.mark.skip_version("7.0.0")
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.skip(
         reason="This test requires special configuration for client-output-buffer-limit for valkey-server and timeouts seems to vary across platforms and server versions"
     )
@@ -2139,7 +2139,7 @@ class TestPubSub:
             await client_cleanup(listening_client, pub_sub if cluster_mode else None)
             await client_cleanup(publishing_client, None)
 
-    @pytest.mark.skip_version("7.0.0")
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.skip(
         reason="This test requires special configuration for client-output-buffer-limit for valkey-server and timeouts seems to vary across platforms and server versions"
     )
@@ -2438,7 +2438,7 @@ class TestPubSub:
             await client_cleanup(client4, None)
             await client_cleanup(client, None)
 
-    @pytest.mark.skip_version("7.0.0")
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     async def test_pubsub_shardchannels(self, request, cluster_mode: bool):
         """
@@ -2497,7 +2497,7 @@ class TestPubSub:
             await client_cleanup(client2, None)
             await client_cleanup(client, None)
 
-    @pytest.mark.skip_version("7.0.0")
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     async def test_pubsub_shardnumsub(self, request, cluster_mode: bool):
         """
@@ -2592,7 +2592,7 @@ class TestPubSub:
             await client_cleanup(client4, None)
             await client_cleanup(client, None)
 
-    @pytest.mark.skip_version("7.0.0")
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     async def test_pubsub_channels_and_shardchannels_separation(
         self, request, cluster_mode: bool
@@ -2639,7 +2639,7 @@ class TestPubSub:
             await client_cleanup(client1, pub_sub if cluster_mode else None)
             await client_cleanup(client2, None)
 
-    @pytest.mark.skip_version("7.0.0")
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     async def test_pubsub_numsub_and_shardnumsub_separation(
         self, request, cluster_mode: bool
