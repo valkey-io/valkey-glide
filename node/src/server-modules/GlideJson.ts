@@ -988,4 +988,89 @@ export class GlideJson {
         const args = ["JSON.NUMMULTBY", key, path, num.toString()];
         return _executeCommand(client, args);
     }
+
+    /**
+     * Retrieves the number of key-value pairs in the object stored at the specified `path` within the JSON document stored at `key`.
+     *
+     * @param client - The client to execute the command.
+     * @param key - The key of the JSON document.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) path - The path within the JSON document, Defaults to root if not provided.
+     * @returns ReturnTypeJson<number>:
+     *     - For JSONPath (`path` starts with `$`):
+             - Returns a list of integer replies for every possible path, indicating the length of the object,
+                or `null` for JSON values matching the path that are not an object.
+                If `path` doesn't exist, an empty array will be returned.
+           - For legacy path (`path` doesn't starts with `$`):
+             - Returns the length of the object at `path`.
+                If multiple paths match, the length of the first object match is returned.
+                If the JSON value at `path` is not an object or if `path` doesn't exist, an error is raised.
+           - If `key` doesn't exist, `null` is returned.
+     *
+     * @example
+     * ```typescript
+     * console.log(await GlideJson.set(client, "doc", "$", '{"a": 1.0, "b": {"a": {"x": 1, "y": 2}, "b": 2.5, "c": true}}'));
+     * // Output: 'OK' - Indicates successful setting of the value at the root path '$' in the key `doc`.
+     * console.log(await GlideJson.objlen(client, "doc", "$"));
+     * // Output: [2] - Returns the number of key-value pairs at the root object, which has 2 keys: 'a' and 'b'.
+     * console.log(await GlideJson.objlen(client, "doc", "."));
+     * // Output: 2 - Returns the number of key-value pairs for the object matching the path '.', which has 2 keys: 'a' and 'b'.
+     * ```
+     */
+    static async objlen(
+        client: BaseClient,
+        key: GlideString,
+        options?: { path: GlideString },
+    ): Promise<ReturnTypeJson<number>> {
+        const args = ["JSON.OBJLEN", key];
+
+        if (options) {
+            args.push(options.path);
+        }
+
+        return _executeCommand<ReturnTypeJson<number>>(client, args);
+    }
+
+    /**
+     * Retrieves key names in the object values at the specified `path` within the JSON document stored at `key`.
+     *
+     * @param client - The client to execute the command.
+     * @param key - The key of the JSON document.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) path - The path within the JSON document where the key names will be retrieved. Defaults to root if not provided.
+     * @returns ReturnTypeJson<GlideString[]>:
+           - For JSONPath (`path` starts with `$`):
+             - Returns a list of arrays containing key names for each matching object.
+               If a value matching the path is not an object, an empty array is returned.
+               If `path` doesn't exist, an empty array is returned.
+            - For legacy path (`path` starts with `.`):
+              - Returns a list of key names for the object value matching the path.
+                If multiple objects match the path, the key names of the first object are returned.
+                If a value matching the path is not an object, an error is raised.
+                If `path` doesn't exist, `null` is returned.
+            If `key` doesn't exist, `null` is returned.
+     *
+     * @example
+     * ```typescript
+     * console.log(await GlideJson.set(client, "doc", "$", '{"a": 1.0, "b": {"a": {"x": 1, "y": 2}, "b": 2.5, "c": true}}'));
+     * // Output: 'OK' - Indicates successful setting of the value at the root path '$' in the key `doc`.
+     * console.log(await GlideJson.objkeys(client, "doc", "$"));
+     * // Output: [["a", "b"]] - Returns a list of arrays containing the key names for objects matching the path '$'.
+     * console.log(await GlideJson.objkeys(client, "doc", "."));
+     * // Output: ["a", "b"] - Returns key names for the object matching the path '.' as it is the only match.
+     * ```
+     */
+    static async objkeys(
+        client: BaseClient,
+        key: GlideString,
+        options?: { path: GlideString },
+    ): Promise<ReturnTypeJson<GlideString[]>> {
+        const args = ["JSON.OBJKEYS", key];
+
+        if (options) {
+            args.push(options.path);
+        }
+
+        return _executeCommand<ReturnTypeJson<GlideString[]>>(client, args);
+    }
 }
