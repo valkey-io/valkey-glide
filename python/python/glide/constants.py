@@ -116,5 +116,5 @@ FtSearchResponse = List[
 FtAggregateResponse = List[Mapping[TEncodable, Any]]
 
 FtProfileResponse = List[
-    Union[FtSearchResponse, FtAggregateResponse, Mapping[TEncodable, Any]]
+    Union[FtSearchResponse, FtAggregateResponse, Mapping[str, int]]
 ]
