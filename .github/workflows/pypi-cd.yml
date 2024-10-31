@@ -170,8 +170,8 @@ jobs:
                         echo "Running on unsupported architecture: $ARCH. Expected one of: ['x86_64', 'aarch64']"
                         exit 1 
                       fi
-                      curl -LO $PB_REL/download/v3.20.3/protoc-3.20.3-linux-${PROTOC_ARCH}.zip
-                      unzip protoc-3.20.3-linux-${PROTOC_ARCH}.zip -d $HOME/.local
+                      curl -LO $PB_REL/download/v4.25.5/protoc-4.25.5-linux-${PROTOC_ARCH}.zip
+                      unzip protoc-4.25.5-linux-${PROTOC_ARCH}.zip -d $HOME/.local
                       export PATH="$PATH:$HOME/.local/bin"
 
             - name: Build Python wheels (macos)

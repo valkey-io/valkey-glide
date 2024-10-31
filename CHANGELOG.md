@@ -54,6 +54,7 @@
 * Python: Add `JSON.RESP` command ([#2451](https://github.com/valkey-io/valkey-glide/pull/2451))
 * Node: Add `JSON.STRLEN` and `JSON.STRAPPEND` command ([#2537](https://github.com/valkey-io/valkey-glide/pull/2537))
 * Python: Fix example ([#2556](https://github.com/valkey-io/valkey-glide/issues/2556))
+* Java, Python: Bump protobuf (protoc) version ([#2561](https://github.com/valkey-io/valkey-glide/pull/2561))
 
 #### Breaking Changes
 

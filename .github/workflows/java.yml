@@ -95,7 +95,7 @@ jobs:
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
               with:
-                  version: "26.1"
+                  version: "28.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Build java client
@@ -163,7 +163,7 @@ jobs:
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
               with:
-                  version: "26.1"
+                  version: "28.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Install Java

@@ -14,7 +14,7 @@ Before building the package from source, make sure that you have installed the l
 -   git
 -   GCC
 -   pkg-config
--   protoc (protobuf compiler) >= v3.20.0
+-   protoc (protobuf compiler) >= v4.25.5
 -   openssl
 -   openssl-dev
 -   rustup
@@ -35,9 +35,9 @@ rustc --version
 # Install protobuf compiler
 PB_REL="https://github.com/protocolbuffers/protobuf/releases"
 # For other arch type from x86 example below, the signature of the curl url should be protoc-<version>-<os>-<arch>.zip,
-# e.g. protoc-3.20.3-linux-aarch_64.zip for ARM64.
-curl -LO $PB_REL/download/v3.20.3/protoc-3.20.3-linux-x86_64.zip
-unzip protoc-3.20.3-linux-x86_64.zip -d $HOME/.local
+# e.g. protoc-4.25.5-linux-aarch_64.zip for ARM64.
+curl -LO $PB_REL/download/v4.25.5/protoc-4.25.5-linux-x86_64.zip
+unzip protoc-4.25.5-linux-x86_64.zip -d $HOME/.local
 export PATH="$PATH:$HOME/.local/bin"
 # Check that the protobuf compiler is installed
 protoc --version
@@ -59,8 +59,8 @@ source "$HOME/.cargo/env"
 rustc --version
 # Install protobuf compiler
 PB_REL="https://github.com/protocolbuffers/protobuf/releases"
-curl -LO $PB_REL/download/v3.20.3/protoc-3.20.3-linux-x86_64.zip
-unzip protoc-3.20.3-linux-x86_64.zip -d $HOME/.local
+curl -LO $PB_REL/download/v4.25.5/protoc-4.25.5-linux-x86_64.zip
+unzip protoc-4.25.5-linux-x86_64.zip -d $HOME/.local
 export PATH="$PATH:$HOME/.local/bin"
 # Check that the protobuf compiler is installed
 protoc --version
