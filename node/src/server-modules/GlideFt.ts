@@ -12,12 +12,7 @@ import {
 } from "../BaseClient";
 import { GlideClient } from "../GlideClient";
 import { GlideClusterClient } from "../GlideClusterClient";
-import {
-    Field,
-    FtAggregateClauseType,
-    FtAggregateOptions,
-    FtCreateOptions,
-} from "./GlideFtOptions";
+import { Field, FtAggregateOptions, FtCreateOptions } from "./GlideFtOptions";
 
 // Can't disable that rule for specific lines, because prettier moves the comment with "eslint-disable-line"
 // Disabling for the entire file. `FT.SEARCH`, `FT.AGGREGATE` and `FT.PROFILE` return types depend on the
@@ -229,7 +224,7 @@ export class GlideFt {
      *      loadFields: ["__key"],
      *      clauses: [
      *          {
-     *              type: FtAggregateClauseType.GROUPBY,
+     *              type: "GROUPBY",
      *              properties: ["@condition"],
      *              reducers: [
      *                  {
@@ -308,17 +303,17 @@ export class GlideFt {
             if (options.clauses) {
                 for (const clause of options.clauses) {
                     switch (clause.type) {
-                        case FtAggregateClauseType.LIMIT:
+                        case "LIMIT":
                             args.push(
                                 clause.type,
                                 clause.offset.toString(),
                                 clause.count.toString(),
                             );
                             break;
-                        case FtAggregateClauseType.FILTER:
+                        case "FILTER":
                             args.push(clause.type, clause.expression);
                             break;
-                        case FtAggregateClauseType.GROUPBY:
+                        case "GROUPBY":
                             args.push(
                                 clause.type,
                                 clause.properties.length.toString(),
@@ -336,7 +331,7 @@ export class GlideFt {
                             }
 
                             break;
-                        case FtAggregateClauseType.SORTBY:
+                        case "SORTBY":
                             args.push(
                                 clause.type,
                                 (clause.properties.length * 2).toString(),
@@ -346,7 +341,7 @@ export class GlideFt {
                             if (clause.max)
                                 args.push("MAX", clause.max.toString());
                             break;
-                        case FtAggregateClauseType.APPLY:
+                        case "APPLY":
                             args.push(
                                 clause.type,
                                 clause.expression,
@@ -354,6 +349,8 @@ export class GlideFt {
                                 clause.name,
                             );
                             break;
+                        default:
+                            throw new Error("Unknown clause type");
                     }
                 }
             }
