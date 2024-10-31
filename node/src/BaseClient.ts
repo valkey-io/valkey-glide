@@ -5510,7 +5510,6 @@ export class BaseClient {
      *     attributes of a consumer group for the stream at `key`.
      * @example
      * ```typescript
-     *     <pre>{@code
      * const result = await client.xinfoGroups("my_stream");
      * console.log(result); // Output:
      * // [
@@ -5963,13 +5962,11 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     *  <pre>{@code
      * const entryId = await client.xadd("mystream", ["myfield", "mydata"]);
      * // read messages from streamId
      * const readResult = await client.xreadgroup(["myfield", "mydata"], "mygroup", "my0consumer");
      * // acknowledge messages on stream
      * console.log(await client.xack("mystream", "mygroup", [entryId])); // Output: 1
-     * </pre>
      * ```
      */
     public async xack(

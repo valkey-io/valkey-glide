@@ -8,7 +8,7 @@ import typing
 import pytest
 from glide.async_commands.core import ConditionalChange, InfoSection
 from glide.async_commands.server_modules import json
-from glide.async_commands.server_modules.json import JsonGetOptions
+from glide.async_commands.server_modules.json import JsonArrIndexOptions, JsonGetOptions
 from glide.config import ProtocolVersion
 from glide.constants import OK
 from glide.exceptions import RequestError
@@ -1359,6 +1359,335 @@ class TestJson:
         assert await json.arrtrim(glide_client, key, "$.empty", 0, 1) == [0]
         assert await json.arrtrim(glide_client, key, ".empty", 0, 1) == 0
         assert OuterJson.loads(await json.get(glide_client, key, "$.empty")) == [[]]
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_json_arrindex(self, glide_client: TGlideClient):
+        key = get_random_string(10)
+
+        json_value = {
+            "empty_array": [],
+            "single_element": ["apple"],
+            "multiple_elements": ["banana", "cherry", "date"],
+            "nested_arrays": [
+                ["alpha"],
+                ["beta", "gamma"],
+                ["delta", "epsilon", "zeta"],
+            ],
+            "mixed_types": [1, "two", True, None, 5.5],
+            "not_array": 5,
+            "nested_arrays2": [
+                ["a"],
+                ["ab", "abc"],
+                ["abcd", "abcde", "abcdef", "abcdefg", "abcdefgh", 1, 2, None, "gamma"],
+            ],
+            "nested_structure": {
+                "level1": {
+                    "level2": {
+                        "level3": [
+                            ["gamma", "theta"],
+                            ["iota", "kappa", "gamma"],
+                        ]
+                    }
+                }
+            },
+        }
+
+        assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
+
+        # JSONPath Syntax Tests
+        # Search for "beta" in all arrays at the root level, Non-array values return null
+        result = await json.arrindex(glide_client, key, "$[*]", '"beta"')
+        assert result == [-1, -1, -1, -1, -1, None, -1, None]
+
+        # Search for a boolean
+        result = await json.arrindex(glide_client, key, "$.mixed_types", "true")
+        assert result == [2]  # True found at index 2 in the "mixed_types" array
+
+        # Search for a float
+        result = await json.arrindex(glide_client, key, "$.mixed_types", "5.5")
+        assert result == [4]  # 5.5 found at index 4 in the "mixed_types" array
+
+        # Search for "gamma" at nested level
+        result = await json.arrindex(glide_client, key, "$.nested_arrays[*]", '"gamma"')
+        assert result == [-1, 1, -1]  # "gamma" found at index 1 in the second array
+
+        # Search for "gamma" at nested level with a specified range
+        result = await json.arrindex(
+            glide_client,
+            key,
+            "$.nested_arrays2[*]",
+            '"gamma"',
+            JsonArrIndexOptions(start=0, end=5),
+        )
+        assert result == [-1, -1, -1]
+
+        # Search for "gamma" at nested level with start > end
+        result = await json.arrindex(
+            glide_client,
+            key,
+            "$.nested_arrays[*]",
+            '"gamma"',
+            JsonArrIndexOptions(start=2, end=1),
+        )
+        assert result == [-1, -1, -1]  # Invalid range, returns -1 for all
+
+        # Search for "omega" which does not exist
+        result = await json.arrindex(glide_client, key, "$[*]", '"omega"')
+        assert result == [-1, -1, -1, -1, -1, None, -1, None]  # "omega" not found
+
+        # Search for null values, null found at at third index in the fifth array
+        result = await json.arrindex(glide_client, key, "$[*]", "null")
+        assert result == [-1, -1, -1, -1, 3, None, -1, None]
+
+        # Search in mixed types, "two" found at first index in the fifth array
+        result = await json.arrindex(glide_client, key, "$[*]", '"two"')
+        assert result == [-1, -1, -1, -1, 1, None, -1, None]
+
+        # Out of range check for "start" value
+        result = await json.arrindex(
+            glide_client, key, "$[*]", '"apple"', JsonArrIndexOptions(start=-200)
+        )
+        assert result == [
+            -1,
+            0,
+            -1,
+            -1,
+            -1,
+            None,
+            -1,
+            None,
+        ]  # Rounded to the array's start
+
+        # Check for end = -1, tests if the function includes the last element, found "gamma" at index 8 at the third array
+        result = await json.arrindex(
+            glide_client,
+            key,
+            "$.nested_arrays2[*]",
+            '"gamma"',
+            JsonArrIndexOptions(start=0, end=-1),
+        )
+        assert result == [-1, -1, 8]
+
+        # Check for non-existent key
+        with pytest.raises(RequestError):
+            await json.arrindex(
+                glide_client,
+                "Non_existent",
+                "$.nested_arrays2[*]",
+                '"abcdefg"',
+                JsonArrIndexOptions(start=0, end=-1),
+            )
+
+        # Check for non-existent path
+        result = await json.arrindex(
+            glide_client,
+            key,
+            "$.nested_arrays3[*]",
+            '"abcdefg"',
+            JsonArrIndexOptions(start=0, end=-1),
+        )
+        assert result == []
+
+        # Using JSONPath syntax to search for "gamma" in nested_structure.level1.level2.level3
+        result = await json.arrindex(
+            glide_client, key, "$.nested_structure.level1.level2.level3[*]", '"gamma"'
+        )
+        assert result == [
+            0,
+            2,
+        ]  # "gamma" at index 0 in first array, index 2 in second array
+
+        # Check for inclusive behavior of start in JSONPath syntax
+        result = await json.arrindex(
+            glide_client,
+            key,
+            "$.nested_structure.level1.level2.level3[*]",
+            '"gamma"',
+            JsonArrIndexOptions(start=0),
+        )
+        assert result == [
+            0,
+            2,
+        ]  # "gamma" at index 0 of level3[0] and index 2 of level3[1].
+
+        # Check for exclusive behavior of end in JSONPath syntax
+        result = await json.arrindex(
+            glide_client,
+            key,
+            "$.nested_structure.level1.level2.level3[*]",
+            '"gamma"',
+            JsonArrIndexOptions(start=0, end=2),
+        )
+        assert result == [
+            0,
+            -1,
+        ]  # Only "gamma" at index 0 of level3[0] is found; gamma at index 2 of level3[1] is excluded as its not within the search range.
+
+        # Check for passing start = 0, end = 0 in JSONPath syntax
+        result = await json.arrindex(
+            glide_client,
+            key,
+            "$.nested_arrays[2]",
+            '"zeta"',
+            JsonArrIndexOptions(start=0, end=0),
+        )
+        assert result == [2]  # "zeta" found at index 2 as the whole range was searched
+
+        # Check for passing start = 1, end = 0 (start>end) but end is a "special value" in JSONPath syntax
+        result = await json.arrindex(
+            glide_client,
+            key,
+            "$.nested_arrays[2]",
+            '"zeta"',
+            JsonArrIndexOptions(start=1, end=0),
+        )
+        assert result == [2]  # "zeta" found at index 2 as the whole range was searched
+
+        # Check for passing start = 1, end = -1 (start>end) but end is a "special value" in JSONPath syntax
+        result = await json.arrindex(
+            glide_client,
+            key,
+            "$.nested_arrays[2]",
+            '"zeta"',
+            JsonArrIndexOptions(start=1, end=-1),
+        )
+        assert result == [2]  # "zeta" found at index 2 as the whole range was searched
+
+        # Restricted Path Syntax Tests
+        # Search for "abcd" in the "nested_arrays2" array
+        result = await json.arrindex(glide_client, key, ".nested_arrays2[2]", '"abcd"')
+        assert result == 0  # "abcd" found at index 0
+
+        # Search for "abcd" in the "nested_arrays2" array with specified range
+        result = await json.arrindex(
+            glide_client,
+            key,
+            ".nested_arrays2[2]",
+            '"abcd"',
+            JsonArrIndexOptions(start=1, end=4),
+        )
+        assert result == -1  # "abcd" not found at the specified range
+
+        # Search for "abcdefg" in the "nested_arrays2" with start > end
+        result = await json.arrindex(
+            glide_client,
+            key,
+            ".nested_arrays2[2]",
+            '"abcdefg"',
+            JsonArrIndexOptions(start=4, end=3),
+        )
+        assert result == -1
+
+        # Search for "theta" which does not exist
+        result = await json.arrindex(glide_client, key, ".multiple_elements", '"theta"')
+        assert result == -1  # "theta" not found
+
+        # Check for non_existent path
+        with pytest.raises(RequestError):
+            await json.arrindex(glide_client, key, ".non_existent", '"value"')
+
+        # Search in an empty array
+        result = await json.arrindex(glide_client, key, ".empty_array", '"anything"')
+        assert result == -1  # Nothing to find in empty array
+
+        # Search for a boolean
+        result = await json.arrindex(glide_client, key, ".mixed_types", "true")
+        assert result == 2  # True found at index 2
+
+        # Search for a float
+        result = await json.arrindex(glide_client, key, ".mixed_types", "5.5")
+        assert result == 4  # 5.5 found at index 4
+
+        # Search for null value
+        result = await json.arrindex(glide_client, key, ".mixed_types", "null")
+        assert result == 3  # null found at index 3
+
+        # Out of range check for "start" value
+        result = await json.arrindex(
+            glide_client,
+            key,
+            ".single_element",
+            '"apple"',
+            JsonArrIndexOptions(start=-200),
+        )
+        assert result == 0  # Rounded to the array's start
+
+        # Check for end = -1, tests if the function includes the last element
+        result = await json.arrindex(
+            glide_client,
+            key,
+            ".nested_arrays2[2]",
+            '"gamma"',
+            JsonArrIndexOptions(start=0, end=-1),
+        )
+        assert result == 8
+
+        # Check for non-existent key
+        with pytest.raises(RequestError):
+            await json.arrindex(
+                glide_client, "Non_existent", ".nested_arrays2[1]", '"abcdefg"'
+            )
+
+        # Check for value at path is not an array
+        with pytest.raises(RequestError):
+            await json.arrindex(glide_client, key, ".not_array", "val")
+
+        # Using legacy syntax to search for "gamma" in nested_structure
+        result = await json.arrindex(
+            glide_client, key, ".nested_structure.level1.level2.level3[*]", '"gamma"'
+        )
+        assert result == 0  # Legacy syntax returns index from first matching array
+
+        # Check for inclusive behavior of start in legacy syntax
+        result = await json.arrindex(
+            glide_client,
+            key,
+            ".nested_arrays[2]",
+            '"epsilon"',
+            JsonArrIndexOptions(start=1),
+        )
+        assert result == 1  # "epsilon" found at index 1 in nested_arrays[2].
+
+        # Check for exclusive behavior of end in legacy syntax
+        result = await json.arrindex(
+            glide_client,
+            key,
+            ".nested_arrays[2]",
+            '"zeta"',
+            JsonArrIndexOptions(start=1, end=2),
+        )
+        assert result == -1  # "zeta" at index 2 is excluded due to exclusive end.
+
+        # Check for passing start = 0, end = 0
+        result = await json.arrindex(
+            glide_client,
+            key,
+            ".nested_arrays[2]",
+            '"zeta"',
+            JsonArrIndexOptions(start=0, end=0),
+        )
+        assert result == 2  # "zeta" found at index 2 as the whole range was searched
+
+        # Check for passing start = 1, end = 0 (start>end) but end is a "special value"
+        result = await json.arrindex(
+            glide_client,
+            key,
+            ".nested_arrays[2]",
+            '"zeta"',
+            JsonArrIndexOptions(start=1, end=0),
+        )
+        assert result == 2  # "zeta" found at index 2 as the whole range was searched
+
+        # Check for passing start = 1, end = -1 (start>end) but end is a "special value"
+        result = await json.arrindex(
+            glide_client,
+            key,
+            ".nested_arrays[2]",
+            '"zeta"',
+            JsonArrIndexOptions(start=1, end=-1),
+        )
+        assert result == 2  # "zeta" found at index 2 as the whole range was searched
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

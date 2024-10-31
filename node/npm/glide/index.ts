@@ -126,6 +126,7 @@ function initialize() {
         VectorFieldAttributesFlat,
         VectorFieldAttributesHnsw,
         FtCreateOptions,
+        FtInfoReturnType,
         GlideRecord,
         GlideString,
         JsonGetOptions,
@@ -213,6 +214,8 @@ function initialize() {
         ReturnTypeMap,
         ClusterResponse,
         ReturnTypeAttribute,
+        ReturnTypeJson,
+        UniversalReturnTypeJson,
     } = nativeBinding;
 
     module.exports = {
@@ -245,6 +248,7 @@ function initialize() {
         VectorFieldAttributesFlat,
         VectorFieldAttributesHnsw,
         FtCreateOptions,
+        FtInfoReturnType,
         GlideRecord,
         GlideJson,
         GlideString,
@@ -347,6 +351,8 @@ function initialize() {
         ReturnTypeMap,
         ClusterResponse,
         ReturnTypeAttribute,
+        ReturnTypeJson,
+        UniversalReturnTypeJson,
     };
 
     globalObject = Object.assign(global, nativeBinding);
