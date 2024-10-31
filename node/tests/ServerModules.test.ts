@@ -887,179 +887,198 @@ describe("Server Module Tests", () => {
                 ).toBeNull();
             });
 
-            it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-                "json.strlen tests",
-                async (protocol) => {
-                    client = await GlideClusterClient.createClient(
-                        getClientConfigurationOption(
-                            cluster.getAddresses(),
-                            protocol,
-                        ),
-                    );
-                    const key = uuidv4();
-                    const jsonValue = {
-                        a: "foo",
-                        nested: { a: "hello" },
+            it("json.strlen tests", async () => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+                const key = uuidv4();
+                const jsonValue = {
+                    a: "foo",
+                    nested: { a: "hello" },
+                    nested2: { a: 31 },
+                };
+                // setup
+                expect(
+                    await GlideJson.set(
+                        client,
+                        key,
+                        "$",
+                        JSON.stringify(jsonValue),
+                    ),
+                ).toBe("OK");
+
+                expect(
+                    await GlideJson.strlen(client, key, { path: "$..a" }),
+                ).toEqual([3, 5, null]);
+                expect(await GlideJson.strlen(client, key, { path: "a" })).toBe(
+                    3,
+                );
+
+                expect(
+                    await GlideJson.strlen(client, key, {
+                        path: "$.nested",
+                    }),
+                ).toEqual([null]);
+                expect(
+                    await GlideJson.strlen(client, key, { path: "$..a" }),
+                ).toEqual([3, 5, null]);
+
+                expect(
+                    await GlideJson.strlen(client, "non_existing_key", {
+                        path: ".",
+                    }),
+                ).toBeNull();
+                expect(
+                    await GlideJson.strlen(client, "non_existing_key", {
+                        path: "$",
+                    }),
+                ).toBeNull();
+                expect(
+                    await GlideJson.strlen(client, key, {
+                        path: "$.non_existing_path",
+                    }),
+                ).toEqual([]);
+
+                // error case
+                await expect(
+                    GlideJson.strlen(client, key, { path: "nested" }),
+                ).rejects.toThrow(RequestError);
+                await expect(GlideJson.strlen(client, key)).rejects.toThrow(
+                    RequestError,
+                );
+            });
+
+            it("json.strappend tests", async () => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+                const key = uuidv4();
+                const jsonValue = {
+                    a: "foo",
+                    nested: { a: "hello" },
+                    nested2: { a: 31 },
+                };
+                // setup
+                expect(
+                    await GlideJson.set(
+                        client,
+                        key,
+                        "$",
+                        JSON.stringify(jsonValue),
+                    ),
+                ).toBe("OK");
+
+                expect(
+                    await GlideJson.strappend(client, key, '"bar"', {
+                        path: "$..a",
+                    }),
+                ).toEqual([6, 8, null]);
+                expect(
+                    await GlideJson.strappend(
+                        client,
+                        key,
+                        JSON.stringify("foo"),
+                        {
+                            path: "a",
+                        },
+                    ),
+                ).toBe(9);
+
+                expect(await GlideJson.get(client, key, { path: "." })).toEqual(
+                    JSON.stringify({
+                        a: "foobarfoo",
+                        nested: { a: "hellobar" },
                         nested2: { a: 31 },
-                    };
-                    // setup
-                    expect(
-                        await GlideJson.set(
-                            client,
-                            key,
-                            "$",
-                            JSON.stringify(jsonValue),
-                        ),
-                    ).toBe("OK");
+                    }),
+                );
 
-                    expect(
-                        await GlideJson.strlen(client, key, { path: "$..a" }),
-                    ).toEqual([3, 5, null]);
-                    expect(
-                        await GlideJson.strlen(client, key, { path: "a" }),
-                    ).toBe(3);
-
-                    expect(
-                        await GlideJson.strlen(client, key, {
+                expect(
+                    await GlideJson.strappend(
+                        client,
+                        key,
+                        JSON.stringify("bar"),
+                        {
                             path: "$.nested",
-                        }),
-                    ).toEqual([null]);
-                    expect(
-                        await GlideJson.strlen(client, key, { path: "$..a" }),
-                    ).toEqual([3, 5, null]);
+                        },
+                    ),
+                ).toEqual([null]);
 
-                    expect(
-                        await GlideJson.strlen(client, "non_existing_key", {
-                            path: ".",
-                        }),
-                    ).toBeNull();
-                    expect(
-                        await GlideJson.strlen(client, "non_existing_key", {
-                            path: "$",
-                        }),
-                    ).toBeNull();
-                    expect(
-                        await GlideJson.strlen(client, key, {
+                await expect(
+                    GlideJson.strappend(client, key, JSON.stringify("bar"), {
+                        path: ".nested",
+                    }),
+                ).rejects.toThrow(RequestError);
+                await expect(
+                    GlideJson.strappend(client, key, JSON.stringify("bar")),
+                ).rejects.toThrow(RequestError);
+
+                expect(
+                    await GlideJson.strappend(
+                        client,
+                        key,
+                        JSON.stringify("try"),
+                        {
                             path: "$.non_existing_path",
-                        }),
-                    ).toEqual([]);
+                        },
+                    ),
+                ).toEqual([]);
 
-                    // error case
-                    await expect(
-                        GlideJson.strlen(client, key, { path: "nested" }),
-                    ).rejects.toThrow(RequestError);
-                    await expect(GlideJson.strlen(client, key)).rejects.toThrow(
-                        RequestError,
-                    );
-                },
-            );
+                await expect(
+                    GlideJson.strappend(client, key, JSON.stringify("try"), {
+                        path: ".non_existing_path",
+                    }),
+                ).rejects.toThrow(RequestError);
+                await expect(
+                    GlideJson.strappend(
+                        client,
+                        "non_existing_key",
+                        JSON.stringify("try"),
+                    ),
+                ).rejects.toThrow(RequestError);
+            });
 
-            it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-                "json.strappend tests",
-                async (protocol) => {
-                    client = await GlideClusterClient.createClient(
-                        getClientConfigurationOption(
-                            cluster.getAddresses(),
-                            protocol,
-                        ),
-                    );
-                    const key = uuidv4();
-                    const jsonValue = {
-                        a: "foo",
-                        nested: { a: "hello" },
-                        nested2: { a: 31 },
-                    };
-                    // setup
-                    expect(
-                        await GlideJson.set(
-                            client,
-                            key,
-                            "$",
-                            JSON.stringify(jsonValue),
-                        ),
-                    ).toBe("OK");
+            it("json.arrappend", async () => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+                const key = uuidv4();
+                let doc = { a: 1, b: ["one", "two"] };
+                expect(
+                    await GlideJson.set(client, key, "$", JSON.stringify(doc)),
+                ).toBe("OK");
 
-                    expect(
-                        await GlideJson.strappend(client, key, '"bar"', {
-                            path: "$..a",
-                        }),
-                    ).toEqual([6, 8, null]);
-                    expect(
-                        await GlideJson.strappend(
-                            client,
-                            key,
-                            JSON.stringify("foo"),
-                            {
-                                path: "a",
-                            },
-                        ),
-                    ).toBe(9);
+                expect(
+                    await GlideJson.arrappend(client, key, Buffer.from("$.b"), [
+                        '"three"',
+                    ]),
+                ).toEqual([3]);
+                expect(
+                    await GlideJson.arrappend(client, key, ".b", [
+                        '"four"',
+                        '"five"',
+                    ]),
+                ).toEqual(5);
+                doc = JSON.parse(
+                    (await GlideJson.get(client, key, { path: "." })) as string,
+                );
+                expect(doc).toEqual({
+                    a: 1,
+                    b: ["one", "two", "three", "four", "five"],
+                });
 
-                    expect(
-                        await GlideJson.get(client, key, { path: "." }),
-                    ).toEqual(
-                        JSON.stringify({
-                            a: "foobarfoo",
-                            nested: { a: "hellobar" },
-                            nested2: { a: 31 },
-                        }),
-                    );
-
-                    expect(
-                        await GlideJson.strappend(
-                            client,
-                            key,
-                            JSON.stringify("bar"),
-                            {
-                                path: "$.nested",
-                            },
-                        ),
-                    ).toEqual([null]);
-
-                    await expect(
-                        GlideJson.strappend(
-                            client,
-                            key,
-                            JSON.stringify("bar"),
-                            {
-                                path: ".nested",
-                            },
-                        ),
-                    ).rejects.toThrow(RequestError);
-                    await expect(
-                        GlideJson.strappend(client, key, JSON.stringify("bar")),
-                    ).rejects.toThrow(RequestError);
-
-                    expect(
-                        await GlideJson.strappend(
-                            client,
-                            key,
-                            JSON.stringify("try"),
-                            {
-                                path: "$.non_existing_path",
-                            },
-                        ),
-                    ).toEqual([]);
-
-                    await expect(
-                        GlideJson.strappend(
-                            client,
-                            key,
-                            JSON.stringify("try"),
-                            {
-                                path: ".non_existing_path",
-                            },
-                        ),
-                    ).rejects.toThrow(RequestError);
-                    await expect(
-                        GlideJson.strappend(
-                            client,
-                            "non_existing_key",
-                            JSON.stringify("try"),
-                        ),
-                    ).rejects.toThrow(RequestError);
-                },
-            );
+                expect(
+                    await GlideJson.arrappend(client, key, "$.a", ['"value"']),
+                ).toEqual([null]);
+            });
         },
     );
 

@@ -203,8 +203,8 @@ export class GlideJson {
      * @param key - The key of the JSON document.
      * @param path - The path within the JSON document.
      * @param index - The array index before which values are inserted.
-     * @param values - The JSON values to be inserted into the array, in JSON formatted bytes or str.
-     *     JSON string values must be wrapped with quotes. For example, to append `"foo"`, pass `"\"foo\""`.
+     * @param values - The JSON values to be inserted into the array.
+     *     JSON string values must be wrapped with quotes. For example, to insert `"foo"`, pass `"\"foo\""`.
      * @returns
      * - For JSONPath (path starts with `$`):
      *       Returns an array with a list of integers for every possible path,
@@ -660,5 +660,48 @@ export class GlideJson {
         args.push(value);
 
         return _executeCommand<ReturnTypeJson<number>>(client, args);
+    }
+
+    /**
+     * Appends one or more `values` to the JSON array at the specified `path` within the JSON
+     * document stored at `key`.
+     *
+     * @param client - The client to execute the command.
+     * @param key - The key of the JSON document.
+     * @param path - The path within the JSON document.
+     * @param values - The JSON values to be appended to the array.
+     *     JSON string values must be wrapped with quotes. For example, to append `"foo"`, pass `"\"foo\""`.
+     * @returns
+     * - For JSONPath (path starts with `$`):
+     *       Returns an array with a list of integers for every possible path,
+     *       indicating the new length of the array, or `null` for JSON values matching
+     *       the path that are not an array. If `path` does not exist, an empty array
+     *       will be returned.
+     * - For legacy path (path doesn't start with `$`):
+     *       Returns an integer representing the new length of the array. If multiple paths are
+     *       matched, returns the length of the first modified array. If `path` doesn't
+     *       exist or the value at `path` is not an array, an error is raised.
+     * - If the index is out of bounds or `key` doesn't exist, an error is raised.
+     *
+     * @example
+     * ```typescript
+     * await GlideJson.set(client, "doc", "$", '{"a": 1, "b": ["one", "two"]}');
+     * const result = await GlideJson.arrappend(client, "doc", "$.b", ["three"]);
+     * console.log(result); // Output: [3] - the new length of the array at path '$.b' after appending the value.
+     * const result = await GlideJson.arrappend(client, "doc", ".b", ["four"]);
+     * console.log(result); // Output: 4 - the new length of the array at path '.b' after appending the value.
+     * const doc = await json.get(client, "doc");
+     * console.log(doc); // Output: '{"a": 1, "b": ["one", "two", "three", "four"]}'
+     * ```
+     */
+    static async arrappend(
+        client: BaseClient,
+        key: GlideString,
+        path: GlideString,
+        values: GlideString[],
+    ): Promise<ReturnTypeJson<number>> {
+        const args = ["JSON.ARRAPPEND", key, path, ...values];
+
+        return _executeCommand(client, args);
     }
 }

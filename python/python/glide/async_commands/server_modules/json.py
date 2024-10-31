@@ -180,8 +180,8 @@ async def get(
 async def arrappend(
     client: TGlideClient,
     key: TEncodable,
+    path: TEncodable,
     values: List[TEncodable],
-    path: Optional[TEncodable] = None,
 ) -> TJsonResponse[int]:
     """
     Appends one or more `values` to the JSON array at the specified `path` within the JSON document stored at `key`.
@@ -189,19 +189,18 @@ async def arrappend(
     Args:
         client (TGlideClient): The client to execute the command.
         key (TEncodable): The key of the JSON document.
+        path (TEncodable): Represents the path within the JSON document where the `values` will be appended.
         values (TEncodable): The values to append to the JSON array at the specified path.
-        path (Optional[TEncodable]): Represents the path within the JSON document where the `values` will be appended.
-            Defaults to None.
-            **Beware**: For AWS ElastiCache/MemoryDB the `path` parameter is required and not optional.
+            JSON string values must be wrapped with quotes. For example, to append `"foo"`, pass `"\"foo\""`.
 
     Returns:
         TJsonResponse[int]:
             For JSONPath (`path` starts with `$`):
-                Returns a list of integer replies for every possible path, indicating the new length of the new array after appending `values`,
+                Returns a list of integer replies for every possible path, indicating the new length of the array after appending `values`,
                 or None for JSON values matching the path that are not an array.
                 If `path` doesn't exist, an empty array will be returned.
             For legacy path (`path` doesn't start with `$`):
-                Returns the length of the new array after appending `values` to the array at `path`.
+                Returns the length of the array after appending `values` to the array at `path`.
                 If multiple paths match, the length of the first updated array is returned.
                 If the JSON value at `path` is not a array or if `path` doesn't exist, an error is raised.
             If `key` doesn't exist, an error is raised.
@@ -219,10 +218,7 @@ async def arrappend(
         >>> json.loads(await valkeyJson.get(client, "doc", "."))
             {"a": 1, "b": ["one", "two", "three", "four"]}  # Returns the updated JSON document
     """
-    args = ["JSON.ARRAPPEND", key]
-    if path:
-        args.append(path)
-    args.extend(values)
+    args = ["JSON.ARRAPPEND", key, path] + values
     return cast(TJsonResponse[int], await client.custom_command(args))
 
 

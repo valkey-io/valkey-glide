@@ -419,17 +419,18 @@ public class Json {
      * @param key The <code>key</code> of the JSON document.
      * @param path Represents the <code>path</code> within the JSON document where the <code>values
      *     </code> will be appended.
-     * @param values The <code>values</code> to append to the JSON array at the specified <code>path
-     *     </code>.
+     * @param values The JSON values to be appended to the array.<br>
+     *     JSON string values must be wrapped with quotes. For example, to append <code>"foo"</code>,
+     *     pass <code>"\"foo\""</code>.
      * @return
      *     <ul>
      *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
      *           Returns a list of integers for every possible path, indicating the new length of the
-     *           new array after appending <code>values</code>, or <code>null</code> for JSON values
+     *           array after appending <code>values</code>, or <code>null</code> for JSON values
      *           matching the path that are not an array. If <code>path</code> does not exist, an
      *           empty array will be returned.
      *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
-     *           Returns the length of the new array after appending <code>values</code> to the array
+     *           Returns the new length of the array after appending <code>values</code> to the array
      *           at <code>path</code>. If multiple paths are matched, returns the last updated array.
      *           If the JSON value at <code>path</code> is not a array or if <code>path</code> doesn't
      *           exist, an error is raised. If <code>key</code> doesn't exist, an error is raised.
@@ -459,8 +460,9 @@ public class Json {
      * @param key The <code>key</code> of the JSON document.
      * @param path Represents the <code>path</code> within the JSON document where the <code>values
      *     </code> will be appended.
-     * @param values The <code>values</code> to append to the JSON array at the specified <code>path
-     *     </code>.
+     * @param values The JSON values to be appended to the array.<br>
+     *     JSON string values must be wrapped with quotes. For example, to append <code>"foo"</code>,
+     *     pass <code>"\"foo\""</code>.
      * @return
      *     <ul>
      *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
@@ -499,8 +501,8 @@ public class Json {
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
      * @param index The array index before which values are inserted.
-     * @param values The JSON values to be inserted into the array, in JSON formatted bytes or str.
-     *     JSON string values must be wrapped with quotes. For example, to append <code>"foo"</code>,
+     * @param values The JSON values to be inserted into the array.<br>
+     *     JSON string values must be wrapped with quotes. For example, to insert <code>"foo"</code>,
      *     pass <code>"\"foo\""</code>.
      * @return
      *     <ul>
@@ -552,8 +554,8 @@ public class Json {
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
      * @param index The array index before which values are inserted.
-     * @param values The JSON values to be inserted into the array, in JSON formatted bytes or str.
-     *     JSON string values must be wrapped with quotes. For example, to append <code>"foo"</code>,
+     * @param values The JSON values to be inserted into the array.<br>
+     *     JSON string values must be wrapped with quotes. For example, to insert <code>"foo"</code>,
      *     pass <code>"\"foo\""</code>.
      * @return
      *     <ul>
