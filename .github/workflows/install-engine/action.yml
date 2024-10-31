@@ -27,7 +27,7 @@ runs:
     # will not work as expected. We need to find a way to cache the valkey repo on the runner itself.
     steps:
         - name: Cache Valkey
-          if: ${{!contains(inputs.target, 'aarch64') }}
+          if: ${{!contains(inputs.target, 'aarch64-unknown') }}
           uses: actions/cache@v4
           id: cache-valkey
           with:
@@ -36,7 +36,7 @@ runs:
               key: valkey-${{ inputs.engine-version }}-${{ inputs.target }}
 
         - name: Build Valkey for ARM
-          if: ${{ contains(inputs.target, 'aarch64') }}
+          if: ${{ contains(inputs.target, 'aarch64-unknown') }}
           shell: bash
           working-directory: ~
           run: |
@@ -59,7 +59,7 @@ runs:
               fi
         # if no cache hit, build the engine
         - name: Build Valkey
-          if: ${{ steps.cache-valkey.outputs.cache-hit != 'true' && !contains(inputs.target, 'aarch64') }}
+          if: ${{ steps.cache-valkey.outputs.cache-hit != 'true' && !contains(inputs.target, 'aarch64-unknown') }}
           shell: bash
           run: |
               echo "Building valkey ${{ inputs.engine-version }}"
