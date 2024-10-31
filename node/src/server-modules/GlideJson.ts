@@ -26,17 +26,12 @@ export interface JsonGetOptions {
 }
 
 /** Additional options for {@link GlideJson.arrpop | JSON.ARRPOP} command. */
-export type JsonArrPopOptions =
-    | {
-          /** The path within the JSON document. */
-          path?: GlideString;
-      }
-    | {
-          /** The path within the JSON document. */
-          path: GlideString;
-          /** The index of the element to pop. Out of boundary indexes are rounded to their respective array boundaries. */
-          index?: number;
-      };
+export interface JsonArrPopOptions {
+    /** The path within the JSON document. */
+    path: GlideString;
+    /** The index of the element to pop. Out of boundary indexes are rounded to their respective array boundaries. */
+    index?: number;
+}
 
 /**
  * @internal
@@ -327,13 +322,13 @@ export class GlideJson {
      * @example
      * ```typescript
      * await GlideJson.set(client, "doc", "$", '[1, 2, 3, 4]');
-     * console.log(await GlideJson.arrlen(client, "doc")); // Output: 4 - Retrieves lengths of array in root.
+     * console.log(await GlideJson.arrlen(client, "doc")); // Output: 4 - the length of array at root.
      * ```
      */
     static async arrlen(
         client: BaseClient,
         key: GlideString,
-        options?: { path?: GlideString },
+        options?: { path: GlideString },
     ): Promise<ReturnTypeJson<number>> {
         const args = ["JSON.ARRLEN", key];
         if (options?.path) args.push(options?.path);
