@@ -439,6 +439,137 @@ describe("Server Module Tests", () => {
                 expect(await GlideJson.arrlen(client, key)).toEqual(4);
             });
 
+            it("json.arrindex", async () => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+                const doc1 =
+                    '{"a": [1, 3, true, "hello"], "b": {"a": [3, 4, [3, false], 5], "c": {"a": 42}}}';
+
+                expect(await GlideJson.set(client, key1, "$", doc1)).toBe("OK");
+
+                // Verify scalar type
+                expect(
+                    await GlideJson.arrindex(client, key1, "$..a", true),
+                ).toEqual([2, -1, null]);
+                expect(
+                    await GlideJson.arrindex(client, key1, "..a", true),
+                ).toEqual(2);
+
+                expect(
+                    await GlideJson.arrindex(client, key1, "$..a", 3),
+                ).toEqual([1, 0, null]);
+                expect(
+                    await GlideJson.arrindex(client, key1, "..a", 3),
+                ).toEqual(1);
+
+                expect(
+                    await GlideJson.arrindex(client, key1, "$..a", '"hello"'),
+                ).toEqual([3, -1, null]);
+                expect(
+                    await GlideJson.arrindex(client, key1, "..a", '"hello"'),
+                ).toEqual(3);
+
+                // Wrong type
+                expect(
+                    await GlideJson.arrindex(client, key1, "$..c", 42),
+                ).toEqual([null]);
+                await expect(
+                    GlideJson.arrindex(client, key1, "..c", 42),
+                ).rejects.toThrow(RequestError);
+
+                const doc2 =
+                    '{"a": [1, 3, true, "foo", "meow", "m", "foo", "lol", false],' +
+                    ' "b": {"a": [3, 4, ["value", 3, false], 5], "c": {"a": 42}}}';
+
+                expect(await GlideJson.set(client, key2, "$", doc2)).toBe("OK");
+
+                // Verify optional `start` and `end`
+                expect(
+                    await GlideJson.arrindex(client, key2, "$..a", '"foo"', {
+                        start: 6,
+                        end: 8,
+                    }),
+                ).toEqual([6, -1, null]);
+                expect(
+                    await GlideJson.arrindex(client, key2, "$..a", '"foo"', {
+                        start: 2,
+                        end: 8,
+                    }),
+                ).toEqual([3, -1, null]);
+                expect(
+                    await GlideJson.arrindex(client, key2, "..a", '"meow"', {
+                        start: 2,
+                        end: 8,
+                    }),
+                ).toEqual(4);
+
+                // Verify without optional `end`
+                expect(
+                    await GlideJson.arrindex(client, key2, "$..a", '"foo"', {
+                        start: 6,
+                    }),
+                ).toEqual([6, -1, null]);
+                expect(
+                    await GlideJson.arrindex(client, key2, "..a", '"foo"', {
+                        start: 6,
+                    }),
+                ).toEqual(6);
+
+                // Verify optional `end` with 0 or -1 (means the last element is included)
+                expect(
+                    await GlideJson.arrindex(client, key2, "$..a", '"foo"', {
+                        start: 6,
+                        end: 0,
+                    }),
+                ).toEqual([6, -1, null]);
+                expect(
+                    await GlideJson.arrindex(client, key2, "..a", '"foo"', {
+                        start: 6,
+                        end: 0,
+                    }),
+                ).toEqual(6);
+                expect(
+                    await GlideJson.arrindex(client, key2, "$..a", '"foo"', {
+                        start: 6,
+                        end: -1,
+                    }),
+                ).toEqual([6, -1, null]);
+                expect(
+                    await GlideJson.arrindex(client, key2, "..a", '"foo"', {
+                        start: 6,
+                        end: -1,
+                    }),
+                ).toEqual(6);
+
+                // Test with non-existent path
+                expect(
+                    await GlideJson.arrindex(
+                        client,
+                        key2,
+                        "$.nonexistent",
+                        true,
+                    ),
+                ).toEqual([]);
+                await expect(
+                    GlideJson.arrindex(client, key2, "nonexistent", true),
+                ).rejects.toThrow(RequestError);
+
+                // Test with non-existent key
+                await expect(
+                    GlideJson.arrindex(client, "non_existing_key", "$", true),
+                ).rejects.toThrow(RequestError);
+                await expect(
+                    GlideJson.arrindex(client, "non_existing_key", ".", true),
+                ).rejects.toThrow(RequestError);
+            });
+
             it("json.toggle tests", async () => {
                 client = await GlideClusterClient.createClient(
                     getClientConfigurationOption(

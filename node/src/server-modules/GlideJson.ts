@@ -357,6 +357,7 @@ export class GlideJson {
      * - For JSONPath (path starts with `$`):
      *       Returns an array with a list of integers for every possible path,
      *       indicating the index of the matching element. The value is -1 if not found.
+     *       If a value is not an array, its corresponding return value is `null`.
      * - For legacy path (path doesn't start with `$`):
      *       Returns an integer representing the index of matching element, or -1 if
      *       not found. If the value at the `path` is not an array, an error is raised.
