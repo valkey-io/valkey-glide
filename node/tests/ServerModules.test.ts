@@ -887,6 +887,139 @@ describe("Server Module Tests", () => {
                 ).toBeNull();
             });
 
+            it("json.arrtrim tests", async () => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+
+                const key = uuidv4();
+                const jsonValue = {
+                    a: [0, 1, 2, 3, 4, 5, 6, 7, 8],
+                    b: { a: [0, 9, 10, 11, 12, 13], c: { a: 42 } },
+                };
+
+                // setup
+                expect(
+                    await GlideJson.set(
+                        client,
+                        key,
+                        "$",
+                        JSON.stringify(jsonValue),
+                    ),
+                ).toBe("OK");
+
+                // Basic trim
+                expect(
+                    await GlideJson.arrtrim(client, key, "$..a", 1, 7),
+                ).toEqual([7, 5, null]);
+
+                // Test end >= size (should be treated as size-1)
+                expect(
+                    await GlideJson.arrtrim(client, key, "$.a", 0, 10),
+                ).toEqual([7]);
+                expect(
+                    await GlideJson.arrtrim(client, key, ".a", 0, 10),
+                ).toEqual(7);
+
+                // Test negative start (should be treated as 0)
+                expect(
+                    await GlideJson.arrtrim(client, key, "$.a", -1, 5),
+                ).toEqual([6]);
+                expect(
+                    await GlideJson.arrtrim(client, key, ".a", -1, 5),
+                ).toEqual(6);
+
+                // Test start >= size (should empty the array)
+                expect(
+                    await GlideJson.arrtrim(client, key, "$.a", 7, 10),
+                ).toEqual([0]);
+                const jsonValue2 = ["a", "b", "c"];
+                expect(
+                    await GlideJson.set(
+                        client,
+                        key,
+                        ".a",
+                        JSON.stringify(jsonValue2),
+                    ),
+                ).toBe("OK");
+                expect(
+                    await GlideJson.arrtrim(client, key, ".a", 7, 10),
+                ).toEqual(0);
+
+                // Test start > end (should empty the array)
+                expect(
+                    await GlideJson.arrtrim(client, key, "$..a", 2, 1),
+                ).toEqual([0, 0, null]);
+                const jsonValue3 = ["a", "b", "c", "d"];
+                expect(
+                    await GlideJson.set(
+                        client,
+                        key,
+                        "..a",
+                        JSON.stringify(jsonValue3),
+                    ),
+                ).toBe("OK");
+                expect(
+                    await GlideJson.arrtrim(client, key, "..a", 2, 1),
+                ).toEqual(0);
+
+                // Multiple path match
+                expect(
+                    await GlideJson.set(
+                        client,
+                        key,
+                        "$",
+                        JSON.stringify(jsonValue),
+                    ),
+                ).toBe("OK");
+                expect(
+                    await GlideJson.arrtrim(client, key, "..a", 1, 10),
+                ).toEqual(8);
+
+                // Test with non-existent path
+                await expect(
+                    GlideJson.arrtrim(client, key, "nonexistent", 0, 1),
+                ).rejects.toThrow(RequestError);
+                expect(
+                    await GlideJson.arrtrim(client, key, "$.nonexistent", 0, 1),
+                ).toEqual([]);
+
+                // Test with non-array path
+                expect(await GlideJson.arrtrim(client, key, "$", 0, 1)).toEqual(
+                    [null],
+                );
+                await expect(
+                    GlideJson.arrtrim(client, key, ".", 0, 1),
+                ).rejects.toThrow(RequestError);
+
+                // Test with non-existent key
+                await expect(
+                    GlideJson.arrtrim(client, "non_existing_key", "$", 0, 1),
+                ).rejects.toThrow(RequestError);
+                await expect(
+                    GlideJson.arrtrim(client, "non_existing_key", ".", 0, 1),
+                ).rejects.toThrow(RequestError);
+
+                // Test empty array
+                expect(
+                    await GlideJson.set(
+                        client,
+                        key,
+                        "$.empty",
+                        JSON.stringify([]),
+                    ),
+                ).toBe("OK");
+                expect(
+                    await GlideJson.arrtrim(client, key, "$.empty", 0, 1),
+                ).toEqual([0]);
+                expect(
+                    await GlideJson.arrtrim(client, key, ".empty", 0, 1),
+                ).toEqual(0);
+            });
+
             it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
                 "json.strlen tests",
                 async (protocol) => {
