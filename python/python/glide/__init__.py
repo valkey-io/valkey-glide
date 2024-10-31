@@ -259,8 +259,6 @@ __all__ = [
     "JsonGetOptions",
     "JsonArrIndexOptions",
     "JsonArrPopOptions",
-    # Search
-    "ft",
     # Logger
     "Logger",
     "LogLevel",
