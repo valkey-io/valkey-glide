@@ -1348,8 +1348,8 @@ describe("Server Module Tests", () => {
                 | GlideRecord<GlideString | GlideRecord<GlideString>>
             )[] = await GlideFt.search(client, index, "*", {
                 returnFields: [
-                    { fieldIdentifier: "arr", alias: "myarr" },
-                    { fieldIdentifier: "val", alias: "myval" },
+                    { fieldIdentifier: "$..arr", alias: "myarr" },
+                    { fieldIdentifier: "$..val", alias: "myval" },
                 ],
                 timeout: 10000,
                 decoder: Decoder.String,
@@ -1365,12 +1365,11 @@ describe("Server Module Tests", () => {
                         key: prefix + "1",
                         value: [
                             {
-                                // TODO: FT.SEARCH does not consider alias: "myarr" and alias: "myval"
-                                key: "arr",
+                                key: "myarr",
                                 value: "42",
                             },
                             {
-                                key: "val",
+                                key: "myval",
                                 value: "hello",
                             },
                         ],
