@@ -1917,3 +1917,4 @@ class TestJson:
             await json.arrpop(glide_client, key2, JsonArrPopOptions(path=".", index=-1))
             == b'["a","b","c"]'
         )
+        assert await json.arrpop(glide_client, key2) == b'["a"]'
