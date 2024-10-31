@@ -36,6 +36,7 @@
 * Java: Added `JSON.ARRAPPEND` ([#2489](https://github.com/valkey-io/valkey-glide/pull/2489))
 * Java: Added `JSON.ARRTRIM` ([#2518](https://github.com/valkey-io/valkey-glide/pull/2518))
 * Node: Added `JSON.TOGGLE` ([#2491](https://github.com/valkey-io/valkey-glide/pull/2491))
+* Node: Added `JSON.ARRINSERT`, `JSON.ARRPOP` and `JSON.ARRLEN` ([#2542](https://github.com/valkey-io/valkey-glide/pull/2542))
 * Node: Added `JSON.DEL` and `JSON.FORGET` ([#2505](https://github.com/valkey-io/valkey-glide/pull/2505))
 * Java: Added `JSON.TOGGLE` ([#2504](https://github.com/valkey-io/valkey-glide/pull/2504))
 * Java: Added `JSON.STRAPPEND` and `JSON.STRLEN` ([#2522](https://github.com/valkey-io/valkey-glide/pull/2522))
@@ -53,7 +54,7 @@
 * Python: Add `JSON.RESP` command ([#2451](https://github.com/valkey-io/valkey-glide/pull/2451))
 * Node: Add `JSON.STRLEN` and `JSON.STRAPPEND` command ([#2537](https://github.com/valkey-io/valkey-glide/pull/2537))
 * Node: Add `FT.SEARCH` ([#2551](https://github.com/valkey-io/valkey-glide/pull/2551))
-
+* Python: Fix example ([#2556](https://github.com/valkey-io/valkey-glide/issues/2556))
 
 #### Breaking Changes
 

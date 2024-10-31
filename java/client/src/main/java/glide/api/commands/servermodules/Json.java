@@ -1009,8 +1009,7 @@ public class Json {
      *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
      *           Returns an array with a strings for every possible path, representing the popped JSON
      *           values, or <code>null</code> for JSON values matching the path that are not an array
-     *           or an empty array. If a value is not an array, its corresponding return value is
-     *           <code>"null"</code>.
+     *           or an empty array.
      *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
      *           Returns a string representing the popped JSON value, or <code>null</code> if the
      *           array at <code>path</code> is empty. If multiple paths are matched, the value from
@@ -1044,8 +1043,7 @@ public class Json {
      *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
      *           Returns an array with a strings for every possible path, representing the popped JSON
      *           values, or <code>null</code> for JSON values matching the path that are not an array
-     *           or an empty array. If a value is not an array, its corresponding return value is
-     *           <code>"null"</code>.
+     *           or an empty array.
      *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
      *           Returns a string representing the popped JSON value, or <code>null</code> if the
      *           array at <code>path</code> is empty. If multiple paths are matched, the value from
@@ -1081,8 +1079,7 @@ public class Json {
      *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
      *           Returns an array with a strings for every possible path, representing the popped JSON
      *           values, or <code>null</code> for JSON values matching the path that are not an array
-     *           or an empty array. If a value is not an array, its corresponding return value is
-     *           <code>"null"</code>.
+     *           or an empty array.
      *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
      *           Returns a string representing the popped JSON value, or <code>null</code> if the
      *           array at <code>path</code> is empty. If multiple paths are matched, the value from
@@ -1121,8 +1118,7 @@ public class Json {
      *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
      *           Returns an array with a strings for every possible path, representing the popped JSON
      *           values, or <code>null</code> for JSON values matching the path that are not an array
-     *           or an empty array. If a value is not an array, its corresponding return value is
-     *           <code>"null"</code>.
+     *           or an empty array.
      *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
      *           Returns a string representing the popped JSON value, or <code>null</code> if the
      *           array at <code>path</code> is empty. If multiple paths are matched, the value from
