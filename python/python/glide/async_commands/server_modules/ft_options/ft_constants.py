@@ -16,6 +16,7 @@ class CommandNames:
     FT_EXPLAIN = "FT.EXPLAIN"
     FT_EXPLAINCLI = "FT.EXPLAINCLI"
     FT_AGGREGATE = "FT.AGGREGATE"
+    FT_PROFILE = "FT.PROFILE"
 
 
 class FtCreateKeywords:
@@ -55,6 +56,10 @@ class FtSeachKeywords:
 
 
 class FtAggregateKeywords:
+    """
+    Keywords used in the FT.AGGREGATE command.
+    """
+
     LIMIT = "LIMIT"
     FILTER = "FILTER"
     GROUPBY = "GROUPBY"
@@ -66,3 +71,12 @@ class FtAggregateKeywords:
     LOAD = "LOAD"
     TIMEOUT = "TIMEOUT"
     PARAMS = "PARAMS"
+
+
+class FtProfileKeywords:
+    """
+    Keywords used in the FT.PROFILE command.
+    """
+
+    QUERY = "QUERY"
+    LIMITED = "LIMITED"
