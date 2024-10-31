@@ -246,23 +246,137 @@ export type FtSearchOptions = {
     params?: GlideRecord<GlideString>;
 } & (
     | {
-          /**
-           * Configure query pagination. By default only first 10 documents are returned.
-           *
-           * @param offset Zero-based offset.
-           * @param count Number of elements to return.
-           */
-          limit?: { offset: number; count: number };
-          /** `limit` and `count` are mutually exclusive. */
-          count?: never;
-      }
+    /**
+     * Configure query pagination. By default only first 10 documents are returned.
+     *
+     * @param offset Zero-based offset.
+     * @param count Number of elements to return.
+     */
+    limit?: { offset: number; count: number };
+    /** `limit` and `count` are mutually exclusive. */
+    count?: never;
+}
     | {
-          /**
-           * Once set, the query will return only the number of documents in the result set without actually
-           * returning them.
-           */
-          count?: boolean;
-          /** `limit` and `count` are mutually exclusive. */
-          limit?: never;
-      }
-);
+    /**
+     * Once set, the query will return only the number of documents in the result set without actually
+     * returning them.
+     */
+    count?: boolean;
+    /** `limit` and `count` are mutually exclusive. */
+    limit?: never;
+}
+    );
+
+/** Additional parameters for {@link GlideFt.aggregate | FT.AGGREGATE} command. */
+export type FtAggregateOptions = {
+    /** Query timeout in milliseconds. */
+    timeout?: number;
+    /**
+     * {@link FtAggregateFilter | FILTER}, {@link FtAggregateLimit | LIMIT}, {@link FtAggregateGroupBy | GROUPBY},
+     * {@link FtAggregateSortBy | SORTBY} and {@link FtAggregateApply | APPLY} clauses, that can be repeated
+     * multiple times in any order and be freely intermixed. They are applied in the order specified,
+     * with the output of one clause feeding the input of the next clause.
+     */
+    clauses?: FtAggregateClause[];
+    /** The key/value pairs can be referenced from within the query expression. */
+    params?: [GlideString, GlideString][];
+} & (
+    | {
+    /** List of fields to load from the index. */
+    loadFields?: GlideString[];
+    /** `loadAll` and `loadFields` are mutually exclusive. */
+    loadAll?: never;
+}
+    | {
+    /** Option to load all fields declared in the index */
+    loadAll?: boolean;
+    /** `loadAll` and `loadFields` are mutually exclusive. */
+    loadFields?: never;
+}
+    );
+
+/** The {@link GlideFt.aggregate | FT.AGGREGATE} clause type. */
+export enum FtAggregateClauseType {
+    LIMIT = "LIMIT",
+    FILTER = "FILTER",
+    GROUPBY = "GROUPBY",
+    SORTBY = "SORTBY",
+    APPLY = "APPLY",
+}
+
+export type FtAggregateClause =
+    | FtAggregateLimit
+    | FtAggregateFilter
+    | FtAggregateGroupBy
+    | FtAggregateSortBy
+    | FtAggregateApply;
+
+/** A clause for limiting the number of retained records. */
+export interface FtAggregateLimit {
+    type: FtAggregateClauseType.LIMIT;
+    /** Starting point from which the records have to be retained. */
+    offset: number;
+    /** The total number of records to be retained. */
+    count: number;
+}
+
+/**
+ * A clause for filtering the results using predicate expression relating to values in each result.
+ * It is applied post query and relate to the current state of the pipeline.
+ */
+export interface FtAggregateFilter {
+    type: FtAggregateClauseType.FILTER;
+    /** The expression to filter the results. */
+    expression: GlideString;
+}
+
+/** A clause for grouping the results in the pipeline based on one or more properties. */
+export interface FtAggregateGroupBy {
+    type: FtAggregateClauseType.GROUPBY;
+    /** The list of properties to be used for grouping the results in the pipeline. */
+    properties: GlideString[];
+    /** The list of functions that handles the group entries by performing multiple aggregate operations. */
+    reducers: FtAggregateReducer[];
+}
+
+/**
+ * A clause for reducing the matching results in each group using a reduction function.
+ * The matching results are reduced into a single record.
+ */
+export interface FtAggregateReducer {
+    /** The reduction function name for the respective group. */
+    function: string;
+    /** The list of arguments for the reducer. */
+    args: GlideString[];
+    /** User defined property name for the reducer. */
+    name?: GlideString;
+}
+
+/** A clause for sorting the pipeline up until the point of SORTBY, using a list of properties. */
+export interface FtAggregateSortBy {
+    type: FtAggregateClauseType.SORTBY;
+    /** A list of sorting parameters for the sort operation. */
+    properties: FtAggregateSortProperty[];
+    /** The MAX value for optimizing the sorting, by sorting only for the n-largest elements. */
+    max?: number;
+}
+
+/** A single property for the {@link FtAggregateSortBy | SORTBY} clause. */
+export interface FtAggregateSortProperty {
+    /** The sorting parameter. */
+    property: GlideString;
+    /** The order for the sorting. */
+    order: "ASC" | "DESC";
+}
+
+/**
+ * A clause for applying a 1-to-1 transformation on one or more properties and stores the result
+ * as a new property down the pipeline or replaces any property using this transformation.
+ */
+export interface FtAggregateApply {
+    type: FtAggregateClauseType.APPLY;
+    /** The transformation expression. */
+    expression: GlideString;
+    /** The new property name to store the result of apply. This name can be referenced by further operations down the pipeline. */
+    name: GlideString;
+}

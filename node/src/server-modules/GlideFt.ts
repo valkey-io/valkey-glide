@@ -251,7 +251,7 @@ export class GlideFt {
      *      loadFields: ["__key"],
      *      clauses: [
      *          {
-     *              type: "GROUPBY",
+     *              type: FtAggregateClauseType.GROUPBY,
      *              properties: ["@condition"],
      *              reducers: [
      *                  {
@@ -304,12 +304,12 @@ export class GlideFt {
         indexName: GlideString,
         query: GlideString,
         options?: DecoderOption & FtAggregateOptions,
-    ): Promise<GlideRecord<GlideReturnType>[]> {
+    ): Promise<GlideRecord<any>[]> {
         const args: GlideString[] = ["FT.AGGREGATE", indexName, query];
 
         if (options) {
             if (options.loadAll) args.push("LOAD", "*");
-            else if (options.loadFields)
+            if (options.loadFields)
                 args.push(
                     "LOAD",
                     options.loadFields.length.toString(),
@@ -319,7 +319,7 @@ export class GlideFt {
             if (options.timeout)
                 args.push("TIMEOUT", options.timeout.toString());
 
-            if (options.params) {
+            if (options.params && options.params.length) {
                 args.push(
                     "PARAMS",
                     (options.params.length * 2).toString(),
@@ -330,17 +330,17 @@ export class GlideFt {
             if (options.clauses) {
                 for (const clause of options.clauses) {
                     switch (clause.type) {
-                        case "LIMIT":
+                        case FtAggregateClauseType.LIMIT:
                             args.push(
                                 clause.type,
                                 clause.offset.toString(),
                                 clause.count.toString(),
                             );
                             break;
-                        case "FILTER":
+                        case FtAggregateClauseType.FILTER:
                             args.push(clause.type, clause.expression);
                             break;
-                        case "GROUPBY":
+                        case FtAggregateClauseType.GROUPBY:
                             args.push(
                                 clause.type,
                                 clause.properties.length.toString(),
@@ -358,7 +358,7 @@ export class GlideFt {
                             }
 
                             break;
-                        case "SORTBY":
+                        case FtAggregateClauseType.SORTBY:
                             args.push(
                                 clause.type,
                                 (clause.properties.length * 2).toString(),
@@ -368,7 +368,7 @@ export class GlideFt {
                             if (clause.max)
                                 args.push("MAX", clause.max.toString());
                             break;
-                        case "APPLY":
+                        case FtAggregateClauseType.APPLY:
                             args.push(
                                 clause.type,
                                 clause.expression,
@@ -376,17 +376,13 @@ export class GlideFt {
                                 clause.name,
                             );
                             break;
-                        default:
-                            throw new Error(
-                                "Unknown clause type in FtAggregateOptions",
-                            );
                     }
                 }
             }
         }
 
         return _handleCustomCommand(client, args, options) as Promise<
-            GlideRecord<GlideReturnType>[]
+            GlideRecord<any>[]
         >;
     }
 

@@ -16,6 +16,8 @@ import {
     Decoder,
     FtAggregateOptions,
     FtSearchReturnType,
+    FtAggregateClauseType,
+    FtAggregateOptions,
     GlideClusterClient,
     GlideFt,
     GlideJson,
@@ -2641,18 +2643,18 @@ describe("Server Module Tests", () => {
                     setTimeout(resolve, DATA_PROCESSING_TIMEOUT),
                 );
 
-                // FT.AGGREGATE idx:bicycle * LOAD 1 __key GROUPBY 1 @condition REDUCE COUNT 0 AS bicycles
+                // FT.AGGREGATE idx:bicycle * LOAD 1 __key GROUPBY 1 @condition REDUCE COUNT 0 AS bicylces
                 let options: FtAggregateOptions = {
                     loadFields: ["__key"],
                     clauses: [
                         {
-                            type: "GROUPBY",
+                            type: FtAggregateClauseType.GROUPBY,
                             properties: ["@condition"],
                             reducers: [
                                 {
                                     function: "COUNT",
                                     args: [],
-                                    name: "bicycles",
+                                    name: "bicylces",
                                 },
                             ],
                         },
@@ -2660,24 +2662,24 @@ describe("Server Module Tests", () => {
                 };
                 let aggreg = (
                     await GlideFt.aggregate(client, indexBicycles, "*", options)
-                )
-                    .map(convertGlideRecordToRecord)
-                    // elements (records in array) could be reordered
-                    .sort((a, b) =>
-                        a["condition"]! > b["condition"]! ? 1 : -1,
-                    );
-                expect(aggreg).toEqual([
+                ).map(convertGlideRecordToRecord);
+                // elements (records in array) could be reordered
+                expect(
+                    aggreg.sort((a, b) =>
+                        a["condition"] < b["condition"] ? 1 : -1,
+                    ),
+                ).toEqual([
                     {
                         condition: "new",
                         bicycles: isResp3 ? 5 : "5",
                     },
                     {
-                        condition: "refurbished",
-                        bicycles: isResp3 ? 1 : "1",
-                    },
-                    {
                         condition: "used",
                         bicycles: isResp3 ? 4 : "4",
+                    },
+                    {
+                        condition: "refurbished",
+                        bicycles: isResp3 ? 1 : "1",
                     },
                 ]);
 
@@ -2746,12 +2748,12 @@ describe("Server Module Tests", () => {
                     loadAll: true,
                     clauses: [
                         {
-                            type: "APPLY",
+                            type: FtAggregateClauseType.APPLY,
                             expression: "ceil(@rating)",
                             name: "r_rating",
                         },
                         {
-                            type: "GROUPBY",
+                            type: FtAggregateClauseType.GROUPBY,
                             properties: ["@genre"],
                             reducers: [
                                 {
@@ -2772,38 +2774,32 @@ describe("Server Module Tests", () => {
                             ],
                         },
                         {
-                            type: "SORTBY",
+                            type: FtAggregateClauseType.SORTBY,
                             properties: [
-                                {
-                                    property: "@avg_rating",
-                                    order: SortOrder.DESC,
-                                },
-                                {
-                                    property: "@nb_of_votes",
-                                    order: SortOrder.DESC,
-                                },
+                                { property: "@avg_rating", order: "DESC" },
+                                { property: "@nb_of_votes", order: "DESC" },
                             ],
                         },
                     ],
                 };
                 aggreg = (
-                    await GlideFt.aggregate(client, indexMovies, "*", options)
-                )
-                    .map(convertGlideRecordToRecord)
-                    // elements (records in array) could be reordered
-                    .sort((a, b) => (a["genre"]! > b["genre"]! ? 1 : -1));
-                expect(aggreg).toEqual([
-                    {
-                        genre: "Action",
-                        nb_of_movies: isResp3 ? 2.0 : "2",
-                        nb_of_votes: isResp3 ? 2033895.0 : "2033895",
-                        avg_rating: isResp3 ? 9.0 : "9",
-                    },
+                    await GlideFt.aggregate(client, indexBicycles, "*", options)
+                ).map(convertGlideRecordToRecord);
+                // elements (records in array) could be reordered
+                expect(
+                    aggreg.sort((a, b) => (a["genre"] < b["genre"] ? 1 : -1)),
+                ).toEqual([
                     {
                         genre: "Drama",
                         nb_of_movies: isResp3 ? 1.0 : "1",
                         nb_of_votes: isResp3 ? 1563839.0 : "1563839",
                         avg_rating: isResp3 ? 10.0 : "10",
+                    },
+                    {
+                        genre: "Action",
+                        nb_of_movies: isResp3 ? 2.0 : "2",
+                        nb_of_votes: isResp3 ? 2033895.0 : "2033895",
+                        avg_rating: isResp3 ? 9.0 : "9",
                     },
                     {
                         genre: "Thriller",
@@ -2812,9 +2808,6 @@ describe("Server Module Tests", () => {
                         avg_rating: isResp3 ? 9.0 : "9",
                     },
                 ]);
-
-                await GlideFt.dropindex(client, indexMovies);
-                await GlideFt.dropindex(client, indexBicycles);
             },
         );
 
