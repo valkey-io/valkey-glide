@@ -2643,7 +2643,7 @@ describe("Server Module Tests", () => {
                     setTimeout(resolve, DATA_PROCESSING_TIMEOUT),
                 );
 
-                // FT.AGGREGATE idx:bicycle * LOAD 1 __key GROUPBY 1 @condition REDUCE COUNT 0 AS bicylces
+                // FT.AGGREGATE idx:bicycle * LOAD 1 __key GROUPBY 1 @condition REDUCE COUNT 0 AS bicycles
                 let options: FtAggregateOptions = {
                     loadFields: ["__key"],
                     clauses: [
@@ -2654,7 +2654,7 @@ describe("Server Module Tests", () => {
                                 {
                                     function: "COUNT",
                                     args: [],
-                                    name: "bicylces",
+                                    name: "bicycles",
                                 },
                             ],
                         },
@@ -2662,24 +2662,22 @@ describe("Server Module Tests", () => {
                 };
                 let aggreg = (
                     await GlideFt.aggregate(client, indexBicycles, "*", options)
-                ).map(convertGlideRecordToRecord);
-                // elements (records in array) could be reordered
-                expect(
-                    aggreg.sort((a, b) =>
-                        a["condition"] < b["condition"] ? 1 : -1,
-                    ),
-                ).toEqual([
+                )
+                    .map(convertGlideRecordToRecord)
+                    // elements (records in array) could be reordered
+                    .sort((a, b) => (a["condition"] > b["condition"] ? 1 : -1));
+                expect(aggreg).toEqual([
                     {
                         condition: "new",
                         bicycles: isResp3 ? 5 : "5",
                     },
                     {
-                        condition: "used",
-                        bicycles: isResp3 ? 4 : "4",
-                    },
-                    {
                         condition: "refurbished",
                         bicycles: isResp3 ? 1 : "1",
+                    },
+                    {
+                        condition: "used",
+                        bicycles: isResp3 ? 4 : "4",
                     },
                 ]);
 
@@ -2783,23 +2781,23 @@ describe("Server Module Tests", () => {
                     ],
                 };
                 aggreg = (
-                    await GlideFt.aggregate(client, indexBicycles, "*", options)
-                ).map(convertGlideRecordToRecord);
-                // elements (records in array) could be reordered
-                expect(
-                    aggreg.sort((a, b) => (a["genre"] < b["genre"] ? 1 : -1)),
-                ).toEqual([
-                    {
-                        genre: "Drama",
-                        nb_of_movies: isResp3 ? 1.0 : "1",
-                        nb_of_votes: isResp3 ? 1563839.0 : "1563839",
-                        avg_rating: isResp3 ? 10.0 : "10",
-                    },
+                    await GlideFt.aggregate(client, indexMovies, "*", options)
+                )
+                    .map(convertGlideRecordToRecord)
+                    // elements (records in array) could be reordered
+                    .sort((a, b) => (a["genre"] > b["genre"] ? 1 : -1));
+                expect(aggreg).toEqual([
                     {
                         genre: "Action",
                         nb_of_movies: isResp3 ? 2.0 : "2",
                         nb_of_votes: isResp3 ? 2033895.0 : "2033895",
                         avg_rating: isResp3 ? 9.0 : "9",
+                    },
+                    {
+                        genre: "Drama",
+                        nb_of_movies: isResp3 ? 1.0 : "1",
+                        nb_of_votes: isResp3 ? 1563839.0 : "1563839",
+                        avg_rating: isResp3 ? 10.0 : "10",
                     },
                     {
                         genre: "Thriller",
@@ -2808,6 +2806,9 @@ describe("Server Module Tests", () => {
                         avg_rating: isResp3 ? 9.0 : "9",
                     },
                 ]);
+
+                await GlideFt.dropindex(client, indexMovies);
+                await GlideFt.dropindex(client, indexBicycles);
             },
         );
 
