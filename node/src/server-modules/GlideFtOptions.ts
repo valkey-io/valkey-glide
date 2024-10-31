@@ -123,7 +123,7 @@ export interface FtCreateOptions {
  * Represents the input options to be used in the FT.SEARCH command.
  * All fields in this class are optional inputs for FT.SEARCH.
  */
-export interface FTSearchOptions {
+export interface FtSearchOptions {
     /**
      * Add a field to be returned.
      * @param fieldIdentifier field name to return.

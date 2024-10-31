@@ -12,7 +12,7 @@ import {
 } from "../BaseClient";
 import { GlideClient } from "../GlideClient";
 import { GlideClusterClient } from "../GlideClusterClient";
-import { Field, FtCreateOptions, FTSearchOptions } from "./GlideFtOptions";
+import { Field, FtCreateOptions, FtSearchOptions } from "./GlideFtOptions";
 
 /** Response type of {@link GlideFt.info | ft.info} command. */
 export type FtInfoReturnType = Record<
@@ -285,7 +285,7 @@ export class GlideFt {
      * @param client - The client to execute the command.
      * @param indexName - The index name to search into.
      * @param query - The text query to search.
-     * @param options - (Optional) See {@link FTSearchOptions} and {@link DecoderOption}.
+     * @param options - (Optional) See {@link FtSearchOptions} and {@link DecoderOption}.
      *
      * @returns A two-element array, where the first element is the number of documents in the result set, and the
      * second element has the format: `GlideRecord<GlideRecord<GlideString>>`:
@@ -337,7 +337,7 @@ export class GlideFt {
         client: GlideClient | GlideClusterClient,
         indexName: GlideString,
         query: GlideString,
-        options?: FTSearchOptions & DecoderOption,
+        options?: FtSearchOptions & DecoderOption,
     ): Promise<FtSearchReturnType> {
         const args: GlideString[] = ["FT.SEARCH", indexName, query];
 
