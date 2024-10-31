@@ -1368,6 +1368,7 @@ describe("Server Module Tests", () => {
             expect(
                 await GlideFt.create(client, index, [
                     { type: "NUMERIC", name: "price" },
+                    { type: "TEXT", name: "title" },
                 ]),
             ).toEqual("OK");
 
