@@ -59,6 +59,9 @@ from glide.async_commands.server_modules.ft_options.ft_create_options import (
     VectorFieldAttributesHnsw,
     VectorType,
 )
+from glide.async_commands.server_modules.ft_options.ft_profile_options import (
+    FtProfileOptions,
+)
 from glide.async_commands.server_modules.ft_options.ft_search_options import (
     FtSeachOptions,
     FtSearchLimit,
@@ -115,7 +118,10 @@ from glide.config import (
 from glide.constants import (
     OK,
     TOK,
+    FtAggregateResponse,
     FtInfoResponse,
+    FtProfileResponse,
+    FtSearchResponse,
     TClusterResponse,
     TEncodable,
     TFunctionListResponse,
@@ -186,7 +192,10 @@ __all__ = [
     "TResult",
     "TXInfoStreamFullResponse",
     "TXInfoStreamResponse",
+    "FtAggregateResponse",
     "FtInfoResponse",
+    "FtProfileResponse",
+    "FtSearchResponse",
     # Commands
     "BitEncoding",
     "BitFieldGet",
@@ -301,4 +310,5 @@ __all__ = [
     "FtAggregateReducer",
     "FtAggregateSortBy",
     "FtAggregateSortProperty",
+    "FtProfileOptions",
 ]
