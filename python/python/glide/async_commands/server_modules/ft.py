@@ -325,7 +325,7 @@ async def profile(
 
     Args:
         client (TGlideClient): The client to execute the command.
-        indexName (TEncodable): The index name for which the FT.SEARCH/FT.AGGREGATE query is written.
+        indexName (TEncodable): The index name
         options (FtProfileOptions): Options for the command.
 
     Returns:
@@ -334,7 +334,28 @@ async def profile(
     Examples:
         >>> ftSearchOptions = FtSeachOptions(return_fields=[ReturnField(field_identifier="a", alias="a_new"), ReturnField(field_identifier="b", alias="b_new")])
         >>> ftProfileResult = await ft.profile(glide_client, "myIndex", FtProfileOptions.from_query_options(query="*", queryOptions=ftSearchOptions))
-            [[2, {b'key1': {b'a': b'11111', b'b': b'2'}, b'key2': {b'a': b'22222', b'b': b'2'}}], {b'all.count': 2, b'sync.time': 1, b'query.time': 7, b'result.count': 2, b'result.time': 0}]
+            [
+                [
+                    2,
+                    {
+                        b'key1': {
+                            b'a': b'11111',
+                            b'b': b'2'
+                        },
+                        b'key2': {
+                            b'a': b'22222',
+                            b'b': b'2'
+                        }
+                    }
+                ],
+                {
+                    b'all.count': 2,
+                    b'sync.time': 1,
+                    b'query.time': 7,
+                    b'result.count': 2,
+                    b'result.time': 0
+                }
+            ]
     """
     args: List[TEncodable] = [CommandNames.FT_PROFILE, indexName] + options.to_args()
     return cast(FtProfileResponse, await client.custom_command(args))
