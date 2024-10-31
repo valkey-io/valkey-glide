@@ -334,12 +334,12 @@ export class GlideJson {
      *
      * @example
      * ```typescript
-     * console.log(await GlideJson.set(client, "doc", "$", "[1, 2.3, "foo", true, null, {}, []]"));
+     * console.log(await GlideJson.set(client, "doc", "$", '[1, 2.3, "foo", true, null, {}, []]'));
      * // Output: 'OK' - Indicates successful setting of the value at path '$' in the key stored at `doc`.
      * const result = await GlideJson.type(client, "doc", "$[*]");
      * console.log(result);
      * // Output: ["integer", "number", "string", "boolean", null, "object", "array"];
-     * console.log(await GlideJson.set(client, "doc2", ".", "{Name: 'John', Age: 27}"));
+     * console.log(await GlideJson.set(client, "doc2", ".", '{Name: 'John', Age: 27}'));
      * console.log(await GlideJson.type(client, "doc2")); // Output: "object"
      * console.log(await GlideJson.type(client, "doc2", {path: ".Age"})); // Output: "integer"
      * ```
@@ -385,7 +385,7 @@ export class GlideJson {
      *
      * @example
      * ```typescript
-     * console.log(await GlideJson.set(client, "doc", ".", "{a: [1, 2, 3], b: {a: [1, 2], c: {a: 42}}}"));
+     * console.log(await GlideJson.set(client, "doc", ".", '{a: [1, 2, 3], b: {a: [1, 2], c: {a: 42}}}'));
      * // Output: 'OK' - Indicates successful setting of the value at path '.' in the key stored at `doc`.
      * const result = await GlideJson.resp(client, "doc", {path: "$..a"});
      * console.log(result);
@@ -432,7 +432,7 @@ export class GlideJson {
      *
      * @example
      * ```typescript
-     * console.log(await GlideJson.set(client, "doc", "$", '{a:"foo", nested: {a: "hello"}, nested2: {a: 31}}"));
+     * console.log(await GlideJson.set(client, "doc", "$", '{a:"foo", nested: {a: "hello"}, nested2: {a: 31}}'));
      * // Output: 'OK' - Indicates successful setting of the value at path '$' in the key stored at `doc`.
      * console.log(await GlideJson.strlen(client, "doc", {path: "$..a"}));
      * // Output: [3, 5, null] - The length of the string values at path '$..a' in the key stored at `doc`.
@@ -482,7 +482,7 @@ export class GlideJson {
      *
      * @example
      * ```typescript
-     * console.log(await GlideJson.set(client, "doc", "$", '{a:"foo", nested: {a: "hello"}, nested2: {a: 31}}"));
+     * console.log(await GlideJson.set(client, "doc", "$", '{a:"foo", nested: {a: "hello"}, nested2: {a: 31}}'));
      * // Output: 'OK' - Indicates successful setting of the value at path '$' in the key stored at `doc`.
      * console.log(await GlideJson.strappend(client, "doc", jsonpy.dumps("baz"), {path: "$..a"}))
      * // Output: [6, 8, null] - The new length of the string values at path '$..a' in the key stored at `doc` after the append operation.
@@ -523,7 +523,7 @@ export class GlideJson {
      * @param path - The path within the JSON document.
      * @param start - The start index, inclusive.
      * @param end - The end index, inclusive.
-     * @returns ReturnTypeJson:
+     * @returns
      *     - For JSONPath (`path` starts with `$`):
      *       - Returns a list of integer replies for every possible path, indicating the new length of the array,
      *         or `null` for JSON values matching the path that are not an array.
@@ -539,7 +539,7 @@ export class GlideJson {
      *
      * @example
      * ```typescript
-     * console.log(await GlideJson.set(client, "doc", "$", "[[], ["a"], ["a", "b"], ["a", "b", "c"]]");
+     * console.log(await GlideJson.set(client, "doc", "$", '[[], ["a"], ["a", "b"], ["a", "b", "c"]]');
      * // Output: 'OK' - Indicates successful setting of the value at path '$' in the key stored at `doc`.
      * const result = await GlideJson.arrtrim(client, "doc", "$[*]", 0, 1);
      * console.log(result);
@@ -549,7 +549,7 @@ export class GlideJson {
      * ```
      * @example
      * ```typescript
-     * console.log(await GlideJson.set(client, "doc", "$", "{"children": ["John", "Jack", "Tom", "Bob", "Mike"]}");
+     * console.log(await GlideJson.set(client, "doc", "$", '{"children": ["John", "Jack", "Tom", "Bob", "Mike"]}');
      * // Output: 'OK' - Indicates successful setting of the value at path '$' in the key stored at `doc`.
      * result = await GlideJson.arrtrim(client, "doc", ".children", 0, 1);
      * console.log(result);
