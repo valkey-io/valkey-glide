@@ -7,7 +7,6 @@ import {
     Decoder,
     DecoderOption,
     GlideRecord,
-    GlideReturnType,
     GlideString,
 } from "../BaseClient";
 import { GlideClient } from "../GlideClient";
@@ -269,17 +268,73 @@ export class GlideFt {
             >
         ).then(convertGlideRecordToRecord);
     }
+
+    /**
+     * Parse a query and return information about how that query was parsed.
+     *
+     * @param client - The client to execute the command.
+     * @param indexName - The index name.
+     * @param query - The text query to search. It is the same as the query passed as
+     * an argument to {@link search | FT.SEARCH} or {@link aggregate | FT.AGGREGATE}.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns A query execution plan.
+     *
+     * @example
+     * ```typescript
+     * console.log(GlideFt.explain(client, "myIndex", "@price:[0 10]")); // Output:
+     * // "Field {\n\tprice\n\t0\n\t10\n}"
+     * ```
+     */
+    static explain(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        query: GlideString,
+        options?: DecoderOption,
+    ): Promise<GlideString> {
+        const args = ["FT.EXPLAIN", indexName, query];
+
+        return _handleCustomCommand(client, args, options);
+    }
+
+    /**
+     * Parse a query and return information about how that query was parsed.
+     * Same as {@link explain | FT.EXPLAIN}, except that the results are
+     * displayed in a different format.
+     *
+     * @param client - The client to execute the command.
+     * @param indexName - The index name.
+     * @param query - The text query to search. It is the same as the query passed as
+     * an argument to {@link search | FT.SEARCH} or {@link aggregate | FT.AGGREGATE}.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns A query execution plan.
+     */
+    static explaincli(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        query: GlideString,
+        options?: DecoderOption,
+    ): Promise<GlideString[]> {
+        const args = ["FT.EXPLAINCLI", indexName, query];
+
+        return _handleCustomCommand(client, args, options);
+    }
 }
 
 /**
  * @internal
  */
-async function _handleCustomCommand(
+async function _handleCustomCommand<T>(
     client: GlideClient | GlideClusterClient,
     args: GlideString[],
     decoderOption?: DecoderOption,
-): Promise<GlideReturnType> {
+): Promise<T> {
     return client instanceof GlideClient
-        ? (client as GlideClient).customCommand(args, decoderOption)
-        : (client as GlideClusterClient).customCommand(args, decoderOption);
+        ? ((client as GlideClient).customCommand(
+              args,
+              decoderOption,
+          ) as Promise<T>)
+        : ((client as GlideClusterClient).customCommand(
+              args,
+              decoderOption,
+          ) as Promise<T>);
 }
