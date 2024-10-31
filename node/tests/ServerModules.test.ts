@@ -13,11 +13,10 @@ import { v4 as uuidv4 } from "uuid";
 import {
     ConditionalChange,
     Decoder,
+    FtSearchReturnType,
     GlideClusterClient,
     GlideFt,
     GlideJson,
-    GlideRecord,
-    GlideString,
     InfoOptions,
     JsonGetOptions,
     ProtocolVersion,
@@ -1225,10 +1224,7 @@ describe("Server Module Tests", () => {
             await sleep;
 
             // With the `COUNT` parameters - returns only the count
-            const binaryResultCount: (
-                | number
-                | GlideRecord<GlideString | GlideRecord<GlideString>>
-            )[] = await GlideFt.search(
+            const binaryResultCount: FtSearchReturnType = await GlideFt.search(
                 client,
                 index,
                 "*=>[KNN 2 @VEC $query_vec]",
@@ -1241,10 +1237,7 @@ describe("Server Module Tests", () => {
             );
             expect(binaryResultCount).toEqual([2]);
 
-            const binaryResult: (
-                | number
-                | GlideRecord<GlideString | GlideRecord<GlideString>>
-            )[] = await GlideFt.search(
+            const binaryResult: FtSearchReturnType = await GlideFt.search(
                 client,
                 index,
                 "*=>[KNN 2 @VEC $query_vec]",
@@ -1255,10 +1248,7 @@ describe("Server Module Tests", () => {
                 },
             );
 
-            const expectedBinaryResult: (
-                | number
-                | GlideRecord<GlideString | GlideRecord<GlideString>>
-            )[] = [
+            const expectedBinaryResult: FtSearchReturnType = [
                 2,
                 [
                     {
@@ -1343,22 +1333,21 @@ describe("Server Module Tests", () => {
             );
             await sleep;
 
-            const stringResult: (
-                | number
-                | GlideRecord<GlideString | GlideRecord<GlideString>>
-            )[] = await GlideFt.search(client, index, "*", {
-                returnFields: [
-                    { fieldIdentifier: "$..arr", alias: "myarr" },
-                    { fieldIdentifier: "$..val", alias: "myval" },
-                ],
-                timeout: 10000,
-                decoder: Decoder.String,
-                limit: { offset: 0, count: 2 },
-            });
-            const expectedStringResult: (
-                | number
-                | GlideRecord<GlideString | GlideRecord<GlideString>>
-            )[] = [
+            const stringResult: FtSearchReturnType = await GlideFt.search(
+                client,
+                index,
+                "*",
+                {
+                    returnFields: [
+                        { fieldIdentifier: "$..arr", alias: "myarr" },
+                        { fieldIdentifier: "$..val", alias: "myval" },
+                    ],
+                    timeout: 10000,
+                    decoder: Decoder.String,
+                    limit: { offset: 0, count: 2 },
+                },
+            );
+            const expectedStringResult: FtSearchReturnType = [
                 1,
                 [
                     {

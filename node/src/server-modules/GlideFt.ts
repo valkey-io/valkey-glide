@@ -14,14 +14,22 @@ import { GlideClient } from "../GlideClient";
 import { GlideClusterClient } from "../GlideClusterClient";
 import { Field, FtCreateOptions, FTSearchOptions } from "./GlideFtOptions";
 
-/** Data type of {@link GlideFt.info | info} command response. */
-type FtInfoReturnType = Record<
+/** Response type of {@link GlideFt.info | ft.info} command. */
+export type FtInfoReturnType = Record<
     string,
     | GlideString
     | number
     | GlideString[]
     | Record<string, GlideString | Record<string, GlideString | number>[]>
 >;
+
+/**
+ * Response type for the {@link GlideFt.search | ft.search} command.
+ */
+export type FtSearchReturnType = [
+    number,
+    GlideRecord<GlideRecord<GlideString>>,
+];
 
 /** Module for Vector Search commands. */
 export class GlideFt {
@@ -330,7 +338,7 @@ export class GlideFt {
         indexName: GlideString,
         query: GlideString,
         options?: FTSearchOptions & DecoderOption,
-    ): Promise<[number, GlideRecord<GlideRecord<GlideString>>]> {
+    ): Promise<FtSearchReturnType> {
         const args: GlideString[] = ["FT.SEARCH", indexName, query];
 
         if (options) {
