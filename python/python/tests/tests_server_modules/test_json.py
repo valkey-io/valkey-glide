@@ -1920,7 +1920,13 @@ class TestJson:
         assert await json.arrpop(glide_client, key2) == b'["a"]'
 
         # pop from an empty array
-        assert await json.arrpop(glide_client, key2, JsonArrPopOptions("$[0]")) == [None]
-        assert await json.arrpop(glide_client, key2, JsonArrPopOptions("$[0]", 10)) == [None]
+        assert await json.arrpop(glide_client, key2, JsonArrPopOptions("$[0]")) == [
+            None
+        ]
+        assert await json.arrpop(glide_client, key2, JsonArrPopOptions("$[0]", 10)) == [
+            None
+        ]
         assert await json.arrpop(glide_client, key2, JsonArrPopOptions("[0]")) == None
-        assert await json.arrpop(glide_client, key2, JsonArrPopOptions("[0]", 10)) == None
+        assert (
+            await json.arrpop(glide_client, key2, JsonArrPopOptions("[0]", 10)) == None
+        )
