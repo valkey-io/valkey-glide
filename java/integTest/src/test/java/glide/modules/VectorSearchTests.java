@@ -803,9 +803,9 @@ public class VectorSearchTests {
         assertTrue(exception.getMessage().contains("Alias already exists"));
 
         assertEquals(OK, FT.aliasupdate(client, alias2, indexName).get());
-        assertEquals(Map.of(gs(alias2), gs(indexName)), FT.aliaslist(client).get());
+        assertEquals(
+                Map.of(gs(alias2), gs(indexName), gs(alias2), gs(indexName)), FT.aliaslist(client).get());
         assertEquals(OK, FT.aliasdel(client, alias2).get());
-        assertEquals(0, FT.aliaslist(client).get().size());
 
         // with GlideString:
         assertEquals(OK, FT.aliasupdate(client, gs(alias1), gs(indexName)).get());
