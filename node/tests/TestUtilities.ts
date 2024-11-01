@@ -177,7 +177,6 @@ export function flushallOnPort(port: number): Promise<void> {
  */
 export const parseEndpoints = (endpointsStr: string): [string, number][] => {
     try {
-        console.log(endpointsStr);
         const endpoints: string[][] = endpointsStr
             .split(",")
             .map((endpoint) => endpoint.split(":"));
