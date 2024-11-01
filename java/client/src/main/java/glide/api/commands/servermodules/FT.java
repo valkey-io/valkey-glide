@@ -720,7 +720,7 @@ public class FT {
      *
      * @param client The client to execute the command.
      * @param aliasName The alias name. This alias will now be pointed to a different index.
-     * @param indexName The index name for which an existing alias has to updated.
+     * @param indexName The index name for which an existing alias has to be updated.
      * @return <code>"OK"</code>.
      * @example
      *     <pre>{@code
@@ -738,17 +738,32 @@ public class FT {
      *
      * @param client The client to execute the command.
      * @param aliasName The alias name. This alias will now be pointed to a different index.
-     * @param indexName The index name for which an existing alias has to updated.
+     * @param indexName The index name for which an existing alias has to be updated.
      * @return <code>"OK"</code>.
      * @example
      *     <pre>{@code
-     * FT.aliasupdate(client,gs("myalias"), gs("myindex")).get(); // "OK"
+     * FT.aliasupdate(client, gs("myalias"), gs("myindex")).get(); // "OK"
      * }</pre>
      */
     public static CompletableFuture<String> aliasupdate(
             @NonNull BaseClient client, @NonNull GlideString aliasName, @NonNull GlideString indexName) {
         var args = new GlideString[] {gs("FT.ALIASUPDATE"), aliasName, indexName};
         return executeCommand(client, args, false);
+    }
+
+    /**
+     * Lists all index aliases.
+     *
+     * @param client The client to execute the command.
+     * @return An array of index aliases.
+     * @example
+     *     <pre>{@code
+     * GlideString[] aliases = FT.aliaslist(client).get();
+     * }</pre>
+     */
+    public static CompletableFuture<GlideString[]> aliaslist(@NonNull BaseClient client) {
+        return FT.<Object[]>executeCommand(client, new GlideString[] {gs("FT._ALIASLIST")}, false)
+                .thenApply(arr -> castArray(arr, GlideString.class));
     }
 
     /**
