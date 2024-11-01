@@ -123,7 +123,7 @@ export interface FtCreateOptions {
  * Represents the input options to be used in the FT.SEARCH command.
  * All fields in this class are optional inputs for FT.SEARCH.
  */
-export interface FtSearchOptions {
+export type FtSearchOptions = {
     /**
      * Add a field to be returned.
      * @param fieldIdentifier field name to return.
@@ -139,18 +139,25 @@ export interface FtSearchOptions {
      * the parameter name.
      */
     params?: GlideRecord<GlideString>;
-
-    /**
-     * Configure query pagination. By default only first 10 documents are returned.
-     *
-     * @param offset Zero-based offset.
-     * @param count Number of elements to return.
-     */
-    limit?: { offset: number; count: number };
-
-    /**
-     * Once set, the query will return only the number of documents in the result set without actually
-     * returning them.
-     */
-    count?: boolean;
-}
+} & (
+    | {
+        /**
+         * Configure query pagination. By default only first 10 documents are returned.
+         *
+         * @param offset Zero-based offset.
+         * @param count Number of elements to return.
+         */
+        limit?: { offset: number; count: number };
+        /** `limit` and `count` are mutually exclusive. */
+        count?: never;
+    }
+    | {
+        /**
+         * Once set, the query will return only the number of documents in the result set without actually
+         * returning them.
+         */
+        count?: boolean;
+        /** `limit` and `count` are mutually exclusive. */
+        limit?: never;
+      }
+);
