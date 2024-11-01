@@ -804,7 +804,7 @@ public class VectorSearchTests {
 
         assertEquals(OK, FT.aliasupdate(client, alias2, indexName).get());
         assertEquals(
-                Map.of(gs(alias2), gs(indexName), gs(alias2), gs(indexName)), FT.aliaslist(client).get());
+                Map.of(gs(alias1), gs(indexName), gs(alias2), gs(indexName)), FT.aliaslist(client).get());
         assertEquals(OK, FT.aliasdel(client, alias2).get());
 
         // with GlideString:
