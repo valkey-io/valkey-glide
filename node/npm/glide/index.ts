@@ -130,6 +130,7 @@ function initialize() {
         GlideRecord,
         GlideString,
         JsonGetOptions,
+        JsonArrPopOptions,
         SortedSetDataType,
         StreamEntryDataType,
         HashDataType,
@@ -213,6 +214,8 @@ function initialize() {
         ReturnTypeMap,
         ClusterResponse,
         ReturnTypeAttribute,
+        ReturnTypeJson,
+        UniversalReturnTypeJson,
     } = nativeBinding;
 
     module.exports = {
@@ -250,6 +253,7 @@ function initialize() {
         GlideJson,
         GlideString,
         JsonGetOptions,
+        JsonArrPopOptions,
         SortedSetDataType,
         StreamEntryDataType,
         HashDataType,
@@ -347,6 +351,8 @@ function initialize() {
         ReturnTypeMap,
         ClusterResponse,
         ReturnTypeAttribute,
+        ReturnTypeJson,
+        UniversalReturnTypeJson,
     };
 
     globalObject = Object.assign(global, nativeBinding);

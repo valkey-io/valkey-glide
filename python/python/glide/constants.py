@@ -1,6 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-from typing import Dict, List, Literal, Mapping, Optional, Set, TypeVar, Union
+from typing import Any, Dict, List, Literal, Mapping, Optional, Set, TypeVar, Union
 
 from glide.protobuf.command_request_pb2 import CommandRequest
 from glide.protobuf.connection_request_pb2 import ConnectionRequest
@@ -107,4 +107,14 @@ FtInfoResponse = Mapping[
             ]
         ],
     ],
+]
+
+FtSearchResponse = List[
+    Union[int, Mapping[TEncodable, Mapping[TEncodable, TEncodable]]]
+]
+
+FtAggregateResponse = List[Mapping[TEncodable, Any]]
+
+FtProfileResponse = List[
+    Union[FtSearchResponse, FtAggregateResponse, Mapping[str, int]]
 ]

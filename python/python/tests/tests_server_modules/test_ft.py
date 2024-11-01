@@ -29,6 +29,9 @@ from glide.async_commands.server_modules.ft_options.ft_create_options import (
     VectorFieldAttributesHnsw,
     VectorType,
 )
+from glide.async_commands.server_modules.ft_options.ft_profile_options import (
+    FtProfileOptions,
+)
 from glide.config import ProtocolVersion
 from glide.constants import OK, TEncodable
 from glide.exceptions import RequestError
@@ -337,23 +340,23 @@ class TestFt:
         )
         time.sleep(self.sleep_wait_time)
 
+        ftAggregateOptions: FtAggregateOptions = FtAggregateOptions(
+            loadFields=["__key"],
+            clauses=[
+                FtAggregateGroupBy(
+                    ["@condition"], [FtAggregateReducer("COUNT", [], "bicycles")]
+                )
+            ],
+        )
+
         # Run FT.AGGREGATE command with the following arguments: ['FT.AGGREGATE', '{bicycles}:1e15faab-a870-488e-b6cd-f2b76c6916a3', '*', 'LOAD', '1', '__key', 'GROUPBY', '1', '@condition', 'REDUCE', 'COUNT', '0', 'AS', 'bicycles']
         result = await ft.aggregate(
             glide_client,
             indexName=indexBicycles,
             query="*",
-            options=FtAggregateOptions(
-                loadFields=["__key"],
-                clauses=[
-                    FtAggregateGroupBy(
-                        ["@condition"], [FtAggregateReducer("COUNT", [], "bicycles")]
-                    )
-                ],
-            ),
+            options=ftAggregateOptions,
         )
-        assert await ft.dropindex(glide_client, indexName=indexBicycles) == OK
         sortedResult = sorted(result, key=lambda x: (x[b"condition"], x[b"bicycles"]))
-
         expectedResult = sorted(
             [
                 {
@@ -372,6 +375,22 @@ class TestFt:
             key=lambda x: (x[b"condition"], x[b"bicycles"]),
         )
         assert sortedResult == expectedResult
+
+        # Test FT.PROFILE for the above mentioned FT.AGGREGATE query
+        ftProfileResult = await ft.profile(
+            glide_client,
+            indexBicycles,
+            FtProfileOptions.from_query_options(
+                query="*", queryOptions=ftAggregateOptions
+            ),
+        )
+        assert len(ftProfileResult) > 0
+        assert (
+            sorted(ftProfileResult[0], key=lambda x: (x[b"condition"], x[b"bicycles"]))
+            == expectedResult
+        )
+
+        assert await ft.dropindex(glide_client, indexName=indexBicycles) == OK
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -397,32 +416,32 @@ class TestFt:
         # Run FT.AGGREGATE command with the following arguments:
         # ['FT.AGGREGATE', '{movies}:5a0e6257-3488-4514-96f2-f4c80f6cb0a9', '*', 'LOAD', '*', 'APPLY', 'ceil(@rating)', 'AS', 'r_rating', 'GROUPBY', '1', '@genre', 'REDUCE', 'COUNT', '0', 'AS', 'nb_of_movies', 'REDUCE', 'SUM', '1', 'votes', 'AS', 'nb_of_votes', 'REDUCE', 'AVG', '1', 'r_rating', 'AS', 'avg_rating', 'SORTBY', '4', '@avg_rating', 'DESC', '@nb_of_votes', 'DESC']
 
+        ftAggregateOptions: FtAggregateOptions = FtAggregateOptions(
+            loadAll=True,
+            clauses=[
+                FtAggregateApply(expression="ceil(@rating)", name="r_rating"),
+                FtAggregateGroupBy(
+                    ["@genre"],
+                    [
+                        FtAggregateReducer("COUNT", [], "nb_of_movies"),
+                        FtAggregateReducer("SUM", ["votes"], "nb_of_votes"),
+                        FtAggregateReducer("AVG", ["r_rating"], "avg_rating"),
+                    ],
+                ),
+                FtAggregateSortBy(
+                    properties=[
+                        FtAggregateSortProperty("@avg_rating", OrderBy.DESC),
+                        FtAggregateSortProperty("@nb_of_votes", OrderBy.DESC),
+                    ]
+                ),
+            ],
+        )
         result = await ft.aggregate(
             glide_client,
             indexName=indexMovies,
             query="*",
-            options=FtAggregateOptions(
-                loadAll=True,
-                clauses=[
-                    FtAggregateApply(expression="ceil(@rating)", name="r_rating"),
-                    FtAggregateGroupBy(
-                        ["@genre"],
-                        [
-                            FtAggregateReducer("COUNT", [], "nb_of_movies"),
-                            FtAggregateReducer("SUM", ["votes"], "nb_of_votes"),
-                            FtAggregateReducer("AVG", ["r_rating"], "avg_rating"),
-                        ],
-                    ),
-                    FtAggregateSortBy(
-                        properties=[
-                            FtAggregateSortProperty("@avg_rating", OrderBy.DESC),
-                            FtAggregateSortProperty("@nb_of_votes", OrderBy.DESC),
-                        ]
-                    ),
-                ],
-            ),
+            options=ftAggregateOptions,
         )
-        assert await ft.dropindex(glide_client, indexName=indexMovies) == OK
         sortedResult = sorted(
             result,
             key=lambda x: (
@@ -475,6 +494,30 @@ class TestFt:
             ),
         )
         assert expectedResultSet == sortedResult
+
+        # Test FT.PROFILE for the above mentioned FT.AGGREGATE query
+        ftProfileResult = await ft.profile(
+            glide_client,
+            indexMovies,
+            FtProfileOptions.from_query_options(
+                query="*", queryOptions=ftAggregateOptions
+            ),
+        )
+        assert len(ftProfileResult) > 0
+        assert (
+            sorted(
+                ftProfileResult[0],
+                key=lambda x: (
+                    x[b"genre"],
+                    x[b"nb_of_movies"],
+                    x[b"nb_of_votes"],
+                    x[b"avg_rating"],
+                ),
+            )
+            == expectedResultSet
+        )
+
+        assert await ft.dropindex(glide_client, indexName=indexMovies) == OK
 
     async def _create_index_for_ft_aggregate_with_bicycles_data(
         self, glide_client: GlideClusterClient, index_name: TEncodable, prefix
