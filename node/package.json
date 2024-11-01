@@ -81,6 +81,9 @@
             "THIRD_PARTY_LICENSES_NODE"
         ]
     },
+    "engines": {
+        "node": ">=16"
+    },
     "//": [
         "The fields below have been commented out and are only necessary for publishing the package."
     ],
