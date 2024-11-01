@@ -182,8 +182,8 @@ export class GlideFt {
     /**
      * Deletes an index and associated content. Indexed document keys are unaffected.
      *
-     * @param client The client to execute the command.
-     * @param indexName The index name.
+     * @param client - The client to execute the command.
+     * @param indexName - The index name.
      *
      * @returns "OK"
      *
@@ -202,6 +202,27 @@ export class GlideFt {
         return _handleCustomCommand(client, args, {
             decoder: Decoder.String,
         }) as Promise<"OK">;
+    }
+
+    /**
+     * Lists all indexes.
+     *
+     * @param client - The client to execute the command.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns An array of index names.
+     *
+     * @example
+     * ```typescript
+     * console.log(await GlideFt.list(client)); // Output: ["index1", "index2"]
+     * ```
+     */
+    static async list(
+        client: GlideClient | GlideClusterClient,
+        options?: DecoderOption,
+    ): Promise<GlideString[]> {
+        return _handleCustomCommand(client, ["FT._LIST"], options) as Promise<
+            GlideString[]
+        >;
     }
 
     /**
