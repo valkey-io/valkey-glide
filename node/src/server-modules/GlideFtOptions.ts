@@ -2,6 +2,7 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
+import { SortOrder } from "src/Commands";
 import { GlideString } from "../BaseClient";
 import { GlideFt } from "./GlideFt"; // eslint-disable-line @typescript-eslint/no-unused-vars
 
@@ -130,7 +131,13 @@ export type FtAggregateOptions = {
      * multiple times in any order and be freely intermixed. They are applied in the order specified,
      * with the output of one clause feeding the input of the next clause.
      */
-    clauses?: FtAggregateClause[];
+    clauses?: (
+        | FtAggregateLimit
+        | FtAggregateFilter
+        | FtAggregateGroupBy
+        | FtAggregateSortBy
+        | FtAggregateApply
+    )[];
     /** The key/value pairs can be referenced from within the query expression. */
     params?: [GlideString, GlideString][];
 } & (
@@ -147,13 +154,6 @@ export type FtAggregateOptions = {
           loadFields?: never;
       }
 );
-
-export type FtAggregateClause =
-    | FtAggregateLimit
-    | FtAggregateFilter
-    | FtAggregateGroupBy
-    | FtAggregateSortBy
-    | FtAggregateApply;
 
 /** A clause for limiting the number of retained records. */
 export interface FtAggregateLimit {
@@ -210,7 +210,7 @@ export interface FtAggregateSortProperty {
     /** The sorting parameter. */
     property: GlideString;
     /** The order for the sorting. */
-    order: "ASC" | "DESC";
+    order: SortOrder;
 }
 
 /**

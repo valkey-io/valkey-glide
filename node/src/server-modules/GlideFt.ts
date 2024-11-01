@@ -14,11 +14,6 @@ import { GlideClient } from "../GlideClient";
 import { GlideClusterClient } from "../GlideClusterClient";
 import { Field, FtAggregateOptions, FtCreateOptions } from "./GlideFtOptions";
 
-// Can't disable that rule for specific lines, because prettier moves the comment with "eslint-disable-line"
-// Disabling for the entire file. `FT.SEARCH`, `FT.AGGREGATE` and `FT.PROFILE` return types depend on the
-// search query and user data formats.
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 /** Data type of {@link GlideFt.info | info} command response. */
 type FtInfoReturnType = Record<
     string,
@@ -277,12 +272,12 @@ export class GlideFt {
         indexName: GlideString,
         query: GlideString,
         options?: DecoderOption & FtAggregateOptions,
-    ): Promise<GlideRecord<any>[]> {
+    ): Promise<GlideRecord<GlideReturnType>[]> {
         const args: GlideString[] = ["FT.AGGREGATE", indexName, query];
 
         if (options) {
             if (options.loadAll) args.push("LOAD", "*");
-            if (options.loadFields)
+            else if (options.loadFields)
                 args.push(
                     "LOAD",
                     options.loadFields.length.toString(),
@@ -292,7 +287,7 @@ export class GlideFt {
             if (options.timeout)
                 args.push("TIMEOUT", options.timeout.toString());
 
-            if (options.params && options.params.length) {
+            if (options.params) {
                 args.push(
                     "PARAMS",
                     (options.params.length * 2).toString(),
@@ -350,14 +345,16 @@ export class GlideFt {
                             );
                             break;
                         default:
-                            throw new Error("Unknown clause type");
+                            throw new Error(
+                                "Unknown clause type in FtAggregateOptions",
+                            );
                     }
                 }
             }
         }
 
         return _handleCustomCommand(client, args, options) as Promise<
-            GlideRecord<any>[]
+            GlideRecord<GlideReturnType>[]
         >;
     }
 
