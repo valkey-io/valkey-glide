@@ -4,17 +4,24 @@ package glide.api.models.commands.json;
 import glide.api.commands.servermodules.Json;
 import java.util.ArrayList;
 import java.util.List;
-import lombok.Builder;
 
 /** Additional parameters for {@link Json#arrindex} command. */
-@Builder
-public final class JsonIndexOptions {
+public final class JsonArrIndexOptions {
 
     /** The start index, inclusive. Default to <code>0</code> if not provided. */
-    private long start;
+    private Long start;
 
     /** The end index, exclusive. Default to <code>0</code> if not provided. */
-    private long end;
+    private Long end;
+
+    public JsonArrIndexOptions(Long start) {
+        this.start = start;
+    }
+
+    public JsonArrIndexOptions(Long start, Long end) {
+        this.start = start;
+        this.end = end;
+    }
 
     /**
      * Converts JsonGetOptions into a String[].
@@ -24,12 +31,12 @@ public final class JsonIndexOptions {
     public String[] toArgs() {
         List<String> args = new ArrayList<>();
 
-        if (Long.valueOf(start) != null) {
-            args.add(Long.valueOf(start).toString());
-        }
+        if (start != null) {
+            args.add(start.toString());
 
-        if (Long.valueOf(end) != null) {
-            args.add(Long.valueOf(end).toString());
+            if (end != null) {
+                args.add(end.toString());
+            }
         }
 
         return args.toArray(new String[0]);

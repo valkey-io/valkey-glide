@@ -1,6 +1,12 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands.json;
 
+import glide.api.commands.servermodules.Json;
+
+/**
+ * The JsonScalar object are values that are not objects or arrays. i.e., String, number, boolean
+ * and null are scalar values. It is a parameter for the {@link Json#arrindex} command.
+ */
 public class JsonScalar {
     private final Object value;
 

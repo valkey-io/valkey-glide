@@ -10,10 +10,10 @@ import glide.api.GlideClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.commands.ConditionalChange;
+import glide.api.models.commands.json.JsonArrIndexOptions;
+import glide.api.models.commands.json.JsonArrIndexOptionsBinary;
 import glide.api.models.commands.json.JsonGetOptions;
 import glide.api.models.commands.json.JsonGetOptionsBinary;
-import glide.api.models.commands.json.JsonIndexOptions;
-import glide.api.models.commands.json.JsonIndexOptionsBinary;
 import glide.api.models.commands.json.JsonScalar;
 import glide.utils.ArgsBuilder;
 import java.util.concurrent.CompletableFuture;
@@ -629,14 +629,11 @@ public class Json {
      * @example
      *     <pre>{@code
      * Json.set(client, key, "$", "{\"a\": [\"value\", 3], \"b\": {\"a\": [3, [\"value\", false], 5]}}").get();
-     * Object[] result = Json.arrindex(client, key, "$..a", new JsonScalar(3)).get();
-     * assertArrayEquals(new Object[] {Long.valueOf(1), Long.valueOf(0)}, result);
-     *
-     * result = Json.arrindex(client, key, $.a, new JsonScalar(3)).get();
-     * assertEquals(Long.valueOf(1), result);
+     * var result = Json.arrindex(client, key, "$..a", new JsonScalar(3)).get();
+     * assert Arrays.equal((Object[]) result, new Object[] {1L, 0L});
      * }</pre>
      */
-    public static CompletableFuture<Object[]> arrindex(
+    public static CompletableFuture<Object> arrindex(
             @NonNull BaseClient client,
             @NonNull String key,
             @NonNull String path,
@@ -667,14 +664,11 @@ public class Json {
      * @example
      *     <pre>{@code
      * Json.set(client, key, "$", "{\"a\": [\"value\", 3], \"b\": {\"a\": [3, [\"value\", false], 5]}}").get();
-     * Object[] result = Json.arrindex(client, gs(key), gs("$..a"), new JsonScalar(3)).get();
-     * assertArrayEquals(new Object[] {Long.valueOf(1), Long.valueOf(0)}, result);
-     *
-     * result = Json.arrindex(client, gs(key), gs($.a), new JsonScalar(3)).get();
-     * assertEquals(Long.valueOf(1), result);
+     * var result = Json.arrindex(client, gs(key), gs("$..a"), new JsonScalar(3)).get();
+     * assert Arrays.equal((Object[]) result, new Object[] {1L, 0L});
      * }</pre>
      */
-    public static CompletableFuture<Object[]> arrindex(
+    public static CompletableFuture<Object> arrindex(
             @NonNull BaseClient client,
             @NonNull GlideString key,
             @NonNull GlideString path,
@@ -706,19 +700,19 @@ public class Json {
      * @example
      *     <pre>{@code
      * Json.set(client, key, "$", "{\"a\": [\"value\", 3], \"b\": {\"a\": [3, [\"value\", false], 5]}}").get();
-     * Object[] result1 = Json.arrindex(client, key, "$..a", new JsonScalar(3)).get();
-     * assertArrayEquals(new Object[] {Long.valueOf(1), Long.valueOf(0)}, result1);
+     * var result = Json.arrindex(client, key, "$..a", new JsonScalar(3)).get();
+     * assert Arrays.equal((Object[]) result, new Object[] {1L, 0L});
      *
-     * Object result2 = Json.arrindex(client, key, $.a, new JsonScalar(3)).get();
-     * assertEquals(Long.valueOf(1), result2);
+     * Object result2 = Json.arrindex(client, key, .a, new JsonScalar(3)).get();
+     * assertEquals(1L, result);
      * }</pre>
      */
-    public static CompletableFuture<Object[]> arrindex(
+    public static CompletableFuture<Object> arrindex(
             @NonNull BaseClient client,
             @NonNull String key,
             @NonNull String path,
             @NonNull JsonScalar scalar,
-            @NonNull JsonIndexOptions options) {
+            @NonNull JsonArrIndexOptions options) {
 
         return executeCommand(
                 client,
@@ -754,19 +748,19 @@ public class Json {
      * @example
      *     <pre>{@code
      * Json.set(client, key, "$", "{\"a\": [\"value\", 3], \"b\": {\"a\": [3, [\"value\", false], 5]}}").get();
-     * Object[] result1 = Json.arrindex(client, gs(key), gs("$..a"), new JsonScalar(3)).get();
-     * assertArrayEquals(new Object[] {Long.valueOf(1), Long.valueOf(0)}, result1);
+     * var result = Json.arrindex(client, gs(key), gs("$..a"), new JsonScalar(3)).get();
+     * assert Arrays.equal((Object[]) result, new Object[] {1L, 0L);
      *
-     * Object result2 = Json.arrindex(client, gs(key), gs($.a), new JsonScalar(3)).get();
-     * assertEquals(Long.valueOf(1), result2);
+     * result = Json.arrindex(client, gs(key), gs(.a), new JsonScalar(3)).get();
+     * assertEquals(1L, result);
      * }</pre>
      */
-    public static CompletableFuture<Object[]> arrindex(
+    public static CompletableFuture<Object> arrindex(
             @NonNull BaseClient client,
             @NonNull GlideString key,
             @NonNull GlideString path,
             @NonNull JsonScalar scalar,
-            @NonNull JsonIndexOptionsBinary options) {
+            @NonNull JsonArrIndexOptionsBinary options) {
 
         return executeCommand(
                 client,

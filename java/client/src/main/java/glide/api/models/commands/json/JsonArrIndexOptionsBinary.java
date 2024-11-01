@@ -7,17 +7,24 @@ import glide.api.commands.servermodules.Json;
 import glide.api.models.GlideString;
 import java.util.ArrayList;
 import java.util.List;
-import lombok.Builder;
 
 /** Additional parameters for {@link Json#arrindex} command. */
-@Builder
-public final class JsonIndexOptionsBinary {
+public final class JsonArrIndexOptionsBinary {
 
     /** The start index, inclusive. Default to <code>0</code> if not provided. */
-    private long start;
+    private Long start;
 
     /** The end index, exclusive. Default to <code>0</code> if not provided. */
-    private long end;
+    private Long end;
+
+    public JsonArrIndexOptionsBinary(Long start) {
+        this.start = start;
+    }
+
+    public JsonArrIndexOptionsBinary(Long start, Long end) {
+        this.start = start;
+        this.end = end;
+    }
 
     /**
      * Converts JsonGetOptions into a GlideString[].
@@ -27,14 +34,13 @@ public final class JsonIndexOptionsBinary {
     public GlideString[] toArgs() {
         List<GlideString> args = new ArrayList<>();
 
-        if (Long.valueOf(start) != null) {
-            args.add(gs(Long.valueOf(start).toString()));
-        }
+        if (start != null) {
+            args.add(gs(start.toString()));
 
-        if (Long.valueOf(end) != null) {
-            args.add(gs(Long.valueOf(end).toString()));
+            if (end != null) {
+                args.add(gs(end.toString()));
+            }
         }
-
         return args.toArray(new GlideString[0]);
     }
 }
