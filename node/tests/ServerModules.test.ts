@@ -245,6 +245,47 @@ describe("Server Module Tests", () => {
                 expect(result).toEqual(expectedResult2);
             });
 
+            it("json.mget", async () => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+                const prefix = "{" + uuidv4() + "}:";
+                const key1 = prefix + 1;
+                const key2 = prefix + 2;
+                const data = {
+                    [key1]: '{"a": 1, "b": ["one", "two"]}',
+                    [key2]: '{"a": 1, "c": false}',
+                };
+
+                for (const key in Object.keys(data)) {
+                    GlideJson.set(client, key, ".", data[key]);
+                }
+
+                expect(
+                    await GlideJson.mget(
+                        client,
+                        [key1, key2, prefix + 3],
+                        Buffer.from("$.c"),
+                    ),
+                ).toEqual(["[]", "[false]", null]);
+                expect(
+                    await GlideJson.mget(
+                        client,
+                        [Buffer.from(key1), key2],
+                        ".b[*]",
+                        { decoder: Decoder.Bytes },
+                    ),
+                ).toEqual([Buffer.from('"one"'), null]);
+
+                // cross slot
+                await expect(
+                    GlideJson.mget(client, [uuidv4(), uuidv4()], "."),
+                ).rejects.toThrowError(/crossslot/);
+            });
+
             it("json.arrinsert", async () => {
                 client = await GlideClusterClient.createClient(
                     getClientConfigurationOption(

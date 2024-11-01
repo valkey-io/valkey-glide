@@ -196,6 +196,42 @@ export class GlideJson {
     }
 
     /**
+     * Retrieves the JSON values at the specified `path` stored at multiple `keys`.
+     *
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     *
+     * @param client - The client to execute the command.
+     * @param keys - The keys of the JSON documents.
+     * @param path - The path within the JSON documents.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns
+     * - For JSONPath (path starts with `$`):
+     *       Returns a stringified JSON list replies for every possible path, or a string representation
+     *       of an empty array, if path doesn't exist.
+     * - For legacy path (path doesn't start with `$`):
+     *       Returns a string representation of the value in `path`. If `path` doesn't exist,
+     *       the corresponding array element will be `null`.
+     * - If a `key` doesn't exist, the corresponding array element will be `null`.
+     *
+     * @example
+     * ```typescript
+     * await GlideJson.set(client, "doc1", "$", '{"a": 1, "b": ["one", "two"]}');
+     * await GlideJson.set(client, "doc2", "$", '{"a": 1, "c": false}');
+     * const res = await GlideJson.mget(client, [ "doc1", "doc2", "doc3" ], "$.c");
+     * console.log(res); // Output: ["[]", "[false]", null]
+     * ```
+     */
+    static async mget(
+        client: BaseClient,
+        keys: GlideString[],
+        path: GlideString,
+        options?: DecoderOption,
+    ): Promise<GlideString[]> {
+        const args = ["JSON.MGET", ...keys, path];
+        return _executeCommand(client, args, options);
+    }
+
+    /**
      * Inserts one or more values into the array at the specified `path` within the JSON
      * document stored at `key`, before the given `index`.
      *
@@ -635,7 +671,7 @@ export class GlideJson {
      * @returns
      *     - For JSONPath (path starts with `$`):
      *       - Returns a list of integer replies for every possible path, indicating the length of
-     *         the JSON string value, or <code>null</code> for JSON values matching the path that
+     *         the JSON string value, or `null` for JSON values matching the path that
      *         are not string.
      *     - For legacy path (path doesn't start with `$`):
      *       - Returns the length of the JSON value at `path` or `null` if `key` doesn't exist.

@@ -33,6 +33,7 @@
 * Java: Added `FT.EXPLAIN`, `FT.EXPLAINCLI` ([#2515](https://github.com/valkey-io/valkey-glide/pull/2515))
 * Core: Update routing for commands from server modules ([#2461](https://github.com/valkey-io/valkey-glide/pull/2461))
 * Node: Added `JSON.SET` and `JSON.GET` ([#2427](https://github.com/valkey-io/valkey-glide/pull/2427))
+* Node: Added `JSON.MGET` ([#2567](https://github.com/valkey-io/valkey-glide/pull/2567))
 * Java: Added `JSON.NUMINCRBY` and `JSON.NUMMULTBY` ([#2511](https://github.com/valkey-io/valkey-glide/pull/2511))
 * Java: Added `JSON.ARRAPPEND` ([#2489](https://github.com/valkey-io/valkey-glide/pull/2489))
 * Java: Added `JSON.ARRTRIM` ([#2518](https://github.com/valkey-io/valkey-glide/pull/2518))
