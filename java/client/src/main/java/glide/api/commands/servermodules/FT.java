@@ -361,7 +361,7 @@ public class FT {
      * // example of using the API:
      * FTAggregateOptions options = FTAggregateOptions.builder()
      *     .loadFields(new String[] {"__key"})
-     *     .addExpression(
+     *     .addClause(
      *             new FTAggregateOptions.GroupBy(
      *                     new String[] {"@condition"},
      *                     new Reducer[] {
@@ -443,7 +443,7 @@ public class FT {
      * // example of using the API:
      * FTAggregateOptions options = FTAggregateOptions.builder()
      *     .loadFields(new String[] {"__key"})
-     *     .addExpression(
+     *     .addClause(
      *             new FTAggregateOptions.GroupBy(
      *                     new String[] {"@condition"},
      *                     new Reducer[] {
