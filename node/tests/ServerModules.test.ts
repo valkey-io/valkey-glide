@@ -2664,7 +2664,9 @@ describe("Server Module Tests", () => {
                 )
                     .map(convertGlideRecordToRecord)
                     // elements (records in array) could be reordered
-                    .sort((a, b) => (a["condition"] > b["condition"] ? 1 : -1));
+                    .sort((a, b) =>
+                        a["condition"]! > b["condition"]! ? 1 : -1,
+                    );
                 expect(aggreg).toEqual([
                     {
                         condition: "new",
@@ -2773,8 +2775,14 @@ describe("Server Module Tests", () => {
                         {
                             type: "SORTBY",
                             properties: [
-                                { property: "@avg_rating", order: "DESC" },
-                                { property: "@nb_of_votes", order: "DESC" },
+                                {
+                                    property: "@avg_rating",
+                                    order: SortOrder.DESC,
+                                },
+                                {
+                                    property: "@nb_of_votes",
+                                    order: SortOrder.DESC,
+                                },
                             ],
                         },
                     ],
@@ -2784,7 +2792,7 @@ describe("Server Module Tests", () => {
                 )
                     .map(convertGlideRecordToRecord)
                     // elements (records in array) could be reordered
-                    .sort((a, b) => (a["genre"] > b["genre"] ? 1 : -1));
+                    .sort((a, b) => (a["genre"]! > b["genre"]! ? 1 : -1));
                 expect(aggreg).toEqual([
                     {
                         genre: "Action",

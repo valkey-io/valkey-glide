@@ -304,12 +304,12 @@ export class GlideFt {
         indexName: GlideString,
         query: GlideString,
         options?: DecoderOption & FtAggregateOptions,
-    ): Promise<GlideRecord<any>[]> {
+    ): Promise<GlideRecord<GlideReturnType>[]> {
         const args: GlideString[] = ["FT.AGGREGATE", indexName, query];
 
         if (options) {
             if (options.loadAll) args.push("LOAD", "*");
-            if (options.loadFields)
+            else if (options.loadFields)
                 args.push(
                     "LOAD",
                     options.loadFields.length.toString(),
@@ -319,7 +319,7 @@ export class GlideFt {
             if (options.timeout)
                 args.push("TIMEOUT", options.timeout.toString());
 
-            if (options.params && options.params.length) {
+            if (options.params) {
                 args.push(
                     "PARAMS",
                     (options.params.length * 2).toString(),
@@ -377,14 +377,16 @@ export class GlideFt {
                             );
                             break;
                         default:
-                            throw new Error("Unknown clause type");
+                            throw new Error(
+                                "Unknown clause type in FtAggregateOptions",
+                            );
                     }
                 }
             }
         }
 
         return _handleCustomCommand(client, args, options) as Promise<
-            GlideRecord<any>[]
+            GlideRecord<GlideReturnType>[]
         >;
     }
 
