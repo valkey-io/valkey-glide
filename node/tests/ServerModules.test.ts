@@ -476,7 +476,14 @@ describe("Server Module Tests", () => {
                     await GlideJson.arrindex(client, key1, "..a", '"hello"'),
                 ).toEqual(3);
 
-                // Wrong type
+                expect(
+                    await GlideJson.arrindex(client, key1, "$..a", null),
+                ).toEqual([-1, -1, null]);
+                expect(
+                    await GlideJson.arrindex(client, key1, "..a", null),
+                ).toEqual(-1);
+
+                // Value at the path is not an array
                 expect(
                     await GlideJson.arrindex(client, key1, "$..c", 42),
                 ).toEqual([null]);
