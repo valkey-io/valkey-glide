@@ -141,23 +141,23 @@ export type FtSearchOptions = {
     params?: GlideRecord<GlideString>;
 } & (
     | {
-        /**
-         * Configure query pagination. By default only first 10 documents are returned.
-         *
-         * @param offset Zero-based offset.
-         * @param count Number of elements to return.
-         */
-        limit?: { offset: number; count: number };
-        /** `limit` and `count` are mutually exclusive. */
-        count?: never;
-    }
+          /**
+           * Configure query pagination. By default only first 10 documents are returned.
+           *
+           * @param offset Zero-based offset.
+           * @param count Number of elements to return.
+           */
+          limit?: { offset: number; count: number };
+          /** `limit` and `count` are mutually exclusive. */
+          count?: never;
+      }
     | {
-        /**
-         * Once set, the query will return only the number of documents in the result set without actually
-         * returning them.
-         */
-        count?: boolean;
-        /** `limit` and `count` are mutually exclusive. */
-        limit?: never;
+          /**
+           * Once set, the query will return only the number of documents in the result set without actually
+           * returning them.
+           */
+          count?: boolean;
+          /** `limit` and `count` are mutually exclusive. */
+          limit?: never;
       }
 );
