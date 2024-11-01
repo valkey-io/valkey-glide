@@ -260,8 +260,8 @@ describe("Server Module Tests", () => {
                     [key2]: '{"a": 1, "c": false}',
                 };
 
-                for (const key in Object.keys(data)) {
-                    GlideJson.set(client, key, ".", data[key]);
+                for (const key of Object.keys(data)) {
+                    await GlideJson.set(client, key, ".", data[key]);
                 }
 
                 expect(
@@ -283,7 +283,7 @@ describe("Server Module Tests", () => {
                 // cross slot
                 await expect(
                     GlideJson.mget(client, [uuidv4(), uuidv4()], "."),
-                ).rejects.toThrowError(/crossslot/);
+                ).rejects.toThrowError(/crossslot/i);
             });
 
             it("json.arrinsert", async () => {
