@@ -792,9 +792,9 @@ public class VectorSearchTests {
                                 })
                         .get());
 
-        assertEquals(0, FT.aliaslist(client).get().length);
+        assertEquals(0, FT.aliaslist(client).get().size());
         assertEquals(OK, FT.aliasadd(client, alias1, indexName).get());
-        assertArrayEquals(new GlideString[] {gs(alias1)}, FT.aliaslist(client).get());
+        assertEquals(Map.of(gs(alias1), gs(indexName)), FT.aliaslist(client).get());
 
         // error with adding the same alias to the same index
         var exception =
@@ -803,9 +803,9 @@ public class VectorSearchTests {
         assertTrue(exception.getMessage().contains("Alias already exists"));
 
         assertEquals(OK, FT.aliasupdate(client, alias2, indexName).get());
-        assertArrayEquals(new GlideString[] {gs(alias2)}, FT.aliaslist(client).get());
+        assertEquals(Map.of(gs(alias2), gs(indexName)), FT.aliaslist(client).get());
         assertEquals(OK, FT.aliasdel(client, alias2).get());
-        assertEquals(0, FT.aliaslist(client).get().length);
+        assertEquals(0, FT.aliaslist(client).get().size());
 
         // with GlideString:
         assertEquals(OK, FT.aliasupdate(client, gs(alias1), gs(indexName)).get());
