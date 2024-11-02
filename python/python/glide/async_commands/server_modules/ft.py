@@ -20,7 +20,7 @@ from glide.async_commands.server_modules.ft_options.ft_profile_options import (
     FtProfileOptions,
 )
 from glide.async_commands.server_modules.ft_options.ft_search_options import (
-    FtSeachOptions,
+    FtSearchOptions,
 )
 from glide.constants import (
     TOK,
@@ -46,7 +46,7 @@ async def create(
         client (TGlideClient): The client to execute the command.
         indexName (TEncodable): The index name.
         schema (List[Field]): Fields to populate into the index. Equivalent to `SCHEMA` block in the module API.
-        options (Optional[FtCreateOptions]): Optional arguments for the FT.CREATE command. See `FtCreateOptions`.
+        options (Optional[FtCreateOptions]): Optional arguments for the FT.CREATE command.
 
     Returns:
         TOK: A simple "OK" response.
@@ -60,11 +60,11 @@ async def create(
     """
     args: List[TEncodable] = [CommandNames.FT_CREATE, indexName]
     if options:
-        args.extend(options.toArgs())
+        args.extend(options.to_args())
     if schema:
         args.append(FtCreateKeywords.SCHEMA)
         for field in schema:
-            args.extend(field.toArgs())
+            args.extend(field.to_args())
     return cast(TOK, await client.custom_command(args))
 
 
@@ -94,7 +94,7 @@ async def search(
     client: TGlideClient,
     indexName: TEncodable,
     query: TEncodable,
-    options: Optional[FtSeachOptions],
+    options: Optional[FtSearchOptions],
 ) -> FtSearchResponse:
     """
     Uses the provided query expression to locate keys within an index. Once located, the count and/or the content of indexed fields within those keys can be returned.
@@ -103,7 +103,7 @@ async def search(
         client (TGlideClient): The client to execute the command.
         indexName (TEncodable): The index name to search into.
         query (TEncodable): The text query to search.
-        options (Optional[FtSeachOptions]): The search options. See `FtSearchOptions`.
+        options (Optional[FtSearchOptions]): The search options.
 
     Returns:
         FtSearchResponse: A two element array, where first element is count of documents in result set, and the second element, which has the format Mapping[TEncodable, Mapping[TEncodable, TEncodable]] is a mapping between document names and map of their attributes.
@@ -115,12 +115,12 @@ async def search(
         - A key named {json:}1 with value {"a":1, "b":2}
 
         >>> from glide import ft
-        >>> result = await ft.search(glide_client, "idx", "*", options=FtSeachOptions(return_fields=[ReturnField(field_identifier="first"), ReturnField(field_identifier="second")]))
-        [1, { b'json:1': { b'first': b'42', b'second': b'33' } }] # The first element, 1 is the number of keys returned in the search result. The second element is a map of data queried per key.
+        >>> result = await ft.search(glide_client, "idx", "*", options=FtSearchOptions(return_fields=[ReturnField(field_identifier="first"), ReturnField(field_identifier="second")]))
+        [1, { b'json:1': { b'first': b'42', b'second': b'33' } }]  # The first element, 1 is the number of keys returned in the search result. The second element is a map of data queried per key.
     """
     args: List[TEncodable] = [CommandNames.FT_SEARCH, indexName, query]
     if options:
-        args.extend(options.toArgs())
+        args.extend(options.to_args())
     return cast(FtSearchResponse, await client.custom_command(args))
 
 
@@ -199,7 +199,7 @@ async def info(client: TGlideClient, indexName: TEncodable) -> FtInfoResponse:
         indexName (TEncodable): The index name for which the information has to be returned.
 
     Returns:
-        FtInfoResponse: Nested maps with info about the index. See example for more details. See `FtInfoResponse`.
+        FtInfoResponse: Nested maps with info about the index. See example for more details.
 
     Examples:
         An index with name 'myIndex', 1 text field and 1 vector field is already created for gettting the output of this example.
@@ -332,7 +332,7 @@ async def profile(
         FtProfileResponse: A two-element array. The first element contains results of query being profiled, the second element stores profiling information.
 
     Examples:
-        >>> ftSearchOptions = FtSeachOptions(return_fields=[ReturnField(field_identifier="a", alias="a_new"), ReturnField(field_identifier="b", alias="b_new")])
+        >>> ftSearchOptions = FtSearchOptions(return_fields=[ReturnField(field_identifier="a", alias="a_new"), ReturnField(field_identifier="b", alias="b_new")])
         >>> ftProfileResult = await ft.profile(glide_client, "myIndex", FtProfileOptions.from_query_options(query="*", queryOptions=ftSearchOptions))
             [
                 [

@@ -63,8 +63,8 @@ from glide.async_commands.server_modules.ft_options.ft_profile_options import (
     FtProfileOptions,
 )
 from glide.async_commands.server_modules.ft_options.ft_search_options import (
-    FtSeachOptions,
     FtSearchLimit,
+    FtSearchOptions,
     ReturnField,
 )
 from glide.async_commands.server_modules.json import JsonArrIndexOptions, JsonGetOptions
@@ -300,7 +300,7 @@ __all__ = [
     "VectorType",
     "FtSearchLimit",
     "ReturnField",
-    "FtSeachOptions",
+    "FtSearchOptions",
     "FtAggregateApply",
     "FtAggregateFilter",
     "FtAggregateClause",
