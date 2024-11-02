@@ -1071,19 +1071,14 @@ describe("Server Module Tests", () => {
                         ),
                     );
                     const key = uuidv4();
-                    const jsonValue = 
-                            "{ \"key1\": 1, \"key2\": 3.5, \"key3\": {\"nested_key\": {\"key1\": [4, 5]}}, \"key4\":"
-                                    + " [1, 2, 3], \"key5\": 0, \"key6\": \"hello\", \"key7\": null, \"key8\":"
-                                    + " {\"nested_key\": {\"key1\": 3.5953862697246314e307}}, \"key9\":"
-                                    + " 3.5953862697246314e307, \"key10\": true }";
+                    const jsonValue =
+                        '{ "key1": 1, "key2": 3.5, "key3": {"nested_key": {"key1": [4, 5]}}, "key4":' +
+                        ' [1, 2, 3], "key5": 0, "key6": "hello", "key7": null, "key8":' +
+                        ' {"nested_key": {"key1": 3.5953862697246314e307}}, "key9":' +
+                        ' 3.5953862697246314e307, "key10": true }';
                     // setup
                     expect(
-                        await GlideJson.set(
-                            client,
-                            key,
-                            "$",
-                            jsonValue,
-                        ),
+                        await GlideJson.set(client, key, "$", jsonValue),
                     ).toBe("OK");
 
                     expect(
@@ -1110,13 +1105,13 @@ describe("Server Module Tests", () => {
                         }),
                     ).toEqual(16);
 
-                    expect(
-                        await GlideJson.debugMemory(client, key,),
-                    ).toEqual(504);
+                    expect(await GlideJson.debugMemory(client, key)).toEqual(
+                        504,
+                    );
 
-                    expect(
-                        await GlideJson.debugFields(client, key,),
-                    ).toEqual(19);
+                    expect(await GlideJson.debugFields(client, key)).toEqual(
+                        19,
+                    );
                 },
             );
         },
