@@ -49,3 +49,18 @@ func MapToString(parameter map[string]string) []string {
 	}
 	return flat
 }
+
+// Concat concatenates multiple slices of strings into a single slice.
+func Concat(slices ...[]string) []string {
+	size := 0
+	for _, s := range slices {
+		size += len(s)
+	}
+
+	newSlice := make([]string, 0, size)
+	for _, s := range slices {
+		newSlice = append(newSlice, s...)
+	}
+
+	return newSlice
+}

@@ -11,7 +11,6 @@ import "C"
 
 import (
 	"errors"
-	"slices"
 	"strconv"
 	"unsafe"
 
@@ -598,7 +597,7 @@ func (client *baseClient) SInterCard(keys []string) (Result[int64], error) {
 }
 
 func (client *baseClient) SInterCardLimit(keys []string, limit int64) (Result[int64], error) {
-	args := slices.Concat([]string{utils.IntToString(int64(len(keys)))}, keys, []string{"LIMIT", utils.IntToString(limit)})
+	args := utils.Concat([]string{utils.IntToString(int64(len(keys)))}, keys, []string{"LIMIT", utils.IntToString(limit)})
 
 	result, err := client.executeCommand(C.SInterCard, args)
 	if err != nil {
