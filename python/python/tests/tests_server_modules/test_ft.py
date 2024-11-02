@@ -1001,10 +1001,6 @@ class TestFt:
             prefix + "11002",
             {
                 "title": "Star Wars: Episode V - The Empire Strikes Back",
-                "plot": "After the Rebels are brutally overpowered by the Empire on the ice planet Hoth,"
-                + " Luke Skywalker begins Jedi training with Yoda, while his friends are"
-                + " pursued by Darth Vader and a bounty hunter named Boba Fett all over the"
-                + " galaxy.",
                 "release_year": "1980",
                 "genre": "Action",
                 "rating": "8.7",
@@ -1017,8 +1013,6 @@ class TestFt:
             prefix + "11003",
             {
                 "title": "The Godfather",
-                "plot": "The aging patriarch of an organized crime dynasty transfers control of his"
-                + " clandestine empire to his reluctant son.",
                 "release_year": "1972",
                 "genre": "Drama",
                 "rating": "9.2",
@@ -1031,8 +1025,6 @@ class TestFt:
             prefix + "11004",
             {
                 "title": "Heat",
-                "plot": "A group of professional bank robbers start to feel the heat from police when they"
-                + " unknowingly leave a clue at their latest heist.",
                 "release_year": "1995",
                 "genre": "Thriller",
                 "rating": "8.2",
@@ -1045,7 +1037,6 @@ class TestFt:
             prefix + "11005",
             {
                 "title": "Star Wars: Episode VI - Return of the Jedi",
-                "plot": "The Rebels dispatch to Endor to destroy the second Empire's Death Star.",
                 "release_year": "1983",
                 "genre": "Action",
                 "rating": "8.3",
