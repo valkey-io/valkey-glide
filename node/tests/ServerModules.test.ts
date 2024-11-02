@@ -2120,13 +2120,13 @@ describe("Server Module Tests", () => {
 
                     // Non-existing key
                     expect(
-                        await GlideJson.objlen(client, "non_exiting_key", {
+                        await GlideJson.objlen(client, "non_existing_key", {
                             path: "$",
                         }),
                     ).toBeNull();
 
                     expect(
-                        await GlideJson.objlen(client, "non_exiting_key", {
+                        await GlideJson.objlen(client, "non_existing_key", {
                             path: ".",
                         }),
                     ).toBeNull();
@@ -2173,8 +2173,11 @@ describe("Server Module Tests", () => {
                     ).toEqual([["a", "b"]]);
 
                     expect(
-                        await GlideJson.objkeys(client, key, { path: "." }),
-                    ).toEqual(["a", "b"]);
+                        await GlideJson.objkeys(client, key, {
+                            path: ".",
+                            decoder: Decoder.Bytes,
+                        }),
+                    ).toEqual([Buffer.from("a"), Buffer.from("b")]);
 
                     expect(
                         await GlideJson.objkeys(client, key, { path: "$.." }),
@@ -2220,13 +2223,13 @@ describe("Server Module Tests", () => {
 
                     // Non-existing key
                     expect(
-                        await GlideJson.objkeys(client, "non_exiting_key", {
+                        await GlideJson.objkeys(client, "non_existing_key", {
                             path: "$",
                         }),
                     ).toBeNull();
 
                     expect(
-                        await GlideJson.objkeys(client, "non_exiting_key", {
+                        await GlideJson.objkeys(client, "non_existing_key", {
                             path: ".",
                         }),
                     ).toBeNull();
