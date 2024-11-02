@@ -59,3 +59,43 @@ func TestConvertMapToKeyValueStringArray(t *testing.T) {
 		})
 	}
 }
+
+func TestConcat(t *testing.T) {
+	// Define test cases
+	tests := []struct {
+		name     string
+		inputs   [][]string // Slice of slices to be concatenated
+		expected []string   // Expected result
+	}{
+		{
+			name:     "Multiple non-empty slices",
+			inputs:   [][]string{{"a", "b"}, {"c", "d"}},
+			expected: []string{"a", "b", "c", "d"},
+		},
+		{
+			name:     "Empty slice with non-empty",
+			inputs:   [][]string{{"a", "b"}, {}},
+			expected: []string{"a", "b"},
+		},
+		{
+			name:     "Multiple empty slices",
+			inputs:   [][]string{{}, {}},
+			expected: []string{},
+		},
+		{
+			name:     "Varied lengths",
+			inputs:   [][]string{{"1", "2"}, {"3"}, {"4", "5", "6"}},
+			expected: []string{"1", "2", "3", "4", "5", "6"},
+		},
+	}
+
+	// Run each test case
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Use the variadic argument to unpack the input slices
+			result := Concat(tt.inputs...)
+			// Use assert.Equal to compare the result with the expected output
+			assert.Equal(t, tt.expected, result, "The result of concatenation should match the expected output")
+		})
+	}
+}
