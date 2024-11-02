@@ -767,7 +767,7 @@ class TestFt:
         )
         result = await ft.aggregate(
             glide_client,
-            indexName=index_movies.encode("utf-8"),
+            index_name=index_movies.encode("utf-8"),
             query=b"*",
             options=ft_aggregate_options,
         )
