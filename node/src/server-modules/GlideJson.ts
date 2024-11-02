@@ -573,7 +573,7 @@ export class GlideJson {
 
     /**
      * Clears arrays or objects at the specified JSON path in the document stored at `key`.
-     * Numeric values are set to `0`, and boolean values are set to `false`, and string values are converted to empty strings.
+     * Numeric values are set to `0`, boolean values are set to `false`, and string values are converted to empty strings.
      * 
      * @param client - The client to execute the command.
      * @param key - The key of the JSON document.
@@ -581,7 +581,7 @@ export class GlideJson {
      * - (Optional) `path`: The JSON path to the arrays or objects to be cleared. Defaults to root if not provided.
      * @returns The number of containers cleared, numeric values zeroed, and booleans toggled to `false`,
      * and string values converted to empty strings.
-     * If `path` doesn't exist, or the value at `path` is already empty (e.g., an empty array, object, or string), 0 is returned.
+     * If `path` doesn't exist, or the value at `path` is already empty (e.g., an empty array, object, or string), `0` is returned.
      * If `key doesn't exist, an error is raised.
      *
      * @example
