@@ -733,7 +733,7 @@ async def nummultby(
     key: TEncodable,
     path: TEncodable,
     number: Union[int, float],
-) -> Optional[bytes]:
+) -> bytes:
     """
     Multiplies the JSON value(s) at the specified `path` by `number` within the JSON document stored at `key`.
 
@@ -744,7 +744,7 @@ async def nummultby(
         number (Union[int, float]): The number to multiply by.
 
     Returns:
-        Optional[bytes]:
+        bytes:
             For JSONPath (`path` starts with `$`):
                 Returns a bytes string representation of an array of bulk strings, indicating the new values after multiplication for each matched `path`.
                 If a value is not a number, its corresponding return value will be `null`.
@@ -767,7 +767,7 @@ async def nummultby(
     """
     args = ["JSON.NUMMULTBY", key, path, str(number)]
 
-    return cast(Optional[bytes], await client.custom_command(args))
+    return cast(bytes, await client.custom_command(args))
 
 
 async def objlen(
