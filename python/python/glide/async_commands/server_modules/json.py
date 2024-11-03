@@ -325,7 +325,7 @@ async def numincrby(
     key: TEncodable,
     path: TEncodable,
     number: Union[int, float],
-) -> Optional[bytes]:
+) -> bytes:
     """
     Increments or decrements the JSON value(s) at the specified `path` by `number` within the JSON document stored at `key`.
 
@@ -336,7 +336,7 @@ async def numincrby(
         number (Union[int, float]): The number to increment or decrement by.
 
     Returns:
-        Optional[bytes]:
+        bytes:
             For JSONPath (`path` starts with `$`):
                 Returns a bytes string representation of an array of bulk strings, indicating the new values after incrementing for each matched `path`.
                 If a value is not a number, its corresponding return value will be `null`.
@@ -359,7 +359,7 @@ async def numincrby(
     """
     args = ["JSON.NUMINCRBY", key, path, str(number)]
 
-    return cast(Optional[bytes], await client.custom_command(args))
+    return cast(bytes, await client.custom_command(args))
 
 
 async def toggle(

@@ -440,6 +440,9 @@ class TestJson:
         result = await json.numincrby(glide_client, key, "$.key1", -0.5)
         assert result == b"[-0.5]"  # Expect 0 - 0.5 = -0.5
 
+        result = await json.numincrby(glide_client, key, "$.key7", 5)
+        assert result == b"[null]"  # Expect 'null'
+
         # Test Legacy Path
         # Increment float value (key1) by 5 (integer)
         result = await json.numincrby(glide_client, key, "key1", 5)
@@ -486,3 +489,7 @@ class TestJson:
         # Check for Overflow in legacy
         with pytest.raises(RequestError):
             await json.numincrby(glide_client, key, ".key9", 1.7976931348623157e308)
+
+        # Check 'null' value
+        with pytest.raises(RequestError):
+            await json.numincrby(glide_client, key, ".key7", 5)
