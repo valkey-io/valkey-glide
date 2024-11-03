@@ -1764,5 +1764,10 @@ export async function withPromiseTimeout<T>(
     promise: Promise<T>,
     timeout = 3000,
 ) {
-    return Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject("Timeout"), timeout))]) as Promise<T>;
+    return Promise.race([
+        promise,
+        new Promise((_, reject) =>
+            setTimeout(() => reject("Timeout"), timeout),
+        ),
+    ]) as Promise<T>;
 }
