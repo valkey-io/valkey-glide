@@ -30,6 +30,7 @@ import {
     getServerVersion,
     parseCommandLineArgs,
     parseEndpoints,
+    withPromiseTimeout,
 } from "./TestUtilities";
 
 type TGlideClient = GlideClient | GlideClusterClient;
@@ -185,7 +186,7 @@ describe("PubSub", () => {
         index?: number,
     ) {
         if (method === MethodTesting.Async) {
-            const pubsubMessage = await client.getPubSubMessage();
+            const pubsubMessage = await withPromiseTimeout(client.getPubSubMessage());
             return pubsubMessage;
         } else if (method === MethodTesting.Sync) {
             const pubsubMessage = client.tryGetPubSubMessage();
