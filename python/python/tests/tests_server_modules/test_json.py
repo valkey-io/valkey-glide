@@ -758,6 +758,10 @@ class TestJson:
         result = await json.get(glide_client, key, "$..key1")  # type: ignore
         assert result == b"[-16500,[140,175],1380]"
 
+        # Check 'null' in legacy
+        with pytest.raises(RequestError):
+            await json.nummultby(glide_client, key, ".key7", 5)
+
         # Check for non-existent path in legacy
         with pytest.raises(RequestError):
             await json.nummultby(glide_client, key, ".key10", 51)
