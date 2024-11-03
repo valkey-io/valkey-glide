@@ -465,7 +465,7 @@ async def arrpop(
         >>> await json.arrpop(client, "doc", JsonArrPopOptions(path="$.a", index=1))
             [b'2']  # Pop second element from array at path $.a
         >>> await json.arrpop(client, "doc", JsonArrPopOptions(path="$..a"))
-            [b'true', b'5', None]  # Pop last elements from all arrays matching path `..a`
+            [b'true', b'5', None]  # Pop last elements from all arrays matching path `$..a`
 
         #### Using a legacy path (..) to pop the first matching array
         >>> await json.arrpop(client, "doc", JsonArrPopOptions(path="..a"))

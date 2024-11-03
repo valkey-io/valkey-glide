@@ -1900,6 +1900,7 @@ class TestJson:
                 glide_client, key, JsonArrPopOptions(path="non_existing_path")
             )
 
+        # Non existing key
         with pytest.raises(RequestError):
             await json.arrpop(
                 glide_client, "non_existing_key", JsonArrPopOptions(path="$.a")
@@ -1930,3 +1931,14 @@ class TestJson:
         assert (
             await json.arrpop(glide_client, key2, JsonArrPopOptions("[0]", 10)) == None
         )
+
+        # non jsonpath pops from all matching paths, even if one result is being returned
+        assert (
+            await json.set(
+                glide_client, key2, "$", '[[], ["a"], ["a", "b"], ["a", "b", "c"]]'
+            )
+            == OK
+        )
+
+        assert await json.arrpop(glide_client, key2, JsonArrPopOptions("[*]")) == b'"a"'
+        assert await json.get(glide_client, key2, ".") == b'[[],[],["a"],["a","b"]]'
