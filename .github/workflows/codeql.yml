@@ -2,33 +2,21 @@ name: "CodeQL"
 
 on:
     push:
-<<<<<<< HEAD
-        branches: 
-=======
         branches:
->>>>>>> bcc6b00b (CI - Minimal and full CI matrix impl (#2051))
             - "main"
             - "v.?[0-9]+.[0-9]+.[0-9]+"
             - "v.?[0-9]+.[0-9]+"
             - "v?[0-9]+.[0-9]+.[0-9]+"
             - "v?[0-9]+.[0-9]+"
-<<<<<<< HEAD
             - release-*
     pull_request:
-        branches: 
-=======
-    pull_request:
         branches:
->>>>>>> bcc6b00b (CI - Minimal and full CI matrix impl (#2051))
             - "main"
             - "v.?[0-9]+.[0-9]+.[0-9]+"
             - "v.?[0-9]+.[0-9]+"
             - "v?[0-9]+.[0-9]+.[0-9]+"
             - "v?[0-9]+.[0-9]+"
-<<<<<<< HEAD
             - release-*
-=======
->>>>>>> bcc6b00b (CI - Minimal and full CI matrix impl (#2051))
     schedule:
         - cron: "37 18 * * 6"
 

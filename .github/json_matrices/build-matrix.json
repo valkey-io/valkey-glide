@@ -5,16 +5,11 @@
         "RUNNER": "ubuntu-latest",
         "ARCH": "x64",
         "TARGET": "x86_64-unknown-linux-gnu",
-<<<<<<< HEAD
         "PACKAGE_MANAGERS": [
             "pypi",
             "npm",
             "maven"
         ]
-=======
-        "PACKAGE_MANAGERS": ["pypi", "npm"],
-        "run": ["always", "python", "node", "java"]
->>>>>>> bcc6b00b (CI - Minimal and full CI matrix impl (#2051))
     },
     {
         "OS": "ubuntu",
@@ -26,18 +21,12 @@
         ],
         "ARCH": "arm64",
         "TARGET": "aarch64-unknown-linux-gnu",
-<<<<<<< HEAD
         "PACKAGE_MANAGERS": [
             "pypi",
             "npm",
             "maven"
         ],
         "CONTAINER": "2_28"
-=======
-        "PACKAGE_MANAGERS": ["pypi", "npm"],
-        "CONTAINER": "2_28",
-        "run": ["python", "node", "java"]
->>>>>>> bcc6b00b (CI - Minimal and full CI matrix impl (#2051))
     },
     {
         "OS": "macos",
@@ -45,16 +34,11 @@
         "RUNNER": "macos-12",
         "ARCH": "x64",
         "TARGET": "x86_64-apple-darwin",
-<<<<<<< HEAD
         "PACKAGE_MANAGERS": [
             "pypi",
             "npm",
             "maven"
         ]
-=======
-        "PACKAGE_MANAGERS": ["pypi", "npm"],
-        "run": ["python", "node", "java"]
->>>>>>> bcc6b00b (CI - Minimal and full CI matrix impl (#2051))
     },
     {
         "OS": "macos",
@@ -62,16 +46,11 @@
         "RUNNER": "macos-latest",
         "ARCH": "arm64",
         "TARGET": "aarch64-apple-darwin",
-<<<<<<< HEAD
         "PACKAGE_MANAGERS": [
             "pypi",
             "npm",
             "maven"
         ]
-=======
-        "PACKAGE_MANAGERS": ["pypi", "npm"],
-        "run": ["python", "node", "java"]
->>>>>>> bcc6b00b (CI - Minimal and full CI matrix impl (#2051))
     },
     {
         "OS": "ubuntu",
@@ -85,14 +64,9 @@
         ],
         "IMAGE": "node:lts-alpine3.19",
         "CONTAINER_OPTIONS": "--user root --privileged --rm",
-<<<<<<< HEAD
         "PACKAGE_MANAGERS": [
             "npm"
         ]
-=======
-        "PACKAGE_MANAGERS": ["npm"],
-        "run": ["node"]
->>>>>>> bcc6b00b (CI - Minimal and full CI matrix impl (#2051))
     },
     {
         "OS": "ubuntu",
@@ -102,13 +76,8 @@
         "RUNNER": "ubuntu-latest",
         "IMAGE": "node:lts-alpine3.19",
         "CONTAINER_OPTIONS": "--user root --privileged",
-<<<<<<< HEAD
         "PACKAGE_MANAGERS": [
             "npm"
         ]
-=======
-        "PACKAGE_MANAGERS": ["npm"],
-        "run": ["node"]
->>>>>>> bcc6b00b (CI - Minimal and full CI matrix impl (#2051))
     }
 ]

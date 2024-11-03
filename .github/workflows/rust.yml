@@ -40,21 +40,12 @@ env:
 
 jobs:
     load-engine-matrix:
-<<<<<<< HEAD
-      runs-on: ubuntu-latest
-      outputs:
-          matrix: ${{ steps.load-engine-matrix.outputs.matrix }}
-      steps:
-          - name: Checkout
-            uses: actions/checkout@v4
-=======
         runs-on: ubuntu-latest
         outputs:
             matrix: ${{ steps.load-engine-matrix.outputs.matrix }}
         steps:
             - name: Checkout
               uses: actions/checkout@v4
->>>>>>> bcc6b00b (CI - Minimal and full CI matrix impl (#2051))
 
             - name: Load the engine matrix
               id: load-engine-matrix
@@ -72,7 +63,6 @@ jobs:
 
         steps:
             - uses: actions/checkout@v4
-              
 
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
@@ -107,7 +97,6 @@ jobs:
         timeout-minutes: 30
         steps:
             - uses: actions/checkout@v4
-              
 
             - uses: ./.github/workflows/lint-rust
               with:
