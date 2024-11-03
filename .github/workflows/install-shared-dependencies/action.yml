@@ -23,14 +23,8 @@ inputs:
             - x86_64-unknown-linux-musl
     engine-version:
         description: "Engine version to install"
-<<<<<<< HEAD
         required: false
         type: string
-=======
-        required: true
-        type: string
-
->>>>>>> bcc6b00b (CI - Minimal and full CI matrix impl (#2051))
     github-token:
         description: "GITHUB_TOKEN, GitHub App installation access token"
         required: true

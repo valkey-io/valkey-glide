@@ -41,21 +41,12 @@ runs:
         - name: Clean repository for musl on ARM64
           shell: bash
           run: |
-<<<<<<< HEAD
-            git config --global --add safe.directory "${{ inputs.workspace }}"
-            git fetch origin ${{ github.sha }}
-            git checkout ${{ github.sha }}
-            git clean -xdf
-            git reset --hard
-            
-=======
               git config --global --add safe.directory "${{ inputs.workspace }}"
+              git fetch origin ${{ github.sha }}
+              git checkout ${{ github.sha }}
               git clean -xdf
               git reset --hard
-              git submodule sync
-              git submodule update --init --recursive
 
->>>>>>> bcc6b00b (CI - Minimal and full CI matrix impl (#2051))
         - name: Set up access for musl on ARM
           shell: bash
           run: |

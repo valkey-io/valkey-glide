@@ -79,7 +79,6 @@ jobs:
                 host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output).include }}
         steps:
             - uses: actions/checkout@v4
-              
 
             - name: Set up Python
               uses: actions/setup-python@v5
@@ -144,14 +143,7 @@ jobs:
                 host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output).include }}
         steps:
             - uses: actions/checkout@v4
-<<<<<<< HEAD
-              
-        
-=======
-              with:
-                  submodules: recursive
 
->>>>>>> bcc6b00b (CI - Minimal and full CI matrix impl (#2051))
             - name: Set up Python
               uses: actions/setup-python@v5
               with:
@@ -186,7 +178,6 @@ jobs:
         timeout-minutes: 15
         steps:
             - uses: actions/checkout@v4
-              
 
             - name: lint rust
               uses: ./.github/workflows/lint-rust
@@ -266,50 +257,18 @@ jobs:
                   name: smoke-test-report-amazon-linux
                   path: |
                       python/python/tests/pytest_report.html
-<<<<<<< HEAD
-    
+
     test-modules:
         if: (github.repository_owner == 'valkey-io' && github.event_name == 'workflow_dispatch') || github.event.pull_request.head.repo.owner.login == 'valkey-io'
         environment: AWS_ACTIONS
         name: Running Module Tests
         runs-on: [self-hosted, linux, ARM64]
         timeout-minutes: 15
-        
-=======
 
-    start-self-hosted-runner:
-        if: github.event.pull_request.head.repo.owner.login == 'valkey-io'
-        runs-on: ubuntu-latest
-        environment: AWS_ACTIONS
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v4
-
-            - name: Start self hosted EC2 runner
-              uses: ./.github/workflows/start-self-hosted-runner
-              with:
-                  role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
-                  aws-region: ${{ secrets.AWS_REGION }}
-                  ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
-
-    test-modules:
-        needs: [start-self-hosted-runner, get-matrices]
-        name: Running Module Tests
-        runs-on: ${{ matrix.host.RUNNER }}
-        timeout-minutes: 35
-        strategy:
-            fail-fast: false
-            matrix:
-                engine: ${{ fromJson(needs.get-matrices.outputs.engine-matrix-output) }}
-                python: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output) }}
-                host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output).include }}
-
->>>>>>> bcc6b00b (CI - Minimal and full CI matrix impl (#2051))
         steps:
             - name: Setup self-hosted runner access
               if: ${{ contains(matrix.host.RUNNER, 'self-hosted') }}
               run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
-<<<<<<< HEAD
 
             - uses: actions/checkout@v4
 
@@ -320,27 +279,6 @@ jobs:
                   target: aarch64-unknown-linux-gnu
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
-=======
-
-            - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
-
-            - name: Setup Python for self-hosted Ubuntu runners
-              run: |
-                  sudo apt update -y
-                  sudo apt upgrade -y
-                  sudo apt install python3 python3-venv python3-pip -y
-
-            - name: Build Python wrapper
-              uses: ./.github/workflows/build-python-wrapper
-              with:
-                  os: ${{ matrix.host.OS }}
-                  target: ${{ matrix.host.TARGET }}
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-                  engine-version: ${{ matrix.engine.version }}
-
->>>>>>> bcc6b00b (CI - Minimal and full CI matrix impl (#2051))
             - name: Test with pytest
               working-directory: ./python
               run: |
@@ -353,10 +291,6 @@ jobs:
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-<<<<<<< HEAD
                   name: modules-test-report
-=======
-                  name: modules-test-report-${{ matrix.host.TARGET }}-python-${{ matrix.python }}-server-${{ matrix.engine.version }}
->>>>>>> bcc6b00b (CI - Minimal and full CI matrix impl (#2051))
                   path: |
                       python/python/tests/pytest_report.html

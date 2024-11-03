@@ -203,16 +203,11 @@ jobs:
               if: ${{ matrix.build.ARCH == 'arm64' }}
               shell: bash
               run: |
-<<<<<<< HEAD
-                echo "Resetting repository"
-                git clean -xdf
-                git reset --hard
-                git fetch
-                git checkout ${{ github.sha }}
-=======
-                  git reset --hard
+                  echo "Resetting repository"
                   git clean -xdf
->>>>>>> bcc6b00b (CI - Minimal and full CI matrix impl (#2051))
+                  git reset --hard
+                  git fetch
+                  git checkout ${{ github.sha }}
 
     publish-base-to-npm:
         if: github.event_name != 'pull_request'

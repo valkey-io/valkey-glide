@@ -51,24 +51,7 @@ env:
     CARGO_TERM_COLOR: always
 
 jobs:
-<<<<<<< HEAD
-    load-engine-matrix:
-        runs-on: ubuntu-latest
-        outputs:
-            matrix: ${{ steps.load-engine-matrix.outputs.matrix }}
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v4
-
-            - name: Load the engine matrix
-              id: load-engine-matrix
-              shell: bash
-              run: echo "matrix=$(jq -c . < .github/json_matrices/engine-matrix.json)" >> $GITHUB_OUTPUT
-
-    test-ubuntu-latest:
-=======
     get-matrices:
->>>>>>> bcc6b00b (CI - Minimal and full CI matrix impl (#2051))
         runs-on: ubuntu-latest
         # Avoid running on schedule for forks
         if: (github.repository_owner == 'valkey-io' || github.event_name != 'schedule')
@@ -97,17 +80,11 @@ jobs:
                 node: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output)}}
         steps:
             - uses: actions/checkout@v4
-              
 
-<<<<<<< HEAD
-            - name: Use Node.js 16.x
-              uses: actions/setup-node@v4
-=======
             - name: Setup Node
               uses: actions/setup-node@v4
               env:
                   ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
->>>>>>> bcc6b00b (CI - Minimal and full CI matrix impl (#2051))
               with:
                   node-version: ${{ matrix.node }}
 
@@ -161,7 +138,6 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
-              
 
             - name: lint node rust
               uses: ./.github/workflows/lint-rust
@@ -232,7 +208,6 @@ jobs:
                   apk add git
 
             - uses: actions/checkout@v4
-              
 
             - name: Setup musl on Linux
               uses: ./.github/workflows/setup-musl-on-linux
@@ -278,7 +253,6 @@ jobs:
               run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
 
             - uses: actions/checkout@v4
-              
 
             - name: Use Node.js 16.x
               uses: actions/setup-node@v4

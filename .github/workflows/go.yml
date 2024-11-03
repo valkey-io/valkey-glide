@@ -2,14 +2,10 @@ name: Go CI
 
 on:
     push:
-<<<<<<< HEAD
         branches:
             - main
             - release-*
             - v*
-=======
-        branches: ["main"]
->>>>>>> bcc6b00b (CI - Minimal and full CI matrix impl (#2051))
         paths:
             - glide-core/src/**
             - glide-core/redis-rs/redis/src/**
@@ -77,7 +73,6 @@ jobs:
 
         steps:
             - uses: actions/checkout@v4
-              
 
             - name: Set up Go ${{ matrix.go }}
               uses: actions/setup-go@v5
@@ -207,7 +202,6 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
-              
 
             - uses: ./.github/workflows/lint-rust
               with:
