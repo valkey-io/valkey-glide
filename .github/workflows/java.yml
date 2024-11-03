@@ -83,7 +83,6 @@ jobs:
 
         steps:
             - uses: actions/checkout@v4
-              
 
             - uses: gradle/actions/wrapper-validation@v3
 
@@ -207,7 +206,6 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
-              
 
             - uses: ./.github/workflows/lint-rust
               with:
@@ -226,7 +224,6 @@ jobs:
               run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
 
             - uses: actions/checkout@v4
-              
 
             - name: Set up JDK
               uses: actions/setup-java@v4
