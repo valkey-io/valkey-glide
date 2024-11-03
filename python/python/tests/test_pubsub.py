@@ -13,9 +13,9 @@ from glide.config import (
     GlideClusterClientConfiguration,
     ProtocolVersion,
 )
-from glide.constants import OK, TEncodable
+from glide.constants import OK
 from glide.exceptions import ConfigurationError
-from glide.glide_client import BaseClient, GlideClient, GlideClusterClient, TGlideClient
+from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from tests.conftest import create_client
 from tests.utils.utils import check_if_server_version_lt, get_random_string
 

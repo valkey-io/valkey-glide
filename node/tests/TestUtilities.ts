@@ -1349,6 +1349,9 @@ export async function transactionTest(
     baseTransaction.xgroupDestroy(key9, groupName2);
     responseData.push(["xgroupDestroy(key9, groupName2)", true]);
 
+    baseTransaction.wait(1, 200);
+    responseData.push(["wait(1, 200)", 1]);
+
     baseTransaction.rename(key9, key10);
     responseData.push(["rename(key9, key10)", "OK"]);
     baseTransaction.exists([key10]);
@@ -1713,9 +1716,6 @@ export async function transactionTest(
         responseData.push(["sortReadOnly(key21)", ["1", "2", "3"]]);
     }
 
-    baseTransaction.wait(1, 200);
-    if (gte(version, "7.0.0")) responseData.push(["wait(1, 200)", 1]);
-    else responseData.push(["wait(1, 200)", 0]);
     return responseData;
 }
 

@@ -86,8 +86,6 @@ jobs:
                     echo "No cleaning needed"
                   fi
             - uses: actions/checkout@v4
-              
-
             - name: Set up JDK
               uses: actions/setup-java@v4
               with:
@@ -229,7 +227,6 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@v4
-              
 
             - name: Set up JDK
               uses: actions/setup-java@v4
