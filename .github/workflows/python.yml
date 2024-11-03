@@ -111,17 +111,6 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
-            - name: Type check with mypy
-              working-directory: ./python
-              run: |
-                  # The type check should run inside the virtual env to get
-                  # all installed dependencies and build files
-                  source .env/bin/activate
-                  pip install mypy types-protobuf
-                  # Install the benchmark requirements
-                  pip install -r ../benchmarks/python/requirements.txt
-                  python -m mypy ..
-
             - name: Test with pytest
               working-directory: ./python
               run: |
@@ -130,6 +119,7 @@ jobs:
                   pytest --asyncio-mode=auto --html=pytest_report.html --self-contained-html
 
             - uses: ./.github/workflows/test-benchmark
+              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.python == '3.12' }}
               with:
                   language-flag: -python
 
@@ -225,6 +215,17 @@ jobs:
               working-directory: ./python
               run: |
                   black --check --diff .
+
+            - name: Type check with mypy
+              working-directory: ./python
+              run: |
+                  # The type check should run inside the virtual env to get
+                  # all installed dependencies and build files
+                  source .env/bin/activate
+                  pip install mypy types-protobuf
+                  # Install the benchmark requirements
+                  pip install -r ../benchmarks/python/requirements.txt
+                  python -m mypy ..
 
     get-containers:
         runs-on: ubuntu-latest

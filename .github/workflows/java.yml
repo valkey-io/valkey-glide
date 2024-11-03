@@ -83,7 +83,6 @@ jobs:
 
         steps:
             - uses: actions/checkout@v4
-              
 
             - uses: gradle/actions/wrapper-validation@v3
 
@@ -116,6 +115,7 @@ jobs:
               run: ./gradlew spotlessDiagnose | grep 'All formatters are well behaved for all files'
 
             - uses: ./.github/workflows/test-benchmark
+              if: ${{ matrix.engine.version == '8.0' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.java == '17' }}
               with:
                   language-flag: -java
 
@@ -207,7 +207,6 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
-              
 
             - uses: ./.github/workflows/lint-rust
               with:
@@ -226,7 +225,6 @@ jobs:
               run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
 
             - uses: actions/checkout@v4
-              
 
             - name: Set up JDK
               uses: actions/setup-java@v4

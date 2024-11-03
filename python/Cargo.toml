@@ -16,7 +16,7 @@ pyo3 = { version = "^0.22", features = [
     "num-bigint",
     "gil-refs",
 ] }
-bytes = { version = "1.6.0" }
+bytes = { version = "^1.8" }
 redis = { path = "../glide-core/redis-rs/redis", features = [
     "aio",
     "tokio-comp",

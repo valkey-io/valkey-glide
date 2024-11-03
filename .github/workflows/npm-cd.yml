@@ -325,8 +325,6 @@ jobs:
             - name: Checkout
               if: ${{  matrix.build.TARGET != 'aarch64-unknown-linux-musl'}}
               uses: actions/checkout@v4
-              with:
-                  submodules: "true"
 
             - name: Setup for musl
               if: ${{ contains(matrix.build.TARGET, 'musl') }}

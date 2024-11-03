@@ -52,6 +52,9 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
             - name: Start self hosted EC2 runner
               uses: ./.github/workflows/start-self-hosted-runner
               with:

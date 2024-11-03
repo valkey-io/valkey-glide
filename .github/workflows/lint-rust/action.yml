@@ -14,7 +14,6 @@ runs:
     using: "composite"
     steps:
         - uses: actions/checkout@v4
-          
 
         - name: Install Rust toolchain and protoc
           uses: ./.github/workflows/install-rust-and-protoc
