@@ -186,7 +186,9 @@ describe("PubSub", () => {
         index?: number,
     ) {
         if (method === MethodTesting.Async) {
-            const pubsubMessage = await withPromiseTimeout(client.getPubSubMessage());
+            const pubsubMessage = await withPromiseTimeout(
+                client.getPubSubMessage(),
+            );
             return pubsubMessage;
         } else if (method === MethodTesting.Sync) {
             const pubsubMessage = client.tryGetPubSubMessage();
