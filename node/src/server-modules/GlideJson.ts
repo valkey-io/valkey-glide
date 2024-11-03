@@ -574,7 +574,7 @@ export class GlideJson {
     /**
      * Clears arrays or objects at the specified JSON path in the document stored at `key`.
      * Numeric values are set to `0`, boolean values are set to `false`, and string values are converted to empty strings.
-     * 
+     *
      * @param client - The client to execute the command.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
@@ -594,7 +594,7 @@ export class GlideJson {
      * // Output: '[{"obj":{},"arr":[],"str":"","bool":false,"int":0,"float":0.0,"nullVal":null}]'
      * console.log(await GlideJson.clear(client, "doc", {path: "$.*"}));
      * // Output: 0 - No further clearing needed since the containers are already empty and the values are defaults.
-     * 
+     *
      * console.log(await GlideJson.set(client, "doc", "$", '{"a": 1, "b": {"a": [5, 6, 7], "b": {"a": true}}, "c": {"a": "value", "b": {"a": 3.5}}, "d": {"a": {"foo": "foo"}}, "nullVal": null}'));
      * // Output: 'OK'
      * console.log(await GlideJson.clear(client, "doc", {path: "b.a[1:3]"}));
@@ -603,7 +603,7 @@ export class GlideJson {
      * // Output: 0 - No elements cleared since specified slice has already been cleared.
      * console.log(await GlideJson.get(client, "doc", {path: "$..a"}));
      * // Output: '[1,[5,0,0],true,"value",3.5,{"foo":"foo"}]'
-     * 
+     *
      * console.log(await GlideJson.clear(client, "doc", {path: "$..a"}));
      * // Output: 6 - All numeric, boolean, and string values across paths are cleared.
      * console.log(await GlideJson.get(client, "doc", {path: "$..a"}));
@@ -620,7 +620,7 @@ export class GlideJson {
         if (options) {
             args.push(options.path);
         }
-        
+
         return _executeCommand<ReturnTypeJson<number>>(client, args);
     }
 
