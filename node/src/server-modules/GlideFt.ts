@@ -409,7 +409,7 @@ export class GlideFt {
         indexName: GlideString,
         alias: GlideString
     ): Promise<"OK"> {
-        const args: GlideString[] = ["FT.ADDALIAS", alias, indexName];
+        const args: GlideString[] = ["FT.ALIASADD", alias, indexName];
         return _handleCustomCommand(client, args, {
             decoder: Decoder.String
         }) as Promise<"OK">;
