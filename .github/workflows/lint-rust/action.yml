@@ -12,7 +12,6 @@ inputs:
 
 runs:
     using: "composite"
-
     steps:
         - uses: actions/checkout@v4
           with:
@@ -24,8 +23,6 @@ runs:
               github-token: ${{ inputs.github-token }}
 
         - uses: Swatinem/rust-cache@v2
-          with:
-              github-token: ${{ inputs.github-token }}
 
         - run: cargo fmt --all -- --check
           working-directory: ${{ inputs.cargo-toml-folder }}
@@ -38,7 +35,7 @@ runs:
           # We run clippy without features
         - run: cargo clippy --all-targets -- -D warnings
           working-directory: ${{ inputs.cargo-toml-folder }}
-          shell: bash          
+          shell: bash
 
         - run: |
               cargo update

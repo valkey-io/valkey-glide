@@ -167,9 +167,7 @@ func handleStringOrNullResponse(response *C.struct_CommandResponse) (Result[stri
 	return convertCharArrayToString(response, true)
 }
 
-func handleStringArrayResponse(response *C.struct_CommandResponse) ([]Result[string], error) {
-	defer C.free_command_response(response)
-
+func convertStringArray(response *C.struct_CommandResponse) ([]Result[string], error) {
 	typeErr := checkResponseType(response, C.Array, false)
 	if typeErr != nil {
 		return nil, typeErr
@@ -184,6 +182,12 @@ func handleStringArrayResponse(response *C.struct_CommandResponse) ([]Result[str
 		slice = append(slice, res)
 	}
 	return slice, nil
+}
+
+func handleStringArrayResponse(response *C.struct_CommandResponse) ([]Result[string], error) {
+	defer C.free_command_response(response)
+
+	return convertStringArray(response)
 }
 
 func handleStringArrayOrNullResponse(response *C.struct_CommandResponse) ([]Result[string], error) {
@@ -291,6 +295,36 @@ func handleStringToStringMapResponse(response *C.struct_CommandResponse) (map[Re
 			return nil, err
 		}
 		value, err := convertCharArrayToString(v.map_value, true)
+		if err != nil {
+			return nil, err
+		}
+		m[key] = value
+	}
+
+	return m, nil
+}
+
+func handleStringToStringArrayMapOrNullResponse(
+	response *C.struct_CommandResponse,
+) (map[Result[string]][]Result[string], error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Map, true)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	if response.response_type == C.Null {
+		return nil, nil
+	}
+
+	m := make(map[Result[string]][]Result[string], response.array_value_len)
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		key, err := convertCharArrayToString(v.map_key, true)
+		if err != nil {
+			return nil, err
+		}
+		value, err := convertStringArray(v.map_value)
 		if err != nil {
 			return nil, err
 		}

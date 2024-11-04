@@ -534,6 +534,8 @@ func (suite *GlideTestSuite) TestAppend_existingAndNonExistingKeys() {
 }
 
 func (suite *GlideTestSuite) TestLCS_existingAndNonExistingKeys() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key1 := "{key}" + uuid.New().String()
 		key2 := "{key}" + uuid.New().String()
@@ -1599,6 +1601,8 @@ func (suite *GlideTestSuite) TestSInterCard() {
 }
 
 func (suite *GlideTestSuite) TestSInterCardLimit() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
+
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key1 := "{key}-1-" + uuid.NewString()
 		key2 := "{key}-2-" + uuid.NewString()
@@ -1947,6 +1951,524 @@ func (suite *GlideTestSuite) TestLInsert() {
 
 		res7, err := client.LInsert(key2, api.Before, "value5", "value6")
 		assert.Equal(suite.T(), api.CreateNilInt64Result(), res7)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestBLPop() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		listKey1 := "{listKey}-1-" + uuid.NewString()
+		listKey2 := "{listKey}-2-" + uuid.NewString()
+
+		res1, err := client.LPush(listKey1, []string{"value1", "value2"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res1.Value())
+
+		res2, err := client.BLPop([]string{listKey1, listKey2}, float64(0.5))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), []api.Result[string]{api.CreateStringResult(listKey1), api.CreateStringResult("value2")}, res2)
+
+		res3, err := client.BLPop([]string{listKey2}, float64(1.0))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), ([]api.Result[string])(nil), res3)
+
+		key := uuid.NewString()
+		suite.verifyOK(client.Set(key, "value"))
+
+		res4, err := client.BLPop([]string{key}, float64(1.0))
+		assert.Equal(suite.T(), ([]api.Result[string])(nil), res4)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestBRPop() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		listKey1 := "{listKey}-1-" + uuid.NewString()
+		listKey2 := "{listKey}-2-" + uuid.NewString()
+
+		res1, err := client.LPush(listKey1, []string{"value1", "value2"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res1.Value())
+
+		res2, err := client.BRPop([]string{listKey1, listKey2}, float64(0.5))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), []api.Result[string]{api.CreateStringResult(listKey1), api.CreateStringResult("value1")}, res2)
+
+		res3, err := client.BRPop([]string{listKey2}, float64(1.0))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), ([]api.Result[string])(nil), res3)
+
+		key := uuid.NewString()
+		suite.verifyOK(client.Set(key, "value"))
+
+		res4, err := client.BRPop([]string{key}, float64(1.0))
+		assert.Equal(suite.T(), ([]api.Result[string])(nil), res4)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestRPushX() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.NewString()
+		key2 := uuid.NewString()
+		key3 := uuid.NewString()
+
+		res1, err := client.RPush(key1, []string{"value1"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res1.Value())
+
+		res2, err := client.RPushX(key1, []string{"value2", "value3", "value4"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), res2.Value())
+
+		res3, err := client.LRange(key1, int64(0), int64(-1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			[]api.Result[string]{
+				api.CreateStringResult("value1"),
+				api.CreateStringResult("value2"),
+				api.CreateStringResult("value3"),
+				api.CreateStringResult("value4"),
+			},
+			res3,
+		)
+
+		res4, err := client.RPushX(key2, []string{"value1"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res4.Value())
+		assert.Equal(suite.T(), false, res4.IsNil())
+
+		res5, err := client.LRange(key2, int64(0), int64(-1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), []api.Result[string]{}, res5)
+
+		suite.verifyOK(client.Set(key3, "value"))
+
+		res6, err := client.RPushX(key3, []string{"value1"})
+		assert.Equal(suite.T(), api.CreateNilInt64Result(), res6)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		res7, err := client.RPushX(key2, []string{})
+		assert.Equal(suite.T(), api.CreateNilInt64Result(), res7)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestLPushX() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.NewString()
+		key2 := uuid.NewString()
+		key3 := uuid.NewString()
+
+		res1, err := client.LPush(key1, []string{"value1"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res1.Value())
+
+		res2, err := client.LPushX(key1, []string{"value2", "value3", "value4"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), res2.Value())
+
+		res3, err := client.LRange(key1, int64(0), int64(-1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			[]api.Result[string]{
+				api.CreateStringResult("value4"),
+				api.CreateStringResult("value3"),
+				api.CreateStringResult("value2"),
+				api.CreateStringResult("value1"),
+			},
+			res3,
+		)
+
+		res4, err := client.LPushX(key2, []string{"value1"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res4.Value())
+		assert.Equal(suite.T(), false, res4.IsNil())
+
+		res5, err := client.LRange(key2, int64(0), int64(-1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), []api.Result[string]{}, res5)
+
+		suite.verifyOK(client.Set(key3, "value"))
+
+		res6, err := client.LPushX(key3, []string{"value1"})
+		assert.Equal(suite.T(), api.CreateNilInt64Result(), res6)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		res7, err := client.LPushX(key2, []string{})
+		assert.Equal(suite.T(), api.CreateNilInt64Result(), res7)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestLMPopAndLMPopCount() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1" + uuid.NewString()
+		key2 := "{key}-2" + uuid.NewString()
+		key3 := "{key}-3" + uuid.NewString()
+
+		res1, err := client.LMPop([]string{key1}, api.Left)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), (map[api.Result[string]][]api.Result[string])(nil), res1)
+
+		res2, err := client.LMPopCount([]string{key1}, api.Left, int64(1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), (map[api.Result[string]][]api.Result[string])(nil), res2)
+
+		res3, err := client.LPush(key1, []string{"one", "two", "three", "four", "five"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(5), res3.Value())
+		res4, err := client.LPush(key2, []string{"one", "two", "three", "four", "five"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(5), res4.Value())
+
+		res5, err := client.LMPop([]string{key1}, api.Left)
+		assert.Nil(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			map[api.Result[string]][]api.Result[string]{api.CreateStringResult(key1): {api.CreateStringResult("five")}},
+			res5,
+		)
+
+		res6, err := client.LMPopCount([]string{key2, key1}, api.Right, int64(2))
+		assert.Nil(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			map[api.Result[string]][]api.Result[string]{
+				api.CreateStringResult(key2): {api.CreateStringResult("one"), api.CreateStringResult("two")},
+			},
+			res6,
+		)
+
+		suite.verifyOK(client.Set(key3, "value"))
+
+		res7, err := client.LMPop([]string{key3}, api.Left)
+		assert.Equal(suite.T(), (map[api.Result[string]][]api.Result[string])(nil), res7)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		res8, err := client.LMPop([]string{key3}, "Invalid")
+		assert.Equal(suite.T(), (map[api.Result[string]][]api.Result[string])(nil), res8)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestBLMPopAndBLMPopCount() {
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1" + uuid.NewString()
+		key2 := "{key}-2" + uuid.NewString()
+		key3 := "{key}-3" + uuid.NewString()
+
+		res1, err := client.BLMPop([]string{key1}, api.Left, float64(0.1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), (map[api.Result[string]][]api.Result[string])(nil), res1)
+
+		res2, err := client.BLMPopCount([]string{key1}, api.Left, int64(1), float64(0.1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), (map[api.Result[string]][]api.Result[string])(nil), res2)
+
+		res3, err := client.LPush(key1, []string{"one", "two", "three", "four", "five"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(5), res3.Value())
+		res4, err := client.LPush(key2, []string{"one", "two", "three", "four", "five"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(5), res4.Value())
+
+		res5, err := client.BLMPop([]string{key1}, api.Left, float64(0.1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			map[api.Result[string]][]api.Result[string]{api.CreateStringResult(key1): {api.CreateStringResult("five")}},
+			res5,
+		)
+
+		res6, err := client.BLMPopCount([]string{key2, key1}, api.Right, int64(2), float64(0.1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			map[api.Result[string]][]api.Result[string]{
+				api.CreateStringResult(key2): {api.CreateStringResult("one"), api.CreateStringResult("two")},
+			},
+			res6,
+		)
+
+		suite.verifyOK(client.Set(key3, "value"))
+
+		res7, err := client.BLMPop([]string{key3}, api.Left, float64(0.1))
+		assert.Equal(suite.T(), (map[api.Result[string]][]api.Result[string])(nil), res7)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestLSet() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		nonExistentKey := uuid.NewString()
+
+		res1, err := client.LSet(nonExistentKey, int64(0), "zero")
+		assert.Equal(suite.T(), api.CreateNilStringResult(), res1)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		res2, err := client.LPush(key, []string{"four", "three", "two", "one"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), res2.Value())
+
+		res3, err := client.LSet(key, int64(10), "zero")
+		assert.Equal(suite.T(), api.CreateNilStringResult(), res3)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		res4, err := client.LSet(key, int64(0), "zero")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "OK", res4.Value())
+
+		res5, err := client.LRange(key, int64(0), int64(-1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			[]api.Result[string]{
+				api.CreateStringResult("zero"),
+				api.CreateStringResult("two"),
+				api.CreateStringResult("three"),
+				api.CreateStringResult("four"),
+			},
+			res5,
+		)
+
+		res6, err := client.LSet(key, int64(-1), "zero")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "OK", res6.Value())
+
+		res7, err := client.LRange(key, int64(0), int64(-1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			[]api.Result[string]{
+				api.CreateStringResult("zero"),
+				api.CreateStringResult("two"),
+				api.CreateStringResult("three"),
+				api.CreateStringResult("zero"),
+			},
+			res7,
+		)
+	})
+}
+
+func (suite *GlideTestSuite) TestLMove() {
+	if suite.serverVersion < "6.2.0" {
+		suite.T().Skip("This feature is added in version 6.2.0")
+	}
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1" + uuid.NewString()
+		key2 := "{key}-2" + uuid.NewString()
+		nonExistentKey := "{key}-3" + uuid.NewString()
+		nonListKey := "{key}-4" + uuid.NewString()
+
+		res1, err := client.LMove(key1, key2, api.Left, api.Right)
+		assert.Equal(suite.T(), api.CreateNilStringResult(), res1)
+		assert.Nil(suite.T(), err)
+
+		res2, err := client.LPush(key1, []string{"four", "three", "two", "one"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), res2.Value())
+
+		// only source exists, only source elements gets popped, creates a list at nonExistingKey
+		res3, err := client.LMove(key1, nonExistentKey, api.Right, api.Left)
+		assert.Equal(suite.T(), "four", res3.Value())
+		assert.Nil(suite.T(), err)
+
+		res4, err := client.LRange(key1, int64(0), int64(-1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			[]api.Result[string]{
+				api.CreateStringResult("one"),
+				api.CreateStringResult("two"),
+				api.CreateStringResult("three"),
+			},
+			res4,
+		)
+
+		// source and destination are the same, performing list rotation, "one" gets popped and added back
+		res5, err := client.LMove(key1, key1, api.Left, api.Left)
+		assert.Equal(suite.T(), "one", res5.Value())
+		assert.Nil(suite.T(), err)
+
+		res6, err := client.LRange(key1, int64(0), int64(-1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			[]api.Result[string]{
+				api.CreateStringResult("one"),
+				api.CreateStringResult("two"),
+				api.CreateStringResult("three"),
+			},
+			res6,
+		)
+		// normal use case, "three" gets popped and added to the left of destination
+		res7, err := client.LPush(key2, []string{"six", "five", "four"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res7.Value())
+
+		res8, err := client.LMove(key1, key2, api.Right, api.Left)
+		assert.Equal(suite.T(), "three", res8.Value())
+		assert.Nil(suite.T(), err)
+
+		res9, err := client.LRange(key1, int64(0), int64(-1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			[]api.Result[string]{
+				api.CreateStringResult("one"),
+				api.CreateStringResult("two"),
+			},
+			res9,
+		)
+		res10, err := client.LRange(key2, int64(0), int64(-1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			[]api.Result[string]{
+				api.CreateStringResult("three"),
+				api.CreateStringResult("four"),
+				api.CreateStringResult("five"),
+				api.CreateStringResult("six"),
+			},
+			res10,
+		)
+
+		// source exists but is not a list type key
+		suite.verifyOK(client.Set(nonListKey, "value"))
+
+		res11, err := client.LMove(nonListKey, key1, api.Left, api.Left)
+		assert.Equal(suite.T(), api.CreateNilStringResult(), res11)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		// destination exists but is not a list type key
+		suite.verifyOK(client.Set(nonListKey, "value"))
+
+		res12, err := client.LMove(key1, nonListKey, api.Left, api.Left)
+		assert.Equal(suite.T(), api.CreateNilStringResult(), res12)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestBLMove() {
+	if suite.serverVersion < "6.2.0" {
+		suite.T().Skip("This feature is added in version 6.2.0")
+	}
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1" + uuid.NewString()
+		key2 := "{key}-2" + uuid.NewString()
+		nonExistentKey := "{key}-3" + uuid.NewString()
+		nonListKey := "{key}-4" + uuid.NewString()
+
+		res1, err := client.BLMove(key1, key2, api.Left, api.Right, float64(0.1))
+		assert.Equal(suite.T(), api.CreateNilStringResult(), res1)
+		assert.Nil(suite.T(), err)
+
+		res2, err := client.LPush(key1, []string{"four", "three", "two", "one"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), res2.Value())
+
+		// only source exists, only source elements gets popped, creates a list at nonExistingKey
+		res3, err := client.BLMove(key1, nonExistentKey, api.Right, api.Left, float64(0.1))
+		assert.Equal(suite.T(), "four", res3.Value())
+		assert.Nil(suite.T(), err)
+
+		res4, err := client.LRange(key1, int64(0), int64(-1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			[]api.Result[string]{
+				api.CreateStringResult("one"),
+				api.CreateStringResult("two"),
+				api.CreateStringResult("three"),
+			},
+			res4,
+		)
+
+		// source and destination are the same, performing list rotation, "one" gets popped and added back
+		res5, err := client.BLMove(key1, key1, api.Left, api.Left, float64(0.1))
+		assert.Equal(suite.T(), "one", res5.Value())
+		assert.Nil(suite.T(), err)
+
+		res6, err := client.LRange(key1, int64(0), int64(-1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			[]api.Result[string]{
+				api.CreateStringResult("one"),
+				api.CreateStringResult("two"),
+				api.CreateStringResult("three"),
+			},
+			res6,
+		)
+		// normal use case, "three" gets popped and added to the left of destination
+		res7, err := client.LPush(key2, []string{"six", "five", "four"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res7.Value())
+
+		res8, err := client.BLMove(key1, key2, api.Right, api.Left, float64(0.1))
+		assert.Equal(suite.T(), "three", res8.Value())
+		assert.Nil(suite.T(), err)
+
+		res9, err := client.LRange(key1, int64(0), int64(-1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			[]api.Result[string]{
+				api.CreateStringResult("one"),
+				api.CreateStringResult("two"),
+			},
+			res9,
+		)
+		res10, err := client.LRange(key2, int64(0), int64(-1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			[]api.Result[string]{
+				api.CreateStringResult("three"),
+				api.CreateStringResult("four"),
+				api.CreateStringResult("five"),
+				api.CreateStringResult("six"),
+			},
+			res10,
+		)
+
+		// source exists but is not a list type key
+		suite.verifyOK(client.Set(nonListKey, "value"))
+
+		res11, err := client.BLMove(nonListKey, key1, api.Left, api.Left, float64(0.1))
+		assert.Equal(suite.T(), api.CreateNilStringResult(), res11)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		// destination exists but is not a list type key
+		suite.verifyOK(client.Set(nonListKey, "value"))
+
+		res12, err := client.BLMove(key1, nonListKey, api.Left, api.Left, float64(0.1))
+		assert.Equal(suite.T(), api.CreateNilStringResult(), res12)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})

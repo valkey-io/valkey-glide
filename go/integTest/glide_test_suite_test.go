@@ -96,7 +96,7 @@ func runClusterManager(suite *GlideTestSuite, args []string, ignoreExitCode bool
 			suite.T().Fatalf("Unexpected error while executing cluster_manager.py: %s", err.Error())
 		}
 
-		if exitError.Stderr != nil && len(exitError.Stderr) > 0 {
+		if len(exitError.Stderr) > 0 {
 			suite.T().Logf("cluster_manager.py stderr:\n====\n%s\n====\n", string(exitError.Stderr))
 		}
 
