@@ -19,14 +19,14 @@ runs:
           with:
               role-to-assume: ${{ inputs.role-to-assume }}
               aws-region: ${{ inputs.aws-region }}
-              
+
         - name: Start EC2 self hosted runner
           shell: bash
           run: |
-              sudo apt update
-              sudo apt install awscli -y
+              sudo snap refresh
+              sudo snap install aws-cli --classic
               command_id=$(aws ssm send-command --instance-ids ${{ inputs.ec2-instance-id }} --document-name StartGithubSelfHostedRunner --query Command.CommandId --output text)
-            
+
               while [[ "$invoke_status" != "Success" && "$invoke_status" != "Failed" ]]; do
                 invoke_status=$(aws ssm list-command-invocations --command-id $command_id --query 'CommandInvocations[0].Status' --output text)
                 echo "Current Status: $invoke_status"
@@ -41,4 +41,4 @@ runs:
                 fi
                 done
 
-                echo "Final Command Status: $invoke_status"     
+                echo "Final Command Status: $invoke_status"

@@ -5,7 +5,9 @@
         "RUNNER": "ubuntu-latest",
         "ARCH": "x64",
         "TARGET": "x86_64-unknown-linux-gnu",
-        "PACKAGE_MANAGERS": ["pypi", "npm", "maven"]
+        "PACKAGE_MANAGERS": ["pypi", "npm", "maven"],
+        "run": "always",
+        "languages": ["python", "node", "java", "go", "dotnet"]
     },
     {
         "OS": "ubuntu",
@@ -14,7 +16,8 @@
         "ARCH": "arm64",
         "TARGET": "aarch64-unknown-linux-gnu",
         "PACKAGE_MANAGERS": ["pypi", "npm", "maven"],
-        "CONTAINER": "2_28"
+        "CONTAINER": "2_28",
+        "languages": ["python", "node", "java", "go", "dotnet"]
     },
     {
         "OS": "macos",
@@ -22,7 +25,8 @@
         "RUNNER": "macos-12",
         "ARCH": "x64",
         "TARGET": "x86_64-apple-darwin",
-        "PACKAGE_MANAGERS": ["pypi", "npm", "maven"]
+        "PACKAGE_MANAGERS": ["pypi", "npm", "maven"],
+        "languages": ["python", "node", "java", "go", "dotnet"]
     },
     {
         "OS": "macos",
@@ -30,7 +34,8 @@
         "RUNNER": "macos-latest",
         "ARCH": "arm64",
         "TARGET": "aarch64-apple-darwin",
-        "PACKAGE_MANAGERS": ["pypi", "npm", "maven"]
+        "PACKAGE_MANAGERS": ["pypi", "npm", "maven"],
+        "languages": ["python", "node", "java", "go", "dotnet"]
     },
     {
         "OS": "ubuntu",
@@ -38,9 +43,10 @@
         "ARCH": "arm64",
         "TARGET": "aarch64-unknown-linux-musl",
         "RUNNER": ["self-hosted", "Linux", "ARM64"],
-        "IMAGE": "node:alpine",
+        "IMAGE": "node:lts-alpine3.19",
         "CONTAINER_OPTIONS": "--user root --privileged --rm",
-        "PACKAGE_MANAGERS": ["npm"]
+        "PACKAGE_MANAGERS": ["npm"],
+        "languages": ["node"]
     },
     {
         "OS": "ubuntu",
@@ -48,8 +54,19 @@
         "ARCH": "x64",
         "TARGET": "x86_64-unknown-linux-musl",
         "RUNNER": "ubuntu-latest",
-        "IMAGE": "node:alpine",
+        "IMAGE": "node:lts-alpine3.19",
         "CONTAINER_OPTIONS": "--user root --privileged",
-        "PACKAGE_MANAGERS": ["npm"]
+        "PACKAGE_MANAGERS": ["npm"],
+        "languages": ["node"]
+    },
+    {
+        "OS": "amazon-linux",
+        "NAMED_OS": "linux",
+        "RUNNER": "ubuntu-latest",
+        "ARCH": "x64",
+        "TARGET": "x86_64-unknown-linux-gnu",
+        "IMAGE": "amazonlinux:latest",
+        "PACKAGE_MANAGERS": [],
+        "languages": ["python", "node", "java", "go", "dotnet"]
     }
 ]

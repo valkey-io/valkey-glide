@@ -2,7 +2,10 @@ name: Python tests
 
 on:
     push:
-        branches: ["main"]
+        branches:
+            - main
+            - release-*
+            - v*
         paths:
             - python/**
             - glide-core/src/**
@@ -13,10 +16,10 @@ on:
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
-            - .github/workflows/install-valkey/action.yml
-            - .github/json_matrices/build-matrix.json
-            - .github/json_matrices/engine-matrix.json
+            - .github/workflows/install-engine/action.yml
             - .github/workflows/start-self-hosted-runner/action.yml
+            - .github/workflows/create-test-matrices/action.yml
+            - .github/json_matrices/**
 
     pull_request:
         paths:
@@ -29,14 +32,26 @@ on:
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
-            - .github/workflows/install-valkey/action.yml
-            - .github/json_matrices/build-matrix.json
-            - .github/json_matrices/engine-matrix.json
+            - .github/workflows/install-engine/action.yml
             - .github/workflows/start-self-hosted-runner/action.yml
+            - .github/workflows/create-test-matrices/action.yml
+            - .github/json_matrices/**
+
     workflow_dispatch:
+        inputs:
+            full-matrix:
+                description: "Run the full engine, host, and language version matrix"
+                type: boolean
+                default: false
+            name:
+                required: false
+                type: string
+                description: "(Optional) Test run name"
+
+    workflow_call:
 
 concurrency:
-    group: python-${{ github.head_ref || github.ref }}
+    group: python-${{ github.head_ref || github.ref }}-${{ toJson(inputs) }}
     cancel-in-progress: true
 
 permissions:
@@ -44,53 +59,43 @@ permissions:
     # Allows the GITHUB_TOKEN to make an API call to generate an OIDC token.
     id-token: write
 
+run-name:
+    # Set custom name if job is started manually and name is given
+    ${{ github.event_name == 'workflow_dispatch' && (inputs.name == '' && format('{0} @ {1} {2}', github.ref_name, github.sha, toJson(inputs)) || inputs.name) || '' }}
+
 jobs:
-    load-engine-matrix:
+    get-matrices:
         runs-on: ubuntu-latest
         outputs:
-          matrix: ${{ steps.load-engine-matrix.outputs.matrix }}
+            engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
+            host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
+            version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
         steps:
-            - name: Checkout
-              uses: actions/checkout@v4
-        
-            - name: Load the engine matrix
-              id: load-engine-matrix
-              shell: bash
-              run: echo "matrix=$(jq -c . < .github/json_matrices/engine-matrix.json)" >> $GITHUB_OUTPUT
-        
-    test:
+            - uses: actions/checkout@v4
+            - id: get-matrices
+              uses: ./.github/workflows/create-test-matrices
+              with:
+                  language-name: python
+                  # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
+                  run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
+
+    test-python:
         runs-on: ${{ matrix.host.RUNNER }}
-        needs: load-engine-matrix
+        needs: get-matrices
         timeout-minutes: 35
         strategy:
             fail-fast: false
             matrix:
-                engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
-                python:
-                  # - "3.8"
-                  # - "3.9"
-                  # - "3.10"
-                  # - "3.11"
-                    - "3.12"
-                host:
-                    - {
-                        OS: ubuntu,
-                        RUNNER: ubuntu-latest,
-                        TARGET: x86_64-unknown-linux-gnu
-                    }
-                    # - {
-                    #     OS: macos,
-                    #     RUNNER: macos-latest,
-                    #     TARGET: aarch64-apple-darwin
-                    # }
-
+                python: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output) }}
+                engine: ${{ fromJson(needs.get-matrices.outputs.engine-matrix-output) }}
+                host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
         steps:
             - uses: actions/checkout@v4
               with:
                   submodules: recursive
 
             - name: Set up Python
-              uses: actions/setup-python@v4
+              uses: actions/setup-python@v5
               with:
                   python-version: ${{ matrix.python }}
 
@@ -141,42 +146,27 @@ jobs:
                       utils/clusters/**
                       benchmarks/results/**
 
-    test-pubsub:
+    # run pubsub tests in another job - they take too much time
+    test-pubsub-python:
         runs-on: ${{ matrix.host.RUNNER }}
-        needs: load-engine-matrix
+        needs: get-matrices
         timeout-minutes: 35
         strategy:
             fail-fast: false
             matrix:
-                engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
-                python:
-                  # - "3.8"
-                  # - "3.9"
-                  # - "3.10"
-                  # - "3.11"
-                    - "3.12"
-                host:
-                    - {
-                        OS: ubuntu,
-                        RUNNER: ubuntu-latest,
-                        TARGET: x86_64-unknown-linux-gnu
-                     }
-                    # - {
-                    #     OS: macos,
-                    #     RUNNER: macos-latest,
-                    #     TARGET: aarch64-apple-darwin
-                    # }
-
+                python: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output) }}
+                engine: ${{ fromJson(needs.get-matrices.outputs.engine-matrix-output) }}
+                host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
         steps:
             - uses: actions/checkout@v4
               with:
                   submodules: recursive
-        
+
             - name: Set up Python
-              uses: actions/setup-python@v4
+              uses: actions/setup-python@v5
               with:
                   python-version: ${{ matrix.python }}
-        
+
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
               with:
@@ -184,14 +174,14 @@ jobs:
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
-        
+
             - name: Test pubsub with pytest
               working-directory: ./python
               run: |
                   source .env/bin/activate
                   cd python/tests/
                   pytest --asyncio-mode=auto -k test_pubsub --html=pytest_report.html --self-contained-html
-        
+
             - name: Upload test reports
               if: always()
               continue-on-error: true
@@ -212,14 +202,14 @@ jobs:
             - name: lint rust
               uses: ./.github/workflows/lint-rust
               with:
-                  cargo-toml-folder: ./python
+                  cargo-toml-folder: python
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Install dependencies
               if: always()
-              working-directory: ./python
-              run: |
-                  python -m pip install --upgrade pip
-                  pip install flake8 isort black
+              uses: threeal/pipx-install-action@latest
+              with:
+                  packages: flake8 isort black
 
             - name: Lint python with isort
               if: always()
@@ -242,122 +232,111 @@ jobs:
               run: |
                   black --check --diff .
 
-    build-amazonlinux-latest:
+    get-containers:
         runs-on: ubuntu-latest
-        container: amazonlinux:latest
-        timeout-minutes: 15
+        if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
+        outputs:
+            engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
+            host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
+            version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
+
         steps:
-            - name: Install git
-              run: |
-                  yum -y remove git
-                  yum -y remove git-*
-                  yum -y install https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
-                  yum install -y git
-                  git --version
-
             - uses: actions/checkout@v4
+            - id: get-matrices
+              uses: ./.github/workflows/create-test-matrices
+              with:
+                  language-name: python
+                  run-full-matrix: true
+                  containers: true
 
-            - name: Checkout submodules
+    test-python-container:
+        runs-on: ${{ matrix.host.RUNNER }}
+        needs: [get-containers]
+        timeout-minutes: 25
+        strategy:
+            fail-fast: false
+            matrix:
+                # Don't use generated matrix for python until compatibility issues resolved on amazon linux
+                # python: ${{ fromJson(needs.get-containers.outputs.version-matrix-output) }}
+                engine: ${{ fromJson(needs.get-containers.outputs.engine-matrix-output) }}
+                host: ${{ fromJson(needs.get-containers.outputs.host-matrix-output) }}
+        container:
+            image: ${{ matrix.host.IMAGE }}
+            options: ${{ join(' -q ', matrix.host.CONTAINER_OPTIONS) }} # adding `-q` to bypass empty options
+        steps:
+            - name: Install git and python
               run: |
-                  git config --global --add safe.directory "$GITHUB_WORKSPACE"
-                  git submodule update --init --recursive
-
-            - name: Install python
-              run: |
-                  yum install -y python3
+                  yum update
+                  yum install -y git tar python3
+                  python3 -m ensurepip --upgrade
+                  python3 -m pip install --upgrade pip
+                  python3 -m pip install mypy-protobuf virtualenv
+                  echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
+            # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
 
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
               with:
-                  os: "amazon-linux"
-                  target: "x86_64-unknown-linux-gnu"
+                  os: ${{ matrix.host.OS }}
+                  target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
-                  engine-version: "7.2.5"
+                  engine-version: ${{ matrix.engine.version }}
 
-            - name: Test compatibility with pytest
+            - name: Test with pytest
               working-directory: ./python
               run: |
                   source .env/bin/activate
-                  pytest --asyncio-mode=auto -m smoke_test --html=pytest_report.html --self-contained-html
+                  cd python/tests/
+                  pytest --asyncio-mode=auto --html=pytest_report.html --self-contained-html
 
             - name: Upload test reports
               if: always()
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: smoke-test-report-amazon-linux
+                  name: test-report-python-${{ matrix.python }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ env.IMAGE }}-${{ matrix.host.ARCH }}
                   path: |
                       python/python/tests/pytest_report.html
-    
-    start-self-hosted-runner:
-      if: github.event.pull_request.head.repo.owner.login == 'valkey-io'
-      runs-on: ubuntu-latest
-      environment: AWS_ACTIONS
-      steps:
-          - name: Checkout
-            uses: actions/checkout@v4
-
-          - name: Start self hosted EC2 runner
-            uses: ./.github/workflows/start-self-hosted-runner
-            with:
-                role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
-                aws-region: ${{ secrets.AWS_REGION }}
-                ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
+                      utils/clusters/**
+                      benchmarks/results/**
 
     test-modules:
-      needs: [start-self-hosted-runner, load-engine-matrix]
-      name: Running Module Tests
-      runs-on: ${{ matrix.host.RUNNER }}
-      timeout-minutes: 35
-      strategy:
-        fail-fast: false
-        matrix:
-                engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
-                python:
-                    - "3.12"
-                host:
-                    - {
-                        OS: "ubuntu",
-                        NAMED_OS: "linux",
-                        RUNNER: ["self-hosted", "Linux", "ARM64"],
-                        TARGET: "aarch64-unknown-linux-gnu",
-                     }
-        
-      steps:
-          - name: Setup self-hosted runner access
-            if: ${{ contains(matrix.host.RUNNER, 'self-hosted') }}
-            run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
-          
-          - uses: actions/checkout@v4
-            with:
-              submodules: recursive
-          
-          - name: Setup Python for self-hosted Ubuntu runners
-            run: |
-                  sudo apt update -y
-                  sudo apt upgrade -y
-                  sudo apt install python3 python3-venv python3-pip -y
-  
-          - name: Build Python wrapper
-            uses: ./.github/workflows/build-python-wrapper
-            with:
-                    os: ${{ matrix.host.OS }}
-                    target: ${{ matrix.host.TARGET }}
-                    github-token: ${{ secrets.GITHUB_TOKEN }}
-                    engine-version: ${{ matrix.engine.version }}
+        if: (github.repository_owner == 'valkey-io' && github.event_name == 'workflow_dispatch') || github.event.pull_request.head.repo.owner.login == 'valkey-io'
+        environment: AWS_ACTIONS
+        name: Running Module Tests
+        runs-on: [self-hosted, linux, ARM64]
+        timeout-minutes: 15
 
-          - name: Test with pytest
-            working-directory: ./python
-            run: |
-                    source .env/bin/activate
-                    cd python/tests/
-                    pytest --asyncio-mode=auto --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -k server_modules --html=pytest_report.html --self-contained-html
+        steps:
+            - name: Setup self-hosted runner access
+              if: ${{ contains(matrix.host.RUNNER, 'self-hosted') }}
+              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
 
-          - name: Upload test reports
-            if: always()
-            continue-on-error: true
-            uses: actions/upload-artifact@v4
-            with:
-                name: modules-test-report-${{ matrix.host.TARGET }}-python-${{ matrix.python }}-server-${{ matrix.engine.version }}
-                path: |
-                    python/python/tests/pytest_report.html
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+
+            - name: Build Python wrapper
+              uses: ./.github/workflows/build-python-wrapper
+              with:
+                  os: ubuntu
+                  target: aarch64-unknown-linux-gnu
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+            - name: Test with pytest
+              working-directory: ./python
+              run: |
+                  source .env/bin/activate
+                  cd python/tests/
+                  pytest --asyncio-mode=auto --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -k server_modules --html=pytest_report.html --self-contained-html
+
+            - name: Upload test reports
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: modules-test-report
+                  path: |
+                      python/python/tests/pytest_report.html
