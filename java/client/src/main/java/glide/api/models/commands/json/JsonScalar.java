@@ -25,11 +25,7 @@ public class JsonScalar {
                 || value instanceof Boolean;
     }
 
-    public Object getValue() {
-        return value;
-    }
-
     public String toString() {
-        return value.toString();
+        return value == null ? "null" : value.toString();
     }
 }

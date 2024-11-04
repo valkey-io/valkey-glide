@@ -21,7 +21,6 @@ import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.json.JsonArrIndexOptions;
-import glide.api.models.commands.json.JsonArrIndexOptionsBinary;
 import glide.api.models.commands.json.JsonGetOptions;
 import glide.api.models.commands.json.JsonScalar;
 import java.util.UUID;
@@ -254,6 +253,13 @@ public class JsonTests {
                                 .get());
 
         assertArrayEquals(
+                new Object[] {-1L, -1L, null},
+                (Object[])
+                        Json.arrindex(
+                                        client, key2, "$..a", new JsonScalar(null), new JsonArrIndexOptions(6L, 8L))
+                                .get());
+
+        assertArrayEquals(
                 new Object[] {6L, -1L, null},
                 (Object[])
                         Json.arrindex(
@@ -261,7 +267,7 @@ public class JsonTests {
                                         gs(key2),
                                         gs("$..a"),
                                         new JsonScalar("\"foo\""),
-                                        new JsonArrIndexOptionsBinary(6L, 8L))
+                                        new JsonArrIndexOptions(6L, 8L))
                                 .get());
 
         assertArrayEquals(
@@ -269,17 +275,6 @@ public class JsonTests {
                 (Object[])
                         Json.arrindex(
                                         client, key2, "$..a", new JsonScalar("\"foo\""), new JsonArrIndexOptions(6L))
-                                .get());
-
-        assertArrayEquals(
-                new Object[] {6L, -1L, null},
-                (Object[])
-                        Json.arrindex(
-                                        client,
-                                        gs(key2),
-                                        gs("$..a"),
-                                        new JsonScalar("\"foo\""),
-                                        new JsonArrIndexOptionsBinary(6L))
                                 .get());
 
         // value doesn't exist

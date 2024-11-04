@@ -11,7 +11,6 @@ import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.json.JsonArrIndexOptions;
-import glide.api.models.commands.json.JsonArrIndexOptionsBinary;
 import glide.api.models.commands.json.JsonGetOptions;
 import glide.api.models.commands.json.JsonGetOptionsBinary;
 import glide.api.models.commands.json.JsonScalar;
@@ -630,7 +629,7 @@ public class Json {
      *     <pre>{@code
      * Json.set(client, key, "$", "{\"a\": [\"value\", 3], \"b\": {\"a\": [3, [\"value\", false], 5]}}").get();
      * var result = Json.arrindex(client, key, "$..a", new JsonScalar(3)).get();
-     * assert Arrays.equal((Object[]) result, new Object[] {1L, 0L});
+     * assert Arrays.equals((Object[]) result, new Object[] {1L, 0L});
      * }</pre>
      */
     public static CompletableFuture<Object> arrindex(
@@ -665,7 +664,7 @@ public class Json {
      *     <pre>{@code
      * Json.set(client, key, "$", "{\"a\": [\"value\", 3], \"b\": {\"a\": [3, [\"value\", false], 5]}}").get();
      * var result = Json.arrindex(client, gs(key), gs("$..a"), new JsonScalar(3)).get();
-     * assert Arrays.equal((Object[]) result, new Object[] {1L, 0L});
+     * assert Arrays.equals((Object[]) result, new Object[] {1L, 0L});
      * }</pre>
      */
     public static CompletableFuture<Object> arrindex(
@@ -686,6 +685,7 @@ public class Json {
      * @param path The path within the JSON document.
      * @param scalar The scalar value to search for; JSON scalar refers to values that are not objects
      *     or arrays.
+     * @param options The additional options for the command. See <code>JsonArrIndexOptions</code>.
      * @return
      *     <ul>
      *       <li>For JSONPath (<code>path</code> starts with <code>$</code>): Returns an array with a
@@ -701,7 +701,7 @@ public class Json {
      *     <pre>{@code
      * Json.set(client, key, "$", "{\"a\": [\"value\", 3], \"b\": {\"a\": [3, [\"value\", false], 5]}}").get();
      * var result = Json.arrindex(client, key, "$..a", new JsonScalar(3)).get();
-     * assert Arrays.equal((Object[]) result, new Object[] {1L, 0L});
+     * assert Arrays.equals((Object[]) result, new Object[] {1L, 0L});
      *
      * Object result2 = Json.arrindex(client, key, .a, new JsonScalar(3)).get();
      * assertEquals(1L, result);
@@ -734,6 +734,7 @@ public class Json {
      * @param path The path within the JSON document.
      * @param scalar The scalar value to search for; JSON scalar refers to values that are not objects
      *     or arrays.
+     * @param options The additional options for the command. See <code>JsonArrIndexOptions</code>.
      * @return
      *     <ul>
      *       <li>For JSONPath (<code>path</code> starts with <code>$</code>): Returns an array with a
@@ -749,7 +750,7 @@ public class Json {
      *     <pre>{@code
      * Json.set(client, key, "$", "{\"a\": [\"value\", 3], \"b\": {\"a\": [3, [\"value\", false], 5]}}").get();
      * var result = Json.arrindex(client, gs(key), gs("$..a"), new JsonScalar(3)).get();
-     * assert Arrays.equal((Object[]) result, new Object[] {1L, 0L);
+     * assert Arrays.equals((Object[]) result, new Object[] {1L, 0L);
      *
      * result = Json.arrindex(client, gs(key), gs(.a), new JsonScalar(3)).get();
      * assertEquals(1L, result);
@@ -760,13 +761,12 @@ public class Json {
             @NonNull GlideString key,
             @NonNull GlideString path,
             @NonNull JsonScalar scalar,
-            @NonNull JsonArrIndexOptionsBinary options) {
-
+            @NonNull JsonArrIndexOptions options) {
         return executeCommand(
                 client,
                 concatenateArrays(
                         new GlideString[] {gs(JSON_ARRINDEX), key, path, gs(scalar.toString())},
-                        options.toArgs()));
+                        Arrays.stream(options.toArgs()).map(result -> gs(result)).toArray(GlideString[]::new)));
     }
 
     /**
