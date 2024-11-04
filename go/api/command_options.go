@@ -228,3 +228,24 @@ func (insertPosition InsertPosition) toString() (string, error) {
 		return "", &RequestError{"Invalid insert position"}
 	}
 }
+
+// Enumeration representing element popping or adding direction for the [api.ListCommands].
+type ListDirection string
+
+const (
+	// Represents the option that elements should be popped from or added to the left side of a list.
+	Left ListDirection = "LEFT"
+	// Represents the option that elements should be popped from or added to the right side of a list.
+	Right ListDirection = "RIGHT"
+)
+
+func (listDirection ListDirection) toString() (string, error) {
+	switch listDirection {
+	case Left:
+		return string(Left), nil
+	case Right:
+		return string(Right), nil
+	default:
+		return "", &RequestError{"Invalid list direction"}
+	}
+}
