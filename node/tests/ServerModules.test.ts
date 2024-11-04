@@ -1694,5 +1694,83 @@ describe("Server Module Tests", () => {
             ];
             expect(stringResult).toEqual(expectedStringResult);
         });
+
+        it("FT.ALIASADD test", async () => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+            const index = uuidv4();
+            const alias = uuidv4() + "-alias";
+
+            // Test FT.ADDALIAS throws error if index does not exist.
+            try {
+                expect(
+                    await GlideFt.aliasadd(client, index, alias)
+                ).rejects.toThrow();
+            } catch (e) {
+                expect((e as Error).message).toContain("Index does not exist");
+            }
+
+            //Create test index.
+            expect(
+                await GlideFt.create(client, index, [
+                    { type: "NUMERIC", name: "published_at" },
+                    { type: "TAG", name: "category" },
+                ]),
+            ).toEqual("OK");
+
+            //Check if index created successfully.
+            const before = await client.customCommand(["FT._LIST"]);
+            expect(before).toContain(index);
+
+            //Check if alias added successfully to the test index.
+            expect(
+                await GlideFt.aliasadd(client, index, alias)
+            ).toEqual("OK");
+
+            //Drop the test index.
+            expect(await GlideFt.dropindex(client, index)).toEqual("OK");
+            const after = await client.customCommand(["FT._LIST"]);
+            expect(after).not.toContain(index);
+
+            //Test FT.ADDALIAS for bytes type input.
+
+        });
+
+        it("FT.ALIASADD binary test", async () => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+            const index = uuidv4();
+            const alias = uuidv4() + "-alias";
+
+            //Create index.
+            expect(
+                await GlideFt.create(client, index, [
+                    { type: "NUMERIC", name: "published_at" },
+                    { type: "TAG", name: "category" },
+                ]),
+            ).toEqual("OK");
+
+            //Check if index created successfully.
+            const before = await client.customCommand(["FT._LIST"]);
+            expect(before).toContain(index);
+
+            //Check if alias added successfully to the index.
+            expect(
+                await GlideFt.aliasadd(client, Buffer.from(index), Buffer.from(alias))
+            ).toEqual("OK");
+
+            //Drop the index.
+            expect(await GlideFt.dropindex(client, index)).toEqual("OK");
+            const after = await client.customCommand(["FT._LIST"]);
+            expect(after).not.toContain(index);
+        });
     });
 });

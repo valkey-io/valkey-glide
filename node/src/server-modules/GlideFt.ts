@@ -348,10 +348,10 @@ export class GlideFt {
                 options.returnFields.forEach((returnField) =>
                     returnField.alias
                         ? returnFields.push(
-                              returnField.fieldIdentifier,
-                              "AS",
-                              returnField.alias,
-                          )
+                            returnField.fieldIdentifier,
+                            "AS",
+                            returnField.alias,
+                        )
                         : returnFields.push(returnField.fieldIdentifier),
                 );
                 args.push(
@@ -392,6 +392,69 @@ export class GlideFt {
         return _handleCustomCommand(client, args, options) as Promise<
             [number, GlideRecord<GlideRecord<GlideString>>]
         >;
+    }
+
+    /**
+     * Adds an alias for an index. The new alias name can be used anywhere that an index name is required.
+     * 
+     * @param client The client to execute the command.
+     * @param indexName The alias to be added to the index.
+     * @param alias The index name for which the alias has to be added.
+     * @returns "OK"
+     * 
+     * @example
+     */
+    static async aliasadd(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        alias: GlideString
+    ): Promise<"OK"> {
+        const args: GlideString[] = ["FT.ADDALIAS", alias, indexName];
+        return _handleCustomCommand(client, args, {
+            decoder: Decoder.String
+        }) as Promise<"OK">;
+    }
+
+    /**
+     * Deletes an existing alias for an index.
+     * 
+     * @param client The client to execute the command.
+     * @param alias The existing alias to be deleted for an index.
+     * 
+     * @returns "OK"
+     * 
+     * @example
+     */
+    static async aliasdel(
+        client: GlideClient | GlideClusterClient,
+        alias: GlideString
+    ): Promise<"OK"> {
+        const args: GlideString[] = ["FT.ALIASDEL", alias];
+        return _handleCustomCommand(client, args, {
+            decoder: Decoder.String
+        }) as Promise<"OK">;
+    }
+
+    /**
+     * Updates an existing alias to point to a different physical index. This command only affects future references to the alias.
+     * 
+     * @param client The client to execute the command.
+     * @param alias The alias name. This alias will now be pointed to a different index.
+     * @param indexName The index name for which an existing alias has to updated.
+     *  
+     * @returns "OK"
+     * 
+     * @example
+     */
+    static async aliasupdate(
+        client: GlideClient | GlideClusterClient,
+        alias: GlideString,
+        indexName: GlideString
+    ): Promise<"OK"> {
+        const args: GlideString[] = ["FT.ALIASUPDATE", alias, indexName];
+        return _handleCustomCommand(client, args, {
+            decoder: Decoder.String
+        }) as Promise<"OK">;
     }
 }
 
