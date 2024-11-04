@@ -123,7 +123,7 @@ func parseMap(response *C.struct_CommandResponse) (interface{}, error) {
 		return nil, nil
 	}
 
-	var value_map = make(map[interface{}]interface{}, response.array_value_len)
+	value_map := make(map[interface{}]interface{}, response.array_value_len)
 	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
 		res_key, err := parseInterface(v.map_key)
 		if err != nil {
