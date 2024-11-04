@@ -386,4 +386,307 @@ type ListCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/linsert/
 	LInsert(key string, insertPosition InsertPosition, pivot string, element string) (Result[int64], error)
+
+	// Pops an element from the head of the first list that is non-empty, with the given keys being checked in the order that
+	// they are given.
+	// Blocks the connection when there are no elements to pop from any of the given lists.
+	//
+	// Note:
+	//  - When in cluster mode, all keys must map to the same hash slot.
+	//  - BLPop is a client blocking command, see [Blocking Commands] for more details and best practices.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//  keys        - The keys of the lists to pop from.
+	//  timeoutSecs - The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
+	//
+	// Return value:
+	//  A two-element array of Result[string] containing the key from which the element was popped and the value of the popped
+	//  element, formatted as [key, value].
+	//  If no element could be popped and the timeout expired, returns nil.
+	//
+	// For example:
+	//  result, err := client.BLPop("list1", "list2", 0.5)
+	//  result: []api.Result[string]{api.CreateStringResult("list1"), api.CreateStringResult("element")}
+	//
+	// [valkey.io]: https://valkey.io/commands/blpop/
+	// [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+	BLPop(keys []string, timeoutSecs float64) ([]Result[string], error)
+
+	// Pops an element from the tail of the first list that is non-empty, with the given keys being checked in the order that
+	// they are given.
+	// Blocks the connection when there are no elements to pop from any of the given lists.
+	//
+	// Note:
+	//  - When in cluster mode, all keys must map to the same hash slot.
+	//  - BRPop is a client blocking command, see [Blocking Commands] for more details and best practices.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//  keys        - The keys of the lists to pop from.
+	//  timeoutSecs - The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
+	//
+	// Return value:
+	//  A two-element array of Result[string] containing the key from which the element was popped and the value of the popped
+	//  element, formatted as [key, value].
+	//  If no element could be popped and the timeoutSecs expired, returns nil.
+	//
+	// For example:
+	//  result, err := client.BRPop("list1", "list2", 0.5)
+	//  result: []api.Result[string]{api.CreateStringResult("list1"), api.CreateStringResult("element")}
+	//
+	// [valkey.io]: https://valkey.io/commands/brpop/
+	// [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+	BRPop(keys []string, timeoutSecs float64) ([]Result[string], error)
+
+	// Inserts all the specified values at the tail of the list stored at key, only if key exists and holds a list. If key is
+	// not a list, this performs no operation.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//  key      - The key of the list.
+	//  elements - The elements to insert at the tail of the list stored at key.
+	//
+	// Return value:
+	//  The Result[int64] containing the length of the list after the push operation.
+	//
+	// For example:
+	//  my_list: {"value1", "value2"}
+	//  result, err := client.RPushX("my_list", []string{"value3", value4})
+	//  result.Value(): 4
+	//
+	// [valkey.io]: https://valkey.io/commands/rpushx/
+	RPushX(key string, elements []string) (Result[int64], error)
+
+	// Inserts all the specified values at the head of the list stored at key, only if key exists and holds a list. If key is
+	// not a list, this performs no operation.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//  key      - The key of the list.
+	//  elements - The elements to insert at the head of the list stored at key.
+	//
+	// Return value:
+	//  The Result[int64] containing the length of the list after the push operation.
+	//
+	// For example:
+	//  my_list: {"value1", "value2"}
+	//  result, err := client.LPushX("my_list", []string{"value3", value4})
+	//  result.Value(): 4
+	//
+	// [valkey.io]: https://valkey.io/commands/rpushx/
+	LPushX(key string, elements []string) (Result[int64], error)
+
+	// Pops one element from the first non-empty list from the provided keys.
+	//
+	// Since:
+	//  Valkey 7.0 and above.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//  keys          - An array of keys to lists.
+	//  listDirection - The direction based on which elements are popped from - see [api.ListDirection].
+	//
+	// Return value:
+	//  A map of key name mapped array of popped element.
+	//
+	// For example:
+	//  result, err := client.LPush("my_list", []string{"one", "two", "three"})
+	//  result, err := client.LMPop([]string{"my_list"}, api.Left)
+	//  result[api.CreateStringResult("my_list")] = []api.Result[string]{api.CreateStringResult("three")}
+	//
+	// [valkey.io]: https://valkey.io/commands/lmpop/
+	LMPop(keys []string, listDirection ListDirection) (map[Result[string]][]Result[string], error)
+
+	// Pops one or more elements from the first non-empty list from the provided keys.
+	//
+	// Since:
+	//  Valkey 7.0 and above.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//  keys          - An array of keys to lists.
+	//  listDirection - The direction based on which elements are popped from - see [api.ListDirection].
+	//  count         - The maximum number of popped elements.
+	//
+	// Return value:
+	//  A map of key name mapped array of popped elements.
+	//
+	// For example:
+	//  result, err := client.LPush("my_list", []string{"one", "two", "three"})
+	//  result, err := client.LMPopCount([]string{"my_list"}, api.Left, int64(1))
+	//  result[api.CreateStringResult("my_list")] = []api.Result[string]{api.CreateStringResult("three")}
+	//
+	// [valkey.io]: https://valkey.io/commands/lmpop/
+	LMPopCount(keys []string, listDirection ListDirection, count int64) (map[Result[string]][]Result[string], error)
+
+	// Blocks the connection until it pops one element from the first non-empty list from the provided keys. BLMPop is the
+	// blocking variant of [api.LMPop].
+	//
+	// Note:
+	//  - When in cluster mode, all keys must map to the same hash slot.
+	//  - BLMPop is a client blocking command, see [Blocking Commands] for more details and best practices.
+	//
+	// Since:
+	//  Valkey 7.0 and above.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//  keys          - An array of keys to lists.
+	//  listDirection - The direction based on which elements are popped from - see [api.ListDirection].
+	//  timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of 0 will block
+	//  indefinitely.
+	//
+	// Return value:
+	//  A map of key name mapped array of popped element.
+	//  If no member could be popped and the timeout expired, returns nil.
+	//
+	// For example:
+	//  result, err := client.LPush("my_list", []string{"one", "two", "three"})
+	//  result, err := client.BLMPop([]string{"my_list"}, api.Left, float64(0.1))
+	//  result[api.CreateStringResult("my_list")] = []api.Result[string]{api.CreateStringResult("three")}
+	//
+	// [valkey.io]: https://valkey.io/commands/blmpop/
+	// [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+	BLMPop(keys []string, listDirection ListDirection, timeoutSecs float64) (map[Result[string]][]Result[string], error)
+
+	// Blocks the connection until it pops one or more elements from the first non-empty list from the provided keys.
+	// BLMPopCount is the blocking variant of [api.LMPopCount].
+	//
+	// Note:
+	//  - When in cluster mode, all keys must map to the same hash slot.
+	//  - BLMPopCount is a client blocking command, see [Blocking Commands] for more details and best practices.
+	//
+	// Since:
+	//  Valkey 7.0 and above.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//  keys          - An array of keys to lists.
+	//  listDirection - The direction based on which elements are popped from - see [api.ListDirection].
+	//  count         - The maximum number of popped elements.
+	//  timeoutSecs   - The number of seconds to wait for a blocking operation to complete. A value of 0 will block
+	// indefinitely.
+	//
+	// Return value:
+	//  A map of key name mapped array of popped element.
+	//  If no member could be popped and the timeout expired, returns nil.
+	//
+	// For example:
+	//  result, err: client.LPush("my_list", []string{"one", "two", "three"})
+	//  result, err := client.BLMPopCount([]string{"my_list"}, api.Left, int64(1), float64(0.1))
+	//  result[api.CreateStringResult("my_list")] = []api.Result[string]{api.CreateStringResult("three")}
+	//
+	// [valkey.io]: https://valkey.io/commands/blmpop/
+	// [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+	BLMPopCount(
+		keys []string,
+		listDirection ListDirection,
+		count int64,
+		timeoutSecs float64,
+	) (map[Result[string]][]Result[string], error)
+
+	// Sets the list element at index to element.
+	// The index is zero-based, so 0 means the first element,1 the second element and so on. Negative indices can be used to
+	// designate elements starting at the tail of the list. Here, -1 means the last element, -2 means the penultimate and so
+	// forth.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//  key     - The key of the list.
+	//  index   - The index of the element in the list to be set.
+	//  element - The element to be set.
+	//
+	// Return value:
+	//  A Result[string] containing "OK".
+	//
+	// For example:
+	//  result, err: client.LSet("my_list", int64(1), "two")
+	//  result.Value(): "OK"
+	//
+	// [valkey.io]: https://valkey.io/commands/lset/
+	LSet(key string, index int64, element string) (Result[string], error)
+
+	// Atomically pops and removes the left/right-most element to the list stored at source depending on whereFrom, and pushes
+	// the element at the first/last element of the list stored at destination depending on whereTo.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//  source      - The key to the source list.
+	//  destination - The key to the destination list.
+	//  wherefrom   - The ListDirection the element should be removed from.
+	//  whereto     - The ListDirection the element should be added to.
+	//
+	// Return value:
+	//  A Result[string] containing the popped element or api.CreateNilStringResult() if source does not exist.
+	//
+	// For example:
+	//  result, err: client.LPush("my_list", []string{"two", "one"})
+	//  result, err: client.LPush("my_list2", []string{"four", "three"})
+	//  result, err: client.LMove("my_list1", "my_list2", api.Left, api.Left)
+	//  result.Value(): "one"
+	//  updatedList1, err: client.LRange("my_list1", int64(0), int64(-1))
+	//  updatedList2, err: client.LRange("my_list2", int64(0), int64(-1))
+	//  updatedList1: []api.Result[string]{api.CreateStringResult("two")}
+	//  updatedList2: []api.Result[string]{api.CreateStringResult("one"), api.CreateStringResult("three"),
+	//  api.CreateStringResult("four")}
+	//
+	// [valkey.io]: https://valkey.io/commands/lmove/
+	LMove(source string, destination string, whereFrom ListDirection, whereTo ListDirection) (Result[string], error)
+
+	// Blocks the connection until it pops atomically and removes the left/right-most element to the list stored at source
+	// depending on whereFrom, and pushes the element at the first/last element of the list stored at <destination depending on
+	// wherefrom.
+	// BLMove is the blocking variant of [api.LMove].
+	//
+	// Note:
+	//  - When in cluster mode, all source and destination must map to the same hash slot.
+	//  - BLMove is a client blocking command, see [Blocking Commands] for more details and best practices.
+	//
+	// Since:
+	//  Valkey 6.2.0 and above.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//  source      - The key to the source list.
+	//  destination - The key to the destination list.
+	//  wherefrom   - The ListDirection the element should be removed from.
+	//  whereto     - The ListDirection the element should be added to.
+	//  timeoutSecs - The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
+	//
+	// Return value:
+	// A Result[string] containing the popped element or api.CreateNilStringResult() if source does not exist or if the
+	// operation timed-out.
+	//
+	// For example:
+	//  result, err: client.LPush("my_list", []string{"two", "one"})
+	//  result, err: client.LPush("my_list2", []string{"four", "three"})
+	//  result, err: client.BLMove("my_list1", "my_list2", api.Left, api.Left, float64(0.1))
+	//  result.Value(): "one"
+	//  updatedList1, err: client.LRange("my_list1", int64(0), int64(-1))
+	//  updatedList2, err: client.LRange("my_list2", int64(0), int64(-1))
+	//  updatedList1: []api.Result[string]{api.CreateStringResult("two")}
+	//  updatedList2: []api.Result[string]{api.CreateStringResult("one"), api.CreateStringResult("three"),
+	//  api.CreateStringResult("four")}
+	//
+	// [valkey.io]: https://valkey.io/commands/blmove/
+	// [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+	BLMove(
+		source string,
+		destination string,
+		whereFrom ListDirection,
+		whereTo ListDirection,
+		timeoutSecs float64,
+	) (Result[string], error)
 }
