@@ -1112,6 +1112,15 @@ describe("Server Module Tests", () => {
                     expect(await GlideJson.debugFields(client, key)).toEqual(
                         19,
                     );
+
+                    // testing binary input
+                    expect(
+                        await GlideJson.debugMemory(client, Buffer.from(key)),
+                    ).toEqual(504);
+
+                    expect(
+                        await GlideJson.debugFields(client, Buffer.from(key)),
+                    ).toEqual(19);
                 },
             );
         },
