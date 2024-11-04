@@ -669,7 +669,7 @@ export class GlideJson {
      * @param key - The key of the JSON document.
      * @param value - The value to append to the string. Must be wrapped with single quotes. For example, to append "foo", pass '"foo"'.
      * @param options - (Optional) Additional parameters:
-     * - (Optional) `path`: The path within the JSON document, defaults to root (`"."`) if not provided.
+     * - (Optional) `path`: The path within the JSON document, returns total memory usage if no path is given.
      * @returns
      *     - For JSONPath (path starts with `$`):
      *       - Returns an array of numbers for every possible path, indicating the memory usage.
@@ -702,13 +702,13 @@ export class GlideJson {
     }
 
     /**
-     * Reports memory usage in bytes of a JSON object at the specified `path` within the JSON document stored at `key`.
+     * Reports the number of fields at the specified `path` within the JSON document stored at `key`.
      *
      * @param client - The client to execute the command.
      * @param key - The key of the JSON document.
      * @param value - The value to append to the string. Must be wrapped with single quotes. For example, to append "foo", pass '"foo"'.
      * @param options - (Optional) Additional parameters:
-     * - (Optional) `path`: The path within the JSON document, defaults to root (`"."`) if not provided.
+     * - (Optional) `path`: The path within the JSON document, returns total number of fields if no path is given.
      * @returns
      *     - For JSONPath (path starts with `$`):
      *       - Returns an array of numbers for every possible path, indicating the number of fields.
