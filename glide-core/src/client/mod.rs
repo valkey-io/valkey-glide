@@ -713,8 +713,7 @@ impl Client {
             })
         })
         .await
-        .map_err(|_| ConnectionError::Timeout)
-        .and_then(|res| res)
+        .map_err(|_| ConnectionError::Timeout)?
     }
 }
 

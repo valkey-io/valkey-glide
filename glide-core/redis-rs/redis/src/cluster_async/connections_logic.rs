@@ -388,15 +388,15 @@ where
     if is_management {
         glide_connection_options.disconnect_notifier = None;
     }
-    let conn = C::connect(
+    C::connect(
         info,
         response_timeout,
         connection_timeout,
         socket_addr,
         glide_connection_options,
     )
-    .await?;
-    Ok(conn.into())
+    .await
+    .map(|conn| conn.into())
 }
 
 /// The function returns None if the checked connection/s are healthy. Otherwise, it returns the type of the unhealthy connection/s.

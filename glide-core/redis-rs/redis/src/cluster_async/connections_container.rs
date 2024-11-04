@@ -180,7 +180,11 @@ where
         &mut self,
         other_connection_map: ConnectionsMap<Connection>,
     ) {
+        let conn_count_before = count_connections!(&self.connection_map);
         self.connection_map.extend(other_connection_map.0);
+        let conn_count_after = count_connections!(&self.connection_map);
+        // Update the number of connections by the difference
+        Telemetry::incr_total_connections(conn_count_after.saturating_sub(conn_count_before));
     }
 
     /// Returns true if the address represents a known primary node.
@@ -314,18 +318,14 @@ where
     ) -> String {
         let address = address.into();
 
-        // Increase the total number of connections
+        // Increase the total number of connections by the number of connections managed by `node`
         Telemetry::incr_total_connections(node.connections_count());
 
-        self.connection_map
-            .insert(address.clone(), node)
-            .map(|old_conn| {
-                // old_conn is dropped here -> decrease the count by the number of connections
-                // held by `old_conn`
-                // Increase the total number of connections
-                Telemetry::decr_total_connections(old_conn.connections_count());
-                old_conn
-            });
+        if let Some(old_conn) = self.connection_map.insert(address.clone(), node) {
+            // We are replacing a node. Reduce the counter by the number of connections managed by
+            // the old connection
+            Telemetry::decr_total_connections(old_conn.connections_count());
+        };
         address
     }
 
