@@ -58,6 +58,7 @@
 * Node: Add `JSON.STRLEN` and `JSON.STRAPPEND` command ([#2537](https://github.com/valkey-io/valkey-glide/pull/2537))
 * Node: Add `FT.SEARCH` ([#2551](https://github.com/valkey-io/valkey-glide/pull/2551))
 * Python: Fix example ([#2556](https://github.com/valkey-io/valkey-glide/issues/2556))
+* Core: Add support for sending multi-slot JSON.MSET and JSON.MGET commands ([#2587]https://github.com/valkey-io/valkey-glide/pull/2587) 
 
 #### Breaking Changes
 
