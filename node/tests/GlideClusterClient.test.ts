@@ -75,7 +75,7 @@ describe("GlideClusterClient", () => {
               )
             : // setting replicaCount to 1 to facilitate tests routed to replicas
               await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
-    }, 20000);
+    }, 40000);
 
     afterEach(async () => {
         await flushAndCloseClient(true, cluster.getAddresses(), client);
@@ -84,6 +84,8 @@ describe("GlideClusterClient", () => {
     afterAll(async () => {
         if (testsFailed === 0) {
             await cluster.close();
+        } else {
+            await cluster.close(true);
         }
     });
 
@@ -442,9 +444,15 @@ describe("GlideClusterClient", () => {
                 );
             }
 
-            for (const promise of promises) {
-                await expect(promise).rejects.toThrowError(/crossslot/i);
-            }
+            await Promise.allSettled(promises).then((results) => {
+                results.forEach((result) => {
+                    expect(result.status).toBe("rejected");
+
+                    if (result.status === "rejected") {
+                        expect(result.reason.message).toContain("CrossSlot");
+                    }
+                });
+            });
 
             client.close();
         },

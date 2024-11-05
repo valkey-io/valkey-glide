@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import lombok.Builder;
+import lombok.NonNull;
 import org.apache.commons.lang3.tuple.Pair;
 
 /** Mandatory parameters for {@link FT#search}. */
@@ -84,25 +85,26 @@ public class FTSearchOptions {
         void identifiers(Map<GlideString, GlideString> identifiers) {}
 
         /** Add a field to be returned. */
-        public FTSearchOptionsBuilder addReturnField(String field) {
+        public FTSearchOptionsBuilder addReturnField(@NonNull String field) {
             this.identifiers$value.put(gs(field), null);
             return this;
         }
 
         /** Add a field with an alias to be returned. */
-        public FTSearchOptionsBuilder addReturnField(String field, String alias) {
+        public FTSearchOptionsBuilder addReturnField(@NonNull String field, @NonNull String alias) {
             this.identifiers$value.put(gs(field), gs(alias));
             return this;
         }
 
         /** Add a field to be returned. */
-        public FTSearchOptionsBuilder addReturnField(GlideString field) {
+        public FTSearchOptionsBuilder addReturnField(@NonNull GlideString field) {
             this.identifiers$value.put(field, null);
             return this;
         }
 
         /** Add a field with an alias to be returned. */
-        public FTSearchOptionsBuilder addReturnField(GlideString field, GlideString alias) {
+        public FTSearchOptionsBuilder addReturnField(
+                @NonNull GlideString field, @NonNull GlideString alias) {
             this.identifiers$value.put(field, alias);
             return this;
         }

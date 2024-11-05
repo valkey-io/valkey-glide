@@ -2286,7 +2286,7 @@ export class BaseClient {
      *
      * @param key - The key of the set.
      * @param cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of the search.
-     * @param options - (Optional) The {@link HScanOptions}.
+     * @param options - (Optional) See {@link HScanOptions} and {@link DecoderOption}.
      * @returns An array of the `cursor` and the subset of the hash held by `key`.
      * The first element is always the `cursor` for the next iteration of results. `"0"` will be the `cursor`
      * returned on the last iteration of the hash. The second element is always an array of the subset of the
@@ -5510,7 +5510,6 @@ export class BaseClient {
      *     attributes of a consumer group for the stream at `key`.
      * @example
      * ```typescript
-     *     <pre>{@code
      * const result = await client.xinfoGroups("my_stream");
      * console.log(result); // Output:
      * // [
@@ -5963,13 +5962,11 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     *  <pre>{@code
      * const entryId = await client.xadd("mystream", ["myfield", "mydata"]);
      * // read messages from streamId
      * const readResult = await client.xreadgroup(["myfield", "mydata"], "mygroup", "my0consumer");
      * // acknowledge messages on stream
      * console.log(await client.xack("mystream", "mygroup", [entryId])); // Output: 1
-     * </pre>
      * ```
      */
     public async xack(

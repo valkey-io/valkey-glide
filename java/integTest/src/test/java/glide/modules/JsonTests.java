@@ -293,6 +293,31 @@ public class JsonTests {
 
     @Test
     @SneakyThrows
+    public void debug() {
+        String key = UUID.randomUUID().toString();
+
+        var doc =
+                "{ \"key1\": 1, \"key2\": 3.5, \"key3\": {\"nested_key\": {\"key1\": [4, 5]}}, \"key4\":"
+                        + " [1, 2, 3], \"key5\": 0, \"key6\": \"hello\", \"key7\": null, \"key8\":"
+                        + " {\"nested_key\": {\"key1\": 3.5953862697246314e307}}, \"key9\":"
+                        + " 3.5953862697246314e307, \"key10\": true }";
+        assertEquals("OK", Json.set(client, key, "$", doc).get());
+
+        assertArrayEquals(new Object[] {1L}, (Object[]) Json.debugFields(client, key, "$.key1").get());
+
+        assertEquals(2L, Json.debugFields(client, gs(key), gs(".key3.nested_key.key1")).get());
+
+        assertArrayEquals(
+                new Object[] {16L}, (Object[]) Json.debugMemory(client, key, "$.key4[2]").get());
+
+        assertEquals(16L, Json.debugMemory(client, gs(key), gs(".key6")).get());
+
+        assertEquals(504L, Json.debugMemory(client, key).get());
+        assertEquals(19L, Json.debugFields(client, gs(key)).get());
+    }
+
+    @Test
+    @SneakyThrows
     public void arrlen() {
         String key = UUID.randomUUID().toString();
 
@@ -376,6 +401,301 @@ public class JsonTests {
 
         assertThrows(
                 ExecutionException.class, () -> Json.clear(client, UUID.randomUUID().toString()).get());
+    }
+
+    @Test
+    @SneakyThrows
+    void numincrby() {
+        String key = UUID.randomUUID().toString();
+
+        var jsonValue =
+                "{"
+                        + "    \"key1\": 1,"
+                        + "    \"key2\": 3.5,"
+                        + "    \"key3\": {\"nested_key\": {\"key1\": [4, 5]}},"
+                        + "    \"key4\": [1, 2, 3],"
+                        + "    \"key5\": 0,"
+                        + "    \"key6\": \"hello\","
+                        + "    \"key7\": null,"
+                        + "    \"key8\": {\"nested_key\": {\"key1\": 69}},"
+                        + "    \"key9\": 1.7976931348623157e308"
+                        + "}";
+
+        // Set the initial JSON document at the key
+        assertEquals("OK", Json.set(client, key, "$", jsonValue).get());
+
+        // Test JSONPath
+        // Increment integer value (key1) by 5
+        String result = Json.numincrby(client, key, "$.key1", 5).get();
+        assertEquals("[6]", result); // Expect 1 + 5 = 6
+
+        // Increment float value (key2) by 2.5
+        result = Json.numincrby(client, key, "$.key2", 2.5).get();
+        assertEquals("[6]", result); // Expect 3.5 + 2.5 = 6
+
+        // Increment nested object (key3.nested_key.key1[0]) by 7
+        result = Json.numincrby(client, key, "$.key3.nested_key.key1[1]", 7).get();
+        assertEquals("[12]", result); // Expect 4 + 7 = 12
+
+        // Increment array element (key4[1]) by 1
+        result = Json.numincrby(client, key, "$.key4[1]", 1).get();
+        assertEquals("[3]", result); // Expect 2 + 1 = 3
+
+        // Increment zero value (key5) by 10.23 (float number)
+        result = Json.numincrby(client, key, "$.key5", 10.23).get();
+        assertEquals("[10.23]", result); // Expect 0 + 10.23 = 10.23
+
+        // Increment a string value (key6) by a number
+        result = Json.numincrby(client, key, "$.key6", 99).get();
+        assertEquals("[null]", result); // Expect null
+
+        // Increment a None value (key7) by a number
+        result = Json.numincrby(client, key, "$.key7", 51).get();
+        assertEquals("[null]", result); // Expect null
+
+        // Check increment for all numbers in the document using JSON Path (First Null: key3 as an
+        // entire object. Second Null: The path checks under key3, which is an object, for numeric
+        // values).
+        result = Json.numincrby(client, key, "$..*", 5).get();
+        assertEquals(
+                "[11,11,null,null,15.23,null,null,null,1.7976931348623157e+308,null,null,9,17,6,8,8,null,74]",
+                result);
+
+        // Check for multiple path match in enhanced
+        result = Json.numincrby(client, key, "$..key1", 1).get();
+        assertEquals("[12,null,75]", result); // Expect null
+
+        // Check for non existent path in JSONPath
+        result = Json.numincrby(client, key, "$.key10", 51).get();
+        assertEquals("[]", result); // Expect Empty Array
+
+        // Check for non existent key in JSONPath
+        assertThrows(
+                ExecutionException.class,
+                () -> Json.numincrby(client, "non_existent_key", "$.key10", 51).get());
+
+        // Check for Overflow in JSONPath
+        assertThrows(
+                ExecutionException.class,
+                () -> Json.numincrby(client, key, "$.key9", 1.7976931348623157e308).get());
+
+        // Decrement integer value (key1) by 12
+        result = Json.numincrby(client, key, "$.key1", -12).get();
+        assertEquals("[0]", result); // Expect 12 - 12 = 0
+
+        // Decrement integer value (key1) by 0.5
+        result = Json.numincrby(client, key, "$.key1", -0.5).get();
+        assertEquals("[-0.5]", result); // Expect 0 - 0.5 = -0.5
+
+        // Test Legacy Path
+        // Increment float value (key1) by 5 (integer)
+        result = Json.numincrby(client, key, "key1", 5).get();
+        assertEquals("4.5", result); // Expect -0.5 + 5 = 4.5
+
+        // Decrement float value (key1) by 5.5 (integer)
+        result = Json.numincrby(client, key, "key1", -5.5).get();
+        assertEquals("-1", result); // Expect 4.5 - 5.5 = -1
+
+        // Increment int value (key2) by 2.5 (a float number)
+        result = Json.numincrby(client, key, "key2", 2.5).get();
+        assertEquals("13.5", result); // Expect 11 + 2.5 = 13.5
+
+        // Increment nested value (key3.nested_key.key1[0]) by 7
+        result = Json.numincrby(client, key, "key3.nested_key.key1[0]", 7).get();
+        assertEquals("16", result); // Expect 9 + 7 = 16
+
+        // Increment array element (key4[1]) by 1
+        result = Json.numincrby(client, key, "key4[1]", 1).get();
+        assertEquals("9", result); // Expect 8 + 1 = 9
+
+        // Increment a float value (key5) by 10.2 (a float number)
+        result = Json.numincrby(client, key, "key5", 10.2).get();
+        assertEquals("25.43", result); // Expect 15.23 + 10.2 = 25.43
+
+        // Check for multiple path match in legacy and assure that the result of the last updated value
+        // is returned
+        result = Json.numincrby(client, key, "..key1", 1).get();
+        assertEquals("76", result);
+
+        // Check if the rest of the key1 path matches were updated and not only the last value
+        result = Json.get(client, key, new String[] {"$..key1"}).get();
+        assertEquals(
+                "[0,[16,17],76]",
+                result); // First is 0 as 0 + 0 = 0, Second doesn't change as its an array type
+        // (non-numeric), third is 76 as 0 + 76 = 0
+
+        // Check for non existent path in legacy
+        assertThrows(ExecutionException.class, () -> Json.numincrby(client, key, ".key10", 51).get());
+
+        // Check for non existent key in legacy
+        assertThrows(
+                ExecutionException.class,
+                () -> Json.numincrby(client, "non_existent_key", ".key10", 51).get());
+
+        // Check for Overflow in legacy
+        assertThrows(
+                ExecutionException.class,
+                () -> Json.numincrby(client, key, ".key9", 1.7976931348623157e308).get());
+
+        // Binary tests
+        // Binary integer test
+        GlideString binaryResult = Json.numincrby(client, gs(key), gs("key4[1]"), 1).get();
+        assertEquals(gs("10"), binaryResult); // Expect 9 + 1 = 10
+
+        // Binary float test
+        binaryResult = Json.numincrby(client, gs(key), gs("key5"), 1.0).get();
+        assertEquals(gs("26.43"), binaryResult); // Expect 25.43 + 1.0 = 26.43
+    }
+
+    @Test
+    @SneakyThrows
+    void nummultby() {
+        String key = UUID.randomUUID().toString();
+        var jsonValue =
+                "{"
+                        + "    \"key1\": 1,"
+                        + "    \"key2\": 3.5,"
+                        + "    \"key3\": {\"nested_key\": {\"key1\": [4, 5]}},"
+                        + "    \"key4\": [1, 2, 3],"
+                        + "    \"key5\": 0,"
+                        + "    \"key6\": \"hello\","
+                        + "    \"key7\": null,"
+                        + "    \"key8\": {\"nested_key\": {\"key1\": 69}},"
+                        + "    \"key9\": 3.5953862697246314e307"
+                        + "}";
+
+        // Set the initial JSON document at the key
+        assertEquals("OK", Json.set(client, key, "$", jsonValue).get());
+
+        // Test JSONPath
+        // Multiply integer value (key1) by 5
+        String result = Json.nummultby(client, key, "$.key1", 5).get();
+        assertEquals("[5]", result); // Expect 1 * 5 = 5
+
+        // Multiply float value (key2) by 2.5
+        result = Json.nummultby(client, key, "$.key2", 2.5).get();
+        assertEquals("[8.75]", result); // Expect 3.5 * 2.5 = 8.75
+
+        // Multiply nested object (key3.nested_key.key1[1]) by 7
+        result = Json.nummultby(client, key, "$.key3.nested_key.key1[1]", 7).get();
+        assertEquals("[35]", result); // Expect 5 * 7 = 35
+
+        // Multiply array element (key4[1]) by 1
+        result = Json.nummultby(client, key, "$.key4[1]", 1).get();
+        assertEquals("[2]", result); // Expect 2 * 1 = 2
+
+        // Multiply zero value (key5) by 10.23 (float number)
+        result = Json.nummultby(client, key, "$.key5", 10.23).get();
+        assertEquals("[0]", result); // Expect 0 * 10.23 = 0
+
+        // Multiply a string value (key6) by a number
+        result = Json.nummultby(client, key, "$.key6", 99).get();
+        assertEquals("[null]", result); // Expect null
+
+        // Multiply a None value (key7) by a number
+        result = Json.nummultby(client, key, "$.key7", 51).get();
+        assertEquals("[null]", result); // Expect null
+
+        // Check multiplication for all numbers in the document using JSON Path
+        // key1: 5 * 5 = 25
+        // key2: 8.75 * 5 = 43.75
+        // key3.nested_key.key1[0]: 4 * 5 = 20
+        // key3.nested_key.key1[1]: 35 * 5 = 175
+        // key4[0]: 1 * 5 = 5
+        // key4[1]: 2 * 5 = 10
+        // key4[2]: 3 * 5 = 15
+        // key5: 0 * 5 = 0
+        // key8.nested_key.key1: 69 * 5 = 345
+        // key9: 3.5953862697246314e307 * 5 = 1.7976931348623157e308
+        result = Json.nummultby(client, key, "$..*", 5).get();
+        assertEquals(
+                "[25,43.75,null,null,0,null,null,null,1.7976931348623157e+308,null,null,20,175,5,10,15,null,345]",
+                result);
+
+        // Check for multiple path matches in JSONPath
+        // key1: 25 * 2 = 50
+        // key8.nested_key.key1: 345 * 2 = 690
+        result = Json.nummultby(client, key, "$..key1", 2).get();
+        assertEquals("[50,null,690]", result); // After previous multiplications
+
+        // Check for non-existent path in JSONPath
+        result = Json.nummultby(client, key, "$.key10", 51).get();
+        assertEquals("[]", result); // Expect Empty Array
+
+        // Check for non-existent key in JSONPath
+        assertThrows(
+                ExecutionException.class,
+                () -> Json.nummultby(client, "non_existent_key", "$.key10", 51).get());
+
+        // Check for Overflow in JSONPath
+        assertThrows(
+                ExecutionException.class,
+                () -> Json.nummultby(client, key, "$.key9", 1.7976931348623157e308).get());
+
+        // Multiply integer value (key1) by -12
+        result = Json.nummultby(client, key, "$.key1", -12).get();
+        assertEquals("[-600]", result); // Expect 50 * -12 = -600
+
+        // Multiply integer value (key1) by -0.5
+        result = Json.nummultby(client, key, "$.key1", -0.5).get();
+        assertEquals("[300]", result); // Expect -600 * -0.5 = 300
+
+        // Test Legacy Path
+        // Multiply int value (key1) by 5 (integer)
+        result = Json.nummultby(client, key, "key1", 5).get();
+        assertEquals("1500", result); // Expect 300 * 5 = -1500
+
+        // Multiply int value (key1) by -5.5 (float number)
+        result = Json.nummultby(client, key, "key1", -5.5).get();
+        assertEquals("-8250", result); // Expect -150 * -5.5 = -8250
+
+        // Multiply int float (key2) by 2.5 (a float number)
+        result = Json.nummultby(client, key, "key2", 2.5).get();
+        assertEquals("109.375", result); // Expect 43.75 * 2.5 = 109.375
+
+        // Multiply nested value (key3.nested_key.key1[0]) by 7
+        result = Json.nummultby(client, key, "key3.nested_key.key1[0]", 7).get();
+        assertEquals("140", result); // Expect 20 * 7 = 140
+
+        // Multiply array element (key4[1]) by 1
+        result = Json.nummultby(client, key, "key4[1]", 1).get();
+        assertEquals("10", result); // Expect 10 * 1 = 10
+
+        // Multiply a float value (key5) by 10.2 (a float number)
+        result = Json.nummultby(client, key, "key5", 10.2).get();
+        assertEquals("0", result); // Expect 0 * 10.2 = 0
+
+        // Check for multiple path matches in legacy and assure that the result of the last updated
+        // value is returned
+        // last updated value is key8.nested_key.key1: 690 * 2 = 1380
+        result = Json.nummultby(client, key, "..key1", 2).get();
+        assertEquals("1380", result); // Expect the last updated key1 value multiplied by 2
+
+        // Check if the rest of the key1 path matches were updated and not only the last value
+        result = Json.get(client, key, new String[] {"$..key1"}).get();
+        assertEquals(result, "[-16500,[140,175],1380]");
+
+        // Check for non-existent path in legacy
+        assertThrows(ExecutionException.class, () -> Json.nummultby(client, key, ".key10", 51).get());
+
+        // Check for non-existent key in legacy
+        assertThrows(
+                ExecutionException.class,
+                () -> Json.nummultby(client, "non_existent_key", ".key10", 51).get());
+
+        // Check for Overflow in legacy
+        assertThrows(
+                ExecutionException.class,
+                () -> Json.nummultby(client, key, ".key9", 1.7976931348623157e308).get());
+
+        // Binary tests
+        // Binary integer test
+        GlideString binaryResult = Json.nummultby(client, gs(key), gs("key4[1]"), 1).get();
+        assertEquals(gs("10"), binaryResult); // Expect 10 * 1 = 10
+
+        // Binary float test
+        binaryResult = Json.nummultby(client, gs(key), gs("key5"), 10.2).get();
+        assertEquals(gs("0"), binaryResult); // Expect 0 * 10.2 = 0
     }
 
     @Test
@@ -580,6 +900,90 @@ public class JsonTests {
 
     @Test
     @SneakyThrows
+    public void strappend() {
+        String key = UUID.randomUUID().toString();
+        String jsonValue = "{\"a\": \"foo\", \"nested\": {\"a\": \"hello\"}, \"nested2\": {\"a\": 31}}";
+        assertEquals("OK", Json.set(client, key, "$", jsonValue).get());
+
+        assertArrayEquals(
+                new Object[] {6L, 8L, null},
+                (Object[]) Json.strappend(client, key, "\"bar\"", "$..a").get());
+        assertEquals(9L, (Long) Json.strappend(client, key, "\"foo\"", "a").get());
+
+        String jsonStr = Json.get(client, key, new String[] {"."}).get();
+        assertEquals(
+                "{\"a\":\"foobarfoo\",\"nested\":{\"a\":\"hellobar\"},\"nested2\":{\"a\":31}}", jsonStr);
+
+        assertArrayEquals(
+                new Object[] {null}, (Object[]) Json.strappend(client, key, "\"bar\"", "$.nested").get());
+
+        assertThrows(
+                ExecutionException.class, () -> Json.strappend(client, key, "\"bar\"", ".nested").get());
+
+        assertThrows(ExecutionException.class, () -> Json.strappend(client, key, "\"bar\"").get());
+
+        assertArrayEquals(
+                new Object[] {},
+                (Object[]) Json.strappend(client, key, "\"try\"", "$.non_existing_path").get());
+
+        assertThrows(
+                ExecutionException.class,
+                () -> Json.strappend(client, key, "\"try\"", "non_existing_path").get());
+
+        assertThrows(
+                ExecutionException.class,
+                () -> Json.strappend(client, "non_existing_key", "\"try\"").get());
+
+        // Binary test
+        // Binary with path
+        assertEquals(12L, (Long) Json.strappend(client, gs(key), gs("\"foo\""), gs("a")).get());
+        jsonStr = Json.get(client, key, new String[] {"."}).get();
+        assertEquals(
+                "{\"a\":\"foobarfoofoo\",\"nested\":{\"a\":\"hellobar\"},\"nested2\":{\"a\":31}}", jsonStr);
+
+        // Binary no path
+        assertEquals("OK", Json.set(client, key, "$", "\"hi\"").get());
+        assertEquals(5L, Json.strappend(client, gs(key), gs("\"foo\"")).get());
+        jsonStr = Json.get(client, key, new String[] {"."}).get();
+        assertEquals("\"hifoo\"", jsonStr);
+    }
+
+    @Test
+    @SneakyThrows
+    public void strlen() {
+        String key = UUID.randomUUID().toString();
+        String jsonValue = "{\"a\": \"foo\", \"nested\": {\"a\": \"hello\"}, \"nested2\": {\"a\": 31}}";
+        assertEquals("OK", Json.set(client, key, "$", jsonValue).get());
+
+        assertArrayEquals(
+                new Object[] {3L, 5L, null}, (Object[]) Json.strlen(client, key, "$..a").get());
+        assertEquals(3L, (Long) Json.strlen(client, key, "a").get());
+
+        assertArrayEquals(new Object[] {null}, (Object[]) Json.strlen(client, key, "$.nested").get());
+
+        assertThrows(ExecutionException.class, () -> Json.strlen(client, key, "nested").get());
+
+        assertThrows(ExecutionException.class, () -> Json.strlen(client, key).get());
+
+        assertArrayEquals(
+                new Object[] {}, (Object[]) Json.strlen(client, key, "$.non_existing_path").get());
+        assertThrows(
+                ExecutionException.class, () -> Json.strlen(client, key, ".non_existing_path").get());
+
+        assertNull(Json.strlen(client, "non_existing_key", ".").get());
+        assertNull(Json.strlen(client, "non_existing_key", "$").get());
+
+        // Binary test
+        // Binary with path
+        assertEquals(3L, (Long) Json.strlen(client, gs(key), gs("a")).get());
+
+        // Binary no path
+        assertEquals("OK", Json.set(client, key, "$", "\"hi\"").get());
+        assertEquals(2L, Json.strlen(client, gs(key)).get());
+    }
+
+    @Test
+    @SneakyThrows
     public void json_resp() {
         String key = UUID.randomUUID().toString();
         String jsonValue =
@@ -665,5 +1069,46 @@ public class JsonTests {
         assertNull(Json.resp(client, "nonexistent_key", "$").get());
         assertNull(Json.resp(client, "nonexistent_key", ".").get());
         assertNull(Json.resp(client, "nonexistent_key").get());
+    }
+
+    @Test
+    @SneakyThrows
+    public void json_type() {
+        String key = UUID.randomUUID().toString();
+        String jsonValue =
+                "{\"key1\": \"value1\", \"key2\": 2, \"key3\": [1, 2, 3], \"key4\": {\"nested_key\":"
+                        + " {\"key1\": [4, 5]}}, \"key5\": null, \"key6\": true, \"dec_key\": 2.3}";
+        assertEquals(OK, Json.set(client, key, "$", jsonValue).get());
+
+        assertArrayEquals(new Object[] {"object"}, (Object[]) Json.type(client, key, "$").get());
+        assertArrayEquals(
+                new Object[] {gs("string"), gs("array")},
+                (Object[]) Json.type(client, gs(key), gs("$..key1")).get());
+        assertArrayEquals(new Object[] {"integer"}, (Object[]) Json.type(client, key, "$.key2").get());
+        assertArrayEquals(new Object[] {"array"}, (Object[]) Json.type(client, key, "$.key3").get());
+        assertArrayEquals(new Object[] {"object"}, (Object[]) Json.type(client, key, "$.key4").get());
+        assertArrayEquals(
+                new Object[] {"object"}, (Object[]) Json.type(client, key, "$.key4.nested_key").get());
+        assertArrayEquals(new Object[] {"null"}, (Object[]) Json.type(client, key, "$.key5").get());
+        assertArrayEquals(new Object[] {"boolean"}, (Object[]) Json.type(client, key, "$.key6").get());
+        // Check for non-existent path in enhanced mode $.key7
+        assertArrayEquals(new Object[] {}, (Object[]) Json.type(client, key, "$.key7").get());
+        // Check for non-existent path within an existing key (array bound)
+        assertArrayEquals(new Object[] {}, (Object[]) Json.type(client, key, "$.key3[3]").get());
+        // Legacy path (without $) - will return None for non-existing path
+        assertNull(Json.type(client, key, "key7").get());
+        // Check for multiple path match in legacy
+        assertEquals("string", Json.type(client, key, "..key1").get());
+        // Check for non-existent key with enhanced path
+        assertNull(Json.type(client, "non_existing_key", "$.key1").get());
+        // Check for non-existent key with legacy path
+        assertNull(Json.type(client, "non_existing_key", "key1").get());
+        // Check for all types in the JSON document using JSON Path
+        Object[] actualResult = (Object[]) Json.type(client, key, "$[*]").get();
+        Object[] expectedResult =
+                new Object[] {"string", "integer", "array", "object", "null", "boolean", "number"};
+        assertArrayEquals(expectedResult, actualResult);
+        // Check for all types in the JSON document using legacy path
+        assertEquals("string", Json.type(client, key, "[*]").get());
     }
 }

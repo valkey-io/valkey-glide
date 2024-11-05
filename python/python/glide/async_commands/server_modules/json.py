@@ -18,7 +18,7 @@
 from typing import List, Optional, Union, cast
 
 from glide.async_commands.core import ConditionalChange
-from glide.constants import TOK, TEncodable, TJsonResponse
+from glide.constants import TOK, TEncodable, TJsonResponse, TJsonUniversalResponse
 from glide.glide_client import TGlideClient
 from glide.protobuf.command_request_pb2 import RequestType
 
@@ -51,6 +51,63 @@ class JsonGetOptions:
             args.extend(["NEWLINE", self.new_line])
         if self.space:
             args.extend(["SPACE", self.space])
+        return args
+
+
+class JsonArrIndexOptions:
+    """
+    Options for the `JSON.ARRINDEX` command.
+
+    Args:
+        start (int): The inclusive start index from which the search begins. Defaults to None.
+        end (Optional[int]): The exclusive end index where the search stops. Defaults to None.
+
+    Note:
+        - If `start` is greater than `end`, the command returns `-1` to indicate that the value was not found.
+        - Indices that exceed the array bounds are automatically adjusted to the nearest valid position.
+    """
+
+    def __init__(self, start: int, end: Optional[int] = None):
+        self.start = start
+        self.end = end
+
+    def to_args(self) -> List[str]:
+        """
+        Get the options as a list of arguments for the JSON.ARRINDEX command.
+
+        Returns:
+            List[str]: A list containing the start and end indices if specified.
+        """
+        args = [str(self.start)]
+        if self.end is not None:
+            args.append(str(self.end))
+        return args
+
+
+class JsonArrPopOptions:
+    """
+    Options for the JSON.ARRPOP command.
+
+    Args:
+        path (TEncodable): The path within the JSON document.
+        index (Optional[int]): The index of the element to pop. If not specified, will pop the last element.
+            Out of boundary indexes are rounded to their respective array boundaries. Defaults to None.
+    """
+
+    def __init__(self, path: TEncodable, index: Optional[int] = None):
+        self.path = path
+        self.index = index
+
+    def to_args(self) -> List[TEncodable]:
+        """
+        Get the options as a list of arguments for the JSON.ARRPOP command.
+
+        Returns:
+            List[TEncodable]: A list containing the path and, if specified, the index.
+        """
+        args = [self.path]
+        if self.index is not None:
+            args.append(str(self.index))
         return args
 
 
@@ -147,6 +204,127 @@ async def get(
     return cast(TJsonResponse[Optional[bytes]], await client.custom_command(args))
 
 
+async def arrappend(
+    client: TGlideClient,
+    key: TEncodable,
+    values: List[TEncodable],
+    path: Optional[TEncodable] = None,
+) -> TJsonResponse[int]:
+    """
+    Appends one or more `values` to the JSON array at the specified `path` within the JSON document stored at `key`.
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+        key (TEncodable): The key of the JSON document.
+        values (TEncodable): The values to append to the JSON array at the specified path.
+        path (Optional[TEncodable]): Represents the path within the JSON document where the `values` will be appended.
+            Defaults to None.
+            **Beware**: For AWS ElastiCache/MemoryDB the `path` parameter is required and not optional.
+
+    Returns:
+        TJsonResponse[int]:
+            For JSONPath (`path` starts with `$`):
+                Returns a list of integer replies for every possible path, indicating the new length of the new array after appending `values`,
+                or None for JSON values matching the path that are not an array.
+                If `path` doesn't exist, an empty array will be returned.
+            For legacy path (`path` doesn't start with `$`):
+                Returns the length of the new array after appending `values` to the array at `path`.
+                If multiple paths match, the length of the first updated array is returned.
+                If the JSON value at `path` is not a array or if `path` doesn't exist, an error is raised.
+            If `key` doesn't exist, an error is raised.
+        For more information about the returned type, see `TJsonResponse`.
+
+    Examples:
+        >>> from glide import json as valkeyJson
+        >>> import json
+        >>> await valkeyJson.set(client, "doc", "$", '{"a": 1, "b": ["one", "two"]}')
+            'OK'  # Indicates successful setting of the value at path '$' in the key stored at `doc`.
+        >>> await valkeyJson.arrappend(client, "doc", ["three"], "$.b")
+            [3]  # Returns the new length of the array at path '$.b' after appending the value.
+        >>> await valkeyJson.arrappend(client, "doc", ["four"], ".b")
+            4 # Returns the new length of the array at path '.b' after appending the value.
+        >>> json.loads(await valkeyJson.get(client, "doc", "."))
+            {"a": 1, "b": ["one", "two", "three", "four"]}  # Returns the updated JSON document
+    """
+    args = ["JSON.ARRAPPEND", key]
+    if path:
+        args.append(path)
+    args.extend(values)
+    return cast(TJsonResponse[int], await client.custom_command(args))
+
+
+async def arrindex(
+    client: TGlideClient,
+    key: TEncodable,
+    path: TEncodable,
+    value: TEncodable,
+    options: Optional[JsonArrIndexOptions] = None,
+) -> TJsonResponse[int]:
+    """
+    Searches for the first occurrence of a scalar JSON value (i.e., a value that is neither an object nor an array) within arrays at the specified `path` in the JSON document stored at `key`.
+
+    If specified, `options.start` and `options.end` define an inclusive-to-exclusive search range within the array.
+    (Where `options.start` is inclusive and `options.end` is exclusive).
+
+    Out-of-range indices adjust to the nearest valid position, and negative values count from the end (e.g., `-1` is the last element, `-2` the second last).
+
+    Setting `options.end` to `0` behaves like `-1`, extending the range to the array's end (inclusive).
+
+    If `options.start` exceeds `options.end`, `-1` is returned, indicating that the value was not found.
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+        key (TEncodable): The key of the JSON document.
+        path (TEncodable): The path within the JSON document.
+        value (TEncodable): The value to search for within the arrays.
+        options (Optional[JsonArrIndexOptions]): Options specifying an inclusive `start` index and an optional exclusive `end` index for a range-limited search.
+            Defaults to the full array if not provided. See `JsonArrIndexOptions`.
+
+    Returns:
+        Optional[Union[int, List[int]]]:
+            For JSONPath (`path` starts with `$`):
+                Returns an array of integers for every possible path, indicating of the first occurrence of `value` within the array,
+                or None for JSON values matching the path that are not an array.
+                A returned value of `-1` indicates that the value was not found in that particular array.
+                If `path` does not exist, an empty array will be returned.
+            For legacy path (`path` doesn't start with `$`):
+                Returns an integer representing the index of the first occurrence of `value` within the array at the specified path.
+                A returned value of `-1` indicates that the value was not found in that particular array.
+                If multiple paths match, the index of the value from the first matching array is returned.
+                If the JSON value at the `path` is not an array or if `path` does not exist, an error is raised.
+            If `key` does not exist, an error is raised.
+
+    Examples:
+        >>> from glide import json
+        >>> await json.set(client, "doc", "$", '[[], ["a"], ["a", "b"], ["a", "b", "c"]]')
+            'OK'
+        >>> await json.arrindex(client, "doc", "$[*]", '"b"')
+            [-1, -1, 1, 1]
+        >>> await json.set(client, "doc", ".", '{"children": ["John", "Jack", "Tom", "Bob", "Mike"]}')
+            'OK'
+        >>> await json.arrindex(client, "doc", ".children", '"Tom"')
+            2
+        >>> await json.set(client, "doc", "$", '{"fruits": ["apple", "banana", "cherry", "banana", "grape"]}')
+            'OK'
+        >>> await json.arrindex(client, "doc", "$.fruits", '"banana"', JsonArrIndexOptions(start=2, end=4))
+            3
+        >>> await json.set(client, "k", ".", '[1, 2, "a", 4, "a", 6, 7, "b"]')
+            'OK'
+        >>> await json.arrindex(client, "k", ".", '"b"', JsonArrIndexOptions(start=4, end=0))
+            7  # "b" found at index 7 within the specified range, treating end=0 as the entire array's end.
+        >>> await json.arrindex(client, "k", ".", '"b"', JsonArrIndexOptions(start=4, end=-1))
+            7  # "b" found at index 7, with end=-1 covering the full array to its last element.
+        >>> await json.arrindex(client, "k", ".", '"b"', JsonArrIndexOptions(start=4, end=7))
+            -1  # "b" not found within the range from index 4 to exclusive end at index 7.
+    """
+    args = ["JSON.ARRINDEX", key, path, value]
+
+    if options:
+        args.extend(options.to_args())
+
+    return cast(TJsonResponse[int], await client.custom_command(args))
+
+
 async def arrinsert(
     client: TGlideClient,
     key: TEncodable,
@@ -232,7 +410,7 @@ async def arrlen(
         >>> await json.arrlen(client, "doc", "$.a")
             [3]  # Retrieves the length of the array at path $.a.
         >>> await json.arrlen(client, "doc", "$..a")
-            [3, 2, None]  # Retrieves lengths of arrays found at all levels of the path `..a`.
+            [3, 2, None]  # Retrieves lengths of arrays found at all levels of the path `$..a`.
         >>> await json.arrlen(client, "doc", "..a")
             3  # Legacy path retrieves the first array match at path `..a`.
         >>> await json.arrlen(client, "non_existing_key", "$.a")
@@ -241,13 +419,75 @@ async def arrlen(
         >>> await json.set(client, "doc", "$", '[1, 2, 3, 4]')
             'OK'  # JSON is successfully set for doc
         >>> await json.arrlen(client, "doc")
-            4  # Retrieves lengths of arrays in root.
+            4  # Retrieves lengths of array in root.
     """
     args = ["JSON.ARRLEN", key]
     if path:
         args.append(path)
     return cast(
         Optional[TJsonResponse[int]],
+        await client.custom_command(args),
+    )
+
+
+async def arrpop(
+    client: TGlideClient,
+    key: TEncodable,
+    options: Optional[JsonArrPopOptions] = None,
+) -> Optional[TJsonResponse[bytes]]:
+    """
+    Pops an element from the array located at the specified path within the JSON document stored at `key`.
+    If `options.index` is provided, it pops the element at that index instead of the last element.
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+        key (TEncodable): The key of the JSON document.
+        options (Optional[JsonArrPopOptions]): Options including the path and optional index. See `JsonArrPopOptions`. Default to None.
+            If not specified, attempts to pop the last element from the root value if it's an array.
+            If the root value is not an array, an error will be raised.
+
+    Returns:
+        Optional[TJsonResponse[bytes]]:
+            For JSONPath (`options.path` starts with `$`):
+                Returns a list of bytes string replies for every possible path, representing the popped JSON values,
+                or None for JSON values matching the path that are not an array or are an empty array.
+                If `options.path` doesn't exist, an empty list will be returned.
+            For legacy path (`options.path` doesn't starts with `$`):
+                Returns a bytes string representing the popped JSON value, or None if the array at `options.path` is empty.
+                If multiple paths match, the value from the first matching array that is not empty is returned.
+                If the JSON value at `options.path` is not a array or if `options.path` doesn't exist, an error is raised.
+            If `key` doesn't exist, an error is raised.
+
+    Examples:
+        >>> from glide import json
+        >>> await json.set(client, "doc", "$", '{"a": [1, 2, true], "b": {"a": [3, 4, ["value", 3, false], 5], "c": {"a": 42}}}')
+            b'OK'
+        >>> await json.arrpop(client, "doc", JsonArrPopOptions(path="$.a", index=1))
+            [b'2']  # Pop second element from array at path $.a
+        >>> await json.arrpop(client, "doc", JsonArrPopOptions(path="$..a"))
+            [b'true', b'5', None]  # Pop last elements from all arrays matching path `$..a`
+
+        #### Using a legacy path (..) to pop the first matching array
+        >>> await json.arrpop(client, "doc", JsonArrPopOptions(path="..a"))
+            b"1"  # First match popped (from array at path ..a)
+
+        #### Even though only one value is returned from `..a`, subsequent arrays are also affected
+        >>> await json.get(client, "doc", "$..a")
+            b"[[], [3, 4], 42]"  # Remaining elements after pop show the changes
+
+        >>> await json.set(client, "doc", "$", '[[], ["a"], ["a", "b", "c"]]')
+            b'OK'  # JSON is successfully set
+        >>> await json.arrpop(client, "doc", JsonArrPopOptions(path=".", index=-1))
+            b'["a","b","c"]'  # Pop last elements at path `.`
+        >>> await json.arrpop(client, "doc")
+            b'["a"]'  # Pop last elements at path `.`
+    """
+    args = ["JSON.ARRPOP", key]
+    if options:
+        args.extend(options.to_args())
+
+    return cast(
+        Optional[TJsonResponse[bytes]],
         await client.custom_command(args),
     )
 
@@ -260,7 +500,7 @@ async def arrtrim(
     end: int,
 ) -> TJsonResponse[int]:
     """
-    Trims an array at the specified `path` within the JSON document stored at `key` so that it becomes a subarray [start, end], both inclusive.›
+    Trims an array at the specified `path` within the JSON document stored at `key` so that it becomes a subarray [start, end], both inclusive.
     If `start` < 0, it is treated as 0.
     If `end` >= size (size of the array), it is treated as size-1.
     If `start` >= size or `start` > `end`, the array is emptied and 0 is returned.
@@ -363,7 +603,7 @@ async def debug_fields(
     client: TGlideClient,
     key: TEncodable,
     path: Optional[TEncodable] = None,
-) -> Optional[Union[int, List[int]]]:
+) -> Optional[TJsonUniversalResponse[int]]:
     """
     Returns the number of fields of the JSON value at the specified `path` within the JSON document stored at `key`.
     - **Primitive Values**: Each non-container JSON value (e.g., strings, numbers, booleans, and null) counts as one field.
@@ -380,7 +620,7 @@ async def debug_fields(
         path (Optional[TEncodable]): The path within the JSON document. Defaults to root if not provided.
 
     Returns:
-        Optional[Union[int, List[int]]]:
+        Optional[TJsonUniversalResponse[int]]:
             For JSONPath (`path` starts with `$`):
                 Returns an array of integers, each indicating the number of fields for each matched `path`.
                 If `path` doesn't exist, an empty array will be returned.
@@ -411,14 +651,16 @@ async def debug_fields(
     if path:
         args.append(path)
 
-    return cast(Optional[Union[int, List[int]]], await client.custom_command(args))
+    return cast(
+        Optional[TJsonUniversalResponse[int]], await client.custom_command(args)
+    )
 
 
 async def debug_memory(
     client: TGlideClient,
     key: TEncodable,
     path: Optional[TEncodable] = None,
-) -> Optional[Union[int, List[int]]]:
+) -> Optional[TJsonUniversalResponse[int]]:
     """
     Reports memory usage in bytes of a JSON value at the specified `path` within the JSON document stored at `key`.
 
@@ -428,7 +670,7 @@ async def debug_memory(
         path (Optional[TEncodable]): The path within the JSON document. Defaults to None.
 
     Returns:
-        Optional[Union[int, List[int]]]:
+        Optional[TJsonUniversalResponse[int]]:
             For JSONPath (`path` starts with `$`):
                 Returns an array of integers, indicating the memory usage in bytes of a JSON value for each matched `path`.
                 If `path` doesn't exist, an empty array will be returned.
@@ -457,7 +699,9 @@ async def debug_memory(
     if path:
         args.append(path)
 
-    return cast(Optional[Union[int, List[int]]], await client.custom_command(args))
+    return cast(
+        Optional[TJsonUniversalResponse[int]], await client.custom_command(args)
+    )
 
 
 async def delete(
@@ -536,7 +780,7 @@ async def numincrby(
     key: TEncodable,
     path: TEncodable,
     number: Union[int, float],
-) -> Optional[bytes]:
+) -> bytes:
     """
     Increments or decrements the JSON value(s) at the specified `path` by `number` within the JSON document stored at `key`.
 
@@ -547,7 +791,7 @@ async def numincrby(
         number (Union[int, float]): The number to increment or decrement by.
 
     Returns:
-        Optional[bytes]:
+        bytes:
             For JSONPath (`path` starts with `$`):
                 Returns a bytes string representation of an array of bulk strings, indicating the new values after incrementing for each matched `path`.
                 If a value is not a number, its corresponding return value will be `null`.
@@ -563,14 +807,14 @@ async def numincrby(
         >>> from glide import json
         >>> await json.set(client, "doc", "$", '{"a": [], "b": [1], "c": [1, 2], "d": [1, 2, 3]}')
             'OK'
-        >>> await json.numincrby(client, "doc", "$.d[*]", 10)›
+        >>> await json.numincrby(client, "doc", "$.d[*]", 10)
             b'[11,12,13]'  # Increment each element in `d` array by 10.
         >>> await json.numincrby(client, "doc", ".c[1]", 10)
             b'12'  # Increment the second element in the `c` array by 10.
     """
     args = ["JSON.NUMINCRBY", key, path, str(number)]
 
-    return cast(Optional[bytes], await client.custom_command(args))
+    return cast(bytes, await client.custom_command(args))
 
 
 async def nummultby(
@@ -578,7 +822,7 @@ async def nummultby(
     key: TEncodable,
     path: TEncodable,
     number: Union[int, float],
-) -> Optional[bytes]:
+) -> bytes:
     """
     Multiplies the JSON value(s) at the specified `path` by `number` within the JSON document stored at `key`.
 
@@ -589,7 +833,7 @@ async def nummultby(
         number (Union[int, float]): The number to multiply by.
 
     Returns:
-        Optional[bytes]:
+        bytes:
             For JSONPath (`path` starts with `$`):
                 Returns a bytes string representation of an array of bulk strings, indicating the new values after multiplication for each matched `path`.
                 If a value is not a number, its corresponding return value will be `null`.
@@ -612,7 +856,7 @@ async def nummultby(
     """
     args = ["JSON.NUMMULTBY", key, path, str(number)]
 
-    return cast(Optional[bytes], await client.custom_command(args))
+    return cast(bytes, await client.custom_command(args))
 
 
 async def objlen(
@@ -671,7 +915,7 @@ async def objkeys(
     client: TGlideClient,
     key: TEncodable,
     path: Optional[TEncodable] = None,
-) -> Optional[Union[List[bytes], List[List[bytes]]]]:
+) -> Optional[TJsonUniversalResponse[List[bytes]]]:
     """
     Retrieves key names in the object values at the specified `path` within the JSON document stored at `key`.
 
@@ -682,7 +926,7 @@ async def objkeys(
             Defaults to None.
 
     Returns:
-        Optional[Union[List[bytes], List[List[bytes]]]]:
+        Optional[TJsonUniversalResponse[List[bytes]]]:
             For JSONPath (`path` starts with `$`):
                 Returns a list of arrays containing key names for each matching object.
                 If a value matching the path is not an object, an empty array is returned.
@@ -712,6 +956,61 @@ async def objkeys(
         args.append(path)
     return cast(
         Optional[Union[List[bytes], List[List[bytes]]]],
+        await client.custom_command(args),
+    )
+
+
+async def resp(
+    client: TGlideClient, key: TEncodable, path: Optional[TEncodable] = None
+) -> TJsonUniversalResponse[
+    Optional[Union[bytes, int, List[Optional[Union[bytes, int]]]]]
+]:
+    """
+    Retrieve the JSON value at the specified `path` within the JSON document stored at `key`.
+    The returning result is in the Valkey or Redis OSS Serialization Protocol (RESP).\n
+    JSON null is mapped to the RESP Null Bulk String.\n
+    JSON Booleans are mapped to RESP Simple string.\n
+    JSON integers are mapped to RESP Integers.\n
+    JSON doubles are mapped to RESP Bulk Strings.\n
+    JSON strings are mapped to RESP Bulk Strings.\n
+    JSON arrays are represented as RESP arrays, where the first element is the simple string [, followed by the array's elements.\n
+    JSON objects are represented as RESP object, where the first element is the simple string {, followed by key-value pairs, each of which is a RESP bulk string.\n
+
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+        key (TEncodable): The key of the JSON document.
+        path (Optional[TEncodable]): The path within the JSON document. Default to None.
+
+    Returns:
+        TJsonUniversalResponse[Optional[Union[bytes, int, List[Optional[Union[bytes, int]]]]]]
+            For JSONPath ('path' starts with '$'):
+                Returns a list of replies for every possible path, indicating the RESP form of the JSON value.
+                If `path` doesn't exist, returns an empty list.
+            For legacy path (`path` doesn't starts with `$`):
+                Returns a single reply for the JSON value at the specified path, in its RESP form.
+                This can be a bytes object, an integer, None, or a list representing complex structures.
+                If multiple paths match, the value of the first JSON value match is returned.
+                If `path` doesn't exist, an error is raised.
+            If `key` doesn't exist, an None is returned.
+
+    Examples:
+        >>> from glide import json
+        >>> await json.set(client, "doc", "$", '{"a": [1, 2, 3], "b": {"a": [1, 2], "c": {"a": 42}}}')
+            'OK'
+        >>> await json.resp(client, "doc", "$..a")
+            [[b"[", 1, 2, 3],[b"[", 1, 2],42]
+        >>> await json.resp(client, "doc", "..a")
+            [b"[", 1, 2, 3]
+    """
+    args = ["JSON.RESP", key]
+    if path:
+        args.append(path)
+
+    return cast(
+        TJsonUniversalResponse[
+            Optional[Union[bytes, int, List[Optional[Union[bytes, int]]]]]
+        ],
         await client.custom_command(args),
     )
 
@@ -861,7 +1160,7 @@ async def type(
     client: TGlideClient,
     key: TEncodable,
     path: Optional[TEncodable] = None,
-) -> Optional[Union[bytes, List[bytes]]]:
+) -> Optional[TJsonUniversalResponse[bytes]]:
     """
     Retrieves the type of the JSON value at the specified `path` within the JSON document stored at `key`.
 
@@ -871,7 +1170,7 @@ async def type(
         path (Optional[TEncodable]): The path within the JSON document. Default to None.
 
     Returns:
-        Optional[Union[bytes, List[bytes]]]:
+        Optional[TJsonUniversalResponse[bytes]]:
             For JSONPath ('path' starts with '$'):
                 Returns a list of byte string replies for every possible path, indicating the type of the JSON value.
                 If `path` doesn't exist, an empty array will be returned.
@@ -896,4 +1195,6 @@ async def type(
     if path:
         args.append(path)
 
-    return cast(Optional[Union[bytes, List[bytes]]], await client.custom_command(args))
+    return cast(
+        Optional[TJsonUniversalResponse[bytes]], await client.custom_command(args)
+    )

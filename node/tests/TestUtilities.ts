@@ -177,7 +177,6 @@ export function flushallOnPort(port: number): Promise<void> {
  */
 export const parseEndpoints = (endpointsStr: string): [string, number][] => {
     try {
-        console.log(endpointsStr);
         const endpoints: string[][] = endpointsStr
             .split(",")
             .map((endpoint) => endpoint.split(":"));
@@ -388,6 +387,7 @@ export const getClientConfigurationOption = (
         })),
         protocol,
         useTLS: parseCommandLineArgs()["tls"] == "true",
+        requestTimeout: 1000,
         ...configOverrides,
     };
 };
@@ -1310,6 +1310,9 @@ export async function transactionTest(
     baseTransaction.xgroupDestroy(key9, groupName2);
     responseData.push(["xgroupDestroy(key9, groupName2)", true]);
 
+    baseTransaction.wait(1, 200);
+    responseData.push(["wait(1, 200)", 1]);
+
     baseTransaction.rename(key9, key10);
     responseData.push(["rename(key9, key10)", "OK"]);
     baseTransaction.exists([key10]);
@@ -1407,31 +1410,31 @@ export async function transactionTest(
     baseTransaction.geoadd(
         key18,
         new Map<string, GeospatialData>([
-            ["Palermo", { longitude: 13.361389, latitude: 38.115556 }],
-            ["Catania", { longitude: 15.087269, latitude: 37.502669 }],
+            ["palermo", { longitude: 13.361389, latitude: 38.115556 }],
+            ["catania", { longitude: 15.087269, latitude: 37.502669 }],
         ]),
     );
-    responseData.push(["geoadd(key18, { Palermo: ..., Catania: ... })", 2]);
-    baseTransaction.geopos(key18, ["Palermo", "Catania"]);
+    responseData.push(["geoadd(key18, { palermo: ..., catania: ... })", 2]);
+    baseTransaction.geopos(key18, ["palermo", "catania"]);
     responseData.push([
-        'geopos(key18, ["Palermo", "Catania"])',
+        'geopos(key18, ["palermo", "catania"])',
         [
             [13.36138933897018433, 38.11555639549629859],
             [15.08726745843887329, 37.50266842333162032],
         ],
     ]);
-    baseTransaction.geodist(key18, "Palermo", "Catania");
-    responseData.push(['geodist(key18, "Palermo", "Catania")', 166274.1516]);
-    baseTransaction.geodist(key18, "Palermo", "Catania", {
+    baseTransaction.geodist(key18, "palermo", "catania");
+    responseData.push(['geodist(key18, "palermo", "catania")', 166274.1516]);
+    baseTransaction.geodist(key18, "palermo", "catania", {
         unit: GeoUnit.KILOMETERS,
     });
     responseData.push([
-        'geodist(key18, "Palermo", "Catania", { unit: GeoUnit.KILOMETERS })',
+        'geodist(key18, "palermo", "catania", { unit: GeoUnit.KILOMETERS })',
         166.2742,
     ]);
-    baseTransaction.geohash(key18, ["Palermo", "Catania", "NonExisting"]);
+    baseTransaction.geohash(key18, ["palermo", "catania", "NonExisting"]);
     responseData.push([
-        'geohash(key18, ["Palermo", "Catania", "NonExisting"])',
+        'geohash(key18, ["palermo", "catania", "NonExisting"])',
         ["sqc8b49rny0", "sqdtr74hyu0", null],
     ]);
     baseTransaction.zadd(key23, { one: 1.0 });
@@ -1450,7 +1453,7 @@ export async function transactionTest(
         baseTransaction
             .geosearch(
                 key18,
-                { member: "Palermo" },
+                { member: "palermo" },
                 { radius: 200, unit: GeoUnit.KILOMETERS },
                 { sortOrder: SortOrder.ASC },
             )
@@ -1461,7 +1464,7 @@ export async function transactionTest(
             )
             .geosearch(
                 key18,
-                { member: "Palermo" },
+                { member: "palermo" },
                 { radius: 200, unit: GeoUnit.KILOMETERS },
                 {
                     sortOrder: SortOrder.ASC,
@@ -1484,18 +1487,18 @@ export async function transactionTest(
                 },
             );
         responseData.push([
-            'geosearch(key18, "Palermo", R200 KM, ASC)',
-            ["Palermo", "Catania"],
+            'geosearch(key18, "palermo", R200 KM, ASC)',
+            ["palermo", "catania"],
         ]);
         responseData.push([
             "geosearch(key18, (15, 37), 400x400 KM, ASC)",
-            ["Palermo", "Catania"],
+            ["palermo", "catania"],
         ]);
         responseData.push([
-            'geosearch(key18, "Palermo", R200 KM, ASC 2 3x true)',
+            'geosearch(key18, "palermo", R200 KM, ASC 2 3x true)',
             [
                 [
-                    "Palermo",
+                    "palermo",
                     [
                         0.0,
                         3479099956230698,
@@ -1503,7 +1506,7 @@ export async function transactionTest(
                     ],
                 ],
                 [
-                    "Catania",
+                    "catania",
                     [
                         166.2742,
                         3479447370796909,
@@ -1516,7 +1519,7 @@ export async function transactionTest(
             "geosearch(key18, (15, 37), 400x400 KM, ASC 2 3x true)",
             [
                 [
-                    "Catania",
+                    "catania",
                     [
                         56.4413,
                         3479447370796909,
@@ -1524,7 +1527,7 @@ export async function transactionTest(
                     ],
                 ],
                 [
-                    "Palermo",
+                    "palermo",
                     [
                         190.4424,
                         3479099956230698,
