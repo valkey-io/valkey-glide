@@ -84,6 +84,33 @@ class JsonArrIndexOptions:
         return args
 
 
+class JsonArrPopOptions:
+    """
+    Options for the JSON.ARRPOP command.
+
+    Args:
+        path (TEncodable): The path within the JSON document.
+        index (Optional[int]): The index of the element to pop. If not specified, will pop the last element.
+            Out of boundary indexes are rounded to their respective array boundaries. Defaults to None.
+    """
+
+    def __init__(self, path: TEncodable, index: Optional[int] = None):
+        self.path = path
+        self.index = index
+
+    def to_args(self) -> List[TEncodable]:
+        """
+        Get the options as a list of arguments for the JSON.ARRPOP command.
+
+        Returns:
+            List[TEncodable]: A list containing the path and, if specified, the index.
+        """
+        args = [self.path]
+        if self.index is not None:
+            args.append(str(self.index))
+        return args
+
+
 async def set(
     client: TGlideClient,
     key: TEncodable,
@@ -383,7 +410,7 @@ async def arrlen(
         >>> await json.arrlen(client, "doc", "$.a")
             [3]  # Retrieves the length of the array at path $.a.
         >>> await json.arrlen(client, "doc", "$..a")
-            [3, 2, None]  # Retrieves lengths of arrays found at all levels of the path `..a`.
+            [3, 2, None]  # Retrieves lengths of arrays found at all levels of the path `$..a`.
         >>> await json.arrlen(client, "doc", "..a")
             3  # Legacy path retrieves the first array match at path `..a`.
         >>> await json.arrlen(client, "non_existing_key", "$.a")
@@ -392,13 +419,75 @@ async def arrlen(
         >>> await json.set(client, "doc", "$", '[1, 2, 3, 4]')
             'OK'  # JSON is successfully set for doc
         >>> await json.arrlen(client, "doc")
-            4  # Retrieves lengths of arrays in root.
+            4  # Retrieves lengths of array in root.
     """
     args = ["JSON.ARRLEN", key]
     if path:
         args.append(path)
     return cast(
         Optional[TJsonResponse[int]],
+        await client.custom_command(args),
+    )
+
+
+async def arrpop(
+    client: TGlideClient,
+    key: TEncodable,
+    options: Optional[JsonArrPopOptions] = None,
+) -> Optional[TJsonResponse[bytes]]:
+    """
+    Pops an element from the array located at the specified path within the JSON document stored at `key`.
+    If `options.index` is provided, it pops the element at that index instead of the last element.
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+        key (TEncodable): The key of the JSON document.
+        options (Optional[JsonArrPopOptions]): Options including the path and optional index. See `JsonArrPopOptions`. Default to None.
+            If not specified, attempts to pop the last element from the root value if it's an array.
+            If the root value is not an array, an error will be raised.
+
+    Returns:
+        Optional[TJsonResponse[bytes]]:
+            For JSONPath (`options.path` starts with `$`):
+                Returns a list of bytes string replies for every possible path, representing the popped JSON values,
+                or None for JSON values matching the path that are not an array or are an empty array.
+                If `options.path` doesn't exist, an empty list will be returned.
+            For legacy path (`options.path` doesn't starts with `$`):
+                Returns a bytes string representing the popped JSON value, or None if the array at `options.path` is empty.
+                If multiple paths match, the value from the first matching array that is not empty is returned.
+                If the JSON value at `options.path` is not a array or if `options.path` doesn't exist, an error is raised.
+            If `key` doesn't exist, an error is raised.
+
+    Examples:
+        >>> from glide import json
+        >>> await json.set(client, "doc", "$", '{"a": [1, 2, true], "b": {"a": [3, 4, ["value", 3, false], 5], "c": {"a": 42}}}')
+            b'OK'
+        >>> await json.arrpop(client, "doc", JsonArrPopOptions(path="$.a", index=1))
+            [b'2']  # Pop second element from array at path $.a
+        >>> await json.arrpop(client, "doc", JsonArrPopOptions(path="$..a"))
+            [b'true', b'5', None]  # Pop last elements from all arrays matching path `$..a`
+
+        #### Using a legacy path (..) to pop the first matching array
+        >>> await json.arrpop(client, "doc", JsonArrPopOptions(path="..a"))
+            b"1"  # First match popped (from array at path ..a)
+
+        #### Even though only one value is returned from `..a`, subsequent arrays are also affected
+        >>> await json.get(client, "doc", "$..a")
+            b"[[], [3, 4], 42]"  # Remaining elements after pop show the changes
+
+        >>> await json.set(client, "doc", "$", '[[], ["a"], ["a", "b", "c"]]')
+            b'OK'  # JSON is successfully set
+        >>> await json.arrpop(client, "doc", JsonArrPopOptions(path=".", index=-1))
+            b'["a","b","c"]'  # Pop last elements at path `.`
+        >>> await json.arrpop(client, "doc")
+            b'["a"]'  # Pop last elements at path `.`
+    """
+    args = ["JSON.ARRPOP", key]
+    if options:
+        args.extend(options.to_args())
+
+    return cast(
+        Optional[TJsonResponse[bytes]],
         await client.custom_command(args),
     )
 
@@ -691,7 +780,7 @@ async def numincrby(
     key: TEncodable,
     path: TEncodable,
     number: Union[int, float],
-) -> Optional[bytes]:
+) -> bytes:
     """
     Increments or decrements the JSON value(s) at the specified `path` by `number` within the JSON document stored at `key`.
 
@@ -702,7 +791,7 @@ async def numincrby(
         number (Union[int, float]): The number to increment or decrement by.
 
     Returns:
-        Optional[bytes]:
+        bytes:
             For JSONPath (`path` starts with `$`):
                 Returns a bytes string representation of an array of bulk strings, indicating the new values after incrementing for each matched `path`.
                 If a value is not a number, its corresponding return value will be `null`.
@@ -725,7 +814,7 @@ async def numincrby(
     """
     args = ["JSON.NUMINCRBY", key, path, str(number)]
 
-    return cast(Optional[bytes], await client.custom_command(args))
+    return cast(bytes, await client.custom_command(args))
 
 
 async def nummultby(
@@ -733,7 +822,7 @@ async def nummultby(
     key: TEncodable,
     path: TEncodable,
     number: Union[int, float],
-) -> Optional[bytes]:
+) -> bytes:
     """
     Multiplies the JSON value(s) at the specified `path` by `number` within the JSON document stored at `key`.
 
@@ -744,7 +833,7 @@ async def nummultby(
         number (Union[int, float]): The number to multiply by.
 
     Returns:
-        Optional[bytes]:
+        bytes:
             For JSONPath (`path` starts with `$`):
                 Returns a bytes string representation of an array of bulk strings, indicating the new values after multiplication for each matched `path`.
                 If a value is not a number, its corresponding return value will be `null`.
@@ -767,7 +856,7 @@ async def nummultby(
     """
     args = ["JSON.NUMMULTBY", key, path, str(number)]
 
-    return cast(Optional[bytes], await client.custom_command(args))
+    return cast(bytes, await client.custom_command(args))
 
 
 async def objlen(
