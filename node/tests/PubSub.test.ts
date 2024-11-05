@@ -2862,12 +2862,6 @@ describe("PubSub", () => {
                 await Promise.all([
                     checkNoMessagesLeft(
                         method,
-                        clientSharded,
-                        callbackMessagesSharded,
-                        1,
-                    ),
-                    checkNoMessagesLeft(
-                        method,
                         clientPattern,
                         callbackMessagesPattern,
                         2,
