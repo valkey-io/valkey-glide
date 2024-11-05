@@ -15,6 +15,7 @@ import glide.api.models.commands.json.JsonGetOptions;
 import glide.api.models.commands.json.JsonGetOptionsBinary;
 import glide.api.models.commands.json.JsonScalar;
 import glide.utils.ArgsBuilder;
+import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 import lombok.NonNull;
 
