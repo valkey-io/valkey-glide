@@ -3807,17 +3807,10 @@ describe("PubSub", () => {
             } finally {
                 await Promise.all([
                     client1
-                        ? clientCleanup(
-                              client1,
-                              pubSub ? pubSub : undefined,
-                          )
+                        ? clientCleanup(client1, pubSub ? pubSub : undefined)
                         : Promise.resolve(),
-                    client2
-                        ? clientCleanup(client2)
-                        : Promise.resolve(),
-                    client
-                        ? clientCleanup(client)
-                        : Promise.resolve(),
+                    client2 ? clientCleanup(client2) : Promise.resolve(),
+                    client ? clientCleanup(client) : Promise.resolve(),
                 ]);
             }
         },
@@ -3938,29 +3931,16 @@ describe("PubSub", () => {
             } finally {
                 await Promise.all([
                     client1
-                        ? clientCleanup(
-                        client1,
-                              pubSub1 ? pubSub1 : undefined,
-                          )
+                        ? clientCleanup(client1, pubSub1 ? pubSub1 : undefined)
                         : Promise.resolve(),
                     client2
-                        ? clientCleanup(
-                              client2,
-                              pubSub2 ? pubSub2 : undefined,
-                          )
+                        ? clientCleanup(client2, pubSub2 ? pubSub2 : undefined)
                         : Promise.resolve(),
                     client3
-                        ? clientCleanup(
-                              client3,
-                              pubSub3 ? pubSub3 : undefined,
-                          )
+                        ? clientCleanup(client3, pubSub3 ? pubSub3 : undefined)
                         : Promise.resolve(),
-                    client4
-                        ? clientCleanup(client4)
-                        : Promise.resolve(),
-                    client
-                        ? clientCleanup(client)
-                        : Promise.resolve(),
+                    client4 ? clientCleanup(client4) : Promise.resolve(),
+                    client ? clientCleanup(client) : Promise.resolve(),
                 ]);
             }
         },
