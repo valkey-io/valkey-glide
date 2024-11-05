@@ -673,7 +673,7 @@ export class GlideJson {
      * @returns
      *     - For JSONPath (path starts with `$`):
      *       - Returns an array of numbers for every possible path, indicating the memory usage.
-     *         If `path does not exist, an empty array will be returned.
+     *         If `path` does not exist, an empty array will be returned.
      *     - For legacy path (path doesn't start with `$`):
      *       - Returns an integer representing the memory usage. If multiple paths are matched,
      *         returns the data of the first matching object. If `path` doesn't exist, an error is raised.
