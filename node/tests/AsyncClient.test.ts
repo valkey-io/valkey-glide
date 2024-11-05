@@ -35,8 +35,8 @@ describe("AsyncClient", () => {
         await flushallOnPort(port);
     });
 
-    afterAll(() => {
-        server.close();
+    afterAll(async () => {
+        await server.close();
     });
 
     runCommonTests({

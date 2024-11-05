@@ -2,7 +2,9 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
+#[allow(unused_imports)]
 use logger_core::log_warn;
+#[allow(unused_imports)]
 use std::collections::HashSet;
 use std::time::Duration;
 
