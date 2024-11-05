@@ -1181,8 +1181,7 @@ public class Json {
      *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
      *           Returns an array with a strings for every possible path, representing the popped JSON
      *           values, or <code>null</code> for JSON values matching the path that are not an array
-     *           or an empty array. If a value is not an array, its corresponding return value is
-     *           <code>"null"</code>.
+     *           or an empty array.
      *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
      *           Returns a string representing the popped JSON value, or <code>null</code> if the
      *           array at <code>path</code> is empty. If multiple paths are matched, the value from
@@ -1216,8 +1215,7 @@ public class Json {
      *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
      *           Returns an array with a strings for every possible path, representing the popped JSON
      *           values, or <code>null</code> for JSON values matching the path that are not an array
-     *           or an empty array. If a value is not an array, its corresponding return value is
-     *           <code>"null"</code>.
+     *           or an empty array.
      *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
      *           Returns a string representing the popped JSON value, or <code>null</code> if the
      *           array at <code>path</code> is empty. If multiple paths are matched, the value from
@@ -1253,8 +1251,7 @@ public class Json {
      *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
      *           Returns an array with a strings for every possible path, representing the popped JSON
      *           values, or <code>null</code> for JSON values matching the path that are not an array
-     *           or an empty array. If a value is not an array, its corresponding return value is
-     *           <code>"null"</code>.
+     *           or an empty array.
      *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
      *           Returns a string representing the popped JSON value, or <code>null</code> if the
      *           array at <code>path</code> is empty. If multiple paths are matched, the value from
@@ -1293,8 +1290,7 @@ public class Json {
      *       <li>For JSONPath (<code>path</code> starts with <code>$</code>):<br>
      *           Returns an array with a strings for every possible path, representing the popped JSON
      *           values, or <code>null</code> for JSON values matching the path that are not an array
-     *           or an empty array. If a value is not an array, its corresponding return value is
-     *           <code>"null"</code>.
+     *           or an empty array.
      *       <li>For legacy path (<code>path</code> doesn't start with <code>$</code>):<br>
      *           Returns a string representing the popped JSON value, or <code>null</code> if the
      *           array at <code>path</code> is empty. If multiple paths are matched, the value from
@@ -1321,7 +1317,7 @@ public class Json {
     }
 
     /**
-     * Trims an array at the specified <code>path</code> within the JSON document started at <code>key
+     * Trims an array at the specified <code>path</code> within the JSON document stored at <code>key
      * </code> so that it becomes a subarray [<code>start</code>, <code>end</code>], both inclusive.
      * <br>
      * If <code>start</code> < 0, it is treated as 0.<br>
@@ -1369,7 +1365,7 @@ public class Json {
     }
 
     /**
-     * Trims an array at the specified <code>path</code> within the JSON document started at <code>key
+     * Trims an array at the specified <code>path</code> within the JSON document stored at <code>key
      * </code> so that it becomes a subarray [<code>start</code>, <code>end</code>], both inclusive.
      * <br>
      * If <code>start</code> < 0, it is treated as 0.<br>
@@ -2665,6 +2661,114 @@ public class Json {
     public static CompletableFuture<Object> resp(
             @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString path) {
         return executeCommand(client, new GlideString[] {gs(JSON_RESP), key, path});
+    }
+
+    /**
+     * Retrieves the type of the JSON value at the root of the JSON document stored at <code>key
+     * </code>.
+     *
+     * @param client The Valkey GLIDE client to execute the command.
+     * @param key The key of the JSON document.
+     * @return Returns the type of the JSON value at root. If <code>key</code> doesn't exist, <code>
+     *     null</code> is returned.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "[1, 2, 3]");
+     * assertEquals("array", Json.type(client, "doc").get());
+     *
+     * Json.set(client, "doc", "$", "{\"a\": 1}");
+     * assertEquals("object", Json.type(client, "doc").get());
+     *
+     * assertNull(Json.type(client, "non_existing_key").get());
+     * }</pre>
+     */
+    public static CompletableFuture<Object> type(@NonNull BaseClient client, @NonNull String key) {
+        return executeCommand(client, new String[] {JSON_TYPE, key});
+    }
+
+    /**
+     * Retrieves the type of the JSON value at the root of the JSON document stored at <code>key
+     * </code>.
+     *
+     * @param client The Valkey GLIDE client to execute the command.
+     * @param key The key of the JSON document.
+     * @return Returns the type of the JSON value at root. If <code>key</code> doesn't exist, <code>
+     *     null</code> is returned.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "[1, 2, 3]");
+     * assertEquals(gs("array"), Json.type(client, gs("doc")).get());
+     *
+     * Json.set(client, "doc", "$", "{\"a\": 1}");
+     * assertEquals(gs("object"), Json.type(client, gs("doc")).get());
+     *
+     * assertNull(Json.type(client, gs("non_existing_key")).get());
+     * }</pre>
+     */
+    public static CompletableFuture<Object> type(
+            @NonNull BaseClient client, @NonNull GlideString key) {
+        return executeCommand(client, new GlideString[] {gs(JSON_TYPE), key});
+    }
+
+    /**
+     * Retrieves the type of the JSON value at the specified <code>path</code> within the JSON
+     * document stored at <code>key</code>.
+     *
+     * @param client The Valkey GLIDE client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path Represents the path within the JSON document where the type will be retrieved.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>): Returns a list of string
+     *           replies for every possible path, indicating the type of the JSON value. If `path`
+     *           doesn't exist, an empty array will be returned.
+     *       <li>For legacy path (<code>path</code> doesn't starts with <code>$</code>): Returns the
+     *           type of the JSON value at `path`. If multiple paths match, the type of the first JSON
+     *           value match is returned. If `path` doesn't exist, <code>null</code> will be returned.
+     *     </ul>
+     *     If <code>key</code> doesn't exist, <code>null</code> is returned.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}}");
+     * assertArrayEquals(new Object[]{"object"}, (Object[]) Json.type(client, key, "$.nested").get());
+     * assertArrayEquals(new Object[]{"integer"}, (Object[]) Json.type(client, key, "$.nested.a").get());
+     * assertArrayEquals(new Object[]{"integer", "object"}, (Object[]) Json.type(client, key, "$[*]").get());
+     * }</pre>
+     */
+    public static CompletableFuture<Object> type(
+            @NonNull BaseClient client, @NonNull String key, @NonNull String path) {
+
+        return executeCommand(client, new String[] {JSON_TYPE, key, path});
+    }
+
+    /**
+     * Retrieves the type of the JSON value at the specified <code>path</code> within the JSON
+     * document stored at <code>key</code>.
+     *
+     * @param client The Valkey GLIDE client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path Represents the path within the JSON document where the type will be retrieved.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>): Returns a list of string
+     *           replies for every possible path, indicating the type of the JSON value. If `path`
+     *           doesn't exist, an empty array will be returned.
+     *       <li>For legacy path (<code>path</code> doesn't starts with <code>$</code>): Returns the
+     *           type of the JSON value at `path`. If multiple paths match, the type of the first JSON
+     *           value match is returned. If `path` doesn't exist, <code>null</code> will be returned.
+     *     </ul>
+     *     If <code>key</code> doesn't exist, <code>null</code> is returned.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc", "$", "{\"a\": 1, \"nested\": {\"a\": 2, \"b\": 3}}");
+     * assertArrayEquals(new Object[]{gs("object")}, (Object[]) Json.type(client, gs(key), gs("$.nested")).get());
+     * assertArrayEquals(new Object[]{gs("integer")}, (Object[]) Json.type(client, gs(key), gs("$.nested.a")).get());
+     * assertArrayEquals(new Object[]{gs("integer"), gs("object")}, (Object[]) Json.type(client, gs(key), gs("$[*]")).get());
+     * }</pre>
+     */
+    public static CompletableFuture<Object> type(
+            @NonNull BaseClient client, @NonNull GlideString key, @NonNull GlideString path) {
+        return executeCommand(client, new GlideString[] {gs(JSON_TYPE), key, path});
     }
 
     /**
