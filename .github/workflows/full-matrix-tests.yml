@@ -1,0 +1,123 @@
+name: Full Matrix tests
+
+on:
+    workflow_dispatch: # note: if started manually, it won't run all matrix
+        inputs:
+            full-matrix:
+                description: "Run the full engine and host matrix"
+                type: boolean
+                default: false
+            # GHA supports up to 10 inputs, there is no option for multi-choice
+            core:
+                description: "Test GLIDE core"
+                type: boolean
+                default: true
+            # redis-rs:
+            #     description: "Test Redis-RS client"
+            #     type: boolean
+            #     default: true
+            node:
+                description: "Test Node client"
+                type: boolean
+                default: true
+            python:
+                description: "Test Python client"
+                type: boolean
+                default: true
+            java:
+                description: "Test Java client"
+                type: boolean
+                default: true
+            csharp:
+                description: "Test C# client"
+                type: boolean
+                default: false
+            go:
+                description: "Test Golang client"
+                type: boolean
+                default: false
+
+    schedule:
+        - cron: "0 3 * * *"
+
+concurrency:
+    group: full-matrix-tests
+    cancel-in-progress: false
+
+# TODO matrix by workflow (`uses`) - not supported yet by GH
+jobs:
+    check-running-workflow:
+        runs-on: ubuntu-latest
+        outputs:
+            is_running: ${{ steps.check.outputs.is_running }}
+        steps:
+            - name: Check if the same workflow is running
+              id: check
+              uses: actions/github-script@v6
+              with:
+                  script: |
+                      const { data } = await github.rest.actions.listWorkflowRuns({
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        workflow_id: context.workflow,
+                        status: 'in_progress',
+                      });
+                      const isRunning = data.workflow_runs.some(run => run.id !== context.runId);
+                      core.setOutput('is_running', isRunning.toString());
+    check-input:
+        runs-on: ubuntu-latest
+        needs: check-running-workflow
+        if: needs.check-running-workflow.outputs.is_running == 'false'
+        steps:
+            - name: No tests selected
+              run: echo "No tests selected."
+              if: github.event_name == 'workflow_dispatch' && inputs.core == 'false' && inputs.java == 'false' && inputs.python == 'false' && inputs.node == 'false' && inputs.csharp == 'false' && inputs.go == 'false'
+
+    run-full-tests-for-core:
+        needs: check-running-workflow
+        if: needs.check-running-workflow.outputs.is_running == 'false' && inputs.core == 'true'
+        uses: ./.github/workflows/rust.yml
+        name: Run CI for GLIDE core lib
+        secrets: inherit
+
+    # run-full-tests-for-redis-rs:
+    #     needs: check-running-workflow
+    #     if: needs.check-running-workflow.outputs.is_running == 'false' && inputs.redis-rs == 'true'
+    #     uses: ./.github/workflows/redis-rs.yml
+    #     name: Run CI for Redis-RS client
+    #     secrets: inherit
+
+    run-full-tests-for-java:
+        needs: check-running-workflow
+        if: needs.check-running-workflow.outputs.is_running == 'false' && inputs.java == 'true'
+        uses: ./.github/workflows/java.yml
+        name: Run CI for Java client
+        secrets: inherit
+
+    run-full-tests-for-python:
+        needs: check-running-workflow
+        if: needs.check-running-workflow.outputs.is_running == 'false' && inputs.python == 'true'
+        uses: ./.github/workflows/python.yml
+        name: Run CI for Python client
+        secrets: inherit
+
+    run-full-tests-for-node:
+        needs: check-running-workflow
+        if: needs.check-running-workflow.outputs.is_running == 'false' && inputs.node == 'true'
+        uses: ./.github/workflows/node.yml
+        name: Run CI for Node client
+        secrets: inherit
+
+    run-full-tests-for-csharp:
+        needs: check-running-workflow
+        if: needs.check-running-workflow.outputs.is_running == 'false' && inputs.csharp == 'true'
+        uses: ./.github/workflows/csharp.yml
+        name: Run CI for C# client
+        secrets: inherit
+
+    run-full-tests-for-go:
+        needs: check-running-workflow
+        if: needs.check-running-workflow.outputs.is_running == 'false' && inputs.go == 'true'
+        uses: ./.github/workflows/go.yml
+        name: Run CI for Go client
+        secrets: inherit
