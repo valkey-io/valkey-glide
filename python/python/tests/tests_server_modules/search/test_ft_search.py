@@ -13,12 +13,15 @@ from glide.async_commands.server_modules.ft_options.ft_create_options import (
     FtCreateOptions,
     NumericField,
 )
+from glide.async_commands.server_modules.ft_options.ft_profile_options import (
+    FtProfileOptions,
+)
 from glide.async_commands.server_modules.ft_options.ft_search_options import (
     FtSeachOptions,
     ReturnField,
 )
 from glide.config import ProtocolVersion
-from glide.constants import OK, TEncodable
+from glide.constants import OK, FtSearchResponse, TEncodable
 from glide.glide_client import GlideClusterClient
 
 
@@ -38,7 +41,7 @@ class TestFtSearch:
         prefixes.append(prefix)
         index = prefix + str(uuid.uuid4())
 
-        # Create an index
+        # Create an index.
         assert (
             await ft.create(
                 glide_client,
@@ -52,7 +55,7 @@ class TestFtSearch:
             == OK
         )
 
-        # Create a json key
+        # Create a json key.
         assert (
             await GlideJson.set(glide_client, json_key1, "$", json.dumps(json_value1))
             == OK
@@ -65,19 +68,16 @@ class TestFtSearch:
         # Wait for index to be updated to avoid this error - ResponseError: The index is under construction.
         time.sleep(self.sleep_wait_time)
 
-        # Search the index for string inputs
-        result1 = await ft.search(
-            glide_client,
-            index,
-            "*",
-            options=FtSeachOptions(
-                return_fields=[
-                    ReturnField(field_identifier="a", alias="a_new"),
-                    ReturnField(field_identifier="b", alias="b_new"),
-                ]
-            ),
+        ftSearchOptions = FtSeachOptions(
+            return_fields=[
+                ReturnField(field_identifier="a", alias="a_new"),
+                ReturnField(field_identifier="b", alias="b_new"),
+            ]
         )
-        # Check if we get the expected result from ft.search for string inputs
+
+        # Search the index for string inputs.
+        result1 = await ft.search(glide_client, index, "*", options=ftSearchOptions)
+        # Check if we get the expected result from ft.search for string inputs.
         TestFtSearch._ft_search_deep_compare_result(
             self,
             result=result1,
@@ -89,23 +89,67 @@ class TestFtSearch:
             fieldName2="b",
         )
 
-        # Search the index for byte inputs
-        result2 = await ft.search(
+        # Test FT.PROFILE for the above mentioned FT.SEARCH query and search options.
+
+        ftProfileResult = await ft.profile(
             glide_client,
-            bytes(index, "utf-8"),
-            b"*",
-            options=FtSeachOptions(
-                return_fields=[
-                    ReturnField(field_identifier=b"a", alias=b"a_new"),
-                    ReturnField(field_identifier=b"b", alias=b"b_new"),
-                ]
+            index,
+            FtProfileOptions.from_query_options(
+                query="*", queryOptions=ftSearchOptions
             ),
         )
+        print(ftProfileResult)
+        assert len(ftProfileResult) > 0
 
-        # Check if we get the expected result from ft.search from byte inputs
+        # Check if we get the expected result from FT.PROFILE for string inputs.
+        TestFtSearch._ft_search_deep_compare_result(
+            self,
+            result=cast(FtSearchResponse, ftProfileResult[0]),
+            json_key1=json_key1,
+            json_key2=json_key2,
+            json_value1=json_value1,
+            json_value2=json_value2,
+            fieldName1="a",
+            fieldName2="b",
+        )
+        ftSearchOptionsByteInput = FtSeachOptions(
+            return_fields=[
+                ReturnField(field_identifier=b"a", alias=b"a_new"),
+                ReturnField(field_identifier=b"b", alias=b"b_new"),
+            ]
+        )
+
+        # Search the index for byte type inputs.
+        result2 = await ft.search(
+            glide_client, bytes(index, "utf-8"), b"*", options=ftSearchOptionsByteInput
+        )
+
+        # Check if we get the expected result from ft.search for byte type inputs.
         TestFtSearch._ft_search_deep_compare_result(
             self,
             result=result2,
+            json_key1=json_key1,
+            json_key2=json_key2,
+            json_value1=json_value1,
+            json_value2=json_value2,
+            fieldName1="a",
+            fieldName2="b",
+        )
+
+        # Test FT.PROFILE for the above mentioned FT.SEARCH query and search options for byte type inputs.
+        ftProfileResult = await ft.profile(
+            glide_client,
+            index,
+            FtProfileOptions.from_query_options(
+                query=b"*", queryOptions=ftSearchOptionsByteInput
+            ),
+        )
+        assert len(ftProfileResult) > 0
+
+        # Check if we get the expected result from FT.PROFILE for byte type inputs.
+        TestFtSearch._ft_search_deep_compare_result(
+            self,
+            result=cast(FtSearchResponse, ftProfileResult[0]),
             json_key1=json_key1,
             json_key2=json_key2,
             json_value1=json_value1,

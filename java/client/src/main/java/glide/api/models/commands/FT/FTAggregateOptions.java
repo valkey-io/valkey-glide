@@ -29,7 +29,7 @@ public class FTAggregateOptions {
 
     private final GlideString[] loadFields;
 
-    private final List<FTAggregateExpression> expressions;
+    private final List<FTAggregateClause> clauses;
 
     /** Convert to module API. */
     public GlideString[] toArgs() {
@@ -55,8 +55,8 @@ public class FTAggregateOptions {
                         args.add(value);
                     });
         }
-        if (expressions != null) {
-            for (var expression : expressions) {
+        if (clauses != null) {
+            for (var expression : clauses) {
                 args.addAll(List.of(expression.toArgs()));
             }
         }
@@ -73,37 +73,58 @@ public class FTAggregateOptions {
         // private - hiding this API from user
         void loadAll(boolean loadAll) {}
 
-        void expressions(List<FTAggregateExpression> expressions) {}
+        void expressions(List<FTAggregateClause> expressions) {}
 
+        /** Load all fields declared in the index. */
         public FTAggregateOptionsBuilder loadAll() {
             loadAll = true;
             return this;
         }
 
+        /** Load specified fields from the index. */
         public FTAggregateOptionsBuilder loadFields(@NonNull String[] fields) {
             loadFields = toGlideStringArray(fields);
             loadAll = false;
             return this;
         }
 
+        /** Load specified fields from the index. */
         public FTAggregateOptionsBuilder loadFields(@NonNull GlideString[] fields) {
             loadFields = fields;
             loadAll = false;
             return this;
         }
 
-        public FTAggregateOptionsBuilder addExpression(@NonNull FTAggregateExpression expression) {
-            if (expressions == null) expressions = new ArrayList<>();
-            expressions.add(expression);
+        /**
+         * Add {@link Filter}, {@link Limit}, {@link GroupBy}, {@link SortBy} or {@link Apply} clause to
+         * the pipeline, that can be repeated multiple times in any order and be freely intermixed. They
+         * are applied in the order specified, with the output of one clause feeding the input of the
+         * next clause.
+         */
+        public FTAggregateOptionsBuilder addClause(@NonNull FTAggregateClause clause) {
+            if (clauses == null) clauses = new ArrayList<>();
+            clauses.add(clause);
             return this;
         }
     }
 
-    public abstract static class FTAggregateExpression {
+    /**
+     * A superclass for clauses which could be added to <code>FT.AGGREGATE</code> pipeline.<br>
+     * A clause could be either:
+     *
+     * <ul>
+     *   <li>{@link Filter}
+     *   <li>{@link Limit}
+     *   <li>{@link GroupBy}
+     *   <li>{@link SortBy}
+     *   <li>{@link Apply}
+     * </ul>
+     */
+    public abstract static class FTAggregateClause {
         abstract GlideString[] toArgs();
     }
 
-    enum ExpressionType {
+    enum ClauseType {
         LIMIT,
         FILTER,
         GROUPBY,
@@ -112,11 +133,17 @@ public class FTAggregateOptions {
         APPLY
     }
 
-    /** Configure results limiting. */
-    public static class Limit extends FTAggregateExpression {
+    /** A clause for limiting the number of retained records. */
+    public static class Limit extends FTAggregateClause {
         private final int offset;
         private final int count;
 
+        /**
+         * Initialize a new instance.
+         *
+         * @param offset Starting point from which the records have to be retained.
+         * @param count The total number of records to be retained.
+         */
         public Limit(int offset, int count) {
             this.offset = offset;
             this.count = count;
@@ -125,9 +152,7 @@ public class FTAggregateOptions {
         @Override
         GlideString[] toArgs() {
             return new GlideString[] {
-                gs(ExpressionType.LIMIT.toString()),
-                gs(Integer.toString(offset)),
-                gs(Integer.toString(count))
+                gs(ClauseType.LIMIT.toString()), gs(Integer.toString(offset)), gs(Integer.toString(count))
             };
         }
     }
@@ -136,56 +161,67 @@ public class FTAggregateOptions {
      * Filter the results using predicate expression relating to values in each result. It is applied
      * post query and relate to the current state of the pipeline.
      */
-    public static class Filter extends FTAggregateExpression {
+    public static class Filter extends FTAggregateClause {
         private final GlideString expression;
 
+        /**
+         * Initialize a new instance.
+         *
+         * @param expression The expression to filter the results.
+         */
         public Filter(@NonNull GlideString expression) {
             this.expression = expression;
         }
 
+        /**
+         * Initialize a new instance.
+         *
+         * @param expression The expression to filter the results.
+         */
         public Filter(@NonNull String expression) {
             this.expression = gs(expression);
         }
 
         @Override
         GlideString[] toArgs() {
-            return new GlideString[] {gs(ExpressionType.FILTER.toString()), expression};
+            return new GlideString[] {gs(ClauseType.FILTER.toString()), expression};
         }
     }
 
-    /**
-     * Filter the results using predicate expression relating to values in each result. It is applied
-     * post query and relate to the current state of the pipeline.
-     */
-    public static class GroupBy extends FTAggregateExpression {
+    /** A clause for grouping the results in the pipeline based on one or more properties. */
+    public static class GroupBy extends FTAggregateClause {
         private final GlideString[] properties;
         private final Reducer[] reducers;
 
+        /**
+         * Initialize a new instance.
+         *
+         * @param properties The list of properties to be used for grouping the results in the pipeline.
+         * @param reducers The list of functions that handles the group entries by performing multiple
+         *     aggregate operations.
+         */
         public GroupBy(@NonNull GlideString[] properties, @NonNull Reducer[] reducers) {
             this.properties = properties;
             this.reducers = reducers;
         }
 
+        /**
+         * Initialize a new instance.
+         *
+         * @param properties The list of properties to be used for grouping the results in the pipeline.
+         * @param reducers The list of functions that handles the group entries by performing multiple
+         *     aggregate operations.
+         */
         public GroupBy(@NonNull String[] properties, @NonNull Reducer[] reducers) {
             this.properties = toGlideStringArray(properties);
             this.reducers = reducers;
-        }
-
-        public GroupBy(@NonNull GlideString[] properties) {
-            this.properties = properties;
-            this.reducers = new Reducer[0];
-        }
-
-        public GroupBy(@NonNull String[] properties) {
-            this.properties = toGlideStringArray(properties);
-            this.reducers = new Reducer[0];
         }
 
         @Override
         GlideString[] toArgs() {
             return concatenateArrays(
                     new GlideString[] {
-                        gs(ExpressionType.GROUPBY.toString()), gs(Integer.toString(properties.length))
+                        gs(ClauseType.GROUPBY.toString()), gs(Integer.toString(properties.length))
                     },
                     properties,
                     Stream.of(reducers).map(Reducer::toArgs).flatMap(Stream::of).toArray(GlideString[]::new));
@@ -198,54 +234,92 @@ public class FTAggregateOptions {
         public static class Reducer {
             private final String function;
             private final GlideString[] args;
-            private final String alias;
+            private final String name;
 
-            public Reducer(@NonNull String function, @NonNull GlideString[] args, @NonNull String alias) {
+            /**
+             * Initialize a new instance.
+             *
+             * @param function The reduction function names for the respective group.
+             * @param args The list of arguments for the reducer.
+             * @param name User defined property name for the reducer.
+             */
+            public Reducer(@NonNull String function, @NonNull GlideString[] args, @NonNull String name) {
                 this.function = function;
                 this.args = args;
-                this.alias = alias;
+                this.name = name;
             }
 
+            /**
+             * Initialize a new instance.
+             *
+             * @param function The reduction function names for the respective group.
+             * @param args The list of arguments for the reducer.
+             */
             public Reducer(@NonNull String function, @NonNull GlideString[] args) {
                 this.function = function;
                 this.args = args;
-                this.alias = null;
+                this.name = null;
             }
 
-            public Reducer(@NonNull String function, @NonNull String[] args, @NonNull String alias) {
+            /**
+             * Initialize a new instance.
+             *
+             * @param function The reduction function names for the respective group.
+             * @param args The list of arguments for the reducer.
+             * @param name User defined property name for the reducer.
+             */
+            public Reducer(@NonNull String function, @NonNull String[] args, @NonNull String name) {
                 this.function = function;
                 this.args = toGlideStringArray(args);
-                this.alias = alias;
+                this.name = name;
             }
 
+            /**
+             * Initialize a new instance.
+             *
+             * @param function The reduction function names for the respective group.
+             * @param args The list of arguments for the reducer.
+             */
             public Reducer(@NonNull String function, @NonNull String[] args) {
                 this.function = function;
                 this.args = toGlideStringArray(args);
-                this.alias = null;
+                this.name = null;
             }
 
             GlideString[] toArgs() {
                 return concatenateArrays(
                         new GlideString[] {
-                            gs(ExpressionType.REDUCE.toString()), gs(function), gs(Integer.toString(args.length))
+                            gs(ClauseType.REDUCE.toString()), gs(function), gs(Integer.toString(args.length))
                         },
                         args,
-                        alias == null ? new GlideString[0] : new GlideString[] {gs("AS"), gs(alias)});
+                        name == null ? new GlideString[0] : new GlideString[] {gs("AS"), gs(name)});
             }
         }
     }
 
     /** Sort the pipeline using a list of properties. */
-    public static class SortBy extends FTAggregateExpression {
+    public static class SortBy extends FTAggregateClause {
 
         private final SortProperty[] properties;
         private final Integer max;
 
+        /**
+         * Initialize a new instance.
+         *
+         * @param properties A list of sorting parameters for the sort operation.
+         */
         public SortBy(@NonNull SortProperty[] properties) {
             this.properties = properties;
             this.max = null;
         }
 
+        /**
+         * Initialize a new instance.
+         *
+         * @param properties A list of sorting parameters for the sort operation.
+         * @param max The MAX value for optimizing the sorting, by sorting only for the n-largest
+         *     elements.
+         */
         public SortBy(@NonNull SortProperty[] properties, int max) {
             this.properties = properties;
             this.max = max;
@@ -255,7 +329,7 @@ public class FTAggregateOptions {
         GlideString[] toArgs() {
             return concatenateArrays(
                     new GlideString[] {
-                        gs(ExpressionType.SORTBY.toString()), gs(Integer.toString(properties.length * 2)),
+                        gs(ClauseType.SORTBY.toString()), gs(Integer.toString(properties.length * 2)),
                     },
                     Stream.of(properties)
                             .map(SortProperty::toArgs)
@@ -274,11 +348,23 @@ public class FTAggregateOptions {
             private final GlideString property;
             private final SortOrder order;
 
+            /**
+             * Initialize a new instance.
+             *
+             * @param property The sorting parameter name.
+             * @param order The order for the sorting.
+             */
             public SortProperty(@NonNull GlideString property, @NonNull SortOrder order) {
                 this.property = property;
                 this.order = order;
             }
 
+            /**
+             * Initialize a new instance.
+             *
+             * @param property The sorting parameter name.
+             * @param order The order for the sorting.
+             */
             public SortProperty(@NonNull String property, @NonNull SortOrder order) {
                 this.property = gs(property);
                 this.order = order;
@@ -294,23 +380,35 @@ public class FTAggregateOptions {
      * Apply a 1-to-1 transformation on one or more properties and either stores the result as a new
      * property down the pipeline or replace any property using this transformation.
      */
-    public static class Apply extends FTAggregateExpression {
+    public static class Apply extends FTAggregateClause {
         private final GlideString expression;
-        private final GlideString alias;
+        private final GlideString name;
 
-        public Apply(@NonNull GlideString expression, @NonNull GlideString alias) {
+        /**
+         * Initialize a new instance.
+         *
+         * @param expression The transformation expression.
+         * @param name The new property name to store the result of apply.
+         */
+        public Apply(@NonNull GlideString expression, @NonNull GlideString name) {
             this.expression = expression;
-            this.alias = alias;
+            this.name = name;
         }
 
-        public Apply(@NonNull String expression, @NonNull String alias) {
+        /**
+         * Initialize a new instance.
+         *
+         * @param expression The transformation expression.
+         * @param name The new property name to store the result of apply.
+         */
+        public Apply(@NonNull String expression, @NonNull String name) {
             this.expression = gs(expression);
-            this.alias = gs(alias);
+            this.name = gs(name);
         }
 
         @Override
         GlideString[] toArgs() {
-            return new GlideString[] {gs(ExpressionType.APPLY.toString()), expression, gs("AS"), alias};
+            return new GlideString[] {gs(ClauseType.APPLY.toString()), expression, gs("AS"), name};
         }
     }
 }
