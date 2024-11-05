@@ -795,7 +795,7 @@ describe("Server Module Tests", () => {
                     ).toBe(6);
 
                     const result = await GlideJson.get(client, key, {
-                        paths: ["$"],
+                        path: ["$"],
                     });
 
                     expect(JSON.parse(result as string)).toEqual([
@@ -858,7 +858,7 @@ describe("Server Module Tests", () => {
                     expect(
                         JSON.parse(
                             (await GlideJson.get(client, key, {
-                                paths: ["$..a"],
+                                path: ["$..a"],
                             })) as string,
                         ),
                     ).toEqual([
@@ -877,7 +877,7 @@ describe("Server Module Tests", () => {
                     expect(
                         JSON.parse(
                             (await GlideJson.get(client, key, {
-                                paths: ["$..a"],
+                                path: ["$..a"],
                             })) as string,
                         ),
                     ).toEqual([0, [], false, "", 0.0, {}]);
