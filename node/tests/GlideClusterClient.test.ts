@@ -75,7 +75,7 @@ describe("GlideClusterClient", () => {
               )
             : // setting replicaCount to 1 to facilitate tests routed to replicas
               await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
-    }, 20000);
+    }, 40000);
 
     afterEach(async () => {
         await flushAndCloseClient(true, cluster.getAddresses(), client);
