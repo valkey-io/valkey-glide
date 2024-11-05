@@ -361,7 +361,7 @@ public class FT {
      * // example of using the API:
      * FTAggregateOptions options = FTAggregateOptions.builder()
      *     .loadFields(new String[] {"__key"})
-     *     .addExpression(
+     *     .addClause(
      *             new FTAggregateOptions.GroupBy(
      *                     new String[] {"@condition"},
      *                     new Reducer[] {
@@ -443,7 +443,7 @@ public class FT {
      * // example of using the API:
      * FTAggregateOptions options = FTAggregateOptions.builder()
      *     .loadFields(new String[] {"__key"})
-     *     .addExpression(
+     *     .addClause(
      *             new FTAggregateOptions.GroupBy(
      *                     new String[] {"@condition"},
      *                     new Reducer[] {
@@ -537,7 +537,7 @@ public class FT {
      * @example
      *     <pre>{@code
      * // example of using the API:
-     * Map<String, Object> response = client.ftinfo("myIndex").get();
+     * Map<String, Object> response = FT.info(client, "myIndex").get();
      * // the response contains data in the following format:
      * Map<String, Object> data = Map.of(
      *     "index_name", gs("myIndex"),
@@ -596,7 +596,7 @@ public class FT {
      * @example
      *     <pre>{@code
      * // example of using the API:
-     * Map<String, Object> response = client.ftinfo(gs("myIndex")).get();
+     * Map<String, Object> response = FT.info(client, gs("myIndex")).get();
      * // the response contains data in the following format:
      * Map<String, Object> data = Map.of(
      *     "index_name", gs("myIndex"),
