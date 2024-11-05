@@ -403,6 +403,10 @@ export class GlideFt {
      * @returns "OK"
      * 
      * @example
+     * ```typescript
+     * // Example usage of FT.ALIASADD to add an alias for an index.
+     * await GlideFt.aliasadd(client, "index", "alias"); // "OK"
+     * ```
      */
     static async aliasadd(
         client: GlideClient | GlideClusterClient,
@@ -424,6 +428,10 @@ export class GlideFt {
      * @returns "OK"
      * 
      * @example
+     * ```typescript
+     * // Example usage of FT.ALIASDEL to delete an existing alias.
+     * await GlideFt.aliasadd(client, "index", "alias"); // "OK"
+     * ```
      */
     static async aliasdel(
         client: GlideClient | GlideClusterClient,
@@ -445,6 +453,11 @@ export class GlideFt {
      * @returns "OK"
      * 
      * @example
+     * 
+     * ```typescript
+     * // Example usage of FT.ALIASUPDATE to update an alias to point to a different index.
+     * await GlideFt.aliasupdate(client, "newAlias", "index"); // "OK"
+     * ```
      */
     static async aliasupdate(
         client: GlideClient | GlideClusterClient,

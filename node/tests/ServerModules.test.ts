@@ -1772,5 +1772,112 @@ describe("Server Module Tests", () => {
             const after = await client.customCommand(["FT._LIST"]);
             expect(after).not.toContain(index);
         });
+
+        it("FT.ALIASDEL test", async () => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+            const index = uuidv4();
+            const alias = uuidv4() + "-alias";
+
+            // Create an index.
+            expect(
+                await GlideFt.create(client, index, [
+                    { type: "NUMERIC", name: "published_at" },
+                    { type: "TAG", name: "category" },
+                ]),
+            ).toEqual("OK");
+
+            // Check if the index is created successfully.
+            const before = await client.customCommand(["FT._LIST"]);
+            expect(before).toContain(index);
+
+            //Test if deleting a non existent alias throws an error.
+            try {
+                expect(
+                    await GlideFt.aliasadd(client, index, alias)
+                ).rejects.toThrow();
+            } catch (e) {
+                expect((e as Error).message).toContain("Alias does not exist");
+            }
+
+            // Test if an existing alias is deleted successfully.
+            expect(
+                await GlideFt.aliasadd(client, index, alias)
+            ).toEqual("OK");
+            expect(
+                await GlideFt.aliasdel(client, alias)
+            ).toEqual("OK");
+
+            // Test if an existing alias is deleted successfully for bytes type input.
+            expect(
+                await GlideFt.aliasadd(client, index, alias)
+            ).toEqual("OK");
+            expect(
+                await GlideFt.aliasdel(client, Buffer.from(alias))
+            ).toEqual("OK");
+
+            // Drop the index.
+            expect(await GlideFt.dropindex(client, index)).toEqual("OK");
+            const after = await client.customCommand(["FT._LIST"]);
+            expect(after).not.toContain(index);
+        });
+
+        it("FT.ALIASUPDATE test", async () => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+            const index = uuidv4();
+            const alias = uuidv4() + "-alias";
+
+            // Create an index.
+            expect(
+                await GlideFt.create(client, index, [
+                    { type: "NUMERIC", name: "published_at" },
+                    { type: "TAG", name: "category" },
+                ]),
+            ).toEqual("OK");
+            // Check if the index created successfully.
+            expect(await client.customCommand(["FT._LIST"])).toContain(index);
+
+            // Add an alias to the index.
+            expect(
+                await GlideFt.aliasadd(client, index, alias)
+            ).toEqual("OK");
+
+            const newIndex = uuidv4();
+            const newAlias = uuidv4();
+
+            // Create a new index.
+            expect(
+                await GlideFt.create(client, newIndex, [
+                    { type: "NUMERIC", name: "published_at" },
+                    { type: "TAG", name: "category" },
+                ]),
+            ).toEqual("OK");
+            // Check if the new index created successfully.
+            expect(await client.customCommand(["FT._LIST"])).toContain(newIndex);
+
+            // Add an alias to new index.
+            expect(
+                await GlideFt.aliasadd(client, newIndex, newAlias)
+            ).toEqual("OK");
+
+            // Test if updating an already existing alias to point to an existing index returns "OK".
+            expect(await GlideFt.aliasupdate(client, newAlias, index)).toEqual("OK");
+            // Test alias update for byte type input.
+            expect(await GlideFt.aliasupdate(client, Buffer.from(alias), Buffer.from(newIndex))).toEqual("OK");
+
+            expect(await GlideFt.dropindex(client, index)).toEqual("OK");
+            expect(await client.customCommand(["FT._LIST"])).not.toContain(index);
+            expect(await GlideFt.dropindex(client, newIndex)).toEqual("OK");
+            expect(await client.customCommand(["FT._LIST"])).not.toContain(newIndex);
+        });
     });
 });
