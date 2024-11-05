@@ -111,7 +111,20 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
+            - name: Test with pytest
+              working-directory: ./python
+              run: |
+                  source .env/bin/activate
+                  cd python/tests/
+                  pytest --asyncio-mode=auto --html=pytest_report.html --self-contained-html
+
+            - uses: ./.github/workflows/test-benchmark
+              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.python == '3.12' }}
+              with:
+                  language-flag: -python
+
             - name: Type check with mypy
+              if: ${{ matrix.engine.version == '8.0' && matrix.host.OS == 'ubuntu' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.python == '3.12' }}
               working-directory: ./python
               run: |
                   # The type check should run inside the virtual env to get
@@ -121,17 +134,6 @@ jobs:
                   # Install the benchmark requirements
                   pip install -r ../benchmarks/python/requirements.txt
                   python -m mypy ..
-
-            - name: Test with pytest
-              working-directory: ./python
-              run: |
-                  source .env/bin/activate
-                  cd python/tests/
-                  pytest --asyncio-mode=auto --html=pytest_report.html --self-contained-html
-
-            - uses: ./.github/workflows/test-benchmark
-              with:
-                  language-flag: -python
 
             - name: Upload test reports
               if: always()

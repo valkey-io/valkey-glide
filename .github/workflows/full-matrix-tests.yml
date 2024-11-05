@@ -37,8 +37,8 @@ on:
                 type: boolean
                 default: false
 
-    schedule: # Start every 3 hours, if the previous run is still running, it will be canceled
-        - cron: "0 */3 * * *"
+    schedule:
+        - cron: "0 3 * * *"
 
 concurrency:
     group: full-matrix-tests
