@@ -1708,7 +1708,7 @@ describe("Server Module Tests", () => {
             // Test FT.ADDALIAS throws error if index does not exist.
             try {
                 expect(
-                    await GlideFt.aliasadd(client, index, alias)
+                    await GlideFt.aliasadd(client, index, alias),
                 ).rejects.toThrow();
             } catch (e) {
                 expect((e as Error).message).toContain("Index does not exist");
@@ -1727,9 +1727,7 @@ describe("Server Module Tests", () => {
             expect(before).toContain(index);
 
             //Check if alias added successfully to the test index.
-            expect(
-                await GlideFt.aliasadd(client, index, alias)
-            ).toEqual("OK");
+            expect(await GlideFt.aliasadd(client, index, alias)).toEqual("OK");
 
             //Drop the test index.
             expect(await GlideFt.dropindex(client, index)).toEqual("OK");
@@ -1737,7 +1735,6 @@ describe("Server Module Tests", () => {
             expect(after).not.toContain(index);
 
             //Test FT.ADDALIAS for bytes type input.
-
         });
 
         it("FT.ALIASADD binary test", async () => {
@@ -1764,7 +1761,11 @@ describe("Server Module Tests", () => {
 
             //Check if alias added successfully to the index.
             expect(
-                await GlideFt.aliasadd(client, Buffer.from(index), Buffer.from(alias))
+                await GlideFt.aliasadd(
+                    client,
+                    Buffer.from(index),
+                    Buffer.from(alias),
+                ),
             ).toEqual("OK");
 
             //Drop the index.
@@ -1797,28 +1798,20 @@ describe("Server Module Tests", () => {
 
             //Test if deleting a non existent alias throws an error.
             try {
-                expect(
-                    await GlideFt.aliasdel(client, alias)
-                ).rejects.toThrow();
+                expect(await GlideFt.aliasdel(client, alias)).rejects.toThrow();
             } catch (e) {
                 expect((e as Error).message).toContain("Alias does not exist");
             }
 
             // Test if an existing alias is deleted successfully.
-            expect(
-                await GlideFt.aliasadd(client, index, alias)
-            ).toEqual("OK");
-            expect(
-                await GlideFt.aliasdel(client, alias)
-            ).toEqual("OK");
+            expect(await GlideFt.aliasadd(client, index, alias)).toEqual("OK");
+            expect(await GlideFt.aliasdel(client, alias)).toEqual("OK");
 
             // Test if an existing alias is deleted successfully for bytes type input.
-            expect(
-                await GlideFt.aliasadd(client, index, alias)
-            ).toEqual("OK");
-            expect(
-                await GlideFt.aliasdel(client, Buffer.from(alias))
-            ).toEqual("OK");
+            expect(await GlideFt.aliasadd(client, index, alias)).toEqual("OK");
+            expect(await GlideFt.aliasdel(client, Buffer.from(alias))).toEqual(
+                "OK",
+            );
 
             // Drop the index.
             expect(await GlideFt.dropindex(client, index)).toEqual("OK");
@@ -1847,9 +1840,7 @@ describe("Server Module Tests", () => {
             expect(await client.customCommand(["FT._LIST"])).toContain(index);
 
             // Add an alias to the index.
-            expect(
-                await GlideFt.aliasadd(client, index, alias)
-            ).toEqual("OK");
+            expect(await GlideFt.aliasadd(client, index, alias)).toEqual("OK");
 
             const newIndex = uuidv4();
             const newAlias = uuidv4();
@@ -1862,22 +1853,36 @@ describe("Server Module Tests", () => {
                 ]),
             ).toEqual("OK");
             // Check if the new index created successfully.
-            expect(await client.customCommand(["FT._LIST"])).toContain(newIndex);
+            expect(await client.customCommand(["FT._LIST"])).toContain(
+                newIndex,
+            );
 
             // Add an alias to new index.
-            expect(
-                await GlideFt.aliasadd(client, newIndex, newAlias)
-            ).toEqual("OK");
+            expect(await GlideFt.aliasadd(client, newIndex, newAlias)).toEqual(
+                "OK",
+            );
 
             // Test if updating an already existing alias to point to an existing index returns "OK".
-            expect(await GlideFt.aliasupdate(client, newAlias, index)).toEqual("OK");
+            expect(await GlideFt.aliasupdate(client, newAlias, index)).toEqual(
+                "OK",
+            );
             // Test alias update for byte type input.
-            expect(await GlideFt.aliasupdate(client, Buffer.from(alias), Buffer.from(newIndex))).toEqual("OK");
+            expect(
+                await GlideFt.aliasupdate(
+                    client,
+                    Buffer.from(alias),
+                    Buffer.from(newIndex),
+                ),
+            ).toEqual("OK");
 
             expect(await GlideFt.dropindex(client, index)).toEqual("OK");
-            expect(await client.customCommand(["FT._LIST"])).not.toContain(index);
+            expect(await client.customCommand(["FT._LIST"])).not.toContain(
+                index,
+            );
             expect(await GlideFt.dropindex(client, newIndex)).toEqual("OK");
-            expect(await client.customCommand(["FT._LIST"])).not.toContain(newIndex);
+            expect(await client.customCommand(["FT._LIST"])).not.toContain(
+                newIndex,
+            );
         });
     });
 });

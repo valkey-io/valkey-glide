@@ -348,10 +348,10 @@ export class GlideFt {
                 options.returnFields.forEach((returnField) =>
                     returnField.alias
                         ? returnFields.push(
-                            returnField.fieldIdentifier,
-                            "AS",
-                            returnField.alias,
-                        )
+                              returnField.fieldIdentifier,
+                              "AS",
+                              returnField.alias,
+                          )
                         : returnFields.push(returnField.fieldIdentifier),
                 );
                 args.push(
@@ -396,12 +396,12 @@ export class GlideFt {
 
     /**
      * Adds an alias for an index. The new alias name can be used anywhere that an index name is required.
-     * 
+     *
      * @param client The client to execute the command.
      * @param indexName The alias to be added to the index.
      * @param alias The index name for which the alias has to be added.
      * @returns "OK"
-     * 
+     *
      * @example
      * ```typescript
      * // Example usage of FT.ALIASADD to add an alias for an index.
@@ -411,22 +411,22 @@ export class GlideFt {
     static async aliasadd(
         client: GlideClient | GlideClusterClient,
         indexName: GlideString,
-        alias: GlideString
+        alias: GlideString,
     ): Promise<"OK"> {
         const args: GlideString[] = ["FT.ALIASADD", alias, indexName];
         return _handleCustomCommand(client, args, {
-            decoder: Decoder.String
+            decoder: Decoder.String,
         }) as Promise<"OK">;
     }
 
     /**
      * Deletes an existing alias for an index.
-     * 
+     *
      * @param client The client to execute the command.
      * @param alias The existing alias to be deleted for an index.
-     * 
+     *
      * @returns "OK"
-     * 
+     *
      * @example
      * ```typescript
      * // Example usage of FT.ALIASDEL to delete an existing alias.
@@ -435,25 +435,25 @@ export class GlideFt {
      */
     static async aliasdel(
         client: GlideClient | GlideClusterClient,
-        alias: GlideString
+        alias: GlideString,
     ): Promise<"OK"> {
         const args: GlideString[] = ["FT.ALIASDEL", alias];
         return _handleCustomCommand(client, args, {
-            decoder: Decoder.String
+            decoder: Decoder.String,
         }) as Promise<"OK">;
     }
 
     /**
      * Updates an existing alias to point to a different physical index. This command only affects future references to the alias.
-     * 
+     *
      * @param client The client to execute the command.
      * @param alias The alias name. This alias will now be pointed to a different index.
      * @param indexName The index name for which an existing alias has to updated.
-     *  
+     *
      * @returns "OK"
-     * 
+     *
      * @example
-     * 
+     *
      * ```typescript
      * // Example usage of FT.ALIASUPDATE to update an alias to point to a different index.
      * await GlideFt.aliasupdate(client, "newAlias", "index"); // "OK"
@@ -462,11 +462,11 @@ export class GlideFt {
     static async aliasupdate(
         client: GlideClient | GlideClusterClient,
         alias: GlideString,
-        indexName: GlideString
+        indexName: GlideString,
     ): Promise<"OK"> {
         const args: GlideString[] = ["FT.ALIASUPDATE", alias, indexName];
         return _handleCustomCommand(client, args, {
-            decoder: Decoder.String
+            decoder: Decoder.String,
         }) as Promise<"OK">;
     }
 }
