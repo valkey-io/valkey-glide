@@ -387,6 +387,7 @@ export const getClientConfigurationOption = (
         })),
         protocol,
         useTLS: parseCommandLineArgs()["tls"] == "true",
+        requestTimeout: 1000,
         ...configOverrides,
     };
 };
