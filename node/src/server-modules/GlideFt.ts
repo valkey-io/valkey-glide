@@ -397,10 +397,11 @@ export class GlideFt {
     /**
      * Adds an alias for an index. The new alias name can be used anywhere that an index name is required.
      *
-     * @param client The client to execute the command.
-     * @param indexName The alias to be added to the index.
-     * @param alias The index name for which the alias has to be added.
-     * @returns "OK"
+     * @param client - The client to execute the command.
+     * @param indexName - The alias to be added to the index.
+     * @param alias - The index name for which the alias has to be added.
+     *
+     * @returns `"OK"`
      *
      * @example
      * ```typescript
@@ -422,15 +423,15 @@ export class GlideFt {
     /**
      * Deletes an existing alias for an index.
      *
-     * @param client The client to execute the command.
-     * @param alias The existing alias to be deleted for an index.
+     * @param client - The client to execute the command.
+     * @param alias -  The existing alias to be deleted for an index.
      *
-     * @returns "OK"
+     * @returns `"OK"`
      *
      * @example
      * ```typescript
      * // Example usage of FT.ALIASDEL to delete an existing alias.
-     * await GlideFt.aliasadd(client, "index", "alias"); // "OK"
+     * await GlideFt.aliasdel(client, "alias"); // "OK"
      * ```
      */
     static async aliasdel(
@@ -446,11 +447,11 @@ export class GlideFt {
     /**
      * Updates an existing alias to point to a different physical index. This command only affects future references to the alias.
      *
-     * @param client The client to execute the command.
-     * @param alias The alias name. This alias will now be pointed to a different index.
-     * @param indexName The index name for which an existing alias has to updated.
+     * @param client - The client to execute the command.
+     * @param alias - The alias name. This alias will now be pointed to a different index.
+     * @param indexName - The index name for which an existing alias has to updated.
      *
-     * @returns "OK"
+     * @returns `"OK"`
      *
      * @example
      *
