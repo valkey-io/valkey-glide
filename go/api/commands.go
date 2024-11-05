@@ -132,7 +132,13 @@ type StringCommands interface {
 	// Sets multiple keys to multiple values in a single operation.
 	//
 	// Note:
-	//  When in cluster mode, the command may route to multiple nodes when keys in keyValueMap map to different hash slots.
+	//   In cluster mode, if keys in `keyValueMap` map to different hash slots,
+	//   the command will be split across these slots and executed separately for each.
+	//   This means the command is atomic only at the slot level. If one or more slot-specific
+	//   requests fail, the entire call will return the first encountered error, even
+	//   though some requests may have succeeded while others did not.
+	//   If this behavior impacts your application logic, consider splitting the
+	//   request into sub-requests per slot to ensure atomicity.
 	//
 	// See [valkey.io] for details.
 	//
@@ -153,7 +159,13 @@ type StringCommands interface {
 	// Retrieves the values of multiple keys.
 	//
 	// Note:
-	//  When in cluster mode, the command may route to multiple nodes when keys map to different hash slots.
+	//   In cluster mode, if keys in `keys` map to different hash slots,
+	//   the command will be split across these slots and executed separately for each.
+	//   This means the command is atomic only at the slot level. If one or more slot-specific
+	//   requests fail, the entire call will return the first encountered error, even
+	//   though some requests may have succeeded while others did not.
+	//   If this behavior impacts your application logic, consider splitting the
+	//   request into sub-requests per slot to ensure atomicity.
 	//
 	// See [valkey.io] for details.
 	//
