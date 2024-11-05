@@ -15,7 +15,6 @@ import glide.api.models.commands.json.JsonGetOptions;
 import glide.api.models.commands.json.JsonGetOptionsBinary;
 import glide.api.models.commands.json.JsonScalar;
 import glide.utils.ArgsBuilder;
-import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 import lombok.NonNull;
 
@@ -763,11 +762,16 @@ public class Json {
             @NonNull GlideString path,
             @NonNull JsonScalar scalar,
             @NonNull JsonArrIndexOptions options) {
+
         return executeCommand(
                 client,
-                concatenateArrays(
-                        new GlideString[] {gs(JSON_ARRINDEX), key, path, gs(scalar.toString())},
-                        Arrays.stream(options.toArgs()).map(result -> gs(result)).toArray(GlideString[]::new)));
+                new ArgsBuilder()
+                        .add(JSON_ARRINDEX)
+                        .add(key)
+                        .add(path)
+                        .add(scalar.toString())
+                        .add(options.toArgs())
+                        .toArray());
     }
 
     /**
