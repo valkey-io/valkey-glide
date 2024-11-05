@@ -45,12 +45,11 @@ jobs:
                   engine-version: "7.2.5"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Cache dependencies      
+            - name: Cache dependencies
               uses: Swatinem/rust-cache@v2
               with:
-                cache-on-failure: true
-                workspaces: ./glide-core/redis-rs/redis
-
+                  cache-on-failure: true
+                  workspaces: ./glide-core/redis-rs/redis
 
             - name: Build project
               run: cargo build --release

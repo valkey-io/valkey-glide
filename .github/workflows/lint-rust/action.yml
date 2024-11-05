@@ -12,10 +12,8 @@ inputs:
 
 runs:
     using: "composite"
-
     steps:
         - uses: actions/checkout@v4
-          
 
         - name: Install Rust toolchain and protoc
           uses: ./.github/workflows/install-rust-and-protoc
@@ -35,7 +33,7 @@ runs:
           # We run clippy without features
         - run: cargo clippy --all-targets -- -D warnings
           working-directory: ${{ inputs.cargo-toml-folder }}
-          shell: bash          
+          shell: bash
 
         - run: |
               cargo update

@@ -1,34 +1,33 @@
-
 name: The OSS Review Toolkit (ORT)
 
 on:
     schedule:
-      - cron: "0 0 * * *"
+        - cron: "0 0 * * *"
     pull_request:
-      paths:
-        - .github/workflows/ort.yml
-        - .github/workflows/run-ort-tools/action.yml
-        - utils/get_licenses_from_ort.py
+        paths:
+            - .github/workflows/ort.yml
+            - .github/workflows/run-ort-tools/action.yml
+            - utils/get_licenses_from_ort.py
     workflow_dispatch:
-      inputs:
-        branch:
-          description: 'The branch to run against the ORT tool'     
-          required: true
-        version:
-          description: 'The release version of GLIDE'
-          required: true
+        inputs:
+            branch:
+                description: "The branch to run against the ORT tool"
+                required: true
+            version:
+                description: "The release version of GLIDE"
+                required: true
 jobs:
     run-ort:
         if: github.repository_owner == 'valkey-io'
         name: Create attribution files
         runs-on: ubuntu-latest
         strategy:
-          fail-fast: false
-        env: 
-          PYTHON_ATTRIBUTIONS: "python/THIRD_PARTY_LICENSES_PYTHON"
-          NODE_ATTRIBUTIONS: "node/THIRD_PARTY_LICENSES_NODE"
-          RUST_ATTRIBUTIONS: "glide-core/THIRD_PARTY_LICENSES_RUST"
-          JAVA_ATTRIBUTIONS: "java/THIRD_PARTY_LICENSES_JAVA"
+            fail-fast: false
+        env:
+            PYTHON_ATTRIBUTIONS: "python/THIRD_PARTY_LICENSES_PYTHON"
+            NODE_ATTRIBUTIONS: "node/THIRD_PARTY_LICENSES_NODE"
+            RUST_ATTRIBUTIONS: "glide-core/THIRD_PARTY_LICENSES_RUST"
+            JAVA_ATTRIBUTIONS: "java/THIRD_PARTY_LICENSES_JAVA"
         steps:
             - name: Set the release version
               shell: bash
@@ -36,17 +35,17 @@ jobs:
                   export version=`if [ "$EVENT_NAME" == 'schedule' ] || [ "$EVENT_NAME" == 'pull_request' ]; then echo '255.255.255'; else echo "$INPUT_VERSION"; fi`
                   echo "RELEASE_VERSION=${version}" >> $GITHUB_ENV
               env:
-                EVENT_NAME: ${{ github.event_name }}
-                INPUT_VERSION: ${{ github.event.inputs.version }}
-              
+                  EVENT_NAME: ${{ github.event_name }}
+                  INPUT_VERSION: ${{ github.event.inputs.version }}
+
             - name: Set the base branch
               run: |
-                export BASE_BRANCH=`if [ "$EVENT_NAME" == 'schedule' ]; then echo 'main'; elif [ "$EVENT_NAME" == 'workflow_dispatch' ]; then echo "$INPUT_BRANCH"; else echo ""; fi`
-                echo "Base branch is: ${BASE_BRANCH}"
-                echo "BASE_BRANCH=${BASE_BRANCH}" >> $GITHUB_ENV
+                  export BASE_BRANCH=`if [ "$EVENT_NAME" == 'schedule' ]; then echo 'main'; elif [ "$EVENT_NAME" == 'workflow_dispatch' ]; then echo "$INPUT_BRANCH"; else echo ""; fi`
+                  echo "Base branch is: ${BASE_BRANCH}"
+                  echo "BASE_BRANCH=${BASE_BRANCH}" >> $GITHUB_ENV
               env:
-                EVENT_NAME: ${{ github.event_name }}
-                INPUT_BRANCH: ${{ github.event.inputs.branch }}
+                  EVENT_NAME: ${{ github.event_name }}
+                  INPUT_BRANCH: ${{ github.event.inputs.branch }}
 
             - name: Checkout
               uses: actions/checkout@v4
@@ -64,73 +63,73 @@ jobs:
               uses: actions/cache@v4
               id: cache-ort
               with:
-                path: |
-                  ./ort
-                  ~/.gradle/caches
-                  ~/.gradle/wrapper
-                key: ${{ runner.os }}-ort
+                  path: |
+                      ./ort
+                      ~/.gradle/caches
+                      ~/.gradle/wrapper
+                  key: ${{ runner.os }}-ort
 
             - name: Checkout ORT Repository
               if: steps.cache-ort.outputs.cache-hit != 'true'
               uses: actions/checkout@v4
-              with: 
+              with:
                   repository: "oss-review-toolkit/ort"
                   path: "./ort"
                   ref: "26.0.0"
                   submodules: recursive
 
             - name: Install Rust toolchain
-              uses: dtolnay/rust-toolchain@1.78 
+              uses: dtolnay/rust-toolchain@1.78
 
             - name: Install ORT
               if: steps.cache-ort.outputs.cache-hit != 'true'
               working-directory: ./ort/
               run: |
-                export JAVA_OPTS="$JAVA_OPTS -Xmx8g"
-                ./gradlew installDist
+                  export JAVA_OPTS="$JAVA_OPTS -Xmx8g"
+                  ./gradlew installDist
 
             - name: Create ORT config file
               run: |
-                mkdir -p ~/.ort/config
-                cat << EOF > ~/.ort/config/config.yml
-                ort:
-                  analyzer:
-                    allowDynamicVersions: true
-                    enabledPackageManagers: [Cargo, NPM, PIP, GradleInspector]
-                EOF
-                cat ~/.ort/config/config.yml
+                  mkdir -p ~/.ort/config
+                  cat << EOF > ~/.ort/config/config.yml
+                  ort:
+                    analyzer:
+                      allowDynamicVersions: true
+                      enabledPackageManagers: [Cargo, NPM, PIP, GradleInspector]
+                  EOF
+                  cat ~/.ort/config/config.yml
 
-          ### NodeJS ###
+            ### NodeJS ###
 
             - name: Set up Node.js 16.x
               uses: actions/setup-node@v4
               with:
                   node-version: 16.x
 
-            - name: Create package.json file for the Node wrapper 
+            - name: Create package.json file for the Node wrapper
               uses: ./.github/workflows/node-create-package-file
               with:
-                release_version: ${{ env.RELEASE_VERSION }}
-                os: "ubuntu-latest"
+                  release_version: ${{ env.RELEASE_VERSION }}
+                  os: "ubuntu-latest"
 
             - name: Fix Node base NPM package.json file for ORT
               working-directory: ./node/npm/glide
               run: |
-                # Remove the glide-rs dependency to avoid duplication 
-                sed -i '/ "glide-rs":/d' ../../package.json
-                export pkg_name=valkey-glide-base
-                export package_version="${{ env.RELEASE_VERSION }}"
-                export scope=`if [ "$NPM_SCOPE" != ''  ]; then echo "$NPM_SCOPE/"; fi`
-                mv package.json package.json.tmpl
-                envsubst < package.json.tmpl > "package.json"
-                cat package.json
-            
+                  # Remove the glide-rs dependency to avoid duplication 
+                  sed -i '/ "glide-rs":/d' ../../package.json
+                  export pkg_name=valkey-glide-base
+                  export package_version="${{ env.RELEASE_VERSION }}"
+                  export scope=`if [ "$NPM_SCOPE" != ''  ]; then echo "$NPM_SCOPE/"; fi`
+                  mv package.json package.json.tmpl
+                  envsubst < package.json.tmpl > "package.json"
+                  cat package.json
+
             - name: Run ORT tools for Node
               uses: ./.github/workflows/run-ort-tools
               with:
-                folder_path: "${{ github.workspace }}/node"
-            
-          ### Python ###
+                  folder_path: "${{ github.workspace }}/node"
+
+            ### Python ###
 
             - name: Set up Python 3.10
               uses: actions/setup-python@v5
@@ -146,14 +145,14 @@ jobs:
             - name: Run ORT tools for Python
               uses: ./.github/workflows/run-ort-tools
               with:
-                folder_path: "${{ github.workspace }}/python"
+                  folder_path: "${{ github.workspace }}/python"
 
             ### Rust ###
 
             - name: Run ORT tools for Rust
               uses: ./.github/workflows/run-ort-tools
               with:
-                folder_path: "${{ github.workspace }}/glide-core"
+                  folder_path: "${{ github.workspace }}/glide-core"
 
             ### Java ###
 
@@ -163,60 +162,60 @@ jobs:
                   distribution: "temurin"
                   java-version: 11
 
-            - name: Run ORT tools for Java 
+            - name: Run ORT tools for Java
               uses: ./.github/workflows/run-ort-tools
               with:
-                folder_path: "${{ github.workspace }}/java"
+                  folder_path: "${{ github.workspace }}/java"
 
             ### Process results ###
 
             - name: Check for diff
               run: |
-                cp python/ort_results/NOTICE_DEFAULT $PYTHON_ATTRIBUTIONS
-                cp node/ort_results/NOTICE_DEFAULT $NODE_ATTRIBUTIONS
-                cp glide-core/ort_results/NOTICE_DEFAULT $RUST_ATTRIBUTIONS
-                cp java/ort_results/NOTICE_DEFAULT $JAVA_ATTRIBUTIONS
-                GIT_DIFF=`git diff $PYTHON_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS`
-                if [ -n "$GIT_DIFF" ]; then
-                echo "FOUND_DIFF=true" >> $GITHUB_ENV
-                else
-                echo "FOUND_DIFF=false" >> $GITHUB_ENV
-                fi
+                  cp python/ort_results/NOTICE_DEFAULT $PYTHON_ATTRIBUTIONS
+                  cp node/ort_results/NOTICE_DEFAULT $NODE_ATTRIBUTIONS
+                  cp glide-core/ort_results/NOTICE_DEFAULT $RUST_ATTRIBUTIONS
+                  cp java/ort_results/NOTICE_DEFAULT $JAVA_ATTRIBUTIONS
+                  GIT_DIFF=`git diff $PYTHON_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS`
+                  if [ -n "$GIT_DIFF" ]; then
+                  echo "FOUND_DIFF=true" >> $GITHUB_ENV
+                  else
+                  echo "FOUND_DIFF=false" >> $GITHUB_ENV
+                  fi
 
             - name: Retrieve licenses list
               working-directory: ./utils
               run: |
-                {
-                  echo 'LICENSES_LIST<<EOF'
-                  python3 get_licenses_from_ort.py
-                  echo EOF
-                } >> "$GITHUB_ENV"
+                  {
+                    echo 'LICENSES_LIST<<EOF'
+                    python3 get_licenses_from_ort.py
+                    echo EOF
+                  } >> "$GITHUB_ENV"
 
             ### Create PR ###
 
             - name: Create pull request
               if: ${{ env.FOUND_DIFF  == 'true' && github.event_name != 'pull_request' }}
               run: |
-                export BRANCH_NAME=`if [ "$EVENT_NAME" == 'schedule' ] || [ "$EVENT_NAME" == 'pull_request' ]; then echo 'scheduled-ort'; else echo "ort-v$INPUT_VERSION"; fi`
-                echo "Creating pull request from branch ${BRANCH_NAME} to branch ${{ env.BASE_BRANCH }}"
-                git config --global user.email "valkey-glide@lists.valkey.io"
-                git config --global user.name "ort-bot"
-                git checkout -b ${BRANCH_NAME}
-                git add $PYTHON_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS
-                git commit -m "Updated attribution files" -s
-                git push --set-upstream origin ${BRANCH_NAME} -f
-                title="Updated attribution files for ${BRANCH_NAME}"
-                gh pr create -B ${{ env.BASE_BRANCH }} -H ${BRANCH_NAME} --title "${title}" --body 'Created by Github action.\n${{ env.LICENSES_LIST }}'
+                  export BRANCH_NAME=`if [ "$EVENT_NAME" == 'schedule' ] || [ "$EVENT_NAME" == 'pull_request' ]; then echo 'scheduled-ort'; else echo "ort-v$INPUT_VERSION"; fi`
+                  echo "Creating pull request from branch ${BRANCH_NAME} to branch ${{ env.BASE_BRANCH }}"
+                  git config --global user.email "valkey-glide@lists.valkey.io"
+                  git config --global user.name "ort-bot"
+                  git checkout -b ${BRANCH_NAME}
+                  git add $PYTHON_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS
+                  git commit -m "Updated attribution files" -s
+                  git push --set-upstream origin ${BRANCH_NAME} -f
+                  title="Updated attribution files for ${BRANCH_NAME}"
+                  gh pr create -B ${{ env.BASE_BRANCH }} -H ${BRANCH_NAME} --title "${title}" --body 'Created by Github action.\n${{ env.LICENSES_LIST }}'
               env:
-                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-                EVENT_NAME: ${{ github.event_name }}
-                INPUT_VERSION: ${{ github.event.inputs.version }}
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  EVENT_NAME: ${{ github.event_name }}
+                  INPUT_VERSION: ${{ github.event.inputs.version }}
 
             - name: Get current date
               id: date
               run: |
-                CURR_DATE=$(date +'%Y-%m-%d-%H')
-                echo "date=${CURR_DATE}" >> $GITHUB_OUTPUT
+                  CURR_DATE=$(date +'%Y-%m-%d-%H')
+                  echo "date=${CURR_DATE}" >> $GITHUB_OUTPUT
 
             - name: Upload the final package list
               continue-on-error: true

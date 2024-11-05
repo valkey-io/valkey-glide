@@ -84,4 +84,4 @@ runs:
               mv package.json package.json.tmpl
               envsubst < package.json.tmpl > "package.json"
               cat package.json
-              echo $(ls *json*) 
+              echo $(ls *json*)

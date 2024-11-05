@@ -600,86 +600,42 @@ export async function encodableTransactionTest(
     return responseData;
 }
 
-/**
- * Populates a transaction with commands to test the decoded response.
- * @param baseTransaction - A transaction.
- * @returns Array of tuples, where first element is a test name/description, second - expected return value.
- */
-export async function encodedTransactionTest(
-    baseTransaction: Transaction | ClusterTransaction,
-): Promise<[string, GlideReturnType][]> {
-    const key1 = "{key}" + uuidv4(); // string
-    const key2 = "{key}" + uuidv4(); // string
-    const key = "dumpKey";
-    const dumpResult = Buffer.from([
-        0, 5, 118, 97, 108, 117, 101, 11, 0, 232, 41, 124, 75, 60, 53, 114, 231,
-    ]);
-    const value = "value";
-    const valueEncoded = Buffer.from(value);
-    // array of tuples - first element is test name/description, second - expected return value
-    const responseData: [string, GlideReturnType][] = [];
-
-    baseTransaction.set(key1, value);
-    responseData.push(["set(key1, value)", "OK"]);
-    baseTransaction.set(key2, value);
-    responseData.push(["set(key2, value)", "OK"]);
-    baseTransaction.get(key1);
-    responseData.push(["get(key1)", valueEncoded]);
-    baseTransaction.get(key2);
-    responseData.push(["get(key2)", valueEncoded]);
-
-    baseTransaction.set(key, value);
-    responseData.push(["set(key, value)", "OK"]);
-    baseTransaction.customCommand(["DUMP", key]);
-    responseData.push(['customCommand(["DUMP", key])', dumpResult]);
-    baseTransaction.del([key]);
-    responseData.push(["del(key)", 1]);
-    baseTransaction.get(key);
-    responseData.push(["get(key)", null]);
-    baseTransaction.customCommand(["RESTORE", key, "0", dumpResult]);
-    responseData.push([
-        'customCommand(["RESTORE", key, "0", dumpResult])',
-        "OK",
-    ]);
-    baseTransaction.get(key);
-    responseData.push(["get(key)", valueEncoded]);
-
-    return responseData;
-}
-
 /** Populates a transaction with dump and restore commands
  *
  * @param baseTransaction - A transaction
  * @param valueResponse - Represents the encoded response of "value" to compare
  * @returns Array of tuples, where first element is a test name/description, second - expected return value.
  */
-export async function DumpAndRestureTest(
+export async function DumpAndRestoreTest(
     baseTransaction: Transaction,
-    valueResponse: GlideString,
+    dumpValue: Buffer | null,
 ): Promise<[string, GlideReturnType][]> {
-    const key = "dumpKey";
-    const dumpResult = Buffer.from([
-        0, 5, 118, 97, 108, 117, 101, 11, 0, 232, 41, 124, 75, 60, 53, 114, 231,
-    ]);
-    const value = "value";
+    if (dumpValue == null) {
+        throw new Error("dumpValue is null");
+    }
+
+    const key = "{key}-" + uuidv4(); // string
+    const buffValue = Buffer.from("value");
     // array of tuples - first element is test name/description, second - expected return value
     const responseData: [string, GlideReturnType][] = [];
 
-    baseTransaction.set(key, value);
-    responseData.push(["set(key, value)", "OK"]);
+    baseTransaction.set(key, "value");
+    responseData.push(["set(key, stringValue)", "OK"]);
     baseTransaction.customCommand(["DUMP", key]);
-    responseData.push(['customCommand(["DUMP", key])', dumpResult]);
+    responseData.push(['customCommand(["DUMP", key])', dumpValue]);
+    baseTransaction.get(key);
+    responseData.push(["get(key)", buffValue]);
     baseTransaction.del([key]);
     responseData.push(["del(key)", 1]);
     baseTransaction.get(key);
     responseData.push(["get(key)", null]);
-    baseTransaction.customCommand(["RESTORE", key, "0", dumpResult]);
+    baseTransaction.customCommand(["RESTORE", key, "0", dumpValue]);
     responseData.push([
-        'customCommand(["RESTORE", key, "0", dumpResult])',
+        'customCommand(["RESTORE", buffKey, "0", stringValue])',
         "OK",
     ]);
     baseTransaction.get(key);
-    responseData.push(["get(key)", valueResponse]);
+    responseData.push(["get(key)", buffValue]);
 
     return responseData;
 }
@@ -874,20 +830,20 @@ export async function transactionTest(
     ]);
     responseData.push(["lpush(key5, [1, 2, 3, 4])", 4]);
 
-    if (gte("7.0.0", version)) {
+    if (gte(version, "7.0.0")) {
         baseTransaction.lpush(key24, [field + "1", field + "2"]);
         responseData.push(["lpush(key22, [1, 2])", 2]);
         baseTransaction.lmpop([key24], ListDirection.LEFT);
         responseData.push([
             "lmpop([key22], ListDirection.LEFT)",
-            { [key24]: [field + "2"] },
+            [{ key: key24, value: [field + "2"] }],
         ]);
         baseTransaction.lpush(key24, [field + "2"]);
         responseData.push(["lpush(key22, [2])", 2]);
         baseTransaction.blmpop([key24], ListDirection.LEFT, 0.1, 1);
         responseData.push([
             "blmpop([key22], ListDirection.LEFT, 0.1, 1)",
-            { [key24]: [field + "2"] },
+            [{ key: key24, value: [field + "2"] }],
         ]);
     }
 
@@ -1393,6 +1349,9 @@ export async function transactionTest(
     baseTransaction.xgroupDestroy(key9, groupName2);
     responseData.push(["xgroupDestroy(key9, groupName2)", true]);
 
+    baseTransaction.wait(1, 200);
+    responseData.push(["wait(1, 200)", 1]);
+
     baseTransaction.rename(key9, key10);
     responseData.push(["rename(key9, key10)", "OK"]);
     baseTransaction.exists([key10]);
@@ -1490,31 +1449,31 @@ export async function transactionTest(
     baseTransaction.geoadd(
         key18,
         new Map<string, GeospatialData>([
-            ["Palermo", { longitude: 13.361389, latitude: 38.115556 }],
-            ["Catania", { longitude: 15.087269, latitude: 37.502669 }],
+            ["palermo", { longitude: 13.361389, latitude: 38.115556 }],
+            ["catania", { longitude: 15.087269, latitude: 37.502669 }],
         ]),
     );
-    responseData.push(["geoadd(key18, { Palermo: ..., Catania: ... })", 2]);
-    baseTransaction.geopos(key18, ["Palermo", "Catania"]);
+    responseData.push(["geoadd(key18, { palermo: ..., catania: ... })", 2]);
+    baseTransaction.geopos(key18, ["palermo", "catania"]);
     responseData.push([
-        'geopos(key18, ["Palermo", "Catania"])',
+        'geopos(key18, ["palermo", "catania"])',
         [
             [13.36138933897018433, 38.11555639549629859],
             [15.08726745843887329, 37.50266842333162032],
         ],
     ]);
-    baseTransaction.geodist(key18, "Palermo", "Catania");
-    responseData.push(['geodist(key18, "Palermo", "Catania")', 166274.1516]);
-    baseTransaction.geodist(key18, "Palermo", "Catania", {
+    baseTransaction.geodist(key18, "palermo", "catania");
+    responseData.push(['geodist(key18, "palermo", "catania")', 166274.1516]);
+    baseTransaction.geodist(key18, "palermo", "catania", {
         unit: GeoUnit.KILOMETERS,
     });
     responseData.push([
-        'geodist(key18, "Palermo", "Catania", { unit: GeoUnit.KILOMETERS })',
+        'geodist(key18, "palermo", "catania", { unit: GeoUnit.KILOMETERS })',
         166.2742,
     ]);
-    baseTransaction.geohash(key18, ["Palermo", "Catania", "NonExisting"]);
+    baseTransaction.geohash(key18, ["palermo", "catania", "NonExisting"]);
     responseData.push([
-        'geohash(key18, ["Palermo", "Catania", "NonExisting"])',
+        'geohash(key18, ["palermo", "catania", "NonExisting"])',
         ["sqc8b49rny0", "sqdtr74hyu0", null],
     ]);
     baseTransaction.zadd(key23, { one: 1.0 });
@@ -1533,7 +1492,7 @@ export async function transactionTest(
         baseTransaction
             .geosearch(
                 key18,
-                { member: "Palermo" },
+                { member: "palermo" },
                 { radius: 200, unit: GeoUnit.KILOMETERS },
                 { sortOrder: SortOrder.ASC },
             )
@@ -1544,7 +1503,7 @@ export async function transactionTest(
             )
             .geosearch(
                 key18,
-                { member: "Palermo" },
+                { member: "palermo" },
                 { radius: 200, unit: GeoUnit.KILOMETERS },
                 {
                     sortOrder: SortOrder.ASC,
@@ -1567,18 +1526,18 @@ export async function transactionTest(
                 },
             );
         responseData.push([
-            'geosearch(key18, "Palermo", R200 KM, ASC)',
-            ["Palermo", "Catania"],
+            'geosearch(key18, "palermo", R200 KM, ASC)',
+            ["palermo", "catania"],
         ]);
         responseData.push([
             "geosearch(key18, (15, 37), 400x400 KM, ASC)",
-            ["Palermo", "Catania"],
+            ["palermo", "catania"],
         ]);
         responseData.push([
-            'geosearch(key18, "Palermo", R200 KM, ASC 2 3x true)',
+            'geosearch(key18, "palermo", R200 KM, ASC 2 3x true)',
             [
                 [
-                    "Palermo",
+                    "palermo",
                     [
                         0.0,
                         3479099956230698,
@@ -1586,7 +1545,7 @@ export async function transactionTest(
                     ],
                 ],
                 [
-                    "Catania",
+                    "catania",
                     [
                         166.2742,
                         3479447370796909,
@@ -1599,7 +1558,7 @@ export async function transactionTest(
             "geosearch(key18, (15, 37), 400x400 KM, ASC 2 3x true)",
             [
                 [
-                    "Catania",
+                    "catania",
                     [
                         56.4413,
                         3479447370796909,
@@ -1607,7 +1566,7 @@ export async function transactionTest(
                     ],
                 ],
                 [
-                    "Palermo",
+                    "palermo",
                     [
                         190.4424,
                         3479099956230698,
@@ -1757,8 +1716,6 @@ export async function transactionTest(
         responseData.push(["sortReadOnly(key21)", ["1", "2", "3"]]);
     }
 
-    baseTransaction.wait(1, 200);
-    responseData.push(["wait(1, 200)", 1]);
     return responseData;
 }
 

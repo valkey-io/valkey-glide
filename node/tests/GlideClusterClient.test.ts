@@ -84,6 +84,8 @@ describe("GlideClusterClient", () => {
     afterAll(async () => {
         if (testsFailed === 0) {
             await cluster.close();
+        } else {
+            await cluster.close(true);
         }
     });
 
@@ -246,7 +248,7 @@ describe("GlideClusterClient", () => {
             expect(await client.set(key, value)).toEqual("OK");
             // Since DUMP gets binary results, we cannot use the default decoder (string) here, so we expected to get an error.
             await expect(client.customCommand(["DUMP", key])).rejects.toThrow(
-                "invalid utf-8 sequence of 1 bytes from index 9",
+                "invalid utf-8 sequence of 1 bytes from index",
             );
 
             const dumpResult = await client.customCommand(["DUMP", key], {
@@ -370,6 +372,20 @@ describe("GlideClusterClient", () => {
             const client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
+            const lmpopArr = [];
+
+            if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                lmpopArr.push(
+                    client.lmpop(["abc", "def"], ListDirection.LEFT, {
+                        count: 1,
+                    }),
+                );
+                lmpopArr.push(
+                    client.blmpop(["abc", "def"], ListDirection.RIGHT, 0.1, {
+                        count: 1,
+                    }),
+                );
+            }
 
             const promises: Promise<unknown>[] = [
                 client.blpop(["abc", "zxy", "lkn"], 0.1),
@@ -391,10 +407,7 @@ describe("GlideClusterClient", () => {
                 client.sdiffstore("abc", ["zxy", "lkn"]),
                 client.sortStore("abc", "zyx"),
                 client.sortStore("abc", "zyx", { isAlpha: true }),
-                client.lmpop(["abc", "def"], ListDirection.LEFT, { count: 1 }),
-                client.blmpop(["abc", "def"], ListDirection.RIGHT, 0.1, {
-                    count: 1,
-                }),
+                ...lmpopArr,
                 client.bzpopmax(["abc", "def"], 0.5),
                 client.bzpopmin(["abc", "def"], 0.5),
                 client.xread({ abc: "0-0", zxy: "0-0", lkn: "0-0" }),
@@ -440,9 +453,15 @@ describe("GlideClusterClient", () => {
                 );
             }
 
-            for (const promise of promises) {
-                await expect(promise).rejects.toThrowError(/crossslot/i);
-            }
+            await Promise.allSettled(promises).then((results) => {
+                results.forEach((result) => {
+                    expect(result.status).toBe("rejected");
+
+                    if (result.status === "rejected") {
+                        expect(result.reason.message).toContain("CrossSlot");
+                    }
+                });
+            });
 
             client.close();
         },

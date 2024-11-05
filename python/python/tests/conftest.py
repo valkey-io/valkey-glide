@@ -18,7 +18,7 @@ from tests.utils.cluster import ValkeyCluster
 
 DEFAULT_HOST = "localhost"
 DEFAULT_PORT = 6379
-DEFAULT_TEST_LOG_LEVEL = logLevel.WARN
+DEFAULT_TEST_LOG_LEVEL = logLevel.OFF
 
 Logger.set_logger_config(DEFAULT_TEST_LOG_LEVEL)
 
