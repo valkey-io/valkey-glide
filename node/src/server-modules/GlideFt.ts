@@ -281,8 +281,8 @@ export class GlideFt {
      *
      * @example
      * ```typescript
-     * console.log(GlideFt.explain(client, "myIndex", "@price:[0 10]")); // Output:
-     * // "Field {\n\tprice\n\t0\n\t10\n}"
+     * const result = GlideFt.explain(client, "myIndex", "@price:[0 10]");
+     * console.log(result); // Output: "Field {\n\tprice\n\t0\n\t10\n}"
      * ```
      */
     static explain(
@@ -307,6 +307,12 @@ export class GlideFt {
      * an argument to {@link search | FT.SEARCH} or {@link aggregate | FT.AGGREGATE}.
      * @param options - (Optional) See {@link DecoderOption}.
      * @returns A query execution plan.
+     * 
+     * @example
+     * ```typescript
+     * const result = GlideFt.explaincli(client, "myIndex", "@price:[0 10]");
+     * console.log(result); // Output: ["Field {", "price", "0", "10", "}"]
+     * ```
      */
     static explaincli(
         client: GlideClient | GlideClusterClient,
