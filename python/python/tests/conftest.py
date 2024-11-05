@@ -15,6 +15,7 @@ from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.logger import Level as logLevel
 from glide.logger import Logger
 from tests.utils.cluster import ValkeyCluster
+from tests.utils.utils import check_if_server_version_lt
 
 DEFAULT_HOST = "localhost"
 DEFAULT_PORT = 6379
@@ -278,3 +279,24 @@ async def test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
     client = await create_client(request, cluster_mode, protocol=protocol, timeout=2000)
     await client.custom_command(["FLUSHALL"])
     await client.close()
+
+
+@pytest.fixture(autouse=True)
+async def skip_if_version_below(request):
+    """
+    Skip test(s) if server version is below than given parameter. Can skip a complete test suite.
+
+    Example:
+
+      @pytest.mark.skip_if_version_below('7.0.0')
+      async def test_meow_meow(...):
+          ...
+    """
+    if request.node.get_closest_marker("skip_if_version_below"):
+        min_version = request.node.get_closest_marker("skip_if_version_below").args[0]
+        client = await create_client(request, False)
+        if await check_if_server_version_lt(client, min_version):
+            pytest.skip(
+                reason=f"This feature added in version {min_version}",
+                allow_module_level=True,
+            )
