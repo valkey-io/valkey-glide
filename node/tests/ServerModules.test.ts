@@ -1798,7 +1798,7 @@ describe("Server Module Tests", () => {
             //Test if deleting a non existent alias throws an error.
             try {
                 expect(
-                    await GlideFt.aliasadd(client, index, alias)
+                    await GlideFt.aliasdel(client, alias)
                 ).rejects.toThrow();
             } catch (e) {
                 expect((e as Error).message).toContain("Alias does not exist");
