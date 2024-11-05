@@ -1,4 +1,5 @@
 #### Changes
+* Node: alias commands added: FT.ALIASADD, FT.ALIADDEL, FT.ALIASUPDATE([#2596](https://github.com/valkey-io/valkey-glide/pull/2596))
 * Python: Python: FT.PROFILE command added ([#2543](https://github.com/valkey-io/valkey-glide/pull/2543))
 * Python: Python: FT.AGGREGATE command added([#2530](https://github.com/valkey-io/valkey-glide/pull/2530))
 * Python: Add JSON.OBJLEN command ([#2495](https://github.com/valkey-io/valkey-glide/pull/2495))
