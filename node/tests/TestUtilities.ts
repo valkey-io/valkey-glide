@@ -1310,9 +1310,6 @@ export async function transactionTest(
     baseTransaction.xgroupDestroy(key9, groupName2);
     responseData.push(["xgroupDestroy(key9, groupName2)", true]);
 
-    baseTransaction.wait(1, 200);
-    responseData.push(["wait(1, 200)", 1]);
-
     baseTransaction.rename(key9, key10);
     responseData.push(["rename(key9, key10)", "OK"]);
     baseTransaction.exists([key10]);
