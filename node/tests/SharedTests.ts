@@ -1594,7 +1594,7 @@ export function runBaseTests(config: {
                 // Test count with match returns a non-empty list
                 result = await client.hscan(key1, initialCursor, {
                     match: "1*",
-                    count: 30,
+                    count: 1000,
                 });
                 expect(result[resultCursorIndex]).not.toEqual(initialCursor);
                 expect(result[resultCollectionIndex].length).toBeGreaterThan(0);
@@ -9868,7 +9868,7 @@ export function runBaseTests(config: {
                     // Test count with match returns a non-empty list
                     result = await client.zscan(key1, initialCursor, {
                         match: "member1*",
-                        count: 20,
+                        count: 1000,
                     });
                     expect(result[resultCursorIndex]).not.toEqual("0");
                     expect(

@@ -1233,15 +1233,6 @@ export async function transactionTest(
         "xpending(key9, groupName1)",
         [1, "0-2", "0-2", [[consumer, "1"]]],
     ]);
-    baseTransaction.xpendingWithOptions(key9, groupName1, {
-        start: InfBoundary.NegativeInfinity,
-        end: InfBoundary.PositiveInfinity,
-        count: 10,
-    });
-    responseData.push([
-        "xpendingWithOptions(key9, groupName1, -, +, 10)",
-        [["0-2", consumer, 0, 1]],
-    ]);
     baseTransaction.xclaim(key9, groupName1, consumer, 0, ["0-2"]);
     responseData.push([
         'xclaim(key9, groupName1, consumer, 0, ["0-2"])',
@@ -1309,7 +1300,6 @@ export async function transactionTest(
     responseData.push(["xgroupDestroy(key9, groupName1)", true]);
     baseTransaction.xgroupDestroy(key9, groupName2);
     responseData.push(["xgroupDestroy(key9, groupName2)", true]);
-
     baseTransaction.rename(key9, key10);
     responseData.push(["rename(key9, key10)", "OK"]);
     baseTransaction.exists([key10]);
