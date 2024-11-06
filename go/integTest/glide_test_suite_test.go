@@ -96,7 +96,7 @@ func runClusterManager(suite *GlideTestSuite, args []string, ignoreExitCode bool
 			suite.T().Fatalf("Unexpected error while executing cluster_manager.py: %s", err.Error())
 		}
 
-		if exitError.Stderr != nil && len(exitError.Stderr) > 0 {
+		if len(exitError.Stderr) > 0 {
 			suite.T().Logf("cluster_manager.py stderr:\n====\n%s\n====\n", string(exitError.Stderr))
 		}
 
@@ -189,4 +189,10 @@ func (suite *GlideTestSuite) runWithClients(clients []api.BaseClient, test func(
 func (suite *GlideTestSuite) verifyOK(result api.Result[string], err error) {
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), api.OK, result.Value())
+}
+
+func (suite *GlideTestSuite) SkipIfServerVersionLowerThanBy(version string) {
+	if suite.serverVersion < version {
+		suite.T().Skipf("This feature is added in version %s", version)
+	}
 }
