@@ -1306,51 +1306,55 @@ where
         check_existing_conn: bool,
     ) {
         info!("Started refreshing connections to {:?}", addresses);
-        let connections_container = inner.conn_lock.read().await;
-        let cluster_params = &inner.cluster_params;
-        let subscriptions_by_address = &inner.subscriptions_by_address;
-        let glide_connection_options = &inner.glide_connection_options;
+        let mut tasks = FuturesUnordered::new();
+        let inner = inner.clone();
 
-        stream::iter(addresses.into_iter())
-            .fold(
-                &*connections_container,
-                |connections_container, address| async move {
-                    let node_option = if check_existing_conn {
-                        connections_container.remove_node(&address)
-                    } else {
-                        None
-                    };
+        for address in addresses.into_iter() {
+            let inner = inner.clone();
 
-                    // override subscriptions for this connection
-                    let mut cluster_params = cluster_params.clone();
-                    let subs_guard = subscriptions_by_address.read().await;
-                    cluster_params.pubsub_subscriptions = subs_guard.get(&address).cloned();
-                    drop(subs_guard);
-                    let node = get_or_create_conn(
-                        &address,
-                        node_option,
-                        &cluster_params,
-                        conn_type,
-                        glide_connection_options.clone(),
-                    )
-                    .await;
-                    match node {
-                        Ok(node) => {
-                            connections_container
-                                .replace_or_add_connection_for_address(address, node);
-                        }
-                        Err(err) => {
-                            warn!(
-                                "Failed to refresh connection for node {}. Error: `{:?}`",
-                                address, err
-                            );
-                        }
-                    }
-                    connections_container
-                },
-            )
-            .await;
-        info!("refresh connections completed");
+            tasks.push(async move {
+                let node_option = if check_existing_conn {
+                    let connections_container = inner.conn_lock.read().await;
+                    connections_container.remove_node(&address)
+                } else {
+                    None
+                };
+
+                // Override subscriptions for this connection
+                let mut cluster_params = inner.cluster_params.clone();
+                let subs_guard = inner.subscriptions_by_address.read().await;
+                cluster_params.pubsub_subscriptions = subs_guard.get(&address).cloned();
+                drop(subs_guard);
+
+                let node = get_or_create_conn(
+                    &address,
+                    node_option,
+                    &cluster_params,
+                    conn_type,
+                    inner.glide_connection_options.clone(),
+                )
+                .await;
+
+                (address, node)
+            });
+        }
+
+        // Poll connection tasks as soon as each one finishes
+        while let Some(result) = tasks.next().await {
+            match result {
+                (address, Ok(node)) => {
+                    let connections_container = inner.conn_lock.read().await;
+                    connections_container.replace_or_add_connection_for_address(address, node);
+                }
+                (address, Err(err)) => {
+                    warn!(
+                        "Failed to refresh connection for node {}. Error: `{:?}`",
+                        address, err
+                    );
+                }
+            }
+        }
+        debug!("refresh connections completed");
     }
 
     async fn aggregate_results(
