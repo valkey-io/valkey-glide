@@ -557,6 +557,32 @@ describe("Server Module Tests", () => {
                     }),
                 ).toEqual(6);
 
+                // Test with binary input
+                expect(
+                    await GlideJson.arrindex(
+                        client,
+                        Buffer.from(key2),
+                        Buffer.from("$..a"),
+                        Buffer.from('"foo"'),
+                        {
+                            start: 6,
+                            end: -1,
+                        },
+                    ),
+                ).toEqual([6, -1, null]);
+                expect(
+                    await GlideJson.arrindex(
+                        client,
+                        Buffer.from(key2),
+                        Buffer.from("..a"),
+                        Buffer.from('"foo"'),
+                        {
+                            start: 6,
+                            end: -1,
+                        },
+                    ),
+                ).toEqual(6);
+
                 // Test with non-existent path
                 expect(
                     await GlideJson.arrindex(
