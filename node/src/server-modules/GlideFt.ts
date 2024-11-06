@@ -556,24 +556,24 @@ export class GlideFt {
                 limited: options.limited,
             };
         } else {
-            const commandLineFromAggregate = _addFtAggregateOptions(
-                options as FtAggregateOptions,
-            );
-
-            // if FtAggregateOptions are given, use that
-            if (commandLineFromAggregate) {
-                argOptions = {
-                    queryType: "AGGREGATE",
-                    queryOptions: commandLineFromAggregate,
-                };
-            } else {
-                // if FtSearchOptions are given, use that
+            // the different between aggregate options and search options is
+            // that search options have returnFields and aggregate options 
+            // have "clauses" - otherwise they are identical
+            if ("returnFields" in options) {
                 const commandLineFromSearch = _addFtSearchOptions(
                     options as FtSearchOptions,
                 );
                 argOptions = {
                     queryType: "SEARCH",
                     queryOptions: commandLineFromSearch,
+                };
+            } else {
+                const commandLineFromAggregate = _addFtAggregateOptions(
+                    options as FtAggregateOptions,
+                );
+                argOptions = {
+                    queryType: "AGGREGATE",
+                    queryOptions: commandLineFromAggregate,
                 };
             }
         }
@@ -592,6 +592,9 @@ export class GlideFt {
         }
 
         args.push("QUERY", query, ...argOptions.queryOptions);
+
+        // TODO remove
+        console.log(args);
 
         return _handleCustomCommand(
             client,

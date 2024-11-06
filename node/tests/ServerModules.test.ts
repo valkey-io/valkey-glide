@@ -3155,6 +3155,12 @@ describe("Server Module Tests", () => {
 
             const stringProfileResult: FtProfileReturnType =
                 await GlideFt.profile(client, index, query, optionsWithLimit);
+
+            // TODO remove
+            console.log(stringProfileResult);
+            console.log(stringResult);
+            console.log(expectedStringResult);
+
             expect(stringProfileResult[0]).toEqual(expectedStringResult);
         });
     });
