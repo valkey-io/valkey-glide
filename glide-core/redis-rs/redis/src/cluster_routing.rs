@@ -299,13 +299,13 @@ fn calculate_multi_slot_result_indices<'a>(
         MultiSlotArgPattern::KeysOnly => Ok(route_arg_indices
             .iter()
             .map(|(_, indices)| Cow::Borrowed(indices))),
-        MultiSlotArgPattern::KeysAndPath => {
+        MultiSlotArgPattern::KeysAndLastArg => {
             // The last index corresponds to the path, skip it
             Ok(route_arg_indices
                 .iter()
                 .map(|(_, indices)| Cow::Borrowed(&indices[..indices.len() - 1])))
         }
-        MultiSlotArgPattern::KeyPathValueTriples => {
+        MultiSlotArgPattern::KeyWithTwoArgTriples => {
             // For each triplet (key, path, value) we receive a single response.
             // For example, for argument indices: [(_, [0,1,2]), (_, [3,4,5,9,10,11]), (_, [6,7,8])]
             // The resulting grouped indices would be: [0], [1, 3], [2]
@@ -379,7 +379,7 @@ pub(crate) fn combine_and_sort_array_results(
             ErrorKind::ClientError,
             "Mismatch in the number of multi-slot results compared to the expected result count.",
             format!(
-                "Expected: {:?}, Found: {:?}\nvalues: {values:?}\nresult_indices: {result_indices:?}",
+                "Expected: {:?}, Found: {:?}",
                 values.len(),
                 result_indices.len()
             ),
@@ -424,13 +424,13 @@ pub enum MultiSlotArgPattern {
     /// For example: `MSET key1 value1 key2 value2`
     KeyValuePairs,
 
-    /// Pattern where a list of keys is followed by a shared path or parameter.
+    /// Pattern where a list of keys is followed by a shared parameter.
     /// For example: `JSON.MGET key1 key2 key3 path`
-    KeysAndPath,
+    KeysAndLastArg,
 
-    /// Pattern where each key is followed by a path and a value, forming key-path-value triplets.
+    /// Pattern where each key is followed by two associated arguments, forming key-argument-argument triples.
     /// For example: `JSON.MSET key1 path1 value1 key2 path2 value2`
-    KeyPathValueTriples,
+    KeyWithTwoArgTriples,
 }
 
 /// Takes the given `routable` and creates a multi-slot routing info.
@@ -484,7 +484,7 @@ where
                 // Increment to the value paired with the current key and add its index
                 curr_arg_idx = incr_add_next_arg(arg_indices, curr_arg_idx)?;
             }
-            MultiSlotArgPattern::KeysAndPath => {
+            MultiSlotArgPattern::KeysAndLastArg => {
                 // Check if the command has more keys or if the next argument is a path
                 if routable
                     .arg_idx(first_key_index + curr_arg_idx + 2)
@@ -498,10 +498,10 @@ where
                     break;
                 }
             }
-            MultiSlotArgPattern::KeyPathValueTriples => {
-                // Increment to the path associated with the current key and add its index
+            MultiSlotArgPattern::KeyWithTwoArgTriples => {
+                // Increment to the first argument associated with the current key and add its index
                 curr_arg_idx = incr_add_next_arg(arg_indices, curr_arg_idx)?;
-                // Increment to the value associated with the current key and add its index
+                // Increment to the second argument associated with the current key and add its index
                 curr_arg_idx = incr_add_next_arg(arg_indices, curr_arg_idx)?;
             }
         }
@@ -642,8 +642,8 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         }
 
         b"MSET" => RouteBy::MultiShard(MultiSlotArgPattern::KeyValuePairs),
-        b"JSON.MGET" => RouteBy::MultiShard(MultiSlotArgPattern::KeysAndPath),
-        b"JSON.MSET" => RouteBy::MultiShard(MultiSlotArgPattern::KeyPathValueTriples),
+        b"JSON.MGET" => RouteBy::MultiShard(MultiSlotArgPattern::KeysAndLastArg),
+        b"JSON.MSET" => RouteBy::MultiShard(MultiSlotArgPattern::KeyWithTwoArgTriples),
         // TODO - special handling - b"SCAN"
         b"SCAN" | b"SHUTDOWN" | b"SLAVEOF" | b"REPLICAOF" => RouteBy::Undefined,
 
@@ -1502,14 +1502,14 @@ mod tests_routing {
         assert!(
             matches!(routing.clone(), Some(RoutingInfo::MultiNode((MultipleNodeRoutingInfo::MultiSlot((vec, args_pattern)), Some(ResponsePolicy::CombineArrays)))) if {
                 let routes = vec.clone().into_iter().collect();
-                expected == routes && args_pattern == MultiSlotArgPattern::KeysAndPath
+                expected == routes && args_pattern == MultiSlotArgPattern::KeysAndLastArg
             }),
             "expected={expected:?}\nrouting={routing:?}"
         );
     }
 
     #[test]
-    fn test_multi_shard_key_path_value_triples() {
+    fn test_multi_shard_key_with_two_arg_triples() {
         let mut cmd = cmd("JSON.MSET");
         cmd
             .arg("foo") // key slot 12182
@@ -1529,7 +1529,7 @@ mod tests_routing {
         assert!(
             matches!(routing.clone(), Some(RoutingInfo::MultiNode((MultipleNodeRoutingInfo::MultiSlot((vec, args_pattern)), Some(ResponsePolicy::AllSucceeded)))) if {
                 let routes = vec.clone().into_iter().collect();
-                expected == routes && args_pattern == MultiSlotArgPattern::KeyPathValueTriples
+                expected == routes && args_pattern == MultiSlotArgPattern::KeyWithTwoArgTriples
             }),
             "expected={expected:?}\nrouting={routing:?}"
         );
@@ -1650,7 +1650,7 @@ mod tests_routing {
                 (Route(5061, SlotAddr::Master), vec![2, 3]),
                 (Route(12182, SlotAddr::Master), vec![0, 1, 3]),
             ],
-            &MultiSlotArgPattern::KeysAndPath,
+            &MultiSlotArgPattern::KeysAndLastArg,
         );
 
         assert_eq!(
@@ -1664,7 +1664,7 @@ mod tests_routing {
     }
 
     #[test]
-    fn test_combining_results_into_single_array_key_path_value_triples() {
+    fn test_combining_results_into_single_array_key_with_two_arg_triples() {
         // For example `JSON.MSET foo $.a bar foo2 $.f.a bar2 {foo}foo3 $.f bar3`
         let res1 = Value::Array(vec![Value::Okay]);
         let res2 = Value::Array(vec![Value::BulkString("1".as_bytes().to_vec()), Value::Nil]);
@@ -1674,7 +1674,7 @@ mod tests_routing {
                 (Route(5061, SlotAddr::Master), vec![3, 4, 5]),
                 (Route(12182, SlotAddr::Master), vec![0, 1, 2, 6, 7, 8]),
             ],
-            &MultiSlotArgPattern::KeyPathValueTriples,
+            &MultiSlotArgPattern::KeyWithTwoArgTriples,
         );
 
         assert_eq!(

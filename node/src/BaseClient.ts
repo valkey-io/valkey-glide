@@ -7157,7 +7157,8 @@ export class BaseClient {
      * requests fail, the entire call will return the first encountered error, even
      * though some requests may have succeeded while others did not.
      * If this behavior impacts your application logic, consider splitting the
-     * request into sub-requests per slot to ensure atomicity.     *
+     * request into sub-requests per slot to ensure atomicity.
+     *
      * @param keys - The keys to watch.
      * @returns A simple `"OK"` response.
      *
