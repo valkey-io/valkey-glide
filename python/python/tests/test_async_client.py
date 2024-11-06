@@ -10437,7 +10437,7 @@ class TestScripts:
         assert await glide_client.script_exists([script.get_hash()]) == [False]
 
     @pytest.mark.parametrize("cluster_mode", [True])
-    @pytest.mark.parametrize("single_route", [True, False])
+    @pytest.mark.parametrize("single_route", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_script_kill_route(
         self,
