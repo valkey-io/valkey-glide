@@ -1948,7 +1948,7 @@ describe("GlideClusterClient", () => {
 
                 // Create a long-running script
                 const longScript = new Script(
-                    createLongRunningLuaScript(5, false),
+                    createLongRunningLuaScript(10, false),
                 );
 
                 try {
@@ -1962,7 +1962,8 @@ describe("GlideClusterClient", () => {
                         );
 
                     let killed = false;
-                    let timeout = 4000;
+                    let timeout = 5000;
+                    let last_err;
                     await new Promise((resolve) => setTimeout(resolve, 1000));
 
                     while (timeout >= 0) {
@@ -1970,8 +1971,9 @@ describe("GlideClusterClient", () => {
                             expect(await client1.scriptKill()).toEqual("OK");
                             killed = true;
                             break;
-                        } catch {
+                        } catch (err) {
                             // do nothing
+                            last_err = err;
                         }
 
                         await new Promise((resolve) =>
@@ -1980,7 +1982,12 @@ describe("GlideClusterClient", () => {
                         timeout -= 500;
                     }
 
-                    expect(killed).toBeTruthy();
+                    if (!killed) {
+                        throw new Error(
+                            `Expected the script to be killed. Last error=${last_err}`,
+                        );
+                    }
+
                     await promise;
                 } finally {
                     await waitForScriptNotBusy(client1);

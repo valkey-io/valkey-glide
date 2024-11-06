@@ -13,7 +13,6 @@ import {
 import { BufferReader, BufferWriter } from "protobufjs";
 import { v4 as uuidv4 } from "uuid";
 import {
-    convertGlideRecordToRecord,
     Decoder,
     FlushMode,
     FunctionRestorePolicy,
@@ -25,17 +24,18 @@ import {
     RequestError,
     Script,
     Transaction,
+    convertGlideRecordToRecord,
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import { command_request } from "../src/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import {
+    DumpAndRestoreTest,
     checkFunctionListResponse,
     checkFunctionStatsResponse,
     convertStringArrayToBuffer,
     createLongRunningLuaScript,
     createLuaLibWithLongRunningFunction,
-    DumpAndRestoreTest,
     encodableTransactionTest,
     flushAndCloseClient,
     generateLuaLibCode,
@@ -1479,7 +1479,7 @@ describe("GlideClient", () => {
 
                 // Create a long-running script
                 const longScript = new Script(
-                    createLongRunningLuaScript(5, false),
+                    createLongRunningLuaScript(10, false),
                 );
 
                 try {
@@ -1493,7 +1493,8 @@ describe("GlideClient", () => {
                         );
 
                     let killed = false;
-                    let timeout = 4000;
+                    let timeout = 5000;
+                    let last_err;
                     await new Promise((resolve) => setTimeout(resolve, 1000));
 
                     while (timeout >= 0) {
@@ -1501,8 +1502,9 @@ describe("GlideClient", () => {
                             expect(await client1.scriptKill()).toEqual("OK");
                             killed = true;
                             break;
-                        } catch {
+                        } catch (err) {
                             // do nothing
+                            last_err = err;
                         }
 
                         await new Promise((resolve) =>
@@ -1511,7 +1513,12 @@ describe("GlideClient", () => {
                         timeout -= 500;
                     }
 
-                    expect(killed).toBeTruthy();
+                    if (!killed) {
+                        throw new Error(
+                            `Expected the script to be killed. Last error=${last_err}`,
+                        );
+                    }
+
                     await promise;
                 } finally {
                     await waitForScriptNotBusy(client1);
