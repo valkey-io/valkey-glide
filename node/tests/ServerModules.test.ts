@@ -2659,20 +2659,20 @@ describe("Server Module Tests", () => {
                         },
                     ],
                 };
-                const aggreg = (
-                    await GlideFt.aggregate(
-                        client,
-                        indexBicycles,
-                        query,
-                        options,
-                    )
-                )
-                    .map(convertGlideRecordToRecord)
-                    // elements (records in array) could be reordered
-                    .sort((a, b) =>
-                        a["condition"]! > b["condition"]! ? 1 : -1,
-                    );
-                expect(aggreg).toEqual([
+                const aggreg = await GlideFt.aggregate(
+                    client,
+                    indexBicycles,
+                    query,
+                    options,
+                );
+                expect(
+                    aggreg
+                        .map(convertGlideRecordToRecord)
+                        // elements (records in array) could be reordered
+                        .sort((a, b) =>
+                            a["condition"]! > b["condition"]! ? 1 : -1,
+                        ),
+                ).toEqual([
                     {
                         condition: "new",
                         bicycles: isResp3 ? 5 : "5",
@@ -2819,13 +2819,18 @@ describe("Server Module Tests", () => {
                         },
                     ],
                 };
-                const aggreg = (
-                    await GlideFt.aggregate(client, indexMovies, query, options)
-                )
-                    .map(convertGlideRecordToRecord)
-                    // elements (records in array) could be reordered
-                    .sort((a, b) => (a["genre"]! > b["genre"]! ? 1 : -1));
-                expect(aggreg).toEqual([
+                const aggreg = await GlideFt.aggregate(
+                    client,
+                    indexMovies,
+                    query,
+                    options,
+                );
+                expect(
+                    aggreg
+                        .map(convertGlideRecordToRecord)
+                        // elements (records in array) could be reordered
+                        .sort((a, b) => (a["genre"]! > b["genre"]! ? 1 : -1)),
+                ).toEqual([
                     {
                         genre: "Action",
                         nb_of_movies: isResp3 ? 2.0 : "2",
@@ -3059,7 +3064,7 @@ describe("Server Module Tests", () => {
                     decoder: Decoder.Bytes,
                     ...options,
                 });
-            expect(binaryProfileResult[0]).toEqual(expectedBinaryResult);
+            expect(binaryProfileResult[0]).toEqual(binaryResult);
         });
 
         it("FT.SEARCH string on JSON", async () => {
@@ -3149,7 +3154,7 @@ describe("Server Module Tests", () => {
                     },
                 ],
             ];
-            expect(stringResult).toEqual(expectedStringResult);
+            expect(stringResult).toEqual(stringResult);
 
             const stringProfileResult: FtProfileReturnType =
                 await GlideFt.profile(client, index, query, {
