@@ -16,8 +16,6 @@ import {
     Field,
     FtAggregateOptions,
     FtCreateOptions,
-    FtProfileOptions,
-
     FtSearchOptions,
 } from "./GlideFtOptions";
 
@@ -533,65 +531,28 @@ export class GlideFt {
      * @param options
      * @returns
      */
-    static async profile(
+    static async profileSearch(
         client: GlideClient | GlideClusterClient,
         indexName: GlideString,
         query: GlideString,
-        options: DecoderOption &
-            (FtAggregateOptions | FtSearchOptions | FtProfileOptions),
+        options?: DecoderOption &
+            FtSearchOptions & {
+                limited?: boolean;
+            },
     ): Promise<FtProfileReturnType> {
         const args: GlideString[] = ["FT.PROFILE", indexName];
 
-        let argOptions: {
-            queryType: GlideString;
-            queryOptions: GlideString[];
-            limited?: boolean;
-        };
+        args.push("SEARCH");
 
-        // if PtProfileOptions are given, use that
-        if (options && "queryType" in options) {
-            argOptions = {
-                queryType: options.queryType,
-                queryOptions: [],
-                limited: options.limited,
-            };
-        } else {
-            // the different between aggregate options and search options is
-            // that search options have returnFields and aggregate options 
-            // have "clauses" - otherwise they are identical
-            if ("returnFields" in options) {
-                const commandLineFromSearch = _addFtSearchOptions(
-                    options as FtSearchOptions,
-                );
-                argOptions = {
-                    queryType: "SEARCH",
-                    queryOptions: commandLineFromSearch,
-                };
-            } else {
-                const commandLineFromAggregate = _addFtAggregateOptions(
-                    options as FtAggregateOptions,
-                );
-                argOptions = {
-                    queryType: "AGGREGATE",
-                    queryOptions: commandLineFromAggregate,
-                };
-            }
-        }
-
-        if (!argOptions) {
-            throw new Error(
-                "Invalid options given, must include one of FtAggregateOptions | FtSearchOptions | FtProfileOptions",
-            );
-        }
-
-        // build the command line options
-        args.push(argOptions.queryType);
-
-        if (argOptions.limited) {
+        if (options?.limited) {
             args.push("LIMITED");
         }
 
-        args.push("QUERY", query, ...argOptions.queryOptions);
+        args.push("QUERY", query);
+
+        if (options) {
+            args.push(..._addFtSearchOptions(options as FtSearchOptions));
+        }
 
         // TODO remove
         console.log(args);
@@ -599,7 +560,47 @@ export class GlideFt {
         return _handleCustomCommand(
             client,
             args,
-            options,
+            options as DecoderOption,
+        ) as Promise<FtProfileReturnType>;
+    }
+
+    /**
+     *
+     * @param client
+     * @param indexName
+     * @param options
+     * @returns
+     */
+    static async profileAggregate(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        query: GlideString,
+        options?: DecoderOption &
+            FtAggregateOptions & {
+                limited?: boolean;
+            },
+    ): Promise<FtProfileReturnType> {
+        const args: GlideString[] = ["FT.PROFILE", indexName];
+
+        args.push("AGGREGATE");
+
+        if (options?.limited) {
+            args.push("LIMITED");
+        }
+
+        args.push("QUERY", query);
+
+        if (options) {
+            args.push(..._addFtAggregateOptions(options as FtAggregateOptions));
+        }
+
+        // TODO remove
+        console.log(args);
+
+        return _handleCustomCommand(
+            client,
+            args,
+            options as DecoderOption,
         ) as Promise<FtProfileReturnType>;
     }
 
