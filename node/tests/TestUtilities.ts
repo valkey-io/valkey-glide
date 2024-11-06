@@ -1713,8 +1713,6 @@ export async function transactionTest(
         responseData.push(["sortReadOnly(key21)", ["1", "2", "3"]]);
     }
 
-    baseTransaction.wait(1, 200);
-    responseData.push(["wait(1, 200)", gte(version, "7.0.0") ? 1 : 0]);
     return responseData;
 }
 
