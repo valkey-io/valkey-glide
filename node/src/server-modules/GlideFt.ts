@@ -536,6 +536,7 @@ export class GlideFt {
     static async profile(
         client: GlideClient | GlideClusterClient,
         indexName: GlideString,
+        query: GlideString,
         options: DecoderOption &
             (FtAggregateOptions | FtSearchOptions | FtProfileOptions),
     ): Promise<FtProfileReturnType> {
@@ -543,7 +544,7 @@ export class GlideFt {
 
         let argOptions: {
             queryType: GlideString;
-            query: GlideString[];
+            queryOptions: GlideString[];
             limited?: boolean;
         };
 
@@ -551,7 +552,7 @@ export class GlideFt {
         if (options && "queryType" in options) {
             argOptions = {
                 queryType: options.queryType,
-                query: [options.query],
+                queryOptions: [],
                 limited: options.limited,
             };
         } else {
@@ -563,7 +564,7 @@ export class GlideFt {
             if (commandLineFromAggregate) {
                 argOptions = {
                     queryType: "AGGREGATE",
-                    query: commandLineFromAggregate,
+                    queryOptions: commandLineFromAggregate,
                 };
             } else {
                 // if FtSearchOptions are given, use that
@@ -572,7 +573,7 @@ export class GlideFt {
                 );
                 argOptions = {
                     queryType: "SEARCH",
-                    query: commandLineFromSearch,
+                    queryOptions: commandLineFromSearch,
                 };
             }
         }
@@ -590,7 +591,7 @@ export class GlideFt {
             args.push("LIMITED");
         }
 
-        args.push("QUERY", ...argOptions.query);
+        args.push("QUERY", query, ...argOptions.queryOptions);
 
         return _handleCustomCommand(
             client,

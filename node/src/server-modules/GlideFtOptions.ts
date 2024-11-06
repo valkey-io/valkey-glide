@@ -373,6 +373,5 @@ export interface FtAggregateApply {
 
 export interface FtProfileOptions {
     queryType: "AGGREGATE" | "SEARCH";
-    query: GlideString;
     limited?: boolean;
 }

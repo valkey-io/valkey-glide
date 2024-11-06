@@ -15,6 +15,8 @@ import {
     convertGlideRecordToRecord,
     Decoder,
     FtAggregateOptions,
+    FtProfileReturnType,
+    FtSearchOptions,
     FtSearchReturnType,
     GlideClusterClient,
     GlideFt,
@@ -2501,7 +2503,7 @@ describe("Server Module Tests", () => {
         });
 
         it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-            "FT.AGGREGATE ft.aggregate",
+            "FT.AGGREGATE on JSON",
             async (protocol) => {
                 client = await GlideClusterClient.createClient(
                     getClientConfigurationOption(
@@ -2513,8 +2515,7 @@ describe("Server Module Tests", () => {
                 const isResp3 = protocol == ProtocolVersion.RESP3;
                 const prefixBicycles = "{bicycles}:";
                 const indexBicycles = prefixBicycles + uuidv4();
-                const prefixMovies = "{movies}:";
-                const indexMovies = prefixMovies + uuidv4();
+                const query = "*";
 
                 // FT.CREATE idx:bicycle ON JSON PREFIX 1 bicycle: SCHEMA $.model AS model TEXT $.description AS
                 // description TEXT $.price AS price NUMERIC $.condition AS condition TAG SEPARATOR ,
@@ -2642,7 +2643,7 @@ describe("Server Module Tests", () => {
                 );
 
                 // FT.AGGREGATE idx:bicycle * LOAD 1 __key GROUPBY 1 @condition REDUCE COUNT 0 AS bicycles
-                let options: FtAggregateOptions = {
+                const options: FtAggregateOptions = {
                     loadFields: ["__key"],
                     clauses: [
                         {
@@ -2658,8 +2659,13 @@ describe("Server Module Tests", () => {
                         },
                     ],
                 };
-                let aggreg = (
-                    await GlideFt.aggregate(client, indexBicycles, "*", options)
+                const aggreg = (
+                    await GlideFt.aggregate(
+                        client,
+                        indexBicycles,
+                        query,
+                        options,
+                    )
                 )
                     .map(convertGlideRecordToRecord)
                     // elements (records in array) could be reordered
@@ -2680,6 +2686,33 @@ describe("Server Module Tests", () => {
                         bicycles: isResp3 ? 4 : "4",
                     },
                 ]);
+
+                const aggregProfile = await GlideFt.profile(
+                    client,
+                    indexBicycles,
+                    "*",
+                    options,
+                );
+                expect(aggreg).toEqual(aggregProfile[0]);
+
+                await GlideFt.dropindex(client, indexBicycles);
+            },
+        );
+
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            "FT.AGGREGATE on HASH",
+            async (protocol) => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+
+                const isResp3 = protocol == ProtocolVersion.RESP3;
+                const prefixMovies = "{movies}:";
+                const indexMovies = prefixMovies + uuidv4();
+                const query = "*";
 
                 // FT.CREATE idx:movie ON hash PREFIX 1 "movie:" SCHEMA title TEXT release_year NUMERIC
                 // rating NUMERIC genre TAG votes NUMERIC
@@ -2742,7 +2775,7 @@ describe("Server Module Tests", () => {
                 // FT.AGGREGATE idx:movie * LOAD * APPLY ceil(@rating) as r_rating GROUPBY 1 @genre REDUCE
                 // COUNT 0 AS nb_of_movies REDUCE SUM 1 votes AS nb_of_votes REDUCE AVG 1 r_rating AS avg_rating
                 // SORTBY 4 @avg_rating DESC @nb_of_votes DESC
-                options = {
+                const options: FtAggregateOptions = {
                     loadAll: true,
                     clauses: [
                         {
@@ -2786,8 +2819,8 @@ describe("Server Module Tests", () => {
                         },
                     ],
                 };
-                aggreg = (
-                    await GlideFt.aggregate(client, indexMovies, "*", options)
+                const aggreg = (
+                    await GlideFt.aggregate(client, indexMovies, query, options)
                 )
                     .map(convertGlideRecordToRecord)
                     // elements (records in array) could be reordered
@@ -2813,8 +2846,15 @@ describe("Server Module Tests", () => {
                     },
                 ]);
 
+                const aggregProfile = await GlideFt.profile(
+                    client,
+                    indexMovies,
+                    query,
+                    options,
+                );
+                expect(aggreg).toEqual(aggregProfile[0]);
+
                 await GlideFt.dropindex(client, indexMovies);
-                await GlideFt.dropindex(client, indexBicycles);
             },
         );
 
@@ -2891,72 +2931,7 @@ describe("Server Module Tests", () => {
             },
         );
 
-        it("FT.EXPLAIN ft.explain FT.EXPLAINCLI ft.explaincli", async () => {
-            client = await GlideClusterClient.createClient(
-                getClientConfigurationOption(
-                    cluster.getAddresses(),
-                    ProtocolVersion.RESP3,
-                ),
-            );
-
-            const index = uuidv4();
-            expect(
-                await GlideFt.create(client, index, [
-                    { type: "NUMERIC", name: "price" },
-                    { type: "TEXT", name: "title" },
-                ]),
-            ).toEqual("OK");
-
-            let explain = await GlideFt.explain(
-                client,
-                Buffer.from(index),
-                "@price:[0 10]",
-            );
-            expect(explain).toContain("price");
-            expect(explain).toContain("10");
-
-            explain = (
-                (await GlideFt.explain(client, index, "@price:[0 10]", {
-                    decoder: Decoder.Bytes,
-                })) as Buffer
-            ).toString();
-            expect(explain).toContain("price");
-            expect(explain).toContain("10");
-
-            explain = await GlideFt.explain(client, index, "*");
-            expect(explain).toContain("*");
-
-            let explaincli = (
-                await GlideFt.explaincli(
-                    client,
-                    Buffer.from(index),
-                    "@price:[0 10]",
-                )
-            ).map((s) => (s as string).trim());
-            expect(explaincli).toContain("price");
-            expect(explaincli).toContain("0");
-            expect(explaincli).toContain("10");
-
-            explaincli = (
-                await GlideFt.explaincli(client, index, "@price:[0 10]", {
-                    decoder: Decoder.Bytes,
-                })
-            ).map((s) => (s as Buffer).toString().trim());
-            expect(explaincli).toContain("price");
-            expect(explaincli).toContain("0");
-            expect(explaincli).toContain("10");
-
-            expect(await GlideFt.dropindex(client, index)).toEqual("OK");
-            // querying a missing index
-            await expect(GlideFt.explain(client, index, "*")).rejects.toThrow(
-                "Index not found",
-            );
-            await expect(
-                GlideFt.explaincli(client, index, "*"),
-            ).rejects.toThrow("Index not found");
-        });
-
-        it("FT.SEARCH binary test", async () => {
+        it("FT.SEARCH binary on HASH", async () => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(
                     cluster.getAddresses(),
@@ -2965,6 +2940,7 @@ describe("Server Module Tests", () => {
             );
             const prefix = "{" + uuidv4() + "}:";
             const index = prefix + "index";
+            const query = "*=>[KNN 2 @VEC $query_vec]";
 
             // setup a hash index:
             expect(
@@ -3015,27 +2991,33 @@ describe("Server Module Tests", () => {
             await sleep;
 
             // With the `COUNT` parameters - returns only the count
+            const optionsWithCount: FtSearchOptions = {
+                params: [{ key: "query_vec", value: binaryValue1 }],
+                timeout: 10000,
+                count: true,
+            };
             const binaryResultCount: FtSearchReturnType = await GlideFt.search(
                 client,
                 index,
-                "*=>[KNN 2 @VEC $query_vec]",
+                query,
                 {
-                    params: [{ key: "query_vec", value: binaryValue1 }],
-                    timeout: 10000,
-                    count: true,
                     decoder: Decoder.Bytes,
+                    ...optionsWithCount,
                 },
             );
             expect(binaryResultCount).toEqual([2]);
 
+            const options: FtSearchOptions = {
+                params: [{ key: "query_vec", value: binaryValue1 }],
+                timeout: 10000,
+            };
             const binaryResult: FtSearchReturnType = await GlideFt.search(
                 client,
                 index,
-                "*=>[KNN 2 @VEC $query_vec]",
+                query,
                 {
-                    params: [{ key: "query_vec", value: binaryValue1 }],
-                    timeout: 10000,
                     decoder: Decoder.Bytes,
+                    ...options,
                 },
             );
 
@@ -3071,9 +3053,16 @@ describe("Server Module Tests", () => {
                 ],
             ];
             expect(binaryResult).toEqual(expectedBinaryResult);
+
+            const binaryProfileResult: FtProfileReturnType =
+                await GlideFt.profile(client, index, query, {
+                    decoder: Decoder.Bytes,
+                    ...options,
+                });
+            expect(binaryResult).toEqual(binaryProfileResult[0]);
         });
 
-        it("FT.SEARCH string test", async () => {
+        it("FT.SEARCH string on JSON", async () => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(
                     cluster.getAddresses(),
@@ -3083,6 +3072,7 @@ describe("Server Module Tests", () => {
 
             const prefix = "{" + uuidv4() + "}:";
             const index = prefix + "index";
+            const query = "*";
 
             // set string values
             expect(
@@ -3124,18 +3114,21 @@ describe("Server Module Tests", () => {
             );
             await sleep;
 
+            const optionsWithLimit: FtSearchOptions = {
+                returnFields: [
+                    { fieldIdentifier: "$..arr", alias: "myarr" },
+                    { fieldIdentifier: "$..val", alias: "myval" },
+                ],
+                timeout: 10000,
+                limit: { offset: 0, count: 2 },
+            };
             const stringResult: FtSearchReturnType = await GlideFt.search(
                 client,
                 index,
-                "*",
+                query,
                 {
-                    returnFields: [
-                        { fieldIdentifier: "$..arr", alias: "myarr" },
-                        { fieldIdentifier: "$..val", alias: "myval" },
-                    ],
-                    timeout: 10000,
                     decoder: Decoder.String,
-                    limit: { offset: 0, count: 2 },
+                    ...optionsWithLimit,
                 },
             );
             const expectedStringResult: FtSearchReturnType = [
@@ -3157,358 +3150,92 @@ describe("Server Module Tests", () => {
                 ],
             ];
             expect(stringResult).toEqual(expectedStringResult);
+
+            const stringProfileResult: FtProfileReturnType =
+                await GlideFt.profile(client, index, query, {
+                    decoder: Decoder.String,
+                    ...optionsWithLimit,
+                });
+            expect(stringProfileResult[0]).toEqual(expectedStringResult);
         });
+    });
 
-        it("FT.ALIASADD, FT.ALIASUPDATE and FT.ALIASDEL test", async () => {
-            client = await GlideClusterClient.createClient(
-                getClientConfigurationOption(
-                    cluster.getAddresses(),
-                    ProtocolVersion.RESP3,
-                ),
-            );
-            const index = uuidv4();
-            const alias = uuidv4() + "-alias";
+    it("FT.ALIASADD, FT.ALIASUPDATE and FT.ALIASDEL test", async () => {
+        client = await GlideClusterClient.createClient(
+            getClientConfigurationOption(
+                cluster.getAddresses(),
+                ProtocolVersion.RESP3,
+            ),
+        );
+        const index = uuidv4();
+        const alias = uuidv4() + "-alias";
 
-            // Create an index.
-            expect(
-                await GlideFt.create(client, index, [
-                    { type: "NUMERIC", name: "published_at" },
-                    { type: "TAG", name: "category" },
-                ]),
-            ).toEqual("OK");
-            // Check if the index created successfully.
-            expect(await client.customCommand(["FT._LIST"])).toContain(index);
+        // Create an index.
+        expect(
+            await GlideFt.create(client, index, [
+                { type: "NUMERIC", name: "published_at" },
+                { type: "TAG", name: "category" },
+            ]),
+        ).toEqual("OK");
+        // Check if the index created successfully.
+        expect(await client.customCommand(["FT._LIST"])).toContain(index);
 
-            // Add an alias to the index.
-            expect(await GlideFt.aliasadd(client, index, alias)).toEqual("OK");
+        // Add an alias to the index.
+        expect(await GlideFt.aliasadd(client, index, alias)).toEqual("OK");
 
-            const newIndex = uuidv4();
-            const newAlias = uuidv4();
+        const newIndex = uuidv4();
+        const newAlias = uuidv4();
 
-            // Create a second index.
-            expect(
-                await GlideFt.create(client, newIndex, [
-                    { type: "NUMERIC", name: "published_at" },
-                    { type: "TAG", name: "category" },
-                ]),
-            ).toEqual("OK");
-            // Check if the second index created successfully.
-            expect(await client.customCommand(["FT._LIST"])).toContain(
-                newIndex,
-            );
+        // Create a second index.
+        expect(
+            await GlideFt.create(client, newIndex, [
+                { type: "NUMERIC", name: "published_at" },
+                { type: "TAG", name: "category" },
+            ]),
+        ).toEqual("OK");
+        // Check if the second index created successfully.
+        expect(await client.customCommand(["FT._LIST"])).toContain(
+            newIndex,
+        );
 
-            // Add an alias to second index and also test addalias for bytes type input.
-            expect(
-                await GlideFt.aliasadd(
-                    client,
-                    Buffer.from(newIndex),
-                    Buffer.from(newAlias),
-                ),
-            ).toEqual("OK");
-
-            // Test if updating an already existing alias to point to an existing index returns "OK".
-            expect(await GlideFt.aliasupdate(client, newAlias, index)).toEqual(
-                "OK",
-            );
-            // Test alias update for byte type input.
-            expect(
-                await GlideFt.aliasupdate(
-                    client,
-                    Buffer.from(alias),
-                    Buffer.from(newIndex),
-                ),
-            ).toEqual("OK");
-
-            // Test if an existing alias is deleted successfully.
-            expect(await GlideFt.aliasdel(client, alias)).toEqual("OK");
-
-            // Test if an existing alias is deleted successfully for bytes type input.
-            expect(
-                await GlideFt.aliasdel(client, Buffer.from(newAlias)),
-            ).toEqual("OK");
-
-            // Drop both indexes.
-            expect(await GlideFt.dropindex(client, index)).toEqual("OK");
-            expect(await client.customCommand(["FT._LIST"])).not.toContain(
-                index,
-            );
-            expect(await GlideFt.dropindex(client, newIndex)).toEqual("OK");
-            expect(await client.customCommand(["FT._LIST"])).not.toContain(
-                newIndex,
-            );
-        });
-
-        it("FT.PROFILE string test", async () => {
-            client = await GlideClusterClient.createClient(
-                getClientConfigurationOption(
-                    cluster.getAddresses(),
-                    ProtocolVersion.RESP3,
-                ),
-            );
-
-            const prefixBicycles = "{bicycles}:";
-            const indexBicycles = prefixBicycles + uuidv4();
-            const prefixMovies = "{movies}:";
-            const indexMovies = prefixMovies + uuidv4();
-
-            // FT.CREATE idx:bicycle ON JSON PREFIX 1 bicycle: SCHEMA $.model AS model TEXT $.description AS
-            // description TEXT $.price AS price NUMERIC $.condition AS condition TAG SEPARATOR ,
-
-            // setup a json index:
-            expect(
-                await GlideFt.create(
-                    client,
-                    indexBicycles,
-                    [
-                        {
-                            type: "TEXT",
-                            name: "$.model",
-                            alias: "model",
-                        },
-                        {
-                            type: "TEXT",
-                            name: "$.description",
-                            alias: "description",
-                        },
-                        {
-                            type: "NUMERIC",
-                            name: "$.price",
-                            alias: "price",
-                        },
-                        {
-                            type: "TAG",
-                            name: "$.condition",
-                            alias: "condition",
-                        },
-                    ],
-                    {
-                        dataType: "JSON",
-                        prefixes: [prefixBicycles],
-                    },
-                ),
-            ).toEqual("OK");
-
-            GlideJson.set(
+        // Add an alias to second index and also test addalias for bytes type input.
+        expect(
+            await GlideFt.aliasadd(
                 client,
-                prefixBicycles + 0,
-                ".",
-                '{"brand": "Velorim", "model": "Jigger", "price": 270, "description":' +
-                    ' "Small and powerful, the Jigger is the best ride for the smallest of tikes!' +
-                    " This is the tiniest kids\\u2019 pedal bike on the market available without a" +
-                    " coaster brake, the Jigger is the vehicle of choice for the rare tenacious" +
-                    ' little rider raring to go.", "condition": "new"}',
-            );
+                Buffer.from(newIndex),
+                Buffer.from(newAlias),
+            ),
+        ).toEqual("OK");
 
-            GlideJson.set(
+        // Test if updating an already existing alias to point to an existing index returns "OK".
+        expect(await GlideFt.aliasupdate(client, newAlias, index)).toEqual(
+            "OK",
+        );
+        // Test alias update for byte type input.
+        expect(
+            await GlideFt.aliasupdate(
                 client,
-                prefixBicycles + 1,
-                ".",
-                '{"brand": "Bicyk", "model": "Hillcraft", "price": 1200, "description":' +
-                    ' "Kids want to ride with as little weight as possible. Especially on an' +
-                    ' incline! They may be at the age when a 27.5\\" wheel bike is just too clumsy' +
-                    ' coming off a 24\\" bike. The Hillcraft 26 is just the solution they need!",' +
-                    ' "condition": "used"}',
-            );
+                Buffer.from(alias),
+                Buffer.from(newIndex),
+            ),
+        ).toEqual("OK");
 
-            GlideJson.set(
-                client,
-                prefixBicycles + 2,
-                ".",
-                '{"brand": "Nord", "model": "Chook air 5", "price": 815, "description":' +
-                    ' "The Chook Air 5  gives kids aged six years and older a durable and' +
-                    " uberlight mountain bike for their first experience on tracks and easy" +
-                    " cruising through forests and fields. The lower  top tube makes it easy to" +
-                    " mount and dismount in any situation, giving your kids greater safety on the" +
-                    ' trails.", "condition": "used"}',
-            );
+        // Test if an existing alias is deleted successfully.
+        expect(await GlideFt.aliasdel(client, alias)).toEqual("OK");
 
-            GlideJson.set(
-                client,
-                prefixBicycles + 3,
-                ".",
-                '{"brand": "Eva", "model": "Eva 291", "price": 3400, "description": "The' +
-                    " sister company to Nord, Eva launched in 2005 as the first and only" +
-                    " women-dedicated bicycle brand. Designed by women for women, allEva bikes are" +
-                    " optimized for the feminine physique using analytics from a body metrics" +
-                    " database. If you like 29ers, try the Eva 291. It\\u2019s a brand new bike for" +
-                    " 2022.. This full-suspension, cross-country ride has been designed for" +
-                    " velocity. The 291 has 100mm of front and rear travel, a superlight aluminum" +
-                    ' frame and fast-rolling 29-inch wheels. Yippee!", "condition": "used"}',
-            );
+        // Test if an existing alias is deleted successfully for bytes type input.
+        expect(
+            await GlideFt.aliasdel(client, Buffer.from(newAlias)),
+        ).toEqual("OK");
 
-            GlideJson.set(
-                client,
-                prefixBicycles + 4,
-                ".",
-                '{"brand": "Noka Bikes", "model": "Kahuna", "price": 3200, "description":' +
-                    ' "Whether you want to try your hand at XC racing or are looking for a lively' +
-                    " trail bike that's just as inspiring on the climbs as it is over rougher" +
-                    " ground, the Wilder is one heck of a bike built specifically for short women." +
-                    " Both the frames and components have been tweaked to include a women\\u2019s" +
-                    ' saddle, different bars and unique colourway.", "condition": "used"}',
-            );
-
-            GlideJson.set(
-                client,
-                prefixBicycles + 5,
-                ".",
-                '{"brand": "Breakout", "model": "XBN 2.1 Alloy", "price": 810,' +
-                    ' "description": "The XBN 2.1 Alloy is our entry-level road bike \\u2013 but' +
-                    " that\\u2019s not to say that it\\u2019s a basic machine. With an internal" +
-                    " weld aluminium frame, a full carbon fork, and the slick-shifting Claris gears" +
-                    " from Shimano\\u2019s, this is a bike which doesn\\u2019t break the bank and" +
-                    ' delivers craved performance.", "condition": "new"}',
-            );
-
-            GlideJson.set(
-                client,
-                prefixBicycles + 6,
-                ".",
-                '{"brand": "ScramBikes", "model": "WattBike", "price": 2300,' +
-                    ' "description": "The WattBike is the best e-bike for people who still feel' +
-                    " young at heart. It has a Bafang 1000W mid-drive system and a 48V 17.5AH" +
-                    " Samsung Lithium-Ion battery, allowing you to ride for more than 60 miles on" +
-                    " one charge. It\\u2019s great for tackling hilly terrain or if you just fancy" +
-                    " a more leisurely ride. With three working modes, you can choose between" +
-                    ' E-bike, assisted bicycle, and normal bike modes.", "condition": "new"}',
-            );
-
-            GlideJson.set(
-                client,
-                prefixBicycles + 7,
-                ".",
-                '{"brand": "Peaknetic", "model": "Secto", "price": 430, "description":' +
-                    ' "If you struggle with stiff fingers or a kinked neck or back after a few' +
-                    " minutes on the road, this lightweight, aluminum bike alleviates those issues" +
-                    " and allows you to enjoy the ride. From the ergonomic grips to the" +
-                    " lumbar-supporting seat position, the Roll Low-Entry offers incredible" +
-                    " comfort. The rear-inclined seat tube facilitates stability by allowing you to" +
-                    " put a foot on the ground to balance at a stop, and the low step-over frame" +
-                    " makes it accessible for all ability and mobility levels. The saddle is very" +
-                    " soft, with a wide back to support your hip joints and a cutout in the center" +
-                    " to redistribute that pressure. Rim brakes deliver satisfactory braking" +
-                    " control, and the wide tires provide a smooth, stable ride on paved roads and" +
-                    " gravel. Rack and fender mounts facilitate setting up the Roll Low-Entry as" +
-                    " your preferred commuter, and the BMX-like handlebar offers space for mounting" +
-                    ' a flashlight, bell, or phone holder.", "condition": "new"}',
-            );
-
-            GlideJson.set(
-                client,
-                prefixBicycles + 8,
-                ".",
-                '{"brand": "nHill", "model": "Summit", "price": 1200, "description":' +
-                    ' "This budget mountain bike from nHill performs well both on bike paths and' +
-                    " on the trail. The fork with 100mm of travel absorbs rough terrain. Fat Kenda" +
-                    " Booster tires give you grip in corners and on wet trails. The Shimano Tourney" +
-                    " drivetrain offered enough gears for finding a comfortable pace to ride" +
-                    " uphill, and the Tektro hydraulic disc brakes break smoothly. Whether you want" +
-                    " an affordable bike that you can take to work, but also take trail in" +
-                    " mountains on the weekends or you\\u2019re just after a stable, comfortable" +
-                    ' ride for the bike path, the Summit gives a good value for money.",' +
-                    ' "condition": "new"}',
-            );
-
-            GlideJson.set(
-                client,
-                prefixBicycles + 9,
-                ".",
-                '{"model": "ThrillCycle", "brand": "BikeShind", "price": 815,' +
-                    ' "description": "An artsy,  retro-inspired bicycle that\\u2019s as' +
-                    " functional as it is pretty: The ThrillCycle steel frame offers a smooth ride." +
-                    " A 9-speed drivetrain has enough gears for coasting in the city, but we" +
-                    " wouldn\\u2019t suggest taking it to the mountains. Fenders protect you from" +
-                    " mud, and a rear basket lets you transport groceries, flowers and books. The" +
-                    " ThrillCycle comes with a limited lifetime warranty, so this little guy will" +
-                    ' last you long past graduation.", "condition": "refurbished"}',
-            );
-
-            // let server digest the data and update index
-            const sleep = new Promise((resolve) =>
-                setTimeout(resolve, DATA_PROCESSING_TIMEOUT),
-            );
-            await sleep;
-
-            // FT.AGGREGATE idx:bicycle "*" LOAD 1 "__key" GROUPBY 1 "@condition" REDUCE COUNT 0 AS bicylces
-            const aggOptions: FtAggregateOptions = {
-                loadFields: ["__key"],
-                clauses: [{
-                    type: "GROUPBY",
-                    properties: ["@condition"],
-                    reducers: [{
-                        function: "COUNT",
-                        args: [],
-                        name: "bicycles",
-                    }],
-                }],
-            };
-            const aggregateProfileResult = GlideFt.aggregate(client, indexBicycles, "*", aggOptions);
-            expect(aggregateProfileResult).toEqual([
-                {"condition": "new", "bicycles": 5.0},
-                {"condition": "used", "bicycles": 4.0},
-                {"condition": "refurbished", "bicycles": 1.0},
-            ]);
-
-            it("FT._ALIASLIST test", async () => {
-                client = await GlideClusterClient.createClient(
-                    getClientConfigurationOption(
-                        cluster.getAddresses(),
-                        ProtocolVersion.RESP3,
-                    ),
-                );
-                const index1 = uuidv4();
-                const alias1 = uuidv4() + "-alias";
-                const index2 = uuidv4();
-                const alias2 = uuidv4() + "-alias";
-
-                //Create the 2 test indexes.
-                expect(
-                    await GlideFt.create(client, index1, [
-                        { type: "NUMERIC", name: "published_at" },
-                        { type: "TAG", name: "category" },
-                    ]),
-                ).toEqual("OK");
-                expect(
-                    await GlideFt.create(client, index2, [
-                        { type: "NUMERIC", name: "published_at" },
-                        { type: "TAG", name: "category" },
-                    ]),
-                ).toEqual("OK");
-
-                //Check if the two indexes created successfully.
-                expect(await client.customCommand(["FT._LIST"])).toContain(index1);
-                expect(await client.customCommand(["FT._LIST"])).toContain(index2);
-
-                //Add aliases to the 2 indexes.
-                expect(await GlideFt.aliasadd(client, index1, alias1)).toBe("OK");
-                expect(await GlideFt.aliasadd(client, index2, alias2)).toBe("OK");
-
-                //Test if the aliaslist command return the added alias.
-                const result = await GlideFt.aliaslist(client);
-                const expected: GlideRecord<GlideString> = [
-                    {
-                        key: alias2,
-                        value: index2,
-                    },
-                    {
-                        key: alias1,
-                        value: index1,
-                    },
-                ];
-
-                const compareFunction = function (
-                    a: { key: GlideString; value: GlideString },
-                    b: { key: GlideString; value: GlideString },
-                ) {
-                    return a.key.toString().localeCompare(b.key.toString()) > 0
-                        ? 1
-                        : -1;
-                };
-
-                expect(result.sort(compareFunction)).toEqual(
-                    expected.sort(compareFunction),
-                );
-            });
-        });
+        // Drop both indexes.
+        expect(await GlideFt.dropindex(client, index)).toEqual("OK");
+        expect(await client.customCommand(["FT._LIST"])).not.toContain(
+            index,
+        );
+        expect(await GlideFt.dropindex(client, newIndex)).toEqual("OK");
+        expect(await client.customCommand(["FT._LIST"])).not.toContain(
+            newIndex,
+        );
     });
 });
