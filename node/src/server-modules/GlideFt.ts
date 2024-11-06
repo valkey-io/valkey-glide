@@ -16,6 +16,8 @@ import {
     Field,
     FtAggregateOptions,
     FtCreateOptions,
+    FtProfileOptions,
+
     FtSearchOptions,
 } from "./GlideFtOptions";
 
@@ -35,6 +37,20 @@ export type FtSearchReturnType = [
     number,
     GlideRecord<GlideRecord<GlideString>>,
 ];
+
+/**
+ * Response type for the {@link GlideFt.aggregate | ft.aggregate} command.
+ */
+export type FtAggregateReturnType = GlideRecord<GlideReturnType>[];
+
+/**
+ * Response type for the {@link GlideFt.profile | ft.profile} command.
+ */
+export type FtProfileReturnType = (
+    | FtAggregateReturnType
+    | FtSearchReturnType
+    | Record<string, number>
+)[];
 
 /** Module for Vector Search commands. */
 export class GlideFt {
@@ -304,86 +320,13 @@ export class GlideFt {
         indexName: GlideString,
         query: GlideString,
         options?: DecoderOption & FtAggregateOptions,
-    ): Promise<GlideRecord<GlideReturnType>[]> {
-        const args: GlideString[] = ["FT.AGGREGATE", indexName, query];
-
-        if (options) {
-            if (options.loadAll) args.push("LOAD", "*");
-            else if (options.loadFields)
-                args.push(
-                    "LOAD",
-                    options.loadFields.length.toString(),
-                    ...options.loadFields,
-                );
-
-            if (options.timeout)
-                args.push("TIMEOUT", options.timeout.toString());
-
-            if (options.params) {
-                args.push(
-                    "PARAMS",
-                    (options.params.length * 2).toString(),
-                    ...options.params.flatMap((pair) => pair),
-                );
-            }
-
-            if (options.clauses) {
-                for (const clause of options.clauses) {
-                    switch (clause.type) {
-                        case "LIMIT":
-                            args.push(
-                                clause.type,
-                                clause.offset.toString(),
-                                clause.count.toString(),
-                            );
-                            break;
-                        case "FILTER":
-                            args.push(clause.type, clause.expression);
-                            break;
-                        case "GROUPBY":
-                            args.push(
-                                clause.type,
-                                clause.properties.length.toString(),
-                                ...clause.properties,
-                            );
-
-                            for (const reducer of clause.reducers) {
-                                args.push(
-                                    "REDUCE",
-                                    reducer.function,
-                                    reducer.args.length.toString(),
-                                    ...reducer.args,
-                                );
-                                if (reducer.name) args.push("AS", reducer.name);
-                            }
-
-                            break;
-                        case "SORTBY":
-                            args.push(
-                                clause.type,
-                                (clause.properties.length * 2).toString(),
-                            );
-                            for (const property of clause.properties)
-                                args.push(property.property, property.order);
-                            if (clause.max)
-                                args.push("MAX", clause.max.toString());
-                            break;
-                        case "APPLY":
-                            args.push(
-                                clause.type,
-                                clause.expression,
-                                "AS",
-                                clause.name,
-                            );
-                            break;
-                        default:
-                            throw new Error(
-                                "Unknown clause type in FtAggregateOptions",
-                            );
-                    }
-                }
-            }
-        }
+    ): Promise<FtAggregateReturnType> {
+        const args: GlideString[] = [
+            "FT.AGGREGATE",
+            indexName,
+            query,
+            ..._addFtAggregateOptions(options),
+        ];
 
         return _handleCustomCommand(client, args, options) as Promise<
             GlideRecord<GlideReturnType>[]
@@ -571,59 +514,89 @@ export class GlideFt {
         query: GlideString,
         options?: FtSearchOptions & DecoderOption,
     ): Promise<FtSearchReturnType> {
-        const args: GlideString[] = ["FT.SEARCH", indexName, query];
-
-        if (options) {
-            // RETURN
-            if (options.returnFields) {
-                const returnFields: GlideString[] = [];
-                options.returnFields.forEach((returnField) =>
-                    returnField.alias
-                        ? returnFields.push(
-                              returnField.fieldIdentifier,
-                              "AS",
-                              returnField.alias,
-                          )
-                        : returnFields.push(returnField.fieldIdentifier),
-                );
-                args.push(
-                    "RETURN",
-                    returnFields.length.toString(),
-                    ...returnFields,
-                );
-            }
-
-            // TIMEOUT
-            if (options.timeout) {
-                args.push("TIMEOUT", options.timeout.toString());
-            }
-
-            // PARAMS
-            if (options.params) {
-                args.push("PARAMS", (options.params.length * 2).toString());
-                options.params.forEach((param) =>
-                    args.push(param.key, param.value),
-                );
-            }
-
-            // LIMIT
-            if (options.limit) {
-                args.push(
-                    "LIMIT",
-                    options.limit.offset.toString(),
-                    options.limit.count.toString(),
-                );
-            }
-
-            // COUNT
-            if (options.count) {
-                args.push("COUNT");
-            }
-        }
+        const args: GlideString[] = [
+            "FT.SEARCH",
+            indexName,
+            query,
+            ..._addFtSearchOptions(options),
+        ];
 
         return _handleCustomCommand(client, args, options) as Promise<
             [number, GlideRecord<GlideRecord<GlideString>>]
         >;
+    }
+
+    /**
+     *
+     * @param client
+     * @param indexName
+     * @param options
+     * @returns
+     */
+    static async profile(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        options: DecoderOption &
+            (FtAggregateOptions | FtSearchOptions | FtProfileOptions),
+    ): Promise<FtProfileReturnType> {
+        const args: GlideString[] = ["FT.AGGREGATE", indexName];
+
+        let argOptions: {
+            queryType: GlideString;
+            query: GlideString[];
+            limited?: boolean;
+        };
+
+        // if PtProfileOptions are given, use that
+        if (options && "queryType" in options) {
+            argOptions = {
+                queryType: options.queryType,
+                query: [options.query],
+                limited: options.limited,
+            };
+        } else {
+            const commandLineFromAggregate = _addFtAggregateOptions(
+                options as FtAggregateOptions,
+            );
+
+            // if FtAggregateOptions are given, use that
+            if (commandLineFromAggregate) {
+                argOptions = {
+                    queryType: "AGGREGATE",
+                    query: commandLineFromAggregate,
+                };
+            } else {
+                // if FtSearchOptions are given, use that
+                const commandLineFromSearch = _addFtSearchOptions(
+                    options as FtSearchOptions,
+                );
+                argOptions = {
+                    queryType: "SEARCH",
+                    query: commandLineFromSearch,
+                };
+            }
+        }
+
+        if (!argOptions) {
+            throw new Error(
+                "Invalid options given, must include one of FtAggregateOptions | FtSearchOptions | FtProfileOptions",
+            );
+        }
+
+        // build the command line options
+        args.push(argOptions.queryType);
+
+        if (argOptions.limited) {
+            args.push("LIMITED");
+        }
+
+        args.push("QUERY", ...argOptions.query);
+
+        return _handleCustomCommand(
+            client,
+            args,
+            options,
+        ) as Promise<FtProfileReturnType>;
     }
 
     /**
@@ -721,6 +694,142 @@ export class GlideFt {
         const args: GlideString[] = ["FT._ALIASLIST"];
         return _handleCustomCommand(client, args, options);
     }
+}
+
+/**
+ * @internal
+ */
+function _addFtAggregateOptions(options?: FtAggregateOptions): GlideString[] {
+    if (!options) return [];
+
+    const args: GlideString[] = [];
+
+    if (options.loadAll) args.push("LOAD", "*");
+    else if (options.loadFields)
+        args.push(
+            "LOAD",
+            options.loadFields.length.toString(),
+            ...options.loadFields,
+        );
+
+    if (options.timeout) args.push("TIMEOUT", options.timeout.toString());
+
+    if (options.params) {
+        args.push(
+            "PARAMS",
+            (options.params.length * 2).toString(),
+            ...options.params.flatMap((pair) => pair),
+        );
+    }
+
+    if (options.clauses) {
+        for (const clause of options.clauses) {
+            switch (clause.type) {
+                case "LIMIT":
+                    args.push(
+                        clause.type,
+                        clause.offset.toString(),
+                        clause.count.toString(),
+                    );
+                    break;
+                case "FILTER":
+                    args.push(clause.type, clause.expression);
+                    break;
+                case "GROUPBY":
+                    args.push(
+                        clause.type,
+                        clause.properties.length.toString(),
+                        ...clause.properties,
+                    );
+
+                    for (const reducer of clause.reducers) {
+                        args.push(
+                            "REDUCE",
+                            reducer.function,
+                            reducer.args.length.toString(),
+                            ...reducer.args,
+                        );
+                        if (reducer.name) args.push("AS", reducer.name);
+                    }
+
+                    break;
+                case "SORTBY":
+                    args.push(
+                        clause.type,
+                        (clause.properties.length * 2).toString(),
+                    );
+                    for (const property of clause.properties)
+                        args.push(property.property, property.order);
+                    if (clause.max) args.push("MAX", clause.max.toString());
+                    break;
+                case "APPLY":
+                    args.push(
+                        clause.type,
+                        clause.expression,
+                        "AS",
+                        clause.name,
+                    );
+                    break;
+                default:
+                    throw new Error(
+                        "Unknown clause type in FtAggregateOptions",
+                    );
+            }
+        }
+    }
+
+    return args;
+}
+
+/**
+ * @internal
+ */
+function _addFtSearchOptions(options?: FtSearchOptions): GlideString[] {
+    if (!options) return [];
+
+    const args: GlideString[] = [];
+
+    // RETURN
+    if (options.returnFields) {
+        const returnFields: GlideString[] = [];
+        options.returnFields.forEach((returnField) =>
+            returnField.alias
+                ? returnFields.push(
+                      returnField.fieldIdentifier,
+                      "AS",
+                      returnField.alias,
+                  )
+                : returnFields.push(returnField.fieldIdentifier),
+        );
+        args.push("RETURN", returnFields.length.toString(), ...returnFields);
+    }
+
+    // TIMEOUT
+    if (options.timeout) {
+        args.push("TIMEOUT", options.timeout.toString());
+    }
+
+    // PARAMS
+    if (options.params) {
+        args.push("PARAMS", (options.params.length * 2).toString());
+        options.params.forEach((param) => args.push(param.key, param.value));
+    }
+
+    // LIMIT
+    if (options.limit) {
+        args.push(
+            "LIMIT",
+            options.limit.offset.toString(),
+            options.limit.count.toString(),
+        );
+    }
+
+    // COUNT
+    if (options.count) {
+        args.push("COUNT");
+    }
+
+    return args;
 }
 
 /**

@@ -16,7 +16,6 @@ import {
     Decoder,
     FtAggregateOptions,
     FtSearchReturnType,
-    FtAggregateOptions,
     GlideClusterClient,
     GlideFt,
     GlideJson,
@@ -3239,65 +3238,277 @@ describe("Server Module Tests", () => {
             );
         });
 
-        it("FT._ALIASLIST test", async () => {
+        it("FT.PROFILE string test", async () => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(
                     cluster.getAddresses(),
                     ProtocolVersion.RESP3,
                 ),
             );
-            const index1 = uuidv4();
-            const alias1 = uuidv4() + "-alias";
-            const index2 = uuidv4();
-            const alias2 = uuidv4() + "-alias";
 
-            //Create the 2 test indexes.
+            const prefixBicycles = "{bicycles}:";
+            const indexBicycles = prefixBicycles + uuidv4();
+            const prefixMovies = "{movies}:";
+            const indexMovies = prefixMovies + uuidv4();
+
+            // FT.CREATE idx:bicycle ON JSON PREFIX 1 bicycle: SCHEMA $.model AS model TEXT $.description AS
+            // description TEXT $.price AS price NUMERIC $.condition AS condition TAG SEPARATOR ,
+
+            // setup a json index:
             expect(
-                await GlideFt.create(client, index1, [
-                    { type: "NUMERIC", name: "published_at" },
-                    { type: "TAG", name: "category" },
-                ]),
+                await GlideFt.create(
+                    client,
+                    indexBicycles,
+                    [
+                        {
+                            type: "TEXT",
+                            name: "$.model",
+                            alias: "model",
+                        },
+                        {
+                            type: "TEXT",
+                            name: "$.description",
+                            alias: "description",
+                        },
+                        {
+                            type: "NUMERIC",
+                            name: "$.price",
+                            alias: "price",
+                        },
+                        {
+                            type: "TAG",
+                            name: "$.condition",
+                            alias: "condition",
+                        },
+                    ],
+                    {
+                        dataType: "JSON",
+                        prefixes: [prefixBicycles],
+                    },
+                ),
             ).toEqual("OK");
-            expect(
-                await GlideFt.create(client, index2, [
-                    { type: "NUMERIC", name: "published_at" },
-                    { type: "TAG", name: "category" },
-                ]),
-            ).toEqual("OK");
 
-            //Check if the two indexes created successfully.
-            expect(await client.customCommand(["FT._LIST"])).toContain(index1);
-            expect(await client.customCommand(["FT._LIST"])).toContain(index2);
-
-            //Add aliases to the 2 indexes.
-            expect(await GlideFt.aliasadd(client, index1, alias1)).toBe("OK");
-            expect(await GlideFt.aliasadd(client, index2, alias2)).toBe("OK");
-
-            //Test if the aliaslist command return the added alias.
-            const result = await GlideFt.aliaslist(client);
-            const expected: GlideRecord<GlideString> = [
-                {
-                    key: alias2,
-                    value: index2,
-                },
-                {
-                    key: alias1,
-                    value: index1,
-                },
-            ];
-
-            const compareFunction = function (
-                a: { key: GlideString; value: GlideString },
-                b: { key: GlideString; value: GlideString },
-            ) {
-                return a.key.toString().localeCompare(b.key.toString()) > 0
-                    ? 1
-                    : -1;
-            };
-
-            expect(result.sort(compareFunction)).toEqual(
-                expected.sort(compareFunction),
+            GlideJson.set(
+                client,
+                prefixBicycles + 0,
+                ".",
+                '{"brand": "Velorim", "model": "Jigger", "price": 270, "description":' +
+                    ' "Small and powerful, the Jigger is the best ride for the smallest of tikes!' +
+                    " This is the tiniest kids\\u2019 pedal bike on the market available without a" +
+                    " coaster brake, the Jigger is the vehicle of choice for the rare tenacious" +
+                    ' little rider raring to go.", "condition": "new"}',
             );
+
+            GlideJson.set(
+                client,
+                prefixBicycles + 1,
+                ".",
+                '{"brand": "Bicyk", "model": "Hillcraft", "price": 1200, "description":' +
+                    ' "Kids want to ride with as little weight as possible. Especially on an' +
+                    ' incline! They may be at the age when a 27.5\\" wheel bike is just too clumsy' +
+                    ' coming off a 24\\" bike. The Hillcraft 26 is just the solution they need!",' +
+                    ' "condition": "used"}',
+            );
+
+            GlideJson.set(
+                client,
+                prefixBicycles + 2,
+                ".",
+                '{"brand": "Nord", "model": "Chook air 5", "price": 815, "description":' +
+                    ' "The Chook Air 5  gives kids aged six years and older a durable and' +
+                    " uberlight mountain bike for their first experience on tracks and easy" +
+                    " cruising through forests and fields. The lower  top tube makes it easy to" +
+                    " mount and dismount in any situation, giving your kids greater safety on the" +
+                    ' trails.", "condition": "used"}',
+            );
+
+            GlideJson.set(
+                client,
+                prefixBicycles + 3,
+                ".",
+                '{"brand": "Eva", "model": "Eva 291", "price": 3400, "description": "The' +
+                    " sister company to Nord, Eva launched in 2005 as the first and only" +
+                    " women-dedicated bicycle brand. Designed by women for women, allEva bikes are" +
+                    " optimized for the feminine physique using analytics from a body metrics" +
+                    " database. If you like 29ers, try the Eva 291. It\\u2019s a brand new bike for" +
+                    " 2022.. This full-suspension, cross-country ride has been designed for" +
+                    " velocity. The 291 has 100mm of front and rear travel, a superlight aluminum" +
+                    ' frame and fast-rolling 29-inch wheels. Yippee!", "condition": "used"}',
+            );
+
+            GlideJson.set(
+                client,
+                prefixBicycles + 4,
+                ".",
+                '{"brand": "Noka Bikes", "model": "Kahuna", "price": 3200, "description":' +
+                    ' "Whether you want to try your hand at XC racing or are looking for a lively' +
+                    " trail bike that's just as inspiring on the climbs as it is over rougher" +
+                    " ground, the Wilder is one heck of a bike built specifically for short women." +
+                    " Both the frames and components have been tweaked to include a women\\u2019s" +
+                    ' saddle, different bars and unique colourway.", "condition": "used"}',
+            );
+
+            GlideJson.set(
+                client,
+                prefixBicycles + 5,
+                ".",
+                '{"brand": "Breakout", "model": "XBN 2.1 Alloy", "price": 810,' +
+                    ' "description": "The XBN 2.1 Alloy is our entry-level road bike \\u2013 but' +
+                    " that\\u2019s not to say that it\\u2019s a basic machine. With an internal" +
+                    " weld aluminium frame, a full carbon fork, and the slick-shifting Claris gears" +
+                    " from Shimano\\u2019s, this is a bike which doesn\\u2019t break the bank and" +
+                    ' delivers craved performance.", "condition": "new"}',
+            );
+
+            GlideJson.set(
+                client,
+                prefixBicycles + 6,
+                ".",
+                '{"brand": "ScramBikes", "model": "WattBike", "price": 2300,' +
+                    ' "description": "The WattBike is the best e-bike for people who still feel' +
+                    " young at heart. It has a Bafang 1000W mid-drive system and a 48V 17.5AH" +
+                    " Samsung Lithium-Ion battery, allowing you to ride for more than 60 miles on" +
+                    " one charge. It\\u2019s great for tackling hilly terrain or if you just fancy" +
+                    " a more leisurely ride. With three working modes, you can choose between" +
+                    ' E-bike, assisted bicycle, and normal bike modes.", "condition": "new"}',
+            );
+
+            GlideJson.set(
+                client,
+                prefixBicycles + 7,
+                ".",
+                '{"brand": "Peaknetic", "model": "Secto", "price": 430, "description":' +
+                    ' "If you struggle with stiff fingers or a kinked neck or back after a few' +
+                    " minutes on the road, this lightweight, aluminum bike alleviates those issues" +
+                    " and allows you to enjoy the ride. From the ergonomic grips to the" +
+                    " lumbar-supporting seat position, the Roll Low-Entry offers incredible" +
+                    " comfort. The rear-inclined seat tube facilitates stability by allowing you to" +
+                    " put a foot on the ground to balance at a stop, and the low step-over frame" +
+                    " makes it accessible for all ability and mobility levels. The saddle is very" +
+                    " soft, with a wide back to support your hip joints and a cutout in the center" +
+                    " to redistribute that pressure. Rim brakes deliver satisfactory braking" +
+                    " control, and the wide tires provide a smooth, stable ride on paved roads and" +
+                    " gravel. Rack and fender mounts facilitate setting up the Roll Low-Entry as" +
+                    " your preferred commuter, and the BMX-like handlebar offers space for mounting" +
+                    ' a flashlight, bell, or phone holder.", "condition": "new"}',
+            );
+
+            GlideJson.set(
+                client,
+                prefixBicycles + 8,
+                ".",
+                '{"brand": "nHill", "model": "Summit", "price": 1200, "description":' +
+                    ' "This budget mountain bike from nHill performs well both on bike paths and' +
+                    " on the trail. The fork with 100mm of travel absorbs rough terrain. Fat Kenda" +
+                    " Booster tires give you grip in corners and on wet trails. The Shimano Tourney" +
+                    " drivetrain offered enough gears for finding a comfortable pace to ride" +
+                    " uphill, and the Tektro hydraulic disc brakes break smoothly. Whether you want" +
+                    " an affordable bike that you can take to work, but also take trail in" +
+                    " mountains on the weekends or you\\u2019re just after a stable, comfortable" +
+                    ' ride for the bike path, the Summit gives a good value for money.",' +
+                    ' "condition": "new"}',
+            );
+
+            GlideJson.set(
+                client,
+                prefixBicycles + 9,
+                ".",
+                '{"model": "ThrillCycle", "brand": "BikeShind", "price": 815,' +
+                    ' "description": "An artsy,  retro-inspired bicycle that\\u2019s as' +
+                    " functional as it is pretty: The ThrillCycle steel frame offers a smooth ride." +
+                    " A 9-speed drivetrain has enough gears for coasting in the city, but we" +
+                    " wouldn\\u2019t suggest taking it to the mountains. Fenders protect you from" +
+                    " mud, and a rear basket lets you transport groceries, flowers and books. The" +
+                    " ThrillCycle comes with a limited lifetime warranty, so this little guy will" +
+                    ' last you long past graduation.", "condition": "refurbished"}',
+            );
+
+            // let server digest the data and update index
+            const sleep = new Promise((resolve) =>
+                setTimeout(resolve, DATA_PROCESSING_TIMEOUT),
+            );
+            await sleep;
+
+            // FT.AGGREGATE idx:bicycle "*" LOAD 1 "__key" GROUPBY 1 "@condition" REDUCE COUNT 0 AS bicylces
+            const aggOptions: FtAggregateOptions = {
+                loadFields: ["__key"],
+                clauses: [{
+                    type: "GROUPBY",
+                    properties: ["@condition"],
+                    reducers: [{
+                        function: "COUNT",
+                        args: [],
+                        name: "bicycles",
+                    }],
+                }],
+            };
+            const aggregateProfileResult = GlideFt.aggregate(client, indexBicycles, "*", aggOptions);
+            expect(aggregateProfileResult).toEqual([
+                {"condition": "new", "bicycles": 5.0},
+                {"condition": "used", "bicycles": 4.0},
+                {"condition": "refurbished", "bicycles": 1.0},
+            ]);
+
+            it("FT._ALIASLIST test", async () => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        ProtocolVersion.RESP3,
+                    ),
+                );
+                const index1 = uuidv4();
+                const alias1 = uuidv4() + "-alias";
+                const index2 = uuidv4();
+                const alias2 = uuidv4() + "-alias";
+
+                //Create the 2 test indexes.
+                expect(
+                    await GlideFt.create(client, index1, [
+                        { type: "NUMERIC", name: "published_at" },
+                        { type: "TAG", name: "category" },
+                    ]),
+                ).toEqual("OK");
+                expect(
+                    await GlideFt.create(client, index2, [
+                        { type: "NUMERIC", name: "published_at" },
+                        { type: "TAG", name: "category" },
+                    ]),
+                ).toEqual("OK");
+
+                //Check if the two indexes created successfully.
+                expect(await client.customCommand(["FT._LIST"])).toContain(index1);
+                expect(await client.customCommand(["FT._LIST"])).toContain(index2);
+
+                //Add aliases to the 2 indexes.
+                expect(await GlideFt.aliasadd(client, index1, alias1)).toBe("OK");
+                expect(await GlideFt.aliasadd(client, index2, alias2)).toBe("OK");
+
+                //Test if the aliaslist command return the added alias.
+                const result = await GlideFt.aliaslist(client);
+                const expected: GlideRecord<GlideString> = [
+                    {
+                        key: alias2,
+                        value: index2,
+                    },
+                    {
+                        key: alias1,
+                        value: index1,
+                    },
+                ];
+
+                const compareFunction = function (
+                    a: { key: GlideString; value: GlideString },
+                    b: { key: GlideString; value: GlideString },
+                ) {
+                    return a.key.toString().localeCompare(b.key.toString()) > 0
+                        ? 1
+                        : -1;
+                };
+
+                expect(result.sort(compareFunction)).toEqual(
+                    expected.sort(compareFunction),
+                );
+            });
         });
     });
 });

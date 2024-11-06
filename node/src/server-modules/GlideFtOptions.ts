@@ -246,26 +246,26 @@ export type FtSearchOptions = {
     params?: GlideRecord<GlideString>;
 } & (
     | {
-    /**
-     * Configure query pagination. By default only first 10 documents are returned.
-     *
-     * @param offset Zero-based offset.
-     * @param count Number of elements to return.
-     */
-    limit?: { offset: number; count: number };
-    /** `limit` and `count` are mutually exclusive. */
-    count?: never;
-}
+          /**
+           * Configure query pagination. By default only first 10 documents are returned.
+           *
+           * @param offset Zero-based offset.
+           * @param count Number of elements to return.
+           */
+          limit?: { offset: number; count: number };
+          /** `limit` and `count` are mutually exclusive. */
+          count?: never;
+      }
     | {
-    /**
-     * Once set, the query will return only the number of documents in the result set without actually
-     * returning them.
-     */
-    count?: boolean;
-    /** `limit` and `count` are mutually exclusive. */
-    limit?: never;
-}
-    );
+          /**
+           * Once set, the query will return only the number of documents in the result set without actually
+           * returning them.
+           */
+          count?: boolean;
+          /** `limit` and `count` are mutually exclusive. */
+          limit?: never;
+      }
+);
 
 /** Additional parameters for {@link GlideFt.aggregate | FT.AGGREGATE} command. */
 export type FtAggregateOptions = {
@@ -288,18 +288,18 @@ export type FtAggregateOptions = {
     params?: [GlideString, GlideString][];
 } & (
     | {
-    /** List of fields to load from the index. */
-    loadFields?: GlideString[];
-    /** `loadAll` and `loadFields` are mutually exclusive. */
-    loadAll?: never;
-}
+          /** List of fields to load from the index. */
+          loadFields?: GlideString[];
+          /** `loadAll` and `loadFields` are mutually exclusive. */
+          loadAll?: never;
+      }
     | {
-    /** Option to load all fields declared in the index */
-    loadAll?: boolean;
-    /** `loadAll` and `loadFields` are mutually exclusive. */
-    loadFields?: never;
-}
-    );
+          /** Option to load all fields declared in the index */
+          loadAll?: boolean;
+          /** `loadAll` and `loadFields` are mutually exclusive. */
+          loadFields?: never;
+      }
+);
 
 /** A clause for limiting the number of retained records. */
 export interface FtAggregateLimit {
@@ -369,4 +369,10 @@ export interface FtAggregateApply {
     expression: GlideString;
     /** The new property name to store the result of apply. This name can be referenced by further operations down the pipeline. */
     name: GlideString;
+}
+
+export interface FtProfileOptions {
+    queryType: "AGGREGATE" | "SEARCH";
+    query: GlideString;
+    limited?: boolean;
 }
