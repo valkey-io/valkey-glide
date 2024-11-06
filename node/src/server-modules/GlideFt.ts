@@ -540,7 +540,7 @@ export class GlideFt {
         options: DecoderOption &
             (FtAggregateOptions | FtSearchOptions | FtProfileOptions),
     ): Promise<FtProfileReturnType> {
-        const args: GlideString[] = ["FT.AGGREGATE", indexName];
+        const args: GlideString[] = ["FT.PROFILE", indexName];
 
         let argOptions: {
             queryType: GlideString;

@@ -2693,7 +2693,7 @@ describe("Server Module Tests", () => {
                     "*",
                     options,
                 );
-                expect(aggreg).toEqual(aggregProfile[0]);
+                expect(aggregProfile[0]).toEqual(aggreg);
 
                 await GlideFt.dropindex(client, indexBicycles);
             },
@@ -2852,7 +2852,7 @@ describe("Server Module Tests", () => {
                     query,
                     options,
                 );
-                expect(aggreg).toEqual(aggregProfile[0]);
+                expect(aggregProfile[0]).toEqual(aggreg);
 
                 await GlideFt.dropindex(client, indexMovies);
             },
@@ -3059,7 +3059,7 @@ describe("Server Module Tests", () => {
                     decoder: Decoder.Bytes,
                     ...options,
                 });
-            expect(binaryResult).toEqual(binaryProfileResult[0]);
+            expect(binaryProfileResult[0]).toEqual(expectedBinaryResult);
         });
 
         it("FT.SEARCH string on JSON", async () => {
