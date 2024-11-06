@@ -2689,17 +2689,21 @@ describe("Server Module Tests", () => {
                         ),
                 ).toEqual(expectedAggreg);
 
-                const aggregProfile = (await GlideFt.profileAggregate(
-                    client,
-                    indexBicycles,
-                    "*",
-                    options,
-                ))[0] as FtAggregateReturnType;
-                expect(aggregProfile.map(convertGlideRecordToRecord)
-                    // elements (records in array) could be reordered
-                    .sort((a, b) =>
-                        a["condition"]! > b["condition"]! ? 1 : -1,
-                    ),
+                const aggregProfile = (
+                    await GlideFt.profileAggregate(
+                        client,
+                        indexBicycles,
+                        "*",
+                        options,
+                    )
+                )[0] as FtAggregateReturnType;
+                expect(
+                    aggregProfile
+                        .map(convertGlideRecordToRecord)
+                        // elements (records in array) could be reordered
+                        .sort((a, b) =>
+                            a["condition"]! > b["condition"]! ? 1 : -1,
+                        ),
                 ).toEqual(expectedAggreg);
 
                 await GlideFt.dropindex(client, indexBicycles);
@@ -2832,12 +2836,7 @@ describe("Server Module Tests", () => {
                     query,
                     options,
                 );
-                expect(
-                    aggreg
-                        .map(convertGlideRecordToRecord)
-                        // elements (records in array) could be reordered
-                        .sort((a, b) => (a["genre"]! > b["genre"]! ? 1 : -1)),
-                ).toEqual([
+                const expectedAggreg = [
                     {
                         genre: "Action",
                         nb_of_movies: isResp3 ? 2.0 : "2",
@@ -2856,15 +2855,28 @@ describe("Server Module Tests", () => {
                         nb_of_votes: isResp3 ? 559490.0 : "559490",
                         avg_rating: isResp3 ? 9.0 : "9",
                     },
-                ]);
+                ];
+                expect(
+                    aggreg
+                        .map(convertGlideRecordToRecord)
+                        // elements (records in array) could be reordered
+                        .sort((a, b) => (a["genre"]! > b["genre"]! ? 1 : -1)),
+                ).toEqual(expectedAggreg);
 
-                const aggregProfile = await GlideFt.profileAggregate(
-                    client,
-                    indexMovies,
-                    query,
-                    options,
-                );
-                expect(aggregProfile[0]).toEqual(aggreg);
+                const aggregProfile = (
+                    await GlideFt.profileAggregate(
+                        client,
+                        indexMovies,
+                        query,
+                        options,
+                    )
+                )[0] as FtAggregateReturnType;
+                expect(
+                    aggregProfile
+                        .map(convertGlideRecordToRecord)
+                        // elements (records in array) could be reordered
+                        .sort((a, b) => (a["genre"]! > b["genre"]! ? 1 : -1)),
+                ).toEqual(expectedAggreg);
 
                 await GlideFt.dropindex(client, indexMovies);
             },
