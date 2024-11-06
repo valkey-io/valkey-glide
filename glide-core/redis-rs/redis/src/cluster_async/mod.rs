@@ -56,6 +56,7 @@ use tokio::task::JoinHandle;
 
 #[cfg(feature = "tokio-comp")]
 use crate::aio::DisconnectNotifier;
+use telemetrylib::Telemetry;
 
 use crate::{
     aio::{get_socket_addrs, ConnectionLike, MultiplexedConnection, Runtime},
@@ -144,7 +145,7 @@ where
     /// # Arguments
     ///
     /// * `scan_state_rc` - A reference to the scan state, For initiating new scan send [`ScanStateRC::new()`],
-    ///   for each subsequent iteration use the returned [`ScanStateRC`].    
+    ///   for each subsequent iteration use the returned [`ScanStateRC`].
     /// * `count` - An optional count of keys requested,
     ///   the amount returned can vary and not obligated to return exactly count.
     /// * `object_type` - An optional [`ObjectType`] enum of requested key redis type.
@@ -181,7 +182,7 @@ where
     ///             break;
     ///             }
     ///         }
-    ///     keys     
+    ///     keys
     ///     }
     /// ```
     pub async fn cluster_scan(
@@ -241,7 +242,7 @@ where
     ///             break;
     ///             }
     ///         }
-    ///     keys     
+    ///     keys
     ///     }
     /// ```
     pub async fn cluster_scan_with_pattern<K: ToRedisArgs>(
@@ -495,14 +496,27 @@ pub(crate) struct ClusterConnInner<C> {
 
 impl<C> Dispose for ClusterConnInner<C> {
     fn dispose(self) {
+        if let Ok(conn_lock) = self.inner.conn_lock.try_read() {
+            // Each node may contain user and *maybe* a management connection
+            let mut count = 0usize;
+            for node in conn_lock.connection_map() {
+                count = node.connections_count();
+            }
+            Telemetry::decr_total_connections(count);
+        }
+
         if let Some(handle) = self.periodic_checks_handler {
             #[cfg(feature = "tokio-comp")]
             handle.abort()
         }
+
         if let Some(handle) = self.connections_validation_handler {
             #[cfg(feature = "tokio-comp")]
             handle.abort()
         }
+
+        // Reduce the number of clients
+        Telemetry::decr_total_clients(1);
     }
 }
 
@@ -1080,6 +1094,8 @@ where
             }
         }
 
+        // New client added
+        Telemetry::incr_total_clients(1);
         Ok(Disposable::new(connection))
     }
 
@@ -1185,7 +1201,7 @@ where
         Ok(connections.0)
     }
 
-    // Reconnet to the initial nodes provided by the user in the creation of the client,
+    // Reconnect to the initial nodes provided by the user in the creation of the client,
     // and try to refresh the slots based on the initial connections.
     // Being used when all cluster connections are unavailable.
     fn reconnect_to_initial_nodes(inner: Arc<InnerCore<C>>) -> impl Future<Output = ()> {
@@ -1272,7 +1288,7 @@ where
         );
 
         if !addrs_to_refresh.is_empty() {
-            // dont try existing nodes since we know a. it does not exist. b. exist but its connection is closed
+            // don't try existing nodes since we know a. it does not exist. b. exist but its connection is closed
             Self::refresh_connections(
                 inner.clone(),
                 addrs_to_refresh,
@@ -1481,7 +1497,7 @@ where
                     });
                 let wait_duration = rate_limiter.wait_duration();
                 if passed_time <= wait_duration {
-                    debug!("Skipping slot refresh as the wait duration hasn't yet passed. Passed time = {:?}, 
+                    debug!("Skipping slot refresh as the wait duration hasn't yet passed. Passed time = {:?},
                             Wait duration = {:?}", passed_time, wait_duration);
                     skip_slots_refresh = true;
                 }

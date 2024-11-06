@@ -13,9 +13,10 @@ on:
             - utils/cluster_manager.py
             - .github/workflows/rust.yml
             - .github/workflows/install-shared-dependencies/action.yml
-            - .github/workflows/install-valkey/action.yml
+            - .github/workflows/install-engine/action.yml
             - .github/workflows/lint-rust/action.yml
-            - .github/json_matrices/build-matrix.json
+            - .github/workflows/create-test-matrices/action.yml
+            - .github/json_matrices/**
             - deny.toml
     pull_request:
         paths:
@@ -25,45 +26,66 @@ on:
             - utils/cluster_manager.py
             - .github/workflows/rust.yml
             - .github/workflows/install-shared-dependencies/action.yml
-            - .github/workflows/install-valkey/action.yml
+            - .github/workflows/install-engine/action.yml
             - .github/workflows/lint-rust/action.yml
-            - .github/json_matrices/build-matrix.json
+            - .github/workflows/create-test-matrices/action.yml
+            - .github/json_matrices/**
             - deny.toml
     workflow_dispatch:
+        inputs:
+            full-matrix:
+                description: "Run the full engine and host matrix"
+                type: boolean
+                default: false
+            name:
+                required: false
+                type: string
+                description: "(Optional) Test run name"
+
+    workflow_call:
 
 concurrency:
-    group: rust-${{ github.head_ref || github.ref }}
+    group: rust-${{ github.head_ref || github.ref }}-${{ toJson(inputs) }}
     cancel-in-progress: true
 
 env:
     CARGO_TERM_COLOR: always
 
+run-name:
+    # Set custom name if job is started manually and name is given
+    ${{ github.event_name == 'workflow_dispatch' && (inputs.name == '' && format('{0} @ {1} {2}', github.ref_name, github.sha, toJson(inputs)) || inputs.name) || '' }}
+
 jobs:
-    load-engine-matrix:
-      runs-on: ubuntu-latest
-      outputs:
-          matrix: ${{ steps.load-engine-matrix.outputs.matrix }}
-      steps:
-          - name: Checkout
-            uses: actions/checkout@v4
-
-          - name: Load the engine matrix
-            id: load-engine-matrix
-            shell: bash
-            run: echo "matrix=$(jq -c . < .github/json_matrices/engine-matrix.json)" >> $GITHUB_OUTPUT
-
-    build:
+    get-matrices:
         runs-on: ubuntu-latest
-        needs: load-engine-matrix
+        # Avoid running on schedule for forks
+        if: (github.repository_owner == 'valkey-io' || github.event_name != 'schedule') || github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+        outputs:
+            engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
+            host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
+            # language version matrix is omitted
+
+        steps:
+            - uses: actions/checkout@v4
+            - id: get-matrices
+              uses: ./.github/workflows/create-test-matrices
+              with:
+                  language-name: rust
+                  # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
+                  run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
+
+    tests:
+        runs-on: ${{ matrix.host.RUNNER }}
+        needs: get-matrices
         timeout-minutes: 15
         strategy:
             fail-fast: false
             matrix:
-                engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
+                engine: ${{ fromJson(needs.get-matrices.outputs.engine-matrix-output) }}
+                host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
 
         steps:
             - uses: actions/checkout@v4
-              
 
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
@@ -98,7 +120,6 @@ jobs:
         timeout-minutes: 30
         steps:
             - uses: actions/checkout@v4
-              
 
             - uses: ./.github/workflows/lint-rust
               with:

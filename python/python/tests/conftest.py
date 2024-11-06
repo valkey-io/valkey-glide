@@ -18,7 +18,7 @@ from tests.utils.cluster import ValkeyCluster
 
 DEFAULT_HOST = "localhost"
 DEFAULT_PORT = 6379
-DEFAULT_TEST_LOG_LEVEL = logLevel.WARN
+DEFAULT_TEST_LOG_LEVEL = logLevel.OFF
 
 Logger.set_logger_config(DEFAULT_TEST_LOG_LEVEL)
 
@@ -222,7 +222,7 @@ async def create_client(
     addresses: Optional[List[NodeAddress]] = None,
     client_name: Optional[str] = None,
     protocol: ProtocolVersion = ProtocolVersion.RESP3,
-    timeout: Optional[int] = None,
+    timeout: Optional[int] = 1000,
     cluster_mode_pubsub: Optional[
         GlideClusterClientConfiguration.PubSubSubscriptions
     ] = None,
