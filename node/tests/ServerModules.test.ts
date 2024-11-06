@@ -3180,11 +3180,6 @@ describe("Server Module Tests", () => {
                     optionsWithLimit,
                 );
 
-            // TODO remove
-            console.log(stringProfileResult);
-            console.log(stringResult);
-            console.log(expectedStringResult);
-
             expect(stringProfileResult[0]).toEqual(expectedStringResult);
         });
     });

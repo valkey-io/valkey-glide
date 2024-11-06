@@ -277,7 +277,7 @@ export class GlideFt {
      *          },
      *      ],
      *  };
-     * const result = await GlideFt.aggregate("myIndex", "*", options);
+     * const result = await GlideFt.aggregate(client, "myIndex", "*", options);
      * console.log(result); // Output:
      * // [
      * //     [
@@ -525,11 +525,26 @@ export class GlideFt {
     }
 
     /**
+     * Runs a search query and collects performance profiling information.
      *
-     * @param client
-     * @param indexName
-     * @param options
-     * @returns
+     * @param client - The client to execute the command.
+     * @param indexName - The index name.
+     * @param query - The text query to search.
+     * @param options - (Optional) See {@link FtSearchOptions} and {@link DecoderOption}. Additionally:
+     * - limited (Optional) - Either provide a full verbose output or some brief version.
+     *
+     * @returns A two-element array. The first element contains results of the search query being profiled, the
+     *     second element stores profiling information.
+     *
+     * @example
+     * ```typescript
+     * //
+     * const vector = Buffer.alloc(24);
+     * const result = await GlideFt.profileSearch(client, "json_idx1", "*=>[KNN 2 @VEC $query_vec]", {params: [{key: "query_vec", value: vector}]});
+     * console.log(result); // Output:
+     * // result[0] contains `FT.SEARCH` response with the given query
+     * // result[1] contains profiling data as a `Record<string, number>`
+     * ```
      */
     static async profileSearch(
         client: GlideClient | GlideClusterClient,
@@ -554,9 +569,6 @@ export class GlideFt {
             args.push(..._addFtSearchOptions(options as FtSearchOptions));
         }
 
-        // TODO remove
-        console.log(args);
-
         return _handleCustomCommand(
             client,
             args,
@@ -565,11 +577,40 @@ export class GlideFt {
     }
 
     /**
+     * Runs an aggregate query and collects performance profiling information.
      *
-     * @param client
-     * @param indexName
-     * @param options
-     * @returns
+     * @param client - The client to execute the command.
+     * @param indexName - The index name.
+     * @param query - The text query to search.
+     * @param options - (Optional) See {@link FtAggregateOptions} and {@link DecoderOption}. Additionally:
+     * - limited (Optional) - Either provide a full verbose output or some brief version.
+     *
+     * @returns A two-element array. The first element contains results of the aggregate query being profiled, the
+     *     second element stores profiling information.
+     *
+     * @example
+     * ```typescript
+     * const options: FtAggregateOptions = {
+     *      loadFields: ["__key"],
+     *      clauses: [
+     *          {
+     *              type: "GROUPBY",
+     *              properties: ["@condition"],
+     *              reducers: [
+     *                  {
+     *                      function: "TOLIST",
+     *                      args: ["__key"],
+     *                      name: "bicycles",
+     *                  },
+     *              ],
+     *          },
+     *      ],
+     *  };
+     * const result = await GlideFt.profileAggregate(client, "myIndex", "*", options);
+     * console.log(result); // Output:
+     * // result[0] contains `FT.AGGREGATE` response with the given query
+     * // result[1] contains profiling data as a `Record<string, number>`
+     * ```
      */
     static async profileAggregate(
         client: GlideClient | GlideClusterClient,
@@ -593,9 +634,6 @@ export class GlideFt {
         if (options) {
             args.push(..._addFtAggregateOptions(options as FtAggregateOptions));
         }
-
-        // TODO remove
-        console.log(args);
 
         return _handleCustomCommand(
             client,
