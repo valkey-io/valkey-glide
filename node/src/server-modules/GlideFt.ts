@@ -45,7 +45,6 @@ export class GlideFt {
      * @param indexName - The index name for the index to be created.
      * @param schema - The fields of the index schema, specifying the fields and their types.
      * @param options - (Optional) Options for the `FT.CREATE` command. See {@link FtCreateOptions}.
-     *
      * @returns If the index is successfully created, returns "OK".
      *
      * @example
@@ -197,7 +196,6 @@ export class GlideFt {
      *
      * @param client - The client to execute the command.
      * @param indexName - The index name.
-     *
      * @returns "OK"
      *
      * @example
@@ -377,7 +375,6 @@ export class GlideFt {
      * @param client - The client to execute the command.
      * @param indexName - The index name.
      * @param options - (Optional) See {@link DecoderOption}.
-     *
      * @returns Nested maps with info about the index. See example for more details.
      *
      * @example
@@ -445,7 +442,6 @@ export class GlideFt {
      * @param indexName - The index name to search into.
      * @param query - The text query to search.
      * @param options - (Optional) See {@link FtSearchOptions} and {@link DecoderOption}.
-     *
      * @returns A two-element array, where the first element is the number of documents in the result set, and the
      * second element has the format: `GlideRecord<GlideRecord<GlideString>>`:
      * a mapping between document names and a map of their attributes.
@@ -559,7 +555,6 @@ export class GlideFt {
      * @param client - The client to execute the command.
      * @param indexName - The alias to be added to the index.
      * @param alias - The index name for which the alias has to be added.
-     *
      * @returns `"OK"`
      *
      * @example
@@ -584,7 +579,6 @@ export class GlideFt {
      *
      * @param client - The client to execute the command.
      * @param alias -  The existing alias to be deleted for an index.
-     *
      * @returns `"OK"`
      *
      * @example
@@ -609,11 +603,9 @@ export class GlideFt {
      * @param client - The client to execute the command.
      * @param alias - The alias name. This alias will now be pointed to a different index.
      * @param indexName - The index name for which an existing alias has to updated.
-     *
      * @returns `"OK"`
      *
      * @example
-     *
      * ```typescript
      * // Example usage of FT.ALIASUPDATE to update an alias to point to a different index.
      * await GlideFt.aliasupdate(client, "newAlias", "index"); // "OK"
