@@ -50,7 +50,6 @@ import {
     getServerVersion,
     intoArray,
     intoString,
-    parseCommandLineArgs,
     parseEndpoints,
     transactionTest,
     validateTransactionResponse,
@@ -65,7 +64,7 @@ describe("GlideClusterClient", () => {
     let cluster: ValkeyCluster;
     let client: GlideClusterClient;
     beforeAll(async () => {
-        const clusterAddresses = parseCommandLineArgs()["cluster-endpoints"];
+        const clusterAddresses = global.CLUSTER_ENDPOINTS;
         // Connect to cluster or create a new one based on the parsed addresses
         cluster = clusterAddresses
             ? await ValkeyCluster.initFromExistingCluster(

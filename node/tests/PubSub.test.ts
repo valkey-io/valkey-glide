@@ -28,7 +28,6 @@ import ValkeyCluster from "../../utils/TestUtils";
 import {
     flushAndCloseClient,
     getServerVersion,
-    parseCommandLineArgs,
     parseEndpoints,
 } from "./TestUtilities";
 
@@ -60,9 +59,8 @@ describe("PubSub", () => {
     let cmeCluster: ValkeyCluster;
     let cmdCluster: ValkeyCluster;
     beforeAll(async () => {
-        const standaloneAddresses =
-            parseCommandLineArgs()["standalone-endpoints"];
-        const clusterAddresses = parseCommandLineArgs()["cluster-endpoints"];
+        const standaloneAddresses = global.STAND_ALONE_ENDPOINT;
+        const clusterAddresses = global.CLUSTER_ENDPOINTS;
         // Connect to cluster or create a new one based on the parsed addresses
         cmdCluster = standaloneAddresses
             ? await ValkeyCluster.initFromExistingCluster(

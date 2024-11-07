@@ -28,7 +28,6 @@ import {
     flushAndCloseClient,
     getClientConfigurationOption,
     getServerVersion,
-    parseCommandLineArgs,
     parseEndpoints,
 } from "./TestUtilities";
 
@@ -39,7 +38,7 @@ describe("Server Module Tests", () => {
     let cluster: ValkeyCluster;
 
     beforeAll(async () => {
-        const clusterAddresses = parseCommandLineArgs()["cluster-endpoints"];
+        const clusterAddresses = global.CLUSTER_ENDPOINTS;
         cluster = await ValkeyCluster.initFromExistingCluster(
             true,
             parseEndpoints(clusterAddresses),
