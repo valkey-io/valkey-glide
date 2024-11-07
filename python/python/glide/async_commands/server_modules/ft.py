@@ -55,7 +55,7 @@ async def create(
         >>> from glide import ft
         >>> schema: List[Field] = [TextField("title")]
         >>> prefixes: List[str] = ["blog:post:"]
-        >>> result = await ft.create(glide_client, "my_idx1", schema, FtCreateOptions(DataType.HASH, prefixes))
+        >>> await ft.create(glide_client, "my_idx1", schema, FtCreateOptions(DataType.HASH, prefixes))
             'OK'  # Indicates successful creation of index named 'idx'
     """
     args: List[TEncodable] = [CommandNames.FT_CREATE, index_name]
@@ -83,11 +83,29 @@ async def dropindex(client: TGlideClient, index_name: TEncodable) -> TOK:
         For the following example to work, an index named 'idx' must be already created. If not created, you will get an error.
         >>> from glide import ft
         >>> index_name = "idx"
-        >>> result = await ft.dropindex(glide_client, index_name)
+        >>> await ft.dropindex(glide_client, index_name)
             'OK'  # Indicates successful deletion/dropping of index named 'idx'
     """
     args: List[TEncodable] = [CommandNames.FT_DROPINDEX, index_name]
     return cast(TOK, await client.custom_command(args))
+
+
+async def list(client: TGlideClient) -> List[TEncodable]:
+    """
+    Lists all indexes.
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+
+    Returns:
+        List[TEncodable]: An array of index names.
+
+    Examples:
+        >>> from glide import ft
+        >>> await ft.list(glide_client)
+            [b"index1", b"index2"]
+    """
+    return cast(List[TEncodable], await client.custom_command([CommandNames.FT_LIST]))
 
 
 async def search(
@@ -115,8 +133,8 @@ async def search(
         - A key named {json:}1 with value {"a":1, "b":2}
 
         >>> from glide import ft
-        >>> result = await ft.search(glide_client, "idx", "*", options=FtSearchOptions(return_fields=[ReturnField(field_identifier="first"), ReturnField(field_identifier="second")]))
-        [1, { b'json:1': { b'first': b'42', b'second': b'33' } }]  # The first element, 1 is the number of keys returned in the search result. The second element is a map of data queried per key.
+        >>> await ft.search(glide_client, "idx", "*", options=FtSeachOptions(return_fields=[ReturnField(field_identifier="first"), ReturnField(field_identifier="second")]))
+        [1, { b'json:1': { b'first': b'42', b'second': b'33' } }] # The first element, 1 is the number of keys returned in the search result. The second element is a map of data queried per key.
     """
     args: List[TEncodable] = [CommandNames.FT_SEARCH, index_name, query]
     if options:
@@ -140,7 +158,7 @@ async def aliasadd(
 
     Examples:
         >>> from glide import ft
-        >>> result = await ft.aliasadd(glide_client, "myalias", "myindex")
+        >>> await ft.aliasadd(glide_client, "myalias", "myindex")
             'OK'  # Indicates the successful addition of the alias named "myalias" for the index.
     """
     args: List[TEncodable] = [CommandNames.FT_ALIASADD, alias, index_name]
@@ -160,7 +178,7 @@ async def aliasdel(client: TGlideClient, alias: TEncodable) -> TOK:
 
     Examples:
         >>> from glide import ft
-        >>> result = await ft.aliasdel(glide_client, "myalias")
+        >>> await ft.aliasdel(glide_client, "myalias")
             'OK'  # Indicates the successful deletion of the alias named "myalias"
     """
     args: List[TEncodable] = [CommandNames.FT_ALIASDEL, alias]
@@ -183,7 +201,7 @@ async def aliasupdate(
 
     Examples:
         >>> from glide import ft
-        >>> result = await ft.aliasupdate(glide_client, "myalias", "myindex")
+        >>> await ft.aliasupdate(glide_client, "myalias", "myindex")
             'OK'  # Indicates the successful update of the alias to point to the index named "myindex"
     """
     args: List[TEncodable] = [CommandNames.FT_ALIASUPDATE, alias, index_name]
@@ -204,7 +222,7 @@ async def info(client: TGlideClient, index_name: TEncodable) -> FtInfoResponse:
     Examples:
         An index with name 'myIndex', 1 text field and 1 vector field is already created for gettting the output of this example.
         >>> from glide import ft
-        >>> result = await ft.info(glide_client, "myIndex")
+        >>> await ft.info(glide_client, "myIndex")
             [
                 b'index_name',
                 b'myIndex',
@@ -258,7 +276,7 @@ async def explain(
 
     Examples:
         >>> from glide import ft
-        >>> result = await ft.explain(glide_client, index_name="myIndex", query="@price:[0 10]")
+        >>> await ft.explain(glide_client, indexName="myIndex", query="@price:[0 10]")
             b'Field {\n  price\n  0\n  10\n}\n' # Parsed results.
     """
     args: List[TEncodable] = [CommandNames.FT_EXPLAIN, index_name, query]
@@ -281,7 +299,7 @@ async def explaincli(
 
     Examples:
         >>> from glide import ft
-        >>> result = await ft.explaincli(glide_client, index_name="myIndex", query="@price:[0 10]")
+        >>> await ft.explaincli(glide_client, indexName="myIndex", query="@price:[0 10]")
             [b'Field {', b'  price', b'  0', b'  10', b'}', b''] # Parsed results.
     """
     args: List[TEncodable] = [CommandNames.FT_EXPLAINCLI, index_name, query]
@@ -308,7 +326,7 @@ async def aggregate(
 
     Examples:
         >>> from glide import ft
-        >>> result = await ft.aggregate(glide_client, "myIndex", "*", FtAggregateOptions(loadFields=["__key"], clauses=[GroupBy(["@condition"], [Reducer("COUNT", [], "bicycles")])]))
+        >>> await ft.aggregate(glide_client, "myIndex", "*", FtAggregateOptions(loadFields=["__key"], clauses=[GroupBy(["@condition"], [Reducer("COUNT", [], "bicycles")])]))
             [{b'condition': b'refurbished', b'bicycles': b'1'}, {b'condition': b'new', b'bicycles': b'5'}, {b'condition': b'used', b'bicycles': b'4'}]
     """
     args: List[TEncodable] = [CommandNames.FT_AGGREGATE, index_name, query]
@@ -332,8 +350,8 @@ async def profile(
         FtProfileResponse: A two-element array. The first element contains results of query being profiled, the second element stores profiling information.
 
     Examples:
-        >>> ftSearchOptions = FtSearchOptions(return_fields=[ReturnField(field_identifier="a", alias="a_new"), ReturnField(field_identifier="b", alias="b_new")])
-        >>> ftProfileResult = await ft.profile(glide_client, "myIndex", FtProfileOptions.from_query_options(query="*", queryOptions=ftSearchOptions))
+        >>> ftSearchOptions = FtSeachOptions(return_fields=[ReturnField(field_identifier="a", alias="a_new"), ReturnField(field_identifier="b", alias="b_new")])
+        >>> await ft.profile(glide_client, "myIndex", FtProfileOptions.from_query_options(query="*", queryOptions=ftSearchOptions))
             [
                 [
                     2,
