@@ -264,6 +264,7 @@ pub(crate) fn combine_and_sort_array_results<'a>(
     for (key_indices, value) in sorting_order.into_iter().zip(values) {
         match value {
             Value::Array(values) => {
+                assert_eq!(values.len(), key_indices.len());
                 for (index, value) in key_indices.iter().zip(values) {
                     results[*index] = value;
                 }
@@ -300,44 +301,26 @@ fn multi_shard<R>(
     routable: &R,
     cmd: &[u8],
     first_key_index: usize,
-    values_position: MultiShardValues,
+    has_values: bool,
 ) -> Option<RoutingInfo>
 where
     R: Routable + ?Sized,
 {
     let is_readonly = is_readonly_cmd(cmd);
     let mut routes = HashMap::new();
-    let mut arg_index = 0;
-
-    // determine arg count, because it is needed for MultiShardValues::ValueAfterAllKeys
-    let mut arg_count = first_key_index;
-    while routable.arg_idx(arg_count).is_some() {
-        arg_count += 1;
-    }
-    let last_arg_idx = arg_count - 1;
-
-    while let Some(key) = routable.arg_idx(first_key_index + arg_index) {
+    let mut key_index = 0;
+    while let Some(key) = routable.arg_idx(first_key_index + key_index) {
         let route = get_route(is_readonly, key);
         let entry = routes.entry(route);
-        let args = entry.or_insert(Vec::new());
-        args.push(arg_index);
+        let keys = entry.or_insert(Vec::new());
+        keys.push(key_index);
 
-        match values_position {
-            MultiShardValues::ValueAfterEachKey => {
-                arg_index += 1;
-                routable.arg_idx(first_key_index + arg_index)?; // check that there's a value for the key
-                args.push(arg_index);
-            }
-            MultiShardValues::ValueAfterAllKeys => {
-                args.push(last_arg_idx - first_key_index);
-                // break if we're on the last key (next arg is the value)
-                if arg_index + first_key_index == last_arg_idx - 1 {
-                    break;
-                }
-            }
-            MultiShardValues::NoValues => (), // no-op
+        if has_values {
+            key_index += 1;
+            routable.arg_idx(first_key_index + key_index)?; // check that there's a value for the key
+            keys.push(key_index);
         }
-        arg_index += 1;
+        key_index += 1;
     }
 
     let mut routes: Vec<(Route, Vec<usize>)> = routes.into_iter().collect();
@@ -375,7 +358,6 @@ impl ResponsePolicy {
             b"KEYS"
             | b"FT._ALIASLIST"
             | b"FT._LIST"
-            | b"JSON.MGET"
             | b"MGET"
             | b"SLOWLOG GET"
             | b"PUBSUB CHANNELS"
@@ -408,7 +390,8 @@ enum RouteBy {
     AllNodes,
     AllPrimaries,
     FirstKey,
-    MultiShard(MultiShardValues),
+    MultiShardNoValues,
+    MultiShardWithValues,
     Random,
     SecondArg,
     SecondArgAfterKeyCount,
@@ -416,13 +399,6 @@ enum RouteBy {
     StreamsIndex,
     ThirdArgAfterKeyCount,
     Undefined,
-}
-
-/// Defines values' positions in a command line for commands which could be forwarded to multiple shards
-enum MultiShardValues {
-    NoValues,          // for example, `MGET key1 key2`
-    ValueAfterEachKey, // for example, `MSET key1 value1 key2 value2`
-    ValueAfterAllKeys, // for example, `JSON.MGET key1 key2 key3 value`
 }
 
 fn base_routing(cmd: &[u8]) -> RouteBy {
@@ -478,10 +454,9 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"WAITAOF" => RouteBy::AllPrimaries,
 
         b"MGET" | b"DEL" | b"EXISTS" | b"UNLINK" | b"TOUCH" | b"WATCH" => {
-            RouteBy::MultiShard(MultiShardValues::NoValues)
+            RouteBy::MultiShardNoValues
         }
-        b"MSET" => RouteBy::MultiShard(MultiShardValues::ValueAfterEachKey),
-        b"JSON.MGET" => RouteBy::MultiShard(MultiShardValues::ValueAfterAllKeys),
+        b"MSET" => RouteBy::MultiShardWithValues,
 
         // TODO - special handling - b"SCAN"
         b"SCAN" | b"SHUTDOWN" | b"SLAVEOF" | b"REPLICAOF" => RouteBy::Undefined,
@@ -597,7 +572,8 @@ impl RoutingInfo {
             | RouteBy::ThirdArgAfterKeyCount
             | RouteBy::SecondArgSlot
             | RouteBy::StreamsIndex
-            | RouteBy::MultiShard(_) => {
+            | RouteBy::MultiShardNoValues
+            | RouteBy::MultiShardWithValues => {
                 if matches!(cmd, b"SPUBLISH") {
                     // SPUBLISH does not return MOVED errors within the slot's shard. This means that even if READONLY wasn't sent to a replica,
                     // executing SPUBLISH FOO BAR on that replica will succeed. This behavior differs from true key-based commands,
@@ -632,7 +608,9 @@ impl RoutingInfo {
                 ResponsePolicy::for_command(cmd),
             ))),
 
-            RouteBy::MultiShard(values_position) => multi_shard(r, cmd, 1, values_position),
+            RouteBy::MultiShardWithValues => multi_shard(r, cmd, 1, true),
+
+            RouteBy::MultiShardNoValues => multi_shard(r, cmd, 1, false),
 
             RouteBy::Random => Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)),
 
