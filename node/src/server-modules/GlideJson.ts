@@ -198,7 +198,12 @@ export class GlideJson {
     /**
      * Retrieves the JSON values at the specified `path` stored at multiple `keys`.
      *
-     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @remarks When in cluster mode, if keys in `keyValueMap` map to different hash slots, the command
+     * will be split across these slots and executed separately for each. This means the command
+     * is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+     * call will return the first encountered error, even though some requests may have succeeded
+     * while others did not. If this behavior impacts your application logic, consider splitting
+     * the request into sub-requests per slot to ensure atomicity.
      *
      * @param client - The client to execute the command.
      * @param keys - The keys of the JSON documents.

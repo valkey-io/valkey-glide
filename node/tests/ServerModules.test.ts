@@ -266,9 +266,8 @@ describe("Server Module Tests", () => {
                         protocol,
                     ),
                 );
-                const prefix = "{" + uuidv4() + "}:";
-                const key1 = prefix + 1;
-                const key2 = prefix + 2;
+                const key1 = uuidv4();
+                const key2 = uuidv4();
                 const data = {
                     [key1]: '{"a": 1, "b": ["one", "two"]}',
                     [key2]: '{"a": 1, "c": false}',
@@ -281,7 +280,7 @@ describe("Server Module Tests", () => {
                 expect(
                     await GlideJson.mget(
                         client,
-                        [key1, key2, prefix + 3],
+                        [key1, key2, uuidv4()],
                         Buffer.from("$.c"),
                     ),
                 ).toEqual(["[]", "[false]", null]);
@@ -293,11 +292,6 @@ describe("Server Module Tests", () => {
                         { decoder: Decoder.Bytes },
                     ),
                 ).toEqual([Buffer.from('"one"'), null]);
-
-                // cross slot
-                await expect(
-                    GlideJson.mget(client, [uuidv4(), uuidv4()], "."),
-                ).rejects.toThrowError(/crossslot/i);
             });
 
             it("json.arrinsert", async () => {
