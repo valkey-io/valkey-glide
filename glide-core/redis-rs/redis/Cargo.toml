@@ -102,6 +102,8 @@ tracing = "0.1"
 # Optional uuid support
 uuid = { version = "1.6.1", optional = true }
 
+telemetrylib = { path = "../../telemetry" }
+
 [features]
 default = [
     "acl",

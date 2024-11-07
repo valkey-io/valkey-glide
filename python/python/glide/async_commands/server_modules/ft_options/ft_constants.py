@@ -42,7 +42,7 @@ class FtCreateKeywords:
     EF_RUNTIME = "EF_RUNTIME"
 
 
-class FtSeachKeywords:
+class FtSearchKeywords:
     """
     Keywords used in the FT.SEARCH command.
     """

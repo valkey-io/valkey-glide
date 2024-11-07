@@ -1,0 +1,98 @@
+name: Full Matrix tests
+
+on:
+    workflow_dispatch: # note: if started manually, it won't run all matrix
+        inputs:
+            full-matrix:
+                description: "Run the full engine and host matrix"
+                type: boolean
+                default: false
+            # GHA supports up to 10 inputs, there is no option for multi-choice
+            core:
+                description: "Test GLIDE core"
+                type: boolean
+                default: true
+            redis-rs:
+                description: "Test Redis-RS client"
+                type: boolean
+                default: true
+            node:
+                description: "Test Node client"
+                type: boolean
+                default: true
+            python:
+                description: "Test Python client"
+                type: boolean
+                default: true
+            java:
+                description: "Test Java client"
+                type: boolean
+                default: true
+            csharp:
+                description: "Test C# client"
+                type: boolean
+                default: false
+            go:
+                description: "Test Golang client"
+                type: boolean
+                default: false
+
+    schedule:
+        - cron: "0 3 * * *"
+
+concurrency:
+    group: nightly-${{ github.head_ref || github.ref }}-${{ toJson(inputs) }}
+    cancel-in-progress: true
+
+# TODO matrix by workflow (`uses`) - not supported yet by GH
+jobs:
+    check-input:
+        runs-on: ubuntu-latest
+        steps:
+            - name: no tests selected
+              run: false
+              if: github.event_name == 'workflow_dispatch' && inputs.core == false && inputs.java == false && inputs.python == false && inputs.node == false && inputs.java == false && inputs.csharp == false && inputs.go == false
+
+    run-full-tests-for-core:
+        if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.core == true)
+        uses: ./.github/workflows/rust.yml
+        name: Run CI for GLIDE core lib
+        secrets: inherit
+
+    run-full-tests-for-redis-rs:
+        if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.redis-rs == true)
+        uses: ./.github/workflows/redis-rs.yml
+        name: Run CI for Redis-RS client
+        secrets: inherit
+
+    run-full-tests-for-java:
+        if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.java == true)
+        uses: ./.github/workflows/java.yml
+        name: Run CI for java client
+        secrets: inherit
+
+    run-full-tests-for-python:
+        if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.python == true)
+        uses: ./.github/workflows/python.yml
+        name: Run CI for python client
+        secrets: inherit
+
+    run-full-tests-for-node:
+        if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.node == true)
+        uses: ./.github/workflows/node.yml
+        name: Run CI for node client
+        secrets: inherit
+
+    run-full-tests-for-csharp:
+        # C# deactivated in cron, uncomment condition to activate
+        #if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.csharp == true)
+        if: (github.event_name == 'workflow_dispatch' && inputs.csharp == true)
+        uses: ./.github/workflows/csharp.yml
+        name: Run CI for c# client
+        secrets: inherit
+
+    run-full-tests-for-go:
+        if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.go == true)
+        uses: ./.github/workflows/go.yml
+        name: Run CI for go client
+        secrets: inherit

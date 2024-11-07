@@ -2,7 +2,7 @@
 
 from typing import List, Mapping, Optional
 
-from glide.async_commands.server_modules.ft_options.ft_constants import FtSeachKeywords
+from glide.async_commands.server_modules.ft_options.ft_constants import FtSearchKeywords
 from glide.constants import TEncodable
 
 
@@ -22,7 +22,7 @@ class FtSearchLimit:
         self.offset = offset
         self.count = count
 
-    def toArgs(self) -> List[TEncodable]:
+    def to_args(self) -> List[TEncodable]:
         """
         Get the arguments for the LIMIT option of FT.SEARCH.
 
@@ -30,7 +30,7 @@ class FtSearchLimit:
             List[TEncodable]: A list of LIMIT option arguments.
         """
         args: List[TEncodable] = [
-            FtSeachKeywords.LIMIT,
+            FtSearchKeywords.LIMIT,
             str(self.offset),
             str(self.count),
         ]
@@ -55,7 +55,7 @@ class ReturnField:
         self.field_identifier = field_identifier
         self.alias = alias
 
-    def toArgs(self) -> List[TEncodable]:
+    def to_args(self) -> List[TEncodable]:
         """
         Get the arguments for the RETURN option of FT.SEARCH.
 
@@ -64,12 +64,12 @@ class ReturnField:
         """
         args: List[TEncodable] = [self.field_identifier]
         if self.alias:
-            args.append(FtSeachKeywords.AS)
+            args.append(FtSearchKeywords.AS)
             args.append(self.alias)
         return args
 
 
-class FtSeachOptions:
+class FtSearchOptions:
     """
     This class represents the input options to be used in the FT.SEARCH command.
     All fields in this class are optional inputs for FT.SEARCH.
@@ -99,7 +99,7 @@ class FtSeachOptions:
         self.limit = limit
         self.count = count
 
-    def toArgs(self) -> List[TEncodable]:
+    def to_args(self) -> List[TEncodable]:
         """
         Get the optional arguments for the FT.SEARCH command.
 
@@ -109,23 +109,23 @@ class FtSeachOptions:
         """
         args: List[TEncodable] = []
         if self.return_fields:
-            args.append(FtSeachKeywords.RETURN)
+            args.append(FtSearchKeywords.RETURN)
             return_field_args: List[TEncodable] = []
             for return_field in self.return_fields:
-                return_field_args.extend(return_field.toArgs())
+                return_field_args.extend(return_field.to_args())
             args.append(str(len(return_field_args)))
             args.extend(return_field_args)
         if self.timeout:
-            args.append(FtSeachKeywords.TIMEOUT)
+            args.append(FtSearchKeywords.TIMEOUT)
             args.append(str(self.timeout))
         if self.params:
-            args.append(FtSeachKeywords.PARAMS)
+            args.append(FtSearchKeywords.PARAMS)
             args.append(str(len(self.params)))
             for name, value in self.params.items():
                 args.append(name)
                 args.append(value)
         if self.limit:
-            args.extend(self.limit.toArgs())
+            args.extend(self.limit.to_args())
         if self.count:
-            args.append(FtSeachKeywords.COUNT)
+            args.append(FtSearchKeywords.COUNT)
         return args
