@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /** Additional parameters for {@link Json#arrindex} command. */
-public final class JsonArrIndexOptions {
+public final class JsonArrindexOptions {
 
     /** The start index, inclusive. Default to <code>0</code> if not provided. */
     private Long start;
@@ -14,17 +14,19 @@ public final class JsonArrIndexOptions {
     /** The end index, exclusive. Default to <code>0</code> if not provided. */
     private Long end;
 
-    public JsonArrIndexOptions(Long start) {
+    /** Constructs the JsonArrindexOptions object with only the start index */
+    public JsonArrindexOptions(Long start) {
         this.start = start;
     }
 
-    public JsonArrIndexOptions(Long start, Long end) {
+    /** Constructs the JsonArrindexOptions object with the start and end index */
+    public JsonArrindexOptions(Long start, Long end) {
         this.start = start;
         this.end = end;
     }
 
     /**
-     * Converts JsonGetOptions into a String[].
+     * Converts JsonArrindexOptions into a String[].
      *
      * @return String[]
      */

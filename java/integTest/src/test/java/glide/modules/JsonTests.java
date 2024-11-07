@@ -20,7 +20,7 @@ import glide.api.models.GlideString;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
-import glide.api.models.commands.json.JsonArrIndexOptions;
+import glide.api.models.commands.json.JsonArrindexOptions;
 import glide.api.models.commands.json.JsonGetOptions;
 import glide.api.models.commands.json.JsonScalar;
 import java.util.UUID;
@@ -249,14 +249,14 @@ public class JsonTests {
                                         key2,
                                         "$..a",
                                         new JsonScalar("\"foo\""),
-                                        new JsonArrIndexOptions(6L, 8L))
+                                        new JsonArrindexOptions(6L, 8L))
                                 .get());
 
         assertArrayEquals(
                 new Object[] {-1L, -1L, null},
                 (Object[])
                         Json.arrindex(
-                                        client, key2, "$..a", new JsonScalar(null), new JsonArrIndexOptions(6L, 8L))
+                                        client, key2, "$..a", new JsonScalar(null), new JsonArrindexOptions(6L, 8L))
                                 .get());
 
         assertArrayEquals(
@@ -267,14 +267,14 @@ public class JsonTests {
                                         gs(key2),
                                         gs("$..a"),
                                         new JsonScalar("\"foo\""),
-                                        new JsonArrIndexOptions(6L, 8L))
+                                        new JsonArrindexOptions(6L, 8L))
                                 .get());
 
         assertArrayEquals(
                 new Object[] {6L, -1L, null},
                 (Object[])
                         Json.arrindex(
-                                        client, key2, "$..a", new JsonScalar("\"foo\""), new JsonArrIndexOptions(6L))
+                                        client, key2, "$..a", new JsonScalar("\"foo\""), new JsonArrindexOptions(6L))
                                 .get());
 
         // value doesn't exist
@@ -282,7 +282,7 @@ public class JsonTests {
                 new Object[] {null},
                 (Object[])
                         Json.arrindex(
-                                        client, key1, "$..b", new JsonScalar(true), new JsonArrIndexOptions(1L, 3L))
+                                        client, key1, "$..b", new JsonScalar(true), new JsonArrindexOptions(1L, 3L))
                                 .get());
 
         // with legacy path

@@ -6,23 +6,34 @@ import glide.api.commands.servermodules.Json;
 /**
  * The JsonScalar object are values that are not objects or arrays. i.e., String, number, boolean
  * and null are scalar values. It is a parameter for the {@link Json#arrindex} command.
+ *
+ * <p>The JsonScalar object is inspired by JsonPrimitive class in Google's Gson suite.
  */
 public class JsonScalar {
     private final Object value;
 
-    public JsonScalar(Object value) {
-        if (!isValidScalar(value)) {
-            throw new IllegalArgumentException(
-                    "Value must be a JSON scalar (String, Number, Boolean, or null).");
+    /** Constructs the JsonScalar object with a Json String */
+    public JsonScalar(String value) {
+        if (!(value instanceof String)) {
+            throw new IllegalArgumentException("Value must be a Json String.");
         }
         this.value = value;
     }
 
-    private boolean isValidScalar(Object value) {
-        return value == null
-                || value instanceof String
-                || value instanceof Number
-                || value instanceof Boolean;
+    /** Constructs the JsonScalar object with a Json Number */
+    public JsonScalar(Number value) {
+        if (!(value instanceof Number)) {
+            throw new IllegalArgumentException("Value must be a Json Number.");
+        }
+        this.value = value;
+    }
+
+    /** Constructs the JsonScalar object with a Json Boolean */
+    public JsonScalar(Boolean value) {
+        if (!(value instanceof Boolean)) {
+            throw new IllegalArgumentException("Value must be a Json Boolean.");
+        }
+        this.value = value;
     }
 
     public String toString() {

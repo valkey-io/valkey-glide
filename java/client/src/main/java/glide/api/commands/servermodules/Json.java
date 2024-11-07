@@ -703,8 +703,8 @@ public class Json {
      * var result = Json.arrindex(client, key, "$..a", new JsonScalar(3)).get();
      * assert Arrays.equals((Object[]) result, new Object[] {1L, 0L});
      *
-     * Object result2 = Json.arrindex(client, key, .a, new JsonScalar(3)).get();
-     * assertEquals(1L, result);
+     * Object result2 = Json.arrindex(client, key, ".a", new JsonScalar(3)).get();
+     * assert Arrays.equals(1L, result);
      * }</pre>
      */
     public static CompletableFuture<Object> arrindex(
@@ -752,8 +752,8 @@ public class Json {
      * var result = Json.arrindex(client, gs(key), gs("$..a"), new JsonScalar(3)).get();
      * assert Arrays.equals((Object[]) result, new Object[] {1L, 0L);
      *
-     * result = Json.arrindex(client, gs(key), gs(.a), new JsonScalar(3)).get();
-     * assertEquals(1L, result);
+     * result = Json.arrindex(client, gs(key), gs(".a"), new JsonScalar(3)).get();
+     * assert Arrays.equals(1L, result);
      * }</pre>
      */
     public static CompletableFuture<Object> arrindex(
