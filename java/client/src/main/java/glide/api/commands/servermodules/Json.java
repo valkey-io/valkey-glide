@@ -10,7 +10,7 @@ import glide.api.GlideClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.commands.ConditionalChange;
-import glide.api.models.commands.json.JsonArrIndexOptions;
+import glide.api.models.commands.json.JsonArrindexOptions;
 import glide.api.models.commands.json.JsonGetOptions;
 import glide.api.models.commands.json.JsonGetOptionsBinary;
 import glide.api.models.commands.json.JsonScalar;
@@ -685,7 +685,7 @@ public class Json {
      * @param path The path within the JSON document.
      * @param scalar The scalar value to search for; JSON scalar refers to values that are not objects
      *     or arrays.
-     * @param options The additional options for the command. See <code>JsonArrIndexOptions</code>.
+     * @param options The additional options for the command. See <code>JsonArrindexOptions</code>.
      * @return
      *     <ul>
      *       <li>For JSONPath (<code>path</code> starts with <code>$</code>): Returns an array with a
@@ -712,7 +712,7 @@ public class Json {
             @NonNull String key,
             @NonNull String path,
             @NonNull JsonScalar scalar,
-            @NonNull JsonArrIndexOptions options) {
+            @NonNull JsonArrindexOptions options) {
 
         return executeCommand(
                 client,
@@ -734,7 +734,7 @@ public class Json {
      * @param path The path within the JSON document.
      * @param scalar The scalar value to search for; JSON scalar refers to values that are not objects
      *     or arrays.
-     * @param options The additional options for the command. See <code>JsonArrIndexOptions</code>.
+     * @param options The additional options for the command. See <code>JsonArrindexOptions</code>.
      * @return
      *     <ul>
      *       <li>For JSONPath (<code>path</code> starts with <code>$</code>): Returns an array with a
@@ -761,7 +761,7 @@ public class Json {
             @NonNull GlideString key,
             @NonNull GlideString path,
             @NonNull JsonScalar scalar,
-            @NonNull JsonArrIndexOptions options) {
+            @NonNull JsonArrindexOptions options) {
 
         return executeCommand(
                 client,
