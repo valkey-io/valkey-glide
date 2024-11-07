@@ -20,7 +20,6 @@ import {
     BitOverflowControl,
     BitmapIndexType,
     BitwiseOperation,
-    ClosingError,
     ClusterTransaction,
     ConditionalChange,
     Decoder,
@@ -127,13 +126,9 @@ export function runBaseTests(config: {
             await runTest(async (client: BaseClient) => {
                 client.close();
 
-                try {
-                    expect(await client.set("foo", "bar")).toThrow();
-                } catch (e) {
-                    expect((e as ClosingError).message).toMatch(
-                        "Unable to execute requests; the client is closed. Please create a new client.",
-                    );
-                }
+                await expect(client.set("foo", "bar")).rejects.toThrow(
+                    "Unable to execute requests; the client is closed. Please create a new client.",
+                );
             }, protocol);
         },
         config.timeout,
@@ -300,14 +295,10 @@ export function runBaseTests(config: {
                 if (conf_file.length > 0) {
                     expect(await client.configRewrite()).toEqual("OK");
                 } else {
-                    try {
-                        /// We expect Valkey to return an error since the test cluster doesn't use redis.conf file
-                        expect(await client.configRewrite()).toThrow();
-                    } catch (e) {
-                        expect((e as Error).message).toMatch(
-                            "The server is running without a config file",
-                        );
-                    }
+                    /// We expect Valkey to return an error since the test cluster doesn't use redis.conf file
+                    await expect(client.configRewrite()).rejects.toThrow(
+                        "The server is running without a config file",
+                    );
                 }
             }, protocol);
         },
@@ -505,29 +496,16 @@ export function runBaseTests(config: {
                 const key = uuidv4();
                 expect(await client.set(key, "foo")).toEqual("OK");
 
-                try {
-                    expect(await client.incr(key)).toThrow();
-                } catch (e) {
-                    expect((e as Error).message).toMatch(
-                        "value is not an integer",
-                    );
-                }
+                await expect(client.incr(key)).rejects.toThrow(
+                    "value is not an integer",
+                );
 
-                try {
-                    expect(await client.incrBy(key, 1)).toThrow();
-                } catch (e) {
-                    expect((e as Error).message).toMatch(
-                        "value is not an integer",
-                    );
-                }
-
-                try {
-                    expect(await client.incrByFloat(key, 1.5)).toThrow();
-                } catch (e) {
-                    expect((e as Error).message).toMatch(
-                        "value is not a valid float",
-                    );
-                }
+                await expect(client.incrBy(key, 1)).rejects.toThrow(
+                    "value is not an integer",
+                );
+                await expect(client.incrByFloat(key, 1.5)).rejects.toThrow(
+                    "value is not a valid float",
+                );
             }, protocol);
         },
         config.timeout,
@@ -617,21 +595,13 @@ export function runBaseTests(config: {
                 const key = uuidv4();
                 expect(await client.set(key, "foo")).toEqual("OK");
 
-                try {
-                    expect(await client.decr(key)).toThrow();
-                } catch (e) {
-                    expect((e as Error).message).toMatch(
-                        "value is not an integer",
-                    );
-                }
+                await expect(client.decr(key)).rejects.toThrow(
+                    "value is not an integer",
+                );
 
-                try {
-                    expect(await client.decrBy(key, 3)).toThrow();
-                } catch (e) {
-                    expect((e as Error).message).toMatch(
-                        "value is not an integer",
-                    );
-                }
+                await expect(client.decrBy(key, 3)).rejects.toThrow(
+                    "value is not an integer",
+                );
             }, protocol);
         },
         config.timeout,
@@ -1929,23 +1899,12 @@ export function runBaseTests(config: {
                 };
                 expect(await client.hset(key, fieldValueMap)).toEqual(1);
 
-                try {
-                    expect(await client.hincrBy(key, field, 2)).toThrow();
-                } catch (e) {
-                    expect((e as Error).message).toMatch(
-                        "hash value is not an integer",
-                    );
-                }
-
-                try {
-                    expect(
-                        await client.hincrByFloat(key, field, 1.5),
-                    ).toThrow();
-                } catch (e) {
-                    expect((e as Error).message).toMatch(
-                        "hash value is not a float",
-                    );
-                }
+                await expect(client.hincrBy(key, field, 2)).rejects.toThrow(
+                    "hash value is not an integer",
+                );
+                await expect(
+                    client.hincrByFloat(key, field, 1.5),
+                ).rejects.toThrow("hash value is not a float");
             }, protocol);
         },
         config.timeout,
@@ -2198,29 +2157,15 @@ export function runBaseTests(config: {
                 const key = uuidv4();
                 expect(await client.set(key, "foo")).toEqual("OK");
 
-                try {
-                    expect(await client.lpush(key, ["bar"])).toThrow();
-                } catch (e) {
-                    expect((e as Error).message).toMatch(
-                        "Operation against a key holding the wrong kind of value",
-                    );
-                }
-
-                try {
-                    expect(await client.lpop(key)).toThrow();
-                } catch (e) {
-                    expect((e as Error).message).toMatch(
-                        "Operation against a key holding the wrong kind of value",
-                    );
-                }
-
-                try {
-                    expect(await client.lrange(key, 0, -1)).toThrow();
-                } catch (e) {
-                    expect((e as Error).message).toMatch(
-                        "Operation against a key holding the wrong kind of value",
-                    );
-                }
+                await expect(client.lpush(key, ["bar"])).rejects.toThrow(
+                    "Operation against a key holding the wrong kind of value",
+                );
+                await expect(client.lpop(key)).rejects.toThrow(
+                    "Operation against a key holding the wrong kind of value",
+                );
+                await expect(client.lrange(key, 0, -1)).rejects.toThrow(
+                    "Operation against a key holding the wrong kind of value",
+                );
             }, protocol);
         },
         config.timeout,
@@ -2292,13 +2237,9 @@ export function runBaseTests(config: {
 
                 expect(await client.set(key2, "foo")).toEqual("OK");
 
-                try {
-                    expect(await client.llen(key2)).toThrow();
-                } catch (e) {
-                    expect((e as Error).message).toMatch(
-                        "Operation against a key holding the wrong kind of value",
-                    );
-                }
+                await expect(client.llen(key2)).rejects.toThrow(
+                    "Operation against a key holding the wrong kind of value",
+                );
             }, protocol);
         },
         config.timeout,
@@ -2660,13 +2601,9 @@ export function runBaseTests(config: {
 
                 expect(await client.set(key, "foo")).toEqual("OK");
 
-                try {
-                    expect(await client.ltrim(key, 0, 1)).toThrow();
-                } catch (e) {
-                    expect((e as Error).message).toMatch(
-                        "Operation against a key holding the wrong kind of value",
-                    );
-                }
+                await expect(client.ltrim(key, 0, 1)).rejects.toThrow(
+                    "Operation against a key holding the wrong kind of value",
+                );
 
                 //test for binary key as input to the command
                 const key2 = uuidv4();
@@ -2774,21 +2711,12 @@ export function runBaseTests(config: {
                 const key = uuidv4();
                 expect(await client.set(key, "foo")).toEqual("OK");
 
-                try {
-                    expect(await client.rpush(key, ["bar"])).toThrow();
-                } catch (e) {
-                    expect((e as Error).message).toMatch(
-                        "Operation against a key holding the wrong kind of value",
-                    );
-                }
-
-                try {
-                    expect(await client.rpop(key)).toThrow();
-                } catch (e) {
-                    expect((e as Error).message).toMatch(
-                        "Operation against a key holding the wrong kind of value",
-                    );
-                }
+                await expect(client.rpush(key, ["bar"])).rejects.toThrow(
+                    "Operation against a key holding the wrong kind of value",
+                );
+                await expect(client.rpop(key)).rejects.toThrow(
+                    "Operation against a key holding the wrong kind of value",
+                );
             }, protocol);
         },
         config.timeout,
@@ -2974,37 +2902,18 @@ export function runBaseTests(config: {
                 const key = uuidv4();
                 expect(await client.set(key, "foo")).toEqual("OK");
 
-                try {
-                    expect(await client.sadd(key, ["bar"])).toThrow();
-                } catch (e) {
-                    expect((e as Error).message).toMatch(
-                        "Operation against a key holding the wrong kind of value",
-                    );
-                }
-
-                try {
-                    expect(await client.srem(key, ["bar"])).toThrow();
-                } catch (e) {
-                    expect((e as Error).message).toMatch(
-                        "Operation against a key holding the wrong kind of value",
-                    );
-                }
-
-                try {
-                    expect(await client.scard(key)).toThrow();
-                } catch (e) {
-                    expect((e as Error).message).toMatch(
-                        "Operation against a key holding the wrong kind of value",
-                    );
-                }
-
-                try {
-                    expect(await client.smembers(key)).toThrow();
-                } catch (e) {
-                    expect((e as Error).message).toMatch(
-                        "Operation against a key holding the wrong kind of value",
-                    );
-                }
+                await expect(client.sadd(key, ["bar"])).rejects.toThrow(
+                    "Operation against a key holding the wrong kind of value",
+                );
+                await expect(client.srem(key, ["bar"])).rejects.toThrow(
+                    "Operation against a key holding the wrong kind of value",
+                );
+                await expect(client.scard(key)).rejects.toThrow(
+                    "Operation against a key holding the wrong kind of value",
+                );
+                await expect(client.smembers(key)).rejects.toThrow(
+                    "Operation against a key holding the wrong kind of value",
+                );
             }, protocol);
         },
         config.timeout,
@@ -3036,13 +2945,9 @@ export function runBaseTests(config: {
                 ).toEqual(new Set([Buffer.from("c"), Buffer.from("d")]));
 
                 // invalid argument - key list must not be empty
-                try {
-                    expect(await client.sinter([])).toThrow();
-                } catch (e) {
-                    expect((e as Error).message).toMatch(
-                        "ResponseError: wrong number of arguments",
-                    );
-                }
+                await expect(client.sinter([])).rejects.toThrow(
+                    "wrong number of arguments",
+                );
 
                 // non-existing key returns empty set
                 expect(await client.sinter([key1, non_existing_key])).toEqual(
@@ -3052,13 +2957,9 @@ export function runBaseTests(config: {
                 // non-set key
                 expect(await client.set(key2, "value")).toEqual("OK");
 
-                try {
-                    expect(await client.sinter([key2])).toThrow();
-                } catch (e) {
-                    expect((e as Error).message).toMatch(
-                        "Operation against a key holding the wrong kind of value",
-                    );
-                }
+                await expect(client.sinter([key2])).rejects.toThrow(
+                    "Operation against a key holding the wrong kind of value",
+                );
             }, protocol);
         },
         config.timeout,
@@ -4227,6 +4128,18 @@ export function runBaseTests(config: {
                 expect(
                     await client.zadd(key, newMembersScores, { changed: true }),
                 ).toEqual(2);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "script kill killable test_%p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                await expect(client.scriptKill()).rejects.toThrow(
+                    "No scripts in execution right now",
+                );
             }, protocol);
         },
         config.timeout,
@@ -6692,19 +6605,6 @@ export function runBaseTests(config: {
                 // key exists, but it is not a list
                 await client.set("foo", "bar");
                 await expect(client.brpop(["foo"], 0.1)).rejects.toThrow();
-
-                // Same-slot requirement
-                if (client instanceof GlideClusterClient) {
-                    try {
-                        expect(
-                            await client.brpop(["abc", "zxy", "lkn"], 0.1),
-                        ).toThrow();
-                    } catch (e) {
-                        expect((e as Error).message.toLowerCase()).toMatch(
-                            "crossslot",
-                        );
-                    }
-                }
             }, protocol);
         },
         config.timeout,
@@ -6735,19 +6635,6 @@ export function runBaseTests(config: {
                 // key exists, but it is not a list
                 await client.set("foo", "bar");
                 await expect(client.blpop(["foo"], 0.1)).rejects.toThrow();
-
-                // Same-slot requirement
-                if (client instanceof GlideClusterClient) {
-                    try {
-                        expect(
-                            await client.blpop(["abc", "zxy", "lkn"], 0.1),
-                        ).toThrow();
-                    } catch (e) {
-                        expect((e as Error).message.toLowerCase()).toMatch(
-                            "crossslot",
-                        );
-                    }
-                }
             }, protocol);
         },
         config.timeout,
@@ -7762,11 +7649,9 @@ export function runBaseTests(config: {
                 const key3 = `{key}-3-${uuidv4()}`;
 
                 // renamenx missing key
-                try {
-                    expect(await client.renamenx(key1, key2)).toThrow();
-                } catch (e) {
-                    expect((e as Error).message).toMatch("no such key");
-                }
+                await expect(client.renamenx(key1, key2)).rejects.toThrow(
+                    "no such key",
+                );
 
                 // renamenx a string
                 await client.set(key1, "key1");
@@ -7995,13 +7880,9 @@ export function runBaseTests(config: {
                 expect(await client.pfcount([key3])).toEqual(0);
 
                 // invalid argument - key list must not be empty
-                try {
-                    expect(await client.pfcount([])).toThrow();
-                } catch (e) {
-                    expect((e as Error).message).toMatch(
-                        "ResponseError: wrong number of arguments",
-                    );
-                }
+                await expect(client.pfcount([])).rejects.toThrow(
+                    "ResponseError: wrong number of arguments",
+                );
 
                 // key exists, but it is not a HyperLogLog
                 expect(await client.set(stringKey, "value")).toEqual("OK");

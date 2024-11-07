@@ -4,7 +4,6 @@
 
 import { expect } from "@jest/globals";
 import { exec } from "child_process";
-import parseArgs from "minimist";
 import { gte } from "semver";
 import { v4 as uuidv4 } from "uuid";
 import {
@@ -329,40 +328,6 @@ export function createLongRunningLuaScript(
     return script.replaceAll("$timeout", timeout.toString());
 }
 
-export async function waitForScriptNotBusy(
-    client: GlideClusterClient | GlideClient,
-) {
-    // If function wasn't killed, and it didn't time out - it blocks the server and cause rest test to fail.
-    let isBusy = true;
-
-    do {
-        try {
-            await client.scriptKill();
-        } catch (err) {
-            // should throw `notbusy` error, because the function should be killed before
-            if ((err as Error).message.toLowerCase().includes("notbusy")) {
-                isBusy = false;
-            }
-        }
-    } while (isBusy);
-}
-
-/**
- * Parses the command-line arguments passed to the Node.js process.
- *
- * @returns Parsed command-line arguments.
- *
- * @example
- * ```typescript
- * // Command: node script.js --name="John Doe" --age=30
- * const args = parseCommandLineArgs();
- * // args = { name: 'John Doe', age: 30 }
- * ```
- */
-export function parseCommandLineArgs() {
-    return parseArgs(process.argv.slice(2));
-}
-
 export async function testTeardown(
     cluster_mode: boolean,
     option: BaseClientConfiguration,
@@ -386,7 +351,7 @@ export const getClientConfigurationOption = (
             port,
         })),
         protocol,
-        useTLS: parseCommandLineArgs()["tls"] == "true",
+        useTLS: global.TLS ?? false,
         requestTimeout: 1000,
         ...configOverrides,
     };

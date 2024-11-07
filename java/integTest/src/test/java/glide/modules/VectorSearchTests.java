@@ -319,8 +319,8 @@ public class VectorSearchTests {
 
     @SneakyThrows
     @Test
-    public void ft_drop() {
-        var index = UUID.randomUUID().toString();
+    public void ft_drop_and_ft_list() {
+        var index = gs(UUID.randomUUID().toString());
         assertEquals(
                 OK,
                 FT.create(
@@ -331,17 +331,11 @@ public class VectorSearchTests {
                                 })
                         .get());
 
-        // TODO use FT.LIST with it is done
-        var before =
-                Set.of((Object[]) client.customCommand(new String[] {"FT._LIST"}).get().getSingleValue());
+        var before = Set.of(FT.list(client).get());
 
         assertEquals(OK, FT.dropindex(client, index).get());
 
-        // TODO use FT.LIST with it is done
-        var after =
-                new HashSet<>(
-                        Set.of(
-                                (Object[]) client.customCommand(new String[] {"FT._LIST"}).get().getSingleValue()));
+        var after = new HashSet<>(Set.of(FT.list(client).get()));
 
         assertFalse(after.contains(index));
         after.add(index);
@@ -676,7 +670,7 @@ public class VectorSearchTests {
 
     @SneakyThrows
     @Test
-    public void ft_aliasadd_aliasdel_aliasupdate() {
+    public void ft_aliasadd_aliasdel_aliasupdate_aliaslist() {
 
         var alias1 = "alias1";
         var alias2 = "a2";
@@ -693,7 +687,9 @@ public class VectorSearchTests {
                                 })
                         .get());
 
+        assertEquals(0, FT.aliaslist(client).get().size());
         assertEquals(OK, FT.aliasadd(client, alias1, indexName).get());
+        assertEquals(Map.of(gs(alias1), gs(indexName)), FT.aliaslist(client).get());
 
         // error with adding the same alias to the same index
         var exception =
@@ -702,6 +698,8 @@ public class VectorSearchTests {
         assertTrue(exception.getMessage().contains("Alias already exists"));
 
         assertEquals(OK, FT.aliasupdate(client, alias2, indexName).get());
+        assertEquals(
+                Map.of(gs(alias1), gs(indexName), gs(alias2), gs(indexName)), FT.aliaslist(client).get());
         assertEquals(OK, FT.aliasdel(client, alias2).get());
 
         // with GlideString:
