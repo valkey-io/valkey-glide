@@ -2089,7 +2089,9 @@ describe("Server Module Tests", () => {
                     ).toEqual(3);
 
                     expect(
-                        await GlideJson.objlen(client, key, { path: "..a" }),
+                        await GlideJson.objlen(client, Buffer.from(key), {
+                            path: Buffer.from("..a"),
+                        }),
                     ).toEqual(2);
 
                     expect(await GlideJson.objlen(client, key)).toEqual(2);
@@ -2180,7 +2182,9 @@ describe("Server Module Tests", () => {
                     ).toEqual([Buffer.from("a"), Buffer.from("b")]);
 
                     expect(
-                        await GlideJson.objkeys(client, key, { path: "$.." }),
+                        await GlideJson.objkeys(client, Buffer.from(key), {
+                            path: Buffer.from("$.."),
+                        }),
                     ).toEqual([
                         ["a", "b"],
                         ["a", "b", "c"],
