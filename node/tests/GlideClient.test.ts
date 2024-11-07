@@ -30,7 +30,6 @@ import { ValkeyCluster } from "../../utils/TestUtils.js";
 import { command_request } from "../src/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import {
-    DumpAndRestoreTest,
     checkFunctionListResponse,
     checkFunctionStatsResponse,
     convertStringArrayToBuffer,
