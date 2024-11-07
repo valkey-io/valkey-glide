@@ -48,6 +48,7 @@
 * Java: Added `JSON.STRAPPEND` and `JSON.STRLEN` ([#2522](https://github.com/valkey-io/valkey-glide/pull/2522))
 * Java: Added `JSON.CLEAR` ([#2519](https://github.com/valkey-io/valkey-glide/pull/2519))
 * Node: Added `JSON.TYPE` ([#2510](https://github.com/valkey-io/valkey-glide/pull/2510))
+* Node: Added `JSON.ARRAPPEND` ([#2562](https://github.com/valkey-io/valkey-glide/pull/2562))
 * Java: Added `JSON.RESP` ([#2513](https://github.com/valkey-io/valkey-glide/pull/2513))
 * Java: Added `JSON.TYPE` ([#2525](https://github.com/valkey-io/valkey-glide/pull/2525))
 * Java: Added `FT._LIST` ([#2568](https://github.com/valkey-io/valkey-glide/pull/2568))
