@@ -248,6 +248,15 @@ describe("Server Module Tests", () => {
                 const expectedResult2 =
                     '[\n~{\n~~"a":*1,\n~~"b":*2,\n~~"c":*{\n~~~"d":*3,\n~~~"e":*4\n~~}\n~}\n]';
                 expect(result).toEqual(expectedResult2);
+
+                // binary buffer test
+                const result3 = await GlideJson.get(client, Buffer.from(key), {
+                    path: Buffer.from("$"),
+                    indent: Buffer.from("~"),
+                    newline: Buffer.from("\n"),
+                    space: Buffer.from("*"),
+                } as JsonGetOptions);
+                expect(result3).toEqual(expectedResult2);
             });
 
             it("json.arrinsert", async () => {
@@ -354,6 +363,16 @@ describe("Server Module Tests", () => {
                 expect(
                     JSON.parse((await GlideJson.get(client, key)) as string),
                 ).toEqual(expected);
+
+                // Binary buffer test
+                expect(
+                    JSON.parse(
+                        (await GlideJson.get(
+                            client,
+                            Buffer.from(key),
+                        )) as string,
+                    ),
+                ).toEqual(expected);
             });
 
             it("json.arrpop", async () => {
@@ -404,6 +423,11 @@ describe("Server Module Tests", () => {
                     "OK",
                 );
                 expect(await GlideJson.arrpop(client, key)).toEqual("42");
+
+                // Binary buffer test
+                expect(
+                    await GlideJson.arrpop(client, Buffer.from(key)),
+                ).toEqual("[3,4]");
             });
 
             it("json.arrlen", async () => {
@@ -442,6 +466,11 @@ describe("Server Module Tests", () => {
                     await GlideJson.set(client, key, "$", "[1, 2, 3, 4]"),
                 ).toBe("OK");
                 expect(await GlideJson.arrlen(client, key)).toEqual(4);
+
+                // Binary buffer test
+                expect(
+                    await GlideJson.arrlen(client, Buffer.from(key)),
+                ).toEqual(4);
             });
 
             it("json.toggle tests", async () => {
@@ -497,6 +526,11 @@ describe("Server Module Tests", () => {
                 await expect(
                     GlideJson.toggle(client, "non_existing_key", { path: "$" }),
                 ).rejects.toThrow(RequestError);
+
+                // Binary buffer test
+                expect(await GlideJson.toggle(client, Buffer.from(key2))).toBe(
+                    false,
+                );
             });
 
             it("json.del tests", async () => {
@@ -584,6 +618,9 @@ describe("Server Module Tests", () => {
                 expect(
                     await GlideJson.get(client, key, { path: "$" }),
                 ).toBeNull();
+
+                // Binary buffer test
+                expect(await GlideJson.del(client, Buffer.from(key))).toBe(0);
 
                 // non-existing keys
                 expect(
@@ -688,6 +725,11 @@ describe("Server Module Tests", () => {
                     await GlideJson.get(client, key, { path: "$" }),
                 ).toBeNull();
 
+                // Binary buffer test
+                expect(await GlideJson.forget(client, Buffer.from(key))).toBe(
+                    0,
+                );
+
                 // non-existing keys
                 expect(
                     await GlideJson.forget(client, "non_existing_key", {
@@ -764,6 +806,13 @@ describe("Server Module Tests", () => {
                 expect(
                     await GlideJson.type(client, "non_existing", { path: "." }),
                 ).toBeNull();
+
+                // Binary buffer test
+                expect(
+                    await GlideJson.type(client, Buffer.from(key2), {
+                        path: Buffer.from(".Age"),
+                    }),
+                ).toEqual("integer");
             });
 
             it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -1043,6 +1092,13 @@ describe("Server Module Tests", () => {
                 expect(
                     await GlideJson.resp(client, "nonexistent_key"),
                 ).toBeNull();
+
+                // binary buffer test
+                expect(
+                    await GlideJson.resp(client, Buffer.from(key), {
+                        path: Buffer.from("..a"),
+                    }),
+                ).toEqual(["[", 1, 2, 3]);
             });
 
             it("json.arrtrim tests", async () => {
@@ -1178,179 +1234,583 @@ describe("Server Module Tests", () => {
                 ).toEqual(0);
             });
 
-            it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-                "json.strlen tests",
-                async (protocol) => {
-                    client = await GlideClusterClient.createClient(
-                        getClientConfigurationOption(
-                            cluster.getAddresses(),
-                            protocol,
-                        ),
-                    );
-                    const key = uuidv4();
-                    const jsonValue = {
-                        a: "foo",
-                        nested: { a: "hello" },
+            it("json.strlen tests", async () => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+                const key = uuidv4();
+                const jsonValue = {
+                    a: "foo",
+                    nested: { a: "hello" },
+                    nested2: { a: 31 },
+                };
+                // setup
+                expect(
+                    await GlideJson.set(
+                        client,
+                        key,
+                        "$",
+                        JSON.stringify(jsonValue),
+                    ),
+                ).toBe("OK");
+
+                expect(
+                    await GlideJson.strlen(client, key, { path: "$..a" }),
+                ).toEqual([3, 5, null]);
+                expect(await GlideJson.strlen(client, key, { path: "a" })).toBe(
+                    3,
+                );
+
+                expect(
+                    await GlideJson.strlen(client, key, {
+                        path: "$.nested",
+                    }),
+                ).toEqual([null]);
+                expect(
+                    await GlideJson.strlen(client, key, { path: "$..a" }),
+                ).toEqual([3, 5, null]);
+
+                expect(
+                    await GlideJson.strlen(client, "non_existing_key", {
+                        path: ".",
+                    }),
+                ).toBeNull();
+                expect(
+                    await GlideJson.strlen(client, "non_existing_key", {
+                        path: "$",
+                    }),
+                ).toBeNull();
+                expect(
+                    await GlideJson.strlen(client, key, {
+                        path: "$.non_existing_path",
+                    }),
+                ).toEqual([]);
+
+                // error case
+                await expect(
+                    GlideJson.strlen(client, key, { path: "nested" }),
+                ).rejects.toThrow(RequestError);
+                await expect(GlideJson.strlen(client, key)).rejects.toThrow(
+                    RequestError,
+                );
+
+                // Binary buffer test
+                expect(
+                    await GlideJson.strlen(client, Buffer.from(key), {
+                        path: Buffer.from("$..a"),
+                    }),
+                ).toEqual([3, 5, null]);
+            });
+
+            it("json.strappend tests", async () => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+                const key = uuidv4();
+                const jsonValue = {
+                    a: "foo",
+                    nested: { a: "hello" },
+                    nested2: { a: 31 },
+                };
+                // setup
+                expect(
+                    await GlideJson.set(
+                        client,
+                        key,
+                        "$",
+                        JSON.stringify(jsonValue),
+                    ),
+                ).toBe("OK");
+
+                expect(
+                    await GlideJson.strappend(client, key, '"bar"', {
+                        path: "$..a",
+                    }),
+                ).toEqual([6, 8, null]);
+                expect(
+                    await GlideJson.strappend(
+                        client,
+                        key,
+                        JSON.stringify("foo"),
+                        {
+                            path: "a",
+                        },
+                    ),
+                ).toBe(9);
+
+                expect(await GlideJson.get(client, key, { path: "." })).toEqual(
+                    JSON.stringify({
+                        a: "foobarfoo",
+                        nested: { a: "hellobar" },
                         nested2: { a: 31 },
-                    };
-                    // setup
-                    expect(
-                        await GlideJson.set(
-                            client,
-                            key,
-                            "$",
-                            JSON.stringify(jsonValue),
-                        ),
-                    ).toBe("OK");
+                    }),
+                );
 
-                    expect(
-                        await GlideJson.strlen(client, key, { path: "$..a" }),
-                    ).toEqual([3, 5, null]);
-                    expect(
-                        await GlideJson.strlen(client, key, { path: "a" }),
-                    ).toBe(3);
+                // Binary buffer test
+                expect(
+                    await GlideJson.strappend(
+                        client,
+                        Buffer.from(key),
+                        Buffer.from(JSON.stringify("foo")),
+                        {
+                            path: Buffer.from("a"),
+                        },
+                    ),
+                ).toBe(12);
 
-                    expect(
-                        await GlideJson.strlen(client, key, {
+                expect(
+                    await GlideJson.strappend(
+                        client,
+                        key,
+                        JSON.stringify("bar"),
+                        {
                             path: "$.nested",
-                        }),
-                    ).toEqual([null]);
-                    expect(
-                        await GlideJson.strlen(client, key, { path: "$..a" }),
-                    ).toEqual([3, 5, null]);
+                        },
+                    ),
+                ).toEqual([null]);
 
-                    expect(
-                        await GlideJson.strlen(client, "non_existing_key", {
-                            path: ".",
-                        }),
-                    ).toBeNull();
-                    expect(
-                        await GlideJson.strlen(client, "non_existing_key", {
-                            path: "$",
-                        }),
-                    ).toBeNull();
-                    expect(
-                        await GlideJson.strlen(client, key, {
+                await expect(
+                    GlideJson.strappend(client, key, JSON.stringify("bar"), {
+                        path: ".nested",
+                    }),
+                ).rejects.toThrow(RequestError);
+                await expect(
+                    GlideJson.strappend(client, key, JSON.stringify("bar")),
+                ).rejects.toThrow(RequestError);
+
+                expect(
+                    await GlideJson.strappend(
+                        client,
+                        key,
+                        JSON.stringify("try"),
+                        {
                             path: "$.non_existing_path",
-                        }),
-                    ).toEqual([]);
+                        },
+                    ),
+                ).toEqual([]);
 
-                    // error case
-                    await expect(
-                        GlideJson.strlen(client, key, { path: "nested" }),
-                    ).rejects.toThrow(RequestError);
-                    await expect(GlideJson.strlen(client, key)).rejects.toThrow(
-                        RequestError,
-                    );
-                },
-            );
+                await expect(
+                    GlideJson.strappend(client, key, JSON.stringify("try"), {
+                        path: ".non_existing_path",
+                    }),
+                ).rejects.toThrow(RequestError);
+                await expect(
+                    GlideJson.strappend(
+                        client,
+                        "non_existing_key",
+                        JSON.stringify("try"),
+                    ),
+                ).rejects.toThrow(RequestError);
+            });
 
-            it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-                "json.strappend tests",
-                async (protocol) => {
-                    client = await GlideClusterClient.createClient(
-                        getClientConfigurationOption(
-                            cluster.getAddresses(),
-                            protocol,
-                        ),
-                    );
-                    const key = uuidv4();
-                    const jsonValue = {
-                        a: "foo",
-                        nested: { a: "hello" },
-                        nested2: { a: 31 },
-                    };
-                    // setup
-                    expect(
-                        await GlideJson.set(
-                            client,
-                            key,
-                            "$",
-                            JSON.stringify(jsonValue),
-                        ),
-                    ).toBe("OK");
+            it("json.numincrby tests", async () => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+                const key = uuidv4();
+                const jsonValue = {
+                    key1: 1,
+                    key2: 3.5,
+                    key3: { nested_key: { key1: [4, 5] } },
+                    key4: [1, 2, 3],
+                    key5: 0,
+                    key6: "hello",
+                    key7: null,
+                    key8: { nested_key: { key1: 69 } },
+                    key9: 1.7976931348623157e308,
+                };
+                // setup
+                expect(
+                    await GlideJson.set(
+                        client,
+                        key,
+                        "$",
+                        JSON.stringify(jsonValue),
+                    ),
+                ).toBe("OK");
 
-                    expect(
-                        await GlideJson.strappend(client, key, '"bar"', {
-                            path: "$..a",
-                        }),
-                    ).toEqual([6, 8, null]);
-                    expect(
-                        await GlideJson.strappend(
-                            client,
-                            key,
-                            JSON.stringify("foo"),
-                            {
-                                path: "a",
-                            },
-                        ),
-                    ).toBe(9);
+                // Increment integer value (key1) by 5
+                expect(
+                    await GlideJson.numincrby(client, key, "$.key1", 5),
+                ).toBe("[6]"); // 1 + 5 = 6
 
-                    expect(
-                        await GlideJson.get(client, key, { path: "." }),
-                    ).toEqual(
-                        JSON.stringify({
-                            a: "foobarfoo",
-                            nested: { a: "hellobar" },
-                            nested2: { a: 31 },
-                        }),
-                    );
+                // Increment float value (key2) by 2.5
+                expect(
+                    await GlideJson.numincrby(client, key, "$.key2", 2.5),
+                ).toBe("[6]"); // 3.5 + 2.5 = 6
 
-                    expect(
-                        await GlideJson.strappend(
-                            client,
-                            key,
-                            JSON.stringify("bar"),
-                            {
-                                path: "$.nested",
-                            },
-                        ),
-                    ).toEqual([null]);
+                // Increment nested object (key3.nested_key.key1[0]) by 7
+                expect(
+                    await GlideJson.numincrby(
+                        client,
+                        key,
+                        "$.key3.nested_key.key1[1]",
+                        7,
+                    ),
+                ).toBe("[12]"); // 4 + 7 = 12
 
-                    await expect(
-                        GlideJson.strappend(
-                            client,
-                            key,
-                            JSON.stringify("bar"),
-                            {
-                                path: ".nested",
-                            },
-                        ),
-                    ).rejects.toThrow(RequestError);
-                    await expect(
-                        GlideJson.strappend(client, key, JSON.stringify("bar")),
-                    ).rejects.toThrow(RequestError);
+                // Increment array element (key4[1]) by 1
+                expect(
+                    await GlideJson.numincrby(client, key, "$.key4[1]", 1),
+                ).toBe("[3]"); // 2 + 1 = 3
 
-                    expect(
-                        await GlideJson.strappend(
-                            client,
-                            key,
-                            JSON.stringify("try"),
-                            {
-                                path: "$.non_existing_path",
-                            },
-                        ),
-                    ).toEqual([]);
+                // Increment zero value (key5) by 10.23 (float number)
+                expect(
+                    await GlideJson.numincrby(client, key, "$.key5", 10.23),
+                ).toBe("[10.23]"); // 0 + 10.23 = 10.23
 
-                    await expect(
-                        GlideJson.strappend(
-                            client,
-                            key,
-                            JSON.stringify("try"),
-                            {
-                                path: ".non_existing_path",
-                            },
-                        ),
-                    ).rejects.toThrow(RequestError);
-                    await expect(
-                        GlideJson.strappend(
-                            client,
-                            "non_existing_key",
-                            JSON.stringify("try"),
-                        ),
-                    ).rejects.toThrow(RequestError);
-                },
-            );
+                // Increment a string value (key6) by a number
+                expect(
+                    await GlideJson.numincrby(client, key, "$.key6", 99),
+                ).toBe("[null]"); // null
+
+                // Increment a None value (key7) by a number
+                expect(
+                    await GlideJson.numincrby(client, key, "$.key7", 51),
+                ).toBe("[null]"); // null
+
+                // Check increment for all numbers in the document using JSON Path (First Null: key3 as an entire object. Second Null: The path checks under key3, which is an object, for numeric values).
+                expect(await GlideJson.numincrby(client, key, "$..*", 5)).toBe(
+                    "[11,11,null,null,15.23,null,null,null,1.7976931348623157e+308,null,null,9,17,6,8,8,null,74]",
+                );
+
+                // Check for multiple path match in enhanced
+                expect(
+                    await GlideJson.numincrby(client, key, "$..key1", 1),
+                ).toBe("[12,null,75]");
+
+                // Check for non existent path in JSONPath
+                expect(
+                    await GlideJson.numincrby(client, key, "$.key10", 51),
+                ).toBe("[]"); // empty array
+
+                // Check for non existent key in JSONPath
+                await expect(
+                    GlideJson.numincrby(
+                        client,
+                        "non_existing_key",
+                        "$.key10",
+                        51,
+                    ),
+                ).rejects.toThrow(RequestError);
+
+                // Check for Overflow in JSONPath
+                await expect(
+                    GlideJson.numincrby(
+                        client,
+                        key,
+                        "$.key9",
+                        1.7976931348623157e308,
+                    ),
+                ).rejects.toThrow(RequestError);
+
+                // Decrement integer value (key1) by 12
+                expect(
+                    await GlideJson.numincrby(client, key, "$.key1", -12),
+                ).toBe("[0]"); // 12 - 12 = 0
+
+                // Decrement integer value (key1) by 0.5
+                expect(
+                    await GlideJson.numincrby(client, key, "$.key1", -0.5),
+                ).toBe("[-0.5]"); // 0 - 0.5 = -0.5
+
+                // Test Legacy Path
+                // Increment float value (key1) by 5 (integer)
+                expect(await GlideJson.numincrby(client, key, "key1", 5)).toBe(
+                    "4.5",
+                ); // -0.5 + 5 = 4.5
+
+                // Decrement float value (key1) by 5.5 (integer)
+                expect(
+                    await GlideJson.numincrby(client, key, "key1", -5.5),
+                ).toBe("-1"); // 4.5 - 5.5 = -1
+
+                // Increment int value (key2) by 2.5 (a float number)
+                expect(
+                    await GlideJson.numincrby(client, key, "key2", 2.5),
+                ).toBe("13.5"); // 11 + 2.5 = 13.5
+
+                // Increment nested value (key3.nested_key.key1[0]) by 7
+                expect(
+                    await GlideJson.numincrby(
+                        client,
+                        key,
+                        "key3.nested_key.key1[0]",
+                        7,
+                    ),
+                ).toBe("16"); // 9 + 7 = 16
+
+                // Increment array element (key4[1]) by 1
+                expect(
+                    await GlideJson.numincrby(client, key, "key4[1]", 1),
+                ).toBe("9"); // 8 + 1 = 9
+
+                // Increment a float value (key5) by 10.2 (a float number)
+                expect(
+                    await GlideJson.numincrby(client, key, "key5", 10.2),
+                ).toBe("25.43"); // 15.23 + 10.2 = 25.43
+
+                // Check for multiple path match in legacy and assure that the result of the last updated value is returned
+                expect(
+                    await GlideJson.numincrby(client, key, "..key1", 1),
+                ).toBe("76");
+
+                // Check if the rest of the key1 path matches were updated and not only the last value
+                expect(
+                    await GlideJson.get(client, key, { path: "$..key1" }),
+                ).toBe("[0,[16,17],76]");
+                // First is 0 as 0 + 0 = 0, Second doesn't change as its an array type (non-numeric), third is 76 as 0 + 76 = 0
+
+                // Check for non existent path in legacy
+                await expect(
+                    GlideJson.numincrby(client, key, ".key10", 51),
+                ).rejects.toThrow(RequestError);
+
+                // Check for non existent key in legacy
+                await expect(
+                    GlideJson.numincrby(
+                        client,
+                        "non_existent_key",
+                        ".key10",
+                        51,
+                    ),
+                ).rejects.toThrow(RequestError);
+
+                // Check for Overflow in legacy
+                await expect(
+                    GlideJson.numincrby(
+                        client,
+                        key,
+                        ".key9",
+                        1.7976931348623157e308,
+                    ),
+                ).rejects.toThrow(RequestError);
+
+                // binary buffer test
+                expect(
+                    await GlideJson.numincrby(
+                        client,
+                        Buffer.from(key),
+                        Buffer.from("key5"),
+                        1,
+                    ),
+                ).toBe("26.43");
+            });
+
+            it("json.nummultiby tests", async () => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+                const key = uuidv4();
+                const jsonValue =
+                    "{" +
+                    ' "key1": 1,' +
+                    ' "key2": 3.5,' +
+                    ' "key3": {"nested_key": {"key1": [4, 5]}},' +
+                    ' "key4": [1, 2, 3],' +
+                    ' "key5": 0,' +
+                    ' "key6": "hello",' +
+                    ' "key7": null,' +
+                    ' "key8": {"nested_key": {"key1": 69}},' +
+                    ' "key9": 3.5953862697246314e307' +
+                    "}";
+                // setup
+                expect(await GlideJson.set(client, key, "$", jsonValue)).toBe(
+                    "OK",
+                );
+
+                // Test JSONPath
+                // Multiply integer value (key1) by 5
+                expect(
+                    await GlideJson.nummultby(client, key, "$.key1", 5),
+                ).toBe("[5]"); //  1 * 5 = 5
+
+                // Multiply float value (key2) by 2.5
+                expect(
+                    await GlideJson.nummultby(client, key, "$.key2", 2.5),
+                ).toBe("[8.75]"); //  3.5 * 2.5 = 8.75
+
+                // Multiply nested object (key3.nested_key.key1[1]) by 7
+                expect(
+                    await GlideJson.nummultby(
+                        client,
+                        key,
+                        "$.key3.nested_key.key1[1]",
+                        7,
+                    ),
+                ).toBe("[35]"); //  5 * 7 = 5
+
+                // Multiply array element (key4[1]) by 1
+                expect(
+                    await GlideJson.nummultby(client, key, "$.key4[1]", 1),
+                ).toBe("[2]"); //  2 * 1 = 2
+
+                // Multiply zero value (key5) by 10.23 (float number)
+                expect(
+                    await GlideJson.nummultby(client, key, "$.key5", 10.23),
+                ).toBe("[0]"); // 0 * 10.23 = 0
+
+                // Multiply a string value (key6) by a number
+                expect(
+                    await GlideJson.nummultby(client, key, "$.key6", 99),
+                ).toBe("[null]");
+
+                // Multiply a None value (key7) by a number
+                expect(
+                    await GlideJson.nummultby(client, key, "$.key7", 51),
+                ).toBe("[null]");
+
+                // Check multiplication for all numbers in the document using JSON Path
+                // key1: 5 * 5 = 25
+                // key2: 8.75 * 5 = 43.75
+                // key3.nested_key.key1[0]: 4 * 5 = 20
+                // key3.nested_key.key1[1]: 35 * 5 = 175
+                // key4[0]: 1 * 5 = 5
+                // key4[1]: 2 * 5 = 10
+                // key4[2]: 3 * 5 = 15
+                // key5: 0 * 5 = 0
+                // key8.nested_key.key1: 69 * 5 = 345
+                // key9: 3.5953862697246314e307 * 5 = 1.7976931348623157e308
+                expect(await GlideJson.nummultby(client, key, "$..*", 5)).toBe(
+                    "[25,43.75,null,null,0,null,null,null,1.7976931348623157e+308,null,null,20,175,5,10,15,null,345]",
+                );
+
+                // Check for multiple path matches in JSONPath
+                // key1: 25 * 2 = 50
+                // key8.nested_key.key1: 345 * 2 = 690
+                expect(
+                    await GlideJson.nummultby(client, key, "$..key1", 2),
+                ).toBe("[50,null,690]"); //  After previous multiplications
+
+                // Check for non-existent path in JSONPath
+                expect(
+                    await GlideJson.nummultby(client, key, "$.key10", 51),
+                ).toBe("[]"); //  Empty Array
+
+                // Check for non-existent key in JSONPath
+                await expect(
+                    GlideJson.numincrby(
+                        client,
+                        "non_existent_key",
+                        "$.key10",
+                        51,
+                    ),
+                ).rejects.toThrow(RequestError);
+
+                // Check for Overflow in JSONPath
+                await expect(
+                    GlideJson.numincrby(
+                        client,
+                        key,
+                        "$.key9",
+                        1.7976931348623157e308,
+                    ),
+                ).rejects.toThrow(RequestError);
+
+                // Multiply integer value (key1) by -12
+                expect(
+                    await GlideJson.nummultby(client, key, "$.key1", -12),
+                ).toBe("[-600]"); // 50 * -12 = -600
+
+                // Multiply integer value (key1) by -0.5
+                expect(
+                    await GlideJson.nummultby(client, key, "$.key1", -0.5),
+                ).toBe("[300]"); //  -600 * -0.5 = 300
+
+                // Test Legacy Path
+                // Multiply int value (key1) by 5 (integer)
+                expect(await GlideJson.nummultby(client, key, "key1", 5)).toBe(
+                    "1500",
+                ); //  300 * 5 = -1500
+
+                // Multiply int value (key1) by -5.5 (float number)
+                expect(
+                    await GlideJson.nummultby(client, key, "key1", -5.5),
+                ).toBe("-8250"); //  -150 * -5.5 = -8250
+
+                // Multiply int float (key2) by 2.5 (a float number)
+                expect(
+                    await GlideJson.nummultby(client, key, "key2", 2.5),
+                ).toBe("109.375"); // 109.375
+
+                // Multiply nested value (key3.nested_key.key1[0]) by 7
+                expect(
+                    await GlideJson.nummultby(
+                        client,
+                        key,
+                        "key3.nested_key.key1[0]",
+                        7,
+                    ),
+                ).toBe("140"); // 20 * 7 = 140
+
+                // Multiply array element (key4[1]) by 1
+                expect(
+                    await GlideJson.nummultby(client, key, "key4[1]", 1),
+                ).toBe("10"); //  10 * 1 = 10
+
+                // Multiply a float value (key5) by 10.2 (a float number)
+                expect(
+                    await GlideJson.nummultby(client, key, "key5", 10.2),
+                ).toBe("0"); // 0 * 10.2 = 0
+
+                // Check for multiple path matches in legacy and assure that the result of the last updated value is returned
+                // last updated value is key8.nested_key.key1: 690 * 2 = 1380
+                expect(
+                    await GlideJson.nummultby(client, key, "..key1", 2),
+                ).toBe("1380"); //  the last updated key1 value multiplied by 2
+
+                // Check if the rest of the key1 path matches were updated and not only the last value
+                expect(
+                    await GlideJson.get(client, key, { path: "$..key1" }),
+                ).toBe("[-16500,[140,175],1380]");
+
+                // Check for non-existent path in legacy
+                await expect(
+                    GlideJson.numincrby(client, key, ".key10", 51),
+                ).rejects.toThrow(RequestError);
+
+                // Check for non-existent key in legacy
+                await expect(
+                    GlideJson.numincrby(
+                        client,
+                        "non_existent_key",
+                        ".key10",
+                        51,
+                    ),
+                ).rejects.toThrow(RequestError);
+
+                // Check for Overflow in legacy
+                await expect(
+                    GlideJson.numincrby(
+                        client,
+                        key,
+                        ".key9",
+                        1.7976931348623157e308,
+                    ),
+                ).rejects.toThrow(RequestError);
+
+                // binary buffer tests
+                expect(
+                    await GlideJson.nummultby(
+                        client,
+                        Buffer.from(key),
+                        Buffer.from("key5"),
+                        10.2,
+                    ),
+                ).toBe("0"); // 0 * 10.2 = 0
+            });
 
             it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
                 "json.debug tests",
