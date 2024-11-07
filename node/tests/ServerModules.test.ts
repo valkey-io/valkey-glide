@@ -2216,7 +2216,7 @@ describe("Server Module Tests", () => {
             }
         });
 
-        it("FT.DROPINDEX test", async () => {
+        it("FT.DROPINDEX FT._LIST FT.LIST", async () => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(
                     cluster.getAddresses(),
@@ -2242,13 +2242,13 @@ describe("Server Module Tests", () => {
                 ]),
             ).toEqual("OK");
 
-            const before = await client.customCommand(["FT._LIST"]);
+            const before = await GlideFt.list(client);
             expect(before).toContain(index);
 
             // DROP it
             expect(await GlideFt.dropindex(client, index)).toEqual("OK");
 
-            const after = await client.customCommand(["FT._LIST"]);
+            const after = await GlideFt.list(client);
             expect(after).not.toContain(index);
 
             // dropping the index again results in an error
