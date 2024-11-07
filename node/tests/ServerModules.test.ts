@@ -111,9 +111,9 @@ describe("Server Module Tests", () => {
                 expect(
                     await GlideJson.set(
                         client,
-                        key,
-                        "$",
-                        JSON.stringify({ a: 1.0, b: 3 }),
+                        Buffer.from(key),
+                        Buffer.from("$"),
+                        Buffer.from(JSON.stringify({ a: 1.0, b: 3 })),
                     ),
                 ).toBe("OK");
 
