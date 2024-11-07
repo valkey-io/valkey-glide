@@ -370,20 +370,6 @@ describe("GlideClusterClient", () => {
             const client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            const lmpopArr = [];
-
-            if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
-                lmpopArr.push(
-                    client.lmpop(["abc", "def"], ListDirection.LEFT, {
-                        count: 1,
-                    }),
-                );
-                lmpopArr.push(
-                    client.blmpop(["abc", "def"], ListDirection.RIGHT, 0.1, {
-                        count: 1,
-                    }),
-                );
-            }
 
             const promises: Promise<unknown>[] = [
                 client.blpop(["abc", "zxy", "lkn"], 0.1),
@@ -405,7 +391,6 @@ describe("GlideClusterClient", () => {
                 client.sdiffstore("abc", ["zxy", "lkn"]),
                 client.sortStore("abc", "zyx"),
                 client.sortStore("abc", "zyx", { isAlpha: true }),
-                ...lmpopArr,
                 client.bzpopmax(["abc", "def"], 0.5),
                 client.bzpopmin(["abc", "def"], 0.5),
                 client.xread({ abc: "0-0", zxy: "0-0", lkn: "0-0" }),
@@ -448,6 +433,12 @@ describe("GlideClusterClient", () => {
                     client.lcs("abc", "xyz"),
                     client.lcsLen("abc", "xyz"),
                     client.lcsIdx("abc", "xyz"),
+                    client.lmpop(["abc", "def"], ListDirection.LEFT, {
+                        count: 1,
+                    }),
+                    client.blmpop(["abc", "def"], ListDirection.RIGHT, 0.1, {
+                        count: 1,
+                    }),
                 );
             }
 
