@@ -1,5 +1,6 @@
 #### Changes
 * Python: Python: `FT._ALIASLIST` command added([#2638](https://github.com/valkey-io/valkey-glide/pull/2638))
+* Python code cleanup ([#2573](https://github.com/valkey-io/valkey-glide/pull/2573))
 * Python: Python: FT.PROFILE command added ([#2543](https://github.com/valkey-io/valkey-glide/pull/2543))
 * Python: Python: FT.AGGREGATE command added([#2530](https://github.com/valkey-io/valkey-glide/pull/2530))
 * Python: Add JSON.OBJLEN command ([#2495](https://github.com/valkey-io/valkey-glide/pull/2495))
@@ -62,6 +63,7 @@
 * Node: Add `FT.SEARCH` ([#2551](https://github.com/valkey-io/valkey-glide/pull/2551))
 * Python: Fix example ([#2556](https://github.com/valkey-io/valkey-glide/issues/2556))
 * Core: Add support for sending multi-slot JSON.MSET and JSON.MGET commands ([#2587]https://github.com/valkey-io/valkey-glide/pull/2587) 
+* Node: Add `JSON.DEBUG` command ([#2572](https://github.com/valkey-io/valkey-glide/pull/2572))
 
 #### Breaking Changes
 
