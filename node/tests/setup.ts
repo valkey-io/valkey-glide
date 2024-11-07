@@ -20,4 +20,4 @@ const args = minimist(process.argv.slice(2));
 global.CLI_ARGS = args;
 global.CLUSTER_ENDPOINTS = args["cluster-endpoints"] as string;
 global.STAND_ALONE_ENDPOINT = args["standalone-endpoints"] as string;
-global.TLS = args.tls;
+global.TLS = !!args.tls;
