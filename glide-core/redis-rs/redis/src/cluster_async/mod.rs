@@ -1435,10 +1435,11 @@ where
                 future::try_join_all(receivers.into_iter().map(get_receiver))
                     .await
                     .and_then(|results| match routing {
-                        MultipleNodeRoutingInfo::MultiSlot(vec) => {
+                        MultipleNodeRoutingInfo::MultiSlot((vec, args_pattern)) => {
                             crate::cluster_routing::combine_and_sort_array_results(
                                 results,
-                                vec.iter().map(|(_, indices)| indices),
+                                vec,
+                                args_pattern,
                             )
                         }
                         _ => crate::cluster_routing::combine_array_results(results),
@@ -1889,7 +1890,7 @@ where
                     .all_primary_connections()
                     .map(|tuple| Some((cmd.clone(), tuple))),
             ),
-            MultipleNodeRoutingInfo::MultiSlot(slots) => {
+            MultipleNodeRoutingInfo::MultiSlot((slots, _)) => {
                 into_channels(slots.iter().map(|(route, indices)| {
                     connections_container
                         .connection_for_route(route)
