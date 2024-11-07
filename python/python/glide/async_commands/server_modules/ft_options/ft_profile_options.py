@@ -9,7 +9,7 @@ from glide.async_commands.server_modules.ft_options.ft_constants import (
     FtProfileKeywords,
 )
 from glide.async_commands.server_modules.ft_options.ft_search_options import (
-    FtSeachOptions,
+    FtSearchOptions,
 )
 from glide.constants import TEncodable
 
@@ -37,8 +37,8 @@ class FtProfileOptions:
     def __init__(
         self,
         query: TEncodable,
-        queryType: QueryType,
-        queryOptions: Optional[Union[FtSeachOptions, FtAggregateOptions]] = None,
+        query_type: QueryType,
+        query_options: Optional[Union[FtSearchOptions, FtAggregateOptions]] = None,
         limited: Optional[bool] = False,
     ):
         """
@@ -46,20 +46,20 @@ class FtProfileOptions:
 
         Args:
             query (TEncodable): The query that is being profiled. This is the query argument from the FT.AGGREGATE/FT.SEARCH command.
-            queryType (Optional[QueryType]): The type of query to be profiled.
-            queryOptions (Optional[Union[FtSeachOptions, FtAggregateOptions]]): The arguments/options for the FT.AGGREGATE/FT.SEARCH command being profiled.
+            query_type (Optional[QueryType]): The type of query to be profiled.
+            query_options (Optional[Union[FtSearchOptions, FtAggregateOptions]]): The arguments/options for the FT.AGGREGATE/FT.SEARCH command being profiled.
             limited (Optional[bool]): To provide some brief version of the output, otherwise a full verbose output is provided.
         """
         self.query = query
-        self.queryType = queryType
-        self.queryOptions = queryOptions
+        self.query_type = query_type
+        self.query_options = query_options
         self.limited = limited
 
     @classmethod
     def from_query_options(
         cls,
         query: TEncodable,
-        queryOptions: Union[FtSeachOptions, FtAggregateOptions],
+        query_options: Union[FtSearchOptions, FtAggregateOptions],
         limited: Optional[bool] = False,
     ):
         """
@@ -67,27 +67,27 @@ class FtProfileOptions:
 
         Args:
             query (TEncodable): The query that is being profiled. This is the query argument from the FT.AGGREGATE/FT.SEARCH command.
-            queryOptions (Optional[Union[FtSeachOptions, FtAggregateOptions]]): The arguments/options for the FT.AGGREGATE/FT.SEARCH command being profiled.
+            query_options (Optional[Union[FtSearchOptions, FtAggregateOptions]]): The arguments/options for the FT.AGGREGATE/FT.SEARCH command being profiled.
             limited (Optional[bool]): To provide some brief version of the output, otherwise a full verbose output is provided.
         """
-        queryType: QueryType = QueryType.SEARCH
-        if type(queryOptions) == FtAggregateOptions:
-            queryType = QueryType.AGGREGATE
-        return cls(query, queryType, queryOptions, limited)
+        query_type: QueryType = QueryType.SEARCH
+        if type(query_options) == FtAggregateOptions:
+            query_type = QueryType.AGGREGATE
+        return cls(query, query_type, query_options, limited)
 
     @classmethod
     def from_query_type(
-        cls, query: TEncodable, queryType: QueryType, limited: Optional[bool] = False
+        cls, query: TEncodable, query_type: QueryType, limited: Optional[bool] = False
     ):
         """
         A class method to create FtProfileOptions with QueryType.
 
         Args:
             query (TEncodable): The query that is being profiled. This is the query argument from the FT.AGGREGATE/FT.SEARCH command.
-            queryType (QueryType): The type of query to be profiled.
+            query_type (QueryType): The type of query to be profiled.
             limited (Optional[bool]): To provide some brief version of the output, otherwise a full verbose output is provided.
         """
-        return cls(query, queryType, None, limited)
+        return cls(query, query_type, None, limited)
 
     def to_args(self) -> List[TEncodable]:
         """
@@ -96,13 +96,13 @@ class FtProfileOptions:
         Returns:
             List[TEncodable]: A list of remaining arguments for the FT.PROFILE command.
         """
-        args: List[TEncodable] = [self.queryType.value]
+        args: List[TEncodable] = [self.query_type.value]
         if self.limited:
             args.append(FtProfileKeywords.LIMITED)
         args.extend([FtProfileKeywords.QUERY, self.query])
-        if self.queryOptions:
-            if type(self.queryOptions) == FtAggregateOptions:
-                args.extend(cast(FtAggregateOptions, self.queryOptions).to_args())
+        if self.query_options:
+            if type(self.query_options) == FtAggregateOptions:
+                args.extend(cast(FtAggregateOptions, self.query_options).to_args())
             else:
-                args.extend(cast(FtSeachOptions, self.queryOptions).toArgs())
+                args.extend(cast(FtSearchOptions, self.query_options).to_args())
         return args
