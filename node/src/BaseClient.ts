@@ -1396,6 +1396,14 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/del/|valkey.io} for details.
      *
+     * @remarks In cluster mode, if keys in `keys` map to different hash slots,
+     * the command will be split across these slots and executed separately for each.
+     * This means the command is atomic only at the slot level. If one or more slot-specific
+     * requests fail, the entire call will return the first encountered error, even
+     * though some requests may have succeeded while others did not.
+     * If this behavior impacts your application logic, consider splitting the
+     * request into sub-requests per slot to ensure atomicity.
+     *
      * @param keys - The keys we wanted to remove.
      * @returns The number of keys that were removed.
      *
@@ -1496,7 +1504,14 @@ export class BaseClient {
     /** Retrieve the values of multiple keys.
      *
      * @see {@link https://valkey.io/commands/mget/|valkey.io} for details.
-     * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+     *
+     * @remarks In cluster mode, if keys in `keys` map to different hash slots,
+     * the command will be split across these slots and executed separately for each.
+     * This means the command is atomic only at the slot level. If one or more slot-specific
+     * requests fail, the entire call will return the first encountered error, even
+     * though some requests may have succeeded while others did not.
+     * If this behavior impacts your application logic, consider splitting the
+     * request into sub-requests per slot to ensure atomicity.
      *
      * @param keys - A list of keys to retrieve values for.
      * @param options - (Optional) See {@link DecoderOption}.
@@ -1522,10 +1537,18 @@ export class BaseClient {
     /** Set multiple keys to multiple values in a single operation.
      *
      * @see {@link https://valkey.io/commands/mset/|valkey.io} for details.
-     * @remarks When in cluster mode, the command may route to multiple nodes when keys in `keyValueMap` map to different hash slots.
+     *
+     * @remarks In cluster mode, if keys in `keyValueMap` map to different hash slots,
+     * the command will be split across these slots and executed separately for each.
+     * This means the command is atomic only at the slot level. If one or more slot-specific
+     * requests fail, the entire call will return the first encountered error, even
+     * though some requests may have succeeded while others did not.
+     * If this behavior impacts your application logic, consider splitting the
+     * request into sub-requests per slot to ensure atomicity.
      *
      * @param keysAndValues - A list of key-value pairs to set.
-     * @returns always "OK".
+     *
+     * @returns A simple "OK" response.
      *
      * @example
      * ```typescript
@@ -3434,6 +3457,14 @@ export class BaseClient {
     /**
      * Returns the number of keys in `keys` that exist in the database.
      *
+     * @remarks In cluster mode, if keys in `keys` map to different hash slots,
+     * the command will be split across these slots and executed separately for each.
+     * This means the command is atomic only at the slot level. If one or more slot-specific
+     * requests fail, the entire call will return the first encountered error, even
+     * though some requests may have succeeded while others did not.
+     * If this behavior impacts your application logic, consider splitting the
+     * request into sub-requests per slot to ensure atomicity.
+     *
      * @see {@link https://valkey.io/commands/exists/|valkey.io} for details.
      *
      * @param keys - The keys list to check.
@@ -3455,6 +3486,14 @@ export class BaseClient {
      * Removes the specified keys. A key is ignored if it does not exist.
      * This command, similar to {@link del}, removes specified keys and ignores non-existent ones.
      * However, this command does not block the server, while {@link https://valkey.io/commands/del|`DEL`} does.
+     *
+     * @remarks In cluster mode, if keys in `keys` map to different hash slots,
+     * the command will be split across these slots and executed separately for each.
+     * This means the command is atomic only at the slot level. If one or more slot-specific
+     * requests fail, the entire call will return the first encountered error, even
+     * though some requests may have succeeded while others did not.
+     * If this behavior impacts your application logic, consider splitting the
+     * request into sub-requests per slot to ensure atomicity.
      *
      * @see {@link https://valkey.io/commands/unlink/|valkey.io} for details.
      *
@@ -7081,7 +7120,14 @@ export class BaseClient {
      * Updates the last access time of the specified keys.
      *
      * @see {@link https://valkey.io/commands/touch/|valkey.io} for more details.
-     * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+     *
+     * @remarks In cluster mode, if keys in `keys` map to different hash slots,
+     * the command will be split across these slots and executed separately for each.
+     * This means the command is atomic only at the slot level. If one or more slot-specific
+     * requests fail, the entire call will return the first encountered error, even
+     * though some requests may have succeeded while others did not.
+     * If this behavior impacts your application logic, consider splitting the
+     * request into sub-requests per slot to ensure atomicity.
      *
      * @param keys - The keys to update the last access time of.
      * @returns The number of keys that were updated. A key is ignored if it doesn't exist.
@@ -7104,7 +7150,14 @@ export class BaseClient {
      * transaction. Executing a transaction will automatically flush all previously watched keys.
      *
      * @see {@link https://valkey.io/commands/watch/|valkey.io} and {@link https://valkey.io/topics/transactions/#cas|Valkey Glide Wiki} for more details.
-     * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+     *
+     * @remarks In cluster mode, if keys in `keys` map to different hash slots,
+     * the command will be split across these slots and executed separately for each.
+     * This means the command is atomic only at the slot level. If one or more slot-specific
+     * requests fail, the entire call will return the first encountered error, even
+     * though some requests may have succeeded while others did not.
+     * If this behavior impacts your application logic, consider splitting the
+     * request into sub-requests per slot to ensure atomicity.
      *
      * @param keys - The keys to watch.
      * @returns A simple `"OK"` response.

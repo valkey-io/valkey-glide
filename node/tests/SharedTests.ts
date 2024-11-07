@@ -4233,6 +4233,18 @@ export function runBaseTests(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "script kill killable test_%p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                await expect(client.scriptKill()).rejects.toThrow(
+                    "No scripts in execution right now",
+                );
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zadd and zaddIncr with NX XX test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
