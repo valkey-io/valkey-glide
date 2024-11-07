@@ -45,7 +45,6 @@ export class GlideFt {
      * @param indexName - The index name for the index to be created.
      * @param schema - The fields of the index schema, specifying the fields and their types.
      * @param options - (Optional) Options for the `FT.CREATE` command. See {@link FtCreateOptions}.
-     *
      * @returns If the index is successfully created, returns "OK".
      *
      * @example
@@ -197,7 +196,6 @@ export class GlideFt {
      *
      * @param client - The client to execute the command.
      * @param indexName - The index name.
-     *
      * @returns "OK"
      *
      * @example
@@ -377,7 +375,6 @@ export class GlideFt {
      * @param client - The client to execute the command.
      * @param indexName - The index name.
      * @param options - (Optional) See {@link DecoderOption}.
-     *
      * @returns Nested maps with info about the index. See example for more details.
      *
      * @example
@@ -501,7 +498,6 @@ export class GlideFt {
      * @param indexName - The index name to search into.
      * @param query - The text query to search.
      * @param options - (Optional) See {@link FtSearchOptions} and {@link DecoderOption}.
-     *
      * @returns A two-element array, where the first element is the number of documents in the result set, and the
      * second element has the format: `GlideRecord<GlideRecord<GlideString>>`:
      * a mapping between document names and a map of their attributes.
@@ -607,6 +603,79 @@ export class GlideFt {
         return _handleCustomCommand(client, args, options) as Promise<
             [number, GlideRecord<GlideRecord<GlideString>>]
         >;
+    }
+
+    /**
+     * Adds an alias for an index. The new alias name can be used anywhere that an index name is required.
+     *
+     * @param client - The client to execute the command.
+     * @param indexName - The alias to be added to the index.
+     * @param alias - The index name for which the alias has to be added.
+     * @returns `"OK"`
+     *
+     * @example
+     * ```typescript
+     * // Example usage of FT.ALIASADD to add an alias for an index.
+     * await GlideFt.aliasadd(client, "index", "alias"); // "OK"
+     * ```
+     */
+    static async aliasadd(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        alias: GlideString,
+    ): Promise<"OK"> {
+        const args: GlideString[] = ["FT.ALIASADD", alias, indexName];
+        return _handleCustomCommand(client, args, {
+            decoder: Decoder.String,
+        }) as Promise<"OK">;
+    }
+
+    /**
+     * Deletes an existing alias for an index.
+     *
+     * @param client - The client to execute the command.
+     * @param alias -  The existing alias to be deleted for an index.
+     * @returns `"OK"`
+     *
+     * @example
+     * ```typescript
+     * // Example usage of FT.ALIASDEL to delete an existing alias.
+     * await GlideFt.aliasdel(client, "alias"); // "OK"
+     * ```
+     */
+    static async aliasdel(
+        client: GlideClient | GlideClusterClient,
+        alias: GlideString,
+    ): Promise<"OK"> {
+        const args: GlideString[] = ["FT.ALIASDEL", alias];
+        return _handleCustomCommand(client, args, {
+            decoder: Decoder.String,
+        }) as Promise<"OK">;
+    }
+
+    /**
+     * Updates an existing alias to point to a different physical index. This command only affects future references to the alias.
+     *
+     * @param client - The client to execute the command.
+     * @param alias - The alias name. This alias will now be pointed to a different index.
+     * @param indexName - The index name for which an existing alias has to updated.
+     * @returns `"OK"`
+     *
+     * @example
+     * ```typescript
+     * // Example usage of FT.ALIASUPDATE to update an alias to point to a different index.
+     * await GlideFt.aliasupdate(client, "newAlias", "index"); // "OK"
+     * ```
+     */
+    static async aliasupdate(
+        client: GlideClient | GlideClusterClient,
+        alias: GlideString,
+        indexName: GlideString,
+    ): Promise<"OK"> {
+        const args: GlideString[] = ["FT.ALIASUPDATE", alias, indexName];
+        return _handleCustomCommand(client, args, {
+            decoder: Decoder.String,
+        }) as Promise<"OK">;
     }
 }
 
