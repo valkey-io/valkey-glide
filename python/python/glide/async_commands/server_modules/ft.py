@@ -3,7 +3,7 @@
 module for `vector search` commands.
 """
 
-from typing import Any, List, Mapping, Optional, Union, cast
+from typing import List, Mapping, Optional, cast
 
 from glide.async_commands.server_modules.ft_options.ft_aggregate_options import (
     FtAggregateOptions,
@@ -377,3 +377,19 @@ async def profile(
     """
     args: List[TEncodable] = [CommandNames.FT_PROFILE, index_name] + options.to_args()
     return cast(FtProfileResponse, await client.custom_command(args))
+
+
+async def aliaslist(client: TGlideClient) -> Mapping[TEncodable, TEncodable]:
+    """
+    List the index aliases.
+    Args:
+        client (TGlideClient): The client to execute the command.
+    Returns:
+        Mapping[TEncodable, TEncodable]: A map of index aliases for indices being aliased.
+    Examples:
+        >>> from glide import ft
+        >>> await ft._aliaslist(glide_client)
+            {b'alias': b'index1', b'alias-bytes': b'index2'}
+    """
+    args: List[TEncodable] = [CommandNames.FT_ALIASLIST]
+    return cast(Mapping, await client.custom_command(args))
