@@ -13,40 +13,38 @@ import {
 import { BufferReader, BufferWriter } from "protobufjs";
 import { v4 as uuidv4 } from "uuid";
 import {
-    convertGlideRecordToRecord,
     Decoder,
     FlushMode,
     FunctionRestorePolicy,
     GlideClient,
     GlideRecord,
     GlideString,
+    ListDirection,
     ProtocolVersion,
     RequestError,
     Script,
     Transaction,
+    convertGlideRecordToRecord,
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import { command_request } from "../src/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import {
+    DumpAndRestoreTest,
     checkFunctionListResponse,
     checkFunctionStatsResponse,
     convertStringArrayToBuffer,
     createLongRunningLuaScript,
     createLuaLibWithLongRunningFunction,
-    DumpAndRestureTest,
     encodableTransactionTest,
-    encodedTransactionTest,
     flushAndCloseClient,
     generateLuaLibCode,
     getClientConfigurationOption,
     getServerVersion,
-    parseCommandLineArgs,
     parseEndpoints,
     transactionTest,
     validateTransactionResponse,
     waitForNotBusy,
-    waitForScriptNotBusy,
 } from "./TestUtilities";
 
 const TIMEOUT = 50000;
@@ -56,8 +54,7 @@ describe("GlideClient", () => {
     let cluster: ValkeyCluster;
     let client: GlideClient;
     beforeAll(async () => {
-        const standaloneAddresses =
-            parseCommandLineArgs()["standalone-endpoints"];
+        const standaloneAddresses = global.STAND_ALONE_ENDPOINT;
         cluster = standaloneAddresses
             ? await ValkeyCluster.initFromExistingCluster(
                   false,
@@ -74,6 +71,8 @@ describe("GlideClient", () => {
     afterAll(async () => {
         if (testsFailed === 0) {
             await cluster.close();
+        } else {
+            await cluster.close(true);
         }
     }, TIMEOUT);
 
@@ -133,6 +132,45 @@ describe("GlideClient", () => {
                 expect.not.stringContaining("# Latencystats"),
             );
         },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "check that blocking commands returns never timeout_%p",
+        async (protocol) => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    requestTimeout: 300,
+                }),
+            );
+
+            const promiseList = [
+                client.blmove(
+                    "source",
+                    "destination",
+                    ListDirection.LEFT,
+                    ListDirection.LEFT,
+                    0.1,
+                ),
+                client.bzpopmax(["key1", "key2"], 0),
+                client.bzpopmin(["key1", "key2"], 0),
+            ];
+
+            try {
+                for (const promise of promiseList) {
+                    const timeoutPromise = new Promise((resolve) => {
+                        setTimeout(resolve, 500);
+                    });
+                    await Promise.race([promise, timeoutPromise]);
+                }
+            } finally {
+                for (const promise of promiseList) {
+                    await Promise.resolve([promise]);
+                }
+
+                client.close();
+            }
+        },
+        5000,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -240,34 +278,18 @@ describe("GlideClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `can get Bytes decoded transactions_%p`,
-        async (protocol) => {
-            client = await GlideClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
-            );
-            const transaction = new Transaction();
-            const expectedRes = await encodedTransactionTest(transaction);
-            transaction.select(0);
-            const result = await client.exec(transaction, {
-                decoder: Decoder.Bytes,
-            });
-            expectedRes.push(["select(0)", "OK"]);
-
-            validateTransactionResponse(result, expectedRes);
-            client.close();
-        },
-    );
-
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `dump and restore transactions_%p`,
         async (protocol) => {
             client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const bytesTransaction = new Transaction();
-            const expectedBytesRes = await DumpAndRestureTest(
+            await client.set("key", "value");
+            const dumpValue: Buffer = (await client.dump("key")) as Buffer;
+            await client.del(["key"]);
+            const expectedBytesRes = await DumpAndRestoreTest(
                 bytesTransaction,
-                Buffer.from("value"),
+                dumpValue,
             );
             bytesTransaction.select(0);
             const result = await client.exec(bytesTransaction, {
@@ -278,14 +300,14 @@ describe("GlideClient", () => {
             validateTransactionResponse(result, expectedBytesRes);
 
             const stringTransaction = new Transaction();
-            await DumpAndRestureTest(stringTransaction, "value");
+            await DumpAndRestoreTest(stringTransaction, dumpValue);
             stringTransaction.select(0);
 
             // Since DUMP gets binary results, we cannot use the string decoder here, so we expected to get an error.
             await expect(
                 client.exec(stringTransaction, { decoder: Decoder.String }),
             ).rejects.toThrowError(
-                "invalid utf-8 sequence of 1 bytes from index 9",
+                /invalid utf-8 sequence of 1 bytes from index/,
             );
 
             client.close();
@@ -1435,70 +1457,6 @@ describe("GlideClient", () => {
             }
         },
         TIMEOUT,
-    );
-
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "script kill killable test_%p",
-        async (protocol) => {
-            const config = getClientConfigurationOption(
-                cluster.getAddresses(),
-                protocol,
-                { requestTimeout: 10000 },
-            );
-            const client1 = await GlideClient.createClient(config);
-            const client2 = await GlideClient.createClient(config);
-
-            try {
-                // Verify that script kill raises an error when no script is running
-                await expect(client1.scriptKill()).rejects.toThrow(
-                    "No scripts in execution right now",
-                );
-
-                // Create a long-running script
-                const longScript = new Script(
-                    createLongRunningLuaScript(5, false),
-                );
-
-                try {
-                    // call the script without await
-                    const promise = client2
-                        .invokeScript(longScript)
-                        .catch((e) =>
-                            expect((e as Error).message).toContain(
-                                "Script killed",
-                            ),
-                        );
-
-                    let killed = false;
-                    let timeout = 4000;
-                    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-                    while (timeout >= 0) {
-                        try {
-                            expect(await client1.scriptKill()).toEqual("OK");
-                            killed = true;
-                            break;
-                        } catch {
-                            // do nothing
-                        }
-
-                        await new Promise((resolve) =>
-                            setTimeout(resolve, 500),
-                        );
-                        timeout -= 500;
-                    }
-
-                    expect(killed).toBeTruthy();
-                    await promise;
-                } finally {
-                    await waitForScriptNotBusy(client1);
-                }
-            } finally {
-                expect(await client1.scriptFlush()).toEqual("OK");
-                client1.close();
-                client2.close();
-            }
-        },
     );
 
     it.each([

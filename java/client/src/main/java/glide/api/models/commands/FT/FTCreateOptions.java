@@ -24,14 +24,14 @@ import lombok.NonNull;
  */
 @Builder
 public class FTCreateOptions {
-    /** The index type. If not given a {@link IndexType#HASH} index is created. */
-    private final IndexType indexType;
+    /** The index data type. If not defined a {@link DataType#HASH} index is created. */
+    private final DataType dataType;
 
     /** A list of prefixes of index definitions. */
     private final GlideString[] prefixes;
 
-    FTCreateOptions(IndexType indexType, GlideString[] prefixes) {
-        this.indexType = indexType;
+    FTCreateOptions(DataType dataType, GlideString[] prefixes) {
+        this.dataType = dataType;
         this.prefixes = prefixes;
     }
 
@@ -41,9 +41,9 @@ public class FTCreateOptions {
 
     public GlideString[] toArgs() {
         var args = new ArrayList<GlideString>();
-        if (indexType != null) {
+        if (dataType != null) {
             args.add(gs("ON"));
-            args.add(gs(indexType.toString()));
+            args.add(gs(dataType.toString()));
         }
         if (prefixes != null && prefixes.length > 0) {
             args.add(gs("PREFIX"));
@@ -54,17 +54,17 @@ public class FTCreateOptions {
     }
 
     public static class FTCreateOptionsBuilder {
-        public FTCreateOptionsBuilder prefixes(String[] prefixes) {
+        public FTCreateOptionsBuilder prefixes(@NonNull String[] prefixes) {
             this.prefixes = Stream.of(prefixes).map(GlideString::gs).toArray(GlideString[]::new);
             return this;
         }
     }
 
     /** Type of the index dataset. */
-    public enum IndexType {
-        /** Data stored in hashes, so field identifiers are field names within the hashes. */
+    public enum DataType {
+        /** Data stored in hashes. Field identifiers are field names within the hashes. */
         HASH,
-        /** Data stored in JSONs, so field identifiers are JSON Path expressions. */
+        /** Data stored as a JSON document. Field identifiers are JSON Path expressions. */
         JSON
     }
 
@@ -110,8 +110,8 @@ public class FTCreateOptions {
     /**
      * Tag fields are similar to full-text fields, but they interpret the text as a simple list of
      * tags delimited by a separator character.<br>
-     * For {@link IndexType#HASH} fields, separator default is a comma (<code>,</code>). For {@link
-     * IndexType#JSON} fields, there is no default separator; you must declare one explicitly if
+     * For {@link DataType#HASH} fields, separator default is a comma (<code>,</code>). For {@link
+     * DataType#JSON} fields, there is no default separator; you must declare one explicitly if
      * needed.
      */
     public static class TagField implements Field {
@@ -127,7 +127,8 @@ public class FTCreateOptions {
         /**
          * Create a <code>TAG</code> field.
          *
-         * @param separator The tag separator.
+         * @param separator Specify how text in the attribute is split into individual tags. Must be a
+         *     single character.
          */
         public TagField(char separator) {
             this.separator = Optional.of(separator);
@@ -137,8 +138,10 @@ public class FTCreateOptions {
         /**
          * Create a <code>TAG</code> field.
          *
-         * @param separator The tag separator.
-         * @param caseSensitive Whether to keep the original case.
+         * @param separator Specify how text in the attribute is split into individual tags. Must be a
+         *     single character.
+         * @param caseSensitive Preserve the original letter cases of tags. If set to False, characters
+         *     are converted to lowercase by default.
          */
         public TagField(char separator, boolean caseSensitive) {
             this.separator = Optional.of(separator);
@@ -148,7 +151,8 @@ public class FTCreateOptions {
         /**
          * Create a <code>TAG</code> field.
          *
-         * @param caseSensitive Whether to keep the original case.
+         * @param caseSensitive Preserve the original letter cases of tags. If set to False, characters
+         *     are converted to lowercase by default.
          */
         public TagField(boolean caseSensitive) {
             this.caseSensitive = caseSensitive;
@@ -204,6 +208,7 @@ public class FTCreateOptions {
         }
     }
 
+    /** Algorithm for vector type fields used for vector similarity search. */
     private enum VectorAlgorithm {
         HNSW,
         FLAT
@@ -234,8 +239,9 @@ public class FTCreateOptions {
          * Init a builder.
          *
          * @param distanceMetric {@link DistanceMetric} to measure the degree of similarity between two
-         *     vectors.
-         * @param dimensions Vector dimension, specified as a positive integer. Maximum: 32768
+         *     vectors. Equivalent to <code>DISTANCE_METRIC</code> on the module API.
+         * @param dimensions Vector dimension, specified as a positive integer. Maximum: 32768.
+         *     Equivalent to <code>DIM</code> on the module API.
          */
         public static VectorFieldHnswBuilder builder(
                 @NonNull DistanceMetric distanceMetric, int dimensions) {
@@ -256,6 +262,7 @@ public class FTCreateOptions {
         /**
          * Number of maximum allowed outgoing edges for each node in the graph in each layer. On layer
          * zero the maximal number of outgoing edges is doubled. Default is 16 Maximum is 512.
+         * Equivalent to <code>M</code> on the module API.
          */
         public VectorFieldHnswBuilder numberOfEdges(int numberOfEdges) {
             params.put(VectorAlgorithmParam.M, Integer.toString(numberOfEdges));
@@ -265,7 +272,8 @@ public class FTCreateOptions {
         /**
          * (Optional) The number of vectors examined during index construction. Higher values for this
          * parameter will improve recall ratio at the expense of longer index creation times. Default
-         * value is 200. Maximum value is 4096.
+         * value is 200. Maximum value is 4096. Equivalent to <code>EF_CONSTRUCTION</code> on the module
+         * API.
          */
         public VectorFieldHnswBuilder vectorsExaminedOnConstruction(int vectorsExaminedOnConstruction) {
             params.put(
@@ -277,6 +285,7 @@ public class FTCreateOptions {
          * (Optional) The number of vectors examined during query operations. Higher values for this
          * parameter can yield improved recall at the expense of longer query times. The value of this
          * parameter can be overriden on a per-query basis. Default value is 10. Maximum value is 4096.
+         * Equivalent to <code>EF_RUNTIME</code> on the module API.
          */
         public VectorFieldHnswBuilder vectorsExaminedOnRuntime(int vectorsExaminedOnRuntime) {
             params.put(VectorAlgorithmParam.EF_RUNTIME, Integer.toString(vectorsExaminedOnRuntime));
@@ -299,8 +308,9 @@ public class FTCreateOptions {
          * Init a builder.
          *
          * @param distanceMetric {@link DistanceMetric} to measure the degree of similarity between two
-         *     vectors.
-         * @param dimensions Vector dimension, specified as a positive integer. Maximum: 32768
+         *     vectors. Equivalent to <code>DISTANCE_METRIC</code> on the module API.
+         * @param dimensions Vector dimension, specified as a positive integer. Maximum: 32768.
+         *     Equivalent to <code>DIM</code> on the module API.
          */
         public static VectorFieldFlatBuilder builder(
                 @NonNull DistanceMetric distanceMetric, int dimensions) {
@@ -330,7 +340,7 @@ public class FTCreateOptions {
 
         /**
          * Initial vector capacity in the index affecting memory allocation size of the index. Defaults
-         * to 1024.
+         * to 1024. Equivalent to <code>INITIAL_CAP</code> on the module API.
          */
         @SuppressWarnings("unchecked")
         public T initialCapacity(int initialCapacity) {
@@ -343,18 +353,18 @@ public class FTCreateOptions {
 
     /** Field definition to be added into index schema. */
     public static class FieldInfo {
-        private final GlideString identifier;
+        private final GlideString name;
         private final GlideString alias;
         private final Field field;
 
         /**
          * Field definition to be added into index schema.
          *
-         * @param identifier Field identifier (name).
+         * @param name Field name.
          * @param field The {@link Field} itself.
          */
-        public FieldInfo(@NonNull String identifier, @NonNull Field field) {
-            this.identifier = gs(identifier);
+        public FieldInfo(@NonNull String name, @NonNull Field field) {
+            this.name = gs(name);
             this.field = field;
             this.alias = null;
         }
@@ -362,12 +372,12 @@ public class FTCreateOptions {
         /**
          * Field definition to be added into index schema.
          *
-         * @param identifier Field identifier (name).
+         * @param name Field name.
          * @param alias Field alias.
          * @param field The {@link Field} itself.
          */
-        public FieldInfo(@NonNull String identifier, @NonNull String alias, @NonNull Field field) {
-            this.identifier = gs(identifier);
+        public FieldInfo(@NonNull String name, @NonNull String alias, @NonNull Field field) {
+            this.name = gs(name);
             this.alias = gs(alias);
             this.field = field;
         }
@@ -375,11 +385,11 @@ public class FTCreateOptions {
         /**
          * Field definition to be added into index schema.
          *
-         * @param identifier Field identifier (name).
+         * @param name Field name.
          * @param field The {@link Field} itself.
          */
-        public FieldInfo(@NonNull GlideString identifier, @NonNull Field field) {
-            this.identifier = identifier;
+        public FieldInfo(@NonNull GlideString name, @NonNull Field field) {
+            this.name = name;
             this.field = field;
             this.alias = null;
         }
@@ -387,13 +397,12 @@ public class FTCreateOptions {
         /**
          * Field definition to be added into index schema.
          *
-         * @param identifier Field identifier (name).
+         * @param name Field name.
          * @param alias Field alias.
          * @param field The {@link Field} itself.
          */
-        public FieldInfo(
-                @NonNull GlideString identifier, @NonNull GlideString alias, @NonNull Field field) {
-            this.identifier = identifier;
+        public FieldInfo(@NonNull GlideString name, @NonNull GlideString alias, @NonNull Field field) {
+            this.name = name;
             this.alias = alias;
             this.field = field;
         }
@@ -401,7 +410,7 @@ public class FTCreateOptions {
         /** Convert to module API. */
         public GlideString[] toArgs() {
             var args = new ArrayList<GlideString>();
-            args.add(identifier);
+            args.add(name);
             if (alias != null) {
                 args.add(gs("AS"));
                 args.add(alias);

@@ -13,10 +13,12 @@ import glide.api.models.GlideString;
 import glide.api.models.commands.FT.FTAggregateOptions;
 import glide.api.models.commands.FT.FTCreateOptions;
 import glide.api.models.commands.FT.FTCreateOptions.FieldInfo;
+import glide.api.models.commands.FT.FTProfileOptions;
 import glide.api.models.commands.FT.FTSearchOptions;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.NonNull;
 
@@ -27,8 +29,9 @@ public class FT {
      *
      * @param client The client to execute the command.
      * @param indexName The index name.
-     * @param fields Fields to populate into the index.
-     * @return <code>OK</code>.
+     * @param schema Fields to populate into the index. Equivalent to `SCHEMA` block in the module
+     *     API.
+     * @return <code>"OK"</code>.
      * @example
      *     <pre>{@code
      * // Create an index for vectors of size 2:
@@ -44,11 +47,11 @@ public class FT {
      * }</pre>
      */
     public static CompletableFuture<String> create(
-            @NonNull BaseClient client, @NonNull String indexName, @NonNull FieldInfo[] fields) {
+            @NonNull BaseClient client, @NonNull String indexName, @NonNull FieldInfo[] schema) {
         // Node: bug in meme DB - command fails if cmd is too short even though all mandatory args are
         // present
         // TODO confirm is it fixed or not and update docs if needed
-        return create(client, indexName, fields, FTCreateOptions.builder().build());
+        return create(client, indexName, schema, FTCreateOptions.builder().build());
     }
 
     /**
@@ -56,9 +59,10 @@ public class FT {
      *
      * @param client The client to execute the command.
      * @param indexName The index name.
-     * @param fields Fields to populate into the index.
+     * @param schema Fields to populate into the index. Equivalent to `SCHEMA` block in the module
+     *     API.
      * @param options Additional parameters for the command - see {@link FTCreateOptions}.
-     * @return <code>OK</code>.
+     * @return <code>"OK"</code>.
      * @example
      *     <pre>{@code
      * // Create a 6-dimensional JSON index using the HNSW algorithm:
@@ -66,16 +70,16 @@ public class FT {
      *     new FieldInfo[] { new FieldInfo("$.vec", "VEC",
      *         VectorFieldHnsw.builder(DistanceMetric.L2, 6).numberOfEdges(32).build())
      *     },
-     *     FTCreateOptions.builder().indexType(JSON).prefixes(new String[] {"json:"}).build(),
+     *     FTCreateOptions.builder().dataType(JSON).prefixes(new String[] {"json:"}).build(),
      * ).get();
      * }</pre>
      */
     public static CompletableFuture<String> create(
             @NonNull BaseClient client,
             @NonNull String indexName,
-            @NonNull FieldInfo[] fields,
+            @NonNull FieldInfo[] schema,
             @NonNull FTCreateOptions options) {
-        return create(client, gs(indexName), fields, options);
+        return create(client, gs(indexName), schema, options);
     }
 
     /**
@@ -83,8 +87,9 @@ public class FT {
      *
      * @param client The client to execute the command.
      * @param indexName The index name.
-     * @param fields Fields to populate into the index.
-     * @return <code>OK</code>.
+     * @param schema Fields to populate into the index. Equivalent to `SCHEMA` block in the module
+     *     API.
+     * @return <code>"OK"</code>.
      * @example
      *     <pre>{@code
      * // Create an index for vectors of size 2:
@@ -100,11 +105,11 @@ public class FT {
      * }</pre>
      */
     public static CompletableFuture<String> create(
-            @NonNull BaseClient client, @NonNull GlideString indexName, @NonNull FieldInfo[] fields) {
+            @NonNull BaseClient client, @NonNull GlideString indexName, @NonNull FieldInfo[] schema) {
         // Node: bug in meme DB - command fails if cmd is too short even though all mandatory args are
         // present
         // TODO confirm is it fixed or not and update docs if needed
-        return create(client, indexName, fields, FTCreateOptions.builder().build());
+        return create(client, indexName, schema, FTCreateOptions.builder().build());
     }
 
     /**
@@ -112,7 +117,8 @@ public class FT {
      *
      * @param client The client to execute the command.
      * @param indexName The index name.
-     * @param fields Fields to populate into the index.
+     * @param schema Fields to populate into the index. Equivalent to `SCHEMA` block in the module
+     *     API.
      * @param options Additional parameters for the command - see {@link FTCreateOptions}.
      * @return <code>OK</code>.
      * @example
@@ -122,21 +128,21 @@ public class FT {
      *     new FieldInfo[] { new FieldInfo(gs("$.vec"), gs("VEC"),
      *         VectorFieldHnsw.builder(DistanceMetric.L2, 6).numberOfEdges(32).build())
      *     },
-     *     FTCreateOptions.builder().indexType(JSON).prefixes(new String[] {"json:"}).build(),
+     *     FTCreateOptions.builder().dataType(JSON).prefixes(new String[] {"json:"}).build(),
      * ).get();
      * }</pre>
      */
     public static CompletableFuture<String> create(
             @NonNull BaseClient client,
             @NonNull GlideString indexName,
-            @NonNull FieldInfo[] fields,
+            @NonNull FieldInfo[] schema,
             @NonNull FTCreateOptions options) {
         var args =
                 Stream.of(
                                 new GlideString[] {gs("FT.CREATE"), indexName},
                                 options.toArgs(),
                                 new GlideString[] {gs("SCHEMA")},
-                                Arrays.stream(fields)
+                                Arrays.stream(schema)
                                         .map(FieldInfo::toArgs)
                                         .flatMap(Arrays::stream)
                                         .toArray(GlideString[]::new))
@@ -281,6 +287,7 @@ public class FT {
     /**
      * Deletes an index and associated content. Indexed document keys are unaffected.
      *
+     * @param client The client to execute the command.
      * @param indexName The index name.
      * @return <code>"OK"</code>.
      * @example
@@ -296,6 +303,7 @@ public class FT {
     /**
      * Deletes an index and associated content. Indexed document keys are unaffected.
      *
+     * @param client The client to execute the command.
      * @param indexName The index name.
      * @return <code>"OK"</code>.
      * @example
@@ -354,7 +362,7 @@ public class FT {
      * // example of using the API:
      * FTAggregateOptions options = FTAggregateOptions.builder()
      *     .loadFields(new String[] {"__key"})
-     *     .addExpression(
+     *     .addClause(
      *             new FTAggregateOptions.GroupBy(
      *                     new String[] {"@condition"},
      *                     new Reducer[] {
@@ -436,7 +444,7 @@ public class FT {
      * // example of using the API:
      * FTAggregateOptions options = FTAggregateOptions.builder()
      *     .loadFields(new String[] {"__key"})
-     *     .addExpression(
+     *     .addClause(
      *             new FTAggregateOptions.GroupBy(
      *                     new String[] {"@condition"},
      *                     new Reducer[] {
@@ -475,21 +483,70 @@ public class FT {
     }
 
     /**
+     * Runs a search or aggregation query and collects performance profiling information.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name.
+     * @param options Querying and profiling parameters - see {@link FTProfileOptions}.
+     * @return A two-element array. The first element contains results of query being profiled, the
+     *     second element stores profiling information.
+     * @example
+     *     <pre>{@code
+     * var options = FTSearchOptions.builder().params(Map.of(
+     *         gs("query_vec"),
+     *         gs(new byte[] { (byte) 0, (byte) 0, (byte) 0, (byte) 0 })))
+     *     .build();
+     * var result = FT.profile(client, "myIndex", new FTProfileOptions("*=>[KNN 2 @VEC $query_vec]", options)).get();
+     * // result[0] contains `FT.SEARCH` response with the given options and query
+     * // result[1] contains profiling data as a `Map<GlideString, Long>`
+     * }</pre>
+     */
+    public static CompletableFuture<Object[]> profile(
+            @NonNull BaseClient client, @NonNull String indexName, @NonNull FTProfileOptions options) {
+        return profile(client, gs(indexName), options);
+    }
+
+    /**
+     * Runs a search or aggregation query and collects performance profiling information.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name.
+     * @param options Querying and profiling parameters - see {@link FTProfileOptions}.
+     * @return A two-element array. The first element contains results of query being profiled, the
+     *     second element stores profiling information.
+     * @example
+     *     <pre>{@code
+     * var commandLine = new String[] { "*", "LOAD", "1", "__key", "GROUPBY", "1", "@condition", "REDUCE", "COUNT", "0", "AS", "bicylces" };
+     * var result = FT.profile(client, gs("myIndex"), new FTProfileOptions(QueryType.AGGREGATE, commandLine)).get();
+     * // result[0] contains `FT.AGGREGATE` response with the given command line
+     * // result[1] contains profiling data as a `Map<GlideString, Long>`
+     * }</pre>
+     */
+    public static CompletableFuture<Object[]> profile(
+            @NonNull BaseClient client,
+            @NonNull GlideString indexName,
+            @NonNull FTProfileOptions options) {
+        var args = concatenateArrays(new GlideString[] {gs("FT.PROFILE"), indexName}, options.toArgs());
+        return executeCommand(client, args, false);
+    }
+
+    /**
      * Returns information about a given index.
      *
+     * @param client The client to execute the command.
      * @param indexName The index name.
      * @return Nested maps with info about the index. See example for more details.
      * @example
      *     <pre>{@code
      * // example of using the API:
-     * Map<String, Object> response = client.ftinfo("myIndex").get();
+     * Map<String, Object> response = FT.info(client, "myIndex").get();
      * // the response contains data in the following format:
      * Map<String, Object> data = Map.of(
-     *     "index_name", gs("bcd97d68-4180-4bc5-98fe-5125d0abbcb8"),
+     *     "index_name", gs("myIndex"),
      *     "index_status", gs("AVAILABLE"),
      *     "key_type", gs("JSON"),
      *     "creation_timestamp", 1728348101728771L,
-     *     "key_prefixes", new String[] { gs("json:") },
+     *     "key_prefixes", new Object[] { gs("json:") },
      *     "num_indexed_vectors", 0L,
      *     "space_usage", 653471L,
      *     "num_docs", 0L,
@@ -511,7 +568,7 @@ public class FT {
      *                 gs("dimension", 6L,
      *                 gs("block_size", 1024L,
      *                 gs("algorithm", gs("FLAT")
-     *           )
+     *             )
      *         ),
      *         Map.of(
      *             gs("identifier"), gs("name"),
@@ -525,30 +582,26 @@ public class FT {
      */
     public static CompletableFuture<Map<String, Object>> info(
             @NonNull BaseClient client, @NonNull String indexName) {
-        // TODO inconsistency: the outer map is `Map<String, T>`,
-        //   while inner maps are `Map<GlideString, T>`
-        //   The outer map converted from `Map<GlideString, T>` in ClusterValue::ofMultiValueBinary
-        // TODO server returns all strings as `SimpleString`, we're safe to convert all to
-        //   `GlideString`s to `String`
-        return executeCommand(client, new GlideString[] {gs("FT.INFO"), gs(indexName)}, true);
+        return info(client, gs(indexName));
     }
 
     /**
      * Returns information about a given index.
      *
+     * @param client The client to execute the command.
      * @param indexName The index name.
      * @return Nested maps with info about the index. See example for more details.
      * @example
      *     <pre>{@code
      * // example of using the API:
-     * Map<String, Object> response = client.ftinfo(gs("myIndex")).get();
+     * Map<String, Object> response = FT.info(client, gs("myIndex")).get();
      * // the response contains data in the following format:
      * Map<String, Object> data = Map.of(
-     *     "index_name", gs("bcd97d68-4180-4bc5-98fe-5125d0abbcb8"),
+     *     "index_name", gs("myIndex"),
      *     "index_status", gs("AVAILABLE"),
      *     "key_type", gs("JSON"),
      *     "creation_timestamp", 1728348101728771L,
-     *     "key_prefixes", new String[] { gs("json:") },
+     *     "key_prefixes", new Object[] { gs("json:") },
      *     "num_indexed_vectors", 0L,
      *     "space_usage", 653471L,
      *     "num_docs", 0L,
@@ -570,7 +623,7 @@ public class FT {
      *                 gs("dimension", 6L,
      *                 gs("block_size", 1024L,
      *                 gs("algorithm", gs("FLAT")
-     *           )
+     *             )
      *         ),
      *         Map.of(
      *             gs("identifier"), gs("name"),
@@ -584,7 +637,36 @@ public class FT {
      */
     public static CompletableFuture<Map<String, Object>> info(
             @NonNull BaseClient client, @NonNull GlideString indexName) {
-        return executeCommand(client, new GlideString[] {gs("FT.INFO"), indexName}, true);
+        // TODO inconsistency on cluster client: the outer map is `Map<String, T>`,
+        //   while inner maps are `Map<GlideString, T>`
+        //   The outer map converted from `Map<GlideString, T>` in ClusterValue::ofMultiValueBinary
+        // TODO server returns all map keys as `SimpleString`, we're safe to convert all to
+        //   `GlideString`s to `String`
+
+        // standalone client returns `Map<GlideString, Object>`, but cluster `Map<String, Object>`
+        if (client instanceof GlideClusterClient)
+            return executeCommand(client, new GlideString[] {gs("FT.INFO"), indexName}, true);
+        return FT.<Map<GlideString, Object>>executeCommand(
+                        client, new GlideString[] {gs("FT.INFO"), indexName}, true)
+                .thenApply(
+                        map ->
+                                map.entrySet().stream()
+                                        .collect(Collectors.toMap(e -> e.getKey().toString(), Map.Entry::getValue)));
+    }
+
+    /**
+     * Lists all indexes.
+     *
+     * @param client The client to execute the command.
+     * @return An array of index names.
+     * @example
+     *     <pre>{@code
+     * GlideString[] indices = FT.list(client).get();
+     * }</pre>
+     */
+    public static CompletableFuture<GlideString[]> list(@NonNull BaseClient client) {
+        return FT.<Object[]>executeCommand(client, new GlideString[] {gs("FT._LIST")}, false)
+                .thenApply(arr -> castArray(arr, GlideString.class));
     }
 
     /**
@@ -665,7 +747,7 @@ public class FT {
      *
      * @param client The client to execute the command.
      * @param aliasName The alias name. This alias will now be pointed to a different index.
-     * @param indexName The index name for which an existing alias has to updated.
+     * @param indexName The index name for which an existing alias has to be updated.
      * @return <code>"OK"</code>.
      * @example
      *     <pre>{@code
@@ -683,18 +765,146 @@ public class FT {
      *
      * @param client The client to execute the command.
      * @param aliasName The alias name. This alias will now be pointed to a different index.
-     * @param indexName The index name for which an existing alias has to updated.
+     * @param indexName The index name for which an existing alias has to be updated.
      * @return <code>"OK"</code>.
      * @example
      *     <pre>{@code
-     * FT.aliasupdate(client,gs("myalias"), gs("myindex")).get(); // "OK"
+     * FT.aliasupdate(client, gs("myalias"), gs("myindex")).get(); // "OK"
      * }</pre>
      */
     public static CompletableFuture<String> aliasupdate(
             @NonNull BaseClient client, @NonNull GlideString aliasName, @NonNull GlideString indexName) {
         var args = new GlideString[] {gs("FT.ALIASUPDATE"), aliasName, indexName};
-
         return executeCommand(client, args, false);
+    }
+
+    /**
+     * Lists all index aliases.
+     *
+     * @param client The client to execute the command.
+     * @return A map of index aliases to indices being aliased.
+     * @example
+     *     <pre>{@code
+     * var aliases = FT.aliaslist(client).get();
+     * // the response contains data in the following format:
+     * Map<GlideString, GlideString> aliases = Map.of(
+     *     gs("alias"), gs("myIndex"),
+     * );
+     * }</pre>
+     */
+    public static CompletableFuture<Map<GlideString, GlideString>> aliaslist(
+            @NonNull BaseClient client) {
+        // standalone client returns `Map<GlideString, Object>`, but cluster `Map<String, Object>`
+        //   The map converted from `Map<GlideString, T>` in ClusterValue::ofMultiValueBinary
+        // TODO this will fail once an alias name will be non-utf8-compatible
+        if (client instanceof GlideClient)
+            return executeCommand(client, new GlideString[] {gs("FT._ALIASLIST")}, true);
+        return FT.<Map<String, GlideString>>executeCommand(
+                        client, new GlideString[] {gs("FT._ALIASLIST")}, true)
+                .thenApply(
+                        map ->
+                                map.entrySet().stream()
+                                        .collect(Collectors.toMap(e -> gs(e.getKey()), Map.Entry::getValue)));
+    }
+
+    /**
+     * Parse a query and return information about how that query was parsed.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name to search into.
+     * @param query The text query to search. It is the same as the query passed as an argument to
+     *     {@link FT#search(BaseClient, String, String)} and {@link FT#aggregate(BaseClient, String,
+     *     String)}.
+     * @return A <code>String</code> representing the execution plan.
+     * @example
+     *     <pre>{@code
+     * String result = FT.explain(client, "myIndex", "@price:[0 10]").get();
+     * assert result.equals("Field {\n\tprice\n\t0\n\t10\n}");
+     * }</pre>
+     */
+    public static CompletableFuture<String> explain(
+            @NonNull BaseClient client, @NonNull String indexName, @NonNull String query) {
+        GlideString[] args = {gs("FT.EXPLAIN"), gs(indexName), gs(query)};
+        return FT.<GlideString>executeCommand(client, args, false).thenApply(GlideString::toString);
+    }
+
+    /**
+     * Parse a query and return information about how that query was parsed.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name to search into.
+     * @param query The text query to search. It is the same as the query passed as an argument to
+     *     {@link FT#search(BaseClient, GlideString, GlideString)} and {@link FT#aggregate(BaseClient,
+     *     GlideString, GlideString)}.
+     * @return A <code>GlideString</code> representing the execution plan.
+     * @example
+     *     <pre>{@code
+     * GlideString result = FT.explain(client, gs("myIndex"), gs("@price:[0 10]")).get();
+     * assert result.equals("Field {\n\tprice\n\t0\n\t10\n}");
+     * }</pre>
+     */
+    public static CompletableFuture<GlideString> explain(
+            @NonNull BaseClient client, @NonNull GlideString indexName, @NonNull GlideString query) {
+        GlideString[] args = {gs("FT.EXPLAIN"), indexName, query};
+        return executeCommand(client, args, false);
+    }
+
+    /**
+     * Same as the {@link FT#explain(BaseClient, String, String)} except that the results are
+     * displayed in a different format.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name to search into.
+     * @param query The text query to search. It is the same as the query passed as an argument to
+     *     {@link FT#search(BaseClient, String, String)} and {@link FT#aggregate(BaseClient, String,
+     *     String)}.
+     * @return A <code>String[]</code> representing the execution plan.
+     * @example
+     *     <pre>{@code
+     * String[] result = FT.explaincli(client, "myIndex",  "@price:[0 10]").get();
+     * assert Arrays.equals(result, new String[]{
+     *   "Field {",
+     *   "  price",
+     *   "  0",
+     *   "  10",
+     *   "}"
+     * });
+     * }</pre>
+     */
+    public static CompletableFuture<String[]> explaincli(
+            @NonNull BaseClient client, @NonNull String indexName, @NonNull String query) {
+        CompletableFuture<GlideString[]> result = explaincli(client, gs(indexName), gs(query));
+        return result.thenApply(
+                ret -> Arrays.stream(ret).map(GlideString::toString).toArray(String[]::new));
+    }
+
+    /**
+     * Same as the {@link FT#explain(BaseClient, String, String)} except that the results are
+     * displayed in a different format.
+     *
+     * @param client The client to execute the command.
+     * @param indexName The index name to search into.
+     * @param query The text query to search. It is the same as the query passed as an argument to
+     *     {@link FT#search(BaseClient, GlideString, GlideString)} and {@link FT#aggregate(BaseClient,
+     *     GlideString, GlideString)}.
+     * @return A <code>GlideString[]</code> representing the execution plan.
+     * @example
+     *     <pre>{@code
+     * GlideString[] result = FT.explaincli(client, gs("myIndex"),  gs("@price:[0 10]")).get();
+     * assert Arrays.equals(result, new GlideString[]{
+     *   gs("Field {"),
+     *   gs("  price"),
+     *   gs("  0"),
+     *   gs("  10"),
+     *   gs("}")
+     * });
+     * }</pre>
+     */
+    public static CompletableFuture<GlideString[]> explaincli(
+            @NonNull BaseClient client, @NonNull GlideString indexName, @NonNull GlideString query) {
+        GlideString[] args = new GlideString[] {gs("FT.EXPLAINCLI"), indexName, query};
+        return FT.<Object[]>executeCommand(client, args, false)
+                .thenApply(ret -> castArray(ret, GlideString.class));
     }
 
     /**

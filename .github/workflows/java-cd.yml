@@ -86,8 +86,6 @@ jobs:
                     echo "No cleaning needed"
                   fi
             - uses: actions/checkout@v4
-              
-
             - name: Set up JDK
               uses: actions/setup-java@v4
               with:
@@ -211,7 +209,12 @@ jobs:
                   exit 1
 
     test-deployment-on-all-architectures:
-        needs: [set-release-version, load-platform-matrix, publish-to-maven-central-deployment]
+        needs:
+            [
+                set-release-version,
+                load-platform-matrix,
+                publish-to-maven-central-deployment,
+            ]
         env:
             JAVA_VERSION: "11"
             RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
@@ -224,7 +227,6 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@v4
-              
 
             - name: Set up JDK
               uses: actions/setup-java@v4
@@ -236,7 +238,7 @@ jobs:
               uses: ./.github/workflows/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
-                  engine-version: "7.2.5"
+                  engine-version: "7.2"
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -265,7 +267,11 @@ jobs:
 
     publish-release-to-maven:
         if: ${{ inputs.maven_publish == true || github.event_name == 'push' }}
-        needs: [publish-to-maven-central-deployment, test-deployment-on-all-architectures]
+        needs:
+            [
+                publish-to-maven-central-deployment,
+                test-deployment-on-all-architectures,
+            ]
         runs-on: ubuntu-latest
         environment: AWS_ACTIONS
         env:
@@ -279,7 +285,11 @@ jobs:
 
     drop-deployment-if-validation-fails:
         if: ${{ failure() }}
-        needs: [publish-to-maven-central-deployment, test-deployment-on-all-architectures]
+        needs:
+            [
+                publish-to-maven-central-deployment,
+                test-deployment-on-all-architectures,
+            ]
         runs-on: ubuntu-latest
         env:
             DEPLOYMENT_ID: ${{ needs.publish-to-maven-central-deployment.outputs.DEPLOYMENT_ID }}
