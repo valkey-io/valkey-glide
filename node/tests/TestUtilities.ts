@@ -566,46 +566,6 @@ export async function encodableTransactionTest(
     return responseData;
 }
 
-/** Populates a transaction with dump and restore commands
- *
- * @param baseTransaction - A transaction
- * @param valueResponse - Represents the encoded response of "value" to compare
- * @returns Array of tuples, where first element is a test name/description, second - expected return value.
- */
-export async function DumpAndRestoreTest(
-    baseTransaction: Transaction,
-    dumpValue: Buffer | null,
-): Promise<[string, GlideReturnType][]> {
-    if (dumpValue == null) {
-        throw new Error("dumpValue is null");
-    }
-
-    const key = "{key}-" + uuidv4(); // string
-    const buffValue = Buffer.from("value");
-    // array of tuples - first element is test name/description, second - expected return value
-    const responseData: [string, GlideReturnType][] = [];
-
-    baseTransaction.set(key, "value");
-    responseData.push(["set(key, stringValue)", "OK"]);
-    baseTransaction.customCommand(["DUMP", key]);
-    responseData.push(['customCommand(["DUMP", key])', dumpValue]);
-    baseTransaction.get(key);
-    responseData.push(["get(key)", buffValue]);
-    baseTransaction.del([key]);
-    responseData.push(["del(key)", 1]);
-    baseTransaction.get(key);
-    responseData.push(["get(key)", null]);
-    baseTransaction.customCommand(["RESTORE", key, "0", dumpValue]);
-    responseData.push([
-        'customCommand(["RESTORE", buffKey, "0", stringValue])',
-        "OK",
-    ]);
-    baseTransaction.get(key);
-    responseData.push(["get(key)", buffValue]);
-
-    return responseData;
-}
-
 /**
  * Populates a transaction with commands to test.
  * @param baseTransaction - A transaction.
@@ -802,14 +762,14 @@ export async function transactionTest(
         baseTransaction.lmpop([key24], ListDirection.LEFT);
         responseData.push([
             "lmpop([key22], ListDirection.LEFT)",
-            [{ key: key24, value: [field + "2"] }],
+            convertRecordToGlideRecord({ [key24]: [field + "2"] }),
         ]);
         baseTransaction.lpush(key24, [field + "2"]);
         responseData.push(["lpush(key22, [2])", 2]);
         baseTransaction.blmpop([key24], ListDirection.LEFT, 0.1, 1);
         responseData.push([
             "blmpop([key22], ListDirection.LEFT, 0.1, 1)",
-            [{ key: key24, value: [field + "2"] }],
+            convertRecordToGlideRecord({ [key24]: [field + "2"] }),
         ]);
     }
 
