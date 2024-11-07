@@ -533,6 +533,7 @@ public class FT {
     /**
      * Returns information about a given index.
      *
+     * @param client The client to execute the command.
      * @param indexName The index name.
      * @return Nested maps with info about the index. See example for more details.
      * @example
@@ -587,6 +588,7 @@ public class FT {
     /**
      * Returns information about a given index.
      *
+     * @param client The client to execute the command.
      * @param indexName The index name.
      * @return Nested maps with info about the index. See example for more details.
      * @example
@@ -650,6 +652,21 @@ public class FT {
                         map ->
                                 map.entrySet().stream()
                                         .collect(Collectors.toMap(e -> e.getKey().toString(), Map.Entry::getValue)));
+    }
+
+    /**
+     * Lists all indexes.
+     *
+     * @param client The client to execute the command.
+     * @return An array of index names.
+     * @example
+     *     <pre>{@code
+     * GlideString[] indices = FT.list(client).get();
+     * }</pre>
+     */
+    public static CompletableFuture<GlideString[]> list(@NonNull BaseClient client) {
+        return FT.<Object[]>executeCommand(client, new GlideString[] {gs("FT._LIST")}, false)
+                .thenApply(arr -> castArray(arr, GlideString.class));
     }
 
     /**
