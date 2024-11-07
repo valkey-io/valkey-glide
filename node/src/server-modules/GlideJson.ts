@@ -405,6 +405,59 @@ export class GlideJson {
     }
 
     /**
+     * Searches for the first occurrence of a `scalar` JSON value in the arrays at the `path`.
+     * Out of range errors are treated by rounding the index to the array's `start` and `end.
+     * If `start` > `end`, return `-1` (not found).
+     *
+     * @param client - The client to execute the command.
+     * @param key - The key of the JSON document.
+     * @param path - The path within the JSON document.
+     * @param scalar - The scalar value to search for.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `start`: The start index, inclusive. Default to 0 if not provided.
+     * - (Optional) `end`: The end index, exclusive. Default to 0 if not provided.
+     *                     0 or -1 means the last element is included.
+     * @returns
+     * - For JSONPath (path starts with `$`):
+     *       Returns an array with a list of integers for every possible path,
+     *       indicating the index of the matching element. The value is `-1` if not found.
+     *       If a value is not an array, its corresponding return value is `null`.
+     * - For legacy path (path doesn't start with `$`):
+     *       Returns an integer representing the index of matching element, or `-1` if
+     *       not found. If the value at the `path` is not an array, an error is raised.
+     *
+     * @example
+     * ```typescript
+     * await GlideJson.set(client, "doc", "$", '{"a": ["value", 3], "b": {"a": [3, ["value", false], 5]}}');
+     * console.log(await GlideJson.arrindex(client, "doc", "$..a", 3, { start: 3, end: 3 }); // Output: [2, -1]
+     * ```
+     */
+    static async arrindex(
+        client: BaseClient,
+        key: GlideString,
+        path: GlideString,
+        scalar: GlideString | number | boolean | null,
+        options?: { start: number; end?: number },
+    ): Promise<ReturnTypeJson<number>> {
+        const args = ["JSON.ARRINDEX", key, path];
+
+        if (typeof scalar === `number`) {
+            args.push(scalar.toString());
+        } else if (typeof scalar === `boolean`) {
+            args.push(scalar ? `true` : `false`);
+        } else if (scalar !== null) {
+            args.push(scalar);
+        } else {
+            args.push(`null`);
+        }
+
+        if (options?.start !== undefined) args.push(options?.start.toString());
+        if (options?.end !== undefined) args.push(options?.end.toString());
+
+        return _executeCommand(client, args);
+    }
+
+    /**
      * Toggles a Boolean value stored at the specified `path` within the JSON document stored at `key`.
      *
      * @param client - The client to execute the command.
