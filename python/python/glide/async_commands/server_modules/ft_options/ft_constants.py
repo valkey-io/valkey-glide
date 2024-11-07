@@ -18,6 +18,7 @@ class CommandNames:
     FT_EXPLAINCLI = "FT.EXPLAINCLI"
     FT_AGGREGATE = "FT.AGGREGATE"
     FT_PROFILE = "FT.PROFILE"
+    FT_ALIASLIST = "FT._ALIASLIST"
 
 
 class FtCreateKeywords:
