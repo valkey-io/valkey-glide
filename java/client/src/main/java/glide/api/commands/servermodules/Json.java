@@ -703,7 +703,7 @@ public class Json {
      * var result = Json.arrindex(client, key, "$..a", new JsonScalar(3)).get();
      * assert Arrays.equals((Object[]) result, new Object[] {1L, 0L});
      *
-     * Object result2 = Json.arrindex(client, key, ".a", new JsonScalar(3)).get();
+     * Object result2 = Json.arrindex(client, key, ".a", new JsonScalar(3), new JsonArrindexOptions(0L)).get();
      * assert Arrays.equals(1L, result);
      * }</pre>
      */
@@ -752,7 +752,7 @@ public class Json {
      * var result = Json.arrindex(client, gs(key), gs("$..a"), new JsonScalar(3)).get();
      * assert Arrays.equals((Object[]) result, new Object[] {1L, 0L);
      *
-     * result = Json.arrindex(client, gs(key), gs(".a"), new JsonScalar(3)).get();
+     * result = Json.arrindex(client, gs(key), gs(".a"), new JsonScalar(3), new JsonArrindexOptions(0L)).get();
      * assert Arrays.equals(1L, result);
      * }</pre>
      */
