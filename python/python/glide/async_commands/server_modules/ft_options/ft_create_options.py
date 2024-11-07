@@ -95,7 +95,7 @@ class Field(ABC):
 
         Args:
             name (TEncodable): The name of the field.
-            type (FieldType): The type of the field. See `FieldType`.
+            type (FieldType): The type of the field.
             alias (Optional[TEncodable]): An alias for the field.
         """
         self.name = name
@@ -103,7 +103,7 @@ class Field(ABC):
         self.alias = alias
 
     @abstractmethod
-    def toArgs(self) -> List[TEncodable]:
+    def to_args(self) -> List[TEncodable]:
         """
         Get the arguments representing the field.
 
@@ -132,14 +132,8 @@ class TextField(Field):
         """
         super().__init__(name, FieldType.TEXT, alias)
 
-    def toArgs(self) -> List[TEncodable]:
-        """
-        Get the arguments representing the text field.
-
-        Returns:
-            List[TEncodable]: A list of text field arguments.
-        """
-        args = super().toArgs()
+    def to_args(self) -> List[TEncodable]:
+        args = super().to_args()
         return args
 
 
@@ -172,14 +166,8 @@ class TagField(Field):
         self.separator = separator
         self.case_sensitive = case_sensitive
 
-    def toArgs(self) -> List[TEncodable]:
-        """
-        Get the arguments representing the tag field.
-
-        Returns:
-            List[TEncodable]: A list of tag field arguments.
-        """
-        args = super().toArgs()
+    def to_args(self) -> List[TEncodable]:
+        args = super().to_args()
         if self.separator:
             args.extend([FtCreateKeywords.SEPARATOR, self.separator])
         if self.case_sensitive:
@@ -202,14 +190,8 @@ class NumericField(Field):
         """
         super().__init__(name, FieldType.NUMERIC, alias)
 
-    def toArgs(self) -> List[TEncodable]:
-        """
-        Get the arguments representing the numeric field.
-
-        Returns:
-            List[TEncodable]: A list of numeric field arguments.
-        """
-        args = super().toArgs()
+    def to_args(self) -> List[TEncodable]:
+        args = super().to_args()
         return args
 
 
@@ -235,7 +217,7 @@ class VectorFieldAttributes(ABC):
         self.type = type
 
     @abstractmethod
-    def toArgs(self) -> List[TEncodable]:
+    def to_args(self) -> List[TEncodable]:
         """
         Get the arguments to be used for the algorithm of the vector field.
 
@@ -276,14 +258,8 @@ class VectorFieldAttributesFlat(VectorFieldAttributes):
         super().__init__(dimensions, distance_metric, type)
         self.initial_cap = initial_cap
 
-    def toArgs(self) -> List[TEncodable]:
-        """
-        Get the arguments representing the vector field created with FLAT algorithm.
-
-        Returns:
-            List[TEncodable]: A list of FLAT algorithm type vector arguments.
-        """
-        args = super().toArgs()
+    def to_args(self) -> List[TEncodable]:
+        args = super().to_args()
         if self.initial_cap:
             args.extend([FtCreateKeywords.INITIAL_CAP, str(self.initial_cap)])
         return args
@@ -322,14 +298,8 @@ class VectorFieldAttributesHnsw(VectorFieldAttributes):
         self.vectors_examined_on_construction = vectors_examined_on_construction
         self.vectors_examined_on_runtime = vectors_examined_on_runtime
 
-    def toArgs(self) -> List[TEncodable]:
-        """
-        Get the arguments representing the vector field created with HSNW algorithm.
-
-        Returns:
-            List[TEncodable]: A list of HNSW algorithm type vector arguments.
-        """
-        args = super().toArgs()
+    def to_args(self) -> List[TEncodable]:
+        args = super().to_args()
         if self.initial_cap:
             args.extend([FtCreateKeywords.INITIAL_CAP, str(self.initial_cap)])
         if self.number_of_edges:
@@ -365,25 +335,19 @@ class VectorField(Field):
 
         Args:
             name (TEncodable): The name of the vector field.
-            algorithm (VectorAlgorithm): The vector indexing algorithm. See `VectorAlgorithm`.
+            algorithm (VectorAlgorithm): The vector indexing algorithm.
             alias (Optional[TEncodable]): An alias for the field.
-            attributes (VectorFieldAttributes): Additional attributes to be passed with the vector field after the algorithm name. See `VectorFieldAttributes`.
+            attributes (VectorFieldAttributes): Additional attributes to be passed with the vector field after the algorithm name.
         """
         super().__init__(name, FieldType.VECTOR, alias)
         self.algorithm = algorithm
         self.attributes = attributes
 
-    def toArgs(self) -> List[TEncodable]:
-        """
-        Get the arguments representing the vector field.
-
-        Returns:
-            List[TEncodable]: A list of vector field arguments.
-        """
-        args = super().toArgs()
+    def to_args(self) -> List[TEncodable]:
+        args = super().to_args()
         args.append(self.algorithm.value)
         if self.attributes:
-            attribute_list = self.attributes.toArgs()
+            attribute_list = self.attributes.to_args()
             args.append(str(len(attribute_list)))
             args.extend(attribute_list)
         return args
@@ -419,13 +383,13 @@ class FtCreateOptions:
         Initialize the FT.CREATE optional fields.
 
         Args:
-            data_type (Optional[DataType]): The index data type. If not defined a `HASH` index is created. See `DataType`.
+            data_type (Optional[DataType]): The index data type. If not defined a `HASH` index is created.
             prefixes (Optional[List[TEncodable]]): A list of prefixes of index definitions.
         """
         self.data_type = data_type
         self.prefixes = prefixes
 
-    def toArgs(self) -> List[TEncodable]:
+    def to_args(self) -> List[TEncodable]:
         """
         Get the optional arguments for the FT.CREATE command.
 

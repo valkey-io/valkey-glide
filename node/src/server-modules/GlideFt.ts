@@ -11,7 +11,12 @@ import {
 } from "../BaseClient";
 import { GlideClient } from "../GlideClient";
 import { GlideClusterClient } from "../GlideClusterClient";
-import { Field, FtCreateOptions, FtSearchOptions } from "./GlideFtOptions";
+import {
+    Field,
+    FtAggregateOptions,
+    FtCreateOptions,
+    FtSearchOptions,
+} from "./GlideFtOptions";
 
 /** Response type of {@link GlideFt.info | ft.info} command. */
 export type FtInfoReturnType = Record<
@@ -209,6 +214,160 @@ export class GlideFt {
         return _handleCustomCommand(client, args, {
             decoder: Decoder.String,
         }) as Promise<"OK">;
+    }
+
+    /**
+     * Runs a search query on an index, and perform aggregate transformations on the results.
+     *
+     * @param client - The client to execute the command.
+     * @param indexName - The index name.
+     * @param query - The text query to search.
+     * @param options - Additional parameters for the command - see {@link FtAggregateOptions} and {@link DecoderOption}.
+     * @returns Results of the last stage of the pipeline.
+     *
+     * @example
+     * ```typescript
+     * const options: FtAggregateOptions = {
+     *      loadFields: ["__key"],
+     *      clauses: [
+     *          {
+     *              type: "GROUPBY",
+     *              properties: ["@condition"],
+     *              reducers: [
+     *                  {
+     *                      function: "TOLIST",
+     *                      args: ["__key"],
+     *                      name: "bicycles",
+     *                  },
+     *              ],
+     *          },
+     *      ],
+     *  };
+     * const result = await GlideFt.aggregate("myIndex", "*", options);
+     * console.log(result); // Output:
+     * // [
+     * //     [
+     * //         {
+     * //             key: "condition",
+     * //             value: "refurbished"
+     * //         },
+     * //         {
+     * //             key: "bicycles",
+     * //             value: [ "bicycle:9" ]
+     * //         }
+     * //     ],
+     * //     [
+     * //         {
+     * //             key: "condition",
+     * //             value: "used"
+     * //         },
+     * //         {
+     * //             key: "bicycles",
+     * //             value: [ "bicycle:1", "bicycle:2", "bicycle:3" ]
+     * //         }
+     * //     ],
+     * //     [
+     * //         {
+     * //             key: "condition",
+     * //             value: "new"
+     * //         },
+     * //         {
+     * //             key: "bicycles",
+     * //             value: [ "bicycle:0", "bicycle:5" ]
+     * //         }
+     * //     ]
+     * // ]
+     * ```
+     */
+    static async aggregate(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        query: GlideString,
+        options?: DecoderOption & FtAggregateOptions,
+    ): Promise<GlideRecord<GlideReturnType>[]> {
+        const args: GlideString[] = ["FT.AGGREGATE", indexName, query];
+
+        if (options) {
+            if (options.loadAll) args.push("LOAD", "*");
+            else if (options.loadFields)
+                args.push(
+                    "LOAD",
+                    options.loadFields.length.toString(),
+                    ...options.loadFields,
+                );
+
+            if (options.timeout)
+                args.push("TIMEOUT", options.timeout.toString());
+
+            if (options.params) {
+                args.push(
+                    "PARAMS",
+                    (options.params.length * 2).toString(),
+                    ...options.params.flatMap((pair) => pair),
+                );
+            }
+
+            if (options.clauses) {
+                for (const clause of options.clauses) {
+                    switch (clause.type) {
+                        case "LIMIT":
+                            args.push(
+                                clause.type,
+                                clause.offset.toString(),
+                                clause.count.toString(),
+                            );
+                            break;
+                        case "FILTER":
+                            args.push(clause.type, clause.expression);
+                            break;
+                        case "GROUPBY":
+                            args.push(
+                                clause.type,
+                                clause.properties.length.toString(),
+                                ...clause.properties,
+                            );
+
+                            for (const reducer of clause.reducers) {
+                                args.push(
+                                    "REDUCE",
+                                    reducer.function,
+                                    reducer.args.length.toString(),
+                                    ...reducer.args,
+                                );
+                                if (reducer.name) args.push("AS", reducer.name);
+                            }
+
+                            break;
+                        case "SORTBY":
+                            args.push(
+                                clause.type,
+                                (clause.properties.length * 2).toString(),
+                            );
+                            for (const property of clause.properties)
+                                args.push(property.property, property.order);
+                            if (clause.max)
+                                args.push("MAX", clause.max.toString());
+                            break;
+                        case "APPLY":
+                            args.push(
+                                clause.type,
+                                clause.expression,
+                                "AS",
+                                clause.name,
+                            );
+                            break;
+                        default:
+                            throw new Error(
+                                "Unknown clause type in FtAggregateOptions",
+                            );
+                    }
+                }
+            }
+        }
+
+        return _handleCustomCommand(client, args, options) as Promise<
+            GlideRecord<GlideReturnType>[]
+        >;
     }
 
     /**
