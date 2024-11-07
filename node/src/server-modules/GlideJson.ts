@@ -855,4 +855,84 @@ export class GlideJson {
 
         return _executeCommand(client, args);
     }
+
+    /**
+     * Increments or decrements the JSON value(s) at the specified `path` by `number` within the JSON document stored at `key`.
+     *
+     * @param client - The client to execute the command.
+     * @param key - The key of the JSON document.
+     * @param path - The path within the JSON document.
+     * @param num - The number to increment or decrement by.
+     * @returns
+     *     - For JSONPath (path starts with `$`):
+     *       - Returns a string representation of an array of strings, indicating the new values after incrementing for each matched `path`.
+     *         If a value is not a number, its corresponding return value will be `null`.
+     *         If `path` doesn't exist, a byte string representation of an empty array will be returned.
+     *     - For legacy path (path doesn't start with `$`):
+     *       - Returns a string representation of the resulting value after the increment or decrement.
+     *         If multiple paths match, the result of the last updated value is returned.
+     *         If the value at the `path` is not a number or `path` doesn't exist, an error is raised.
+     *     - If `key` does not exist, an error is raised.
+     *     - If the result is out of the range of 64-bit IEEE double, an error is raised.
+     *
+     * @example
+     * ```typescript
+     * console.log(await GlideJson.set(client, "doc", "$", '{"a": [], "b": [1], "c": [1, 2], "d": [1, 2, 3]}'));
+     * // Output: 'OK' - Indicates successful setting of the value at path '$' in the key stored at `doc`.
+     * console.log(await GlideJson.numincrby(client, "doc", "$.d[*]", 10))
+     * // Output: '[11,12,13]' - Increment each element in `d` array by 10.
+     *
+     * console.log(await GlideJson.numincrby(client, "doc", ".c[1]", 10));
+     * // Output: '12' - Increment the second element in the `c` array by 10.
+     * ```
+     */
+    static async numincrby(
+        client: BaseClient,
+        key: GlideString,
+        path: GlideString,
+        num: number,
+    ): Promise<GlideString> {
+        const args = ["JSON.NUMINCRBY", key, path, num.toString()];
+        return _executeCommand(client, args);
+    }
+
+    /**
+     * Multiplies the JSON value(s) at the specified `path` by `number` within the JSON document stored at `key`.
+     *
+     * @param client - The client to execute the command.
+     * @param key - The key of the JSON document.
+     * @param path - The path within the JSON document.
+     * @param num - The number to multiply by.
+     * @returns
+     *     - For JSONPath (path starts with `$`):
+     *       - Returns a GlideString representation of an array of strings, indicating the new values after multiplication for each matched `path`.
+     *         If a value is not a number, its corresponding return value will be `null`.
+     *         If `path` doesn't exist, a byte string representation of an empty array will be returned.
+     *     - For legacy path (path doesn't start with `$`):
+     *       - Returns a GlideString representation of the resulting value after multiplication.
+     *         If multiple paths match, the result of the last updated value is returned.
+     *         If the value at the `path` is not a number or `path` doesn't exist, an error is raised.
+     *     - If `key` does not exist, an error is raised.
+     *     - If the result is out of the range of 64-bit IEEE double, an error is raised.
+     *
+     * @example
+     * ```typescript
+     * console.log(await GlideJson.set(client, "doc", "$", '{"a": [], "b": [1], "c": [1, 2], "d": [1, 2, 3]}'));
+     * // Output: 'OK' - Indicates successful setting of the value at path '$' in the key stored at `doc`.
+     * console.log(await GlideJson.nummultby(client, "doc", "$.d[*]", 2))
+     * // Output: '[2,4,6]' - Multiplies each element in the `d` array by 2.
+     *
+     * console.log(await GlideJson.nummultby(client, "doc", ".c[1]", 2));
+     * // Output: '4' - Multiplies the second element in the `c` array by 2.
+     * ```
+     */
+    static async nummultby(
+        client: BaseClient,
+        key: GlideString,
+        path: GlideString,
+        num: number,
+    ): Promise<GlideString> {
+        const args = ["JSON.NUMMULTBY", key, path, num.toString()];
+        return _executeCommand(client, args);
+    }
 }
