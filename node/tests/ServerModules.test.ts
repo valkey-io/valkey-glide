@@ -1460,13 +1460,49 @@ describe("Server Module Tests", () => {
                 await expect(GlideJson.strlen(client, key)).rejects.toThrow(
                     RequestError,
                 );
-
                 // Binary buffer test
                 expect(
                     await GlideJson.strlen(client, Buffer.from(key), {
                         path: Buffer.from("$..a"),
                     }),
                 ).toEqual([3, 5, null]);
+            });
+
+            it("json.arrappend", async () => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+                const key = uuidv4();
+                let doc = { a: 1, b: ["one", "two"] };
+                expect(
+                    await GlideJson.set(client, key, "$", JSON.stringify(doc)),
+                ).toBe("OK");
+
+                expect(
+                    await GlideJson.arrappend(client, key, Buffer.from("$.b"), [
+                        '"three"',
+                    ]),
+                ).toEqual([3]);
+                expect(
+                    await GlideJson.arrappend(client, key, ".b", [
+                        '"four"',
+                        '"five"',
+                    ]),
+                ).toEqual(5);
+                doc = JSON.parse(
+                    (await GlideJson.get(client, key, { path: "." })) as string,
+                );
+                expect(doc).toEqual({
+                    a: 1,
+                    b: ["one", "two", "three", "four", "five"],
+                });
+
+                expect(
+                    await GlideJson.arrappend(client, key, "$.a", ['"value"']),
+                ).toEqual([null]);
             });
 
             it("json.strappend tests", async () => {
