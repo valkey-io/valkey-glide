@@ -1067,26 +1067,26 @@ class TestFt:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ft_aliaslist(self, glide_client: GlideClusterClient):
-        indexName: str = str(uuid.uuid4())
+        index_name: str = str(uuid.uuid4())
         alias: str = "alias"
         # Create an index and add an alias.
-        await TestFt._create_test_index_hash_type(self, glide_client, indexName)
-        assert await ft.aliasadd(glide_client, alias, indexName) == OK
+        await TestFt._create_test_index_hash_type(self, glide_client, index_name)
+        assert await ft.aliasadd(glide_client, alias, index_name) == OK
 
         # Create a second index and add an alias.
-        indexNameString = str(uuid.uuid4())
-        indexNameBytes = bytes(indexNameString, "utf-8")
-        aliasNameBytes = b"alias-bytes"
-        await TestFt._create_test_index_hash_type(self, glide_client, indexNameString)
-        assert await ft.aliasadd(glide_client, aliasNameBytes, indexNameBytes) == OK
+        index_name_string = str(uuid.uuid4())
+        index_name_bytes = bytes(index_name_string, "utf-8")
+        alias_name_bytes = b"alias-bytes"
+        await TestFt._create_test_index_hash_type(self, glide_client, index_name_string)
+        assert await ft.aliasadd(glide_client, alias_name_bytes, index_name_bytes) == OK
 
         # List all aliases.
         result = await ft.aliaslist(glide_client)
         assert result == {
-            b"alias": indexName.encode("utf-8"),
-            b"alias-bytes": indexNameBytes,
+            b"alias": index_name.encode("utf-8"),
+            b"alias-bytes": index_name_bytes,
         }
 
         # Drop all indexes.
-        assert await ft.dropindex(glide_client, indexName=indexName) == OK
-        assert await ft.dropindex(glide_client, indexName=indexNameString) == OK
+        assert await ft.dropindex(glide_client, index_name) == OK
+        assert await ft.dropindex(glide_client, index_name_string) == OK
