@@ -4232,7 +4232,7 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    fit.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "script kill killable test_%p",
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
