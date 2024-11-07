@@ -405,6 +405,59 @@ export class GlideJson {
     }
 
     /**
+     * Searches for the first occurrence of a `scalar` JSON value in the arrays at the `path`.
+     * Out of range errors are treated by rounding the index to the array's `start` and `end.
+     * If `start` > `end`, return `-1` (not found).
+     *
+     * @param client - The client to execute the command.
+     * @param key - The key of the JSON document.
+     * @param path - The path within the JSON document.
+     * @param scalar - The scalar value to search for.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `start`: The start index, inclusive. Default to 0 if not provided.
+     * - (Optional) `end`: The end index, exclusive. Default to 0 if not provided.
+     *                     0 or -1 means the last element is included.
+     * @returns
+     * - For JSONPath (path starts with `$`):
+     *       Returns an array with a list of integers for every possible path,
+     *       indicating the index of the matching element. The value is `-1` if not found.
+     *       If a value is not an array, its corresponding return value is `null`.
+     * - For legacy path (path doesn't start with `$`):
+     *       Returns an integer representing the index of matching element, or `-1` if
+     *       not found. If the value at the `path` is not an array, an error is raised.
+     *
+     * @example
+     * ```typescript
+     * await GlideJson.set(client, "doc", "$", '{"a": ["value", 3], "b": {"a": [3, ["value", false], 5]}}');
+     * console.log(await GlideJson.arrindex(client, "doc", "$..a", 3, { start: 3, end: 3 }); // Output: [2, -1]
+     * ```
+     */
+    static async arrindex(
+        client: BaseClient,
+        key: GlideString,
+        path: GlideString,
+        scalar: GlideString | number | boolean | null,
+        options?: { start: number; end?: number },
+    ): Promise<ReturnTypeJson<number>> {
+        const args = ["JSON.ARRINDEX", key, path];
+
+        if (typeof scalar === `number`) {
+            args.push(scalar.toString());
+        } else if (typeof scalar === `boolean`) {
+            args.push(scalar ? `true` : `false`);
+        } else if (scalar !== null) {
+            args.push(scalar);
+        } else {
+            args.push(`null`);
+        }
+
+        if (options?.start !== undefined) args.push(options?.start.toString());
+        if (options?.end !== undefined) args.push(options?.end.toString());
+
+        return _executeCommand(client, args);
+    }
+
+    /**
      * Toggles a Boolean value stored at the specified `path` within the JSON document stored at `key`.
      *
      * @param client - The client to execute the command.
@@ -895,6 +948,86 @@ export class GlideJson {
             args.push(options.path);
         }
 
+        return _executeCommand(client, args);
+    }
+
+    /**
+     * Increments or decrements the JSON value(s) at the specified `path` by `number` within the JSON document stored at `key`.
+     *
+     * @param client - The client to execute the command.
+     * @param key - The key of the JSON document.
+     * @param path - The path within the JSON document.
+     * @param num - The number to increment or decrement by.
+     * @returns
+     *     - For JSONPath (path starts with `$`):
+     *       - Returns a string representation of an array of strings, indicating the new values after incrementing for each matched `path`.
+     *         If a value is not a number, its corresponding return value will be `null`.
+     *         If `path` doesn't exist, a byte string representation of an empty array will be returned.
+     *     - For legacy path (path doesn't start with `$`):
+     *       - Returns a string representation of the resulting value after the increment or decrement.
+     *         If multiple paths match, the result of the last updated value is returned.
+     *         If the value at the `path` is not a number or `path` doesn't exist, an error is raised.
+     *     - If `key` does not exist, an error is raised.
+     *     - If the result is out of the range of 64-bit IEEE double, an error is raised.
+     *
+     * @example
+     * ```typescript
+     * console.log(await GlideJson.set(client, "doc", "$", '{"a": [], "b": [1], "c": [1, 2], "d": [1, 2, 3]}'));
+     * // Output: 'OK' - Indicates successful setting of the value at path '$' in the key stored at `doc`.
+     * console.log(await GlideJson.numincrby(client, "doc", "$.d[*]", 10))
+     * // Output: '[11,12,13]' - Increment each element in `d` array by 10.
+     *
+     * console.log(await GlideJson.numincrby(client, "doc", ".c[1]", 10));
+     * // Output: '12' - Increment the second element in the `c` array by 10.
+     * ```
+     */
+    static async numincrby(
+        client: BaseClient,
+        key: GlideString,
+        path: GlideString,
+        num: number,
+    ): Promise<GlideString> {
+        const args = ["JSON.NUMINCRBY", key, path, num.toString()];
+        return _executeCommand(client, args);
+    }
+
+    /**
+     * Multiplies the JSON value(s) at the specified `path` by `number` within the JSON document stored at `key`.
+     *
+     * @param client - The client to execute the command.
+     * @param key - The key of the JSON document.
+     * @param path - The path within the JSON document.
+     * @param num - The number to multiply by.
+     * @returns
+     *     - For JSONPath (path starts with `$`):
+     *       - Returns a GlideString representation of an array of strings, indicating the new values after multiplication for each matched `path`.
+     *         If a value is not a number, its corresponding return value will be `null`.
+     *         If `path` doesn't exist, a byte string representation of an empty array will be returned.
+     *     - For legacy path (path doesn't start with `$`):
+     *       - Returns a GlideString representation of the resulting value after multiplication.
+     *         If multiple paths match, the result of the last updated value is returned.
+     *         If the value at the `path` is not a number or `path` doesn't exist, an error is raised.
+     *     - If `key` does not exist, an error is raised.
+     *     - If the result is out of the range of 64-bit IEEE double, an error is raised.
+     *
+     * @example
+     * ```typescript
+     * console.log(await GlideJson.set(client, "doc", "$", '{"a": [], "b": [1], "c": [1, 2], "d": [1, 2, 3]}'));
+     * // Output: 'OK' - Indicates successful setting of the value at path '$' in the key stored at `doc`.
+     * console.log(await GlideJson.nummultby(client, "doc", "$.d[*]", 2))
+     * // Output: '[2,4,6]' - Multiplies each element in the `d` array by 2.
+     *
+     * console.log(await GlideJson.nummultby(client, "doc", ".c[1]", 2));
+     * // Output: '4' - Multiplies the second element in the `c` array by 2.
+     * ```
+     */
+    static async nummultby(
+        client: BaseClient,
+        key: GlideString,
+        path: GlideString,
+        num: number,
+    ): Promise<GlideString> {
+        const args = ["JSON.NUMMULTBY", key, path, num.toString()];
         return _executeCommand(client, args);
     }
 }

@@ -45,7 +45,6 @@ export class GlideFt {
      * @param indexName - The index name for the index to be created.
      * @param schema - The fields of the index schema, specifying the fields and their types.
      * @param options - (Optional) Options for the `FT.CREATE` command. See {@link FtCreateOptions}.
-     *
      * @returns If the index is successfully created, returns "OK".
      *
      * @example
@@ -197,7 +196,6 @@ export class GlideFt {
      *
      * @param client - The client to execute the command.
      * @param indexName - The index name.
-     *
      * @returns "OK"
      *
      * @example
@@ -215,6 +213,27 @@ export class GlideFt {
         return _handleCustomCommand(client, args, {
             decoder: Decoder.String,
         }) as Promise<"OK">;
+    }
+
+    /**
+     * Lists all indexes.
+     *
+     * @param client - The client to execute the command.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns An array of index names.
+     *
+     * @example
+     * ```typescript
+     * console.log(await GlideFt.list(client)); // Output: ["index1", "index2"]
+     * ```
+     */
+    static async list(
+        client: GlideClient | GlideClusterClient,
+        options?: DecoderOption,
+    ): Promise<GlideString[]> {
+        return _handleCustomCommand(client, ["FT._LIST"], options) as Promise<
+            GlideString[]
+        >;
     }
 
     /**
@@ -377,7 +396,6 @@ export class GlideFt {
      * @param client - The client to execute the command.
      * @param indexName - The index name.
      * @param options - (Optional) See {@link DecoderOption}.
-     *
      * @returns Nested maps with info about the index. See example for more details.
      *
      * @example
@@ -438,6 +456,62 @@ export class GlideFt {
     }
 
     /**
+     * Parse a query and return information about how that query was parsed.
+     *
+     * @param client - The client to execute the command.
+     * @param indexName - The index name.
+     * @param query - The text query to search. It is the same as the query passed as
+     * an argument to {@link search | FT.SEARCH} or {@link aggregate | FT.AGGREGATE}.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns A query execution plan.
+     *
+     * @example
+     * ```typescript
+     * const result = GlideFt.explain(client, "myIndex", "@price:[0 10]");
+     * console.log(result); // Output: "Field {\n\tprice\n\t0\n\t10\n}"
+     * ```
+     */
+    static explain(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        query: GlideString,
+        options?: DecoderOption,
+    ): Promise<GlideString> {
+        const args = ["FT.EXPLAIN", indexName, query];
+
+        return _handleCustomCommand(client, args, options);
+    }
+
+    /**
+     * Parse a query and return information about how that query was parsed.
+     * Same as {@link explain | FT.EXPLAIN}, except that the results are
+     * displayed in a different format.
+     *
+     * @param client - The client to execute the command.
+     * @param indexName - The index name.
+     * @param query - The text query to search. It is the same as the query passed as
+     * an argument to {@link search | FT.SEARCH} or {@link aggregate | FT.AGGREGATE}.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns A query execution plan.
+     *
+     * @example
+     * ```typescript
+     * const result = GlideFt.explaincli(client, "myIndex", "@price:[0 10]");
+     * console.log(result); // Output: ["Field {", "price", "0", "10", "}"]
+     * ```
+     */
+    static explaincli(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        query: GlideString,
+        options?: DecoderOption,
+    ): Promise<GlideString[]> {
+        const args = ["FT.EXPLAINCLI", indexName, query];
+
+        return _handleCustomCommand(client, args, options);
+    }
+
+    /**
      * Uses the provided query expression to locate keys within an index. Once located, the count
      * and/or content of indexed fields within those keys can be returned.
      *
@@ -445,7 +519,6 @@ export class GlideFt {
      * @param indexName - The index name to search into.
      * @param query - The text query to search.
      * @param options - (Optional) See {@link FtSearchOptions} and {@link DecoderOption}.
-     *
      * @returns A two-element array, where the first element is the number of documents in the result set, and the
      * second element has the format: `GlideRecord<GlideRecord<GlideString>>`:
      * a mapping between document names and a map of their attributes.
@@ -552,17 +625,96 @@ export class GlideFt {
             [number, GlideRecord<GlideRecord<GlideString>>]
         >;
     }
+
+    /**
+     * Adds an alias for an index. The new alias name can be used anywhere that an index name is required.
+     *
+     * @param client - The client to execute the command.
+     * @param indexName - The alias to be added to the index.
+     * @param alias - The index name for which the alias has to be added.
+     * @returns `"OK"`
+     *
+     * @example
+     * ```typescript
+     * // Example usage of FT.ALIASADD to add an alias for an index.
+     * await GlideFt.aliasadd(client, "index", "alias"); // "OK"
+     * ```
+     */
+    static async aliasadd(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        alias: GlideString,
+    ): Promise<"OK"> {
+        const args: GlideString[] = ["FT.ALIASADD", alias, indexName];
+        return _handleCustomCommand(client, args, {
+            decoder: Decoder.String,
+        }) as Promise<"OK">;
+    }
+
+    /**
+     * Deletes an existing alias for an index.
+     *
+     * @param client - The client to execute the command.
+     * @param alias -  The existing alias to be deleted for an index.
+     * @returns `"OK"`
+     *
+     * @example
+     * ```typescript
+     * // Example usage of FT.ALIASDEL to delete an existing alias.
+     * await GlideFt.aliasdel(client, "alias"); // "OK"
+     * ```
+     */
+    static async aliasdel(
+        client: GlideClient | GlideClusterClient,
+        alias: GlideString,
+    ): Promise<"OK"> {
+        const args: GlideString[] = ["FT.ALIASDEL", alias];
+        return _handleCustomCommand(client, args, {
+            decoder: Decoder.String,
+        }) as Promise<"OK">;
+    }
+
+    /**
+     * Updates an existing alias to point to a different physical index. This command only affects future references to the alias.
+     *
+     * @param client - The client to execute the command.
+     * @param alias - The alias name. This alias will now be pointed to a different index.
+     * @param indexName - The index name for which an existing alias has to updated.
+     * @returns `"OK"`
+     *
+     * @example
+     * ```typescript
+     * // Example usage of FT.ALIASUPDATE to update an alias to point to a different index.
+     * await GlideFt.aliasupdate(client, "newAlias", "index"); // "OK"
+     * ```
+     */
+    static async aliasupdate(
+        client: GlideClient | GlideClusterClient,
+        alias: GlideString,
+        indexName: GlideString,
+    ): Promise<"OK"> {
+        const args: GlideString[] = ["FT.ALIASUPDATE", alias, indexName];
+        return _handleCustomCommand(client, args, {
+            decoder: Decoder.String,
+        }) as Promise<"OK">;
+    }
 }
 
 /**
  * @internal
  */
-async function _handleCustomCommand(
+async function _handleCustomCommand<T>(
     client: GlideClient | GlideClusterClient,
     args: GlideString[],
     decoderOption: DecoderOption = {},
-): Promise<GlideReturnType> {
+): Promise<T> {
     return client instanceof GlideClient
-        ? (client as GlideClient).customCommand(args, decoderOption)
-        : (client as GlideClusterClient).customCommand(args, decoderOption);
+        ? ((client as GlideClient).customCommand(
+              args,
+              decoderOption,
+          ) as Promise<T>)
+        : ((client as GlideClusterClient).customCommand(
+              args,
+              decoderOption,
+          ) as Promise<T>);
 }
