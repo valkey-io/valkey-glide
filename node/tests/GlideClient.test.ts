@@ -41,7 +41,6 @@ import {
     generateLuaLibCode,
     getClientConfigurationOption,
     getServerVersion,
-    parseCommandLineArgs,
     parseEndpoints,
     transactionTest,
     validateTransactionResponse,
@@ -56,8 +55,7 @@ describe("GlideClient", () => {
     let cluster: ValkeyCluster;
     let client: GlideClient;
     beforeAll(async () => {
-        const standaloneAddresses =
-            parseCommandLineArgs()["standalone-endpoints"];
+        const standaloneAddresses = global.STAND_ALONE_ENDPOINT;
         cluster = standaloneAddresses
             ? await ValkeyCluster.initFromExistingCluster(
                   false,
