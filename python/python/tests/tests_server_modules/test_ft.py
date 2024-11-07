@@ -451,6 +451,25 @@ class TestFt:
         assert await ft.dropindex(glide_client, index_name) == OK
         assert await ft.dropindex(glide_client, new_index_name) == OK
 
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_ft_dropindex_ft_list(self, glide_client: GlideClusterClient):
+        indexName = str(uuid.uuid4()).encode()
+        await TestFt._create_test_index_hash_type(self, glide_client, indexName)
+
+        before = await ft.list(glide_client)
+        assert indexName in before
+
+        assert await ft.dropindex(glide_client, indexName) == OK
+        after = await ft.list(glide_client)
+        assert indexName not in after
+
+        assert {_ for _ in after + [indexName]} == {_ for _ in before}
+
+        # Drop a non existent index. Expects a RequestError.
+        with pytest.raises(RequestError):
+            await ft.dropindex(glide_client, indexName)
+
     async def _create_test_index_hash_type(
         self, glide_client: GlideClusterClient, index_name: TEncodable
     ):

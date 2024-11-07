@@ -473,6 +473,170 @@ describe("Server Module Tests", () => {
                 ).toEqual(4);
             });
 
+            it("json.arrindex", async () => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+                const doc1 =
+                    '{"a": [1, 3, true, "hello"], "b": {"a": [3, 4, [3, false], 5], "c": {"a": 42}}}';
+
+                expect(await GlideJson.set(client, key1, "$", doc1)).toBe("OK");
+
+                // Verify scalar type
+                expect(
+                    await GlideJson.arrindex(client, key1, "$..a", true),
+                ).toEqual([2, -1, null]);
+                expect(
+                    await GlideJson.arrindex(client, key1, "..a", true),
+                ).toEqual(2);
+
+                expect(
+                    await GlideJson.arrindex(client, key1, "$..a", 3),
+                ).toEqual([1, 0, null]);
+                expect(
+                    await GlideJson.arrindex(client, key1, "..a", 3),
+                ).toEqual(1);
+
+                expect(
+                    await GlideJson.arrindex(client, key1, "$..a", '"hello"'),
+                ).toEqual([3, -1, null]);
+                expect(
+                    await GlideJson.arrindex(client, key1, "..a", '"hello"'),
+                ).toEqual(3);
+
+                expect(
+                    await GlideJson.arrindex(client, key1, "$..a", null),
+                ).toEqual([-1, -1, null]);
+                expect(
+                    await GlideJson.arrindex(client, key1, "..a", null),
+                ).toEqual(-1);
+
+                // Value at the path is not an array
+                expect(
+                    await GlideJson.arrindex(client, key1, "$..c", 42),
+                ).toEqual([null]);
+                await expect(
+                    GlideJson.arrindex(client, key1, "..c", 42),
+                ).rejects.toThrow(RequestError);
+
+                const doc2 =
+                    '{"a": [1, 3, true, "foo", "meow", "m", "foo", "lol", false],' +
+                    ' "b": {"a": [3, 4, ["value", 3, false], 5], "c": {"a": 42}}}';
+
+                expect(await GlideJson.set(client, key2, "$", doc2)).toBe("OK");
+
+                // Verify optional `start` and `end`
+                expect(
+                    await GlideJson.arrindex(client, key2, "$..a", '"foo"', {
+                        start: 6,
+                        end: 8,
+                    }),
+                ).toEqual([6, -1, null]);
+                expect(
+                    await GlideJson.arrindex(client, key2, "$..a", '"foo"', {
+                        start: 2,
+                        end: 8,
+                    }),
+                ).toEqual([3, -1, null]);
+                expect(
+                    await GlideJson.arrindex(client, key2, "..a", '"meow"', {
+                        start: 2,
+                        end: 8,
+                    }),
+                ).toEqual(4);
+
+                // Verify without optional `end`
+                expect(
+                    await GlideJson.arrindex(client, key2, "$..a", '"foo"', {
+                        start: 6,
+                    }),
+                ).toEqual([6, -1, null]);
+                expect(
+                    await GlideJson.arrindex(client, key2, "..a", '"foo"', {
+                        start: 6,
+                    }),
+                ).toEqual(6);
+
+                // Verify optional `end` with 0 or -1 (means the last element is included)
+                expect(
+                    await GlideJson.arrindex(client, key2, "$..a", '"foo"', {
+                        start: 6,
+                        end: 0,
+                    }),
+                ).toEqual([6, -1, null]);
+                expect(
+                    await GlideJson.arrindex(client, key2, "..a", '"foo"', {
+                        start: 6,
+                        end: 0,
+                    }),
+                ).toEqual(6);
+                expect(
+                    await GlideJson.arrindex(client, key2, "$..a", '"foo"', {
+                        start: 6,
+                        end: -1,
+                    }),
+                ).toEqual([6, -1, null]);
+                expect(
+                    await GlideJson.arrindex(client, key2, "..a", '"foo"', {
+                        start: 6,
+                        end: -1,
+                    }),
+                ).toEqual(6);
+
+                // Test with binary input
+                expect(
+                    await GlideJson.arrindex(
+                        client,
+                        Buffer.from(key2),
+                        Buffer.from("$..a"),
+                        Buffer.from('"foo"'),
+                        {
+                            start: 6,
+                            end: -1,
+                        },
+                    ),
+                ).toEqual([6, -1, null]);
+                expect(
+                    await GlideJson.arrindex(
+                        client,
+                        Buffer.from(key2),
+                        Buffer.from("..a"),
+                        Buffer.from('"foo"'),
+                        {
+                            start: 6,
+                            end: -1,
+                        },
+                    ),
+                ).toEqual(6);
+
+                // Test with non-existent path
+                expect(
+                    await GlideJson.arrindex(
+                        client,
+                        key2,
+                        "$.nonexistent",
+                        true,
+                    ),
+                ).toEqual([]);
+                await expect(
+                    GlideJson.arrindex(client, key2, "nonexistent", true),
+                ).rejects.toThrow(RequestError);
+
+                // Test with non-existent key
+                await expect(
+                    GlideJson.arrindex(client, "non_existing_key", "$", true),
+                ).rejects.toThrow(RequestError);
+                await expect(
+                    GlideJson.arrindex(client, "non_existing_key", ".", true),
+                ).rejects.toThrow(RequestError);
+            });
+
             it("json.toggle tests", async () => {
                 client = await GlideClusterClient.createClient(
                     getClientConfigurationOption(
@@ -2488,7 +2652,7 @@ describe("Server Module Tests", () => {
             },
         );
 
-        it("FT.SEARCH binary test", async () => {
+        it("FT.EXPLAIN ft.explain FT.EXPLAINCLI ft.explaincli", async () => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(
                     cluster.getAddresses(),
@@ -2496,6 +2660,70 @@ describe("Server Module Tests", () => {
                 ),
             );
 
+            const index = uuidv4();
+            expect(
+                await GlideFt.create(client, index, [
+                    { type: "NUMERIC", name: "price" },
+                    { type: "TEXT", name: "title" },
+                ]),
+            ).toEqual("OK");
+
+            let explain = await GlideFt.explain(
+                client,
+                Buffer.from(index),
+                "@price:[0 10]",
+            );
+            expect(explain).toContain("price");
+            expect(explain).toContain("10");
+
+            explain = (
+                (await GlideFt.explain(client, index, "@price:[0 10]", {
+                    decoder: Decoder.Bytes,
+                })) as Buffer
+            ).toString();
+            expect(explain).toContain("price");
+            expect(explain).toContain("10");
+
+            explain = await GlideFt.explain(client, index, "*");
+            expect(explain).toContain("*");
+
+            let explaincli = (
+                await GlideFt.explaincli(
+                    client,
+                    Buffer.from(index),
+                    "@price:[0 10]",
+                )
+            ).map((s) => (s as string).trim());
+            expect(explaincli).toContain("price");
+            expect(explaincli).toContain("0");
+            expect(explaincli).toContain("10");
+
+            explaincli = (
+                await GlideFt.explaincli(client, index, "@price:[0 10]", {
+                    decoder: Decoder.Bytes,
+                })
+            ).map((s) => (s as Buffer).toString().trim());
+            expect(explaincli).toContain("price");
+            expect(explaincli).toContain("0");
+            expect(explaincli).toContain("10");
+
+            expect(await GlideFt.dropindex(client, index)).toEqual("OK");
+            // querying a missing index
+            await expect(GlideFt.explain(client, index, "*")).rejects.toThrow(
+                "Index not found",
+            );
+            await expect(
+                GlideFt.explaincli(client, index, "*"),
+            ).rejects.toThrow("Index not found");
+        });
+
+        it("FT.SEARCH binary test", async () => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
             const prefix = "{" + uuidv4() + "}:";
             const index = prefix + "index";
 
