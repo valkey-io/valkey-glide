@@ -30,7 +30,6 @@ import { ValkeyCluster } from "../../utils/TestUtils.js";
 import { command_request } from "../src/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import {
-    DumpAndRestoreTest,
     checkFunctionListResponse,
     checkFunctionStatsResponse,
     convertStringArrayToBuffer,
@@ -283,32 +282,27 @@ describe("GlideClient", () => {
             client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            const bytesTransaction = new Transaction();
-            await client.set("key", "value");
-            const dumpValue: Buffer = (await client.dump("key")) as Buffer;
-            await client.del(["key"]);
-            const expectedBytesRes = await DumpAndRestoreTest(
-                bytesTransaction,
-                dumpValue,
-            );
-            bytesTransaction.select(0);
-            const result = await client.exec(bytesTransaction, {
-                decoder: Decoder.Bytes,
-            });
-            expectedBytesRes.push(["select(0)", "OK"]);
+            const key1 = uuidv4();
+            const key2 = uuidv4();
+            const value = uuidv4();
 
-            validateTransactionResponse(result, expectedBytesRes);
-
-            const stringTransaction = new Transaction();
-            await DumpAndRestoreTest(stringTransaction, dumpValue);
-            stringTransaction.select(0);
+            const transaction1 = new Transaction().set(key1, value).dump(key1);
 
             // Since DUMP gets binary results, we cannot use the string decoder here, so we expected to get an error.
             await expect(
-                client.exec(stringTransaction, { decoder: Decoder.String }),
-            ).rejects.toThrowError(
-                /invalid utf-8 sequence of 1 bytes from index/,
-            );
+                client.exec(transaction1, { decoder: Decoder.String }),
+            ).rejects.toThrow("invalid utf-8 sequence of");
+
+            const result = await client.exec(transaction1, {
+                decoder: Decoder.Bytes,
+            });
+            expect(result?.[0]).toEqual("OK");
+            const dump = result?.[1] as Buffer;
+
+            const transaction2 = new Transaction().restore(key2, 0, dump);
+            expect(await client.exec(transaction2)).toEqual(["OK"]);
+
+            expect(value).toEqual(await client.get(key2));
 
             client.close();
         },
