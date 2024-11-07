@@ -21,9 +21,9 @@ function parseOutput(input: string): {
         .split(",")
         .map((address) => address.split(":"))
         .map((address) => [address[0], Number(address[1])]) as [
-            string,
-            number
-        ][];
+        string,
+        number,
+    ][];
 
     if (clusterFolder === undefined || ports === undefined) {
         throw new Error(`Insufficient data in input: ${input}`);
@@ -43,7 +43,7 @@ export class ValkeyCluster {
     private constructor(
         version: string,
         addresses: [string, number][],
-        clusterFolder?: string
+        clusterFolder?: string,
     ) {
         this.addresses = addresses;
         this.clusterFolder = clusterFolder;
@@ -54,8 +54,11 @@ export class ValkeyCluster {
         cluster_mode: boolean,
         shardCount: number,
         replicaCount: number,
-        getVersionCallback: (addresses: [string, number][], clusterMode: boolean) => Promise<string>,
-        loadModule?: string[]
+        getVersionCallback: (
+            addresses: [string, number][],
+            clusterMode: boolean,
+        ) => Promise<string>,
+        loadModule?: string[],
     ): Promise<ValkeyCluster> {
         return new Promise<ValkeyCluster>((resolve, reject) => {
             let command = `start -r ${replicaCount} -n ${shardCount}`;
@@ -67,7 +70,7 @@ export class ValkeyCluster {
             if (loadModule) {
                 if (loadModule.length === 0) {
                     throw new Error(
-                        "Please provide the path(s) to the module(s) you want to load."
+                        "Please provide the path(s) to the module(s) you want to load.",
                     );
                 }
 
@@ -88,11 +91,15 @@ export class ValkeyCluster {
                         resolve(
                             getVersionCallback(addresses, cluster_mode).then(
                                 (ver) =>
-                                    new ValkeyCluster(ver, addresses, clusterFolder)
-                            )
+                                    new ValkeyCluster(
+                                        ver,
+                                        addresses,
+                                        clusterFolder,
+                                    ),
+                            ),
                         );
                     }
-                }
+                },
             );
         });
     }
@@ -100,10 +107,13 @@ export class ValkeyCluster {
     public static async initFromExistingCluster(
         cluster_mode: boolean,
         addresses: [string, number][],
-        getVersionCallback: (addresses: [string, number][], clusterMode: boolean) => Promise<string>
+        getVersionCallback: (
+            addresses: [string, number][],
+            clusterMode: boolean,
+        ) => Promise<string>,
     ): Promise<ValkeyCluster> {
         return getVersionCallback(addresses, cluster_mode).then(
-            (ver) => new ValkeyCluster(ver, addresses, "")
+            (ver) => new ValkeyCluster(ver, addresses, ""),
         );
     }
 
@@ -123,26 +133,28 @@ export class ValkeyCluster {
         return lt(this.version, minVersion);
     }
 
-    public async close() {
+    public async close(keepFolder = false): Promise<void> {
         if (this.clusterFolder) {
             await new Promise<void>((resolve, reject) => {
-                execFile(
-                    "python3",
-                    [
-                        PY_SCRIPT_PATH,
-                        `stop`,
-                        `--cluster-folder`,
-                        `${this.clusterFolder}`,
-                    ],
-                    (error, _, stderr) => {
-                        if (error) {
-                            console.error(stderr);
-                            reject(error);
-                        } else {
-                            resolve();
-                        }
+                const commandArgs = [
+                    PY_SCRIPT_PATH,
+                    `stop`,
+                    `--cluster-folder`,
+                    `${this.clusterFolder}`,
+                ];
+
+                if (keepFolder) {
+                    commandArgs.push(`--keep-folder`);
+                }
+
+                execFile("python3", commandArgs, (error, _, stderr) => {
+                    if (error) {
+                        console.error(stderr);
+                        reject(error);
+                    } else {
+                        resolve();
                     }
-                );
+                });
             });
         }
     }

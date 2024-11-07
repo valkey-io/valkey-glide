@@ -32,7 +32,7 @@
         "compile-protobuf-files": "cd src && pbjs -t static-module -o ProtobufMessage.js ../../glide-core/src/protobuf/*.proto && pbts -o ProtobufMessage.d.ts ProtobufMessage.js",
         "clean": "rm -rf build-ts rust-client/target docs glide-logs rust-client/glide-rs.*.node rust-client/index.* src/ProtobufMessage.*",
         "fix-protobuf-file": "replace 'this\\.encode\\(message, writer\\)\\.ldelim' 'this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim' src/ProtobufMessage.js",
-        "test": "npm run build-test-utils && jest --verbose --runInBand --testPathIgnorePatterns='ServerModules'",
+        "test": "npm run build-test-utils && jest --verbose --testPathIgnorePatterns='ServerModules'",
         "test-minimum": "npm run build-test-utils && jest --verbose --runInBand --testNamePattern='^(.(?!(GlideJson|GlideFt|pubsub|kill)))*$'",
         "test-modules": "npm run build-test-utils && jest --verbose --runInBand --testNamePattern='(GlideJson|GlideFt)'",
         "build-test-utils": "cd ../utils && npm i && npm run build",
@@ -40,7 +40,7 @@
         "lint": "npm run install-linting && npx eslint -c ../eslint.config.mjs && npm run prettier:check:ci",
         "install-linting": "cd ../ & npm install",
         "prepack": "npmignore --auto",
-        "prereq": "git submodule update --init --recursive && npm install",
+        "prereq": "npm install",
         "prettier:check:ci": "npx prettier --check . --ignore-unknown '!**/*.{js,d.ts}'",
         "prettier:format": "npx prettier --write . --ignore-unknown '!**/*.{js,d.ts}'"
     },
@@ -59,9 +59,9 @@
         "replace": "^1.2.2",
         "semver": "^7.6.3",
         "ts-jest": "^29.2.5",
+        "ts-node": "^10.9.2",
         "typescript": "^5.5.4",
-        "uuid": "^10.0.0",
-        "ts-node": "^10.9.2"
+        "uuid": "^11.0"
     },
     "author": "Valkey GLIDE Maintainers",
     "license": "Apache-2.0",

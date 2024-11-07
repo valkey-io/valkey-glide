@@ -572,7 +572,7 @@ where
         let mut slots = self.slots.borrow_mut();
 
         let results = match &routing {
-            MultipleNodeRoutingInfo::MultiSlot(routes) => {
+            MultipleNodeRoutingInfo::MultiSlot((routes, _)) => {
                 self.execute_multi_slot(input, &mut slots, &mut connections, routes)
             }
             MultipleNodeRoutingInfo::AllMasters => {
@@ -648,10 +648,11 @@ where
                     .map(|res| res.map(|(_, val)| val))
                     .collect::<RedisResult<Vec<_>>>()?;
                 match routing {
-                    MultipleNodeRoutingInfo::MultiSlot(vec) => {
+                    MultipleNodeRoutingInfo::MultiSlot((vec, args_pattern)) => {
                         crate::cluster_routing::combine_and_sort_array_results(
                             results,
-                            vec.iter().map(|(_, indices)| indices),
+                            &vec,
+                            &args_pattern,
                         )
                     }
                     _ => crate::cluster_routing::combine_array_results(results),

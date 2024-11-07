@@ -18,6 +18,7 @@ import glide.api.models.commands.FT.FTSearchOptions;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.NonNull;
 
@@ -361,7 +362,7 @@ public class FT {
      * // example of using the API:
      * FTAggregateOptions options = FTAggregateOptions.builder()
      *     .loadFields(new String[] {"__key"})
-     *     .addExpression(
+     *     .addClause(
      *             new FTAggregateOptions.GroupBy(
      *                     new String[] {"@condition"},
      *                     new Reducer[] {
@@ -443,7 +444,7 @@ public class FT {
      * // example of using the API:
      * FTAggregateOptions options = FTAggregateOptions.builder()
      *     .loadFields(new String[] {"__key"})
-     *     .addExpression(
+     *     .addClause(
      *             new FTAggregateOptions.GroupBy(
      *                     new String[] {"@condition"},
      *                     new Reducer[] {
@@ -537,14 +538,14 @@ public class FT {
      * @example
      *     <pre>{@code
      * // example of using the API:
-     * Map<String, Object> response = client.ftinfo("myIndex").get();
+     * Map<String, Object> response = FT.info(client, "myIndex").get();
      * // the response contains data in the following format:
      * Map<String, Object> data = Map.of(
      *     "index_name", gs("myIndex"),
      *     "index_status", gs("AVAILABLE"),
      *     "key_type", gs("JSON"),
      *     "creation_timestamp", 1728348101728771L,
-     *     "key_prefixes", new String[] { gs("json:") },
+     *     "key_prefixes", new Object[] { gs("json:") },
      *     "num_indexed_vectors", 0L,
      *     "space_usage", 653471L,
      *     "num_docs", 0L,
@@ -580,12 +581,7 @@ public class FT {
      */
     public static CompletableFuture<Map<String, Object>> info(
             @NonNull BaseClient client, @NonNull String indexName) {
-        // TODO inconsistency: the outer map is `Map<String, T>`,
-        //   while inner maps are `Map<GlideString, T>`
-        //   The outer map converted from `Map<GlideString, T>` in ClusterValue::ofMultiValueBinary
-        // TODO server returns all strings as `SimpleString`, we're safe to convert all to
-        //   `GlideString`s to `String`
-        return executeCommand(client, new GlideString[] {gs("FT.INFO"), gs(indexName)}, true);
+        return info(client, gs(indexName));
     }
 
     /**
@@ -596,14 +592,14 @@ public class FT {
      * @example
      *     <pre>{@code
      * // example of using the API:
-     * Map<String, Object> response = client.ftinfo(gs("myIndex")).get();
+     * Map<String, Object> response = FT.info(client, gs("myIndex")).get();
      * // the response contains data in the following format:
      * Map<String, Object> data = Map.of(
      *     "index_name", gs("myIndex"),
      *     "index_status", gs("AVAILABLE"),
      *     "key_type", gs("JSON"),
      *     "creation_timestamp", 1728348101728771L,
-     *     "key_prefixes", new String[] { gs("json:") },
+     *     "key_prefixes", new Object[] { gs("json:") },
      *     "num_indexed_vectors", 0L,
      *     "space_usage", 653471L,
      *     "num_docs", 0L,
@@ -639,7 +635,21 @@ public class FT {
      */
     public static CompletableFuture<Map<String, Object>> info(
             @NonNull BaseClient client, @NonNull GlideString indexName) {
-        return executeCommand(client, new GlideString[] {gs("FT.INFO"), indexName}, true);
+        // TODO inconsistency on cluster client: the outer map is `Map<String, T>`,
+        //   while inner maps are `Map<GlideString, T>`
+        //   The outer map converted from `Map<GlideString, T>` in ClusterValue::ofMultiValueBinary
+        // TODO server returns all map keys as `SimpleString`, we're safe to convert all to
+        //   `GlideString`s to `String`
+
+        // standalone client returns `Map<GlideString, Object>`, but cluster `Map<String, Object>`
+        if (client instanceof GlideClusterClient)
+            return executeCommand(client, new GlideString[] {gs("FT.INFO"), indexName}, true);
+        return FT.<Map<GlideString, Object>>executeCommand(
+                        client, new GlideString[] {gs("FT.INFO"), indexName}, true)
+                .thenApply(
+                        map ->
+                                map.entrySet().stream()
+                                        .collect(Collectors.toMap(e -> e.getKey().toString(), Map.Entry::getValue)));
     }
 
     /**
@@ -720,7 +730,7 @@ public class FT {
      *
      * @param client The client to execute the command.
      * @param aliasName The alias name. This alias will now be pointed to a different index.
-     * @param indexName The index name for which an existing alias has to updated.
+     * @param indexName The index name for which an existing alias has to be updated.
      * @return <code>"OK"</code>.
      * @example
      *     <pre>{@code
@@ -738,17 +748,46 @@ public class FT {
      *
      * @param client The client to execute the command.
      * @param aliasName The alias name. This alias will now be pointed to a different index.
-     * @param indexName The index name for which an existing alias has to updated.
+     * @param indexName The index name for which an existing alias has to be updated.
      * @return <code>"OK"</code>.
      * @example
      *     <pre>{@code
-     * FT.aliasupdate(client,gs("myalias"), gs("myindex")).get(); // "OK"
+     * FT.aliasupdate(client, gs("myalias"), gs("myindex")).get(); // "OK"
      * }</pre>
      */
     public static CompletableFuture<String> aliasupdate(
             @NonNull BaseClient client, @NonNull GlideString aliasName, @NonNull GlideString indexName) {
         var args = new GlideString[] {gs("FT.ALIASUPDATE"), aliasName, indexName};
         return executeCommand(client, args, false);
+    }
+
+    /**
+     * Lists all index aliases.
+     *
+     * @param client The client to execute the command.
+     * @return A map of index aliases to indices being aliased.
+     * @example
+     *     <pre>{@code
+     * var aliases = FT.aliaslist(client).get();
+     * // the response contains data in the following format:
+     * Map<GlideString, GlideString> aliases = Map.of(
+     *     gs("alias"), gs("myIndex"),
+     * );
+     * }</pre>
+     */
+    public static CompletableFuture<Map<GlideString, GlideString>> aliaslist(
+            @NonNull BaseClient client) {
+        // standalone client returns `Map<GlideString, Object>`, but cluster `Map<String, Object>`
+        //   The map converted from `Map<GlideString, T>` in ClusterValue::ofMultiValueBinary
+        // TODO this will fail once an alias name will be non-utf8-compatible
+        if (client instanceof GlideClient)
+            return executeCommand(client, new GlideString[] {gs("FT._ALIASLIST")}, true);
+        return FT.<Map<String, GlideString>>executeCommand(
+                        client, new GlideString[] {gs("FT._ALIASLIST")}, true)
+                .thenApply(
+                        map ->
+                                map.entrySet().stream()
+                                        .collect(Collectors.toMap(e -> gs(e.getKey()), Map.Entry::getValue)));
     }
 
     /**
