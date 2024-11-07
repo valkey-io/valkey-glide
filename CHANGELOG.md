@@ -1,5 +1,6 @@
 #### Changes
 * Node: alias commands added: FT.ALIASADD, FT.ALIADDEL, FT.ALIASUPDATE([#2596](https://github.com/valkey-io/valkey-glide/pull/2596))
+* Python code cleanup ([#2573](https://github.com/valkey-io/valkey-glide/pull/2573))
 * Python: Python: FT.PROFILE command added ([#2543](https://github.com/valkey-io/valkey-glide/pull/2543))
 * Python: Python: FT.AGGREGATE command added([#2530](https://github.com/valkey-io/valkey-glide/pull/2530))
 * Python: Add JSON.OBJLEN command ([#2495](https://github.com/valkey-io/valkey-glide/pull/2495))
@@ -48,8 +49,10 @@
 * Node: Added `JSON.TYPE` ([#2510](https://github.com/valkey-io/valkey-glide/pull/2510))
 * Java: Added `JSON.RESP` ([#2513](https://github.com/valkey-io/valkey-glide/pull/2513))
 * Java: Added `JSON.TYPE` ([#2525](https://github.com/valkey-io/valkey-glide/pull/2525))
+* Java: Added `FT._LIST` ([#2568](https://github.com/valkey-io/valkey-glide/pull/2568))
 * Node: Added `FT.DROPINDEX` ([#2516](https://github.com/valkey-io/valkey-glide/pull/2516))
 * Node: Added `JSON.RESP` ([#2517](https://github.com/valkey-io/valkey-glide/pull/2517))
+* Node: Added `JSON.CLEAR` ([#2566](https://github.com/valkey-io/valkey-glide/pull/2566))
 * Node: Added `JSON.ARRTRIM` ([#2550](https://github.com/valkey-io/valkey-glide/pull/2550))
 * Python: Add `JSON.STRAPPEND` , `JSON.STRLEN` commands ([#2372](https://github.com/valkey-io/valkey-glide/pull/2372))
 * Python: Add `JSON.OBJKEYS` command ([#2395](https://github.com/valkey-io/valkey-glide/pull/2395))
@@ -61,7 +64,9 @@
 * Node: Add `JSON.STRLEN` and `JSON.STRAPPEND` command ([#2537](https://github.com/valkey-io/valkey-glide/pull/2537))
 * Node: Add `FT.SEARCH` ([#2551](https://github.com/valkey-io/valkey-glide/pull/2551))
 * Python: Fix example ([#2556](https://github.com/valkey-io/valkey-glide/issues/2556))
-* Core: Add support for sending multi-slot JSON.MSET and JSON.MGET commands ([#2587]https://github.com/valkey-io/valkey-glide/pull/2587) 
+* Core: Add support for sending multi-slot JSON.MSET and JSON.MGET commands ([#2587]https://github.com/valkey-io/valkey-glide/pull/2587)
+* Node: Add `JSON.DEBUG` command ([#2572](https://github.com/valkey-io/valkey-glide/pull/2572))
+* Node: Add `JSON.NUMINCRBY` and `JSON.NUMMULTBY` command ([#2555](https://github.com/valkey-io/valkey-glide/pull/2555))
 
 #### Breaking Changes
 
