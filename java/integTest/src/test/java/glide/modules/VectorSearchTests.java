@@ -319,8 +319,8 @@ public class VectorSearchTests {
 
     @SneakyThrows
     @Test
-    public void ft_drop() {
-        var index = UUID.randomUUID().toString();
+    public void ft_drop_and_ft_list() {
+        var index = gs(UUID.randomUUID().toString());
         assertEquals(
                 OK,
                 FT.create(
@@ -331,17 +331,11 @@ public class VectorSearchTests {
                                 })
                         .get());
 
-        // TODO use FT.LIST with it is done
-        var before =
-                Set.of((Object[]) client.customCommand(new String[] {"FT._LIST"}).get().getSingleValue());
+        var before = Set.of(FT.list(client).get());
 
         assertEquals(OK, FT.dropindex(client, index).get());
 
-        // TODO use FT.LIST with it is done
-        var after =
-                new HashSet<>(
-                        Set.of(
-                                (Object[]) client.customCommand(new String[] {"FT._LIST"}).get().getSingleValue()));
+        var after = new HashSet<>(Set.of(FT.list(client).get()));
 
         assertFalse(after.contains(index));
         after.add(index);
