@@ -60,7 +60,7 @@ public class ClusterClientTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> GlideClusterClient.createClient(commonClusterClientConfig().build()).get());
-        assertTrue(exception.getCause() instanceof ClosingException);
+        assertInstanceOf(ClosingException.class, exception.getCause());
 
         // Creation of a new client with credentials
         GlideClusterClient auth_client =
@@ -129,7 +129,7 @@ public class ClusterClientTests {
 
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> testUserClient.set("foo", "bar").get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         client.customCommand(new String[] {"ACL", "DELUSER", username}).get();
 
@@ -161,7 +161,7 @@ public class ClusterClientTests {
         client.close();
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.set("foo", "bar").get());
-        assertTrue(executionException.getCause() instanceof ClosingException);
+        assertInstanceOf(ClosingException.class, executionException.getCause());
     }
 
     @SneakyThrows

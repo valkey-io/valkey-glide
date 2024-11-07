@@ -3,6 +3,7 @@ package glide;
 
 import static glide.TestUtilities.commonClientConfig;
 import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -33,7 +34,7 @@ public class ErrorHandlingTests {
                                                         .build())
                                         .get());
         assertAll(
-                () -> assertTrue(exception.getCause() instanceof ClosingException),
+                () -> assertInstanceOf(ClosingException.class, exception.getCause()),
                 () -> assertTrue(exception.getCause().getMessage().contains("Connection refused")));
     }
 
@@ -46,7 +47,7 @@ public class ErrorHandlingTests {
                             ExecutionException.class,
                             () -> regularClient.customCommand(new String[] {"pewpew"}).get());
             assertAll(
-                    () -> assertTrue(exception.getCause() instanceof RequestException),
+                    () -> assertInstanceOf(RequestException.class, exception.getCause()),
                     () -> assertTrue(exception.getCause().getMessage().contains("unknown command")));
         }
     }
@@ -60,7 +61,7 @@ public class ErrorHandlingTests {
                             ExecutionException.class,
                             () -> regularClient.customCommand(new String[] {"ping", "pang", "pong"}).get());
             assertAll(
-                    () -> assertTrue(exception.getCause() instanceof RequestException),
+                    () -> assertInstanceOf(RequestException.class, exception.getCause()),
                     () ->
                             assertTrue(exception.getCause().getMessage().contains("wrong number of arguments")));
         }
