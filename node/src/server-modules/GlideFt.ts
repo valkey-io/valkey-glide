@@ -7,6 +7,7 @@ import {
     Decoder,
     DecoderOption,
     GlideRecord,
+    GlideReturnType,
     GlideString,
 } from "../BaseClient";
 import { GlideClient } from "../GlideClient";
