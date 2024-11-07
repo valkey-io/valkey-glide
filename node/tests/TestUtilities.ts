@@ -328,24 +328,6 @@ export function createLongRunningLuaScript(
     return script.replaceAll("$timeout", timeout.toString());
 }
 
-export async function waitForScriptNotBusy(
-    client: GlideClusterClient | GlideClient,
-) {
-    // If function wasn't killed, and it didn't time out - it blocks the server and cause rest test to fail.
-    let isBusy = true;
-
-    do {
-        try {
-            await client.scriptKill();
-        } catch (err) {
-            // should throw `notbusy` error, because the function should be killed before
-            if ((err as Error).message.toLowerCase().includes("notbusy")) {
-                isBusy = false;
-            }
-        }
-    } while (isBusy);
-}
-
 export async function testTeardown(
     cluster_mode: boolean,
     option: BaseClientConfiguration,
