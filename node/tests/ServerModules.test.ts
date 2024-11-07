@@ -2038,7 +2038,7 @@ describe("Server Module Tests", () => {
                     ).toEqual(19);
                 },
             );
-            
+
             it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
                 "json.objlen tests",
                 async (protocol) => {
