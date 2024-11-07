@@ -342,6 +342,69 @@ export class GlideJson {
     }
 
     /**
+     * Trims an array at the specified `path` within the JSON document stored at `key` so that it becomes a subarray [start, end], both inclusive.
+     * If `start` < 0, it is treated as 0.
+     * If `end` >= size (size of the array), it is treated as size-1.
+     * If `start` >= size or `start` > `end`, the array is emptied and 0 is returned.
+     *
+     * @param client - The client to execute the command.
+     * @param key - The key of the JSON document.
+     * @param path - The path within the JSON document.
+     * @param start - The start index, inclusive.
+     * @param end - The end index, inclusive.
+     * @returns
+     *     - For JSONPath (`path` starts with `$`):
+     *       - Returns a list of integer replies for every possible path, indicating the new length of the array,
+     *         or `null` for JSON values matching the path that are not an array.
+     *       - If the array is empty, its corresponding return value is 0.
+     *       - If `path` doesn't exist, an empty array will be returned.
+     *       - If an index argument is out of bounds, an error is raised.
+     *     - For legacy path (`path` doesn't start with `$`):
+     *       - Returns an integer representing the new length of the array.
+     *       - If the array is empty, its corresponding return value is 0.
+     *       - If multiple paths match, the length of the first trimmed array match is returned.
+     *       - If `path` doesn't exist, or the value at `path` is not an array, an error is raised.
+     *       - If an index argument is out of bounds, an error is raised.
+     *
+     * @example
+     * ```typescript
+     * console.log(await GlideJson.set(client, "doc", "$", '[[], ["a"], ["a", "b"], ["a", "b", "c"]]');
+     * // Output: 'OK' - Indicates successful setting of the value at path '$' in the key stored at `doc`.
+     * const result = await GlideJson.arrtrim(client, "doc", "$[*]", 0, 1);
+     * console.log(result);
+     * // Output: [0, 1, 2, 2]
+     * console.log(await GlideJson.get(client, "doc", "$"));
+     * // Output: '[[],["a"],["a","b"],["a","b"]]' - Returns the value at path '$' in the JSON document stored at `doc`.
+     * ```
+     * @example
+     * ```typescript
+     * console.log(await GlideJson.set(client, "doc", "$", '{"children": ["John", "Jack", "Tom", "Bob", "Mike"]}');
+     * // Output: 'OK' - Indicates successful setting of the value at path '$' in the key stored at `doc`.
+     * result = await GlideJson.arrtrim(client, "doc", ".children", 0, 1);
+     * console.log(result);
+     * // Output: 2
+     * console.log(await GlideJson.get(client, "doc", ".children"));
+     * // Output: '["John", "Jack"]' - Returns the value at path '$' in the JSON document stored at `doc`.
+     * ```
+     */
+    static async arrtrim(
+        client: BaseClient,
+        key: GlideString,
+        path: GlideString,
+        start: number,
+        end: number,
+    ): Promise<ReturnTypeJson<number>> {
+        const args: GlideString[] = [
+            "JSON.ARRTRIM",
+            key,
+            path,
+            start.toString(),
+            end.toString(),
+        ];
+        return _executeCommand<ReturnTypeJson<number>>(client, args);
+    }
+
+    /**
      * Toggles a Boolean value stored at the specified `path` within the JSON document stored at `key`.
      *
      * @param client - The client to execute the command.
@@ -484,7 +547,7 @@ export class GlideJson {
      *
      * @example
      * ```typescript
-     * console.log(await GlideJson.set(client, "doc", "$", "[1, 2.3, "foo", true, null, {}, []]"));
+     * console.log(await GlideJson.set(client, "doc", "$", '[1, 2.3, "foo", true, null, {}, []]'));
      * // Output: 'OK' - Indicates successful setting of the value at path '$' in the key stored at `doc`.
      * const result = await GlideJson.type(client, "doc", {path: "$[*]"});
      * console.log(result);
@@ -535,7 +598,7 @@ export class GlideJson {
      *
      * @example
      * ```typescript
-     * console.log(await GlideJson.set(client, "doc", ".", "{a: [1, 2, 3], b: {a: [1, 2], c: {a: 42}}}"));
+     * console.log(await GlideJson.set(client, "doc", ".", '{a: [1, 2, 3], b: {a: [1, 2], c: {a: 42}}}'));
      * // Output: 'OK' - Indicates successful setting of the value at path '.' in the key stored at `doc`.
      * const result = await GlideJson.resp(client, "doc", {path: "$..a"});
      * console.log(result);

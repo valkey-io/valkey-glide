@@ -1145,7 +1145,7 @@ public class Json {
     }
 
     /**
-     * Trims an array at the specified <code>path</code> within the JSON document started at <code>key
+     * Trims an array at the specified <code>path</code> within the JSON document stored at <code>key
      * </code> so that it becomes a subarray [<code>start</code>, <code>end</code>], both inclusive.
      * <br>
      * If <code>start</code> < 0, it is treated as 0.<br>
@@ -1193,7 +1193,7 @@ public class Json {
     }
 
     /**
-     * Trims an array at the specified <code>path</code> within the JSON document started at <code>key
+     * Trims an array at the specified <code>path</code> within the JSON document stored at <code>key
      * </code> so that it becomes a subarray [<code>start</code>, <code>end</code>], both inclusive.
      * <br>
      * If <code>start</code> < 0, it is treated as 0.<br>

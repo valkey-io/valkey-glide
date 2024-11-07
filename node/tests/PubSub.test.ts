@@ -28,7 +28,6 @@ import ValkeyCluster from "../../utils/TestUtils";
 import {
     flushAndCloseClient,
     getServerVersion,
-    parseCommandLineArgs,
     parseEndpoints,
 } from "./TestUtilities";
 
@@ -60,9 +59,8 @@ describe("PubSub", () => {
     let cmeCluster: ValkeyCluster;
     let cmdCluster: ValkeyCluster;
     beforeAll(async () => {
-        const standaloneAddresses =
-            parseCommandLineArgs()["standalone-endpoints"];
-        const clusterAddresses = parseCommandLineArgs()["cluster-endpoints"];
+        const standaloneAddresses = global.STAND_ALONE_ENDPOINT;
+        const clusterAddresses = global.CLUSTER_ENDPOINTS;
         // Connect to cluster or create a new one based on the parsed addresses
         cmdCluster = standaloneAddresses
             ? await ValkeyCluster.initFromExistingCluster(
@@ -80,12 +78,22 @@ describe("PubSub", () => {
             : await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
     }, 40000);
     afterEach(async () => {
-        await flushAndCloseClient(false, cmdCluster.getAddresses());
-        await flushAndCloseClient(true, cmeCluster.getAddresses());
+        if (cmdCluster) {
+            await flushAndCloseClient(false, cmdCluster.getAddresses());
+        }
+
+        if (cmeCluster) {
+            await flushAndCloseClient(true, cmeCluster.getAddresses());
+        }
     });
     afterAll(async () => {
-        await cmeCluster.close();
-        await cmdCluster.close();
+        if (cmdCluster) {
+            await cmdCluster.close();
+        }
+
+        if (cmeCluster) {
+            await cmeCluster.close();
+        }
     });
 
     async function createClients(
@@ -3956,6 +3964,12 @@ describe("PubSub", () => {
             let client2: TGlideClient | null = null;
 
             try {
+                const minVersion = "7.0.0";
+
+                if (cmeCluster.checkIfServerVersionLessThan(minVersion)) {
+                    return; // Skip test if server version is less than required
+                }
+
                 const regularChannel = "regular_channel";
                 const shardChannel = "shard_channel";
 
@@ -3976,12 +3990,6 @@ describe("PubSub", () => {
                     getOptions(clusterMode),
                     pubSub,
                 );
-
-                const minVersion = "7.0.0";
-
-                if (cmeCluster.checkIfServerVersionLessThan(minVersion)) {
-                    return; // Skip test if server version is less than required
-                }
 
                 // Test pubsubChannels
                 const regularChannels = await client2.pubsubChannels();
