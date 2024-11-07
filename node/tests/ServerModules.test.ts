@@ -2488,7 +2488,7 @@ describe("Server Module Tests", () => {
             },
         );
 
-        it("FT.SEARCH binary test", async () => {
+        it("FT.EXPLAIN ft.explain FT.EXPLAINCLI ft.explaincli", async () => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(
                     cluster.getAddresses(),
@@ -2496,6 +2496,70 @@ describe("Server Module Tests", () => {
                 ),
             );
 
+            const index = uuidv4();
+            expect(
+                await GlideFt.create(client, index, [
+                    { type: "NUMERIC", name: "price" },
+                    { type: "TEXT", name: "title" },
+                ]),
+            ).toEqual("OK");
+
+            let explain = await GlideFt.explain(
+                client,
+                Buffer.from(index),
+                "@price:[0 10]",
+            );
+            expect(explain).toContain("price");
+            expect(explain).toContain("10");
+
+            explain = (
+                (await GlideFt.explain(client, index, "@price:[0 10]", {
+                    decoder: Decoder.Bytes,
+                })) as Buffer
+            ).toString();
+            expect(explain).toContain("price");
+            expect(explain).toContain("10");
+
+            explain = await GlideFt.explain(client, index, "*");
+            expect(explain).toContain("*");
+
+            let explaincli = (
+                await GlideFt.explaincli(
+                    client,
+                    Buffer.from(index),
+                    "@price:[0 10]",
+                )
+            ).map((s) => (s as string).trim());
+            expect(explaincli).toContain("price");
+            expect(explaincli).toContain("0");
+            expect(explaincli).toContain("10");
+
+            explaincli = (
+                await GlideFt.explaincli(client, index, "@price:[0 10]", {
+                    decoder: Decoder.Bytes,
+                })
+            ).map((s) => (s as Buffer).toString().trim());
+            expect(explaincli).toContain("price");
+            expect(explaincli).toContain("0");
+            expect(explaincli).toContain("10");
+
+            expect(await GlideFt.dropindex(client, index)).toEqual("OK");
+            // querying a missing index
+            await expect(GlideFt.explain(client, index, "*")).rejects.toThrow(
+                "Index not found",
+            );
+            await expect(
+                GlideFt.explaincli(client, index, "*"),
+            ).rejects.toThrow("Index not found");
+        });
+
+        it("FT.SEARCH binary test", async () => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
             const prefix = "{" + uuidv4() + "}:";
             const index = prefix + "index";
 
