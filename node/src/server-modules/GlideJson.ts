@@ -423,23 +423,23 @@ export class GlideJson {
      * const resultSet = await GlideJson.set("doc", "$", jsonStr);
      * // Output: 'OK'
      *
-     * const resultToggle = await.GlideJson.toggle(client, "doc", "$.bool")
+     * const resultToggle = await.GlideJson.toggle(client, "doc", {path: "$.bool"});
      * // Output: [false, true, null] - Indicates successful toggling of the Boolean values at path '$.bool' in the key stored at `doc`.
      *
-     * const resultToggle = await.GlideJson.toggle(client, "doc", "bool")
+     * const resultToggle = await.GlideJson.toggle(client, "doc", {path: "bool"});
      * // Output: true - Indicates successful toggling of the Boolean value at path 'bool' in the key stored at `doc`.
      *
-     * const resultToggle = await.GlideJson.toggle(client, "doc", "bool")
+     * const resultToggle = await.GlideJson.toggle(client, "doc", {path: "bool"});
      * // Output: true - Indicates successful toggling of the Boolean value at path 'bool' in the key stored at `doc`.
      *
-     * const jsonGetStr = await GlideJson.get(client, "doc", "$");
+     * const jsonGetStr = await GlideJson.get(client, "doc", {path: "$"});
      * console.log(JSON.stringify(jsonGetStr));
      * // Output: [{bool: true, nested: {bool: true, nested: {bool: 10}}}] - The updated JSON value in the key stored at `doc`.
      *
      * // Without specifying a path, the path defaults to root.
      * console.log(await GlideJson.set(client, "doc2", ".", true)); // Output: "OK"
-     * console.log(await GlideJson.toggle(client, "doc2")); // Output: "false"
-     * console.log(await GlideJson.toggle(client, "doc2")); // Output: "true"
+     * console.log(await GlideJson.toggle(client, {path: "doc2"})); // Output: "false"
+     * console.log(await GlideJson.toggle(client, {path: "doc2"})); // Output: "true"
      * ```
      */
     static async toggle(
@@ -505,9 +505,9 @@ export class GlideJson {
      * ```typescript
      * console.log(await GlideJson.set(client, "doc", "$", '{a: 1, nested: {a:2, b:3}}'));
      * // Output: "OK" - Indicates successful setting of the value at path '$' in the key stored at `doc`.
-     * console.log(await GlideJson.forget(client, "doc", "$..a"));
+     * console.log(await GlideJson.forget(client, "doc", {path: "$..a"}));
      * // Output: 2 - Indicates successful deletion of the specific values in the key stored at `doc`.
-     * console.log(await GlideJson.get(client, "doc", "$"));
+     * console.log(await GlideJson.get(client, "doc", {path: "$"}));
      * // Output: "[{nested: {b: 3}}]" - Returns the value at path '$' in the JSON document stored at `doc`.
      * console.log(await GlideJson.forget(client, "doc"));
      * // Output: 1 - Deletes the entire JSON document stored at `doc`.
@@ -549,7 +549,7 @@ export class GlideJson {
      * ```typescript
      * console.log(await GlideJson.set(client, "doc", "$", '[1, 2.3, "foo", true, null, {}, []]'));
      * // Output: 'OK' - Indicates successful setting of the value at path '$' in the key stored at `doc`.
-     * const result = await GlideJson.type(client, "doc", "$[*]");
+     * const result = await GlideJson.type(client, "doc", {path: "$[*]"});
      * console.log(result);
      * // Output: ["integer", "number", "string", "boolean", null, "object", "array"];
      * console.log(await GlideJson.set(client, "doc2", ".", "{Name: 'John', Age: 27}"));
@@ -569,6 +569,59 @@ export class GlideJson {
         }
 
         return _executeCommand<ReturnTypeJson<GlideString>>(client, args);
+    }
+
+    /**
+     * Clears arrays or objects at the specified JSON path in the document stored at `key`.
+     * Numeric values are set to `0`, boolean values are set to `false`, and string values are converted to empty strings.
+     *
+     * @param client - The client to execute the command.
+     * @param key - The key of the JSON document.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `path`: The JSON path to the arrays or objects to be cleared. Defaults to root if not provided.
+     * @returns The number of containers cleared, numeric values zeroed, and booleans toggled to `false`,
+     * and string values converted to empty strings.
+     * If `path` doesn't exist, or the value at `path` is already empty (e.g., an empty array, object, or string), `0` is returned.
+     * If `key doesn't exist, an error is raised.
+     *
+     * @example
+     * ```typescript
+     * console.log(await GlideJson.set(client, "doc", "$", '{"obj":{"a":1, "b":2}, "arr":[1,2,3], "str": "foo", "bool": true, "int": 42, "float": 3.14, "nullVal": null}'));
+     * // Output: 'OK' - JSON document is successfully set.
+     * console.log(await GlideJson.clear(client, "doc", {path: "$.*"}));
+     * // Output: 6 - 6 values are cleared (arrays/objects/strings/numbers/booleans), but `null` remains as is.
+     * console.log(await GlideJson.get(client, "doc", "$"));
+     * // Output: '[{"obj":{},"arr":[],"str":"","bool":false,"int":0,"float":0.0,"nullVal":null}]'
+     * console.log(await GlideJson.clear(client, "doc", {path: "$.*"}));
+     * // Output: 0 - No further clearing needed since the containers are already empty and the values are defaults.
+     *
+     * console.log(await GlideJson.set(client, "doc", "$", '{"a": 1, "b": {"a": [5, 6, 7], "b": {"a": true}}, "c": {"a": "value", "b": {"a": 3.5}}, "d": {"a": {"foo": "foo"}}, "nullVal": null}'));
+     * // Output: 'OK'
+     * console.log(await GlideJson.clear(client, "doc", {path: "b.a[1:3]"}));
+     * // Output: 2 - 2 elements (`6` and `7`) are cleared.
+     * console.log(await GlideJson.clear(client, "doc", {path: "b.a[1:3]"}));
+     * // Output: 0 - No elements cleared since specified slice has already been cleared.
+     * console.log(await GlideJson.get(client, "doc", {path: "$..a"}));
+     * // Output: '[1,[5,0,0],true,"value",3.5,{"foo":"foo"}]'
+     *
+     * console.log(await GlideJson.clear(client, "doc", {path: "$..a"}));
+     * // Output: 6 - All numeric, boolean, and string values across paths are cleared.
+     * console.log(await GlideJson.get(client, "doc", {path: "$..a"}));
+     * // Output: '[0,[],false,"",0.0,{}]'
+     * ```
+     */
+    static async clear(
+        client: BaseClient,
+        key: GlideString,
+        options?: { path: GlideString },
+    ): Promise<ReturnTypeJson<number>> {
+        const args = ["JSON.CLEAR", key];
+
+        if (options) {
+            args.push(options.path);
+        }
+
+        return _executeCommand<ReturnTypeJson<number>>(client, args);
     }
 
     /**
@@ -764,6 +817,83 @@ export class GlideJson {
         values: GlideString[],
     ): Promise<ReturnTypeJson<number>> {
         const args = ["JSON.ARRAPPEND", key, path, ...values];
+        return _executeCommand(client, args);
+    }
+
+    /**
+     * Reports memory usage in bytes of a JSON object at the specified `path` within the JSON document stored at `key`.
+     *
+     * @param client - The client to execute the command.
+     * @param key - The key of the JSON document.
+     * @param value - The value to append to the string. Must be wrapped with single quotes. For example, to append "foo", pass '"foo"'.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `path`: The path within the JSON document, returns total memory usage if no path is given.
+     * @returns
+     *     - For JSONPath (path starts with `$`):
+     *       - Returns an array of numbers for every possible path, indicating the memory usage.
+     *         If `path` does not exist, an empty array will be returned.
+     *     - For legacy path (path doesn't start with `$`):
+     *       - Returns an integer representing the memory usage. If multiple paths are matched,
+     *         returns the data of the first matching object. If `path` doesn't exist, an error is raised.
+     *     - If `key` doesn't exist, returns `null`.
+     *
+     * @example
+     * ```typescript
+     * console.log(await GlideJson.set(client, "doc", "$", '[1, 2.3, "foo", true, null, {}, [], {a:1, b:2}, [1, 2, 3]]'));
+     * // Output: 'OK' - Indicates successful setting of the value at path '$' in the key stored at `doc`.
+     * console.log(await GlideJson.debugMemory(client, "doc", {path: ".."});
+     * // Output: 258
+     * ```
+     */
+    static async debugMemory(
+        client: BaseClient,
+        key: GlideString,
+        options?: { path: GlideString },
+    ): Promise<ReturnTypeJson<number>> {
+        const args = ["JSON.DEBUG", "MEMORY", key];
+
+        if (options) {
+            args.push(options.path);
+        }
+
+        return _executeCommand(client, args);
+    }
+
+    /**
+     * Reports the number of fields at the specified `path` within the JSON document stored at `key`.
+     *
+     * @param client - The client to execute the command.
+     * @param key - The key of the JSON document.
+     * @param value - The value to append to the string. Must be wrapped with single quotes. For example, to append "foo", pass '"foo"'.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `path`: The path within the JSON document, returns total number of fields if no path is given.
+     * @returns
+     *     - For JSONPath (path starts with `$`):
+     *       - Returns an array of numbers for every possible path, indicating the number of fields.
+     *         If `path` does not exist, an empty array will be returned.
+     *     - For legacy path (path doesn't start with `$`):
+     *       - Returns an integer representing the memory usage. If multiple paths are matched,
+     *         returns the data of the first matching object. If `path` doesn't exist, an error is raised.
+     *     - If `key` doesn't exist, returns `null`.
+     *
+     * @example
+     * ```typescript
+     * console.log(await GlideJson.set(client, "doc", "$", '[1, 2.3, "foo", true, null, {}, [], {a:1, b:2}, [1, 2, 3]]'));
+     * // Output: 'OK' - Indicates successful setting of the value at path '$' in the key stored at `doc`.
+     * console.log(await GlideJson.debugMemory(client, "doc", {path: "$[*]"});
+     * // Output: [1, 1, 1, 1, 1, 0, 0, 2, 3]
+     * ```
+     */
+    static async debugFields(
+        client: BaseClient,
+        key: GlideString,
+        options?: { path: GlideString },
+    ): Promise<ReturnTypeJson<number>> {
+        const args = ["JSON.DEBUG", "FIELDS", key];
+
+        if (options) {
+            args.push(options.path);
+        }
 
         return _executeCommand(client, args);
     }

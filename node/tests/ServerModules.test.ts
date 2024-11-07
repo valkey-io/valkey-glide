@@ -12,7 +12,9 @@ import {
 import { v4 as uuidv4 } from "uuid";
 import {
     ConditionalChange,
+    convertGlideRecordToRecord,
     Decoder,
+    FtAggregateOptions,
     FtSearchReturnType,
     GlideClusterClient,
     GlideFt,
@@ -21,6 +23,7 @@ import {
     JsonGetOptions,
     ProtocolVersion,
     RequestError,
+    SortOrder,
     VectorField,
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils";
@@ -28,18 +31,18 @@ import {
     flushAndCloseClient,
     getClientConfigurationOption,
     getServerVersion,
-    parseCommandLineArgs,
     parseEndpoints,
 } from "./TestUtilities";
 
 const TIMEOUT = 50000;
+/** Waiting interval to let server process the data before querying */
 const DATA_PROCESSING_TIMEOUT = 1000;
 
 describe("Server Module Tests", () => {
     let cluster: ValkeyCluster;
 
     beforeAll(async () => {
-        const clusterAddresses = parseCommandLineArgs()["cluster-endpoints"];
+        const clusterAddresses = global.CLUSTER_ENDPOINTS;
         cluster = await ValkeyCluster.initFromExistingCluster(
             true,
             parseEndpoints(clusterAddresses),
@@ -763,6 +766,159 @@ describe("Server Module Tests", () => {
                 ).toBeNull();
             });
 
+            it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+                "json.clear tests",
+                async () => {
+                    client = await GlideClusterClient.createClient(
+                        getClientConfigurationOption(
+                            cluster.getAddresses(),
+                            protocol,
+                        ),
+                    );
+                    const key = uuidv4();
+                    const jsonValue = {
+                        obj: { a: 1, b: 2 },
+                        arr: [1, 2, 3],
+                        str: "foo",
+                        bool: true,
+                        int: 42,
+                        float: 3.14,
+                        nullVal: null,
+                    };
+
+                    expect(
+                        await GlideJson.set(
+                            client,
+                            key,
+                            "$",
+                            JSON.stringify(jsonValue),
+                        ),
+                    ).toBe("OK");
+
+                    expect(
+                        await GlideJson.clear(client, key, { path: "$.*" }),
+                    ).toBe(6);
+
+                    const result = await GlideJson.get(client, key, {
+                        path: ["$"],
+                    });
+
+                    expect(JSON.parse(result as string)).toEqual([
+                        {
+                            obj: {},
+                            arr: [],
+                            str: "",
+                            bool: false,
+                            int: 0,
+                            float: 0.0,
+                            nullVal: null,
+                        },
+                    ]);
+
+                    expect(
+                        await GlideJson.clear(client, key, { path: "$.*" }),
+                    ).toBe(0);
+
+                    expect(
+                        await GlideJson.set(
+                            client,
+                            key,
+                            "$",
+                            JSON.stringify(jsonValue),
+                        ),
+                    ).toBe("OK");
+
+                    expect(
+                        await GlideJson.clear(client, key, { path: "*" }),
+                    ).toBe(6);
+
+                    const jsonValue2 = {
+                        a: 1,
+                        b: { a: [5, 6, 7], b: { a: true } },
+                        c: { a: "value", b: { a: 3.5 } },
+                        d: { a: { foo: "foo" } },
+                        nullVal: null,
+                    };
+                    expect(
+                        await GlideJson.set(
+                            client,
+                            key,
+                            "$",
+                            JSON.stringify(jsonValue2),
+                        ),
+                    ).toBe("OK");
+
+                    expect(
+                        await GlideJson.clear(client, key, {
+                            path: "b.a[1:3]",
+                        }),
+                    ).toBe(2);
+
+                    expect(
+                        await GlideJson.clear(client, key, {
+                            path: "b.a[1:3]",
+                        }),
+                    ).toBe(0);
+
+                    expect(
+                        JSON.parse(
+                            (await GlideJson.get(client, key, {
+                                path: ["$..a"],
+                            })) as string,
+                        ),
+                    ).toEqual([
+                        1,
+                        [5, 0, 0],
+                        true,
+                        "value",
+                        3.5,
+                        { foo: "foo" },
+                    ]);
+
+                    expect(
+                        await GlideJson.clear(client, key, { path: "..a" }),
+                    ).toBe(6);
+
+                    expect(
+                        JSON.parse(
+                            (await GlideJson.get(client, key, {
+                                path: ["$..a"],
+                            })) as string,
+                        ),
+                    ).toEqual([0, [], false, "", 0.0, {}]);
+
+                    expect(
+                        await GlideJson.clear(client, key, { path: "$..a" }),
+                    ).toBe(0);
+
+                    // Path doesn't exist
+                    expect(
+                        await GlideJson.clear(client, key, { path: "$.path" }),
+                    ).toBe(0);
+
+                    expect(
+                        await GlideJson.clear(client, key, { path: "path" }),
+                    ).toBe(0);
+
+                    // Key doesn't exist
+                    await expect(
+                        GlideJson.clear(client, "non_existing_key"),
+                    ).rejects.toThrow(RequestError);
+
+                    await expect(
+                        GlideJson.clear(client, "non_existing_key", {
+                            path: "$",
+                        }),
+                    ).rejects.toThrow(RequestError);
+
+                    await expect(
+                        GlideJson.clear(client, "non_existing_key", {
+                            path: ".",
+                        }),
+                    ).rejects.toThrow(RequestError);
+                },
+            );
+
             it("json.resp tests", async () => {
                 client = await GlideClusterClient.createClient(
                     getClientConfigurationOption(
@@ -1201,19 +1357,184 @@ describe("Server Module Tests", () => {
                     ),
                 ).toEqual([]);
 
+                // error case
                 await expect(
-                    GlideJson.strappend(client, key, JSON.stringify("try"), {
-                        path: ".non_existing_path",
-                    }),
+                    GlideJson.strlen(client, key, { path: "nested" }),
                 ).rejects.toThrow(RequestError);
-                await expect(
-                    GlideJson.strappend(
-                        client,
-                        "non_existing_key",
-                        JSON.stringify("try"),
-                    ),
-                ).rejects.toThrow(RequestError);
+                await expect(GlideJson.strlen(client, key)).rejects.toThrow(
+                    RequestError,
+                );
             });
+
+            it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+                "json.strappend tests",
+                async (protocol) => {
+                    client = await GlideClusterClient.createClient(
+                        getClientConfigurationOption(
+                            cluster.getAddresses(),
+                            protocol,
+                        ),
+                    );
+                    const key = uuidv4();
+                    const jsonValue = {
+                        a: "foo",
+                        nested: { a: "hello" },
+                        nested2: { a: 31 },
+                    };
+                    // setup
+                    expect(
+                        await GlideJson.set(
+                            client,
+                            key,
+                            "$",
+                            JSON.stringify(jsonValue),
+                        ),
+                    ).toBe("OK");
+
+                    expect(
+                        await GlideJson.strappend(client, key, '"bar"', {
+                            path: "$..a",
+                        }),
+                    ).toEqual([6, 8, null]);
+                    expect(
+                        await GlideJson.strappend(
+                            client,
+                            key,
+                            JSON.stringify("foo"),
+                            {
+                                path: "a",
+                            },
+                        ),
+                    ).toBe(9);
+
+                    expect(
+                        await GlideJson.get(client, key, { path: "." }),
+                    ).toEqual(
+                        JSON.stringify({
+                            a: "foobarfoo",
+                            nested: { a: "hellobar" },
+                            nested2: { a: 31 },
+                        }),
+                    );
+
+                    expect(
+                        await GlideJson.strappend(
+                            client,
+                            key,
+                            JSON.stringify("bar"),
+                            {
+                                path: "$.nested",
+                            },
+                        ),
+                    ).toEqual([null]);
+
+                    await expect(
+                        GlideJson.strappend(
+                            client,
+                            key,
+                            JSON.stringify("bar"),
+                            {
+                                path: ".nested",
+                            },
+                        ),
+                    ).rejects.toThrow(RequestError);
+                    await expect(
+                        GlideJson.strappend(client, key, JSON.stringify("bar")),
+                    ).rejects.toThrow(RequestError);
+
+                    expect(
+                        await GlideJson.strappend(
+                            client,
+                            key,
+                            JSON.stringify("try"),
+                            {
+                                path: "$.non_existing_path",
+                            },
+                        ),
+                    ).toEqual([]);
+
+                    await expect(
+                        GlideJson.strappend(
+                            client,
+                            key,
+                            JSON.stringify("try"),
+                            {
+                                path: ".non_existing_path",
+                            },
+                        ),
+                    ).rejects.toThrow(RequestError);
+                    await expect(
+                        GlideJson.strappend(
+                            client,
+                            "non_existing_key",
+                            JSON.stringify("try"),
+                        ),
+                    ).rejects.toThrow(RequestError);
+                },
+            );
+
+            it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+                "json.debug tests",
+                async (protocol) => {
+                    client = await GlideClusterClient.createClient(
+                        getClientConfigurationOption(
+                            cluster.getAddresses(),
+                            protocol,
+                        ),
+                    );
+                    const key = uuidv4();
+                    const jsonValue =
+                        '{ "key1": 1, "key2": 3.5, "key3": {"nested_key": {"key1": [4, 5]}}, "key4":' +
+                        ' [1, 2, 3], "key5": 0, "key6": "hello", "key7": null, "key8":' +
+                        ' {"nested_key": {"key1": 3.5953862697246314e307}}, "key9":' +
+                        ' 3.5953862697246314e307, "key10": true }';
+                    // setup
+                    expect(
+                        await GlideJson.set(client, key, "$", jsonValue),
+                    ).toBe("OK");
+
+                    expect(
+                        await GlideJson.debugFields(client, key, {
+                            path: "$.key1",
+                        }),
+                    ).toEqual([1]);
+
+                    expect(
+                        await GlideJson.debugFields(client, key, {
+                            path: "$.key3.nested_key.key1",
+                        }),
+                    ).toEqual([2]);
+
+                    expect(
+                        await GlideJson.debugMemory(client, key, {
+                            path: "$.key4[2]",
+                        }),
+                    ).toEqual([16]);
+
+                    expect(
+                        await GlideJson.debugMemory(client, key, {
+                            path: ".key6",
+                        }),
+                    ).toEqual(16);
+
+                    expect(await GlideJson.debugMemory(client, key)).toEqual(
+                        504,
+                    );
+
+                    expect(await GlideJson.debugFields(client, key)).toEqual(
+                        19,
+                    );
+
+                    // testing binary input
+                    expect(
+                        await GlideJson.debugMemory(client, Buffer.from(key)),
+                    ).toEqual(504);
+
+                    expect(
+                        await GlideJson.debugFields(client, Buffer.from(key)),
+                    ).toEqual(19);
+                },
+            );
         },
     );
 
@@ -1436,6 +1757,324 @@ describe("Server Module Tests", () => {
                 expect((e as Error).message).toContain("Index does not exist");
             }
         });
+
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            "FT.AGGREGATE ft.aggregate",
+            async (protocol) => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+
+                const isResp3 = protocol == ProtocolVersion.RESP3;
+                const prefixBicycles = "{bicycles}:";
+                const indexBicycles = prefixBicycles + uuidv4();
+                const prefixMovies = "{movies}:";
+                const indexMovies = prefixMovies + uuidv4();
+
+                // FT.CREATE idx:bicycle ON JSON PREFIX 1 bicycle: SCHEMA $.model AS model TEXT $.description AS
+                // description TEXT $.price AS price NUMERIC $.condition AS condition TAG SEPARATOR ,
+                expect(
+                    await GlideFt.create(
+                        client,
+                        indexBicycles,
+                        [
+                            { type: "TEXT", name: "$.model", alias: "model" },
+                            {
+                                type: "TEXT",
+                                name: "$.description",
+                                alias: "description",
+                            },
+                            {
+                                type: "NUMERIC",
+                                name: "$.price",
+                                alias: "price",
+                            },
+                            {
+                                type: "TAG",
+                                name: "$.condition",
+                                alias: "condition",
+                                separator: ",",
+                            },
+                        ],
+                        { prefixes: [prefixBicycles], dataType: "JSON" },
+                    ),
+                ).toEqual("OK");
+
+                // TODO check JSON module loaded
+                expect(
+                    await GlideJson.set(
+                        client,
+                        prefixBicycles + 0,
+                        ".",
+                        '{"brand": "Velorim", "model": "Jigger", "price": 270, "condition": "new"}',
+                    ),
+                ).toEqual("OK");
+
+                expect(
+                    await GlideJson.set(
+                        client,
+                        prefixBicycles + 1,
+                        ".",
+                        '{"brand": "Bicyk", "model": "Hillcraft", "price": 1200, "condition": "used"}',
+                    ),
+                ).toEqual("OK");
+
+                expect(
+                    await GlideJson.set(
+                        client,
+                        prefixBicycles + 2,
+                        ".",
+                        '{"brand": "Nord", "model": "Chook air 5", "price": 815, "condition": "used"}',
+                    ),
+                ).toEqual("OK");
+
+                expect(
+                    await GlideJson.set(
+                        client,
+                        prefixBicycles + 3,
+                        ".",
+                        '{"brand": "Eva", "model": "Eva 291", "price": 3400, "condition": "used"}',
+                    ),
+                ).toEqual("OK");
+
+                expect(
+                    await GlideJson.set(
+                        client,
+                        prefixBicycles + 4,
+                        ".",
+                        '{"brand": "Noka Bikes", "model": "Kahuna", "price": 3200, "condition": "used"}',
+                    ),
+                ).toEqual("OK");
+
+                expect(
+                    await GlideJson.set(
+                        client,
+                        prefixBicycles + 5,
+                        ".",
+                        '{"brand": "Breakout", "model": "XBN 2.1 Alloy", "price": 810, "condition": "new"}',
+                    ),
+                ).toEqual("OK");
+
+                expect(
+                    await GlideJson.set(
+                        client,
+                        prefixBicycles + 6,
+                        ".",
+                        '{"brand": "ScramBikes", "model": "WattBike", "price": 2300, "condition": "new"}',
+                    ),
+                ).toEqual("OK");
+
+                expect(
+                    await GlideJson.set(
+                        client,
+                        prefixBicycles + 7,
+                        ".",
+                        '{"brand": "Peaknetic", "model": "Secto", "price": 430, "condition": "new"}',
+                    ),
+                ).toEqual("OK");
+
+                expect(
+                    await GlideJson.set(
+                        client,
+                        prefixBicycles + 8,
+                        ".",
+                        '{"brand": "nHill", "model": "Summit", "price": 1200, "condition": "new"}',
+                    ),
+                ).toEqual("OK");
+
+                expect(
+                    await GlideJson.set(
+                        client,
+                        prefixBicycles + 9,
+                        ".",
+                        '{"model": "ThrillCycle", "brand": "BikeShind", "price": 815, "condition": "refurbished"}',
+                    ),
+                ).toEqual("OK");
+
+                // let server digest the data and update index
+                await new Promise((resolve) =>
+                    setTimeout(resolve, DATA_PROCESSING_TIMEOUT),
+                );
+
+                // FT.AGGREGATE idx:bicycle * LOAD 1 __key GROUPBY 1 @condition REDUCE COUNT 0 AS bicycles
+                let options: FtAggregateOptions = {
+                    loadFields: ["__key"],
+                    clauses: [
+                        {
+                            type: "GROUPBY",
+                            properties: ["@condition"],
+                            reducers: [
+                                {
+                                    function: "COUNT",
+                                    args: [],
+                                    name: "bicycles",
+                                },
+                            ],
+                        },
+                    ],
+                };
+                let aggreg = (
+                    await GlideFt.aggregate(client, indexBicycles, "*", options)
+                )
+                    .map(convertGlideRecordToRecord)
+                    // elements (records in array) could be reordered
+                    .sort((a, b) =>
+                        a["condition"]! > b["condition"]! ? 1 : -1,
+                    );
+                expect(aggreg).toEqual([
+                    {
+                        condition: "new",
+                        bicycles: isResp3 ? 5 : "5",
+                    },
+                    {
+                        condition: "refurbished",
+                        bicycles: isResp3 ? 1 : "1",
+                    },
+                    {
+                        condition: "used",
+                        bicycles: isResp3 ? 4 : "4",
+                    },
+                ]);
+
+                // FT.CREATE idx:movie ON hash PREFIX 1 "movie:" SCHEMA title TEXT release_year NUMERIC
+                // rating NUMERIC genre TAG votes NUMERIC
+                expect(
+                    await GlideFt.create(
+                        client,
+                        indexMovies,
+                        [
+                            { type: "TEXT", name: "title" },
+                            { type: "NUMERIC", name: "release_year" },
+                            { type: "NUMERIC", name: "rating" },
+                            { type: "TAG", name: "genre" },
+                            { type: "NUMERIC", name: "votes" },
+                        ],
+                        { prefixes: [prefixMovies], dataType: "HASH" },
+                    ),
+                ).toEqual("OK");
+
+                await client.hset(prefixMovies + 11002, {
+                    title: "Star Wars: Episode V - The Empire Strikes Back",
+                    release_year: "1980",
+                    genre: "Action",
+                    rating: "8.7",
+                    votes: "1127635",
+                    imdb_id: "tt0080684",
+                });
+
+                await client.hset(prefixMovies + 11003, {
+                    title: "The Godfather",
+                    release_year: "1972",
+                    genre: "Drama",
+                    rating: "9.2",
+                    votes: "1563839",
+                    imdb_id: "tt0068646",
+                });
+
+                await client.hset(prefixMovies + 11004, {
+                    title: "Heat",
+                    release_year: "1995",
+                    genre: "Thriller",
+                    rating: "8.2",
+                    votes: "559490",
+                    imdb_id: "tt0113277",
+                });
+
+                await client.hset(prefixMovies + 11005, {
+                    title: "Star Wars: Episode VI - Return of the Jedi",
+                    release_year: "1983",
+                    genre: "Action",
+                    rating: "8.3",
+                    votes: "906260",
+                    imdb_id: "tt0086190",
+                });
+
+                // let server digest the data and update index
+                await new Promise((resolve) =>
+                    setTimeout(resolve, DATA_PROCESSING_TIMEOUT),
+                );
+
+                // FT.AGGREGATE idx:movie * LOAD * APPLY ceil(@rating) as r_rating GROUPBY 1 @genre REDUCE
+                // COUNT 0 AS nb_of_movies REDUCE SUM 1 votes AS nb_of_votes REDUCE AVG 1 r_rating AS avg_rating
+                // SORTBY 4 @avg_rating DESC @nb_of_votes DESC
+                options = {
+                    loadAll: true,
+                    clauses: [
+                        {
+                            type: "APPLY",
+                            expression: "ceil(@rating)",
+                            name: "r_rating",
+                        },
+                        {
+                            type: "GROUPBY",
+                            properties: ["@genre"],
+                            reducers: [
+                                {
+                                    function: "COUNT",
+                                    args: [],
+                                    name: "nb_of_movies",
+                                },
+                                {
+                                    function: "SUM",
+                                    args: ["votes"],
+                                    name: "nb_of_votes",
+                                },
+                                {
+                                    function: "AVG",
+                                    args: ["r_rating"],
+                                    name: "avg_rating",
+                                },
+                            ],
+                        },
+                        {
+                            type: "SORTBY",
+                            properties: [
+                                {
+                                    property: "@avg_rating",
+                                    order: SortOrder.DESC,
+                                },
+                                {
+                                    property: "@nb_of_votes",
+                                    order: SortOrder.DESC,
+                                },
+                            ],
+                        },
+                    ],
+                };
+                aggreg = (
+                    await GlideFt.aggregate(client, indexMovies, "*", options)
+                )
+                    .map(convertGlideRecordToRecord)
+                    // elements (records in array) could be reordered
+                    .sort((a, b) => (a["genre"]! > b["genre"]! ? 1 : -1));
+                expect(aggreg).toEqual([
+                    {
+                        genre: "Action",
+                        nb_of_movies: isResp3 ? 2.0 : "2",
+                        nb_of_votes: isResp3 ? 2033895.0 : "2033895",
+                        avg_rating: isResp3 ? 9.0 : "9",
+                    },
+                    {
+                        genre: "Drama",
+                        nb_of_movies: isResp3 ? 1.0 : "1",
+                        nb_of_votes: isResp3 ? 1563839.0 : "1563839",
+                        avg_rating: isResp3 ? 10.0 : "10",
+                    },
+                    {
+                        genre: "Thriller",
+                        nb_of_movies: isResp3 ? 1.0 : "1",
+                        nb_of_votes: isResp3 ? 559490.0 : "559490",
+                        avg_rating: isResp3 ? 9.0 : "9",
+                    },
+                ]);
+
+                await GlideFt.dropindex(client, indexMovies);
+                await GlideFt.dropindex(client, indexBicycles);
+            },
+        );
 
         it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
             "FT.INFO ft.info",
