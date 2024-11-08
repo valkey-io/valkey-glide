@@ -708,7 +708,7 @@ export class GlideFt {
      *
      * @example
      * ```typescript
-     * // Example usage of FT._ALIASLIST to add an alias for an index.
+     * // Example usage of FT._ALIASLIST to query index aliases
      * const result = await GlideFt.aliaslist(client);
      * console.log(result); // Output:
      * //[{"key": "alias1", "value": "index1"}, {"key": "alias2", "value": "index2"}]
@@ -719,9 +719,7 @@ export class GlideFt {
         options?: DecoderOption,
     ): Promise<GlideRecord<GlideString>> {
         const args: GlideString[] = ["FT._ALIASLIST"];
-        return _handleCustomCommand(client, args, options) as Promise<
-            GlideRecord<GlideString>
-        >;
+        return _handleCustomCommand(client, args, options);
     }
 }
 
