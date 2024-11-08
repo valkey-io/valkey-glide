@@ -317,9 +317,7 @@ export class GlideFt {
             ..._addFtAggregateOptions(options),
         ];
 
-        return _handleCustomCommand(client, args, options) as Promise<
-            GlideRecord<GlideReturnType>[]
-        >;
+        return _handleCustomCommand(client, args, options) as Promise<FtAggregateReturnType>;
     }
 
     /**
@@ -522,13 +520,14 @@ export class GlideFt {
      * @param indexName - The index name.
      * @param query - The text query to search.
      * @param options - (Optional) See {@link FtSearchOptions} and {@link DecoderOption}. Additionally:
-     * - `limited` (Optional) - Either provide a full verbose output or some brief version.
+     * - limited (Optional) - Either provide a full verbose output or some brief version.
      *
      * @returns A two-element array. The first element contains results of the search query being profiled, the
      *     second element stores profiling information.
      *
      * @example
      * ```typescript
+     * //
      * const vector = Buffer.alloc(24);
      * const result = await GlideFt.profileSearch(client, "json_idx1", "*=>[KNN 2 @VEC $query_vec]", {params: [{key: "query_vec", value: vector}]});
      * console.log(result); // Output:
@@ -544,8 +543,10 @@ export class GlideFt {
             FtSearchOptions & {
                 limited?: boolean;
             },
-    ): Promise<[FtSearchReturnType, Record<string, number>[]]> {
-        const args: GlideString[] = ["FT.PROFILE", indexName, "SEARCH"];
+    ): Promise<[FtSearchReturnType, Record<string, number>]> {
+        const args: GlideString[] = ["FT.PROFILE", indexName];
+
+        args.push("SEARCH");
 
         if (options?.limited) {
             args.push("LIMITED");
@@ -554,12 +555,17 @@ export class GlideFt {
         args.push("QUERY", query);
 
         if (options) {
-            args.push(..._addFtSearchOptions(options));
+            args.push(..._addFtSearchOptions(options as FtSearchOptions));
         }
 
-        return _handleCustomCommand(client, args, options) as Promise<
-            [FtSearchReturnType, Record<string, number>[]]
-        >;
+        return (_handleCustomCommand(
+            client,
+            args,
+            options as DecoderOption,
+        ) as Promise<[FtSearchReturnType, GlideRecord<number>]>).then((value) => [
+            value[0], 
+            convertGlideRecordToRecord(value[1]),
+        ]);
     }
 
     /**
@@ -569,7 +575,7 @@ export class GlideFt {
      * @param indexName - The index name.
      * @param query - The text query to search.
      * @param options - (Optional) See {@link FtAggregateOptions} and {@link DecoderOption}. Additionally:
-     * - `limited` (Optional) - Either provide a full verbose output or some brief version.
+     * - limited (Optional) - Either provide a full verbose output or some brief version.
      *
      * @returns A two-element array. The first element contains results of the aggregate query being profiled, the
      *     second element stores profiling information.
@@ -606,8 +612,10 @@ export class GlideFt {
             FtAggregateOptions & {
                 limited?: boolean;
             },
-    ): Promise<[FtAggregateReturnType, Record<string, number>[]]> {
-        const args: GlideString[] = ["FT.PROFILE", indexName, "AGGREGATE"];
+    ): Promise<[FtAggregateReturnType, Record<string, number>]> {
+        const args: GlideString[] = ["FT.PROFILE", indexName];
+
+        args.push("AGGREGATE");
 
         if (options?.limited) {
             args.push("LIMITED");
@@ -616,12 +624,17 @@ export class GlideFt {
         args.push("QUERY", query);
 
         if (options) {
-            args.push(..._addFtAggregateOptions(options));
+            args.push(..._addFtAggregateOptions(options as FtAggregateOptions));
         }
 
-        return _handleCustomCommand(client, args, options) as Promise<
-            [FtAggregateReturnType, Record<string, number>[]]
-        >;
+        return (_handleCustomCommand(
+            client,
+            args,
+            options as DecoderOption,
+        ) as Promise<[FtAggregateReturnType, GlideRecord<number>]>).then((value) => [
+            value[0], 
+            convertGlideRecordToRecord(value[1]),
+        ]);
     }
 
     /**

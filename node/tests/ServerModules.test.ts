@@ -2761,16 +2761,17 @@ describe("Server Module Tests", () => {
                         ),
                 ).toEqual(expectedAggreg);
 
-                const aggregProfile: FtAggregateReturnType = (
+                const aggregProfile: [FtAggregateReturnType, Record<string, number>[]] = (
                     await GlideFt.profileAggregate(
                         client,
                         indexBicycles,
                         "*",
                         options,
                     )
-                )[0];
+                );
+                console.log(aggregProfile[1]);
                 expect(
-                    aggregProfile
+                    aggregProfile[0]
                         .map(convertGlideRecordToRecord)
                         // elements (records in array) could be reordered
                         .sort((a, b) =>
@@ -2935,16 +2936,17 @@ describe("Server Module Tests", () => {
                         .sort((a, b) => (a["genre"]! > b["genre"]! ? 1 : -1)),
                 ).toEqual(expectedAggreg);
 
-                const aggregProfile: FtAggregateReturnType = (
+                const aggregProfile: [FtAggregateReturnType, Record<string, number>[]] = (
                     await GlideFt.profileAggregate(
                         client,
                         indexMovies,
                         query,
                         options,
                     )
-                )[0];
+                );
+                console.log(aggregProfile[1]);
                 expect(
-                    aggregProfile
+                    aggregProfile[0]
                         .map(convertGlideRecordToRecord)
                         // elements (records in array) could be reordered
                         .sort((a, b) => (a["genre"]! > b["genre"]! ? 1 : -1)),
@@ -3077,13 +3079,14 @@ describe("Server Module Tests", () => {
             ];
             expect(binaryResult).toEqual(expectedBinaryResult);
 
-            const binaryProfileResult: FtSearchReturnType = (
+            const binaryProfileResult: [FtSearchReturnType, Record<string, number>[]] = (
                 await GlideFt.profileSearch(client, index, query, {
                     decoder: Decoder.Bytes,
                     ...options,
                 })
-            )[0];
-            expect(binaryProfileResult).toEqual(expectedBinaryResult);
+            );
+            console.log(binaryProfileResult[1])
+            expect(binaryProfileResult[0]).toEqual(expectedBinaryResult);
         });
 
         it("FT.SEARCH string on JSON", async () => {
@@ -3172,16 +3175,16 @@ describe("Server Module Tests", () => {
             ];
             expect(stringResult).toEqual(expectedStringResult);
 
-            const stringProfileResult: FtSearchReturnType = (
+            const stringProfileResult: [FtSearchReturnType, Record<string, number>[]] = (
                 await GlideFt.profileSearch(
                     client,
                     index,
                     query,
                     optionsWithLimit,
                 )
-            )[0];
-
-            expect(stringProfileResult).toEqual(expectedStringResult);
+            );
+            console.log(stringProfileResult[1]);
+            expect(stringProfileResult[0]).toEqual(expectedStringResult);
         });
 
         it("FT.EXPLAIN ft.explain FT.EXPLAINCLI ft.explaincli", async () => {
