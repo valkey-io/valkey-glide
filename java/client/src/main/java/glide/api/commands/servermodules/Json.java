@@ -631,7 +631,7 @@ public class Json {
      * var result = Json.arrindex(client, key, "$..a", "3").get();
      * assert Arrays.equals((Object[]) result, new Object[] {1L, 0L});
      *
-     * result = Json.arrindex(client, key, "$..a", "\"value\"").get(); // string quote value quote
+     * result = Json.arrindex(client, key, "$..a", "\"value\"").get();
      * assert Arrays.equals((Object[]) result, new Object[] {0L, -1L});
      * }</pre>
      */
@@ -668,6 +668,7 @@ public class Json {
      * var result = Json.arrindex(client, gs(key), gs("$..a"), gs("3")).get();
      * assert Arrays.equals((Object[]) result, new Object[] {1L, 0L});
      *
+     * // Searches for the first occurrence of null in the arrays
      * result = Json.arrindex(client, gs(key), gs("$..a"), gs("null")).get();
      * assert Arrays.equals((Object[]) result, new Object[] {-1L, -1L});
      * }</pre>
@@ -703,10 +704,7 @@ public class Json {
      * @example
      *     <pre>{@code
      * Json.set(client, key, "$", "{\"a\": [\"value\", 3], \"b\": {\"a\": [3, [\"value\", false], 5]}}").get();
-     * var result = Json.arrindex(client, key, "$..a", "3").get();
-     * assert Arrays.equals((Object[]) result, new Object[] {1L, 0L});
-     *
-     * result = Json.arrindex(client, key, ".a", "3", new JsonArrindexOptions(0L)).get();
+     * var result = Json.arrindex(client, key, ".a", "3", new JsonArrindexOptions(0L)).get();
      * assert Arrays.equals(1L, result);
      * }</pre>
      */
@@ -751,10 +749,7 @@ public class Json {
      * @example
      *     <pre>{@code
      * Json.set(client, key, "$", "{\"a\": [\"value\", 3], \"b\": {\"a\": [3, [\"value\", false], 5]}}").get();
-     * var result = Json.arrindex(client, gs(key), gs("$..a"), gs("3")).get();
-     * assert Arrays.equals((Object[]) result, new Object[] {1L, 0L);
-     *
-     * result = Json.arrindex(client, gs(key), gs(".a"), gs("3"), new JsonArrindexOptions(0L)).get();
+     * var result = Json.arrindex(client, gs(key), gs(".a"), gs("3"), new JsonArrindexOptions(0L)).get();
      * assert Arrays.equals(1L, result);
      * }</pre>
      */

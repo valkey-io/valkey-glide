@@ -8,18 +8,26 @@ import java.util.List;
 /** Additional parameters for {@link Json#arrindex} command. */
 public final class JsonArrindexOptions {
 
-    /** The start index, inclusive. Default to <code>0</code> if not provided. */
+    /** The start index, inclusive. Default to <code>0</code>. */
     private Long start;
 
-    /** The end index, exclusive. Default to <code>0</code> if not provided. */
+    /** The end index, exclusive. */
     private Long end;
 
-    /** Constructs the JsonArrindexOptions object with only the start index */
+    /**
+     * Search using a start index (is inclusive). Defaults to <code>0</code> if not provided. Indices
+     * that exceed the array bounds are automatically adjusted to the nearest valid position.
+     */
     public JsonArrindexOptions(Long start) {
         this.start = start;
     }
 
-    /** Constructs the JsonArrindexOptions object with the start and end index */
+    /**
+     * Search using a start index (is inclusive) and end index (is exclusive). If <code>start</code>
+     * is greater than <code>end</code>, the command returns <code>-1</code> to indicate that the
+     * value was not found. Indices that exceed the array bounds are automatically adjusted to the
+     * nearest valid position.
+     */
     public JsonArrindexOptions(Long start, Long end) {
         this.start = start;
         this.end = end;

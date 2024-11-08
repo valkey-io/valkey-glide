@@ -285,6 +285,16 @@ public class JsonTests {
 
         // JsonScalar is null
         assertThrows(ExecutionException.class, () -> Json.arrindex(client, key3, ".a", "null").get());
+
+        // start index is larger than the end index
+        assertEquals(
+                -1L, Json.arrindex(client, key2, ".a", "false", new JsonArrindexOptions(4L, 2L)).get());
+
+        // end index is larger than the length of the array
+        assertEquals(
+                8L,
+                Json.arrindex(client, key2, ".a", "false", new JsonArrindexOptions(0L, 12378798798721L))
+                        .get());
     }
 
     @Test
