@@ -6345,7 +6345,7 @@ export function runBaseTests(config: {
                     expect(
                         await client.bzpopmax(
                             [key3],
-                            cluster.checkIfServerVersionLessThan("6.0.0")
+                            cluster.checkIfServerVersionLessThan("7.0.0")
                                 ? 1.0
                                 : 0.01,
                         ),
@@ -6395,7 +6395,7 @@ export function runBaseTests(config: {
                     expect(
                         await client.bzpopmin(
                             [key3],
-                            cluster.checkIfServerVersionLessThan("6.0.0")
+                            cluster.checkIfServerVersionLessThan("7.0.0")
                                 ? 1.0
                                 : 0.01,
                         ),
@@ -7412,126 +7412,152 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `xinfo stream xinfosream test_%p`,
         async (protocol) => {
-            await runTest(
-                async (client: BaseClient, cluster: ValkeyCluster) => {
-                    const key = uuidv4();
-                    const groupName = `group-${uuidv4()}`;
-                    const consumerName = `consumer-${uuidv4()}`;
-                    const streamId0_0 = "0-0";
-                    const streamId1_0 = "1-0";
-                    const streamId1_1 = "1-1";
+            await runTest(async (client: BaseClient, cluster) => {
+                const key = uuidv4();
+                const groupName = `group-${uuidv4()}`;
+                const consumerName = `consumer-${uuidv4()}`;
+                const streamId0_0 = "0-0";
+                const streamId1_0 = "1-0";
+                const streamId1_1 = "1-1";
 
-                    expect(
-                        await client.xadd(
-                            key,
-                            [
-                                ["a", "b"],
-                                ["c", "d"],
-                            ],
-                            { id: streamId1_0 },
-                        ),
-                    ).toEqual(streamId1_0);
+                expect(
+                    await client.xadd(
+                        key,
+                        [
+                            ["a", "b"],
+                            ["c", "d"],
+                        ],
+                        { id: streamId1_0 },
+                    ),
+                ).toEqual(streamId1_0);
 
-                    expect(
-                        await client.xgroupCreate(key, groupName, streamId0_0),
-                    ).toEqual("OK");
+                expect(
+                    await client.xgroupCreate(key, groupName, streamId0_0),
+                ).toEqual("OK");
 
-                    await client.xreadgroup(groupName, consumerName, {
-                        [key]: ">",
-                    });
+                await client.xreadgroup(groupName, consumerName, {
+                    [key]: ">",
+                });
 
-                    const result = (await client.xinfoStream(key)) as {
-                        length: number;
-                        "radix-tree-keys": number;
-                        "radix-tree-nodes": number;
-                        "last-generated-id": string;
-                        "max-deleted-entry-id": string;
-                        "entries-added": number;
-                        "recorded-first-entry-id": string;
-                        "first-entry": (string | number | string[])[];
-                        "last-entry": (string | number | string[])[];
-                        groups: number;
-                    };
+                const result = (await client.xinfoStream(key)) as {
+                    length: number;
+                    "radix-tree-keys": number;
+                    "radix-tree-nodes": number;
+                    "last-generated-id": string;
+                    "max-deleted-entry-id": string;
+                    "entries-added": number;
+                    "recorded-first-entry-id": string;
+                    "first-entry": (string | number | string[])[];
+                    "last-entry": (string | number | string[])[];
+                    groups: number;
+                };
 
-                    expect(result.length).toEqual(1);
-                    const expectedFirstEntry = ["1-0", ["a", "b", "c", "d"]];
-                    expect(result["first-entry"]).toEqual(expectedFirstEntry);
-                    expect(result["last-entry"]).toEqual(expectedFirstEntry);
-                    expect(result.groups).toEqual(1);
+                expect(result.length).toEqual(1);
+                const expectedFirstEntry = ["1-0", ["a", "b", "c", "d"]];
+                expect(result["first-entry"]).toEqual(expectedFirstEntry);
+                expect(result["last-entry"]).toEqual(expectedFirstEntry);
+                expect(result.groups).toEqual(1);
 
-                    expect(
-                        await client.xadd(key, [["foo", "bar"]], {
-                            id: streamId1_1,
-                        }),
-                    ).toEqual(streamId1_1);
-                    const fullResult = (await client.xinfoStream(
-                        Buffer.from(key),
+                expect(
+                    await client.xadd(key, [["foo", "bar"]], {
+                        id: streamId1_1,
+                    }),
+                ).toEqual(streamId1_1);
+                const fullResult = (await client.xinfoStream(Buffer.from(key), {
+                    fullOptions: 1,
+                })) as {
+                    length: number;
+                    "radix-tree-keys": number;
+                    "radix-tree-nodes": number;
+                    "last-generated-id": string;
+                    "max-deleted-entry-id": string;
+                    "entries-added": number;
+                    "recorded-first-entry-id": string;
+                    entries: (string | number | string[])[][];
+                    groups: [
                         {
-                            fullOptions: 1,
+                            name: string;
+                            "last-delivered-id": string;
+                            "entries-read": number;
+                            lag: number;
+                            "pel-count": number;
+                            pending: (string | number)[][];
+                            consumers: [
+                                {
+                                    name: string;
+                                    "seen-time": number;
+                                    "active-time": number;
+                                    "pel-count": number;
+                                    pending: (string | number)[][];
+                                },
+                            ];
                         },
-                    )) as {
-                        length: number;
-                        "radix-tree-keys": number;
-                        "radix-tree-nodes": number;
-                        "last-generated-id": string;
-                        "max-deleted-entry-id": string;
-                        "entries-added": number;
-                        "recorded-first-entry-id": string;
-                        entries: (string | number | string[])[][];
-                        groups: [
-                            {
-                                name: string;
-                                "last-delivered-id": string;
-                                "entries-read": number;
-                                lag: number;
-                                "pel-count": number;
-                                pending: (string | number)[][];
-                                consumers: [
-                                    {
-                                        name: string;
-                                        "seen-time": number;
-                                        "active-time": number;
-                                        "pel-count": number;
-                                        pending: (string | number)[][];
-                                    },
-                                ];
-                            },
-                        ];
-                    };
+                    ];
+                };
 
-                    expect(fullResult.length).toEqual(2);
+                // verify full result like:
+                // {
+                //   length: 2,
+                //   'radix-tree-keys': 1,
+                //   'radix-tree-nodes': 2,
+                //   'last-generated-id': '1-1',
+                //   'max-deleted-entry-id': '0-0',
+                //   'entries-added': 2,
+                //   'recorded-first-entry-id': '1-0',
+                //   entries: [ [ '1-0', ['a', 'b', ...] ] ],
+                //   groups: [ {
+                //     name: 'group',
+                //     'last-delivered-id': '1-0',
+                //     'entries-read': 1,
+                //     lag: 1,
+                //     'pel-count': 1,
+                //     pending: [ [ '1-0', 'consumer', 1722624726802, 1 ] ],
+                //     consumers: [ {
+                //         name: 'consumer',
+                //         'seen-time': 1722624726802,
+                //         'active-time': 1722624726802,
+                //         'pel-count': 1,
+                //         pending: [ [ '1-0', 'consumer', 1722624726802, 1 ] ],
+                //         }
+                //       ]
+                //     }
+                //   ]
+                // }
+                expect(fullResult.length).toEqual(2);
 
-                    if (cluster.checkIfServerVersionLessThan("7.0.0")) {
-                        expect(
-                            fullResult["max-deleted-entry-id"],
-                        ).toBeUndefined();
-                        expect(fullResult["entries-added"]).toBeUndefined();
-                        expect(
-                            fullResult.groups[0]["entries-read"],
-                        ).toBeUndefined();
-                        expect(fullResult.groups[0]["lag"]).toBeUndefined();
-                    } else if (cluster.checkIfServerVersionLessThan("7.2.0")) {
-                        expect(fullResult["recorded-first-entry-id"]).toEqual(
-                            streamId1_0,
-                        );
+                if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                    expect(fullResult["recorded-first-entry-id"]).toEqual(
+                        streamId1_0,
+                    );
+                }
 
-                        expect(
-                            fullResult.groups[0].consumers[0]["active-time"],
-                        ).toBeUndefined();
-                        expect(
-                            fullResult.groups[0].consumers[0]["seen-time"],
-                        ).toBeDefined();
-                    } else {
-                        expect(
-                            fullResult.groups[0].consumers[0]["active-time"],
-                        ).toBeDefined();
-                        expect(
-                            fullResult.groups[0].consumers[0]["seen-time"],
-                        ).toBeDefined();
-                    }
-                },
-                protocol,
-            );
+                if (cluster.checkIfServerVersionLessThan("7.0.0")) {
+                    expect(fullResult["max-deleted-entry-id"]).toBeUndefined();
+                    expect(fullResult["entries-added"]).toBeUndefined();
+                    expect(
+                        fullResult.groups[0]["entries-read"],
+                    ).toBeUndefined();
+                    expect(fullResult.groups[0]["lag"]).toBeUndefined();
+                } else if (cluster.checkIfServerVersionLessThan("7.2.0")) {
+                    expect(fullResult["recorded-first-entry-id"]).toEqual(
+                        streamId1_0,
+                    );
+
+                    expect(
+                        fullResult.groups[0].consumers[0]["active-time"],
+                    ).toBeUndefined();
+                    expect(
+                        fullResult.groups[0].consumers[0]["seen-time"],
+                    ).toBeDefined();
+                } else {
+                    expect(
+                        fullResult.groups[0].consumers[0]["active-time"],
+                    ).toBeDefined();
+                    expect(
+                        fullResult.groups[0].consumers[0]["seen-time"],
+                    ).toBeDefined();
+                }
+            }, protocol);
         },
         config.timeout,
     );

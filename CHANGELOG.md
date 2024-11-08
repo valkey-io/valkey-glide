@@ -1,4 +1,5 @@
 #### Changes
+* Python: Python: `FT._ALIASLIST` command added([#2638](https://github.com/valkey-io/valkey-glide/pull/2638))
 * Node: alias commands added: FT.ALIASADD, FT.ALIADDEL, FT.ALIASUPDATE([#2596](https://github.com/valkey-io/valkey-glide/pull/2596))
 * Python code cleanup ([#2573](https://github.com/valkey-io/valkey-glide/pull/2573))
 * Python: Python: FT.PROFILE command added ([#2543](https://github.com/valkey-io/valkey-glide/pull/2543))
