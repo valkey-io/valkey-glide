@@ -2770,6 +2770,19 @@ describe("Server Module Tests", () => {
                     )
                 );
                 console.log(aggregProfile[1]);
+                expect(aggregProfile[1].flatMap(r => r.key)).toEqual([
+                    "parse.time",
+                    "all.count",
+                    "sync.time",
+                    "query.time",
+                    "fetch.time",
+                    "query.count",
+                    "stage.count",
+                    "groupby.time",
+                    "groupby.count",
+                    "result.time",
+                    "result.count",
+                ]);
                 expect(
                     aggregProfile[0]
                         .map(convertGlideRecordToRecord)
@@ -2945,6 +2958,23 @@ describe("Server Module Tests", () => {
                     )
                 );
                 console.log(aggregProfile[1]);
+                expect(aggregProfile[1].flatMap(r => r.key)).toEqual([
+                    "parse.time",
+                    "all.count",
+                    "sync.time",
+                    "query.time",
+                    "fetch.time",
+                    "query.count",
+                    "stage.count",
+                    "apply.time",
+                    "apply.count",
+                    "groupby.time",
+                    "groupby.count",
+                    "sortby.time",
+                    "sortby.count",
+                    "result.time",
+                    "result.count",
+                ]);
                 expect(
                     aggregProfile[0]
                         .map(convertGlideRecordToRecord)
@@ -3087,7 +3117,14 @@ describe("Server Module Tests", () => {
                         ...options,
                     })
                 );
-                console.log(binaryProfileResult[1])
+                console.log(binaryProfileResult[1]);
+                expect(binaryProfileResult[1].flatMap(r => r.key)).toEqual([
+                    "all.count",
+                    "sync.time",
+                    "query.time",
+                    "result.count",
+                    "result.time",
+                ]);
                 expect(binaryProfileResult[0]).toEqual(expectedBinaryResult);
             }
         );
@@ -3189,6 +3226,13 @@ describe("Server Module Tests", () => {
                     )
                 );
                 console.log(stringProfileResult[1]);
+                expect(stringProfileResult[1].flatMap(r => r.key)).toEqual([
+                    "all.count",
+                    "sync.time",
+                    "query.time",
+                    "result.count",
+                    "result.time",
+                ]);
                 expect(stringProfileResult[0]).toEqual(expectedStringResult);
             }
         );
