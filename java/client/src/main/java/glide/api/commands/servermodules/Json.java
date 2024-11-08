@@ -13,7 +13,6 @@ import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.json.JsonArrindexOptions;
 import glide.api.models.commands.json.JsonGetOptions;
 import glide.api.models.commands.json.JsonGetOptionsBinary;
-import glide.api.models.commands.json.JsonScalar;
 import glide.utils.ArgsBuilder;
 import java.util.concurrent.CompletableFuture;
 import lombok.NonNull;
@@ -614,8 +613,7 @@ public class Json {
      * @param client The client to execute the command.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
-     * @param scalar The scalar value to search for; JSON scalar refers to values that are not objects
-     *     or arrays.
+     * @param scalar The scalar value to search for.
      * @return
      *     <ul>
      *       <li>For JSONPath (<code>path</code> starts with <code>$</code>): Returns an array with a
@@ -630,16 +628,19 @@ public class Json {
      * @example
      *     <pre>{@code
      * Json.set(client, key, "$", "{\"a\": [\"value\", 3], \"b\": {\"a\": [3, [\"value\", false], 5]}}").get();
-     * var result = Json.arrindex(client, key, "$..a", new JsonScalar(3)).get();
+     * var result = Json.arrindex(client, key, "$..a", "3").get();
      * assert Arrays.equals((Object[]) result, new Object[] {1L, 0L});
+     *
+     * result = Json.arrindex(client, key, "$..a", "\"value\"").get(); // string quote value quote
+     * assert Arrays.equals((Object[]) result, new Object[] {0L, -1L});
      * }</pre>
      */
     public static CompletableFuture<Object> arrindex(
             @NonNull BaseClient client,
             @NonNull String key,
             @NonNull String path,
-            @NonNull JsonScalar scalar) {
-        return arrindex(client, gs(key), gs(path), scalar);
+            @NonNull String scalar) {
+        return arrindex(client, gs(key), gs(path), gs(scalar));
     }
 
     /**
@@ -649,8 +650,7 @@ public class Json {
      * @param client The client to execute the command.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
-     * @param scalar The scalar value to search for; JSON scalar refers to values that are not objects
-     *     or arrays.
+     * @param scalar The scalar value to search for.
      * @return
      *     <ul>
      *       <li>For JSONPath (<code>path</code> starts with <code>$</code>): Returns an array with a
@@ -665,17 +665,19 @@ public class Json {
      * @example
      *     <pre>{@code
      * Json.set(client, key, "$", "{\"a\": [\"value\", 3], \"b\": {\"a\": [3, [\"value\", false], 5]}}").get();
-     * var result = Json.arrindex(client, gs(key), gs("$..a"), new JsonScalar(3)).get();
+     * var result = Json.arrindex(client, gs(key), gs("$..a"), gs("3")).get();
      * assert Arrays.equals((Object[]) result, new Object[] {1L, 0L});
+     *
+     * result = Json.arrindex(client, gs(key), gs("$..a"), gs("null")).get();
+     * assert Arrays.equals((Object[]) result, new Object[] {-1L, -1L});
      * }</pre>
      */
     public static CompletableFuture<Object> arrindex(
             @NonNull BaseClient client,
             @NonNull GlideString key,
             @NonNull GlideString path,
-            @NonNull JsonScalar scalar) {
-        return executeCommand(
-                client, new GlideString[] {gs(JSON_ARRINDEX), key, path, gs(scalar.toString())});
+            @NonNull GlideString scalar) {
+        return executeCommand(client, new GlideString[] {gs(JSON_ARRINDEX), key, path, scalar});
     }
 
     /**
@@ -685,8 +687,7 @@ public class Json {
      * @param client The client to execute the command.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
-     * @param scalar The scalar value to search for; JSON scalar refers to values that are not objects
-     *     or arrays.
+     * @param scalar The scalar value to search for.
      * @param options The additional options for the command. See <code>JsonArrindexOptions</code>.
      * @return
      *     <ul>
@@ -702,10 +703,10 @@ public class Json {
      * @example
      *     <pre>{@code
      * Json.set(client, key, "$", "{\"a\": [\"value\", 3], \"b\": {\"a\": [3, [\"value\", false], 5]}}").get();
-     * var result = Json.arrindex(client, key, "$..a", new JsonScalar(3)).get();
+     * var result = Json.arrindex(client, key, "$..a", "3").get();
      * assert Arrays.equals((Object[]) result, new Object[] {1L, 0L});
      *
-     * Object result2 = Json.arrindex(client, key, ".a", new JsonScalar(3), new JsonArrindexOptions(0L)).get();
+     * result = Json.arrindex(client, key, ".a", "3", new JsonArrindexOptions(0L)).get();
      * assert Arrays.equals(1L, result);
      * }</pre>
      */
@@ -713,7 +714,7 @@ public class Json {
             @NonNull BaseClient client,
             @NonNull String key,
             @NonNull String path,
-            @NonNull JsonScalar scalar,
+            @NonNull String scalar,
             @NonNull JsonArrindexOptions options) {
 
         return executeCommand(
@@ -722,7 +723,7 @@ public class Json {
                         .add(JSON_ARRINDEX)
                         .add(key)
                         .add(path)
-                        .add(scalar.toString())
+                        .add(scalar)
                         .add(options.toArgs())
                         .toArray());
     }
@@ -734,8 +735,7 @@ public class Json {
      * @param client The client to execute the command.
      * @param key The key of the JSON document.
      * @param path The path within the JSON document.
-     * @param scalar The scalar value to search for; JSON scalar refers to values that are not objects
-     *     or arrays.
+     * @param scalar The scalar value to search for.
      * @param options The additional options for the command. See <code>JsonArrindexOptions</code>.
      * @return
      *     <ul>
@@ -751,10 +751,10 @@ public class Json {
      * @example
      *     <pre>{@code
      * Json.set(client, key, "$", "{\"a\": [\"value\", 3], \"b\": {\"a\": [3, [\"value\", false], 5]}}").get();
-     * var result = Json.arrindex(client, gs(key), gs("$..a"), new JsonScalar(3)).get();
+     * var result = Json.arrindex(client, gs(key), gs("$..a"), gs("3")).get();
      * assert Arrays.equals((Object[]) result, new Object[] {1L, 0L);
      *
-     * result = Json.arrindex(client, gs(key), gs(".a"), new JsonScalar(3), new JsonArrindexOptions(0L)).get();
+     * result = Json.arrindex(client, gs(key), gs(".a"), gs("3"), new JsonArrindexOptions(0L)).get();
      * assert Arrays.equals(1L, result);
      * }</pre>
      */
@@ -762,7 +762,7 @@ public class Json {
             @NonNull BaseClient client,
             @NonNull GlideString key,
             @NonNull GlideString path,
-            @NonNull JsonScalar scalar,
+            @NonNull GlideString scalar,
             @NonNull JsonArrindexOptions options) {
 
         return executeCommand(
@@ -771,7 +771,7 @@ public class Json {
                         .add(JSON_ARRINDEX)
                         .add(key)
                         .add(path)
-                        .add(scalar.toString())
+                        .add(scalar)
                         .add(options.toArgs())
                         .toArray());
     }

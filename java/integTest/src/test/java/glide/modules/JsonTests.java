@@ -22,7 +22,6 @@ import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.json.JsonArrindexOptions;
 import glide.api.models.commands.json.JsonGetOptions;
-import glide.api.models.commands.json.JsonScalar;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
@@ -227,86 +226,65 @@ public class JsonTests {
 
         assertEquals("OK", Json.set(client, key1, "$", doc1).get());
         assertArrayEquals(
-                new Object[] {2L, -1L, null},
-                (Object[]) Json.arrindex(client, key1, "$..a", new JsonScalar(true)).get());
+                new Object[] {2L, -1L, null}, (Object[]) Json.arrindex(client, key1, "$..a", "true").get());
 
         assertArrayEquals(
                 new Object[] {1L, 0L, null},
-                (Object[]) Json.arrindex(client, gs(key1), gs("$..a"), new JsonScalar(3)).get());
-
-        // not a json scalar - should give a illegal argument exception.
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> Json.arrindex(client, key1, "$..a", new JsonScalar(new String[] {"rar", "no"})));
+                (Object[]) Json.arrindex(client, gs(key1), gs("$..a"), gs("3")).get());
 
         assertEquals("OK", Json.set(client, key2, "$", doc2).get());
 
         assertArrayEquals(
                 new Object[] {6L, -1L, null},
                 (Object[])
-                        Json.arrindex(
-                                        client,
-                                        key2,
-                                        "$..a",
-                                        new JsonScalar("\"foo\""),
-                                        new JsonArrindexOptions(6L, 8L))
-                                .get());
+                        Json.arrindex(client, key2, "$..a", "\"foo\"", new JsonArrindexOptions(6L, 8L)).get());
 
         assertArrayEquals(
                 new Object[] {-1L, -1L, null},
                 (Object[])
-                        Json.arrindex(
-                                        client, key2, "$..a", new JsonScalar(null), new JsonArrindexOptions(6L, 8L))
+                        Json.arrindex(client, key2, "$..a", "null", new JsonArrindexOptions(6L, 8L)).get());
+        assertArrayEquals(
+                new Object[] {-1L, -1L, null},
+                (Object[])
+                        Json.arrindex(client, gs(key2), gs("$..a"), gs("null"), new JsonArrindexOptions(6L, 8L))
                                 .get());
 
         assertArrayEquals(
                 new Object[] {6L, -1L, null},
                 (Object[])
                         Json.arrindex(
-                                        client,
-                                        gs(key2),
-                                        gs("$..a"),
-                                        new JsonScalar("\"foo\""),
-                                        new JsonArrindexOptions(6L, 8L))
+                                        client, gs(key2), gs("$..a"), gs("\"foo\""), new JsonArrindexOptions(6L, 8L))
                                 .get());
 
         assertArrayEquals(
                 new Object[] {6L, -1L, null},
                 (Object[])
-                        Json.arrindex(
-                                        client, key2, "$..a", new JsonScalar("\"foo\""), new JsonArrindexOptions(6L))
-                                .get());
+                        Json.arrindex(client, key2, "$..a", "\"foo\"", new JsonArrindexOptions(6L)).get());
 
         // value doesn't exist
         assertArrayEquals(
                 new Object[] {null},
                 (Object[])
-                        Json.arrindex(
-                                        client, key1, "$..b", new JsonScalar(true), new JsonArrindexOptions(1L, 3L))
-                                .get());
+                        Json.arrindex(client, key1, "$..b", "true", new JsonArrindexOptions(1L, 3L)).get());
 
         // with legacy path
-        assertEquals(2L, Json.arrindex(client, key1, ".a", new JsonScalar(true)).get());
+        assertEquals(2L, Json.arrindex(client, key1, ".a", "true").get());
 
         // element doesn't exist
-        assertEquals(
-                -1L, Json.arrindex(client, key1, ".a", new JsonScalar("\"nonexistent-element\"")).get());
+        assertEquals(-1L, Json.arrindex(client, key1, ".a", "\"nonexistent-element\"").get());
 
         // empty array
         assertThrows(
                 ExecutionException.class,
-                () ->
-                        Json.arrindex(client, key1, ".empty", new JsonScalar("\"nonexistent-element\"")).get());
+                () -> Json.arrindex(client, key1, ".empty", "\"nonexistent-element\"").get());
 
         assertEquals("OK", Json.set(client, key3, "$", doc3).get());
 
         // wrong type error
-        assertThrows(
-                ExecutionException.class,
-                () -> Json.arrindex(client, key3, ".a", new JsonScalar(42)).get());
+        assertThrows(ExecutionException.class, () -> Json.arrindex(client, key3, ".a", "42").get());
 
         // JsonScalar is null
-        assertThrows(NullPointerException.class, () -> Json.arrindex(client, key3, ".a", null).get());
+        assertThrows(ExecutionException.class, () -> Json.arrindex(client, key3, ".a", "null").get());
     }
 
     @Test
