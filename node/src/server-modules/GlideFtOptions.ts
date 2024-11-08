@@ -138,8 +138,11 @@ export type FtAggregateOptions = {
         | FtAggregateSortBy
         | FtAggregateApply
     )[];
-    /** The key/value pairs can be referenced from within the query expression. */
-    params?: [GlideString, GlideString][];
+    /**
+     * Query parameters, which could be referenced in the query by `$` sign, followed by
+     * the parameter name.
+     */
+    params?: GlideRecord<GlideString>;
 } & (
     | {
           /** List of fields to load from the index. */
@@ -264,43 +267,6 @@ export type FtSearchOptions = {
           count?: boolean;
           /** `limit` and `count` are mutually exclusive. */
           limit?: never;
-      }
-);
-
-/** Additional parameters for {@link GlideFt.aggregate | FT.AGGREGATE} command. */
-export type FtAggregateOptions = {
-    /** Query timeout in milliseconds. */
-    timeout?: number;
-    /**
-     * {@link FtAggregateFilter | FILTER}, {@link FtAggregateLimit | LIMIT}, {@link FtAggregateGroupBy | GROUPBY},
-     * {@link FtAggregateSortBy | SORTBY} and {@link FtAggregateApply | APPLY} clauses, that can be repeated
-     * multiple times in any order and be freely intermixed. They are applied in the order specified,
-     * with the output of one clause feeding the input of the next clause.
-     */
-    clauses?: (
-        | FtAggregateLimit
-        | FtAggregateFilter
-        | FtAggregateGroupBy
-        | FtAggregateSortBy
-        | FtAggregateApply
-    )[];
-    /**
-     * Query parameters, which could be referenced in the query by `$` sign, followed by
-     * the parameter name.
-     */
-    params?: GlideRecord<GlideString>;
-} & (
-    | {
-          /** List of fields to load from the index. */
-          loadFields?: GlideString[];
-          /** `loadAll` and `loadFields` are mutually exclusive. */
-          loadAll?: never;
-      }
-    | {
-          /** Option to load all fields declared in the index */
-          loadAll?: boolean;
-          /** `loadAll` and `loadFields` are mutually exclusive. */
-          loadFields?: never;
       }
 );
 

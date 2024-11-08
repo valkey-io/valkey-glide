@@ -2503,6 +2503,79 @@ describe("Server Module Tests", () => {
         });
 
         it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            "FT.INFO ft.info",
+            async (protocol) => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+
+                const index = uuidv4();
+                expect(
+                    await GlideFt.create(
+                        client,
+                        Buffer.from(index),
+                        [
+                            {
+                                type: "VECTOR",
+                                name: "$.vec",
+                                alias: "VEC",
+                                attributes: {
+                                    algorithm: "HNSW",
+                                    distanceMetric: "COSINE",
+                                    dimensions: 42,
+                                },
+                            },
+                            { type: "TEXT", name: "$.name" },
+                        ],
+                        { dataType: "JSON", prefixes: ["123"] },
+                    ),
+                ).toEqual("OK");
+
+                let response = await GlideFt.info(client, Buffer.from(index));
+
+                expect(response).toMatchObject({
+                    index_name: index,
+                    key_type: "JSON",
+                    key_prefixes: ["123"],
+                    fields: [
+                        {
+                            identifier: "$.name",
+                            type: "TEXT",
+                            field_name: "$.name",
+                            option: "",
+                        },
+                        {
+                            identifier: "$.vec",
+                            type: "VECTOR",
+                            field_name: "VEC",
+                            option: "",
+                            vector_params: {
+                                distance_metric: "COSINE",
+                                dimension: 42,
+                            },
+                        },
+                    ],
+                });
+
+                response = await GlideFt.info(client, index, {
+                    decoder: Decoder.Bytes,
+                });
+                expect(response).toMatchObject({
+                    index_name: Buffer.from(index),
+                });
+
+                expect(await GlideFt.dropindex(client, index)).toEqual("OK");
+                // querying a missing index
+                await expect(GlideFt.info(client, index)).rejects.toThrow(
+                    "Index not found",
+                );
+            },
+        );
+
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
             "FT.AGGREGATE on JSON",
             async (protocol) => {
                 client = await GlideClusterClient.createClient(
@@ -2881,79 +2954,6 @@ describe("Server Module Tests", () => {
             },
         );
 
-        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-            "FT.INFO ft.info",
-            async (protocol) => {
-                client = await GlideClusterClient.createClient(
-                    getClientConfigurationOption(
-                        cluster.getAddresses(),
-                        protocol,
-                    ),
-                );
-
-                const index = uuidv4();
-                expect(
-                    await GlideFt.create(
-                        client,
-                        Buffer.from(index),
-                        [
-                            {
-                                type: "VECTOR",
-                                name: "$.vec",
-                                alias: "VEC",
-                                attributes: {
-                                    algorithm: "HNSW",
-                                    distanceMetric: "COSINE",
-                                    dimensions: 42,
-                                },
-                            },
-                            { type: "TEXT", name: "$.name" },
-                        ],
-                        { dataType: "JSON", prefixes: ["123"] },
-                    ),
-                ).toEqual("OK");
-
-                let response = await GlideFt.info(client, Buffer.from(index));
-
-                expect(response).toMatchObject({
-                    index_name: index,
-                    key_type: "JSON",
-                    key_prefixes: ["123"],
-                    fields: [
-                        {
-                            identifier: "$.name",
-                            type: "TEXT",
-                            field_name: "$.name",
-                            option: "",
-                        },
-                        {
-                            identifier: "$.vec",
-                            type: "VECTOR",
-                            field_name: "VEC",
-                            option: "",
-                            vector_params: {
-                                distance_metric: "COSINE",
-                                dimension: 42,
-                            },
-                        },
-                    ],
-                });
-
-                response = await GlideFt.info(client, index, {
-                    decoder: Decoder.Bytes,
-                });
-                expect(response).toMatchObject({
-                    index_name: Buffer.from(index),
-                });
-
-                expect(await GlideFt.dropindex(client, index)).toEqual("OK");
-                // querying a missing index
-                await expect(GlideFt.info(client, index)).rejects.toThrow(
-                    "Index not found",
-                );
-            },
-        );
-
         it("FT.SEARCH binary on HASH", async () => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(
@@ -3183,84 +3183,149 @@ describe("Server Module Tests", () => {
 
             expect(stringProfileResult).toEqual(expectedStringResult);
         });
-    });
 
-    it("FT.ALIASADD, FT.ALIASUPDATE and FT.ALIASDEL test", async () => {
-        client = await GlideClusterClient.createClient(
-            getClientConfigurationOption(
-                cluster.getAddresses(),
-                ProtocolVersion.RESP3,
-            ),
-        );
-        const index = uuidv4();
-        const alias = uuidv4() + "-alias";
+        it("FT.EXPLAIN ft.explain FT.EXPLAINCLI ft.explaincli", async () => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
 
-        // Create an index.
-        expect(
-            await GlideFt.create(client, index, [
-                { type: "NUMERIC", name: "published_at" },
-                { type: "TAG", name: "category" },
-            ]),
-        ).toEqual("OK");
-        // Check if the index created successfully.
-        expect(await client.customCommand(["FT._LIST"])).toContain(index);
+            const index = uuidv4();
+            expect(
+                await GlideFt.create(client, index, [
+                    { type: "NUMERIC", name: "price" },
+                    { type: "TEXT", name: "title" },
+                ]),
+            ).toEqual("OK");
 
-        // Add an alias to the index.
-        expect(await GlideFt.aliasadd(client, index, alias)).toEqual("OK");
-
-        const newIndex = uuidv4();
-        const newAlias = uuidv4();
-
-        // Create a second index.
-        expect(
-            await GlideFt.create(client, newIndex, [
-                { type: "NUMERIC", name: "published_at" },
-                { type: "TAG", name: "category" },
-            ]),
-        ).toEqual("OK");
-        // Check if the second index created successfully.
-        expect(await client.customCommand(["FT._LIST"])).toContain(
-            newIndex,
-        );
-
-        // Add an alias to second index and also test addalias for bytes type input.
-        expect(
-            await GlideFt.aliasadd(
+            let explain = await GlideFt.explain(
                 client,
-                Buffer.from(newIndex),
-                Buffer.from(newAlias),
-            ),
-        ).toEqual("OK");
+                Buffer.from(index),
+                "@price:[0 10]",
+            );
+            expect(explain).toContain("price");
+            expect(explain).toContain("10");
 
-        // Test if updating an already existing alias to point to an existing index returns "OK".
-        expect(await GlideFt.aliasupdate(client, newAlias, index)).toEqual(
-            "OK",
-        );
-        // Test alias update for byte type input.
-        expect(
-            await GlideFt.aliasupdate(
-                client,
-                Buffer.from(alias),
-                Buffer.from(newIndex),
-            ),
-        ).toEqual("OK");
+            explain = (
+                (await GlideFt.explain(client, index, "@price:[0 10]", {
+                    decoder: Decoder.Bytes,
+                })) as Buffer
+            ).toString();
+            expect(explain).toContain("price");
+            expect(explain).toContain("10");
 
-        // Test if an existing alias is deleted successfully.
-        expect(await GlideFt.aliasdel(client, alias)).toEqual("OK");
+            explain = await GlideFt.explain(client, index, "*");
+            expect(explain).toContain("*");
 
-        // Test if an existing alias is deleted successfully for bytes type input.
-        expect(
-            await GlideFt.aliasdel(client, Buffer.from(newAlias)),
-        ).toEqual("OK");
+            let explaincli = (
+                await GlideFt.explaincli(
+                    client,
+                    Buffer.from(index),
+                    "@price:[0 10]",
+                )
+            ).map((s) => (s as string).trim());
+            expect(explaincli).toContain("price");
+            expect(explaincli).toContain("0");
+            expect(explaincli).toContain("10");
 
-        // Drop both indexes.
-        expect(await GlideFt.dropindex(client, index)).toEqual("OK");
-        expect(await client.customCommand(["FT._LIST"])).not.toContain(
-            index,
-        );
-        expect(await GlideFt.dropindex(client, newIndex)).toEqual("OK");
-        expect(await client.customCommand(["FT._LIST"])).not.toContain(
-            newIndex,
-        );
+            explaincli = (
+                await GlideFt.explaincli(client, index, "@price:[0 10]", {
+                    decoder: Decoder.Bytes,
+                })
+            ).map((s) => (s as Buffer).toString().trim());
+            expect(explaincli).toContain("price");
+            expect(explaincli).toContain("0");
+            expect(explaincli).toContain("10");
+
+            expect(await GlideFt.dropindex(client, index)).toEqual("OK");
+            // querying a missing index
+            await expect(GlideFt.explain(client, index, "*")).rejects.toThrow(
+                "Index not found",
+            );
+            await expect(
+                GlideFt.explaincli(client, index, "*"),
+            ).rejects.toThrow("Index not found");
+        });
+
+        it("FT.ALIASADD, FT.ALIASUPDATE and FT.ALIASDEL test", async () => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+            const index = uuidv4();
+            const alias = uuidv4() + "-alias";
+
+            // Create an index.
+            expect(
+                await GlideFt.create(client, index, [
+                    { type: "NUMERIC", name: "published_at" },
+                    { type: "TAG", name: "category" },
+                ]),
+            ).toEqual("OK");
+            // Check if the index created successfully.
+            expect(await client.customCommand(["FT._LIST"])).toContain(index);
+
+            // Add an alias to the index.
+            expect(await GlideFt.aliasadd(client, index, alias)).toEqual("OK");
+
+            const newIndex = uuidv4();
+            const newAlias = uuidv4();
+
+            // Create a second index.
+            expect(
+                await GlideFt.create(client, newIndex, [
+                    { type: "NUMERIC", name: "published_at" },
+                    { type: "TAG", name: "category" },
+                ]),
+            ).toEqual("OK");
+            // Check if the second index created successfully.
+            expect(await client.customCommand(["FT._LIST"])).toContain(
+                newIndex,
+            );
+
+            // Add an alias to second index and also test addalias for bytes type input.
+            expect(
+                await GlideFt.aliasadd(
+                    client,
+                    Buffer.from(newIndex),
+                    Buffer.from(newAlias),
+                ),
+            ).toEqual("OK");
+
+            // Test if updating an already existing alias to point to an existing index returns "OK".
+            expect(await GlideFt.aliasupdate(client, newAlias, index)).toEqual(
+                "OK",
+            );
+            // Test alias update for byte type input.
+            expect(
+                await GlideFt.aliasupdate(
+                    client,
+                    Buffer.from(alias),
+                    Buffer.from(newIndex),
+                ),
+            ).toEqual("OK");
+
+            // Test if an existing alias is deleted successfully.
+            expect(await GlideFt.aliasdel(client, alias)).toEqual("OK");
+
+            // Test if an existing alias is deleted successfully for bytes type input.
+            expect(
+                await GlideFt.aliasdel(client, Buffer.from(newAlias)),
+            ).toEqual("OK");
+
+            // Drop both indexes.
+            expect(await GlideFt.dropindex(client, index)).toEqual("OK");
+            expect(await client.customCommand(["FT._LIST"])).not.toContain(
+                index,
+            );
+            expect(await GlideFt.dropindex(client, newIndex)).toEqual("OK");
+            expect(await client.customCommand(["FT._LIST"])).not.toContain(
+                newIndex,
+            );
+        });
     });
 });
