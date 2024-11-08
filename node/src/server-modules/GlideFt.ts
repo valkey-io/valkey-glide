@@ -568,10 +568,7 @@ export class GlideFt {
                 args,
                 options as DecoderOption,
             ) as Promise<[FtSearchReturnType, GlideRecord<number>]>
-        ).then((v) => {
-            console.log(v[1]);
-            return [v[0], convertGlideRecordToRecord(v[1])];
-        });
+        ).then((v) => [v[0], convertGlideRecordToRecord(v[1])]);
     }
 
     /**
@@ -639,10 +636,7 @@ export class GlideFt {
                 args,
                 options as DecoderOption,
             ) as Promise<[FtAggregateReturnType, GlideRecord<number>]>
-        ).then((v) => {
-            console.log(v[1]);
-            return [v[0], convertGlideRecordToRecord(v[1])];
-        });
+        ).then((v) => [v[0], convertGlideRecordToRecord(v[1])]);
     }
 
     /**
