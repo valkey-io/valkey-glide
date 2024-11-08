@@ -161,13 +161,13 @@ public class MessageHandler {
      */
     public static class PubSubMessageQueue {
         /** The queue itself. */
-        final ConcurrentLinkedDeque<PubSubMessage> messageQueue = new ConcurrentLinkedDeque<>();
+        private final ConcurrentLinkedDeque<PubSubMessage> messageQueue = new ConcurrentLinkedDeque<>();
 
         /**
          * A promise for the first incoming message. Returned to a user, if message queried in async
          * manner, but nothing received yet.
          */
-        CompletableFuture<PubSubMessage> firstMessagePromise = new CompletableFuture<>();
+        private CompletableFuture<PubSubMessage> firstMessagePromise = new CompletableFuture<>();
 
         /** A flag whether a user already got a {@link #firstMessagePromise}. */
         private boolean firstMessagePromiseRequested = false;
@@ -200,7 +200,8 @@ public class MessageHandler {
                     // this makes first incoming message to be delivered into `firstMessagePromise` instead of
                     // `messageQueue`
                     firstMessagePromiseRequested = true;
-                    return firstMessagePromise;
+                    // Return a copy of the promise by creating a new CompletableFuture
+                    return new CompletableFuture<PubSubMessage>().completeAsync(() -> firstMessagePromise.join());
                 }
                 var future = new CompletableFuture<PubSubMessage>();
                 future.complete(message);

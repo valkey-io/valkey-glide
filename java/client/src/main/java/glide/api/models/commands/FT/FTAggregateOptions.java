@@ -9,6 +9,7 @@ import glide.api.BaseClient;
 import glide.api.commands.servermodules.FT;
 import glide.api.models.GlideString;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -87,7 +88,7 @@ public class FTAggregateOptions {
         }
 
         public FTAggregateOptionsBuilder loadFields(@NonNull GlideString[] fields) {
-            loadFields = fields;
+            loadFields = Arrays.copyOf(fields, fields.length);
             loadAll = false;
             return this;
         }
@@ -162,17 +163,17 @@ public class FTAggregateOptions {
         private final Reducer[] reducers;
 
         public GroupBy(@NonNull GlideString[] properties, @NonNull Reducer[] reducers) {
-            this.properties = properties;
-            this.reducers = reducers;
+            this.properties = Arrays.copyOf(properties, properties.length);
+            this.reducers = Arrays.copyOf(reducers, reducers.length);
         }
 
         public GroupBy(@NonNull String[] properties, @NonNull Reducer[] reducers) {
             this.properties = toGlideStringArray(properties);
-            this.reducers = reducers;
+            this.reducers = Arrays.copyOf(reducers, reducers.length);
         }
 
         public GroupBy(@NonNull GlideString[] properties) {
-            this.properties = properties;
+            this.properties = Arrays.copyOf(properties, properties.length);;
             this.reducers = new Reducer[0];
         }
 
@@ -202,13 +203,13 @@ public class FTAggregateOptions {
 
             public Reducer(@NonNull String function, @NonNull GlideString[] args, @NonNull String alias) {
                 this.function = function;
-                this.args = args;
+                this.args = Arrays.copyOf(args, args.length);;
                 this.alias = alias;
             }
 
             public Reducer(@NonNull String function, @NonNull GlideString[] args) {
                 this.function = function;
-                this.args = args;
+                this.args = Arrays.copyOf(args, args.length);;
                 this.alias = null;
             }
 
@@ -242,12 +243,12 @@ public class FTAggregateOptions {
         private final Integer max;
 
         public SortBy(@NonNull SortProperty[] properties) {
-            this.properties = properties;
+            this.properties = Arrays.copyOf(properties, properties.length);;
             this.max = null;
         }
 
         public SortBy(@NonNull SortProperty[] properties, int max) {
-            this.properties = properties;
+            this.properties = Arrays.copyOf(properties, properties.length);;
             this.max = max;
         }
 

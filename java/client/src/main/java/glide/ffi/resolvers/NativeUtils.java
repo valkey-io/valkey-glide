@@ -92,13 +92,13 @@ public class NativeUtils {
         File temp = new File(temporaryDir, filename);
 
         try (InputStream is = NativeUtils.class.getResourceAsStream(path)) {
+            if (is == null) {
+                throw new FileNotFoundException("File " + path + " was not found inside JAR.");
+            }
             Files.copy(is, temp.toPath(), StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
             temp.delete();
             throw e;
-        } catch (NullPointerException e) {
-            temp.delete();
-            throw new FileNotFoundException("File " + path + " was not found inside JAR.");
         }
 
         try {

@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<FindBugsFilter>
+  <Match>
+    <Or>
+      <Package name="command_request" />
+      <Package name="connection_request" />
+      <Package name="response" />
+    </Or>
+  </Match>
+</FindBugsFilter>

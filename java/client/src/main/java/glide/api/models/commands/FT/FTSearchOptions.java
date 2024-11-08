@@ -77,6 +77,9 @@ public class FTSearchOptions {
 
     public static class FTSearchOptionsBuilder {
 
+        // Initialize the field as a new HashMap
+        private Map<GlideString, GlideString> identifiers$value = new HashMap<>();
+
         // private - hiding this API from user
         void limit(Pair<Integer, Integer> limit) {}
 
