@@ -28,7 +28,7 @@ import {
     ProtocolVersion,
     RequestError,
     SortOrder,
-    VectorField
+    VectorField,
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import {
@@ -2761,15 +2761,16 @@ describe("Server Module Tests", () => {
                         ),
                 ).toEqual(expectedAggreg);
 
-                const aggregProfile: [FtAggregateReturnType, Record<string, number>] = (
-                    await GlideFt.profileAggregate(
-                        client,
-                        indexBicycles,
-                        "*",
-                        options,
-                    )
+                const aggregProfile: [
+                    FtAggregateReturnType,
+                    Record<string, number>,
+                ] = await GlideFt.profileAggregate(
+                    client,
+                    indexBicycles,
+                    "*",
+                    options,
                 );
-                expect(aggregProfile[1].keys).toEqual([
+                expect(Object.keys(aggregProfile[1])).toEqual([
                     "parse.time",
                     "all.count",
                     "sync.time",
@@ -2948,15 +2949,16 @@ describe("Server Module Tests", () => {
                         .sort((a, b) => (a["genre"]! > b["genre"]! ? 1 : -1)),
                 ).toEqual(expectedAggreg);
 
-                const aggregProfile: [FtAggregateReturnType, Record<string, number>] = (
-                    await GlideFt.profileAggregate(
-                        client,
-                        indexMovies,
-                        query,
-                        options,
-                    )
+                const aggregProfile: [
+                    FtAggregateReturnType,
+                    Record<string, number>,
+                ] = await GlideFt.profileAggregate(
+                    client,
+                    indexMovies,
+                    query,
+                    options,
                 );
-                expect(aggregProfile[1].keys).toEqual([
+                expect(Object.keys(aggregProfile[1])).toEqual([
                     "parse.time",
                     "all.count",
                     "sync.time",
@@ -3051,15 +3053,11 @@ describe("Server Module Tests", () => {
                     timeout: 10000,
                     count: true,
                 };
-                const binaryResultCount: FtSearchReturnType = await GlideFt.search(
-                    client,
-                    index,
-                    query,
-                    {
+                const binaryResultCount: FtSearchReturnType =
+                    await GlideFt.search(client, index, query, {
                         decoder: Decoder.Bytes,
                         ...optionsWithCount,
-                    },
-                );
+                    });
                 expect(binaryResultCount).toEqual([2]);
 
                 const options: FtSearchOptions = {
@@ -3109,22 +3107,23 @@ describe("Server Module Tests", () => {
                 ];
                 expect(binaryResult).toEqual(expectedBinaryResult);
 
-                const binaryProfileResult: [FtSearchReturnType, Record<string, number>] = (
-                    await GlideFt.profileSearch(client, index, query, {
-                        decoder: Decoder.Bytes,
-                        ...options,
-                    })
-                );
-                expect(binaryProfileResult[1].keys).toEqual([
-                    Buffer.from("sync.time"),
-                    Buffer.from("query.time"),
-                    Buffer.from("vector.count"),
-                    Buffer.from("vector.time"),
-                    Buffer.from("result.count"),
-                    Buffer.from("result.time"),
+                const binaryProfileResult: [
+                    FtSearchReturnType,
+                    Record<string, number>,
+                ] = await GlideFt.profileSearch(client, index, query, {
+                    decoder: Decoder.Bytes,
+                    ...options,
+                });
+                expect(Object.keys(binaryProfileResult[1])).toEqual([
+                    "sync.time",
+                    "query.time",
+                    "vector.count",
+                    "vector.time",
+                    "result.count",
+                    "result.time",
                 ]);
                 expect(binaryProfileResult[0]).toEqual(expectedBinaryResult);
-            }
+            },
         );
 
         it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -3215,15 +3214,16 @@ describe("Server Module Tests", () => {
                 ];
                 expect(stringResult).toEqual(expectedStringResult);
 
-                const stringProfileResult: [FtSearchReturnType, Record<string, number>] = (
-                    await GlideFt.profileSearch(
-                        client,
-                        index,
-                        query,
-                        optionsWithLimit,
-                    )
+                const stringProfileResult: [
+                    FtSearchReturnType,
+                    Record<string, number>,
+                ] = await GlideFt.profileSearch(
+                    client,
+                    index,
+                    query,
+                    optionsWithLimit,
                 );
-                expect(stringProfileResult[1].keys).toEqual([
+                expect(Object.keys(stringProfileResult[1])).toEqual([
                     "all.count",
                     "sync.time",
                     "query.time",
@@ -3231,7 +3231,7 @@ describe("Server Module Tests", () => {
                     "result.time",
                 ]);
                 expect(stringProfileResult[0]).toEqual(expectedStringResult);
-            }
+            },
         );
 
         it("FT.EXPLAIN ft.explain FT.EXPLAINCLI ft.explaincli", async () => {

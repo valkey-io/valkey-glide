@@ -317,7 +317,11 @@ export class GlideFt {
             ..._addFtAggregateOptions(options),
         ];
 
-        return _handleCustomCommand(client, args, options) as Promise<FtAggregateReturnType>;
+        return _handleCustomCommand(
+            client,
+            args,
+            options,
+        ) as Promise<FtAggregateReturnType>;
     }
 
     /**
@@ -558,16 +562,15 @@ export class GlideFt {
             args.push(..._addFtSearchOptions(options as FtSearchOptions));
         }
 
-        return (_handleCustomCommand(
-            client,
-            args,
-            options as DecoderOption,
-        ) as Promise<[FtSearchReturnType, GlideRecord<number>]>).then(v => {
+        return (
+            _handleCustomCommand(
+                client,
+                args,
+                options as DecoderOption,
+            ) as Promise<[FtSearchReturnType, GlideRecord<number>]>
+        ).then((v) => {
             console.log(v[1]);
-            return [
-                v[0],
-                convertGlideRecordToRecord(v[1])
-            ]
+            return [v[0], convertGlideRecordToRecord(v[1])];
         });
     }
 
@@ -630,18 +633,16 @@ export class GlideFt {
             args.push(..._addFtAggregateOptions(options as FtAggregateOptions));
         }
 
-        return (_handleCustomCommand(
-            client,
-            args,
-            options as DecoderOption,
-        ) as Promise<[FtAggregateReturnType, GlideRecord<number>]>).then(v => {
+        return (
+            _handleCustomCommand(
+                client,
+                args,
+                options as DecoderOption,
+            ) as Promise<[FtAggregateReturnType, GlideRecord<number>]>
+        ).then((v) => {
             console.log(v[1]);
-            return [
-                v[0],
-                convertGlideRecordToRecord(v[1]),
-            ]
+            return [v[0], convertGlideRecordToRecord(v[1])];
         });
-
     }
 
     /**
