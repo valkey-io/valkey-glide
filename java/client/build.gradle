@@ -283,7 +283,7 @@ spotbugsMain {
 }
 
 spotbugs {
-    ignoreFailures = true 
+    ignoreFailures = true
     showStackTraces = true
     excludeFilter = file("${projectDir}/spotbugs-exclude.xml")
 }
