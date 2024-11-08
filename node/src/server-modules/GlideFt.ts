@@ -719,7 +719,9 @@ export class GlideFt {
         options?: DecoderOption,
     ): Promise<GlideRecord<GlideString>> {
         const args: GlideString[] = ["FT._ALIASLIST"];
-        return _handleCustomCommand(client, args, options) as Promise<any>;
+        return _handleCustomCommand(client, args, options) as Promise<
+            GlideRecord<GlideString>
+        >;
     }
 }
 

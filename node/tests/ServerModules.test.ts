@@ -3293,6 +3293,7 @@ describe("Server Module Tests", () => {
                     ? 1
                     : -1;
             };
+
             expect(result.sort(compareFunction)).toEqual(
                 expected.sort(compareFunction),
             );
