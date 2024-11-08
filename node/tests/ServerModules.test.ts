@@ -28,7 +28,7 @@ import {
     ProtocolVersion,
     RequestError,
     SortOrder,
-    VectorField,
+    VectorField
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import {
@@ -2761,7 +2761,7 @@ describe("Server Module Tests", () => {
                         ),
                 ).toEqual(expectedAggreg);
 
-                const aggregProfile: [FtAggregateReturnType, GlideRecord<number>] = (
+                const aggregProfile: [FtAggregateReturnType, Record<string, number>] = (
                     await GlideFt.profileAggregate(
                         client,
                         indexBicycles,
@@ -2769,7 +2769,7 @@ describe("Server Module Tests", () => {
                         options,
                     )
                 );
-                expect(aggregProfile[1].flatMap(r => r.key)).toEqual([
+                expect(aggregProfile[1].keys).toEqual([
                     "parse.time",
                     "all.count",
                     "sync.time",
@@ -2948,7 +2948,7 @@ describe("Server Module Tests", () => {
                         .sort((a, b) => (a["genre"]! > b["genre"]! ? 1 : -1)),
                 ).toEqual(expectedAggreg);
 
-                const aggregProfile: [FtAggregateReturnType, GlideRecord<number>] = (
+                const aggregProfile: [FtAggregateReturnType, Record<string, number>] = (
                     await GlideFt.profileAggregate(
                         client,
                         indexMovies,
@@ -2956,7 +2956,7 @@ describe("Server Module Tests", () => {
                         options,
                     )
                 );
-                expect(aggregProfile[1].flatMap(r => r.key)).toEqual([
+                expect(aggregProfile[1].keys).toEqual([
                     "parse.time",
                     "all.count",
                     "sync.time",
@@ -3109,13 +3109,13 @@ describe("Server Module Tests", () => {
                 ];
                 expect(binaryResult).toEqual(expectedBinaryResult);
 
-                const binaryProfileResult: [FtSearchReturnType, GlideRecord<number>] = (
+                const binaryProfileResult: [FtSearchReturnType, Record<string, number>] = (
                     await GlideFt.profileSearch(client, index, query, {
                         decoder: Decoder.Bytes,
                         ...options,
                     })
                 );
-                expect(binaryProfileResult[1].flatMap(r => r.key)).toEqual([
+                expect(binaryProfileResult[1].keys).toEqual([
                     Buffer.from("sync.time"),
                     Buffer.from("query.time"),
                     Buffer.from("vector.count"),
@@ -3215,7 +3215,7 @@ describe("Server Module Tests", () => {
                 ];
                 expect(stringResult).toEqual(expectedStringResult);
 
-                const stringProfileResult: [FtSearchReturnType, GlideRecord<number>] = (
+                const stringProfileResult: [FtSearchReturnType, Record<string, number>] = (
                     await GlideFt.profileSearch(
                         client,
                         index,
@@ -3223,7 +3223,7 @@ describe("Server Module Tests", () => {
                         optionsWithLimit,
                     )
                 );
-                expect(stringProfileResult[1].flatMap(r => r.key)).toEqual([
+                expect(stringProfileResult[1].keys).toEqual([
                     "all.count",
                     "sync.time",
                     "query.time",
