@@ -10,6 +10,7 @@ import glide.api.GlideClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.commands.ConditionalChange;
+import glide.api.models.commands.json.JsonArrindexOptions;
 import glide.api.models.commands.json.JsonGetOptions;
 import glide.api.models.commands.json.JsonGetOptionsBinary;
 import glide.utils.ArgsBuilder;
@@ -26,6 +27,7 @@ public class Json {
     private static final String JSON_NUMMULTBY = JSON_PREFIX + "NUMMULTBY";
     private static final String JSON_ARRAPPEND = JSON_PREFIX + "ARRAPPEND";
     private static final String JSON_ARRINSERT = JSON_PREFIX + "ARRINSERT";
+    private static final String JSON_ARRINDEX = JSON_PREFIX + "ARRINDEX";
     private static final String JSON_ARRLEN = JSON_PREFIX + "ARRLEN";
     private static final String[] JSON_DEBUG_MEMORY = new String[] {JSON_PREFIX + "DEBUG", "MEMORY"};
     private static final String[] JSON_DEBUG_FIELDS = new String[] {JSON_PREFIX + "DEBUG", "FIELDS"};
@@ -601,6 +603,171 @@ public class Json {
                         .add(path)
                         .add(Integer.toString(index))
                         .add(values)
+                        .toArray());
+    }
+
+    /**
+     * Searches for the first occurrence of a <code>scalar</code> JSON value in the arrays at the
+     * path.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @param scalar The scalar value to search for.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>): Returns an array with a
+     *           list of integers for every possible path, indicating the index of the matching
+     *           element. The value is <code>-1</code> if not found. If a value is not an array, its
+     *           corresponding return value is <code>null</code>.
+     *       <li>For legacy path (path doesn't start with <code>$</code>): Returns an integer
+     *           representing the index of matching element, or <code>-1</code> if not found. If the
+     *           value at the <code>path</code> is not an array, an error is raised.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * Json.set(client, key, "$", "{\"a\": [\"value\", 3], \"b\": {\"a\": [3, [\"value\", false], 5]}}").get();
+     * var result = Json.arrindex(client, key, "$..a", "3").get();
+     * assert Arrays.equals((Object[]) result, new Object[] {1L, 0L});
+     *
+     * result = Json.arrindex(client, key, "$..a", "\"value\"").get();
+     * assert Arrays.equals((Object[]) result, new Object[] {0L, -1L});
+     * }</pre>
+     */
+    public static CompletableFuture<Object> arrindex(
+            @NonNull BaseClient client,
+            @NonNull String key,
+            @NonNull String path,
+            @NonNull String scalar) {
+        return arrindex(client, gs(key), gs(path), gs(scalar));
+    }
+
+    /**
+     * Searches for the first occurrence of a <code>scalar</code> JSON value in the arrays at the
+     * path.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @param scalar The scalar value to search for.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>): Returns an array with a
+     *           list of integers for every possible path, indicating the index of the matching
+     *           element. The value is <code>-1</code> if not found. If a value is not an array, its
+     *           corresponding return value is <code>null</code>.
+     *       <li>For legacy path (path doesn't start with <code>$</code>): Returns an integer
+     *           representing the index of matching element, or <code>-1</code> if not found. If the
+     *           value at the <code>path</code> is not an array, an error is raised.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * Json.set(client, key, "$", "{\"a\": [\"value\", 3], \"b\": {\"a\": [3, [\"value\", false], 5]}}").get();
+     * var result = Json.arrindex(client, gs(key), gs("$..a"), gs("3")).get();
+     * assert Arrays.equals((Object[]) result, new Object[] {1L, 0L});
+     *
+     * // Searches for the first occurrence of null in the arrays
+     * result = Json.arrindex(client, gs(key), gs("$..a"), gs("null")).get();
+     * assert Arrays.equals((Object[]) result, new Object[] {-1L, -1L});
+     * }</pre>
+     */
+    public static CompletableFuture<Object> arrindex(
+            @NonNull BaseClient client,
+            @NonNull GlideString key,
+            @NonNull GlideString path,
+            @NonNull GlideString scalar) {
+        return executeCommand(client, new GlideString[] {gs(JSON_ARRINDEX), key, path, scalar});
+    }
+
+    /**
+     * Searches for the first occurrence of a <code>scalar</code> JSON value in the arrays at the
+     * path.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @param scalar The scalar value to search for.
+     * @param options The additional options for the command. See <code>JsonArrindexOptions</code>.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>): Returns an array with a
+     *           list of integers for every possible path, indicating the index of the matching
+     *           element. The value is <code>-1</code> if not found. If a value is not an array, its
+     *           corresponding return value is <code>null</code>.
+     *       <li>For legacy path (path doesn't start with <code>$</code>): Returns an integer
+     *           representing the index of matching element, or <code>-1</code> if not found. If the
+     *           value at the <code>path</code> is not an array, an error is raised.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * Json.set(client, key, "$", "{\"a\": [\"value\", 3], \"b\": {\"a\": [3, [\"value\", false], 5]}}").get();
+     * var result = Json.arrindex(client, key, ".a", "3", new JsonArrindexOptions(0L)).get();
+     * assert Arrays.equals(1L, result);
+     * }</pre>
+     */
+    public static CompletableFuture<Object> arrindex(
+            @NonNull BaseClient client,
+            @NonNull String key,
+            @NonNull String path,
+            @NonNull String scalar,
+            @NonNull JsonArrindexOptions options) {
+
+        return executeCommand(
+                client,
+                new ArgsBuilder()
+                        .add(JSON_ARRINDEX)
+                        .add(key)
+                        .add(path)
+                        .add(scalar)
+                        .add(options.toArgs())
+                        .toArray());
+    }
+
+    /**
+     * Searches for the first occurrence of a <code>scalar</code> JSON value in the arrays at the
+     * path.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @param scalar The scalar value to search for.
+     * @param options The additional options for the command. See <code>JsonArrindexOptions</code>.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>): Returns an array with a
+     *           list of integers for every possible path, indicating the index of the matching
+     *           element. The value is <code>-1</code> if not found. If a value is not an array, its
+     *           corresponding return value is <code>null</code>..
+     *       <li>For legacy path (path doesn't start with <code>$</code>): Returns an integer
+     *           representing the index of matching element, or <code>-1</code> if not found. If the
+     *           value at the <code>path</code> is not an array, an error is raised.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * Json.set(client, key, "$", "{\"a\": [\"value\", 3], \"b\": {\"a\": [3, [\"value\", false], 5]}}").get();
+     * var result = Json.arrindex(client, gs(key), gs(".a"), gs("3"), new JsonArrindexOptions(0L)).get();
+     * assert Arrays.equals(1L, result);
+     * }</pre>
+     */
+    public static CompletableFuture<Object> arrindex(
+            @NonNull BaseClient client,
+            @NonNull GlideString key,
+            @NonNull GlideString path,
+            @NonNull GlideString scalar,
+            @NonNull JsonArrindexOptions options) {
+
+        return executeCommand(
+                client,
+                new ArgsBuilder()
+                        .add(JSON_ARRINDEX)
+                        .add(key)
+                        .add(path)
+                        .add(scalar)
+                        .add(options.toArgs())
                         .toArray());
     }
 
