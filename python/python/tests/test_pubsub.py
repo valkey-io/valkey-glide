@@ -13,9 +13,9 @@ from glide.config import (
     GlideClusterClientConfiguration,
     ProtocolVersion,
 )
-from glide.constants import OK, TEncodable
+from glide.constants import OK
 from glide.exceptions import ConfigurationError
-from glide.glide_client import BaseClient, GlideClient, GlideClusterClient, TGlideClient
+from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from tests.conftest import create_client
 from tests.utils.utils import check_if_server_version_lt, get_random_string
 
@@ -469,6 +469,7 @@ class TestPubSub:
             await client_cleanup(listening_client, pub_sub if cluster_mode else None)
             await client_cleanup(publishing_client, None)
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
@@ -506,9 +507,6 @@ class TestPubSub:
             listening_client, publishing_client = await create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub
             )
-            min_version = "7.0.0"
-            if await check_if_server_version_lt(publishing_client, min_version):
-                pytest.skip(reason=f"Valkey version required >= {min_version}")
 
             assert (
                 await cast(GlideClusterClient, publishing_client).publish(
@@ -534,6 +532,7 @@ class TestPubSub:
             await client_cleanup(listening_client, pub_sub if cluster_mode else None)
             await client_cleanup(publishing_client, None)
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     async def test_sharded_pubsub_co_existence(self, request, cluster_mode: bool):
         """
@@ -562,10 +561,6 @@ class TestPubSub:
             listening_client, publishing_client = await create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub
             )
-
-            min_version = "7.0.0"
-            if await check_if_server_version_lt(publishing_client, min_version):
-                pytest.skip(reason=f"Valkey version required >= {min_version}")
 
             assert (
                 await cast(GlideClusterClient, publishing_client).publish(
@@ -608,6 +603,7 @@ class TestPubSub:
             await client_cleanup(listening_client, pub_sub if cluster_mode else None)
             await client_cleanup(publishing_client, None)
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
@@ -655,10 +651,6 @@ class TestPubSub:
             listening_client, publishing_client = await create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub
             )
-
-            min_version = "7.0.0"
-            if await check_if_server_version_lt(publishing_client, min_version):
-                pytest.skip(reason=f"Valkey version required >= {min_version}")
 
             # Publish messages to each channel
             for channel, message in channels_and_messages.items():
@@ -1172,6 +1164,7 @@ class TestPubSub:
             )
             await client_cleanup(client_dont_care, None)
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
@@ -1247,10 +1240,6 @@ class TestPubSub:
                 pub_sub_exact,
             )
 
-            # Setup PUBSUB for sharded channels (Valkey version > 7)
-            if await check_if_server_version_lt(publishing_client, "7.0.0"):
-                pytest.skip("Valkey version required >= 7.0.0")
-
             # Publish messages to all channels
             for channel, message in {
                 **exact_channels_and_messages,
@@ -1308,6 +1297,7 @@ class TestPubSub:
             )
             await client_cleanup(publishing_client, None)
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
@@ -1398,10 +1388,6 @@ class TestPubSub:
                     pub_sub_exact,
                 )
             )
-
-            # Setup PUBSUB for sharded channels (Valkey version > 7)
-            if await check_if_server_version_lt(publishing_client, "7.0.0"):
-                pytest.skip("Valkey version required >= 7.0.0")
 
             if method == MethodTesting.Callback:
                 context = callback_messages_pattern
@@ -1534,6 +1520,7 @@ class TestPubSub:
                 listening_client_sharded, pub_sub_sharded if cluster_mode else None
             )
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
@@ -1602,10 +1589,6 @@ class TestPubSub:
                     pub_sub_exact,
                 )
             )
-
-            # (Valkey version > 7)
-            if await check_if_server_version_lt(publishing_client, "7.0.0"):
-                pytest.skip("Valkey version required >= 7.0.0")
 
             # Setup PUBSUB for pattern channel
             if method == MethodTesting.Callback:
@@ -1801,6 +1784,7 @@ class TestPubSub:
                 client_pattern, pub_sub_pattern if cluster_mode else None
             )
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
@@ -1892,9 +1876,6 @@ class TestPubSub:
             client_sharded, client_dont_care = await create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub_sharded
             )
-            # (Valkey version > 7)
-            if await check_if_server_version_lt(client_pattern, "7.0.0"):
-                pytest.skip("Valkey version required >= 7.0.0")
 
             # Publish messages to each channel - both clients publishing
             assert (
@@ -2024,6 +2005,7 @@ class TestPubSub:
             await client_cleanup(listening_client, pub_sub if cluster_mode else None)
             await client_cleanup(publishing_client, None)
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.skip(
         reason="This test requires special configuration for client-output-buffer-limit for valkey-server and timeouts seems to vary across platforms and server versions"
     )
@@ -2061,10 +2043,6 @@ class TestPubSub:
                 pub_sub,
                 timeout=10000,
             )
-
-            # (Valkey version > 7)
-            if await check_if_server_version_lt(publishing_client, "7.0.0"):
-                pytest.skip("Valkey version required >= 7.0.0")
 
             assert (
                 await cast(GlideClusterClient, publishing_client).publish(
@@ -2161,6 +2139,7 @@ class TestPubSub:
             await client_cleanup(listening_client, pub_sub if cluster_mode else None)
             await client_cleanup(publishing_client, None)
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.skip(
         reason="This test requires special configuration for client-output-buffer-limit for valkey-server and timeouts seems to vary across platforms and server versions"
     )
@@ -2200,10 +2179,6 @@ class TestPubSub:
             listening_client, publishing_client = await create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub, timeout=10000
             )
-
-            # (Valkey version > 7)
-            if await check_if_server_version_lt(publishing_client, "7.0.0"):
-                pytest.skip("Valkey version required >= 7.0.0")
 
             assert (
                 await cast(GlideClusterClient, publishing_client).publish(
@@ -2463,6 +2438,7 @@ class TestPubSub:
             await client_cleanup(client4, None)
             await client_cleanup(client, None)
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     async def test_pubsub_shardchannels(self, request, cluster_mode: bool):
         """
@@ -2471,7 +2447,7 @@ class TestPubSub:
         This test verifies that the pubsub_shardchannels command correctly returns
         the active sharded channels matching a specified pattern.
         """
-        client1, client2, client = None, None, None
+        pub_sub, client1, client2, client = None, None, None, None
         try:
             channel1 = "test_shardchannel1"
             channel2 = "test_shardchannel2"
@@ -2479,9 +2455,6 @@ class TestPubSub:
             pattern = "test_*"
 
             client = await create_client(request, cluster_mode)
-            min_version = "7.0.0"
-            if await check_if_server_version_lt(client, min_version):
-                pytest.skip(reason=f"Valkey version required >= {min_version}")
             assert type(client) == GlideClusterClient
             # Assert no sharded channels exist yet
             assert await client.pubsub_shardchannels() == []
@@ -2506,10 +2479,6 @@ class TestPubSub:
                 request, cluster_mode, pub_sub
             )
 
-            min_version = "7.0.0"
-            if await check_if_server_version_lt(client1, min_version):
-                pytest.skip(reason=f"Valkey version required >= {min_version}")
-
             assert type(client2) == GlideClusterClient
 
             # Test pubsub_shardchannels without pattern
@@ -2528,6 +2497,7 @@ class TestPubSub:
             await client_cleanup(client2, None)
             await client_cleanup(client, None)
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     async def test_pubsub_shardnumsub(self, request, cluster_mode: bool):
         """
@@ -2582,9 +2552,7 @@ class TestPubSub:
 
             # Create a client and check initial subscribers
             client = await create_client(request, cluster_mode)
-            min_version = "7.0.0"
-            if await check_if_server_version_lt(client, min_version):
-                pytest.skip(reason=f"Valkey version required >= {min_version}")
+
             assert type(client) == GlideClusterClient
             assert await client.pubsub_shardnumsub([channel1, channel2, channel3]) == {
                 channel1_bytes: 0,
@@ -2595,10 +2563,6 @@ class TestPubSub:
             client1, client2 = await create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub1, pub_sub2
             )
-
-            min_version = "7.0.0"
-            if await check_if_server_version_lt(client1, min_version):
-                pytest.skip(reason=f"Valkey version required >= {min_version}")
 
             client3, client4 = await create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub3
@@ -2628,6 +2592,7 @@ class TestPubSub:
             await client_cleanup(client4, None)
             await client_cleanup(client, None)
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     async def test_pubsub_channels_and_shardchannels_separation(
         self, request, cluster_mode: bool
@@ -2663,10 +2628,6 @@ class TestPubSub:
                 request, cluster_mode, pub_sub
             )
 
-            min_version = "7.0.0"
-            if await check_if_server_version_lt(client1, min_version):
-                pytest.skip(reason=f"Valkey version required >= {min_version}")
-
             assert type(client2) == GlideClusterClient
             # Test pubsub_channels
             assert await client2.pubsub_channels() == [regular_channel_bytes]
@@ -2678,6 +2639,7 @@ class TestPubSub:
             await client_cleanup(client1, pub_sub if cluster_mode else None)
             await client_cleanup(client2, None)
 
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     async def test_pubsub_numsub_and_shardnumsub_separation(
         self, request, cluster_mode: bool
@@ -2722,10 +2684,6 @@ class TestPubSub:
             client1, client2 = await create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub1, pub_sub2
             )
-
-            min_version = "7.0.0"
-            if await check_if_server_version_lt(client1, min_version):
-                pytest.skip(reason=f"Valkey version required >= {min_version}")
 
             assert type(client2) == GlideClusterClient
 

@@ -30,28 +30,28 @@ runs:
           run: |
               apk update
               apk add bash git sed python3
-        
+
         - name: Skip all steps if not on ARM64
           shell: bash
           if: ${{ inputs.arch != 'arm64' }}
           run: exit 0
 
-        # Currently "Checkout" action is not supported for musl on ARM64, so the checkout is happening on the runner and 
+        # Currently "Checkout" action is not supported for musl on ARM64, so the checkout is happening on the runner and
         # here we just making sure we getting the clean repo
         - name: Clean repository for musl on ARM64
           shell: bash
           run: |
-            git config --global --add safe.directory "${{ inputs.workspace }}"
-            git fetch origin ${{ github.sha }}
-            git checkout ${{ github.sha }}
-            git clean -xdf
-            git reset --hard
-            
+              git config --global --add safe.directory "${{ inputs.workspace }}"
+              git fetch origin ${{ github.sha }}
+              git checkout ${{ github.sha }}
+              git clean -xdf
+              git reset --hard
+
         - name: Set up access for musl on ARM
           shell: bash
           run: |
               chown -R $(whoami):$(whoami) $GITHUB_WORKSPACE
-                
+
         - name: Setup node
           shell: bash
           working-directory: ./node

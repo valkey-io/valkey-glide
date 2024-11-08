@@ -613,7 +613,13 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/del/ for details.
 
         Note:
-            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+            In cluster mode, if keys in `keys` map to different hash slots,
+            the command will be split across these slots and executed separately for each.
+            This means the command is atomic only at the slot level. If one or more slot-specific
+            requests fail, the entire call will return the first encountered error, even
+            though some requests may have succeeded while others did not.
+            If this behavior impacts your application logic, consider splitting the
+            request into sub-requests per slot to ensure atomicity.
 
         Args:
             keys (List[TEncodable]): A list of keys to be deleted from the database.
@@ -730,7 +736,13 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/mset/ for more details.
 
         Note:
-            When in cluster mode, the command may route to multiple nodes when keys in `key_value_map` map to different hash slots.
+            In cluster mode, if keys in `key_value_map` map to different hash slots,
+            the command will be split across these slots and executed separately for each.
+            This means the command is atomic only at the slot level. If one or more slot-specific
+            requests fail, the entire call will return the first encountered error, even
+            though some requests may have succeeded while others did not.
+            If this behavior impacts your application logic, consider splitting the
+            request into sub-requests per slot to ensure atomicity.
 
         Args:
             key_value_map (Mapping[TEncodable, TEncodable]): A map of key value pairs.
@@ -783,8 +795,13 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/mget/ for more details.
 
         Note:
-            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
-
+            In cluster mode, if keys in `keys` map to different hash slots,
+            the command will be split across these slots and executed separately for each.
+            This means the command is atomic only at the slot level. If one or more slot-specific
+            requests fail, the entire call will return the first encountered error, even
+            though some requests may have succeeded while others did not.
+            If this behavior impacts your application logic, consider splitting the
+            request into sub-requests per slot to ensure atomicity.
         Args:
             keys (List[TEncodable]): A list of keys to retrieve values for.
 
@@ -850,7 +867,14 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/touch/ for details.
 
         Note:
-            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+            In cluster mode, if keys in `key_value_map` map to different hash slots,
+            the command will be split across these slots and executed separately for each.
+            This means the command is atomic only at the slot level. If one or more slot-specific
+            requests fail, the entire call will return the first encountered error, even
+            though some requests may have succeeded while others did not.
+            If this behavior impacts your application logic, consider splitting the
+            request into sub-requests per slot to ensure atomicity.        Args:
+            keys (List[TEncodable]): The list of keys to unlink.
 
         Args:
             keys (List[TEncodable]): The keys to update last access time.
@@ -2303,7 +2327,13 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/exists/ for more details.
 
         Note:
-            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+            In cluster mode, if keys in `keys` map to different hash slots,
+            the command will be split across these slots and executed separately for each.
+            This means the command is atomic only at the slot level. If one or more slot-specific
+            requests fail, the entire call will return the first encountered error, even
+            though some requests may have succeeded while others did not.
+            If this behavior impacts your application logic, consider splitting the
+            request into sub-requests per slot to ensure atomicity.
 
         Args:
             keys (List[TEncodable]): The list of keys to check.
@@ -2327,7 +2357,13 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/unlink/ for more details.
 
         Note:
-            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+            In cluster mode, if keys in `key_value_map` map to different hash slots,
+            the command will be split across these slots and executed separately for each.
+            This means the command is atomic only at the slot level. If one or more slot-specific
+            requests fail, the entire call will return the first encountered error, even
+            though some requests may have succeeded while others did not.
+            If this behavior impacts your application logic, consider splitting the
+            request into sub-requests per slot to ensure atomicity.
 
         Args:
             keys (List[TEncodable]): The list of keys to unlink.
@@ -6360,7 +6396,13 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/watch for more details.
 
         Note:
-            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+            In cluster mode, if keys in `key_value_map` map to different hash slots,
+            the command will be split across these slots and executed separately for each.
+            This means the command is atomic only at the slot level. If one or more slot-specific
+            requests fail, the entire call will return the first encountered error, even
+            though some requests may have succeeded while others did not.
+            If this behavior impacts your application logic, consider splitting the
+            request into sub-requests per slot to ensure atomicity.
 
         Args:
             keys (List[TEncodable]): The keys to watch.

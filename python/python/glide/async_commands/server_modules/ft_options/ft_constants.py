@@ -8,6 +8,7 @@ class CommandNames:
 
     FT_CREATE = "FT.CREATE"
     FT_DROPINDEX = "FT.DROPINDEX"
+    FT_LIST = "FT._LIST"
     FT_SEARCH = "FT.SEARCH"
     FT_INFO = "FT.INFO"
     FT_ALIASADD = "FT.ALIASADD"
@@ -16,6 +17,8 @@ class CommandNames:
     FT_EXPLAIN = "FT.EXPLAIN"
     FT_EXPLAINCLI = "FT.EXPLAINCLI"
     FT_AGGREGATE = "FT.AGGREGATE"
+    FT_PROFILE = "FT.PROFILE"
+    FT_ALIASLIST = "FT._ALIASLIST"
 
 
 class FtCreateKeywords:
@@ -41,7 +44,7 @@ class FtCreateKeywords:
     EF_RUNTIME = "EF_RUNTIME"
 
 
-class FtSeachKeywords:
+class FtSearchKeywords:
     """
     Keywords used in the FT.SEARCH command.
     """
@@ -55,6 +58,10 @@ class FtSeachKeywords:
 
 
 class FtAggregateKeywords:
+    """
+    Keywords used in the FT.AGGREGATE command.
+    """
+
     LIMIT = "LIMIT"
     FILTER = "FILTER"
     GROUPBY = "GROUPBY"
@@ -66,3 +73,12 @@ class FtAggregateKeywords:
     LOAD = "LOAD"
     TIMEOUT = "TIMEOUT"
     PARAMS = "PARAMS"
+
+
+class FtProfileKeywords:
+    """
+    Keywords used in the FT.PROFILE command.
+    """
+
+    QUERY = "QUERY"
+    LIMITED = "LIMITED"
