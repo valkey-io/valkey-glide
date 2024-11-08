@@ -19,6 +19,8 @@ import {
     GlideClusterClient,
     GlideFt,
     GlideJson,
+    GlideRecord,
+    GlideString,
     InfoOptions,
     JsonGetOptions,
     ProtocolVersion,
@@ -3233,6 +3235,66 @@ describe("Server Module Tests", () => {
             expect(await GlideFt.dropindex(client, newIndex)).toEqual("OK");
             expect(await client.customCommand(["FT._LIST"])).not.toContain(
                 newIndex,
+            );
+        });
+
+        it("FT._ALIASLIST test", async () => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+            const index1 = uuidv4();
+            const alias1 = uuidv4() + "-alias";
+            const index2 = uuidv4();
+            const alias2 = uuidv4() + "-alias";
+
+            //Create the 2 test indexes.
+            expect(
+                await GlideFt.create(client, index1, [
+                    { type: "NUMERIC", name: "published_at" },
+                    { type: "TAG", name: "category" },
+                ]),
+            ).toEqual("OK");
+            expect(
+                await GlideFt.create(client, index2, [
+                    { type: "NUMERIC", name: "published_at" },
+                    { type: "TAG", name: "category" },
+                ]),
+            ).toEqual("OK");
+
+            //Check if the two indexes created successfully.
+            expect(await client.customCommand(["FT._LIST"])).toContain(index1);
+            expect(await client.customCommand(["FT._LIST"])).toContain(index2);
+
+            //Add aliases to the 2 indexes.
+            expect(await GlideFt.aliasadd(client, index1, alias1)).toBe("OK");
+            expect(await GlideFt.aliasadd(client, index2, alias2)).toBe("OK");
+
+            //Test if the aliaslist command return the added alias.
+            const result = await GlideFt.aliaslist(client);
+            const expected: GlideRecord<GlideString> = [
+                {
+                    key: alias2,
+                    value: index2,
+                },
+                {
+                    key: alias1,
+                    value: index1,
+                },
+            ];
+
+            const compareFunction = function (
+                a: { key: GlideString; value: GlideString },
+                b: { key: GlideString; value: GlideString },
+            ) {
+                return a.key.toString().localeCompare(b.key.toString()) > 0
+                    ? 1
+                    : -1;
+            };
+            expect(result.sort(compareFunction)).toEqual(
+                expected.sort(compareFunction),
             );
         });
     });

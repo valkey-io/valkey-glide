@@ -698,6 +698,29 @@ export class GlideFt {
             decoder: Decoder.String,
         }) as Promise<"OK">;
     }
+
+    /**
+     * List the index aliases.
+     *
+     * @param client - The client to execute the command.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns A map of index aliases for indices being aliased.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of FT._ALIASLIST to add an alias for an index.
+     * const result = await GlideFt.aliaslist(client);
+     * console.log(result); // Output:
+     * //[{"key": "alias1", "value": "index1"}, {"key": "alias2", "value": "index2"}]
+     * ```
+     */
+    static async aliaslist(
+        client: GlideClient | GlideClusterClient,
+        options?: DecoderOption,
+    ): Promise<GlideRecord<GlideString>> {
+        const args: GlideString[] = ["FT._ALIASLIST"];
+        return _handleCustomCommand(client, args, options) as Promise<any>;
+    }
 }
 
 /**
