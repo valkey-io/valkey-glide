@@ -532,7 +532,7 @@ export class GlideFt {
      * const result = await GlideFt.profileSearch(client, "json_idx1", "*=>[KNN 2 @VEC $query_vec]", {params: [{key: "query_vec", value: vector}]});
      * console.log(result); // Output:
      * // result[0] contains `FT.SEARCH` response with the given query
-     * // result[1] contains profiling data as a `GlideRecord<number>`
+     * // result[1] contains profiling data as a `Record<string, number>[]`
      * ```
      */
     static async profileSearch(
@@ -543,7 +543,7 @@ export class GlideFt {
             FtSearchOptions & {
                 limited?: boolean;
             },
-    ): Promise<[FtSearchReturnType, GlideRecord<number>]> {
+    ): Promise<[FtSearchReturnType, Record<string, number>[]]> {
         const args: GlideString[] = ["FT.PROFILE", indexName];
 
         args.push("SEARCH");
@@ -558,11 +558,17 @@ export class GlideFt {
             args.push(..._addFtSearchOptions(options as FtSearchOptions));
         }
 
-        return _handleCustomCommand(
+        return (_handleCustomCommand(
             client,
             args,
             options as DecoderOption,
-        ) as Promise<[FtSearchReturnType, GlideRecord<number>]>;
+        ) as Promise<[FtSearchReturnType, GlideRecord<number>[]]>).then(v => {
+            console.log(v[1]);
+            return [
+                v[0],
+                v[1].map(convertGlideRecordToRecord)
+            ]
+        });
     }
 
     /**
@@ -598,7 +604,7 @@ export class GlideFt {
      * const result = await GlideFt.profileAggregate(client, "myIndex", "*", options);
      * console.log(result); // Output:
      * // result[0] contains `FT.AGGREGATE` response with the given query
-     * // result[1] contains profiling data as a `GlideRecord<number>`
+     * // result[1] contains profiling data as a `Record<string, number>[]`
      * ```
      */
     static async profileAggregate(
@@ -609,7 +615,7 @@ export class GlideFt {
             FtAggregateOptions & {
                 limited?: boolean;
             },
-    ): Promise<[FtAggregateReturnType, GlideRecord<number>]> {
+    ): Promise<[FtAggregateReturnType, Record<string, number>[]]> {
         const args: GlideString[] = ["FT.PROFILE", indexName];
 
         args.push("AGGREGATE");
@@ -624,11 +630,17 @@ export class GlideFt {
             args.push(..._addFtAggregateOptions(options as FtAggregateOptions));
         }
 
-        return _handleCustomCommand(
+        return (_handleCustomCommand(
             client,
             args,
             options as DecoderOption,
-        ) as Promise<[FtAggregateReturnType, GlideRecord<number>]>;
+        ) as Promise<[FtAggregateReturnType, GlideRecord<number>[]]>).then(v => {
+            console.log(v[1]);
+            return [
+                v[0],
+                v[1].map(convertGlideRecordToRecord)
+            ]
+        });
 
     }
 
