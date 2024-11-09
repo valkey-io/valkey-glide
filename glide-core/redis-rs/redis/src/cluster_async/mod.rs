@@ -389,7 +389,7 @@ where
         let (sender, receiver) = oneshot::channel();
         self.0
             .send(Message {
-                cmd: CmdArg::OperationRequest { operation_request },
+                cmd: CmdArg::OperationRequest(operation_request),
                 sender,
             })
             .await
@@ -2107,7 +2107,7 @@ where
                     Err(err) => Err((OperationTarget::FanOut, err)),
                 }
             }
-            CmdArg::OperationRequest { operation_request } => match operation_request {
+            CmdArg::OperationRequest(operation_request) => match operation_request {
                 Operation::UpdateConnectionPassword(password) => {
                     core.set_cluster_param(|params| params.password = password)
                         .expect(MUTEX_WRITE_ERR);
