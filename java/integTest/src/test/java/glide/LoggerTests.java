@@ -37,7 +37,70 @@ public class LoggerTests {
 
     @SneakyThrows
     @Test
+    @SneakyThrows
     public void log_to_file() {
+        String logFileIdentifier = UUID.randomUUID().toString();
+
+        String infoIdentifier = "Info";
+        String infoMessage = "foo";
+        String warnIdentifier = "Warn";
+        String warnMessage = "woof";
+        String errorIdentifier = "Error";
+        String errorMessage = "meow";
+        String debugIdentifier = "Debug";
+        String debugMessage = "chirp";
+        String traceIdentifier = "Trace";
+        String traceMessage = "squawk";
+
+        String filename = logFileIdentifier + "log.txt";
+
+        Logger.setLoggerConfig(Logger.Level.INFO, filename);
+        Logger.log(Logger.Level.INFO, infoIdentifier, infoMessage);
+        Logger.log(Logger.Level.WARN, warnIdentifier, warnMessage);
+        Logger.log(Logger.Level.ERROR, errorIdentifier, errorMessage);
+        Logger.log(Logger.Level.DEBUG, debugIdentifier, debugMessage);
+        Logger.log(Logger.Level.TRACE, traceIdentifier, traceMessage);
+
+        // Test logging with lazily constructed messages
+        Logger.log(Logger.Level.INFO, infoIdentifier, () -> infoMessage);
+        Logger.log(Logger.Level.WARN, warnIdentifier, () -> warnMessage);
+        Logger.log(Logger.Level.ERROR, errorIdentifier, () -> errorMessage);
+        Logger.log(Logger.Level.DEBUG, debugIdentifier, () -> debugMessage);
+        Logger.log(Logger.Level.TRACE, traceIdentifier, () -> traceMessage);
+
+        File logFolder = new File("glide-logs");
+
+        // Initialize a new logger to force closing of existing files
+        String dummyFilename = "dummy.txt";
+        Logger.setLoggerConfig(Logger.Level.DEFAULT, dummyFilename);
+
+        // Add a small delay to ensure file writing is complete
+        Thread.sleep(100);
+
+        File[] logFiles = logFolder.listFiles((dir, name) -> name.startsWith(filename + "."));
+        assertNotNull(logFiles);
+        assertTrue(logFiles.length > 0, "Log file was not created");
+        File logFile = logFiles[0];
+        try (Scanner reader = new Scanner(logFile)) {
+            String infoLine = reader.nextLine();
+            String warnLine = reader.nextLine();
+            String errorLine = reader.nextLine();
+            String infoLineLazy = reader.nextLine();
+            String warnLineLazy = reader.nextLine();
+            String errorLineLazy = reader.nextLine();
+            assertFalse(reader.hasNextLine(), "Unexpected additional lines in log file");
+
+            assertTrue(infoLine.contains(infoIdentifier + " - " + infoMessage), "Info message not found");
+            assertTrue(warnLine.contains(warnIdentifier + " - " + warnMessage), "Warn message not found");
+            assertTrue(errorLine.contains(errorIdentifier + " - " + errorMessage), "Error message not found");
+            assertTrue(infoLineLazy.contains(infoIdentifier + " - " + infoMessage), "Lazy info message not found");
+            assertTrue(warnLineLazy.contains(warnIdentifier + " - " + warnMessage), "Lazy warn message not found");
+            assertTrue(errorLineLazy.contains(errorIdentifier + " - " + errorMessage), "Lazy error message not found");
+        } finally {
+            logFile.delete();
+            logFolder.delete();
+        }
+    }
         String logFileIdentifier = UUID.randomUUID().toString();
 
         String infoIdentifier = "Info";
