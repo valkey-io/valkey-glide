@@ -11,9 +11,9 @@ assignees: ''
 
 - **Test Name:** [Name of the test that is flaky]
 - **Test Location:** [File and line number or test suite]
+- **Filure permlink in the recent CI Run:** [Permlink to the failure line in the test run]
 - **Frequency:** [How often does the test fail?]
-- **Recent CI Runs:** [Links to the recent CI runs where the test failed]
-
+  
 **Steps to Reproduce:**
 
 1. [Step 1]
@@ -27,6 +27,7 @@ assignees: ''
 - **Engine-version:** [v6.2 ...]
 - **Logs:** [Include any relevant logs or error messages]
 - **Screenshots:** [If applicable, add screenshots to help explain the issue]
+- **Glide version:** [major.minor.patch/main of after major.minor.patch/release-major.minor]
 
 **Expected Behavior:**
 
