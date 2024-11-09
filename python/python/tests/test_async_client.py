@@ -185,7 +185,7 @@ class TestGlideClients:
                 ["CONFIG", "SET", "requirepass", password]
             )
 
-            with pytest.raises(ClosingError, match="NOAUTH"):
+            with pytest.raises(ClosingError, match="NoAuth"):
                 # Creation of a new client without password should fail
                 await create_client(
                     request,

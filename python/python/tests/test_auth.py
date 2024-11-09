@@ -63,7 +63,7 @@ class TestAuthCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_replace_connection_password(self, glide_client: TGlideClient):
+    async def test_update_connection_password(self, glide_client: TGlideClient):
         """
         Test replacing the connection password without immediate re-authentication.
         Verifies that:
@@ -73,7 +73,7 @@ class TestAuthCommands:
         Currently, this test is only supported for cluster mode,
         since standalone mode dont have retry mechanism.
         """
-        result = await glide_client.replace_connection_password(
+        result = await glide_client.update_connection_password(
             NEW_PASSWORD, re_auth=False
         )
         assert result == OK
@@ -89,7 +89,7 @@ class TestAuthCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_replace_connection_password_no_server_auth(
+    async def test_update_connection_password_no_server_auth(
         self, glide_client: TGlideClient
     ):
         """
@@ -98,17 +98,17 @@ class TestAuthCommands:
         password when the server has no password set.
         """
         with pytest.raises(RequestError):
-            await glide_client.replace_connection_password(WRONG_PASSWORD, re_auth=True)
+            await glide_client.update_connection_password(WRONG_PASSWORD, re_auth=True)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_replace_connection_password_long(self, glide_client: TGlideClient):
+    async def test_update_connection_password_long(self, glide_client: TGlideClient):
         """
         Test replacing connection password with a long password string.
         Verifies that the client can handle long passwords (1000 characters).
         """
         long_password = "p" * 1000
-        result = await glide_client.replace_connection_password(
+        result = await glide_client.update_connection_password(
             long_password, re_auth=False
         )
         assert result == OK
@@ -125,11 +125,11 @@ class TestAuthCommands:
         """
         await config_set_new_password(glide_client, NEW_PASSWORD)
         with pytest.raises(RequestError):
-            await glide_client.replace_connection_password(WRONG_PASSWORD, re_auth=True)
+            await glide_client.update_connection_password(WRONG_PASSWORD, re_auth=True)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_replace_connection_password_with_reauth(
+    async def test_update_connection_password_with_reauth(
         self, glide_client: TGlideClient
     ):
         """
@@ -139,7 +139,7 @@ class TestAuthCommands:
         2. The client remains operational after re-authentication
         """
         await config_set_new_password(glide_client, NEW_PASSWORD)
-        result = await glide_client.replace_connection_password(
+        result = await glide_client.update_connection_password(
             NEW_PASSWORD, re_auth=True
         )
         assert result == OK
