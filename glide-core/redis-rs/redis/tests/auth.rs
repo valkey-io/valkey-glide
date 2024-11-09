@@ -90,24 +90,21 @@ mod auth {
         }
     }
 
-    async fn kill_non_management_connections(con: &mut Connection) {
+    async fn kill_all_connections_but_caller(con: &mut ClusterConnection) {
         let mut kill_cmd = cmd("client");
-        kill_cmd.arg("kill").arg("type").arg("normal");
-        match con {
-            Connection::Cluster(cluster_conn) => {
-                cluster_conn
-                    .route_command(&kill_cmd, ALL_SUCCESS_ROUTE)
-                    .await
-                    .unwrap();
-            }
-            Connection::Standalone(standalone_conn) => {
-                kill_cmd.arg("skipme").arg("no");
-                kill_cmd
-                    .query_async::<_, ()>(standalone_conn)
-                    .await
-                    .unwrap();
-            }
-        }
+        kill_cmd
+            .arg("kill")
+            .arg("type")
+            .arg("normal")
+            .arg("skipme")
+            .arg("yes");
+        con.route_command(&kill_cmd, ALL_SUCCESS_ROUTE)
+            .await
+            .unwrap();
+    }
+
+    async fn reset_connection_standalone(con: &mut MultiplexedConnection) {
+        let _: () = cmd("reset").query_async(con).await.unwrap();
     }
 
     #[tokio::test]
@@ -116,7 +113,7 @@ mod auth {
         let cluster_context = TestClusterContext::new(3, 0);
 
         // Create a management connection to set the password
-        let management_connection =
+        let mut management_connection =
             match create_connection(None, ConnectionType::Cluster, Some(&cluster_context), None)
                 .await
                 .unwrap()
@@ -134,8 +131,7 @@ mod auth {
             create_connection(None, ConnectionType::Cluster, Some(&cluster_context), None).await;
         assert!(connection_should_fail.is_err());
         let err = connection_should_fail.err().unwrap();
-        println!("{}", err.to_string());
-        assert!(err.to_string().contains("Authentication required."));
+        assert!(err.to_string().contains("NoAuth: Authentication required."));
 
         // Test that we can connect with password
         let mut connection_should_succeed = match create_connection(
@@ -166,8 +162,7 @@ mod auth {
         assert_eq!(res.unwrap(), Value::BulkString(b"bar".to_vec()));
 
         // Kill the connection to force reconnection
-        kill_non_management_connections(&mut Connection::Cluster(management_connection.clone()))
-            .await;
+        kill_all_connections_but_caller(&mut management_connection).await;
 
         // Attempt to get the value again to ensure reconnection works
         let should_be_ok: RedisResult<Value> = cmd("get")
@@ -176,7 +171,7 @@ mod auth {
             .await;
         assert_eq!(should_be_ok.unwrap(), Value::BulkString(b"bar".to_vec()));
 
-        // Update the password in the connection
+        // Reset the password in the connection
         connection_should_succeed
             .update_connection_password(Some(NEW_PASSWORD.to_string()))
             .await
@@ -198,13 +193,11 @@ mod auth {
         .await;
         assert!(connection_should_fail.is_err());
         let err = connection_should_fail.err().unwrap();
-        assert!(err
-            .to_string()
-            .contains("Password authentication failed- AuthenticationFailed"));
+        let detail = err.detail().unwrap();
+        assert!(detail.contains("AuthenticationFailed"));
 
         // Kill the connection to force reconnection
-        let mut management_conn = Connection::Cluster(management_connection);
-        kill_non_management_connections(&mut management_conn).await;
+        kill_all_connections_but_caller(&mut management_connection).await;
 
         // Verify that the connection with new password still works
         let result_should_succeed: RedisResult<Value> = cmd("get")
@@ -224,7 +217,7 @@ mod auth {
         let standalone_context = TestContext::new();
 
         // Create a management connection to set the password
-        let management_connection = match create_connection(
+        let mut management_connection = match create_connection(
             None,
             ConnectionType::Standalone,
             None,
@@ -276,7 +269,7 @@ mod auth {
             .await;
         assert_eq!(res.unwrap(), Value::Okay);
 
-        // Update the password in the connection
+        // Reset the password in the connection
         connection_should_succeed
             .update_connection_password(Some(NEW_PASSWORD.to_string()))
             .await
@@ -289,7 +282,7 @@ mod auth {
             .unwrap();
 
         // Reset the management connection
-        kill_non_management_connections(&mut management_conn).await;
+        reset_connection_standalone(&mut management_connection).await;
 
         // Test that we can't connect with the old password
         let connection_should_fail = create_connection(
@@ -300,5 +293,23 @@ mod auth {
         )
         .await;
         assert!(connection_should_fail.is_err());
+
+        // Verify that the management connection can't perform operations after reset
+        let result_should_fail: RedisResult<Value> = cmd("get")
+            .arg("foo")
+            .query_async(&mut management_connection)
+            .await;
+        assert!(result_should_fail.is_err());
+
+        // Verify that the connection with new password still works
+        let result_should_succeed: RedisResult<Value> = cmd("get")
+            .arg("foo")
+            .query_async(&mut connection_should_succeed)
+            .await;
+        assert!(result_should_succeed.is_ok());
+        assert_eq!(
+            result_should_succeed.unwrap(),
+            Value::BulkString(b"bar".to_vec())
+        );
     }
 }
