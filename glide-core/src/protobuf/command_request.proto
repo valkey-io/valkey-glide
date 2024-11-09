@@ -517,6 +517,7 @@ message CommandRequest {
         ScriptInvocation script_invocation = 4;
         ScriptInvocationPointers script_invocation_pointers = 5;
         ClusterScan cluster_scan = 6;
+        UpdateConnectionPassword update_connection_password = 7;
     }
     Routes route = 7;
 }

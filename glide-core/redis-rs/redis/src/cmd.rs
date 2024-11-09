@@ -204,7 +204,7 @@ fn args_len<'a, I>(args: I, cursor: u64) -> usize
 where
     I: IntoIterator<Item = Arg<&'a [u8]>> + ExactSizeIterator,
 {
-    let mut total_len = 1 + countdigits(args.len()) + 2;
+    let mut total_len = countdigits(args.len()).saturating_add(3);
     for item in args {
         total_len += bulklen(match item {
             Arg::Cursor => countdigits(cursor as usize),
@@ -287,7 +287,7 @@ impl Default for Cmd {
 }
 
 /// A command acts as a builder interface to creating encoded redis
-/// requests.  This allows you to easy assemble a packed command
+/// requests.  This allows you to easily assemble a packed command
 /// by chaining arguments together.
 ///
 /// Basic example:

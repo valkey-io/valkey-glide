@@ -107,6 +107,7 @@ use self::{
     connections_container::{ConnectionAndAddress, ConnectionType, ConnectionsMap},
     connections_logic::connect_and_check,
 };
+use crate::types::RetryMethod;
 
 pub(crate) const MUTEX_READ_ERR: &str = "Failed to obtain read lock. Poisoned mutex?";
 const MUTEX_WRITE_ERR: &str = "Failed to obtain write lock. Poisoned mutex?";
@@ -472,7 +473,7 @@ where
     {
         self.cluster_params
             .read()
-            .map(|guard| f(&*guard).clone())
+            .map(|guard| f(&guard).clone())
             .map_err(|_| RedisError::from((ErrorKind::ClientError, MUTEX_READ_ERR)))
     }
 
@@ -952,7 +953,7 @@ impl<C> Future for Request<C> {
                     let retry_method = err.retry_method();
                     let next = if err.kind() == ErrorKind::AllConnectionsUnavailable {
                         Next::ReconnectToInitialNodes { request: None }.into()
-                    } else if matches!(err.retry_method(), crate::types::RetryMethod::MovedRedirect)
+                    } else if matches!(err.retry_method(), RetryMethod::MovedRedirect)
                         || matches!(target, OperationTarget::NotFound)
                     {
                         Next::RefreshSlots {
@@ -960,8 +961,8 @@ impl<C> Future for Request<C> {
                             sleep_duration: None,
                         }
                         .into()
-                    } else if matches!(retry_method, crate::types::RetryMethod::Reconnect)
-                        || matches!(retry_method, crate::types::RetryMethod::ReconnectAndRetry)
+                    } else if matches!(retry_method, RetryMethod::Reconnect)
+                        || matches!(retry_method, RetryMethod::ReconnectAndRetry)
                     {
                         if let OperationTarget::Node { address } = target {
                             Next::Reconnect {
@@ -1013,7 +1014,7 @@ impl<C> Future for Request<C> {
                 warn!("Received request error {} on node {:?}.", err, address);
 
                 match err.retry_method() {
-                    crate::types::RetryMethod::AskRedirect => {
+                    RetryMethod::AskRedirect => {
                         let mut request = this.request.take().unwrap();
                         request.info.set_redirect(
                             err.redirect_node()
@@ -1021,7 +1022,7 @@ impl<C> Future for Request<C> {
                         );
                         Next::Retry { request }.into()
                     }
-                    crate::types::RetryMethod::MovedRedirect => {
+                    RetryMethod::MovedRedirect => {
                         let mut request = this.request.take().unwrap();
                         request.info.set_redirect(
                             err.redirect_node()
@@ -1033,7 +1034,7 @@ impl<C> Future for Request<C> {
                         }
                         .into()
                     }
-                    crate::types::RetryMethod::WaitAndRetry => {
+                    RetryMethod::WaitAndRetry => {
                         let sleep_duration = this.retry_params.wait_time_for_retry(request.retry);
                         // Sleep and retry.
                         this.future.set(RequestState::Sleep {
@@ -1041,38 +1042,35 @@ impl<C> Future for Request<C> {
                         });
                         self.poll(cx)
                     }
-                    crate::types::RetryMethod::Reconnect
-                    | crate::types::RetryMethod::ReconnectAndRetry => {
+                    RetryMethod::Reconnect | RetryMethod::ReconnectAndRetry => {
                         let mut request = this.request.take().unwrap();
                         // TODO should we reset the redirect here?
                         request.info.reset_routing();
                         warn!("disconnected from {:?}", address);
-                        let should_retry = matches!(
-                            err.retry_method(),
-                            crate::types::RetryMethod::ReconnectAndRetry
-                        );
+                        let should_retry =
+                            matches!(err.retry_method(), RetryMethod::ReconnectAndRetry);
                         Next::Reconnect {
                             request: should_retry.then_some(request),
                             target: address,
                         }
                         .into()
                     }
-                    crate::types::RetryMethod::WaitAndRetryOnPrimaryRedirectOnReplica => {
+                    RetryMethod::WaitAndRetryOnPrimaryRedirectOnReplica => {
                         Next::RetryBusyLoadingError {
                             request: this.request.take().unwrap(),
                             address,
                         }
                         .into()
                     }
-                    crate::types::RetryMethod::RetryImmediately => Next::Retry {
+                    RetryMethod::RetryImmediately => Next::Retry {
                         request: this.request.take().unwrap(),
                     }
                     .into(),
-                    crate::types::RetryMethod::NoRetry => {
+                    RetryMethod::NoRetry => {
                         self.respond(Err(err));
                         Next::Done.into()
                     }
-                    crate::types::RetryMethod::ReAuthenticate => Next::ReAuth {
+                    RetryMethod::ReAuthenticate => Next::ReAuth {
                         request: this.request.take().unwrap(),
                         address,
                         error: Some(err),
@@ -2478,9 +2476,11 @@ where
         address: String,
         error: Option<RedisError>,
     ) -> OperationResult {
-        let password = core.get_cluster_param(|params| params.password.clone());
+        let password = core
+            .get_cluster_param(|params| params.password.clone())
+            .expect(MUTEX_READ_ERR);
         let username = core.get_cluster_param(|params| params.username.clone());
-        if password.is_ok() {
+        let Some(password) = password else {
             return Err((
                 OperationTarget::Node { address },
                 RedisError::from((
@@ -2489,12 +2489,12 @@ where
                     format!("Original error={error:?}"),
                 )),
             ));
-        }
+        };
         let mut auth_cmd = crate::cmd("AUTH");
         if let Ok(Some(username)) = username {
             auth_cmd.arg(username);
         }
-        auth_cmd.arg(password.unwrap());
+        auth_cmd.arg(password);
         let cmd = Arc::new(auth_cmd.to_owned());
         let routing =
             InternalRoutingInfo::SingleNode(InternalSingleNodeRouting::ByAddress(address.clone()));
@@ -2511,8 +2511,7 @@ where
                         OperationTarget::Node { address },
                         RedisError::from((
                             ErrorKind::AuthenticationFailed,
-                            "Reauthentication attempt failed following a NOAUTH error", 
-format!("Reauthenticate error={response:?}\nOriginal NOAUTH error={error:?}")
+                            "After NOAUTH error, AUTH try failed",
                         )),
                     ))
                 }
