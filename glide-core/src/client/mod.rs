@@ -259,9 +259,9 @@ impl Client {
                         if let Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)) =
                             routing
                         {
-                            let cmdname = cmd.command().unwrap_or_default();
-                            let cmdname = String::from_utf8_lossy(&cmdname);
-                            if redis::cluster_routing::is_readonly_cmd(cmdname.as_bytes()) {
+                            let cmd_name = cmd.command().unwrap_or_default();
+                            let cmd_name = String::from_utf8_lossy(&cmd_name);
+                            if redis::cluster_routing::is_readonly_cmd(cmd_name.as_bytes()) {
                                 // A read-only command, go ahead and send it to a random node
                                 RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)
                             } else {
@@ -270,7 +270,7 @@ impl Client {
                                 log_warn(
                                     "send_command",
                                     format!(
-                                        "User provided 'Random' routing which is not suitable for the writeable command '{cmdname}'. Changing it to 'RandomPrimary'"
+                                        "User provided 'Random' routing which is not suitable for the writeable command '{cmd_name}'. Changing it to 'RandomPrimary'"
                                     ),
                                 );
                                 RoutingInfo::SingleNode(SingleNodeRoutingInfo::RandomPrimary)

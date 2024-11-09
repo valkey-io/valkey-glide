@@ -332,8 +332,7 @@ where
             })
             .map(|response| match response {
                 Response::Single(value) => value,
-                Response::Multiple(_) => unreachable!(),
-                Response::ClusterScanResult(_, _) => unreachable!(),
+                _ => unreachable!(),
             })
     }
 
@@ -656,8 +655,7 @@ fn route_for_pipeline(pipeline: &crate::Pipeline) -> RedisResult<Option<Route>> 
 }
 
 fn boxed_sleep(duration: Duration) -> BoxFuture<'static, ()> {
-    #[cfg(feature = "tokio-comp")]
-    return Box::pin(tokio::time::sleep(duration));
+    Box::pin(tokio::time::sleep(duration))
 }
 
 pub(crate) enum Response {
