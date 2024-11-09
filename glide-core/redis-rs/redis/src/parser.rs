@@ -39,6 +39,7 @@ fn err_parser(line: &str) -> ServerError {
         "MASTERDOWN" => ServerErrorKind::MasterDown,
         "READONLY" => ServerErrorKind::ReadOnly,
         "NOTBUSY" => ServerErrorKind::NotBusy,
+        "NOAUTH" => ServerErrorKind::NoAuth,
         code => {
             return ServerError::ExtensionError {
                 code: code.to_string(),
