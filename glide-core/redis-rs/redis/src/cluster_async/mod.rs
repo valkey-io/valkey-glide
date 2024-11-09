@@ -473,7 +473,7 @@ where
     {
         self.cluster_params
             .read()
-            .map(|guard| f(&*guard).clone())
+            .map(|guard| f(&guard).clone())
             .map_err(|_| RedisError::from((ErrorKind::ClientError, MUTEX_READ_ERR)))
     }
 
@@ -1070,7 +1070,7 @@ impl<C> Future for Request<C> {
                         self.respond(Err(err));
                         Next::Done.into()
                     }
-                    crate::types::RetryMethod::ReAuthenticate => Next::ReAuth {
+                    RetryMethod::ReAuthenticate => Next::ReAuth {
                         request: this.request.take().unwrap(),
                         address,
                         error: Some(err),
@@ -2476,9 +2476,11 @@ where
         address: String,
         error: Option<RedisError>,
     ) -> OperationResult {
-        let password = core.get_cluster_param(|params| params.password.clone());
+        let password = core
+            .get_cluster_param(|params| params.password.clone())
+            .expect(MUTEX_READ_ERR);
         let username = core.get_cluster_param(|params| params.username.clone());
-        if password.is_ok() {
+        let Some(password) = password else {
             return Err((
                 OperationTarget::Node { address },
                 RedisError::from((
@@ -2487,12 +2489,12 @@ where
                     format!("Original error={error:?}"),
                 )),
             ));
-        }
+        };
         let mut auth_cmd = crate::cmd("AUTH");
         if let Ok(Some(username)) = username {
             auth_cmd.arg(username);
         }
-        auth_cmd.arg(password.unwrap());
+        auth_cmd.arg(password);
         let cmd = Arc::new(auth_cmd.to_owned());
         let routing =
             InternalRoutingInfo::SingleNode(InternalSingleNodeRouting::ByAddress(address.clone()));
@@ -2509,8 +2511,7 @@ where
                         OperationTarget::Node { address },
                         RedisError::from((
                             ErrorKind::AuthenticationFailed,
-                            "Reauthentication attempt failed following a NOAUTH error", 
-format!("Reauthenticate error={response:?}\nOriginal NOAUTH error={error:?}")
+                            "After NOAUTH error, AUTH try failed",
                         )),
                     ))
                 }

@@ -392,15 +392,13 @@ class CoreCommands(Protocol):
         type: Optional[ObjectType] = ...,
     ) -> TResult: ...
 
-    async def _update_connection_password(
-        self, password: Optional[str], re_auth: bool
+    async def _replace_connection_password(
+        self, password: str, re_auth: bool
     ) -> TResult: ...
 
-    async def update_connection_password(
-        self, password: Optional[str], re_auth: bool
-    ) -> TOK:
+    async def replace_connection_password(self, password: str, re_auth: bool) -> TOK:
         """
-        Update the current connection password with a new password.
+        Replace the current connection password with a new password.
 
         **Note:** This method updates the client's internal password configuration and does
         not perform password rotation on the server side.
@@ -412,8 +410,7 @@ class CoreCommands(Protocol):
         handle reconnection seamlessly, preventing the loss of in-flight commands.
 
         Args:
-            password (Optional[str]): The new password to use for the connection,
-            if `None` the password will be removed.
+            password (str): The new password to replace the current password.
             re_auth (bool):
                 - `True`: The client will re-authenticate immediately with the new password.
                 - `False`: The new password will be used for the next connection attempt.
@@ -422,10 +419,10 @@ class CoreCommands(Protocol):
             TOK: A simple OK response.
 
         Example:
-            >>> await client.update_connection_password("new_password", re_auth=True)
+            >>> await client.replace_connection_password("new_password", re_auth=True)
             'OK'
         """
-        return cast(TOK, await self._update_connection_password(password, re_auth))
+        return cast(TOK, await self._replace_connection_password(password, re_auth))
 
     async def set(
         self,

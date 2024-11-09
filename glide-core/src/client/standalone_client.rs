@@ -471,8 +471,7 @@ impl StandaloneClient {
         });
     }
 
-    /// Update the password used to authenticate with the servers.
-    /// If the password is `None`, the password will be removed.
+    /// Replace password of the multiplexed connection.
     pub async fn update_connection_password(
         &mut self,
         password: Option<String>,
