@@ -332,7 +332,7 @@ where
             })
             .map(|response| match response {
                 Response::Single(value) => value,
-                Response::ClusterScanResult(..) | Response::Multiple(_) => unreachable!(),
+                _ => unreachable!(),
             })
     }
 
