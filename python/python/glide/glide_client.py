@@ -533,19 +533,19 @@ class BaseClient(CoreCommands):
                 else:
                     await self._process_response(response=response)
 
-    async def _replace_connection_password(
-        self, password: str, re_auth: bool
+    async def _update_connection_password(
+        self, password: Optional[str], re_auth: bool
     ) -> TResult:
         request = CommandRequest()
         request.callback_idx = self._get_callback_index()
-        request.replace_connection_password.password = password
-        request.replace_connection_password.re_auth = re_auth
+        request.update_connection_password.password = password
+        request.update_connection_password.re_auth = re_auth
         response = await self._write_request_await_response(request)
         # Update the client binding side password if managed to change core configuration password
         if response is OK:
             if self.config.credentials is None:
-                self.config.credentials = ServerCredentials(password=password)
-                self.config.credentials.password = password
+                self.config.credentials = ServerCredentials(password=password or "")
+                self.config.credentials.password = password or ""
         return response
 
 
