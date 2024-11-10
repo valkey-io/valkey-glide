@@ -230,11 +230,11 @@ async fn setup_acl_for_cluster(
 }
 
 pub async fn create_cluster_client(
-    cluster: &Option<RedisCluster>,
+    cluster: Option<&RedisCluster>,
     mut configuration: TestConfiguration,
 ) -> Client {
     let addresses = if !configuration.shared_server {
-        cluster.as_ref().unwrap().get_server_addresses()
+        cluster.unwrap().get_server_addresses()
     } else {
         get_shared_cluster_addresses(configuration.use_tls)
     };
@@ -263,8 +263,18 @@ pub async fn setup_test_basics_internal(configuration: TestConfiguration) -> Clu
     } else {
         None
     };
-    let client = create_cluster_client(&cluster, configuration).await;
+    let client = create_cluster_client(cluster.as_ref(), configuration).await;
     ClusterTestBasics { cluster, client }
+}
+
+pub async fn setup_default_cluster() -> RedisCluster {
+    let test_config = TestConfiguration::default();
+    RedisCluster::new(false, &test_config.connection_info, None, None)
+}
+
+pub async fn setup_default_client(cluster: &RedisCluster) -> Client {
+    let test_config = TestConfiguration::default();
+    create_cluster_client(Some(cluster), test_config).await
 }
 
 pub async fn setup_test_basics(use_tls: bool) -> ClusterTestBasics {

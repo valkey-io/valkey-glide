@@ -14,12 +14,16 @@ The release of Valkey GLIDE was tested on the following platforms:
 
 Linux:
 
--   Ubuntu 22.04.1 (x86_64)
+-   Ubuntu 22.04.1 (x86_64 and aarch64)
 -   Amazon Linux 2023 (AL2023) (x86_64)
 
 macOS:
 
--   macOS 12.7 (Apple silicon/aarch_64 and Intel/x86_64)
+-   macOS 14.7 (Apple silicon/aarch_64)
+
+Alpine:
+
+-   node:alpine (default on aarch64 and x86_64)
 
 ## NodeJS supported version
 
@@ -92,9 +96,9 @@ client.close();
 
 ### Supported platforms
 
-Currentlly the package is supported on:
+Currently, the package is tested on:
 
 | Operation systems | C lib                | Architecture      |
 | ----------------- | -------------------- | ----------------- |
 | `Linux`           | `glibc`, `musl libc` | `x86_64`, `arm64` |
-| `macOS`           | `Darwin`             | `x86_64`, `arm64` |
+| `macOS`           | `Darwin`             | `arm64`           |

@@ -1,7 +1,9 @@
 /* eslint no-undef: off */
 module.exports = {
     preset: "ts-jest",
-    transform: { "^.+\\.ts?$": "ts-jest" },
+    transform: {
+        "^.+\\.(t|j)s$": ["ts-jest", { isolatedModules: true }],
+    },
     testEnvironment: "node",
     testRegex: "/tests/.*\\.(test|spec)?\\.(ts|tsx)$",
     moduleFileExtensions: [
@@ -27,4 +29,5 @@ module.exports = {
             },
         ],
     ],
+    setupFilesAfterEnv: ["./tests/setup.ts"],
 };

@@ -10,71 +10,79 @@ on:
             - glide-core/src/**
             - glide-core/redis-rs/redis/src/**
             - java/**
+            - utils/cluster_manager.py
             - .github/workflows/java.yml
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
-            - .github/workflows/install-valkey/action.yml
-            - .github/json_matrices/build-matrix.json
+            - .github/workflows/install-engine/action.yml
+            - .github/workflows/create-test-matrices/action.yml
+            - .github/json_matrices/**
+
     pull_request:
         paths:
             - glide-core/src/**
             - glide-core/redis-rs/redis/src/**
             - java/**
+            - utils/cluster_manager.py
             - .github/workflows/java.yml
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
-            - .github/workflows/install-valkey/action.yml
-            - .github/json_matrices/build-matrix.json
+            - .github/workflows/install-engine/action.yml
+            - .github/workflows/create-test-matrices/action.yml
+            - .github/json_matrices/**
+
     workflow_dispatch:
+        inputs:
+            full-matrix:
+                description: "Run the full engine, host, and language version matrix"
+                type: boolean
+                default: false
+            name:
+                required: false
+                type: string
+                description: "(Optional) Test run name"
+
+    workflow_call:
 
 concurrency:
-    group: java-${{ github.head_ref || github.ref }}
+    group: java-${{ github.head_ref || github.ref }}-${{ toJson(inputs) }}
     cancel-in-progress: true
 
+run-name:
+    # Set custom name if job is started manually and name is given
+    ${{ github.event_name == 'workflow_dispatch' && (inputs.name == '' && format('{0} @ {1} {2}', github.ref_name, github.sha, toJson(inputs)) || inputs.name) || '' }}
+
 jobs:
-    load-engine-matrix:
+    get-matrices:
         runs-on: ubuntu-latest
         outputs:
-            matrix: ${{ steps.load-engine-matrix.outputs.matrix }}
+            engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
+            host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
+            version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
         steps:
-            - name: Checkout
-              uses: actions/checkout@v4
+            - uses: actions/checkout@v4
+            - id: get-matrices
+              uses: ./.github/workflows/create-test-matrices
+              with:
+                  language-name: java
+                  # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
+                  run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
 
-            - name: Load the engine matrix
-              id: load-engine-matrix
-              shell: bash
-              run: echo "matrix=$(jq -c . < .github/json_matrices/engine-matrix.json)" >> $GITHUB_OUTPUT
-
-    build-and-test-java-client:
-        needs: load-engine-matrix
+    test-java:
+        needs: get-matrices
         timeout-minutes: 35
         strategy:
-            # Run all jobs
             fail-fast: false
             matrix:
-                java:
-                    # - 11
-                    - 17
-                engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
-                host:
-                    - {
-                          OS: ubuntu,
-                          RUNNER: ubuntu-latest,
-                          TARGET: x86_64-unknown-linux-gnu,
-                      }
-                    # - {
-                    #     OS: macos,
-                    #     RUNNER: macos-latest,
-                    #     TARGET: aarch64-apple-darwin
-                    # }
-
+                java: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output) }}
+                engine: ${{ fromJson(needs.get-matrices.outputs.engine-matrix-output) }}
+                host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
         runs-on: ${{ matrix.host.RUNNER }}
 
         steps:
             - uses: actions/checkout@v4
-              
 
             - uses: gradle/actions/wrapper-validation@v3
 
@@ -107,6 +115,7 @@ jobs:
               run: ./gradlew spotlessDiagnose | grep 'All formatters are well behaved for all files'
 
             - uses: ./.github/workflows/test-benchmark
+              if: ${{ matrix.engine.version == '8.0' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.java == '17' }}
               with:
                   language-flag: -java
 
@@ -123,52 +132,60 @@ jobs:
                       benchmarks/results/**
                       java/client/build/reports/spotbugs/**
 
-    build-amazonlinux-latest:
-        if: github.repository_owner == 'valkey-io'
+    get-containers:
+        runs-on: ubuntu-latest
+        if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
+        outputs:
+            engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
+            host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
+            version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
+
+        steps:
+            - uses: actions/checkout@v4
+            - id: get-matrices
+              uses: ./.github/workflows/create-test-matrices
+              with:
+                  language-name: java
+                  run-full-matrix: true
+                  containers: true
+
+    test-java-container:
+        runs-on: ${{ matrix.host.RUNNER }}
+        needs: [get-containers]
+        timeout-minutes: 25
         strategy:
-            # Run all jobs
             fail-fast: false
             matrix:
-                java:
-                    # - 11
-                    - 17
-        runs-on: ubuntu-latest
-        container: amazonlinux:latest
-        timeout-minutes: 35
+                java: ${{ fromJson(needs.get-containers.outputs.version-matrix-output) }}
+                engine: ${{ fromJson(needs.get-containers.outputs.engine-matrix-output) }}
+                host: ${{ fromJson(needs.get-containers.outputs.host-matrix-output) }}
+        container:
+            image: ${{ matrix.host.IMAGE }}
+            options: ${{ join(' -q ', matrix.host.CONTAINER_OPTIONS) }} # adding `-q` to bypass empty options
         steps:
             - name: Install git
               run: |
-                  yum -y remove git
-                  yum -y remove git-*
-                  yum -y install https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
                   yum update
-                  yum install -y git
-                  git --version
-
+                  yum install -y git tar java-${{ matrix.java }}-amazon-corretto-devel.x86_64
+                  echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
+            # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
             - uses: actions/checkout@v4
-
-            - name: Checkout submodules
-              run: |
-                  git config --global --add safe.directory "$GITHUB_WORKSPACE"
-                  git submodule update --init --recursive
+              with:
+                  submodules: recursive
 
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
               with:
-                  os: "amazon-linux"
-                  target: "x86_64-unknown-linux-gnu"
+                  os: ${{ matrix.host.OS }}
+                  target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
-                  engine-version: "7.2.5"
+                  engine-version: ${{ matrix.engine.version }}
 
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
               with:
                   version: "26.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Install Java
-              run: |
-                  yum install -y java-${{ matrix.java }}-amazon-corretto-devel.x86_64
 
             - name: Build java wrapper
               working-directory: java
@@ -179,7 +196,7 @@ jobs:
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: test-reports-${{ matrix.java }}-amazon-linux
+                  name: test-reports-java-${{ matrix.java }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ env.IMAGE }}-${{ matrix.host.ARCH }}
                   path: |
                       java/client/build/reports/**
                       java/integTest/build/reports/**
@@ -190,11 +207,11 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
-              
 
             - uses: ./.github/workflows/lint-rust
               with:
-                  cargo-toml-folder: ./java
+                  cargo-toml-folder: java
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
               name: lint java rust
 
     test-modules:
@@ -208,7 +225,6 @@ jobs:
               run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
 
             - uses: actions/checkout@v4
-              
 
             - name: Set up JDK
               uses: actions/setup-java@v4

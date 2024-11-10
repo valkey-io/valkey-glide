@@ -598,4 +598,88 @@ class JsonTest {
         assertEquals(expectedResponse, actualResponse);
         assertEquals(expectedResponseValue, actualResponseValue);
     }
+
+    @Test
+    @SneakyThrows
+    void type_without_path_returns_success() {
+        // setup
+        String key = "testKey";
+        CompletableFuture<Object> expectedResponse = new CompletableFuture<>();
+        String expectedResponseValue = "foo";
+        expectedResponse.complete(expectedResponseValue);
+        when(glideClient.customCommand(eq(new String[] {"JSON.TYPE", key})).thenApply(any()))
+                .thenReturn(expectedResponse);
+
+        // exercise
+        CompletableFuture<Object> actualResponse = Json.type(glideClient, key);
+        Object actualResponseValue = actualResponse.get();
+
+        // verify
+        assertEquals(expectedResponse, actualResponse);
+        assertEquals(expectedResponseValue, actualResponseValue);
+    }
+
+    @Test
+    @SneakyThrows
+    void type_binary_without_path_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        CompletableFuture<Object> expectedResponse = new CompletableFuture<>();
+        GlideString expectedResponseValue = gs("foo");
+        expectedResponse.complete(expectedResponseValue);
+        when(glideClient.customCommand(eq(new GlideString[] {gs("JSON.TYPE"), key})).thenApply(any()))
+                .thenReturn(expectedResponse);
+
+        // exercise
+        CompletableFuture<Object> actualResponse = Json.type(glideClient, key);
+        Object actualResponseValue = actualResponse.get();
+
+        // verify
+        assertEquals(expectedResponse, actualResponse);
+        assertEquals(expectedResponseValue, actualResponseValue);
+    }
+
+    @Test
+    @SneakyThrows
+    void type_with_path_returns_success() {
+        // setup
+        String key = "testKey";
+        String path = "$";
+        CompletableFuture<Object> expectedResponse = new CompletableFuture<>();
+        String expectedResponseValue = "foo";
+        expectedResponse.complete(expectedResponseValue);
+        when(glideClient.customCommand(eq(new String[] {"JSON.TYPE", key, path})).thenApply(any()))
+                .thenReturn(expectedResponse);
+
+        // exercise
+        CompletableFuture<Object> actualResponse = Json.type(glideClient, key, path);
+        Object actualResponseValue = actualResponse.get();
+
+        // verify
+        assertEquals(expectedResponse, actualResponse);
+        assertEquals(expectedResponseValue, actualResponseValue);
+    }
+
+    @Test
+    @SneakyThrows
+    void type_binary_with_path_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString path = gs("$");
+        CompletableFuture<Object> expectedResponse = new CompletableFuture<>();
+        GlideString expectedResponseValue = gs("foo");
+        expectedResponse.complete(expectedResponseValue);
+        when(glideClient
+                        .customCommand(eq(new GlideString[] {gs("JSON.TYPE"), key, path}))
+                        .thenApply(any()))
+                .thenReturn(expectedResponse);
+
+        // exercise
+        CompletableFuture<Object> actualResponse = Json.type(glideClient, key, path);
+        Object actualResponseValue = actualResponse.get();
+
+        // verify
+        assertEquals(expectedResponse, actualResponse);
+        assertEquals(expectedResponseValue, actualResponseValue);
+    }
 }

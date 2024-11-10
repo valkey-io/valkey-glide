@@ -30,7 +30,6 @@ inputs:
         required: true
         type: string
 
-
 runs:
     using: "composite"
     steps:
@@ -39,7 +38,7 @@ runs:
           if: "${{ inputs.os == 'macos' }}"
           run: |
               brew update
-              brew install git openssl coreutils
+              brew install openssl coreutils
 
         - name: Install software dependencies for Ubuntu GNU
           shell: bash
@@ -47,7 +46,7 @@ runs:
           run: |
               sudo apt update -y
               sudo apt install -y git gcc pkg-config openssl libssl-dev
-          
+
         - name: Install software dependencies for Ubuntu MUSL
           shell: bash
           if: "${{ contains(inputs.target, 'musl') }}"
@@ -67,12 +66,12 @@ runs:
           if: "${{ !contains(inputs.target, 'musl') }}"
           uses: ./.github/workflows/install-rust-and-protoc
           with:
-            target: ${{ inputs.target }}
-            github-token: ${{ inputs.github-token }}
+              target: ${{ inputs.target }}
+              github-token: ${{ inputs.github-token }}
 
-        - name: Install Valkey
-          if: ${{ inputs.engine-version != '' }}
-          uses: ./.github/workflows/install-valkey
+        - name: Install engine
+          if: "${{ inputs.engine-version }}"
+          uses: ./.github/workflows/install-engine
           with:
               engine-version: ${{ inputs.engine-version }}
               target: ${{ inputs.target }}

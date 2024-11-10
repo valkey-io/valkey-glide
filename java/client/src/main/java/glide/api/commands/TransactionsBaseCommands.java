@@ -15,8 +15,12 @@ public interface TransactionsBaseCommands {
      * will only execute commands if the watched keys are not modified before execution of the
      * transaction.
      *
-     * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
-     *     map to different hash slots.
+     * @apiNote In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
+     *     will be split across these slots and executed separately for each. This means the command
+     *     is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+     *     call will return the first encountered error, even though some requests may have succeeded
+     *     while others did not. If this behavior impacts your application logic, consider splitting
+     *     the request into sub-requests per slot to ensure atomicity.
      * @see <a href="https://valkey.io/commands/watch/">valkey.io</a> for details.
      * @param keys The keys to watch.
      * @return <code>OK</code>.
@@ -41,8 +45,12 @@ public interface TransactionsBaseCommands {
      * will only execute commands if the watched keys are not modified before execution of the
      * transaction.
      *
-     * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
-     *     map to different hash slots.
+     * @apiNote In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
+     *     will be split across these slots and executed separately for each. This means the command
+     *     is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+     *     call will return the first encountered error, even though some requests may have succeeded
+     *     while others did not. If this behavior impacts your application logic, consider splitting
+     *     the request into sub-requests per slot to ensure atomicity.
      * @see <a href="https://valkey.io/commands/watch/">valkey.io</a> for details.
      * @param keys The keys to watch.
      * @return <code>OK</code>.

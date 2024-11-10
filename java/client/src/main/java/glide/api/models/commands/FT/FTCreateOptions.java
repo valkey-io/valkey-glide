@@ -54,7 +54,7 @@ public class FTCreateOptions {
     }
 
     public static class FTCreateOptionsBuilder {
-        public FTCreateOptionsBuilder prefixes(String[] prefixes) {
+        public FTCreateOptionsBuilder prefixes(@NonNull String[] prefixes) {
             this.prefixes = Stream.of(prefixes).map(GlideString::gs).toArray(GlideString[]::new);
             return this;
         }

@@ -2,7 +2,7 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { beforeAll, describe, expect, it } from "@jest/globals";
+import { describe, expect, it } from "@jest/globals";
 import fs from "fs";
 import {
     createLeakedArray,
@@ -32,7 +32,6 @@ import {
     GlideReturnType,
     InfoOptions,
     isGlideRecord,
-    Logger,
     RequestError,
     SlotKeyTypes,
     TimeUnit,
@@ -44,10 +43,6 @@ import {
 } from "../src/ProtobufMessage";
 import { convertStringArrayToBuffer } from "./TestUtilities";
 const { RequestType, CommandRequest } = command_request;
-
-beforeAll(() => {
-    Logger.init("info");
-});
 
 enum ResponseType {
     /** Type of a response that returns a null. */
