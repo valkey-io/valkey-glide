@@ -9,11 +9,13 @@ Valkey General Language Independent Driver for the Enterprise (GLIDE), is an ope
 The release of Valkey GLIDE was tested on the following platforms:
 
 Linux:
-- Ubuntu 22.04.1 (x86_64)
-- Amazon Linux 2023 (AL2023) (x86_64)
+
+-   Ubuntu 22.04.1 (x86_64 and aarch64)
+-   Amazon Linux 2023 (AL2023) (x86_64)
 
 macOS:
-- macOS 12.7 (Apple silicon/aarch_64 and Intel/x86_64)
+
+-   macOS 14.7 (Apple silicon/aarch_64)
 
 ## Layout of Java code
 The Java client contains the following parts:
