@@ -2,7 +2,7 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 use super::get_redis_connection_info;
-use super::reconnecting_connection::ReconnectingConnection;
+use super::reconnecting_connection::{ReconnectReason, ReconnectingConnection};
 use super::{ConnectionRequest, NodeAddress, TlsMode};
 use crate::retry_strategies::RetryStrategy;
 use futures::{future, stream, StreamExt};
@@ -14,6 +14,7 @@ use redis::cluster_routing::{self, is_readonly_cmd, ResponsePolicy, Routable, Ro
 use redis::{PushInfo, RedisError, RedisResult, Value};
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
+use telemetrylib::Telemetry;
 use tokio::sync::mpsc;
 use tokio::task;
 
@@ -44,6 +45,13 @@ impl Drop for DropWrapper {
 #[derive(Clone, Debug)]
 pub struct StandaloneClient {
     inner: Arc<DropWrapper>,
+}
+
+impl Drop for StandaloneClient {
+    fn drop(&mut self) {
+        // Client was dropped, reduce the number of clients
+        Telemetry::decr_total_clients(1);
+    }
 }
 
 pub enum StandaloneClientConnectionError {
@@ -193,6 +201,9 @@ impl StandaloneClient {
             Self::start_periodic_connection_check(node.clone());
         }
 
+        // Successfully created new client. Update the telemetry
+        Telemetry::incr_total_clients(1);
+
         Ok(Self {
             inner: Arc::new(DropWrapper {
                 primary_index,
@@ -260,7 +271,7 @@ impl StandaloneClient {
         match result {
             Err(err) if err.is_unrecoverable_error() => {
                 log_warn("send request", format!("received disconnect error `{err}`"));
-                reconnecting_connection.reconnect();
+                reconnecting_connection.reconnect(ReconnectReason::ConnectionDropped);
                 Err(err)
             }
             _ => result,
@@ -377,7 +388,7 @@ impl StandaloneClient {
                     "pipeline request",
                     format!("received disconnect error `{err}`"),
                 );
-                reconnecting_connection.reconnect();
+                reconnecting_connection.reconnect(ReconnectReason::ConnectionDropped);
                 Err(err)
             }
             _ => result,
@@ -414,7 +425,7 @@ impl StandaloneClient {
                     .is_err_and(|err| err.is_connection_dropped() || err.is_connection_refusal())
                 {
                     log_debug("StandaloneClient", "heartbeat triggered reconnect");
-                    reconnecting_connection.reconnect();
+                    reconnecting_connection.reconnect(ReconnectReason::ConnectionDropped);
                 }
             }
         });
@@ -435,6 +446,7 @@ impl StandaloneClient {
                         "StandaloneClient",
                         "connection checker stopped after connection was dropped",
                     );
+
                     // Client was dropped, checker can stop.
                     return;
                 }
@@ -453,7 +465,7 @@ impl StandaloneClient {
                         "StandaloneClient",
                         "connection checker has triggered reconnect",
                     );
-                    reconnecting_connection.reconnect();
+                    reconnecting_connection.reconnect(ReconnectReason::ConnectionDropped);
                 }
             }
         });
@@ -483,7 +495,8 @@ async fn get_connection_and_replication_info(
     let mut multiplexed_connection = match reconnecting_connection.get_connection().await {
         Ok(multiplexed_connection) => multiplexed_connection,
         Err(err) => {
-            reconnecting_connection.reconnect();
+            // NOTE: this block is never reached
+            reconnecting_connection.reconnect(ReconnectReason::ConnectionDropped);
             return Err((reconnecting_connection, err));
         }
     };
@@ -492,7 +505,10 @@ async fn get_connection_and_replication_info(
         .send_packed_command(redis::cmd("INFO").arg("REPLICATION"))
         .await
     {
-        Ok(replication_status) => Ok((reconnecting_connection, replication_status)),
+        Ok(replication_status) => {
+            // Connection established + we got the INFO output
+            Ok((reconnecting_connection, replication_status))
+        }
         Err(err) => Err((reconnecting_connection, err)),
     }
 }
