@@ -784,7 +784,6 @@ where
                             return Err(err);
                         }
                         RetryMethod::RetryImmediately => {}
-                        RetryMethod::ReAuthenticate => {}
                     }
                 }
             }

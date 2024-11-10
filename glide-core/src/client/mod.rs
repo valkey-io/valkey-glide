@@ -477,7 +477,7 @@ impl Client {
             .fetch_add(1, Ordering::SeqCst)
     }
 
-    /// Reset the password used to authenticate with the servers.
+    /// Update the password used to authenticate with the servers.
     /// If None is passed, the password will be removed.
     /// If `re_auth` is true, the new password will be used to re-authenticate with all of the nodes.
     pub async fn update_connection_password(
