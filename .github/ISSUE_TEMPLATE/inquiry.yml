@@ -1,7 +1,7 @@
-name: Question
+name: Inquiry
 description: Use this template for asking questions
-title: "[Question] "
-labels: ["question"]
+title: "[Inquiry] "
+labels: ["Inquiry"]
 assignees: []
 
 body:
@@ -13,9 +13,9 @@ body:
 - type: textarea
   id: question-description
   attributes:
-    label: Question
-    description: Describe your question in detail
-    placeholder: Describe your question...
+    label: Inquiry
+    description: Describe your inquiry in detail
+    placeholder: Describe your inquiry...
 
 - type: markdown
   attributes:
