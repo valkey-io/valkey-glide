@@ -31,8 +31,8 @@ use std::time::Duration;
 #[cfg(feature = "tokio-comp")]
 use tokio_util::codec::Decoder;
 
-// Default connection timeout in seconds
-const DEFAULT_CONNECTION_ATTEMPT_TIMEOUT: Duration = Duration::from_secs(2);
+// Default connection timeout in ms
+const DEFAULT_CONNECTION_ATTEMPT_TIMEOUT: Duration = Duration::from_millis(250);
 
 // Senders which the result of a single request are sent through
 type PipelineOutput = oneshot::Sender<RedisResult<Value>>;
@@ -79,7 +79,7 @@ struct PipelineMessage<S> {
 /// interface provided by `Pipeline` an easy interface of request to response, hiding the `Stream`
 /// and `Sink`.
 #[derive(Clone)]
-pub struct Pipeline<SinkItem> {
+pub(crate) struct Pipeline<SinkItem> {
     sender: mpsc::Sender<PipelineMessage<SinkItem>>,
     push_manager: Arc<ArcSwap<PushManager>>,
     is_stream_closed: Arc<AtomicBool>,
@@ -473,8 +473,7 @@ impl MultiplexedConnection {
 
         pipeline.set_push_manager(pm.clone()).await;
 
-        let mut con = MultiplexedConnection::builder()
-            .with_pipeline(pipeline)
+        let mut con = MultiplexedConnection::builder(pipeline)
             .with_db(connection_info.redis.db)
             .with_response_timeout(response_timeout)
             .with_push_manager(pm)
@@ -576,7 +575,8 @@ impl MultiplexedConnection {
         self.pipeline.set_push_manager(push_manager).await;
     }
 
-    /// Replace password of connection
+    /// Replace the password used to authenticate with the server.
+    /// If `None` is provided, the password will be removed.
     pub async fn update_connection_password(
         &mut self,
         password: Option<String>,
@@ -586,27 +586,32 @@ impl MultiplexedConnection {
     }
 
     /// Creates a new `MultiplexedConnectionBuilder` for constructing a `MultiplexedConnection`.
-    pub fn builder() -> MultiplexedConnectionBuilder {
-        MultiplexedConnectionBuilder::default()
+    pub(crate) fn builder(pipeline: Pipeline<Vec<u8>>) -> MultiplexedConnectionBuilder {
+        MultiplexedConnectionBuilder::new(pipeline)
     }
 }
 
-#[derive(Default)]
 /// A builder for creating `MultiplexedConnection` instances.
 pub struct MultiplexedConnectionBuilder {
-    pipeline: Option<Pipeline<Vec<u8>>>,
+    pipeline: Pipeline<Vec<u8>>,
     db: Option<i64>,
     response_timeout: Option<Duration>,
     push_manager: Option<PushManager>,
     protocol: Option<ProtocolVersion>,
-    password: Option<Option<String>>,
+    password: Option<String>,
 }
 
 impl MultiplexedConnectionBuilder {
-    /// Sets the pipeline for the `MultiplexedConnectionBuilder`.
-    pub fn with_pipeline(mut self, pipeline: Pipeline<Vec<u8>>) -> Self {
-        self.pipeline = Some(pipeline);
-        self
+    /// Creates a new builder with the required pipeline
+    pub(crate) fn new(pipeline: Pipeline<Vec<u8>>) -> Self {
+        Self {
+            pipeline,
+            db: None,
+            response_timeout: None,
+            push_manager: None,
+            protocol: None,
+            password: None,
+        }
     }
 
     /// Sets the database index for the `MultiplexedConnectionBuilder`.
@@ -635,28 +640,22 @@ impl MultiplexedConnectionBuilder {
 
     /// Sets the password for the `MultiplexedConnectionBuilder`.
     pub fn with_password(mut self, password: Option<String>) -> Self {
-        self.password = Some(password);
+        self.password = password;
         self
     }
 
     /// Builds and returns a new `MultiplexedConnection` instance using the configured settings.
     pub async fn build(self) -> RedisResult<MultiplexedConnection> {
-        let pipeline = self.pipeline.ok_or_else(|| {
-            RedisError::from((
-                crate::ErrorKind::InvalidClientConfig,
-                "Pipeline is required",
-            ))
-        })?;
         let db = self.db.unwrap_or_default();
         let response_timeout = self
             .response_timeout
             .unwrap_or(DEFAULT_CONNECTION_ATTEMPT_TIMEOUT);
         let push_manager = self.push_manager.unwrap_or_default();
         let protocol = self.protocol.unwrap_or_default();
-        let password = self.password.unwrap_or_default();
+        let password = self.password;
 
         let con = MultiplexedConnection {
-            pipeline,
+            pipeline: self.pipeline,
             db,
             response_timeout,
             push_manager,

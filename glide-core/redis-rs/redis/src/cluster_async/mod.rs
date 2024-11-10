@@ -373,7 +373,7 @@ where
                 Response::ClusterScanResult(..) | Response::Single(_) => unreachable!(),
             })
     }
-    /// Reset the password used to authenticate with all cluster servers
+    /// Update the password used to authenticate with all cluster servers
     pub async fn update_connection_password(
         &mut self,
         password: Option<String>,
@@ -912,11 +912,6 @@ enum Next<C> {
         // if not set, then a reconnect should happen without sending a request afterwards
         request: Option<PendingRequest<C>>,
     },
-    ReAuth {
-        request: PendingRequest<C>,
-        address: String,
-        error: Option<RedisError>,
-    },
     Done,
 }
 
@@ -1070,12 +1065,6 @@ impl<C> Future for Request<C> {
                         self.respond(Err(err));
                         Next::Done.into()
                     }
-                    RetryMethod::ReAuthenticate => Next::ReAuth {
-                        request: this.request.take().unwrap(),
-                        address,
-                        error: Some(err),
-                    }
-                    .into(),
                 }
             }
         }
@@ -2432,25 +2421,6 @@ where
                         self.inner.pending_requests.lock().unwrap().push(request);
                     }
                 }
-                Next::ReAuth {
-                    request,
-                    address,
-                    error,
-                } => {
-                    let future = Self::re_auth_and_retry_request(
-                        self.inner.clone(),
-                        request.info.clone(),
-                        address,
-                        error,
-                    );
-                    self.in_flight_requests.push(Box::pin(Request {
-                        retry_params: retry_params.clone(),
-                        request: Some(request),
-                        future: RequestState::Future {
-                            future: Box::pin(future),
-                        },
-                    }));
-                }
             }
         }
 
@@ -2465,60 +2435,6 @@ where
         }
     }
 
-    // The function is used to send an AUTH command to a node and then retry the original request.
-    // The function is used when the original request failed due to an AUTH error.
-    // Cases in which the function is helpful:
-    // 1. The password was changed, the connection was not re-established, and the request failed due to an AUTH error.
-    // 2. The protection method is allowing X hours of connection without authentication, and the request failed due to an AUTH error.
-    async fn re_auth_and_retry_request(
-        core: Core<C>,
-        info: RequestInfo<C>,
-        address: String,
-        error: Option<RedisError>,
-    ) -> OperationResult {
-        let password = core
-            .get_cluster_param(|params| params.password.clone())
-            .expect(MUTEX_READ_ERR);
-        let username = core.get_cluster_param(|params| params.username.clone());
-        let Some(password) = password else {
-            return Err((
-                OperationTarget::Node { address },
-                RedisError::from((
-                    ErrorKind::AuthenticationFailed,
-                    "No password provided for AUTH",
-                    format!("Original error={error:?}"),
-                )),
-            ));
-        };
-        let mut auth_cmd = crate::cmd("AUTH");
-        if let Ok(Some(username)) = username {
-            auth_cmd.arg(username);
-        }
-        auth_cmd.arg(password);
-        let cmd = Arc::new(auth_cmd.to_owned());
-        let routing =
-            InternalRoutingInfo::SingleNode(InternalSingleNodeRouting::ByAddress(address.clone()));
-        let auth_info = RequestInfo {
-            cmd: CmdArg::Cmd { cmd, routing },
-        };
-        let response = Self::try_request(auth_info, core.clone()).await;
-        match response {
-            Ok(response) => {
-                if let Response::Single(Value::Okay) = response {
-                    Self::try_request(info, core.clone()).await
-                } else {
-                    Err((
-                        OperationTarget::Node { address },
-                        RedisError::from((
-                            ErrorKind::AuthenticationFailed,
-                            "After NOAUTH error, AUTH try failed",
-                        )),
-                    ))
-                }
-            }
-            Err(err) => Err((OperationTarget::Node { address }, err.1)),
-        }
-    }
     fn send_refresh_error(&mut self) {
         if self.refresh_error.is_some() {
             if let Some(mut request) = Pin::new(&mut self.in_flight_requests)

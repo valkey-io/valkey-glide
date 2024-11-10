@@ -30,14 +30,18 @@ async def config_set_new_password(client: TGlideClient, password):
         await client.config_set({"requirepass": password}, route=AllNodes())
 
 
-async def reset_connections(client: TGlideClient):
+async def kill_connections(client: TGlideClient):
     """
-    Resets the connections for the given TGlideClient server connected.
+    Kills all connections to the given TGlideClient server connected.
     """
     if isinstance(client, GlideClient):
-        await client.custom_command(["RESET"])
+        await client.custom_command(
+            ["CLIENT", "KILL", "TYPE", "normal", "skipme", "no"]
+        )
     if isinstance(client, GlideClusterClient):
-        await client.custom_command(["RESET"], route=AllNodes())
+        await client.custom_command(
+            ["CLIENT", "KILL", "TYPE", "normal", "skipme", "no"], route=AllNodes()
+        )
 
 
 @pytest.mark.asyncio
@@ -82,7 +86,7 @@ class TestAuthCommands:
         value = await glide_client.get("test_key")
         assert value == b"test_value"
         await config_set_new_password(glide_client, NEW_PASSWORD)
-        await reset_connections(glide_client)
+        await kill_connections(glide_client)
         # Verify that the client is able to reconnect with the new password
         value = await glide_client.get("test_key")
         assert value == b"test_value"
