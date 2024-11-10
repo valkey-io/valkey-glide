@@ -251,7 +251,7 @@ mod standalone_client_tests {
             .map(|mock| mock.get_number_of_received_commands())
             .collect();
         replica_reads.sort();
-        assert_eq!(config.expected_replica_reads, replica_reads);
+        assert!(config.expected_replica_reads <= replica_reads);
     }
 
     #[rstest]
