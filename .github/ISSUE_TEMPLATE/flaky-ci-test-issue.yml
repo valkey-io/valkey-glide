@@ -1,0 +1,137 @@
+name: Flaky CI Test Issue
+description: Report a flaky test in the CI pipeline
+title: "[Flaky Test] <test-name>"
+labels: ["bug", "flaky-test"]
+assignees: []
+
+body:
+- type: markdown
+  attributes:
+    value: |
+      ## Description of the Flaky Test
+
+- type: input
+  id: test-name
+  attributes:
+    label: Test Name
+    description: Name of the test that is flaky
+    placeholder: e.g., test_example
+
+- type: input
+  id: test-location
+  attributes:
+    label: Test Location
+    description: File and line number or test suite
+    placeholder: e.g., test_suite.py line 42
+
+- type: input
+  id: failure-permlink
+  attributes:
+    label: Failure Permlink
+    description: Permlink to the failure line in the test run
+    placeholder: e.g., https://ci.example.com/build/123
+
+- type: input
+  id: frequency
+  attributes:
+    label: Frequency
+    description: How often does the test fail?
+    placeholder: e.g., 1 in 10 runs
+
+- type: markdown
+  attributes:
+    value: |
+      ## Steps to Reproduce
+
+- type: textarea
+  id: steps-to-reproduce
+  attributes:
+    label: Steps to Reproduce
+    description: List the steps required to reproduce the flaky test
+    placeholder: 
+      1. Step 1
+      2. Step 2
+      3. Step 3
+
+- type: markdown
+  attributes:
+    value: |
+      ## Additional Context
+
+- type: input
+  id: system-information
+  attributes:
+    label: System Information
+    description: Operating system, CI environment, etc.
+    placeholder: e.g., Ubuntu 20.04, GitHub Actions
+
+- type: input
+  id: language-and-version
+  attributes:
+    label: Language and Version
+    description: Programming language and its version
+    placeholder: e.g., Python 3.8
+
+- type: input
+  id: engine-version
+  attributes:
+    label: Engine Version
+    description: Engine version used
+    placeholder: e.g., v6.2
+
+- type: textarea
+  id: logs
+  attributes:
+    label: Logs
+    description: Include any relevant logs or error messages
+    placeholder: Paste logs here...
+
+- type: textarea
+  id: screenshots
+  attributes:
+    label: Screenshots
+    description: If applicable, add screenshots to help explain the issue
+    placeholder: Paste screenshots here...
+
+- type: input
+  id: glide-version
+  attributes:
+    label: Glide Version
+    description: Glide version used
+    placeholder: e.g., 1.2.3
+
+- type: markdown
+  attributes:
+    value: |
+      ## Expected Behavior
+
+- type: textarea
+  id: expected-behavior
+  attributes:
+    label: Expected Behavior
+    description: Describe what you expected to happen
+    placeholder: Describe the expected behavior...
+
+- type: markdown
+  attributes:
+    value: |
+      ## Actual Behavior
+
+- type: textarea
+  id: actual-behavior
+  attributes:
+    label: Actual Behavior
+    description: Describe what actually happened
+    placeholder: Describe the actual behavior...
+
+- type: markdown
+  attributes:
+    value: |
+      ## Possible Fixes
+
+- type: textarea
+  id: possible-fixes
+  attributes:
+    label: Possible Fixes
+    description: If you have any insight into what might be causing the flakiness, mention it here
+    placeholder: Describe possible fixes...
