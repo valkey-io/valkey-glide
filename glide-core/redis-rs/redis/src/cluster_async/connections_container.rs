@@ -297,7 +297,7 @@ where
         &self,
         amount: usize,
         conn_type: ConnectionType,
-    ) -> Option<impl Iterator<Item = ConnectionAndAddress<Connection>> + '_> {
+    ) -> Option<Vec<ConnectionAndAddress<Connection>>> {
         (!self.connection_map.is_empty()).then_some({
             self.connection_map
                 .iter()
@@ -308,6 +308,7 @@ where
                     let conn = node.get_connection(&conn_type);
                     (address.clone(), conn)
                 })
+                .collect::<Vec<_>>()
         })
     }
 
@@ -693,6 +694,7 @@ mod tests {
         let random_connections: HashSet<_> = container
             .random_connections(3, ConnectionType::User)
             .expect("No connections found")
+            .into_iter()
             .map(|pair| pair.1)
             .collect();
 
@@ -723,6 +725,7 @@ mod tests {
         let random_connections: Vec<_> = container
             .random_connections(1, ConnectionType::User)
             .expect("No connections found")
+            .into_iter()
             .collect();
 
         assert_eq!(vec![(address, 4)], random_connections);
@@ -734,6 +737,7 @@ mod tests {
         let mut random_connections: Vec<_> = container
             .random_connections(1000, ConnectionType::User)
             .expect("No connections found")
+            .into_iter()
             .map(|pair| pair.1)
             .collect();
         random_connections.sort();
@@ -747,6 +751,7 @@ mod tests {
         let mut random_connections: Vec<_> = container
             .random_connections(1000, ConnectionType::PreferManagement)
             .expect("No connections found")
+            .into_iter()
             .map(|pair| pair.1)
             .collect();
         random_connections.sort();
