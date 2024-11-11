@@ -387,17 +387,16 @@ impl ClusterClientBuilder {
         self
     }
 
-    /// Sets the read strategy on all new connections, based on the specified policy.
+    /// Set the read strategy for this client.
     ///
-    /// Using the specified `read_strategy`, this function configures whether read queries will be
-    /// routed to replica nodes or primary nodes. If `ReadFromReplicaStrategy::AZAffinity` is set,
-    /// read requests will first attempt to access replicas in the same availability zone, falling
-    /// back to other replicas or the primary if needed. If `ReadFromReplicaStrategy::RoundRobin` is chosen, reads are distributed
-    /// across replicas for load balancing, while `ReadFromReplicaStrategy::AlwaysFromPrimary` ensures all read and write queries
-    /// are directed to the primary node.
+    /// The parameter `read_strategy` can be one of:
+    /// `ReadFromReplicaStrategy::AZAffinity(availability_zone)` - attempt to access replicas in the same availability zone.
+    /// If no suitable replica is found (i.e. no replica could be found in the requested availability zone), choose any replica. Falling back to primary if needed.
+    /// `ReadFromReplicaStrategy::RoundRobin` - reads are distributed across replicas for load balancing using round-robin algorithm. Falling back to primary if needed.
+    /// `ReadFromReplicaStrategy::AlwaysFromPrimary` ensures all read and write queries are directed to the primary node.
     ///
     /// # Parameters
-    /// - `read_strategy`: Defines the replica routing strategy.
+    /// - `read_strategy`: defines the replica routing strategy.
     pub fn read_from(mut self, read_strategy: ReadFromReplicaStrategy) -> ClusterClientBuilder {
         self.builder_params.read_from_replicas = read_strategy;
         self

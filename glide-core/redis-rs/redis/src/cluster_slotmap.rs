@@ -24,16 +24,16 @@ impl SlotMapValue {
 }
 
 #[derive(Debug, Default, Clone, PartialEq)]
-/** Represents the client's read from strategy. */
+/// Represents the client's read from strategy.
 pub enum ReadFromReplicaStrategy {
     #[default]
-    /** Always get from primary, in order to get the freshest data.*/
+    /// Always get from primary, in order to get the freshest data.
     AlwaysFromPrimary,
-    /** Spread the read requests between all replicas in a round robin manner.
-    If no replica is available, route the requests to the primary.*/
+    /// Spread the read requests between all replicas in a round robin manner.
+    /// If no replica is available, route the requests to the primary.
     RoundRobin,
-    /** Spread the read requests between replicas in the same client's AZ (Aviliablity zone) in a round robin manner,
-    falling back to other replicas or the primary if needed.*/
+    /// Spread the read requests between replicas in the same client's AZ (Aviliablity zone) in a round robin manner,
+    /// falling back to other replicas or the primary if needed.
     AZAffinity(String),
 }
 
@@ -60,7 +60,7 @@ fn get_address_from_slot(
                 % slot.addrs.replicas.len();
             slot.addrs.replicas[index].as_str()
         }
-        ReadFromReplicaStrategy::AZAffinity(_az) => todo!(), // todo thrrow exception for sync client
+        ReadFromReplicaStrategy::AZAffinity(_az) => todo!(), // Drop sync client
     }
 }
 

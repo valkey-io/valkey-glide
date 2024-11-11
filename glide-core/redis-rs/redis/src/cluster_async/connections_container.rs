@@ -6,6 +6,7 @@ use dashmap::DashMap;
 use futures::FutureExt;
 use rand::seq::IteratorRandom;
 use std::net::IpAddr;
+use std::sync::atomic::Ordering;
 use telemetrylib::Telemetry;
 
 /// Count the number of connections in a connections_map object
@@ -23,12 +24,12 @@ macro_rules! count_connections {
     }};
 }
 
-/// A struct that encapsulates a network connection along with its associated IP address.
+/// A struct that encapsulates a network connection along with its associated IP address and AZ.
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct ConnectionDetails<Connection> {
     /// The actual connection
     pub conn: Connection,
-    /// The IP associated with the connection
+    /// The IP and AZ associated with the connection
     pub ip: Option<IpAddr>,
     /// The AZ associated with the connection
     pub az: Option<String>,
@@ -209,9 +210,7 @@ where
         slot_map_value: &SlotMapValue,
     ) -> Option<ConnectionAndAddress<Connection>> {
         let addrs = &slot_map_value.addrs;
-        let initial_index = slot_map_value
-            .latest_used_replica
-            .load(std::sync::atomic::Ordering::Relaxed);
+        let initial_index = slot_map_value.latest_used_replica.load(Ordering::Relaxed);
         let mut check_count = 0;
         loop {
             check_count += 1;
@@ -225,8 +224,8 @@ where
                 let _ = slot_map_value.latest_used_replica.compare_exchange_weak(
                     initial_index,
                     index,
-                    std::sync::atomic::Ordering::Relaxed,
-                    std::sync::atomic::Ordering::Relaxed,
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
                 );
                 return Some(connection);
             }
@@ -239,16 +238,13 @@ where
         client_az: String,
     ) -> Option<ConnectionAndAddress<Connection>> {
         let addrs = &slot_map_value.addrs;
-        let initial_index = slot_map_value
-            .latest_used_replica
-            .load(std::sync::atomic::Ordering::Relaxed);
-        let mut check_count = 0;
+        let initial_index = slot_map_value.latest_used_replica.load(Ordering::Relaxed);
+        let mut retries = 0usize;
 
         loop {
-            check_count += 1;
-
+            retries = retries.saturating_add(1);
             // Looped through all replicas; no connected replica found in the same AZ.
-            if check_count > addrs.replicas.len() {
+            if retries > addrs.replicas.len() {
                 // Attempt a fallback to any available replica in other AZs.
                 for replica in &addrs.replicas {
                     if let Some(connection) = self.connection_for_address(replica.as_str()) {
@@ -260,7 +256,7 @@ where
             }
 
             // Calculate index based on initial index and check count.
-            let index = (initial_index + check_count) % addrs.replicas.len();
+            let index = (initial_index + retries) % addrs.replicas.len();
             let replica = &addrs.replicas[index];
 
             // Check if this replica’s AZ matches the user’s AZ.
@@ -272,8 +268,8 @@ where
                     let _ = slot_map_value.latest_used_replica.compare_exchange_weak(
                         initial_index,
                         index,
-                        std::sync::atomic::Ordering::Relaxed,
-                        std::sync::atomic::Ordering::Relaxed,
+                        Ordering::Relaxed,
+                        Ordering::Relaxed,
                     );
                     return Some((address, connection_details.conn));
                 }
