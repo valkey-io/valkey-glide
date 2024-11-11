@@ -186,6 +186,18 @@ func (suite *GlideTestSuite) runWithClients(clients []api.BaseClient, test func(
 	}
 }
 
+func (suite *GlideTestSuite) runWithDefaultClient(test func(client *api.GlideClient)) {
+	suite.T().Run("Testing with default client", func(t *testing.T) {
+		test(suite.defaultClient())
+	})
+}
+
+func (suite *GlideTestSuite) runWithClusterClient(test func(client api.BaseClient)) {
+	suite.T().Run("Testing with cluster client", func(t *testing.T) {
+		test(suite.defaultClusterClient())
+	})
+}
+
 func (suite *GlideTestSuite) verifyOK(result api.Result[string], err error) {
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), api.OK, result.Value())
@@ -195,4 +207,22 @@ func (suite *GlideTestSuite) SkipIfServerVersionLowerThanBy(version string) {
 	if suite.serverVersion < version {
 		suite.T().Skipf("This feature is added in version %s", version)
 	}
+}
+
+func (suite *GlideTestSuite) addAuthConfig(client api.BaseClient) {
+	config, err := client.ConfigSet(map[string]string{"requirepass": "pass"})
+	suite.verifyOK(config, err)
+
+	auth, err := client.CustomCommand([]string{"AUTH", "pass"})
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), auth.(string), api.OK)
+}
+
+func (suite *GlideTestSuite) removeAuthConfig(client api.BaseClient) {
+	config, err := client.ConfigSet(map[string]string{"requirepass": ""})
+	suite.verifyOK(config, err)
+
+	reset, err := client.CustomCommand([]string{"RESET"})
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), reset.(string), "RESET")
 }

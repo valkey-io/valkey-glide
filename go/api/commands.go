@@ -731,4 +731,96 @@ type ConnectionManagementCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/ping/
 	PingWithMessage(message string) (string, error)
+
+	// UpdateConnectionPassword updates the connection password and optionally re-authenticates.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//  password - The new password to set, or null to remove the password.
+	//  reAuth - If true, re-authenticates the connection with the new password.
+	//
+	// Return value:
+	//  A Result containing the operation status, or an error if the password replacement fails.
+	//
+	// For example:
+	//  result, err := client.UpdateConnectionPassword("newpass123", true)
+	//  // result equals api.CreateStringResult("OK")
+	//
+	// [valkey.io]: https://valkey.io/commands/auth/
+	UpdateConnectionPassword(password *string, reAuth bool) (Result[string], error)
+}
+
+// ServerManagementClusterCommands provides cluster management operations.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/?group=server
+type ServerManagementClusterCommands interface {
+	// ConfigGet returns values for the specified configuration parameters.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//  args - A slice of configuration parameter names to retrieve values for.
+	//
+	// Return value:
+	//  A map of parameter names to their values, both wrapped in Result types, or an error if the operation fails.
+	//
+	// For example:
+	//  params, err := client.ConfigGet([]string{"timeout", "maxmemory"})
+	//  // timeout equals api.CreateStringResult("1000")
+	//  // maxmemory equals api.CreateStringResult("1GB")
+	//  // params equals map[api.Result[string]]api.Result[string]{timeout: timeout, maxmemory: maxmemory}
+	//
+	// [valkey.io]: https://valkey.io/commands/config-get/
+	ConfigGet(args []string) (map[Result[string]]Result[string], error)
+
+	// ConfigSet updates the specified configuration parameters with new values.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   parameters - A map where keys are configuration parameter names and values are their new settings.
+	//
+	// Returns:
+	//   - Result[string]: A Result containing "OK" if all parameters were set successfully
+	//   - error: An error if the operation fails for any parameter
+	//
+	// Example:
+	//   result, err := client.ConfigSet(map[string]string{
+	//       "timeout":   "1000",
+	//       "maxmemory": "1GB",
+	//   })
+	//   // If successful:
+	//   // result.Value() equals "OK"
+	//   // err equals nil
+	//
+	// Common configurations:
+	//   - "timeout": Connection timeout in milliseconds
+	//   - "maxmemory": Maximum memory limit (e.g., "1GB", "512MB")
+	//   - "maxclients": Maximum number of client connections
+	//   - "requirepass": Authentication password
+	//
+	// [valkey.io]: https://valkey.io/commands/config-set/
+	ConfigSet(parameters map[string]string) (Result[string], error)
+
+	// CustomCommand executes a custom server command with the provided arguments.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//  args - A slice containing the command name and its arguments.
+	//
+	// Return value:
+	//  An interface{} that must be type asserted to the expected return type, or an error if the command execution fails.
+	//
+	// For example:
+	//  result, err := client.CustomCommand([]string{"MYCOMMAND", "arg1", "arg2"})
+	//  // Assuming command returns a string
+	//  // strResult := result.(string)
+	//  // strResult equals "command response"
+	//
+	// [valkey.io]: https://valkey.io/commands/
+	CustomCommand(args []string) (interface{}, error)
 }

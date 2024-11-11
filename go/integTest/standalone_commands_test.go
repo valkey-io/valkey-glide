@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/valkey-io/valkey-glide/go/glide/api"
-
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/valkey-io/valkey-glide/go/glide/api"
 )
 
 func (suite *GlideTestSuite) TestCustomCommandInfo() {
@@ -123,4 +123,54 @@ func (suite *GlideTestSuite) TestConfigSetAndGet_invalidArgs() {
 	result2, err := client.ConfigGet([]string{"time"})
 	assert.Equal(suite.T(), map[api.Result[string]]api.Result[string]{}, result2)
 	assert.Nil(suite.T(), err)
+}
+
+func (suite *GlideTestSuite) TestUpdateConnectionPassword() {
+	suite.runWithDefaultClient(func(client *api.GlideClient) {
+		suite.addAuthConfig(client)
+
+		newPass := "newpass"
+		res, err := client.UpdateConnectionPassword(&newPass, false)
+		suite.verifyOK(res, err)
+
+		key := uuid.NewString()
+		value := uuid.NewString()
+
+		set, err := client.Set(key, value)
+		suite.verifyOK(set, err)
+
+		get, err := client.Get(key)
+		suite.verifyOK(set, err)
+		assert.Equal(suite.T(), get.Value(), value)
+
+		suite.removeAuthConfig(client)
+	})
+}
+
+func (suite *GlideTestSuite) TestUpdateConnectionPassword_No_Server_Auth() {
+	suite.runWithDefaultClient(func(client *api.GlideClient) {
+		suite.addAuthConfig(client)
+
+		newPass := "newpass"
+		res, err := client.UpdateConnectionPassword(&newPass, true)
+
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+		assert.Empty(suite.T(), res.Value())
+
+		suite.removeAuthConfig(client)
+	})
+}
+
+func (suite *GlideTestSuite) TestUpdateConnectionPassword_Password_long() {
+	suite.runWithDefaultClient(func(client *api.GlideClient) {
+		suite.addAuthConfig(client)
+
+		password := strings.Repeat("p", 1000)
+
+		res, err := client.UpdateConnectionPassword(&password, false)
+		suite.verifyOK(res, err)
+
+		suite.removeAuthConfig(client)
+	})
 }
