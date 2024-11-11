@@ -49,7 +49,6 @@ socket-layer = [
     "protobuf",
     "tokio-util",
 ]
-valkey-gte-7-2 = []
 standalone_heartbeat = []
 
 [dev-dependencies]
