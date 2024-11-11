@@ -1372,6 +1372,122 @@ mod cluster_async {
     }
 
     #[test]
+    fn test_async_cluster_update_slots_based_on_moved_error_indicates_slot_migration() {
+        // This test simulates the scenario where the client receives a MOVED error indicating that a key is now
+        // stored on the primary node of another shard.
+        // It ensures that the new slot now owned by the primary and its associated replicas.
+        let name = "test_async_cluster_update_slots_based_on_moved_error_indicates_slot_migration";
+        let slots_config = vec![
+            MockSlotRange {
+                primary_port: 6379,
+                replica_ports: vec![7000],
+                slot_range: (0..8000),
+            },
+            MockSlotRange {
+                primary_port: 6380,
+                replica_ports: vec![7001],
+                slot_range: (8001..16380),
+            },
+        ];
+
+        let moved_from_port = 6379;
+        let moved_to_port = 6380;
+        let new_shard_replica_port = 7001;
+
+        // Tracking moved and replica requests for validation
+        let moved_requests = Arc::new(atomic::AtomicUsize::new(0));
+        let cloned_moved_requests = moved_requests.clone();
+        let replica_requests = Arc::new(atomic::AtomicUsize::new(0));
+        let cloned_replica_requests = moved_requests.clone();
+
+        // Test key and slot
+        let key = "test";
+        let key_slot = 6918;
+
+        // Mock environment setup
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")])
+            .slots_refresh_rate_limit(Duration::from_secs(1000000), 0) // Rate limiter to disable slot refresh
+            .read_from_replicas(), // Allow reads from replicas
+            name,
+            move |cmd: &[u8], port| {
+                if contains_slice(cmd, b"PING")
+                    || contains_slice(cmd, b"SETNAME")
+                    || contains_slice(cmd, b"READONLY")
+                {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+
+                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                    let slots = create_topology_from_config(name, slots_config.clone());
+                    return Err(Ok(slots));
+                }
+
+                if contains_slice(cmd, b"SET") {
+                    if port == moved_to_port {
+                        // Simulate primary OK response
+                        Err(Ok(Value::SimpleString("OK".into())))
+                    } else if port == moved_from_port {
+                        // Simulate MOVED error for other port
+                        moved_requests.fetch_add(1, Ordering::Relaxed);
+                        Err(parse_redis_value(
+                            format!("-MOVED {key_slot} {name}:{moved_to_port}\r\n").as_bytes(),
+                        ))
+                    } else {
+                        panic!("unexpected port for SET command: {port:?}.\n
+                        Expected one of: moved_to_port={moved_to_port}, moved_from_port={moved_from_port}");
+                    }
+                } else if contains_slice(cmd, b"GET") {
+                    if new_shard_replica_port == port {
+                        // Simulate replica response for GET after slot migration
+                        replica_requests.fetch_add(1, Ordering::Relaxed);
+                        Err(Ok(Value::BulkString(b"123".to_vec())))
+                    } else {
+                        panic!("unexpected port for GET command: {port:?}, Expected: {new_shard_replica_port:?}");
+                    }
+                } else {
+                    panic!("unexpected command {cmd:?}")
+                }
+            },
+        );
+
+        // First request: Trigger MOVED error and reroute
+        let value = runtime.block_on(
+            cmd("SET")
+                .arg(key)
+                .arg("bar")
+                .query_async::<_, Option<Value>>(&mut connection),
+        );
+        assert_eq!(value, Ok(Some(Value::SimpleString("OK".to_owned()))));
+
+        // Second request: Should be routed directly to the new primary node if the slots map is updated
+        let value = runtime.block_on(
+            cmd("SET")
+                .arg(key)
+                .arg("bar")
+                .query_async::<_, Option<Value>>(&mut connection),
+        );
+        assert_eq!(value, Ok(Some(Value::SimpleString("OK".to_owned()))));
+
+        // Handle slot migration scenario: Ensure the new shard's replicas are accessible
+        let value = runtime.block_on(
+            cmd("GET")
+                .arg(key)
+                .query_async::<_, Option<i32>>(&mut connection),
+        );
+        assert_eq!(value, Ok(Some(123)));
+        assert_eq!(cloned_replica_requests.load(Ordering::Relaxed), 1);
+
+        // Assert there was only a single MOVED error
+        assert_eq!(cloned_moved_requests.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
     #[serial_test::serial]
     fn test_async_cluster_reconnect_even_with_zero_retries() {
         let name = "test_async_cluster_reconnect_even_with_zero_retries";
