@@ -8,7 +8,6 @@ use crate::cluster_slotmap::{ReadFromReplicaStrategy, SlotMap};
 use crate::{cluster::TlsMode, ErrorKind, RedisError, RedisResult, Value};
 #[cfg(all(feature = "cluster-async", not(feature = "tokio-comp")))]
 use async_std::sync::RwLock;
-use derivative::Derivative;
 use std::collections::{hash_map::DefaultHasher, HashMap};
 use std::hash::{Hash, Hasher};
 use std::sync::atomic::AtomicBool;
@@ -58,16 +57,20 @@ impl SlotRefreshState {
     }
 }
 
-#[derive(Derivative)]
-#[derivative(PartialEq, Eq)]
 #[derive(Debug)]
 pub(crate) struct TopologyView {
     pub(crate) hash_value: TopologyHash,
-    #[derivative(PartialEq = "ignore")]
     pub(crate) nodes_count: u16,
-    #[derivative(PartialEq = "ignore")]
     slots_and_count: (u16, Vec<Slot>),
 }
+
+impl PartialEq for TopologyView {
+    fn eq(&self, other: &Self) -> bool {
+        self.hash_value == other.hash_value
+    }
+}
+
+impl Eq for TopologyView {}
 
 pub(crate) fn slot(key: &[u8]) -> u16 {
     crc16::State::<crc16::XMODEM>::calculate(key) % SLOT_SIZE

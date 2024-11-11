@@ -61,7 +61,6 @@ r2d2 = { version = "0.8.8", optional = true }
 # Only needed for cluster
 crc16 = { version = "0.4", optional = true }
 rand = { version = "0.8", optional = true }
-derivative = { version = "2.2.0", optional = true }
 
 # Only needed for async cluster
 dashmap = { version = "6.0", optional = true }
@@ -134,7 +133,7 @@ aio = [
 ]
 geospatial = []
 json = ["serde", "serde/derive", "serde_json"]
-cluster = ["crc16", "rand", "derivative"]
+cluster = ["crc16", "rand"]
 script = ["sha1_smol"]
 tls-native-tls = ["native-tls"]
 tls-rustls = [
