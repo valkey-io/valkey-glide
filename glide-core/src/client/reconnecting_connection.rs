@@ -124,7 +124,7 @@ async fn create_connection(
     let action = || async {
         get_multiplexed_connection(client, &connection_options)
             .await
-            .map_err(|err| RetryError::transient(err))
+            .map_err(RetryError::transient)
     };
 
     match Retry::spawn(retry_strategy.get_iterator(), action).await {
