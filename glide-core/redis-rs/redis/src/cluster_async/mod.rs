@@ -93,10 +93,11 @@ use tokio::{sync::Notify, time::timeout};
 use dispose::{Disposable, Dispose};
 use futures::{future::BoxFuture, prelude::*, ready};
 use pin_project_lite::pin_project;
+use std::sync::RwLock as StdRwLock;
 use tokio::sync::{
     mpsc,
     oneshot::{self, Receiver},
-    RwLock,
+    RwLock as TokioRwLock,
 };
 use tracing::{debug, info, trace, warn};
 
@@ -104,6 +105,9 @@ use self::{
     connections_container::{ConnectionAndAddress, ConnectionType, ConnectionsMap},
     connections_logic::connect_and_check,
 };
+
+pub(crate) const MUTEX_WRITE_ERR: &str = "Failed to obtain write lock for mutex. Poisoned mutex";
+pub(crate) const MUTEX_READ_ERR: &str = "Failed to obtain read lock for mutex. Poisoned mutex";
 
 /// This represents an async Redis Cluster connection. It stores the
 /// underlying connections maintained for each node in the cluster, as well
@@ -404,13 +408,13 @@ type ConnectionsContainer<C> =
     self::connections_container::ConnectionsContainer<ConnectionFuture<C>>;
 
 pub(crate) struct InnerCore<C> {
-    pub(crate) conn_lock: RwLock<ConnectionsContainer<C>>,
+    pub(crate) conn_lock: StdRwLock<ConnectionsContainer<C>>,
     cluster_params: ClusterParams,
     pending_requests: Mutex<Vec<PendingRequest<C>>>,
     slot_refresh_state: SlotRefreshState,
     initial_nodes: Vec<ConnectionInfo>,
-    subscriptions_by_address: RwLock<HashMap<String, PubSubSubscriptionInfo>>,
-    unassigned_subscriptions: RwLock<PubSubSubscriptionInfo>,
+    subscriptions_by_address: TokioRwLock<HashMap<String, PubSubSubscriptionInfo>>,
+    unassigned_subscriptions: TokioRwLock<PubSubSubscriptionInfo>,
     glide_connection_options: GlideConnectionOptions,
 }
 
@@ -428,7 +432,7 @@ where
     ) -> Option<String> {
         self.conn_lock
             .read()
-            .await
+            .expect(MUTEX_READ_ERR)
             .slot_map
             .get_node_address_for_slot(slot, slot_addr)
     }
@@ -439,7 +443,7 @@ where
         let node_conn = self
             .conn_lock
             .read()
-            .await
+            .expect(MUTEX_READ_ERR)
             .connection_for_address(node_address)
             .ok_or(RedisError::from((
                 ErrorKind::ResponseError,
@@ -476,7 +480,7 @@ where
     pub(crate) async fn get_slots_of_address(&self, node_address: &str) -> Vec<u16> {
         self.conn_lock
             .read()
-            .await
+            .expect(MUTEX_READ_ERR)
             .slot_map
             .get_slots_of_node(node_address)
     }
@@ -1040,7 +1044,7 @@ where
         let topology_checks_interval = cluster_params.topology_checks_interval;
         let slots_refresh_rate_limiter = cluster_params.slots_refresh_rate_limit;
         let inner = Arc::new(InnerCore {
-            conn_lock: RwLock::new(ConnectionsContainer::new(
+            conn_lock: StdRwLock::new(ConnectionsContainer::new(
                 Default::default(),
                 connections,
                 cluster_params.read_from_replicas,
@@ -1050,14 +1054,14 @@ where
             pending_requests: Mutex::new(Vec::new()),
             slot_refresh_state: SlotRefreshState::new(slots_refresh_rate_limiter),
             initial_nodes: initial_nodes.to_vec(),
-            unassigned_subscriptions: RwLock::new(
+            unassigned_subscriptions: TokioRwLock::new(
                 if let Some(subs) = cluster_params.pubsub_subscriptions {
                     subs.clone()
                 } else {
                     PubSubSubscriptionInfo::new()
                 },
             ),
-            subscriptions_by_address: RwLock::new(Default::default()),
+            subscriptions_by_address: TokioRwLock::new(Default::default()),
             glide_connection_options,
         });
         let mut connection = ClusterConnInner {
@@ -1220,9 +1224,11 @@ where
                     return;
                 }
             };
-            let mut write_lock = inner.conn_lock.write().await;
-            write_lock.extend_connection_map(connection_map);
-            drop(write_lock);
+            inner
+                .conn_lock
+                .write()
+                .expect(MUTEX_WRITE_ERR)
+                .extend_connection_map(connection_map);
             if let Err(err) = Self::refresh_slots_and_subscriptions_with_retries(
                 inner.clone(),
                 &RefreshPolicy::Throttable,
@@ -1243,30 +1249,31 @@ where
         let mut all_valid_conns = HashMap::new();
         // prep connections and clean out these w/o assigned slots, as we might have established connections to unwanted hosts
         let mut nodes_to_delete = Vec::new();
-        let connections_container = inner.conn_lock.read().await;
+        let all_nodes_with_slots: HashSet<String>;
+        {
+            let connections_container = inner.conn_lock.read().expect(MUTEX_READ_ERR);
 
-        let all_nodes_with_slots: HashSet<String> = connections_container
-            .slot_map
-            .addresses_for_all_nodes()
-            .iter()
-            .map(|addr| String::from(*addr))
-            .collect();
+            all_nodes_with_slots = connections_container
+                .slot_map
+                .addresses_for_all_nodes()
+                .iter()
+                .map(|addr| String::from(*addr))
+                .collect();
 
-        connections_container
-            .all_node_connections()
-            .for_each(|(addr, con)| {
-                if all_nodes_with_slots.contains(&addr) {
-                    all_valid_conns.insert(addr.clone(), con.clone());
-                } else {
-                    nodes_to_delete.push(addr.clone());
-                }
-            });
+            connections_container
+                .all_node_connections()
+                .for_each(|(addr, con)| {
+                    if all_nodes_with_slots.contains(&addr) {
+                        all_valid_conns.insert(addr.clone(), con.clone());
+                    } else {
+                        nodes_to_delete.push(addr.clone());
+                    }
+                });
 
-        for addr in &nodes_to_delete {
-            connections_container.remove_node(addr);
+            for addr in &nodes_to_delete {
+                connections_container.remove_node(addr);
+            }
         }
-
-        drop(connections_container);
 
         // identify nodes with closed connection
         let mut addrs_to_refresh = Vec::new();
@@ -1306,51 +1313,55 @@ where
         check_existing_conn: bool,
     ) {
         info!("Started refreshing connections to {:?}", addresses);
-        let connections_container = inner.conn_lock.read().await;
-        let cluster_params = &inner.cluster_params;
-        let subscriptions_by_address = &inner.subscriptions_by_address;
-        let glide_connection_options = &inner.glide_connection_options;
+        let mut tasks = FuturesUnordered::new();
+        let inner = inner.clone();
 
-        stream::iter(addresses.into_iter())
-            .fold(
-                &*connections_container,
-                |connections_container, address| async move {
-                    let node_option = if check_existing_conn {
-                        connections_container.remove_node(&address)
-                    } else {
-                        None
-                    };
+        for address in addresses.into_iter() {
+            let inner = inner.clone();
 
-                    // override subscriptions for this connection
-                    let mut cluster_params = cluster_params.clone();
-                    let subs_guard = subscriptions_by_address.read().await;
-                    cluster_params.pubsub_subscriptions = subs_guard.get(&address).cloned();
-                    drop(subs_guard);
-                    let node = get_or_create_conn(
-                        &address,
-                        node_option,
-                        &cluster_params,
-                        conn_type,
-                        glide_connection_options.clone(),
-                    )
-                    .await;
-                    match node {
-                        Ok(node) => {
-                            connections_container
-                                .replace_or_add_connection_for_address(address, node);
-                        }
-                        Err(err) => {
-                            warn!(
-                                "Failed to refresh connection for node {}. Error: `{:?}`",
-                                address, err
-                            );
-                        }
-                    }
-                    connections_container
-                },
-            )
-            .await;
-        info!("refresh connections completed");
+            tasks.push(async move {
+                let node_option = if check_existing_conn {
+                    let connections_container = inner.conn_lock.read().expect(MUTEX_READ_ERR);
+                    connections_container.remove_node(&address)
+                } else {
+                    None
+                };
+
+                // Override subscriptions for this connection
+                let mut cluster_params = inner.cluster_params.clone();
+                let subs_guard = inner.subscriptions_by_address.read().await;
+                cluster_params.pubsub_subscriptions = subs_guard.get(&address).cloned();
+                drop(subs_guard);
+
+                let node = get_or_create_conn(
+                    &address,
+                    node_option,
+                    &cluster_params,
+                    conn_type,
+                    inner.glide_connection_options.clone(),
+                )
+                .await;
+
+                (address, node)
+            });
+        }
+
+        // Poll connection tasks as soon as each one finishes
+        while let Some(result) = tasks.next().await {
+            match result {
+                (address, Ok(node)) => {
+                    let connections_container = inner.conn_lock.read().expect(MUTEX_READ_ERR);
+                    connections_container.replace_or_add_connection_for_address(address, node);
+                }
+                (address, Err(err)) => {
+                    warn!(
+                        "Failed to refresh connection for node {}. Error: `{:?}`",
+                        address, err
+                    );
+                }
+            }
+        }
+        debug!("refresh connections completed");
     }
 
     async fn aggregate_results(
@@ -1576,75 +1587,71 @@ where
         }
 
         let mut addrs_to_refresh: HashSet<String> = HashSet::new();
-        let mut subs_by_address_guard = inner.subscriptions_by_address.write().await;
-        let mut unassigned_subs_guard = inner.unassigned_subscriptions.write().await;
-        let conns_read_guard = inner.conn_lock.read().await;
+        {
+            let mut subs_by_address_guard = inner.subscriptions_by_address.write().await;
+            let mut unassigned_subs_guard = inner.unassigned_subscriptions.write().await;
+            let conns_read_guard = inner.conn_lock.read().expect(MUTEX_READ_ERR);
+            // validate active subscriptions location
+            subs_by_address_guard.retain(|current_address, address_subs| {
+                address_subs.retain(|kind, channels_patterns| {
+                    channels_patterns.retain(|channel_pattern| {
+                        let new_slot = get_slot(channel_pattern);
+                        let valid = if let Some((new_address, _)) = conns_read_guard
+                            .connection_for_route(&Route::new(new_slot, SlotAddr::Master))
+                        {
+                            *new_address == *current_address
+                        } else {
+                            false
+                        };
+                        // no new address or new address differ - move to unassigned and store this address for connection reset
+                        if !valid {
+                            // need to drop the original connection for clearing the subscription in the server, avoiding possible double-receivers
+                            if conns_read_guard
+                                .connection_for_address(current_address)
+                                .is_some()
+                            {
+                                addrs_to_refresh.insert(current_address.clone());
+                            }
 
-        // validate active subscriptions location
-        subs_by_address_guard.retain(|current_address, address_subs| {
-            address_subs.retain(|kind, channels_patterns| {
+                            unassigned_subs_guard
+                                .entry(*kind)
+                                .and_modify(|channels_patterns| {
+                                    channels_patterns.insert(channel_pattern.clone());
+                                })
+                                .or_insert(HashSet::from([channel_pattern.clone()]));
+                        }
+                        valid
+                    });
+                    !channels_patterns.is_empty()
+                });
+                !address_subs.is_empty()
+            });
+
+            // try to assign new addresses
+            unassigned_subs_guard.retain(|kind: &PubSubSubscriptionKind, channels_patterns| {
                 channels_patterns.retain(|channel_pattern| {
                     let new_slot = get_slot(channel_pattern);
-                    let mut valid = false;
                     if let Some((new_address, _)) = conns_read_guard
                         .connection_for_route(&Route::new(new_slot, SlotAddr::Master))
                     {
-                        if *new_address == *current_address {
-                            valid = true;
-                        }
-                    }
-                    // no new address or new address differ - move to unassigned and store this address for connection reset
-                    if !valid {
-                        // need to drop the original connection for clearing the subscription in the server, avoiding possible double-receivers
-                        if conns_read_guard
-                            .connection_for_address(current_address)
-                            .is_some()
-                        {
-                            addrs_to_refresh.insert(current_address.clone());
-                        }
+                        // need to drop the new connection so the subscription will be picked up in setup_connection()
+                        addrs_to_refresh.insert(new_address.clone());
 
-                        unassigned_subs_guard
-                            .entry(*kind)
-                            .and_modify(|channels_patterns| {
-                                channels_patterns.insert(channel_pattern.clone());
-                            })
-                            .or_insert(HashSet::from([channel_pattern.clone()]));
+                        let e = subs_by_address_guard
+                            .entry(new_address.clone())
+                            .or_insert(PubSubSubscriptionInfo::new());
+
+                        e.entry(*kind)
+                            .or_insert(HashSet::new())
+                            .insert(channel_pattern.clone());
+
+                        return false;
                     }
-                    valid
+                    true
                 });
                 !channels_patterns.is_empty()
             });
-            !address_subs.is_empty()
-        });
-
-        // try to assign new addresses
-        unassigned_subs_guard.retain(|kind: &PubSubSubscriptionKind, channels_patterns| {
-            channels_patterns.retain(|channel_pattern| {
-                let new_slot = get_slot(channel_pattern);
-                if let Some((new_address, _)) =
-                    conns_read_guard.connection_for_route(&Route::new(new_slot, SlotAddr::Master))
-                {
-                    // need to drop the new connection so the subscription will be picked up in setup_connection()
-                    addrs_to_refresh.insert(new_address.clone());
-
-                    let e = subs_by_address_guard
-                        .entry(new_address.clone())
-                        .or_insert(PubSubSubscriptionInfo::new());
-
-                    e.entry(*kind)
-                        .or_insert(HashSet::new())
-                        .insert(channel_pattern.clone());
-
-                    return false;
-                }
-                true
-            });
-            !channels_patterns.is_empty()
-        });
-
-        drop(conns_read_guard);
-        drop(unassigned_subs_guard);
-        drop(subs_by_address_guard);
+        }
 
         if !addrs_to_refresh.is_empty() {
             // immediately trigger connection reestablishment
@@ -1662,8 +1669,7 @@ where
     /// topology view differs from the one currently stored in the connection manager.
     /// Returns true if change was detected, otherwise false.
     async fn check_for_topology_diff(inner: Arc<InnerCore<C>>) -> bool {
-        let read_guard = inner.conn_lock.read().await;
-        let num_of_nodes: usize = read_guard.len();
+        let num_of_nodes = inner.conn_lock.read().expect(MUTEX_READ_ERR).len();
         // TODO: Starting from Rust V1.67, integers has logarithms support.
         // When we no longer need to support Rust versions < 1.67, remove fast_math and transition to the ilog2 function.
         let num_of_nodes_to_query =
@@ -1671,17 +1677,21 @@ where
         let (res, failed_connections) = calculate_topology_from_random_nodes(
             &inner,
             num_of_nodes_to_query,
-            &read_guard,
             DEFAULT_NUMBER_OF_REFRESH_SLOTS_RETRIES,
         )
         .await;
 
         if let Ok((_, found_topology_hash)) = res {
-            if read_guard.get_current_topology_hash() != found_topology_hash {
+            if inner
+                .conn_lock
+                .read()
+                .expect(MUTEX_READ_ERR)
+                .get_current_topology_hash()
+                != found_topology_hash
+            {
                 return true;
             }
         }
-        drop(read_guard);
 
         if !failed_connections.is_empty() {
             Self::refresh_connections(
@@ -1728,19 +1738,13 @@ where
 
     // Query a node to discover slot-> master mappings
     async fn refresh_slots_inner(inner: Arc<InnerCore<C>>, curr_retry: usize) -> RedisResult<()> {
-        let read_guard = inner.conn_lock.read().await;
-        let num_of_nodes = read_guard.len();
+        let num_of_nodes = inner.conn_lock.read().expect(MUTEX_READ_ERR).len();
         const MAX_REQUESTED_NODES: usize = 10;
         let num_of_nodes_to_query = std::cmp::min(num_of_nodes, MAX_REQUESTED_NODES);
-        let (new_slots, topology_hash) = calculate_topology_from_random_nodes(
-            &inner,
-            num_of_nodes_to_query,
-            &read_guard,
-            curr_retry,
-        )
-        .await
-        .0?;
-        let connections = &*read_guard;
+        let (new_slots, topology_hash) =
+            calculate_topology_from_random_nodes(&inner, num_of_nodes_to_query, curr_retry)
+                .await
+                .0?;
         // Create a new connection vector of the found nodes
         let mut nodes = new_slots.values().flatten().collect::<Vec<_>>();
         nodes.sort_unstable();
@@ -1749,30 +1753,40 @@ where
         let addresses_and_connections_iter = stream::iter(nodes)
             .fold(
                 Vec::with_capacity(nodes_len),
-                |mut addrs_and_conns, addr| async move {
-                    if let Some(node) = connections.node_for_address(addr.as_str()) {
-                        addrs_and_conns.push((addr, Some(node)));
-                        return addrs_and_conns;
-                    }
-                    // If it's a DNS endpoint, it could have been stored in the existing connections vector using the resolved IP address instead of the DNS endpoint's name.
-                    // We shall check if a connection is already exists under the resolved IP name.
-                    let (host, port) = match get_host_and_port_from_addr(addr) {
-                        Some((host, port)) => (host, port),
-                        None => {
-                            addrs_and_conns.push((addr, None));
+                |mut addrs_and_conns, addr| {
+                    let inner = inner.clone();
+                    async move {
+                        if let Some(node) = inner
+                            .conn_lock
+                            .read()
+                            .expect(MUTEX_READ_ERR)
+                            .node_for_address(addr.as_str())
+                        {
+                            addrs_and_conns.push((addr, Some(node)));
                             return addrs_and_conns;
                         }
-                    };
-                    let conn = get_socket_addrs(host, port)
-                        .await
-                        .ok()
-                        .map(|mut socket_addresses| {
-                            socket_addresses
-                                .find_map(|addr| connections.node_for_address(&addr.to_string()))
-                        })
-                        .unwrap_or(None);
-                    addrs_and_conns.push((addr, conn));
-                    addrs_and_conns
+                        // If it's a DNS endpoint, it could have been stored in the existing connections vector using the resolved IP address instead of the DNS endpoint's name.
+                        // We shall check if a connection is already exists under the resolved IP name.
+                        let Some((host, port)) = get_host_and_port_from_addr(addr) else {
+                            addrs_and_conns.push((addr, None));
+                            return addrs_and_conns;
+                        };
+                        let conn = get_socket_addrs(host, port)
+                            .await
+                            .ok()
+                            .map(|mut socket_addresses| {
+                                socket_addresses.find_map(|addr| {
+                                    inner
+                                        .conn_lock
+                                        .read()
+                                        .expect(MUTEX_READ_ERR)
+                                        .node_for_address(&addr.to_string())
+                                })
+                            })
+                            .unwrap_or(None);
+                        addrs_and_conns.push((addr, conn));
+                        addrs_and_conns
+                    }
                 },
             )
             .await;
@@ -1800,10 +1814,9 @@ where
             )
             .await;
 
-        drop(read_guard);
         info!("refresh_slots found nodes:\n{new_connections}");
         // Replace the current slot map and connection vector with the new ones
-        let mut write_guard = inner.conn_lock.write().await;
+        let mut write_guard = inner.conn_lock.write().expect(MUTEX_WRITE_ERR);
         *write_guard = ConnectionsContainer::new(
             new_slots,
             new_connections,
@@ -1820,17 +1833,6 @@ where
         response_policy: Option<ResponsePolicy>,
     ) -> OperationResult {
         trace!("execute_on_multiple_nodes");
-        let connections_container = core.conn_lock.read().await;
-        if connections_container.is_empty() {
-            return OperationResult::Err((
-                OperationTarget::FanOut,
-                (
-                    ErrorKind::AllConnectionsUnavailable,
-                    "No connections found for multi-node operation",
-                )
-                    .into(),
-            ));
-        }
 
         // This function maps the connections to senders & receivers of one-shot channels, and the receivers are mapped to `PendingRequest`s.
         // This allows us to pass the new `PendingRequest`s to `try_request`, while letting `execute_on_multiple_nodes` wait on the receivers
@@ -1878,34 +1880,47 @@ where
                 })
                 .unzip()
         }
-
-        let (receivers, requests): (Vec<_>, Vec<_>) = match routing {
-            MultipleNodeRoutingInfo::AllNodes => into_channels(
-                connections_container
-                    .all_node_connections()
-                    .map(|tuple| Some((cmd.clone(), tuple))),
-            ),
-            MultipleNodeRoutingInfo::AllMasters => into_channels(
-                connections_container
-                    .all_primary_connections()
-                    .map(|tuple| Some((cmd.clone(), tuple))),
-            ),
-            MultipleNodeRoutingInfo::MultiSlot((slots, _)) => {
-                into_channels(slots.iter().map(|(route, indices)| {
-                    connections_container
-                        .connection_for_route(route)
-                        .map(|tuple| {
-                            let new_cmd = crate::cluster_routing::command_for_multi_slot_indices(
-                                cmd.as_ref(),
-                                indices.iter(),
-                            );
-                            (Arc::new(new_cmd), tuple)
-                        })
-                }))
+        let (receivers, requests): (Vec<_>, Vec<_>);
+        {
+            let connections_container = core.conn_lock.read().expect(MUTEX_READ_ERR);
+            if connections_container.is_empty() {
+                return OperationResult::Err((
+                    OperationTarget::FanOut,
+                    (
+                        ErrorKind::AllConnectionsUnavailable,
+                        "No connections found for multi-node operation",
+                    )
+                        .into(),
+                ));
             }
-        };
 
-        drop(connections_container);
+            (receivers, requests) = match routing {
+                MultipleNodeRoutingInfo::AllNodes => into_channels(
+                    connections_container
+                        .all_node_connections()
+                        .map(|tuple| Some((cmd.clone(), tuple))),
+                ),
+                MultipleNodeRoutingInfo::AllMasters => into_channels(
+                    connections_container
+                        .all_primary_connections()
+                        .map(|tuple| Some((cmd.clone(), tuple))),
+                ),
+                MultipleNodeRoutingInfo::MultiSlot((slots, _)) => {
+                    into_channels(slots.iter().map(|(route, indices)| {
+                        connections_container
+                            .connection_for_route(route)
+                            .map(|tuple| {
+                                let new_cmd =
+                                    crate::cluster_routing::command_for_multi_slot_indices(
+                                        cmd.as_ref(),
+                                        indices.iter(),
+                                    );
+                                (Arc::new(new_cmd), tuple)
+                            })
+                    }))
+                }
+            };
+        }
         core.pending_requests
             .lock()
             .unwrap()
@@ -2002,14 +2017,16 @@ where
         core: Core<C>,
         cmd: Option<Arc<Cmd>>,
     ) -> RedisResult<(String, C)> {
-        let read_guard = core.conn_lock.read().await;
         let mut asking = false;
 
         let conn_check = match routing {
             InternalSingleNodeRouting::Redirect {
                 redirect: Redirect::Moved(moved_addr),
                 ..
-            } => read_guard
+            } => core
+                .conn_lock
+                .read()
+                .expect(MUTEX_READ_ERR)
                 .connection_for_address(moved_addr.as_str())
                 .map_or(
                     ConnectionCheck::OnlyAddress(moved_addr),
@@ -2020,35 +2037,43 @@ where
                 ..
             } => {
                 asking = true;
-                read_guard.connection_for_address(ask_addr.as_str()).map_or(
-                    ConnectionCheck::OnlyAddress(ask_addr),
-                    ConnectionCheck::Found,
-                )
+                core.conn_lock
+                    .read()
+                    .expect(MUTEX_READ_ERR)
+                    .connection_for_address(ask_addr.as_str())
+                    .map_or(
+                        ConnectionCheck::OnlyAddress(ask_addr),
+                        ConnectionCheck::Found,
+                    )
             }
             InternalSingleNodeRouting::SpecificNode(route) => {
-                match read_guard.connection_for_route(&route) {
-                    Some((conn, address)) => ConnectionCheck::Found((conn, address)),
-                    None => {
-                        // No connection is found for the given route:
-                        // - For key-based commands, attempt redirection to a random node,
-                        //   hopefully to be redirected afterwards by a MOVED error.
-                        // - For non-key-based commands, avoid attempting redirection to a random node
-                        //   as it wouldn't result in MOVED hints and can lead to unwanted results
-                        //   (e.g., sending management command to a different node than the user asked for); instead, raise the error.
-                        let routable_cmd = cmd.and_then(|cmd| Routable::command(&*cmd));
-                        if routable_cmd.is_some()
-                            && !RoutingInfo::is_key_routing_command(&routable_cmd.unwrap())
-                        {
-                            return Err((
-                                ErrorKind::ConnectionNotFoundForRoute,
-                                "Requested connection not found for route",
-                                format!("{route:?}"),
-                            )
-                                .into());
-                        } else {
-                            warn!("No connection found for route `{route:?}`. Attempting redirection to a random node.");
-                            ConnectionCheck::RandomConnection
-                        }
+                if let Some((conn, address)) = core
+                    .conn_lock
+                    .read()
+                    .expect(MUTEX_READ_ERR)
+                    .connection_for_route(&route)
+                {
+                    ConnectionCheck::Found((conn, address))
+                } else {
+                    // No connection is found for the given route:
+                    // - For key-based commands, attempt redirection to a random node,
+                    //   hopefully to be redirected afterwards by a MOVED error.
+                    // - For non-key-based commands, avoid attempting redirection to a random node
+                    //   as it wouldn't result in MOVED hints and can lead to unwanted results
+                    //   (e.g., sending management command to a different node than the user asked for); instead, raise the error.
+                    let routable_cmd = cmd.and_then(|cmd| Routable::command(&*cmd));
+                    if routable_cmd.is_some()
+                        && !RoutingInfo::is_key_routing_command(&routable_cmd.unwrap())
+                    {
+                        return Err((
+                            ErrorKind::ConnectionNotFoundForRoute,
+                            "Requested connection not found for route",
+                            format!("{route:?}"),
+                        )
+                            .into());
+                    } else {
+                        warn!("No connection found for route `{route:?}`. Attempting redirection to a random node.");
+                        ConnectionCheck::RandomConnection
                     }
                 }
             }
@@ -2057,7 +2082,12 @@ where
                 return Ok((address, conn.await));
             }
             InternalSingleNodeRouting::ByAddress(address) => {
-                if let Some((address, conn)) = read_guard.connection_for_address(&address) {
+                let conn_option = core
+                    .conn_lock
+                    .read()
+                    .expect(MUTEX_READ_ERR)
+                    .connection_for_address(&address);
+                if let Some((address, conn)) = conn_option {
                     return Ok((address, conn.await));
                 } else {
                     return Err((
@@ -2069,7 +2099,6 @@ where
                 }
             }
         };
-        drop(read_guard);
 
         let (address, mut conn) = match conn_check {
             ConnectionCheck::Found((address, connection)) => (address, connection.await),
@@ -2091,7 +2120,7 @@ where
                 {
                     Ok(node) => {
                         let connection_clone = node.user_connection.conn.clone().await;
-                        let connections = core.conn_lock.read().await;
+                        let connections = core.conn_lock.read().expect(MUTEX_READ_ERR);
                         let address = connections.replace_or_add_connection_for_address(addr, node);
                         drop(connections);
                         (address, connection_clone)
@@ -2102,23 +2131,23 @@ where
                 }
             }
             ConnectionCheck::RandomConnection => {
-                let read_guard = core.conn_lock.read().await;
-                read_guard
-                    .random_connections(1, ConnectionType::User)
-                    .and_then(|mut random_connections| {
-                        random_connections.next().map(
-                            |(random_address, random_conn_future)| async move {
-                                (random_address, random_conn_future.await)
-                            },
-                        )
-                    })
-                    .ok_or_else(|| {
-                        RedisError::from((
-                            ErrorKind::AllConnectionsUnavailable,
-                            "No random connection found",
-                        ))
-                    })?
-                    .await
+                let random_conn = core
+                    .conn_lock
+                    .read()
+                    .expect(MUTEX_READ_ERR)
+                    .random_connections(1, ConnectionType::User);
+                let (random_address, random_conn_future) =
+                    match random_conn.and_then(|conn_iter| conn_iter.into_iter().next()) {
+                        Some((address, future)) => (address, future),
+                        None => {
+                            return Err(RedisError::from((
+                                ErrorKind::AllConnectionsUnavailable,
+                                "No random connection found",
+                            )));
+                        }
+                    };
+
+                (random_address, random_conn_future.await)
             }
         };
 
@@ -2173,12 +2202,19 @@ where
         address: String,
         retry: u32,
     ) -> OperationResult {
-        let is_primary = core.conn_lock.read().await.is_primary(&address);
+        let is_primary = core
+            .conn_lock
+            .read()
+            .expect(MUTEX_READ_ERR)
+            .is_primary(&address);
 
         if !is_primary {
             // If the connection is a replica, remove the connection and retry.
             // The connection will be established again on the next call to refresh slots once the replica is no longer in loading state.
-            core.conn_lock.read().await.remove_node(&address);
+            core.conn_lock
+                .read()
+                .expect(MUTEX_READ_ERR)
+                .remove_node(&address);
         } else {
             // If the connection is primary, just sleep and retry
             let sleep_duration = core.cluster_params.retry_params.wait_time_for_retry(retry);
@@ -2446,7 +2482,6 @@ where
 async fn calculate_topology_from_random_nodes<'a, C>(
     inner: &Core<C>,
     num_of_nodes_to_query: usize,
-    read_guard: &tokio::sync::RwLockReadGuard<'a, ConnectionsContainer<C>>,
     curr_retry: usize,
 ) -> (
     RedisResult<(
@@ -2458,8 +2493,11 @@ async fn calculate_topology_from_random_nodes<'a, C>(
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
 {
-    let requested_nodes = if let Some(random_conns) =
-        read_guard.random_connections(num_of_nodes_to_query, ConnectionType::PreferManagement)
+    let requested_nodes = if let Some(random_conns) = inner
+        .conn_lock
+        .read()
+        .expect(MUTEX_READ_ERR)
+        .random_connections(num_of_nodes_to_query, ConnectionType::PreferManagement)
     {
         random_conns
     } else {
@@ -2472,7 +2510,7 @@ where
         );
     };
     let topology_join_results =
-        futures::future::join_all(requested_nodes.map(|(addr, conn)| async move {
+        futures::future::join_all(requested_nodes.into_iter().map(|(addr, conn)| async move {
             let mut conn: C = conn.await;
             let res = conn.req_packed_command(&slot_cmd()).await;
             (addr, res)
