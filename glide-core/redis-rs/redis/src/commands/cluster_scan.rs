@@ -1,7 +1,7 @@
 use crate::aio::ConnectionLike;
 use crate::cluster_async::{
     ClusterConnInner, Connect, Core, InternalRoutingInfo, InternalSingleNodeRouting, RefreshPolicy,
-    Response,
+    Response, MUTEX_READ_ERR,
 };
 use crate::cluster_routing::SlotAddr;
 use crate::cluster_topology::SLOT_SIZE;
@@ -385,7 +385,9 @@ where
         }
     }
     async fn are_all_slots_covered(&self) -> bool {
-        ClusterConnInner::<C>::check_if_all_slots_covered(&self.conn_lock.read().await.slot_map)
+        ClusterConnInner::<C>::check_if_all_slots_covered(
+            &self.conn_lock.read().expect(MUTEX_READ_ERR).slot_map,
+        )
     }
     async fn refresh_if_topology_changed(&self) {
         ClusterConnInner::check_topology_and_refresh_if_diff(

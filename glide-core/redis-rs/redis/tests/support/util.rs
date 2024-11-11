@@ -1,4 +1,7 @@
 use std::collections::HashMap;
+use versions::Versioning;
+
+use super::TestContext;
 
 #[macro_export]
 macro_rules! assert_args {
@@ -20,4 +23,13 @@ pub fn parse_client_info(client_info: &str) -> HashMap<String, String> {
     }
 
     res
+}
+
+pub fn version_greater_or_equal(ctx: &TestContext, version: &str) -> bool {
+    // Get the server version
+    let (major, minor, patch) = ctx.get_version();
+    let server_version = Versioning::new(format!("{major}.{minor}.{patch}")).unwrap();
+    let compared_version = Versioning::new(version).unwrap();
+    // Compare server version with the specified version
+    server_version >= compared_version
 }
