@@ -20,11 +20,10 @@ use tracing::info;
 // Exponential backoff constants for retrying a slot refresh
 /// The default number of refresh topology retries in the same call
 pub const DEFAULT_NUMBER_OF_REFRESH_SLOTS_RETRIES: usize = 3;
-/// The default maximum interval between two retries of the same call for topology refresh
-pub const DEFAULT_REFRESH_SLOTS_RETRY_MAX_INTERVAL: Duration = Duration::from_secs(1);
-/// The default initial interval for retrying topology refresh
-pub const DEFAULT_REFRESH_SLOTS_RETRY_INITIAL_INTERVAL: Duration = Duration::from_millis(500);
-
+/// The default base duration for retrying topology refresh
+pub const DEFAULT_REFRESH_SLOTS_RETRY_BASE_DURATION_MILLIS: u64 = 500;
+/// The default base factor for retrying topology refresh
+pub const DEFAULT_REFRESH_SLOTS_RETRY_BASE_FACTOR: f64 = 1.5;
 // Constants for the intervals between two independent consecutive refresh slots calls
 /// The default wait duration between two consecutive refresh slots calls
 #[cfg(feature = "cluster-async")]

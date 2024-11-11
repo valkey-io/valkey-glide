@@ -33,7 +33,11 @@ use crate::{
     client::GlideConnectionOptions,
     cluster_routing::{Routable, RoutingInfo},
     cluster_slotmap::SlotMap,
-    cluster_topology::SLOT_SIZE,
+    cluster_topology::{
+        calculate_topology, get_slot, SlotRefreshState, DEFAULT_NUMBER_OF_REFRESH_SLOTS_RETRIES,
+        DEFAULT_REFRESH_SLOTS_RETRY_BASE_DURATION_MILLIS, DEFAULT_REFRESH_SLOTS_RETRY_BASE_FACTOR,
+        SLOT_SIZE,
+    },
     cmd,
     commands::cluster_scan::{cluster_scan, ClusterScanArgs, ObjectType, ScanStateRC},
     FromRedisValue, InfoDict, ToRedisArgs,
@@ -69,10 +73,6 @@ use crate::{
         self, MultipleNodeRoutingInfo, Redirect, ResponsePolicy, Route, SingleNodeRoutingInfo,
         SlotAddr,
     },
-    cluster_topology::{
-        calculate_topology, get_slot, SlotRefreshState, DEFAULT_NUMBER_OF_REFRESH_SLOTS_RETRIES,
-        DEFAULT_REFRESH_SLOTS_RETRY_INITIAL_INTERVAL, DEFAULT_REFRESH_SLOTS_RETRY_MAX_INTERVAL,
-    },
     connection::{PubSubSubscriptionInfo, PubSubSubscriptionKind},
     push_manager::PushInfo,
     Cmd, ConnectionInfo, ErrorKind, IntoConnectionInfo, RedisError, RedisFuture, RedisResult,
@@ -84,9 +84,10 @@ use std::time::Duration;
 #[cfg(feature = "tokio-comp")]
 use async_trait::async_trait;
 #[cfg(feature = "tokio-comp")]
-use backoff_tokio::future::retry;
+use tokio_retry2::strategy::{jitter_range, ExponentialFactorBackoff};
 #[cfg(feature = "tokio-comp")]
-use backoff_tokio::{Error as BackoffError, ExponentialBackoff};
+use tokio_retry2::{Retry, RetryError};
+
 #[cfg(feature = "tokio-comp")]
 use tokio::{sync::Notify, time::timeout};
 
@@ -1518,16 +1519,24 @@ where
 
         let mut res = Ok(());
         if !skip_slots_refresh {
-            let retry_strategy = ExponentialBackoff {
-                initial_interval: DEFAULT_REFRESH_SLOTS_RETRY_INITIAL_INTERVAL,
-                max_interval: DEFAULT_REFRESH_SLOTS_RETRY_MAX_INTERVAL,
-                max_elapsed_time: None,
-                ..Default::default()
-            };
+            let retry_strategy = ExponentialFactorBackoff::from_millis(
+                DEFAULT_REFRESH_SLOTS_RETRY_BASE_DURATION_MILLIS,
+                DEFAULT_REFRESH_SLOTS_RETRY_BASE_FACTOR,
+            )
+            .map(jitter_range(0.8, 1.2))
+            .take(DEFAULT_NUMBER_OF_REFRESH_SLOTS_RETRIES);
             let retries_counter = AtomicUsize::new(0);
-            res = retry(retry_strategy, || {
+            res = Retry::spawn(retry_strategy, || async {
                 let curr_retry = retries_counter.fetch_add(1, atomic::Ordering::Relaxed);
                 Self::refresh_slots(inner.clone(), curr_retry)
+                    .await
+                    .map_err(|err| {
+                        if err.kind() == ErrorKind::AllConnectionsUnavailable {
+                            RetryError::permanent(err)
+                        } else {
+                            RetryError::transient(err)
+                        }
+                    })
             })
             .await;
         }
@@ -1706,26 +1715,13 @@ where
         false
     }
 
-    async fn refresh_slots(
-        inner: Arc<InnerCore<C>>,
-        curr_retry: usize,
-    ) -> Result<(), BackoffError<RedisError>> {
+    async fn refresh_slots(inner: Arc<InnerCore<C>>, curr_retry: usize) -> RedisResult<()> {
         // Update the slot refresh last run timestamp
         let now = SystemTime::now();
         let mut last_run_wlock = inner.slot_refresh_state.last_run.write().await;
         *last_run_wlock = Some(now);
         drop(last_run_wlock);
-        Self::refresh_slots_inner(inner, curr_retry)
-            .await
-            .map_err(|err| {
-                if curr_retry > DEFAULT_NUMBER_OF_REFRESH_SLOTS_RETRIES
-                    || err.kind() == ErrorKind::AllConnectionsUnavailable
-                {
-                    BackoffError::Permanent(err)
-                } else {
-                    BackoffError::from(err)
-                }
-            })
+        Self::refresh_slots_inner(inner, curr_retry).await
     }
 
     pub(crate) fn check_if_all_slots_covered(slot_map: &SlotMap) -> bool {
