@@ -100,16 +100,7 @@ jobs:
             - name: Run tests
               working-directory: ./glide-core
               # TODO remove the concurrency limit after we fix test flakyness.
-              run:
-                  # Sort versions and get the latest version between the current version and 7.0, if the latest version is 7.0, skip the test.
-                  |
-                  versions_to_compare=$(printf "%s\n" "${{ matrix.engine.version }}" "7.0" | sort -V)
-                  lt_version=$(echo "$versions_to_comare" | tail -n1)
-                  if [[ "7.0" == "$lt_version" ]]; then
-                      cargo test --all-features --release -- --test-threads=1  --skip valkey-gte-7-2
-                  else
-                      cargo test --all-features --release -- --test-threads=1
-                  fi
+              run: cargo test --all-features --release -- --test-threads=1
 
             - name: Run logger tests
               working-directory: ./logger_core
