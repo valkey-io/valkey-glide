@@ -93,10 +93,11 @@ use tokio::{sync::Notify, time::timeout};
 use dispose::{Disposable, Dispose};
 use futures::{future::BoxFuture, prelude::*, ready};
 use pin_project_lite::pin_project;
+use std::sync::RwLock as StdRwLock;
 use tokio::sync::{
     mpsc,
     oneshot::{self, Receiver},
-    RwLock,
+    RwLock as TokioRwLock,
 };
 use tracing::{debug, info, trace, warn};
 
@@ -407,13 +408,13 @@ type ConnectionsContainer<C> =
     self::connections_container::ConnectionsContainer<ConnectionFuture<C>>;
 
 pub(crate) struct InnerCore<C> {
-    pub(crate) conn_lock: std::sync::RwLock<ConnectionsContainer<C>>,
+    pub(crate) conn_lock: StdRwLock<ConnectionsContainer<C>>,
     cluster_params: ClusterParams,
     pending_requests: Mutex<Vec<PendingRequest<C>>>,
     slot_refresh_state: SlotRefreshState,
     initial_nodes: Vec<ConnectionInfo>,
-    subscriptions_by_address: RwLock<HashMap<String, PubSubSubscriptionInfo>>,
-    unassigned_subscriptions: RwLock<PubSubSubscriptionInfo>,
+    subscriptions_by_address: TokioRwLock<HashMap<String, PubSubSubscriptionInfo>>,
+    unassigned_subscriptions: TokioRwLock<PubSubSubscriptionInfo>,
     glide_connection_options: GlideConnectionOptions,
 }
 
@@ -1043,7 +1044,7 @@ where
         let topology_checks_interval = cluster_params.topology_checks_interval;
         let slots_refresh_rate_limiter = cluster_params.slots_refresh_rate_limit;
         let inner = Arc::new(InnerCore {
-            conn_lock: std::sync::RwLock::new(ConnectionsContainer::new(
+            conn_lock: StdRwLock::new(ConnectionsContainer::new(
                 Default::default(),
                 connections,
                 cluster_params.read_from_replicas,
@@ -1053,14 +1054,14 @@ where
             pending_requests: Mutex::new(Vec::new()),
             slot_refresh_state: SlotRefreshState::new(slots_refresh_rate_limiter),
             initial_nodes: initial_nodes.to_vec(),
-            unassigned_subscriptions: RwLock::new(
+            unassigned_subscriptions: TokioRwLock::new(
                 if let Some(subs) = cluster_params.pubsub_subscriptions {
                     subs.clone()
                 } else {
                     PubSubSubscriptionInfo::new()
                 },
             ),
-            subscriptions_by_address: RwLock::new(Default::default()),
+            subscriptions_by_address: TokioRwLock::new(Default::default()),
             glide_connection_options,
         });
         let mut connection = ClusterConnInner {
@@ -1595,14 +1596,13 @@ where
                 address_subs.retain(|kind, channels_patterns| {
                     channels_patterns.retain(|channel_pattern| {
                         let new_slot = get_slot(channel_pattern);
-                        let mut valid = false;
-                        if let Some((new_address, _)) = conns_read_guard
+                        let valid = if let Some((new_address, _)) = conns_read_guard
                             .connection_for_route(&Route::new(new_slot, SlotAddr::Master))
                         {
-                            if *new_address == *current_address {
-                                valid = true;
-                            }
-                        }
+                            *new_address == *current_address
+                        } else {
+                            false
+                        };
                         // no new address or new address differ - move to unassigned and store this address for connection reset
                         if !valid {
                             // need to drop the original connection for clearing the subscription in the server, avoiding possible double-receivers
@@ -1669,7 +1669,7 @@ where
     /// topology view differs from the one currently stored in the connection manager.
     /// Returns true if change was detected, otherwise false.
     async fn check_for_topology_diff(inner: Arc<InnerCore<C>>) -> bool {
-        let num_of_nodes: usize = inner.conn_lock.read().expect(MUTEX_READ_ERR).len();
+        let num_of_nodes = inner.conn_lock.read().expect(MUTEX_READ_ERR).len();
         // TODO: Starting from Rust V1.67, integers has logarithms support.
         // When we no longer need to support Rust versions < 1.67, remove fast_math and transition to the ilog2 function.
         let num_of_nodes_to_query =
@@ -1767,12 +1767,9 @@ where
                         }
                         // If it's a DNS endpoint, it could have been stored in the existing connections vector using the resolved IP address instead of the DNS endpoint's name.
                         // We shall check if a connection is already exists under the resolved IP name.
-                        let (host, port) = match get_host_and_port_from_addr(addr) {
-                            Some((host, port)) => (host, port),
-                            None => {
-                                addrs_and_conns.push((addr, None));
-                                return addrs_and_conns;
-                            }
+                        let Some((host, port)) = get_host_and_port_from_addr(addr) else {
+                            addrs_and_conns.push((addr, None));
+                            return addrs_and_conns;
                         };
                         let conn = get_socket_addrs(host, port)
                             .await
@@ -2050,34 +2047,33 @@ where
                     )
             }
             InternalSingleNodeRouting::SpecificNode(route) => {
-                match core
+                if let Some((conn, address)) = core
                     .conn_lock
                     .read()
                     .expect(MUTEX_READ_ERR)
                     .connection_for_route(&route)
                 {
-                    Some((conn, address)) => ConnectionCheck::Found((conn, address)),
-                    None => {
-                        // No connection is found for the given route:
-                        // - For key-based commands, attempt redirection to a random node,
-                        //   hopefully to be redirected afterwards by a MOVED error.
-                        // - For non-key-based commands, avoid attempting redirection to a random node
-                        //   as it wouldn't result in MOVED hints and can lead to unwanted results
-                        //   (e.g., sending management command to a different node than the user asked for); instead, raise the error.
-                        let routable_cmd = cmd.and_then(|cmd| Routable::command(&*cmd));
-                        if routable_cmd.is_some()
-                            && !RoutingInfo::is_key_routing_command(&routable_cmd.unwrap())
-                        {
-                            return Err((
-                                ErrorKind::ConnectionNotFoundForRoute,
-                                "Requested connection not found for route",
-                                format!("{route:?}"),
-                            )
-                                .into());
-                        } else {
-                            warn!("No connection found for route `{route:?}`. Attempting redirection to a random node.");
-                            ConnectionCheck::RandomConnection
-                        }
+                    ConnectionCheck::Found((conn, address))
+                } else {
+                    // No connection is found for the given route:
+                    // - For key-based commands, attempt redirection to a random node,
+                    //   hopefully to be redirected afterwards by a MOVED error.
+                    // - For non-key-based commands, avoid attempting redirection to a random node
+                    //   as it wouldn't result in MOVED hints and can lead to unwanted results
+                    //   (e.g., sending management command to a different node than the user asked for); instead, raise the error.
+                    let routable_cmd = cmd.and_then(|cmd| Routable::command(&*cmd));
+                    if routable_cmd.is_some()
+                        && !RoutingInfo::is_key_routing_command(&routable_cmd.unwrap())
+                    {
+                        return Err((
+                            ErrorKind::ConnectionNotFoundForRoute,
+                            "Requested connection not found for route",
+                            format!("{route:?}"),
+                        )
+                            .into());
+                    } else {
+                        warn!("No connection found for route `{route:?}`. Attempting redirection to a random node.");
+                        ConnectionCheck::RandomConnection
                     }
                 }
             }
