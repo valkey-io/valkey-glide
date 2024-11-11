@@ -16,7 +16,7 @@ use std::{
     ffi::{c_void, CString},
     mem,
     os::raw::{c_char, c_double, c_long, c_ulong},
-    ptr
+    ptr,
 };
 use tokio::runtime::Builder;
 use tokio::runtime::Runtime;
