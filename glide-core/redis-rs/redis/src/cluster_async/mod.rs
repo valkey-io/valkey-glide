@@ -2276,7 +2276,7 @@ where
                     .conn_lock
                     .read()
                     .expect(MUTEX_READ_ERR)
-                    .connection_for_route_with_params(&route, Some(core.cluster_params.clone()))
+                    .connection_for_route(&route)
                 {
                     ConnectionCheck::Found((conn, address))
                 } else {

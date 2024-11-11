@@ -206,7 +206,7 @@ mod cluster_async {
     #[cfg(feature = "valkey-gte-7-2")]
     #[tokio::test]
     async fn test_routing_by_slot_to_replica_with_az_affinity_strategy_to_all_replicas() {
-        let replica_num: u16 = 3;
+        let replica_num: u16 = 4;
         let primaries_num: u16 = 3;
         let cluster =
             TestClusterContext::new((replica_num * primaries_num) + primaries_num, replica_num);
@@ -260,6 +260,7 @@ mod cluster_async {
             .unwrap();
 
         let info_result = redis::from_owned_redis_value::<HashMap<String, String>>(info).unwrap();
+        println!("{:?}", info_result);
         let get_cmdstat = format!("cmdstat_get:calls={}", n);
         let client_az = format!("availability_zone:{}", az);
 

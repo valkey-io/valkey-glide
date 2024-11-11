@@ -2,7 +2,6 @@ use super::{
     connections_container::{ClusterNode, ConnectionDetails},
     Connect,
 };
-use crate::cmd;
 use crate::FromRedisValue;
 use crate::InfoDict;
 use crate::{
@@ -12,6 +11,7 @@ use crate::{
     cluster_client::ClusterParams,
     ErrorKind, RedisError, RedisResult,
 };
+use crate::{cluster_slotmap::ReadFromReplicaStrategy, cmd};
 use std::net::SocketAddr;
 
 use futures::prelude::*;
@@ -348,8 +348,8 @@ async fn setup_user_connection<C>(
 where
     C: ConnectionLike + Connect + Send + 'static,
 {
-    let read_from_replicas = params.read_from_replicas
-        != crate::cluster_slotmap::ReadFromReplicaStrategy::AlwaysFromPrimary;
+    let read_from_replicas =
+        params.read_from_replicas != ReadFromReplicaStrategy::AlwaysFromPrimary;
     let connection_timeout = params.connection_timeout;
     check_connection(&mut conn_details.conn, connection_timeout).await?;
     if read_from_replicas {
@@ -359,7 +359,12 @@ where
             .await?;
     }
 
-    update_az_from_info(conn_details).await?;
+    if matches!(
+        params.read_from_replicas,
+        ReadFromReplicaStrategy::AZAffinity(_)
+    ) {
+        update_az_from_info(conn_details).await?;
+    }
     Ok(())
 }
 

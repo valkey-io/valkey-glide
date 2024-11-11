@@ -99,8 +99,7 @@ jobs:
 
             - name: Run tests
               working-directory: ./glide-core
-              # TODO remove the concurrency limit after we fix test flakyness.
-              run: cargo test --all-features --release -- --test-threads=1
+              run: cargo test --all-features --release -- --test-threads=1 # TODO remove the concurrency limit after we fix test flakyness.
 
             - name: Run logger tests
               working-directory: ./logger_core
