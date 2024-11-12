@@ -213,7 +213,12 @@ async def mget(
     Retrieves the JSON values at the specified `path` stored at multiple `keys`.
 
     Note:
-        When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+        In cluster mode, if keys in `keyValueMap` map to different hash slots, the command
+        will be split across these slots and executed separately for each. This means the command
+        is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+        call will return the first encountered error, even though some requests may have succeeded
+        while others did not. If this behavior impacts your application logic, consider splitting
+        the request into sub-requests per slot to ensure atomicity.
     Args:
         client (TGlideClient): The Redis client to execute the command.
         keys (List[TEncodable]): A list of keys for the JSON documents.
@@ -244,7 +249,7 @@ async def mget(
     if path:
         args.append(path)
 
-    return cast(List[Optional[bytes]], await client.custom_command(args))
+    return cast(TJsonResponse[Optional[bytes]], await client.custom_command(args))
 
 
 async def arrappend(
