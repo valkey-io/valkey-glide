@@ -339,8 +339,3 @@ export interface FtAggregateApply {
     /** The new property name to store the result of apply. This name can be referenced by further operations down the pipeline. */
     name: GlideString;
 }
-
-export interface FtProfileOptions {
-    queryType: "AGGREGATE" | "SEARCH";
-    limited?: boolean;
-}
