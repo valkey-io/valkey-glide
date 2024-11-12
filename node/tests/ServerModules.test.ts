@@ -105,8 +105,9 @@ describe("Server Module Tests", () => {
                 // binary buffer test
                 result = await GlideJson.get(client, Buffer.from(key), {
                     path: Buffer.from("."),
+                    decoder: Decoder.Bytes,
                 });
-                expect(JSON.parse(result.toString())).toEqual(jsonValue);
+                expect(result).toEqual(Buffer.from(JSON.stringify(jsonValue)));
 
                 expect(
                     await GlideJson.set(
@@ -1276,8 +1277,9 @@ describe("Server Module Tests", () => {
                 expect(
                     await GlideJson.resp(client, Buffer.from(key), {
                         path: Buffer.from("..a"),
+                        decoder: Decoder.Bytes,
                     }),
-                ).toEqual(["[", 1, 2, 3]);
+                ).toEqual([Buffer.from("["), 1, 2, 3]);
             });
 
             it("json.arrtrim tests", async () => {
