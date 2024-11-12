@@ -237,6 +237,15 @@ class TestJson:
         expected_result = [b"2.5", b"4"]
         assert result == expected_result
 
+        # JSONPath that exists in only one of the keys
+        result = await json.mget(
+            glide_client,
+            [key1, key2],
+            "$.b.c",
+        )
+        expected_result = [b"[true]", b"[]"]
+        assert result == expected_result
+
         # Legacy path that exists in only one of the keys
         result = await json.mget(
             glide_client,
@@ -263,13 +272,21 @@ class TestJson:
         )
         assert result == [None, None]
 
-        # One key doesn't exist
+        # JSONPath one key doesn't exist
         result = await json.mget(
             glide_client,
             [key1, "{non_existing_key}"],
             "$.a",
         )
         assert result == [b"[1.0]", None]
+
+        # Legacy path one key doesn't exist
+        result = await json.mget(
+            glide_client,
+            [key1, "{non_existing_key}"],
+            ".a",
+        )
+        assert result == [b"1.0", None]
 
         # Both keys don't exist
         result = await json.mget(

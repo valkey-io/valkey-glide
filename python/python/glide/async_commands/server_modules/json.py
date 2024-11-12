@@ -227,7 +227,6 @@ async def mget(
 
     Returns:
         List[Optional[bytes]]:
-            List[Optional[bytes]]:
             For JSONPath (`path` starts with `$`):
                 Returns a list of byte representations of the values found at the given path for each key.
                 If `path` does not exist within the key, the entry will be an empty array.
