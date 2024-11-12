@@ -30,6 +30,7 @@
 * Node: Added `FT.CREATE` ([#2501](https://github.com/valkey-io/valkey-glide/pull/2501))
 * Node: Added `FT.INFO` ([#2540](https://github.com/valkey-io/valkey-glide/pull/2540))
 * Node: Added `FT.AGGREGATE` ([#2554](https://github.com/valkey-io/valkey-glide/pull/2554))
+* Node: Added `FT.PROFILE` ([#2633](https://github.com/valkey-io/valkey-glide/pull/2633))
 * Java: Added `JSON.DEBUG` ([#2520](https://github.com/valkey-io/valkey-glide/pull/2520))
 * Java: Added `JSON.ARRINSERT` and `JSON.ARRLEN` ([#2476](https://github.com/valkey-io/valkey-glide/pull/2476))
 * Java: Added `JSON.ARRINDEX` ([#2546](https://github.com/valkey-io/valkey-glide/pull/2546))
