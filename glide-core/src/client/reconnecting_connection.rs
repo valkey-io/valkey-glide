@@ -17,7 +17,7 @@ use telemetrylib::Telemetry;
 use tokio::sync::{mpsc, Notify};
 use tokio::task;
 use tokio::time::timeout;
-use tokio_retry::Retry;
+use tokio_retry2::{Retry, RetryError};
 
 use super::{run_with_timeout, DEFAULT_CONNECTION_ATTEMPT_TIMEOUT};
 
@@ -121,7 +121,11 @@ async fn create_connection(
             TokioDisconnectNotifier::new(),
         )),
     };
-    let action = || get_multiplexed_connection(client, &connection_options);
+    let action = || async {
+        get_multiplexed_connection(client, &connection_options)
+            .await
+            .map_err(RetryError::transient)
+    };
 
     match Retry::spawn(retry_strategy.get_iterator(), action).await {
         Ok(connection) => {

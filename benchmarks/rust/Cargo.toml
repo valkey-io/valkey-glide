@@ -15,7 +15,6 @@ redis = { path = "../../glide-core/redis-rs/redis", features = ["aio"] }
 futures = "0.3.28"
 rand = "0.8.5"
 itoa = "1.0.6"
-futures-time = "^3.0.0"
 clap = { version = "4.3.8", features = ["derive"] }
 chrono = "0.4.26"
 serde_json = "1.0.99"

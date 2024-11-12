@@ -8,7 +8,6 @@ use crate::cluster_slotmap::{ReadFromReplicaStrategy, SlotMap};
 use crate::{cluster::TlsMode, ErrorKind, RedisError, RedisResult, Value};
 #[cfg(all(feature = "cluster-async", not(feature = "tokio-comp")))]
 use async_std::sync::RwLock;
-use derivative::Derivative;
 use std::collections::{hash_map::DefaultHasher, HashMap};
 use std::hash::{Hash, Hasher};
 use std::sync::atomic::AtomicBool;
@@ -21,11 +20,10 @@ use tracing::info;
 // Exponential backoff constants for retrying a slot refresh
 /// The default number of refresh topology retries in the same call
 pub const DEFAULT_NUMBER_OF_REFRESH_SLOTS_RETRIES: usize = 3;
-/// The default maximum interval between two retries of the same call for topology refresh
-pub const DEFAULT_REFRESH_SLOTS_RETRY_MAX_INTERVAL: Duration = Duration::from_secs(1);
-/// The default initial interval for retrying topology refresh
-pub const DEFAULT_REFRESH_SLOTS_RETRY_INITIAL_INTERVAL: Duration = Duration::from_millis(500);
-
+/// The default base duration for retrying topology refresh
+pub const DEFAULT_REFRESH_SLOTS_RETRY_BASE_DURATION_MILLIS: u64 = 500;
+/// The default base factor for retrying topology refresh
+pub const DEFAULT_REFRESH_SLOTS_RETRY_BASE_FACTOR: f64 = 1.5;
 // Constants for the intervals between two independent consecutive refresh slots calls
 /// The default wait duration between two consecutive refresh slots calls
 #[cfg(feature = "cluster-async")]
@@ -58,16 +56,20 @@ impl SlotRefreshState {
     }
 }
 
-#[derive(Derivative)]
-#[derivative(PartialEq, Eq)]
 #[derive(Debug)]
 pub(crate) struct TopologyView {
     pub(crate) hash_value: TopologyHash,
-    #[derivative(PartialEq = "ignore")]
     pub(crate) nodes_count: u16,
-    #[derivative(PartialEq = "ignore")]
     slots_and_count: (u16, Vec<Slot>),
 }
+
+impl PartialEq for TopologyView {
+    fn eq(&self, other: &Self) -> bool {
+        self.hash_value == other.hash_value
+    }
+}
+
+impl Eq for TopologyView {}
 
 pub(crate) fn slot(key: &[u8]) -> u16 {
     crc16::State::<crc16::XMODEM>::calculate(key) % SLOT_SIZE
