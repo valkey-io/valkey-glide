@@ -178,6 +178,7 @@ class TestJson:
             await json.set(glide_client, key2, "$", OuterJson.dumps(json2_value)) == OK
         )
 
+        # Test with root JSONPath
         result = await json.mget(
             glide_client,
             [key1, key2],
@@ -189,6 +190,7 @@ class TestJson:
         ]
         assert result == expected_result
 
+        # Retrieves the full JSON objects from multiple keys.
         result = await json.mget(
             glide_client,
             [key1, key2],
@@ -208,6 +210,7 @@ class TestJson:
         expected_result = [b"[1.0]", b"[3.0]"]
         assert result == expected_result
 
+        # Retrieves the value of the 'b' field for multiple keys.
         result = await json.mget(
             glide_client,
             [key1, key2],
@@ -216,6 +219,7 @@ class TestJson:
         expected_result = [b'[{"a":1,"b":2.5,"c":true}]', b'[{"a":1,"b":4}]']
         assert result == expected_result
 
+        # Retrieves all values of 'b' fields using recursive path for multiple keys
         result = await json.mget(
             glide_client,
             [key1, key2],
@@ -224,12 +228,22 @@ class TestJson:
         expected_result = [b'[{"a":1,"b":2.5,"c":true},2.5]', b'[{"a":1,"b":4},4]']
         assert result == expected_result
 
+        # retrieves the value of the nested 'b.b' field for multiple keys
         result = await json.mget(
             glide_client,
             [key1, key2],
             ".b.b",
         )
         expected_result = [b"2.5", b"4"]
+        assert result == expected_result
+
+        # Legacy path that exists in only one of the keys
+        result = await json.mget(
+            glide_client,
+            [key1, key2],
+            ".b.c",
+        )
+        expected_result = [b"true", None]
         assert result == expected_result
 
         # JSONPath doesn't exist
@@ -249,7 +263,15 @@ class TestJson:
         )
         assert result == [None, None]
 
-        # Keys don't exist
+        # One key doesn't exist
+        result = await json.mget(
+            glide_client,
+            [key1, "{non_existing_key}"],
+            "$.a",
+        )
+        assert result == [b"[1.0]", None]
+
+        # Both keys don't exist
         result = await json.mget(
             glide_client,
             ["{non_existing_key}1", "{non_existing_key}2"],
