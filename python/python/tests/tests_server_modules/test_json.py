@@ -165,10 +165,8 @@ class TestJson:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_json_mget(self, glide_client: TGlideClient):
-        key = get_random_string(5)
-        key1 = f"{{{key}}}1"
-        key2 = f"{{{key}}}2"
-        # The prefix ensures that both keys hash to the same slot
+        key1 = get_random_string(5)
+        key2 = get_random_string(5)
 
         json1_value = {"a": 1.0, "b": {"a": 1, "b": 2.5, "c": True}}
         json2_value = {"a": 3.0, "b": {"a": 1, "b": 4}}
