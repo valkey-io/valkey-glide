@@ -219,30 +219,33 @@ async def mget(
         call will return the first encountered error, even though some requests may have succeeded
         while others did not. If this behavior impacts your application logic, consider splitting
         the request into sub-requests per slot to ensure atomicity.
+
     Args:
-        client (TGlideClient): The Redis client to execute the command.
+        client (TGlideClient): The client to execute the command.
         keys (List[TEncodable]): A list of keys for the JSON documents.
         path (Optional[TEncodable]): The path within the JSON documents. Default is root `$`.
 
     Returns:
         List[Optional[bytes]]:
+            List[Optional[bytes]]:
             For JSONPath (`path` starts with `$`):
-                Returns a list of byte representations of the values found at the given path for each key. If the path does not exist,
-                the entry will be an empty array.
-            For legacy path (`path` starts with `.`):
-                                Returns a string representation of the value at the specified path. If the path does not exist, the entry will be None.
-            If a key doesn't exist, the corresponding list element will also be `None`.
+                Returns a list of byte representations of the values found at the given path for each key.
+                If `path` does not exist within the key, the entry will be an empty array.
+            For legacy path (`path` doesn't starts with `$`):
+                Returns a list of byte representations of the values found at the given path for each key.
+                If `path` does not exist within the key, the entry will be None.
+            If a key doesn't exist, the corresponding list element will be None.
 
 
     Examples:
-        >>> from glide import json as redisJson
+        >>> from glide import json as glideJson
         >>> import json
-        >>> json_strs = await redisJson.mget(client, ["doc1", "doc2"], "$")
+        >>> json_strs = await glideJson.mget(client, ["doc1", "doc2"], "$")
         >>> [json.loads(js) for js in json_strs]  # Parse JSON strings to Python data
             [[{"a": 1.0, "b": 2}], [{"a": 2.0, "b": {"a": 3.0, "b" : 4.0}}]]  # JSON objects retrieved from keys `doc1` and `doc2`
-        >>> await redisJson.mget(client, ["doc1", "doc2"], "$.a")
+        >>> await glideJson.mget(client, ["doc1", "doc2"], "$.a")
             [b"[1.0]", b"[2.0]"]  # Returns values at path '$.a' for the JSON documents stored at `doc1` and `doc2`.
-        >>> await redisJson.mget(client, ["doc1"], "$.non_existing_path")
+        >>> await glideJson.mget(client, ["doc1"], "$.non_existing_path")
             [None]  # Returns an empty array since the path '$.non_existing_path' does not exist in the JSON document stored at `doc1`.
     """
     args = ["JSON.MGET"] + keys
