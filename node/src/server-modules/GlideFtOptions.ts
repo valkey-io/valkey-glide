@@ -138,8 +138,11 @@ export type FtAggregateOptions = {
         | FtAggregateSortBy
         | FtAggregateApply
     )[];
-    /** The key/value pairs can be referenced from within the query expression. */
-    params?: [GlideString, GlideString][];
+    /**
+     * Query parameters, which could be referenced in the query by `$` sign, followed by
+     * the parameter name.
+     */
+    params?: GlideRecord<GlideString>;
 } & (
     | {
           /** List of fields to load from the index. */
@@ -224,20 +227,21 @@ export interface FtAggregateApply {
     /** The new property name to store the result of apply. This name can be referenced by further operations down the pipeline. */
     name: GlideString;
 }
+
 /**
  * Represents the input options to be used in the FT.SEARCH command.
  * All fields in this class are optional inputs for FT.SEARCH.
  */
 export type FtSearchOptions = {
+    /** Query timeout in milliseconds. */
+    timeout?: number;
+
     /**
      * Add a field to be returned.
      * @param fieldIdentifier field name to return.
      * @param alias optional alias for the field name to return.
      */
     returnFields?: { fieldIdentifier: GlideString; alias?: GlideString }[];
-
-    /** Query timeout in milliseconds. */
-    timeout?: number;
 
     /**
      * Query parameters, which could be referenced in the query by `$` sign, followed by
