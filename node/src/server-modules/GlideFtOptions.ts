@@ -227,6 +227,7 @@ export interface FtAggregateApply {
     /** The new property name to store the result of apply. This name can be referenced by further operations down the pipeline. */
     name: GlideString;
 }
+
 /**
  * Represents the input options to be used in the FT.SEARCH command.
  * All fields in this class are optional inputs for FT.SEARCH.
@@ -269,73 +270,3 @@ export type FtSearchOptions = {
           limit?: never;
       }
 );
-
-/** A clause for limiting the number of retained records. */
-export interface FtAggregateLimit {
-    type: "LIMIT";
-    /** Starting point from which the records have to be retained. */
-    offset: number;
-    /** The total number of records to be retained. */
-    count: number;
-}
-
-/**
- * A clause for filtering the results using predicate expression relating to values in each result.
- * It is applied post query and relate to the current state of the pipeline.
- */
-export interface FtAggregateFilter {
-    type: "FILTER";
-    /** The expression to filter the results. */
-    expression: GlideString;
-}
-
-/** A clause for grouping the results in the pipeline based on one or more properties. */
-export interface FtAggregateGroupBy {
-    type: "GROUPBY";
-    /** The list of properties to be used for grouping the results in the pipeline. */
-    properties: GlideString[];
-    /** The list of functions that handles the group entries by performing multiple aggregate operations. */
-    reducers: FtAggregateReducer[];
-}
-
-/**
- * A clause for reducing the matching results in each group using a reduction function.
- * The matching results are reduced into a single record.
- */
-export interface FtAggregateReducer {
-    /** The reduction function name for the respective group. */
-    function: string;
-    /** The list of arguments for the reducer. */
-    args: GlideString[];
-    /** User defined property name for the reducer. */
-    name?: GlideString;
-}
-
-/** A clause for sorting the pipeline up until the point of SORTBY, using a list of properties. */
-export interface FtAggregateSortBy {
-    type: "SORTBY";
-    /** A list of sorting parameters for the sort operation. */
-    properties: FtAggregateSortProperty[];
-    /** The MAX value for optimizing the sorting, by sorting only for the n-largest elements. */
-    max?: number;
-}
-
-/** A single property for the {@link FtAggregateSortBy | SORTBY} clause. */
-export interface FtAggregateSortProperty {
-    /** The sorting parameter. */
-    property: GlideString;
-    /** The order for the sorting. */
-    order: SortOrder;
-}
-
-/**
- * A clause for applying a 1-to-1 transformation on one or more properties and stores the result
- * as a new property down the pipeline or replaces any property using this transformation.
- */
-export interface FtAggregateApply {
-    type: "APPLY";
-    /** The transformation expression. */
-    expression: GlideString;
-    /** The new property name to store the result of apply. This name can be referenced by further operations down the pipeline. */
-    name: GlideString;
-}
