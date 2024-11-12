@@ -21,8 +21,6 @@ import {
     GlideClusterClient,
     GlideFt,
     GlideJson,
-    GlideRecord,
-    GlideString,
     InfoOptions,
     JsonGetOptions,
     ProtocolVersion,
@@ -2948,7 +2946,7 @@ describe("Server Module Tests", () => {
                     options,
                 );
                 // profile metrics and categories are subject to change
-                expect(Object.keys(aggregProfile[1])).toBeGreaterThan(0);
+                expect(Object.keys(aggregProfile[1]).length).toBeGreaterThan(0);
                 expect(
                     aggregProfile[0]
                         .map(convertGlideRecordToRecord)
