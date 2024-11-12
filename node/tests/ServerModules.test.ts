@@ -3088,7 +3088,9 @@ describe("Server Module Tests", () => {
                     decoder: Decoder.Bytes,
                     ...options,
                 });
-                expect(Object.keys(binaryProfileResult[1].length)).toBeGreaterThan(0);
+                expect(
+                    Object.keys(binaryProfileResult[1].length),
+                ).toBeGreaterThan(0);
                 expect(binaryProfileResult[0]).toEqual(expectedBinaryResult);
             },
         );
@@ -3190,7 +3192,9 @@ describe("Server Module Tests", () => {
                     query,
                     optionsWithLimit,
                 );
-                expect(Object.keys(stringProfileResult[1].length)).toBeGreaterThan(0);
+                expect(
+                    Object.keys(stringProfileResult[1].length),
+                ).toBeGreaterThan(0);
                 expect(stringProfileResult[0]).toEqual(expectedStringResult);
             },
         );
