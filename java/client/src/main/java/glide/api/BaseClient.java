@@ -275,6 +275,7 @@ import glide.connectors.resources.Platform;
 import glide.connectors.resources.ThreadPoolResource;
 import glide.connectors.resources.ThreadPoolResourceAllocator;
 import glide.ffi.resolvers.GlideValueResolver;
+import glide.ffi.resolvers.StatisticsResolver;
 import glide.managers.BaseResponseResolver;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
@@ -383,6 +384,15 @@ public abstract class BaseClient
             future.completeExceptionally(e);
             return future;
         }
+    }
+
+    /**
+     * Return a statistics
+     *
+     * @return Return a {@link Map} that contains the statistics collected internally by GLIDE core
+     */
+    public Map<String, String> getStatistics() {
+        return (HashMap<String, String>) StatisticsResolver.getStatistics();
     }
 
     /**
