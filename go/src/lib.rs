@@ -3,7 +3,6 @@
 */
 
 #![deny(unsafe_op_in_unsafe_fn)]
-use derivative::Derivative;
 use glide_core::client::Client as GlideClient;
 use glide_core::connection_request;
 use glide_core::errors;
@@ -17,6 +16,7 @@ use std::{
     ffi::{c_void, CString},
     mem,
     os::raw::{c_char, c_double, c_long, c_ulong},
+    ptr,
 };
 use tokio::runtime::Builder;
 use tokio::runtime::Runtime;
@@ -28,8 +28,7 @@ use tokio::runtime::Runtime;
 /// The struct is freed by the external caller by using `free_command_response` to avoid memory leaks.
 /// TODO: Add a type enum to validate what type of response is being sent in the CommandResponse.
 #[repr(C)]
-#[derive(Derivative)]
-#[derivative(Debug, Default)]
+#[derive(Debug)]
 pub struct CommandResponse {
     response_type: ResponseType,
     int_value: c_long,
@@ -39,24 +38,37 @@ pub struct CommandResponse {
     /// Below two values are related to each other.
     /// `string_value` represents the string.
     /// `string_value_len` represents the length of the string.
-    #[derivative(Default(value = "std::ptr::null_mut()"))]
     string_value: *mut c_char,
     string_value_len: c_long,
 
     /// Below two values are related to each other.
     /// `array_value` represents the array of CommandResponse.
     /// `array_value_len` represents the length of the array.
-    #[derivative(Default(value = "std::ptr::null_mut()"))]
     array_value: *mut CommandResponse,
     array_value_len: c_long,
 
     /// Below two values represent the Map structure inside CommandResponse.
     /// The map is transformed into an array of (map_key: CommandResponse, map_value: CommandResponse) and passed to Go.
     /// These are represented as pointers as the map can be null (optionally present).
-    #[derivative(Default(value = "std::ptr::null_mut()"))]
     map_key: *mut CommandResponse,
-    #[derivative(Default(value = "std::ptr::null_mut()"))]
     map_value: *mut CommandResponse,
+}
+
+impl Default for CommandResponse {
+    fn default() -> Self {
+        CommandResponse {
+            response_type: ResponseType::default(),
+            int_value: 0,
+            float_value: 0.0,
+            bool_value: false,
+            string_value: ptr::null_mut(),
+            string_value_len: 0,
+            array_value: ptr::null_mut(),
+            array_value_len: 0,
+            map_key: ptr::null_mut(),
+            map_value: ptr::null_mut(),
+        }
+    }
 }
 
 #[repr(C)]
