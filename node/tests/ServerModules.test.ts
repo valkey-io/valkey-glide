@@ -3459,29 +3459,3 @@ describe("Server Module Tests", () => {
         });
     });
 });
-
-describe("Server Module Tests for transactions", () => {
-    let cluster: ValkeyCluster;
-
-    beforeAll(async () => {
-        const standaloneAddresses = global.STAND_ALONE_ENDPOINT;
-        console.log(standaloneAddresses);
-        cluster = await ValkeyCluster.initFromExistingCluster(
-            false,
-            parseEndpoints(standaloneAddresses),
-            getServerVersion,
-        );
-    }, 40000);
-
-    afterAll(async () => {
-        await cluster.close();
-    }, TIMEOUT);
-
-    describe("GlideMultiJson", () => {
-        let client: GlideClusterClient;
-
-        afterEach(async () => {
-            await flushAndCloseClient(true, cluster.getAddresses(), client);
-        });
-    });
-});
