@@ -3442,7 +3442,7 @@ describe("Server Module Tests", () => {
         });
     });
 
-    describe.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "GlideJson",
         async (protocol) => {
             const client: GlideClient = await GlideClient.createClient(
