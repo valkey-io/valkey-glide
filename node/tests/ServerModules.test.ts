@@ -3443,7 +3443,7 @@ describe("Server Module Tests", () => {
     });
 
     describe("GlideMultiJson", () => {
-        let client: GlideClusterClient;
+        let client: GlideClient;
 
         afterEach(async () => {
             await flushAndCloseClient(true, cluster.getAddresses(), client);
@@ -3452,7 +3452,7 @@ describe("Server Module Tests", () => {
         it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
             "can send transactions_%p",
             async (protocol) => {
-                const client: GlideClient = await GlideClient.createClient(
+                client = await GlideClient.createClient(
                     getClientConfigurationOption(cluster.getAddresses(), protocol),
                 ); const transaction = new Transaction();
                 const expectedRes = await transactionMultiJsonTest(transaction);
