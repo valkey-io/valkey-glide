@@ -2330,7 +2330,8 @@ describe("Server Module Tests", () => {
                     const expectedRes =
                         await transactionMultiJsonTest(transaction);
                     const result = await client.exec(transaction);
-
+                    console.log("result======");
+                    console.log(result);
                     validateTransactionResponse(result, expectedRes);
                     client.close();
                 },
