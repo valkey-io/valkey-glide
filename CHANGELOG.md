@@ -1,4 +1,5 @@
 #### Changes
+* Node: JSON transaction commands([#2281](https://github.com/valkey-io/valkey-glide/pull/2681))
 * Node: Add FT._ALIASLIST command([#2652](https://github.com/valkey-io/valkey-glide/pull/2652))
 * Python: Python: `FT._ALIASLIST` command added([#2638](https://github.com/valkey-io/valkey-glide/pull/2638))
 * Node: alias commands added: FT.ALIASADD, FT.ALIADDEL, FT.ALIASUPDATE([#2596](https://github.com/valkey-io/valkey-glide/pull/2596))
