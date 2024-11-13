@@ -1251,9 +1251,7 @@ func (suite *GlideTestSuite) TestRPush() {
 }
 
 func (suite *GlideTestSuite) TestUpdateConnectionPassword_With_Cluster_Client() {
-	suite.runWithClusterClient(func(client api.BaseClient) {
-		suite.addAuthConfig(client)
-
+	suite.runWithClusterClient(func(client api.GlideClusterClient) {
 		newPass := "newpass"
 		res, err := client.UpdateConnectionPassword(&newPass, false)
 		suite.verifyOK(res, err)
@@ -1267,35 +1265,25 @@ func (suite *GlideTestSuite) TestUpdateConnectionPassword_With_Cluster_Client() 
 		get, err := client.Get(key)
 		suite.verifyOK(set, err)
 		assert.Equal(suite.T(), get.Value(), value)
-
-		suite.removeAuthConfig(client)
 	})
 }
 
 func (suite *GlideTestSuite) TestUpdateConnectionPassword_No_Server_Auth_With_ClusterClient() {
-	suite.runWithClusterClient(func(client api.BaseClient) {
-		suite.addAuthConfig(client)
-
+	suite.runWithClusterClient(func(client api.GlideClusterClient) {
 		newPass := "newpass"
 		res, err := client.UpdateConnectionPassword(&newPass, true)
 
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 		assert.Empty(suite.T(), res.Value())
-
-		suite.removeAuthConfig(client)
 	})
 }
 
 func (suite *GlideTestSuite) TestUpdateConnectionPassword_Password_Long_With_ClusterClient() {
-	suite.runWithClusterClient(func(client api.BaseClient) {
-		suite.addAuthConfig(client)
-
+	suite.runWithClusterClient(func(client api.GlideClusterClient) {
 		password := strings.Repeat("p", 1000)
 
 		res, err := client.UpdateConnectionPassword(&password, false)
 		suite.verifyOK(res, err)
-
-		suite.removeAuthConfig(client)
 	})
 }

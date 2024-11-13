@@ -737,7 +737,7 @@ type ConnectionManagementCommands interface {
 	// See [valkey.io] for details.
 	//
 	// Parameters:
-	//  password - The new password to set, or null to remove the password.
+	//  password - The new password to update, or null to remove the password.
 	//  reAuth - If true, re-authenticates the connection with the new password.
 	//
 	// Return value:
@@ -751,56 +751,51 @@ type ConnectionManagementCommands interface {
 	UpdateConnectionPassword(password *string, reAuth bool) (Result[string], error)
 }
 
-// ServerManagementClusterCommands provides cluster management operations.
+// ServerManagementClusterCommands supports commands and transactions for the "Server Management Commands" group for
+// a cluster client.
 //
 // See [valkey.io] for details.
 //
 // [valkey.io]: https://valkey.io/commands/?group=server
 type ServerManagementClusterCommands interface {
-	// ConfigGet returns values for the specified configuration parameters.
+	// ConfigGet retrieves the values of configuration parameters.
+	// The command will be sent to a random node.
 	//
 	// See [valkey.io] for details.
 	//
 	// Parameters:
-	//  args - A slice of configuration parameter names to retrieve values for.
+	//   parameters - An array of configuration parameter names to retrieve values for
 	//
-	// Return value:
-	//  A map of parameter names to their values, both wrapped in Result types, or an error if the operation fails.
+	// Returns:
+	//   - map[Result[string]]Result[string]: A map of values corresponding to the configuration parameters
+	//   - error: An error if the operation fails
 	//
 	// For example:
-	//  params, err := client.ConfigGet([]string{"timeout", "maxmemory"})
-	//  // timeout equals api.CreateStringResult("1000")
-	//  // maxmemory equals api.CreateStringResult("1GB")
-	//  // params equals map[api.Result[string]]api.Result[string]{timeout: timeout, maxmemory: maxmemory}
+	//	configParams, err := client.ConfigGet([]string{"timeout", "maxmemory"})
+	//	// configParams["timeout"].Value() equals "1000"
+	//	// configParams["maxmemory"].Value() equals "1GB"
 	//
 	// [valkey.io]: https://valkey.io/commands/config-get/
 	ConfigGet(args []string) (map[Result[string]]Result[string], error)
 
-	// ConfigSet updates the specified configuration parameters with new values.
+	// ConfigSet sets configuration parameters to the specified values.
+	// The command will be sent to all nodes.
 	//
 	// See [valkey.io] for details.
 	//
 	// Parameters:
-	//   parameters - A map where keys are configuration parameter names and values are their new settings.
+	//   parameters - A map consisting of configuration parameters and their respective values to set
 	//
 	// Returns:
-	//   - Result[string]: A Result containing "OK" if all parameters were set successfully
-	//   - error: An error if the operation fails for any parameter
+	//   - Result[string]: "OK" if all configurations have been successfully set
+	//   - error: An error if the operation fails
 	//
-	// Example:
-	//   result, err := client.ConfigSet(map[string]string{
-	//       "timeout":   "1000",
-	//       "maxmemory": "1GB",
-	//   })
-	//   // If successful:
-	//   // result.Value() equals "OK"
-	//   // err equals nil
-	//
-	// Common configurations:
-	//   - "timeout": Connection timeout in milliseconds
-	//   - "maxmemory": Maximum memory limit (e.g., "1GB", "512MB")
-	//   - "maxclients": Maximum number of client connections
-	//   - "requirepass": Authentication password
+	// For example:
+	//	resp, err := client.ConfigSet(map[string]string{
+	//	    "timeout": "1000",
+	//	    "maxmemory": "1GB",
+	//	})
+	//	// resp.Value() equals "OK"
 	//
 	// [valkey.io]: https://valkey.io/commands/config-set/
 	ConfigSet(parameters map[string]string) (Result[string], error)
@@ -822,5 +817,112 @@ type ServerManagementClusterCommands interface {
 	//  // strResult equals "command response"
 	//
 	// [valkey.io]: https://valkey.io/commands/
+	CustomCommand(args []string) (interface{}, error)
+}
+
+// ServerManagementCommands supports commands and transactions for the "Server Management" group for a
+// standalone client.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/?group=server
+type ServerManagementCommands interface {
+	// ConfigGet retrieves the values of configuration parameters.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   parameters - An array of configuration parameter names to retrieve values for
+	//
+	// Returns:
+	//   - map[Result[string]]Result[string]: A map of values corresponding to the configuration parameters
+	//   - error: An error if the operation fails
+	//
+	// For example:
+	//	configParams, err := client.ConfigGet([]string{"timeout", "maxmemory"})
+	//	// configParams["timeout"].Value() equals "1000"
+	//	// configParams["maxmemory"].Value() equals "1GB"
+	//
+	// [valkey.io]: https://valkey.io/commands/config-get/
+	ConfigGet(args []string) (map[Result[string]]Result[string], error)
+
+	// ConfigSet sets configuration parameters to the specified values.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   parameters - A map consisting of configuration parameters and their respective values to set
+	//
+	// Returns:
+	//   - Result[string]: "OK" if all configurations have been successfully set
+	//   - error: An error if the operation fails
+	//
+	// For example:
+	//	resp, err := client.ConfigSet(map[string]string{
+	//	    "timeout": "1000",
+	//	    "maxmemory": "1GB",
+	//	})
+	//	// resp.Value() equals "OK"
+	//
+	// [valkey.io]: https://valkey.io/commands/config-set/
+	ConfigSet(parameters map[string]string) (Result[string], error)
+}
+
+// GenericClusterCommands supports generic commands for cluster mode.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/?group=generic
+type GenericClusterCommands interface {
+	// CustomCommand executes a single command without checking inputs. Every part of the command, including subcommands,
+	// should be added as a separate value in args. The command will be routed automatically based on the passed
+	// command's default request policy.
+	//
+	// See [wiki] for details.
+	//
+	// Parameters:
+	//   args - Arguments for the custom command including the command name. For example: ["ping"]
+	//
+	// Returns:
+	//   - interface{}: The returned value for the custom command. For example: "PONG" for ping command
+	//   - error: An error if the operation fails
+	//
+	// For example:
+	//	resp, err := client.CustomCommand([]string{"ping"})
+	//	// If successful:
+	//	// resp equals "PONG"
+	//	// err equals nil
+	//
+	// [wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
+	CustomCommand(args []string) (interface{}, error)
+}
+
+// GenericCommands supports generic commands and transactions for standalone mode.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/?group=generic
+type GenericCommands interface {
+	// CustomCommand executes a single command without checking inputs. Every part of the command,
+	// including subcommands, should be added as a separate value in args.
+	//
+	// See [wiki] for details.
+	//
+	// Parameters:
+	//   args - Arguments for the custom command
+	//
+	// Returns:
+	//   - interface{}: The returned value for the custom command
+	//   - error: An error if the operation fails
+	//
+	// For example:
+	//	// Simple ping command
+	//	resp, err := client.CustomCommand([]string{"ping", "GLIDE"})
+	//	// resp equals "GLIDE"
+	//
+	//	// Get a list of all pub/sub clients
+	//	result, err := client.CustomCommand([]string{"CLIENT", "LIST", "TYPE", "PUBSUB"})
+	//
+	// [wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
 	CustomCommand(args []string) (interface{}, error)
 }

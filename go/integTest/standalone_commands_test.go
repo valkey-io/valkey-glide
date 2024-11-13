@@ -126,9 +126,7 @@ func (suite *GlideTestSuite) TestConfigSetAndGet_invalidArgs() {
 }
 
 func (suite *GlideTestSuite) TestUpdateConnectionPassword() {
-	suite.runWithDefaultClient(func(client *api.GlideClient) {
-		suite.addAuthConfig(client)
-
+	suite.runWithDefaultClientAndAuth(func(client api.GlideClient) {
 		newPass := "newpass"
 		res, err := client.UpdateConnectionPassword(&newPass, false)
 		suite.verifyOK(res, err)
@@ -142,35 +140,25 @@ func (suite *GlideTestSuite) TestUpdateConnectionPassword() {
 		get, err := client.Get(key)
 		suite.verifyOK(set, err)
 		assert.Equal(suite.T(), get.Value(), value)
-
-		suite.removeAuthConfig(client)
 	})
 }
 
 func (suite *GlideTestSuite) TestUpdateConnectionPassword_No_Server_Auth() {
-	suite.runWithDefaultClient(func(client *api.GlideClient) {
-		suite.addAuthConfig(client)
-
+	suite.runWithDefaultClientAndAuth(func(client api.GlideClient) {
 		newPass := "newpass"
 		res, err := client.UpdateConnectionPassword(&newPass, true)
 
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 		assert.Empty(suite.T(), res.Value())
-
-		suite.removeAuthConfig(client)
 	})
 }
 
 func (suite *GlideTestSuite) TestUpdateConnectionPassword_Password_long() {
-	suite.runWithDefaultClient(func(client *api.GlideClient) {
-		suite.addAuthConfig(client)
-
+	suite.runWithDefaultClientAndAuth(func(client api.GlideClient) {
 		password := strings.Repeat("p", 1000)
 
 		res, err := client.UpdateConnectionPassword(&password, false)
 		suite.verifyOK(res, err)
-
-		suite.removeAuthConfig(client)
 	})
 }

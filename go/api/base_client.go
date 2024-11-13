@@ -25,7 +25,6 @@ type BaseClient interface {
 	HashCommands
 	ListCommands
 	ConnectionManagementCommands
-	ServerManagementClusterCommands
 	// Close terminates the client by closing all associated resources.
 	Close()
 }
