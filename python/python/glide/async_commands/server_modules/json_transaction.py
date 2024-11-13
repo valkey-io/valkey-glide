@@ -19,7 +19,7 @@
 
 from typing import List, Optional, Union, cast
 
-from gglide.async_commands.transaction import TTransaction
+from glide.async_commands.transaction import TTransaction
 from glide.async_commands.core import ConditionalChange
 from glide.async_commands.server_modules.json import (
     JsonArrIndexOptions,
