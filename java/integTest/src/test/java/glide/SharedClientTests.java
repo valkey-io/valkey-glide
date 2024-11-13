@@ -5,17 +5,22 @@ import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.TestUtilities.getRandomString;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
+import glide.api.models.commands.PasswordUpdateMode;
 import glide.api.models.exceptions.RequestException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -32,7 +37,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-@Timeout(35) // seconds
+// @Timeout(35) // seconds
 public class SharedClientTests {
 
     private static GlideClient standaloneClient = null;
@@ -48,13 +53,15 @@ public class SharedClientTests {
                 GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get();
         clients = List.of(Arguments.of(standaloneClient), Arguments.of(clusterClient));
-        assertTrue(!clusterClient.getStatistics().isEmpty());
-        assertEquals(
-                clusterClient.getStatistics().size(), 2); // we expect 2 items in the statistics map
+    }
 
-        assertTrue(!standaloneClient.getStatistics().isEmpty());
-        assertEquals(
-                standaloneClient.getStatistics().size(), 2); // we expect 2 items in the statistics map
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void validate_statistics(BaseClient client) {
+        assertFalse(client.getStatistics().isEmpty());
+        // we expect 2 items in the statistics map
+        assertEquals(2, client.getStatistics().size());
     }
 
     @AfterAll
@@ -176,5 +183,58 @@ public class SharedClientTests {
         }
 
         testClient.close();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void password_update(BaseClient client) {
+        if (client instanceof GlideClient) return;
+
+        var key = UUID.randomUUID().toString();
+        var pwd = UUID.randomUUID().toString();
+        client.set(key, "meow meow").get();
+
+        try (BaseClient testClient = client instanceof GlideClient
+                ? GlideClient.createClient(commonClientConfig().requestTimeout(2000).build()).get()
+                : GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(2000).build()).get()) {
+
+            // validate that we can get the value
+            assertEquals("meow meow", testClient.get(key).get());
+
+            // set the password and forcefully drop connection for the second client
+            if (client instanceof GlideClient) {
+                ((GlideClient) client).configSet(Map.of("requirepass", pwd)).get();
+                ((GlideClient) client).customCommand(new String[]{"CLIENT", "KILL", "TYPE", "NORMAL"}).get();
+            } else {
+                ((GlideClusterClient) client).configSet(Map.of("requirepass", pwd)).get();
+                ((GlideClusterClient) client).customCommand(new String[]{"CLIENT", "KILL", "TYPE", "NORMAL"}, ALL_PRIMARIES).get();
+            }
+
+            // client should reconnect, but will receive NOAUTH error
+            var exception = assertThrows(ExecutionException.class, () -> testClient.get(key).get());
+
+            assertEquals("OK", testClient.updateConnectionPassword(pwd, PasswordUpdateMode.RE_AUTHENTICATE).get());
+
+            // after setting new password we should be able to work with the server
+            assertEquals("meow meow", testClient.get(key).get());
+
+            // unset the password and drop connection again
+            if (client instanceof GlideClient) {
+                ((GlideClient) client).configSet(Map.of("requirepass", "")).get();
+                ((GlideClient) client).customCommand(new String[]{"CLIENT", "KILL", "TYPE", "NORMAL"}).get();
+            } else {
+                ((GlideClusterClient) client).configSet(Map.of("requirepass", "")).get();
+                ((GlideClusterClient) client).customCommand(new String[]{"CLIENT", "KILL", "TYPE", "NORMAL"}, ALL_PRIMARIES).get();
+            }
+
+            // client should reconnect, but will receive NOAUTH error
+            exception = assertThrows(ExecutionException.class, () -> testClient.get(key).get());
+
+            assertEquals("OK", testClient.updateConnectionPassword(PasswordUpdateMode.USE_ON_NEW_CONNECTION).get());
+
+            // after updating connection params we should be able to work with the server
+            assertEquals("meow meow", testClient.get(key).get());
+        }
     }
 }

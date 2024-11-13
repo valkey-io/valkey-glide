@@ -218,6 +218,7 @@ import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
+import glide.api.models.commands.PasswordUpdateMode;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.LexRange;
 import glide.api.models.commands.RangeOptions.RangeQuery;
@@ -775,6 +776,54 @@ public abstract class BaseClient
 
         response.put("matches", convertedMatchesObject);
         return response;
+    }
+
+    /**
+     * Update the current connection with a new password.
+     *
+     * <p>This method is useful in scenarios where the server password has changed or when utilizing
+     * short-lived passwords for enhanced security. It allows the client to update its password to
+     * reconnect upon disconnection without the need to recreate the client instance. This ensures
+     * that the internal reconnection mechanism can handle reconnection seamlessly, preventing the
+     * loss of in-flight commands.
+     *
+     * @apiNote This method updates the client's internal password configuration and does not perform
+     *     password rotation on the server side.
+     * @param password A new password to set.
+     * @param mode Password update mode, see {@link PasswordUpdateMode}.
+     * @return <code>"OK"</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.resetConnectionPassword("new_password", RE_AUTHENTICATE).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    public CompletableFuture<String> updateConnectionPassword(
+            @NonNull String password, @NonNull PasswordUpdateMode mode) {
+        return commandManager.submitPasswordUpdate(Optional.of(password), mode, this::handleStringResponse);
+    }
+
+    /**
+     * Update the current connection by removing the password.
+     *
+     * <p>This method is useful in scenarios where the server password has changed or when utilizing
+     * short-lived passwords for enhanced security. It allows the client to update its password to
+     * reconnect upon disconnection without the need to recreate the client instance. This ensures
+     * that the internal reconnection mechanism can handle reconnection seamlessly, preventing the
+     * loss of in-flight commands.
+     *
+     * @apiNote This method updates the client's internal password configuration and does not perform
+     *     password rotation on the server side.
+     * @param mode Password update mode, see {@link PasswordUpdateMode}.
+     * @return <code>"OK"</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.resetConnectionPassword(RE_AUTHENTICATE).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    public CompletableFuture<String> updateConnectionPassword(@NonNull PasswordUpdateMode mode) {
+        return commandManager.submitPasswordUpdate(Optional.empty(), mode, this::handleStringResponse);
     }
 
     @Override

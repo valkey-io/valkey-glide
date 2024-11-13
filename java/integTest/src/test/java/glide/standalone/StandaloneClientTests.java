@@ -14,6 +14,8 @@ import glide.api.GlideClient;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.RequestException;
+
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
@@ -45,7 +47,7 @@ public class StandaloneClientTests {
         GlideClient client = GlideClient.createClient(commonClientConfig().build()).get();
 
         String password = "TEST_AUTH";
-        client.customCommand(new String[] {"CONFIG", "SET", "requirepass", password}).get();
+        client.configSet(Map.of("requirepass", password)).get();
 
         // Creation of a new client without a password should fail
         ExecutionException exception =
@@ -69,7 +71,7 @@ public class StandaloneClientTests {
         assertEquals(value, auth_client.get(key).get());
 
         // Reset password
-        client.customCommand(new String[] {"CONFIG", "SET", "requirepass", ""}).get();
+        client.configSet(Map.of("requirepass", "")).get();
 
         auth_client.close();
         client.close();

@@ -6,6 +6,7 @@ import command_request.CommandRequestOuterClass;
 import command_request.CommandRequestOuterClass.Command;
 import command_request.CommandRequestOuterClass.Command.ArgsArray;
 import command_request.CommandRequestOuterClass.CommandRequest;
+import command_request.CommandRequestOuterClass.ReplaceConnectionPassword;
 import command_request.CommandRequestOuterClass.RequestType;
 import command_request.CommandRequestOuterClass.Routes;
 import command_request.CommandRequestOuterClass.ScriptInvocation;
@@ -16,6 +17,7 @@ import glide.api.models.ClusterTransaction;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.Transaction;
+import glide.api.models.commands.PasswordUpdateMode;
 import glide.api.models.commands.scan.ClusterScanCursor;
 import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute;
@@ -215,6 +217,26 @@ public class CommandManager {
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
         final CommandRequest.Builder command = prepareCursorRequest(cursor, options);
+        return submitCommandToChannel(command, responseHandler);
+    }
+
+    /**
+     * Submit a password update request to GLIDE core.
+     *
+     * @param password A new password to set or empty value to remove the password.
+     * @param mode Password update mode.
+     * @param responseHandler A response handler
+     * @return A request promise.
+     * @param <T> Type of the response.
+     */
+    public <T> CompletableFuture<T> submitPasswordUpdate(
+            Optional<String> password,
+            PasswordUpdateMode mode,
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
+        var builder = ReplaceConnectionPassword.newBuilder().setReAuth(mode.getValue());
+        password.ifPresent(builder::setPassword);
+
+        var command = CommandRequest.newBuilder().setReplaceConnectionPassword(builder.build());
         return submitCommandToChannel(command, responseHandler);
     }
 

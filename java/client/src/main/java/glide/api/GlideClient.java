@@ -57,6 +57,7 @@ import glide.api.models.configuration.GlideClientConfiguration;
 import glide.utils.ArgsBuilder;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 import lombok.NonNull;
