@@ -3444,7 +3444,7 @@ describe("Server Module Tests", () => {
 
     describe("GlideMultiJson", () => {
         let client: GlideClient;
-
+        console.log(cluster.getAddresses());
         afterEach(async () => {
             await flushAndCloseClient(true, cluster.getAddresses(), client);
         });
@@ -3454,7 +3454,8 @@ describe("Server Module Tests", () => {
             async (protocol) => {
                 client = await GlideClient.createClient(
                     getClientConfigurationOption(cluster.getAddresses(), protocol),
-                ); const transaction = new Transaction();
+                );
+                const transaction = new Transaction();
                 const expectedRes = await transactionMultiJsonTest(transaction);
                 transaction.select(0);
                 const result = await client.exec(transaction);
