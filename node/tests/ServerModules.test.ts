@@ -3442,24 +3442,27 @@ describe("Server Module Tests", () => {
         });
     });
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "GlideJson",
-        async (protocol) => {
-            const client: GlideClient = await GlideClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
-            );
+    describe("GlideMultiJson", () => {
+        let client: GlideClusterClient;
 
-            afterEach(async () => {
-                await flushAndCloseClient(true, cluster.getAddresses(), client);
-            });
-            const transaction = new Transaction();
-            const expectedRes = await transactionMultiJsonTest(transaction);
-            transaction.select(0);
-            const result = await client.exec(transaction);
-            expectedRes.push(["select(0)", "OK"]);
+        afterEach(async () => {
+            await flushAndCloseClient(true, cluster.getAddresses(), client);
+        });
 
-            validateTransactionResponse(result, expectedRes);
-            client.close();
-        },
-    );
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            "can send transactions_%p",
+            async (protocol) => {
+                const client: GlideClient = await GlideClient.createClient(
+                    getClientConfigurationOption(cluster.getAddresses(), protocol),
+                ); const transaction = new Transaction();
+                const expectedRes = await transactionMultiJsonTest(transaction);
+                transaction.select(0);
+                const result = await client.exec(transaction);
+                expectedRes.push(["select(0)", "OK"]);
+
+                validateTransactionResponse(result, expectedRes);
+                client.close();
+            },
+        );
+    });
 });
