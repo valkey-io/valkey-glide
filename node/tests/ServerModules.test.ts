@@ -11,6 +11,7 @@ import {
 } from "@jest/globals";
 import { v4 as uuidv4 } from "uuid";
 import {
+    ClusterTransaction,
     ConditionalChange,
     convertGlideRecordToRecord,
     Decoder,
@@ -18,7 +19,6 @@ import {
     FtAggregateReturnType,
     FtSearchOptions,
     FtSearchReturnType,
-    GlideClient,
     GlideClusterClient,
     GlideFt,
     GlideJson,
@@ -29,7 +29,6 @@ import {
     ProtocolVersion,
     RequestError,
     SortOrder,
-    Transaction,
     VectorField,
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils";
@@ -2318,6 +2317,24 @@ describe("Server Module Tests", () => {
                     ).toBeNull();
                 },
             );
+            it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+                "can send transactions_%p",
+                async (protocol) => {
+                    client = await GlideClusterClient.createClient(
+                        getClientConfigurationOption(
+                            cluster.getAddresses(),
+                            protocol,
+                        ),
+                    );
+                    const transaction = new ClusterTransaction();
+                    const expectedRes =
+                        await transactionMultiJsonTest(transaction);
+                    const result = await client.exec(transaction);
+
+                    validateTransactionResponse(result, expectedRes);
+                    client.close();
+                },
+            );
         },
     );
 
@@ -3443,7 +3460,6 @@ describe("Server Module Tests", () => {
     });
 });
 
-
 describe("Server Module Tests for transactions", () => {
     let cluster: ValkeyCluster;
 
@@ -3462,28 +3478,10 @@ describe("Server Module Tests for transactions", () => {
     }, TIMEOUT);
 
     describe("GlideMultiJson", () => {
-        let client: GlideClient;
+        let client: GlideClusterClient;
 
         afterEach(async () => {
             await flushAndCloseClient(true, cluster.getAddresses(), client);
         });
-
-        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-            "can send transactions_%p",
-            async (protocol) => {
-
-                client = await GlideClient.createClient(
-                    getClientConfigurationOption(cluster.getAddresses(), protocol),
-                );
-                const transaction = new Transaction();
-                const expectedRes = await transactionMultiJsonTest(transaction);
-                transaction.select(0);
-                const result = await client.exec(transaction);
-                expectedRes.push(["select(0)", "OK"]);
-
-                validateTransactionResponse(result, expectedRes);
-                client.close();
-            },
-        );
     });
 });
