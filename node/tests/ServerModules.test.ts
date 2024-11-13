@@ -3467,3 +3467,49 @@ describe("Server Module Tests", () => {
         );
     });
 });
+
+
+describe("Server Module Tests for transactions", () => {
+    let cluster: ValkeyCluster;
+
+    beforeAll(async () => {
+        const standaloneAddresses = global.STAND_ALONE_ENDPOINT;
+        cluster = await ValkeyCluster.initFromExistingCluster(
+            false,
+            parseEndpoints(standaloneAddresses),
+            getServerVersion,
+        );
+    }, 40000);
+
+    afterAll(async () => {
+        await cluster.close();
+    }, TIMEOUT);
+
+
+
+
+    describe("GlideMultiJson", () => {
+        let client: GlideClient;
+        console.log(cluster.getAddresses());
+        afterEach(async () => {
+            await flushAndCloseClient(true, cluster.getAddresses(), client);
+        });
+
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            "can send transactions_%p",
+            async (protocol) => {
+                client = await GlideClient.createClient(
+                    getClientConfigurationOption(cluster.getAddresses(), protocol),
+                );
+                const transaction = new Transaction();
+                const expectedRes = await transactionMultiJsonTest(transaction);
+                transaction.select(0);
+                const result = await client.exec(transaction);
+                expectedRes.push(["select(0)", "OK"]);
+
+                validateTransactionResponse(result, expectedRes);
+                client.close();
+            },
+        );
+    });
+});
