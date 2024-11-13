@@ -3449,6 +3449,7 @@ describe("Server Module Tests for transactions", () => {
 
     beforeAll(async () => {
         const standaloneAddresses = global.STAND_ALONE_ENDPOINT;
+        console.log(standaloneAddresses);
         cluster = await ValkeyCluster.initFromExistingCluster(
             false,
             parseEndpoints(standaloneAddresses),
@@ -3470,7 +3471,7 @@ describe("Server Module Tests for transactions", () => {
         it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
             "can send transactions_%p",
             async (protocol) => {
-                console.log(cluster.getAddresses());
+
                 client = await GlideClient.createClient(
                     getClientConfigurationOption(cluster.getAddresses(), protocol),
                 );
