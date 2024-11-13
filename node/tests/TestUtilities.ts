@@ -23,6 +23,7 @@ import {
     GeospatialData,
     GlideClient,
     GlideClusterClient,
+    GlideMultiJson,
     GlideReturnType,
     GlideString,
     InfBoundary,
@@ -1633,13 +1634,14 @@ export async function transactionTest(
 }
 
 export async function transactionMultiJsonTest(
-    baseTransaction: Transaction | ClusterTransaction,
+    baseTransaction: ClusterTransaction,
 ): Promise<[string, GlideReturnType][]> {
     const responseData: [string, GlideReturnType][] = [];
     const key1 = "key1" + uuidv4();
-    baseTransaction.set(key1, "foo");
+    const jsonValue = { a: 1.0, b: 2 };
+    GlideMultiJson.set(baseTransaction, key1, "$", JSON.stringify(jsonValue));
     responseData.push(['set(key1, "bar")', "OK"]);
-    baseTransaction.set(key1, "bar", { returnOldValue: true });
+    GlideMultiJson.set(baseTransaction, key1, "bar", JSON.stringify(jsonValue));
     responseData.push(['set(key1, "bar", {returnOldValue: true})', "foo"]);
     return responseData;
 }
