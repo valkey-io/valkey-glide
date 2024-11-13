@@ -4,16 +4,16 @@ import copy
 import json as OuterJson
 import random
 import typing
+from typing import List
 
 import pytest
 from glide.async_commands.core import ConditionalChange, InfoSection
-from glide.async_commands.server_modules import json
+from glide.async_commands.server_modules import json, json_transaction
 from glide.async_commands.server_modules.json import (
     JsonArrIndexOptions,
     JsonArrPopOptions,
     JsonGetOptions,
 )
-from glide.async_commands.server_modules import json_transaction
 from glide.async_commands.transaction import (
     BaseTransaction,
     ClusterTransaction,
@@ -22,7 +22,7 @@ from glide.async_commands.transaction import (
 from glide.config import ProtocolVersion
 from glide.constants import OK
 from glide.exceptions import RequestError
-from glide.glide_client import TGlideClient
+from glide.glide_client import GlideClusterClient, TGlideClient
 from tests.test_async_client import get_random_string, parse_info_response
 
 
@@ -1963,8 +1963,8 @@ class TestJson:
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def json_transaction_test(self, glide_client: TGlideClient, cluster_mode: bool) -> List[TResult]:
-        transaction = ClusterTransaction() if cluster_mode else Transaction()
+    async def json_transaction_test(self, glide_client: GlideClusterClient):
+        transaction = ClusterTransaction()
 
         key = get_random_string(5)
 

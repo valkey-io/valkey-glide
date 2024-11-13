@@ -21,8 +21,8 @@ from typing import List, Optional, Union, cast
 
 from glide.async_commands.core import ConditionalChange
 from glide.constants import TEncodable
-from glide.transaction import TTransaction
 from glide.protobuf.command_request_pb2 import RequestType
+from glide.transaction import TTransaction
 
 
 def set(
@@ -95,4 +95,3 @@ def get(
         args.extend(paths)
 
     return transaction.custom_command(args)
-
