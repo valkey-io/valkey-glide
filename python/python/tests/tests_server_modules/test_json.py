@@ -305,13 +305,6 @@ class TestJson:
         expected_result = [b"[1.0]"]
         assert result == expected_result
 
-        # No path given
-        result = await json.mget(
-            glide_client,
-            [key1, key2],
-        )
-        assert result == [None]
-
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_json_del(self, glide_client: TGlideClient):

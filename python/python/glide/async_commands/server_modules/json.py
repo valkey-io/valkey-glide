@@ -207,7 +207,7 @@ async def get(
 async def mget(
     client: TGlideClient,
     keys: List[TEncodable],
-    path: Optional[TEncodable] = None,
+    path: TEncodable,
 ) -> List[Optional[bytes]]:
     """
     Retrieves the JSON values at the specified `path` stored at multiple `keys`.
@@ -223,7 +223,7 @@ async def mget(
     Args:
         client (TGlideClient): The client to execute the command.
         keys (List[TEncodable]): A list of keys for the JSON documents.
-        path (Optional[TEncodable]): The path within the JSON documents. Default is root `$`.
+        path (TEncodable): The path within the JSON documents.
 
     Returns:
         List[Optional[bytes]]:
@@ -247,10 +247,7 @@ async def mget(
         >>> await glideJson.mget(client, ["doc1"], "$.non_existing_path")
             [None]  # Returns an empty array since the path '$.non_existing_path' does not exist in the JSON document stored at `doc1`.
     """
-    args = ["JSON.MGET"] + keys
-    if path:
-        args.append(path)
-
+    args = ["JSON.MGET"] + keys + [path]
     return cast(TJsonResponse[Optional[bytes]], await client.custom_command(args))
 
 
