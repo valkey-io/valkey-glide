@@ -122,6 +122,10 @@ public class ConnectionManager {
             connectionRequestBuilder.setInflightRequestsLimit(configuration.getInflightRequestsLimit());
         }
 
+        if (configuration.getClientAZ() != null) {
+            connectionRequestBuilder.setClientAz(configuration.getClientAZ());
+        }
+
         return connectionRequestBuilder;
     }
 
@@ -202,6 +206,8 @@ public class ConnectionManager {
     private ConnectionRequestOuterClass.ReadFrom mapReadFromEnum(ReadFrom readFrom) {
         if (readFrom == ReadFrom.PREFER_REPLICA) {
             return ConnectionRequestOuterClass.ReadFrom.PreferReplica;
+        } else if (readFrom == ReadFrom.AZ_AFFINITY) {
+            return ConnectionRequestOuterClass.ReadFrom.AZAffinity;
         }
 
         return ConnectionRequestOuterClass.ReadFrom.Primary;

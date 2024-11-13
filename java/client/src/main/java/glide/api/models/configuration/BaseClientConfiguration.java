@@ -74,4 +74,9 @@ public abstract class BaseClientConfiguration {
      * used.
      */
     private final Integer inflightRequestsLimit;
+
+    /**
+     * TBD
+     */
+    private final String clientAZ;
 }
