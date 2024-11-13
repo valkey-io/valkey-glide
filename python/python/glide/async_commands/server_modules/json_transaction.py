@@ -27,7 +27,7 @@ from glide.async_commands.server_modules.json import (
 )
 from glide.constants import TEncodable
 from glide.protobuf.command_request_pb2 import RequestType
-from glide.transaction import TTransaction
+from gglide.async_commands.transaction import TTransaction
 
 
 def set(
