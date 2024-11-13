@@ -2150,7 +2150,7 @@ describe("GlideClusterClient", () => {
                             ),
                         );
                     await client_for_testing_az.set("foo", "testvalue");
-                    
+
                     for (let i = 0; i < GET_CALLS; i++) {
                         await client_for_testing_az.get("foo");
                     }
