@@ -1987,6 +1987,7 @@ describe("GlideClusterClient", () => {
                                 protocol,
                             ),
                         );
+
                     // Skip test if version is below 8.0.0
                     if (cluster.checkIfServerVersionLessThan("8.0.0")) {
                         console.log(
@@ -2026,7 +2027,7 @@ describe("GlideClusterClient", () => {
                         const allAZsMatch = azs.every((node) => {
                             const nodeResponse = node as {
                                 key: string;
-                                value: any;
+                                value: string | number;
                             };
 
                             if (protocol === ProtocolVersion.RESP2) {
@@ -2054,6 +2055,7 @@ describe("GlideClusterClient", () => {
 
                     // Stage 3: Set test data and perform GET operations
                     await client_for_testing_az.set("foo", "testvalue");
+
                     for (let i = 0; i < GET_CALLS; i++) {
                         await client_for_testing_az.get("foo");
                     }
@@ -2134,7 +2136,7 @@ describe("GlideClusterClient", () => {
                         ["CONFIG", "SET", "availability-zone", az],
                         { route: { type: "replicaSlotId", id: 12182 } },
                     );
-                    
+
                     // Stage 2: Create AZ affinity client and verify configuration
                     client_for_testing_az =
                         await GlideClusterClient.createClient(
@@ -2148,6 +2150,7 @@ describe("GlideClusterClient", () => {
                             ),
                         );
                     await client_for_testing_az.set("foo", "testvalue");
+                    
                     for (let i = 0; i < GET_CALLS; i++) {
                         await client_for_testing_az.get("foo");
                     }
