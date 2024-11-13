@@ -1197,9 +1197,11 @@ export class GlideMultiJson {
         options?: { conditionalChange: ConditionalChange } & DecoderOption,
     ): Transaction {
         const args: GlideString[] = ["JSON.SET", key, path, value];
+
         if (options?.conditionalChange !== undefined) {
             args.push(options.conditionalChange);
         }
+
         return transaction.customCommand(args);
     }
 

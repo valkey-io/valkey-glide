@@ -1634,7 +1634,6 @@ export async function transactionTest(
 
 export async function transactionMultiJsonTest(
     baseTransaction: Transaction | ClusterTransaction,
-    version: string,
 ): Promise<[string, GlideReturnType][]> {
     const responseData: [string, GlideReturnType][] = [];
     const key1 = "key1" + uuidv4();
@@ -1644,6 +1643,7 @@ export async function transactionMultiJsonTest(
     responseData.push(['set(key1, "bar", {returnOldValue: true})', "foo"]);
     return responseData;
 }
+
 /**
  * This function gets server version using info command in glide client.
  *
