@@ -480,7 +480,7 @@ public class Json {
      *     <pre>{@code
      * Json.set(client, "doc1", "$", "{\"a\": 1, \"b\": [\"one\", \"two\"]}").get();
      * Json.set(client, "doc2", "$", "{\"a\": 1, \"c\": false}").get();
-     * var res = Json.mget(client, new GlideString[] { "doc1", "doc2", "doc3" }, gs("$.c")).get();
+     * var res = Json.mget(client, new GlideString[] { gs("doc1"), gs("doc2"), gs("doc3") }, gs("$.c")).get();
      * assert Arrays.equals(res, new GlideString[] { gs("[]"), gs("[false]"), null });
      * }</pre>
      */
