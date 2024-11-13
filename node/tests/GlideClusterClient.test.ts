@@ -1994,7 +1994,7 @@ describe("GlideClusterClient", () => {
                         );
                         return;
                     }
-                    // const info = await client_for_config_set.customCommand(["INFO", "SERVER"]);
+
                     await client_for_config_set.customCommand([
                         "CONFIG",
                         "RESETSTAT",
@@ -2003,6 +2003,7 @@ describe("GlideClusterClient", () => {
                         ["CONFIG", "SET", "availability-zone", az],
                         { route: "allNodes" },
                     );
+
                     // Stage 2: Create AZ affinity client and verify configuration
                     client_for_testing_az =
                         await GlideClusterClient.createClient(
@@ -2133,6 +2134,7 @@ describe("GlideClusterClient", () => {
                         ["CONFIG", "SET", "availability-zone", az],
                         { route: { type: "replicaSlotId", id: 12182 } },
                     );
+                    
                     // Stage 2: Create AZ affinity client and verify configuration
                     client_for_testing_az =
                         await GlideClusterClient.createClient(
@@ -2149,12 +2151,14 @@ describe("GlideClusterClient", () => {
                     for (let i = 0; i < GET_CALLS; i++) {
                         await client_for_testing_az.get("foo");
                     }
+
                     // Stage 4: Verify GET commands were routed correctly
                     const info_result =
                         await client_for_testing_az.customCommand(
                             ["INFO", "ALL"],
                             { route: "allNodes" },
                         );
+
                     // Process the info_result to check that only one replica has the GET calls
                     if (Array.isArray(info_result)) {
                         // Count the number of nodes where both get_cmdstat and az are present
