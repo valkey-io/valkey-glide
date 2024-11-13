@@ -106,7 +106,10 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
                 } else {
                     log_warn(
                         "types",
-                        format!("Failed to convert AZ string: '{:?}'", value.client_az),
+                        format!(
+                            "Failed to convert availability zone string: '{:?}'. Falling back to `ReadFrom::PreferReplica`",
+                            value.client_az
+                        ),
                     );
                     ReadFrom::PreferReplica
                 }

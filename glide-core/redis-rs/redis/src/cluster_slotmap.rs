@@ -29,7 +29,7 @@ pub enum ReadFromReplicaStrategy {
     /// Spread the read requests between all replicas in a round robin manner.
     /// If no replica is available, route the requests to the primary.
     RoundRobin,
-    /// Spread the read requests between replicas in the same client's AZ (Aviliablity zone) in a round robin manner,
+    /// Spread the read requests between replicas in the same client's Aviliablity zone in a round robin manner,
     /// falling back to other replicas or the primary if needed.
     AZAffinity(String),
 }
@@ -52,7 +52,7 @@ fn get_address_from_slot(
     }
     match read_from_replica {
         ReadFromReplicaStrategy::AlwaysFromPrimary => addrs.primary(),
-        ReadFromReplicaStrategy::RoundRobin | ReadFromReplicaStrategy::AZAffinity => {
+        ReadFromReplicaStrategy::RoundRobin => {
             let index = slot
                 .last_used_replica
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed)

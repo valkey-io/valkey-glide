@@ -2,8 +2,7 @@ use super::{
     connections_container::{ClusterNode, ConnectionDetails},
     Connect,
 };
-use crate::FromRedisValue;
-use crate::InfoDict;
+use crate::cluster_slotmap::ReadFromReplicaStrategy;
 use crate::{
     aio::{ConnectionLike, DisconnectNotifier},
     client::GlideConnectionOptions,
@@ -11,7 +10,6 @@ use crate::{
     cluster_client::ClusterParams,
     ErrorKind, RedisError, RedisResult,
 };
-use crate::{cluster_slotmap::ReadFromReplicaStrategy, cmd};
 use std::net::SocketAddr;
 
 use futures::prelude::*;
@@ -181,6 +179,11 @@ async fn connect_and_check_only_management_conn<C>(
 where
     C: ConnectionLike + Connect + Send + Sync + 'static + Clone,
 {
+    let discover_az = matches!(
+        params.read_from_replicas,
+        crate::cluster_slotmap::ReadFromReplicaStrategy::AZAffinity(_)
+    );
+
     match create_connection::<C>(
         addr,
         params.clone(),
@@ -189,6 +192,7 @@ where
         GlideConnectionOptions {
             push_sender: None,
             disconnect_notifier,
+            discover_az,
         },
     )
     .await
@@ -359,36 +363,7 @@ where
             .await?;
     }
 
-    if matches!(
-        params.read_from_replicas,
-        ReadFromReplicaStrategy::AZAffinity(_)
-    ) {
-        update_az_from_info(conn_details).await?;
-    }
     Ok(())
-}
-
-// Helper function to extract and update availability zone from INFO command
-async fn update_az_from_info<C>(conn_details: &mut ConnectionDetails<C>) -> RedisResult<()>
-where
-    C: ConnectionLike + Send + 'static,
-{
-    let info_res = conn_details.conn.req_packed_command(&cmd("INFO")).await;
-    match info_res {
-        Ok(value) => {
-            let info_dict: InfoDict = FromRedisValue::from_redis_value(&value)?;
-            conn_details.az = info_dict.get::<String>("availability_zone");
-            Ok(())
-        }
-        Err(e) => {
-            // Handle the error case for the INFO command
-            Err(RedisError::from((
-                ErrorKind::ResponseError,
-                "Failed to execute INFO command. ",
-                format!("{:?}", e),
-            )))
-        }
-    }
 }
 
 #[doc(hidden)]
@@ -434,7 +409,10 @@ where
         glide_connection_options,
     )
     .await
-    .map(|conn| conn.into())
+    .map(|conn| {
+        let az = conn.0.get_az();
+        (conn.0, conn.1, az).into()
+    })
 }
 
 /// The function returns None if the checked connection/s are healthy. Otherwise, it returns the type of the unhealthy connection/s.

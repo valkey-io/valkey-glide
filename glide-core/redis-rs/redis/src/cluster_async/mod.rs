@@ -1153,9 +1153,15 @@ where
             None
         };
 
+        let discover_az = matches!(
+            cluster_params.read_from_replicas,
+            crate::cluster_slotmap::ReadFromReplicaStrategy::AZAffinity(_)
+        );
+
         let glide_connection_options = GlideConnectionOptions {
             push_sender,
             disconnect_notifier,
+            discover_az,
         };
 
         let connections = Self::create_initial_connections(
@@ -1957,7 +1963,7 @@ where
         // Reset the current slot map and connection vector with the new ones
         let mut write_guard = inner.conn_lock.write().expect(MUTEX_WRITE_ERR);
         let read_from_replicas = inner
-            .get_cluster_param(|params| params.read_from_replicas)
+            .get_cluster_param(|params| params.read_from_replicas.clone())
             .expect(MUTEX_READ_ERR);
         *write_guard = ConnectionsContainer::new(
             new_slots,
@@ -2777,7 +2783,7 @@ where
         .expect(MUTEX_READ_ERR);
 
     let read_from_replicas = inner
-        .get_cluster_param(|params| params.read_from_replicas)
+        .get_cluster_param(|params| params.read_from_replicas.clone())
         .expect(MUTEX_READ_ERR);
     (
         calculate_topology(
@@ -2823,6 +2829,12 @@ where
     fn is_closed(&self) -> bool {
         false
     }
+
+    fn get_az(&self) -> Option<String> {
+        None
+    }
+
+    fn set_az(&mut self, _az: Option<String>) {}
 }
 
 /// Implements the process of connecting to a Redis server

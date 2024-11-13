@@ -499,7 +499,7 @@ export type ReadFrom =
     /** Spread the requests between all replicas in a round robin manner.
         If no replica is available, route the requests to the primary.*/
     | "preferReplica"
-    /** Spread the requests between replicas in the same client's AZ (Aviliablity zone) in a round robin manner.
+    /** Spread the requests between replicas in the same client's Aviliablity zone in a round robin manner.
         If no replica is available, route the requests to the primary.*/
     | "AZAffinity";
 

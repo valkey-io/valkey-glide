@@ -65,7 +65,7 @@ where
             pubsub: false,
             protocol: connection_info.protocol,
         };
-        setup_connection(connection_info, &mut rv).await?;
+        setup_connection(connection_info, &mut rv, false).await?;
         Ok(rv)
     }
 
@@ -260,6 +260,12 @@ where
         // always false for AsyncRead + AsyncWrite (cant do better)
         false
     }
+
+    fn get_az(&self) -> Option<String> {
+        None
+    }
+
+    fn set_az(&mut self, _az: Option<String>) {}
 }
 
 /// Represents a `PubSub` connection.

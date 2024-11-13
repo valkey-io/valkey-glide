@@ -121,7 +121,7 @@ mod cluster_async {
         .unwrap();
     }
 
-    #[cfg(feature = "valkey-gte-7-2")]
+    #[cfg(feature = "valkey-gte-8")]
     #[tokio::test]
     async fn test_routing_by_slot_to_replica_with_az_affinity_strategy_to_half_replicas() {
         let replica_num: u16 = 4;
@@ -203,7 +203,7 @@ mod cluster_async {
         );
     }
 
-    #[cfg(feature = "valkey-gte-7-2")]
+    #[cfg(feature = "valkey-gte-8")]
     #[tokio::test]
     async fn test_routing_by_slot_to_replica_with_az_affinity_strategy_to_all_replicas() {
         let replica_num: u16 = 4;
@@ -260,7 +260,7 @@ mod cluster_async {
             .unwrap();
 
         let info_result = redis::from_owned_redis_value::<HashMap<String, String>>(info).unwrap();
-        println!("{:?}", info_result);
+        // println!("{:?}", info_result);
         let get_cmdstat = format!("cmdstat_get:calls={}", n);
         let client_az = format!("availability_zone:{}", az);
 
@@ -748,6 +748,12 @@ mod cluster_async {
         fn is_closed(&self) -> bool {
             true
         }
+
+        fn get_az(&self) -> Option<String> {
+            None
+        }
+
+        fn set_az(&mut self, _az: Option<String>) {}
     }
 
     #[test]

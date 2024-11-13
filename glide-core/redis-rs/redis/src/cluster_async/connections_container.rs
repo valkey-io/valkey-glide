@@ -30,9 +30,9 @@ macro_rules! count_connections {
 pub struct ConnectionDetails<Connection> {
     /// The actual connection
     pub conn: Connection,
-    /// The IP and AZ associated with the connection
+    /// The IP associated with the connection
     pub ip: Option<IpAddr>,
-    /// The AZ associated with the connection
+    /// The availability zone associated with the connection
     pub az: Option<String>,
 }
 
@@ -207,6 +207,13 @@ where
         Telemetry::incr_total_connections(conn_count_after.saturating_sub(conn_count_before));
     }
 
+    /// Returns the availability zone associated with the connection in address
+    pub(crate) fn az_for_address(&self, address: &str) -> Option<String> {
+        self.connection_map
+            .get(address)
+            .map(|item| item.value().user_connection.az.clone())?
+    }
+
     /// Returns true if the address represents a known primary node.
     pub(crate) fn is_primary(&self, address: &String) -> bool {
         self.connection_for_address(address).is_some() && self.slot_map.is_primary(address)
@@ -240,7 +247,9 @@ where
         }
     }
 
-    pub(crate) fn round_robin_read_from_az_awareness_replica(
+    /// Returns the node's connection in the same availability zone as `client_az` in round robin strategy if exits,
+    /// if not, will fall back to any available replica or primary.
+    pub(crate) fn round_robin_read_from_replica_with_az_awareness(
         &self,
         slot_map_value: &SlotMapValue,
         client_az: String,
@@ -251,27 +260,21 @@ where
 
         loop {
             retries = retries.saturating_add(1);
-            // Looped through all replicas; no connected replica found in the same AZ.
+            // Looped through all replicas; no connected replica found in the same availability zone.
             if retries > addrs.replicas().len() {
-                // Attempt a fallback to any available replica in other AZs.
-                for replica in &addrs.replicas() {
-                    if let Some(connection) = self.connection_for_address(replica.as_str()) {
-                        return Some(connection);
-                    }
-                }
-                // Fallback to the primary if no replica is connected.
-                return self.connection_for_address(addrs.primary().as_str());
+                // Attempt a fallback to any available replica or primary if needed.
+                return self.round_robin_read_from_replica(slot_map_value);
             }
 
             // Calculate index based on initial index and check count.
             let index = (initial_index + retries) % addrs.replicas().len();
             let replica = &addrs.replicas()[index];
 
-            // Check if this replica’s AZ matches the user’s AZ.
+            // Check if this replica’s availability zone matches the user’s availability zone.
             if let Some((address, connection_details)) =
                 self.connection_details_for_address(replica.as_str())
             {
-                if connection_details.az.as_deref() == Some(&client_az) {
+                if self.az_for_address(&address) == Some(client_az.clone()) {
                     // Attempt to update `latest_used_replica` with the index of this replica.
                     let _ = slot_map_value.last_used_replica.compare_exchange_weak(
                         initial_index,
@@ -303,15 +306,19 @@ where
                 ReadFromReplicaStrategy::RoundRobin => {
                     self.round_robin_read_from_replica(slot_map_value)
                 }
-                ReadFromReplicaStrategy::AZAffinity(az) => {
-                    self.round_robin_read_from_az_awareness_replica(slot_map_value, az.to_string())
-                }
+                ReadFromReplicaStrategy::AZAffinity(az) => self
+                    .round_robin_read_from_replica_with_az_awareness(
+                        slot_map_value,
+                        az.to_string(),
+                    ),
             },
             // when the user strategy per command is replica_preffered
             SlotAddr::ReplicaRequired => match &self.read_from_replica_strategy {
-                ReadFromReplicaStrategy::AZAffinity(az) => {
-                    self.round_robin_read_from_az_awareness_replica(slot_map_value, az.to_string())
-                }
+                ReadFromReplicaStrategy::AZAffinity(az) => self
+                    .round_robin_read_from_replica_with_az_awareness(
+                        slot_map_value,
+                        az.to_string(),
+                    ),
                 _ => self.round_robin_read_from_replica(slot_map_value),
             },
         }
@@ -502,7 +509,6 @@ mod tests {
     }
 
     fn create_container_with_az_strategy(
-        // strategy: ReadFromReplicaStrategy,
         use_management_connections: bool,
     ) -> ConnectionsContainer<usize> {
         let slot_map = SlotMap::new(

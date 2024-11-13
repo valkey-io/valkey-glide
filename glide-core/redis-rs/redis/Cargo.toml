@@ -153,7 +153,7 @@ bigdecimal = ["dep:bigdecimal"]
 num-bigint = []
 uuid = ["dep:uuid"]
 disable-client-setinfo = []
-valkey-gte-7-2 = []
+valkey-gte-8 = []
 
 # Deprecated features
 tls = ["tls-native-tls"] # use "tls-native-tls" instead
