@@ -13,6 +13,12 @@ from glide.async_commands.server_modules.json import (
     JsonArrPopOptions,
     JsonGetOptions,
 )
+from glide.async_commands.server_modules import json_transaction
+from glide.async_commands.transaction import (
+    BaseTransaction,
+    ClusterTransaction,
+    Transaction,
+)
 from glide.config import ProtocolVersion
 from glide.constants import OK
 from glide.exceptions import RequestError
@@ -1954,3 +1960,21 @@ class TestJson:
 
         assert await json.arrpop(glide_client, key2, JsonArrPopOptions("[*]")) == b'"a"'
         assert await json.get(glide_client, key2, ".") == b'[[],[],["a"],["a","b"]]'
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def json_transaction_test(self, glide_client: TGlideClient, cluster_mode: bool) -> List[TResult]:
+        transaction = ClusterTransaction() if cluster_mode else Transaction()
+
+        key = get_random_string(5)
+
+        json_value = {"a": 1.0, "b": 2}
+        json_transaction.set(transaction, key, "$", OuterJson.dumps(json_value))
+        json_transaction.get(transaction, key, "$")
+
+        result = await glide_client.exec(transaction)
+
+        assert isinstance(result, list)
+        assert result[0] == OK
+        assert isinstance(result[1], bytes)
+        assert OuterJson.loads(result[1]) == json_value
