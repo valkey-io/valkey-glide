@@ -574,6 +574,17 @@ export interface BaseClientConfiguration {
      * used.
      */
     inflightRequestsLimit?: number;
+    /**
+     * Availability Zone of the client.
+     * This setting ensures that read operations are directed to nodes within the specified AZ.
+     * If not set, the client's AZ will be determined dynamically based on the node addresses or default behavior.
+     *
+     * @example
+     * ```typescript
+     * configuration.client_az = 'us-east-1a';
+     * ```
+     */
+    clientAz?: string;
 }
 
 /**
@@ -719,6 +730,7 @@ export class BaseClient {
     private readonly pubsubFutures: [PromiseFunction, ErrorFunction][] = [];
     private pendingPushNotification: response.Response[] = [];
     private readonly inflightRequestsLimit: number;
+    private readonly clientAz: string | undefined;
     private config: BaseClientConfiguration | undefined;
 
     protected configurePubsub(
@@ -7571,6 +7583,7 @@ export class BaseClient {
             readFrom,
             authenticationInfo,
             inflightRequestsLimit: options.inflightRequestsLimit,
+            clientAz: options.clientAz ?? null,
         };
     }
 

@@ -1966,4 +1966,562 @@ describe("GlideClusterClient", () => {
             }
         },
     );
+    describe("GlideClusterClient - AZAffinity Read Strategy Test", () => {
+        it.each([ProtocolVersion.RESP2,ProtocolVersion.RESP3])(
+            'should route GET commands to all replicas with the same AZ using protocol %p',
+            async (protocol) => {
+                const az = "us-east-1a";
+                const n_replicas = 6;
+                const GET_CALLS = 3 * n_replicas;
+                const get_cmdstat = `calls=${GET_CALLS / n_replicas}`;
+                
+                let client_for_config_set;
+                let client_for_testing_az;
+                
+                try {
+                    // Stage 1: Configure nodes
+                    client_for_config_set = await GlideClusterClient.createClient(
+                        getClientConfigurationOption(cluster.getAddresses(), protocol)
+                    );
+                    // Skip test if version is below 8.0.0
+                    if (cluster.checkIfServerVersionLessThan("8.0.0")) {
+                        console.log("Skipping test: requires Valkey 8.0.0 or higher");
+                        return;
+                    }
+                    // const info = await client_for_config_set.customCommand(["INFO", "SERVER"]);
+                    await client_for_config_set.customCommand(["CONFIG", "RESETSTAT"]);
+                    await client_for_config_set.customCommand(
+                        ["CONFIG", "SET", "availability-zone", az],
+                        { route: "allNodes" }
+                    );                    
+                    // Stage 2: Create AZ affinity client and verify configuration
+                    client_for_testing_az = await GlideClusterClient.createClient(
+                        getClientConfigurationOption(
+                            cluster.getAddresses(),
+                            protocol,
+                            {
+                                readFrom: "AZAffinity",
+                                clientAz: az
+                            }
+                        )
+                    );
+    
+                    const azs = await client_for_testing_az.customCommand(
+                        ["CONFIG", "GET", "availability-zone"],
+                        { route: "allNodes" }
+                    );
+                    
+                    if (Array.isArray(azs)) {
+                        const allAZsMatch = azs.every(node => {
+                            const nodeResponse = node as { key: string; value: any };
+                            
+                            if (protocol === ProtocolVersion.RESP2) {
+                                // RESP2: Direct array format ["availability-zone", "us-east-1a"]
+                                return Array.isArray(nodeResponse.value) && 
+                                       nodeResponse.value[1] === az;
+                            } else {
+                                // RESP3: Nested object format [{ key: "availability-zone", value: "us-east-1a" }]
+                                return Array.isArray(nodeResponse.value) && 
+                                       nodeResponse.value[0]?.key === "availability-zone" &&
+                                       nodeResponse.value[0]?.value === az;
+                            }
+                        });
+                        expect(allAZsMatch).toBe(true);
+                    } else {
+                        throw new Error("Unexpected response format from CONFIG GET command");
+                    }
+                    
+    
+                    // Stage 3: Set test data and perform GET operations
+                    await client_for_testing_az.set("foo", "testvalue");
+                    for (let i = 0; i < GET_CALLS; i++) {
+                        await client_for_testing_az.get("foo");
+                    }
+
+                    // Stage 4: Verify GET commands were routed correctly
+                    const info_result = await client_for_testing_az.customCommand(
+                        ["INFO", "COMMANDSTATS"],
+                        { route: "allNodes" }
+                    );
+
+
+                    if (Array.isArray(info_result)) {
+                        const matching_entries_count = info_result.filter(node => {
+                            const nodeInfo = node as { key: string; value: string | string[] | null };
+                            const infoStr = nodeInfo.value?.toString() || '';
+                            return infoStr.includes(get_cmdstat);
+                        }).length;
+                    
+                        expect(matching_entries_count).toBe(n_replicas);
+                    } else {
+                        throw new Error("Unexpected response format from INFO command");
+                    }
+                } finally {
+                    // Cleanup
+                    await client_for_config_set?.close();
+                    await client_for_testing_az?.close();
+                }
+            });
+        });
+    describe("GlideClusterClient - AZAffinity Routing to 1 replica", () => {
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            'should route commands to single replica with AZ using protocol %p',
+            async (protocol) => {
+                const az = "us-east-1a";
+                const GET_CALLS = 3;
+                const get_cmdstat = `calls=${GET_CALLS}`;
+                let client_for_config_set;
+                let client_for_testing_az;
+
+                try {
+                    // Stage 1: Configure nodes
+                    client_for_config_set = await GlideClusterClient.createClient(
+                        getClientConfigurationOption(cluster.getAddresses(), protocol)
+                    );
+                    
+                    // Skip test if version is below 8.0.0
+                    if (cluster.checkIfServerVersionLessThan("8.0.0")) {
+                        console.log("Skipping test: requires Valkey 8.0.0 or higher");
+                        return;
+                    }
+                    
+                    await client_for_config_set.customCommand(
+                        ["CONFIG", "SET", "availability-zone", ""],
+                        { route: "allNodes" }
+                    );           
+                    
+                    await client_for_config_set.customCommand(["CONFIG", "RESETSTAT"]);
+                    
+                    await client_for_config_set.customCommand(
+                        ["CONFIG", "SET", "availability-zone", az],
+                        { route: { type: "replicaSlotId", id: 12182 } }
+                    );
+                    // Stage 2: Create AZ affinity client and verify configuration
+                    client_for_testing_az = await GlideClusterClient.createClient(
+                        getClientConfigurationOption(
+                            cluster.getAddresses(),
+                            protocol,
+                            {
+                                readFrom: "AZAffinity",
+                                clientAz: az
+                            }
+                        )
+                    );
+                    await client_for_testing_az.set("foo", "testvalue");
+                    for (let i = 0; i < GET_CALLS; i++) {
+                        await client_for_testing_az.get("foo");
+                    }      
+                    // Stage 4: Verify GET commands were routed correctly
+                    const info_result = await client_for_testing_az.customCommand(
+                        ["INFO", "ALL"],
+                        { route: "allNodes" }
+                    );
+                    // Process the info_result to check that only one replica has the GET calls
+                    if (Array.isArray(info_result)) {
+                        // Count the number of nodes where both get_cmdstat and az are present
+                        const matching_entries_count = info_result.filter(node => {
+                            const nodeInfo = node as { key: string; value: string | string[] | null };
+                            const infoStr = nodeInfo.value?.toString() || '';
+                            return infoStr.includes(get_cmdstat) && infoStr.includes(`availability_zone:${az}`);
+                        }).length;
+
+                        expect(matching_entries_count).toBe(1);
+
+                        // Check that only one node has the availability zone set to az
+                        const changed_az_count = info_result.filter(node => {
+                            const nodeInfo = node as { key: string; value: string | string[] | null };
+                            const infoStr = nodeInfo.value?.toString() || '';
+                            return infoStr.includes(`availability_zone:${az}`);
+                        }).length;
+
+                        expect(changed_az_count).toBe(1);
+                    } else {
+                        throw new Error("Unexpected response format from INFO command");
+                    }
+                } finally {
+                        await client_for_config_set?.close();
+                        await client_for_testing_az?.close();
+                    }
+            }
+        );
+    });
+    describe("GlideClusterClient - AZAffinity with Non-existing AZ", () => {
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            'should route commands to a replica when AZ does not exist using protocol %p',
+            async (protocol) => {
+                const GET_CALLS = 4;
+                const get_cmdstat = `cmdstat_get:calls=${GET_CALLS}`;
+                let client_for_testing_az;
+    
+                try {
+                    if (cluster.checkIfServerVersionLessThan("8.0.0")) {
+                        console.log("Skipping test: requires Valkey 8.0.0 or higher");
+                        return;
+                    }
+    
+                    client_for_testing_az = await GlideClusterClient.createClient(
+                        getClientConfigurationOption(
+                            cluster.getAddresses(),
+                            protocol,
+                            {
+                                readFrom: "AZAffinity",
+                                clientAz: "non-existing-az",
+                                requestTimeout: 2000
+                            }
+                        )
+                    );
+    
+                    await client_for_testing_az.customCommand(["CONFIG", "RESETSTAT"]);
+    
+                    for (let i = 0; i < GET_CALLS; i++) {
+                        await client_for_testing_az.get("foo");
+                    }
+    
+                    const info_result = await client_for_testing_az.customCommand(
+                        ["INFO", "COMMANDSTATS"],
+                        { route: "allNodes" }
+                    );
+    
+                    if (typeof info_result === 'object' && info_result !== null) {
+                        const values = Object.values(info_result);
+                        const matching_entries_count = values.filter(value => {
+                            if (!value || typeof value !== 'object' || !('value' in value)) return false;
+                            return value.value.includes(get_cmdstat);
+                        }).length;
+    
+                        expect(matching_entries_count).toBe(1);
+                    } else {
+                        throw new Error("Unexpected response format from INFO command");
+                    }
+                } finally {
+                    await client_for_testing_az?.close();
+                }
+            }
+        );
+    });
+    
 });
+
+
+
+
+
+
+
+
+
+
+    // describe("GlideClusterClient - AZAffinity Read Strategy Test", () => {
+    //     const protocols = [ProtocolVersion.RESP2, ProtocolVersion.RESP3];
+    //     protocols.forEach(protocol => {
+    //         it(`should route GET commands to all replicas with the same AZ using protocol ${protocol}`, async () => {
+    //             const az = "us-east-1a";
+    //             const n_replicas = 4;
+    //             const GET_CALLS = 3 * n_replicas;
+    //             const get_cmdstat = `calls=${GET_CALLS / n_replicas}`;
+    //             // Create client for all nodes to perform configuration
+    //             const config = getClientConfigurationOption(
+    //                 cluster.getAddresses(),
+    //                 protocol,
+    //             );
+    //             const client_for_config_set = await GlideClusterClient.createClient(config);
+    //             await client_for_config_set.customCommand(["CONFIG", "RESETSTAT"]);
+    //             await client_for_config_set.customCommand(
+    //                 ["CONFIG", "SET", "availability-zone", az],
+    //                 { route: "allNodes" }  // This routes the command to all nodes in the cluster
+    //             );
+    //             await client_for_config_set.close();
+    //             // Create client for testing AZAffinity
+    //             const config2 = getClientConfigurationOption(
+    //                 cluster.getAddresses(),
+    //                 protocol,
+    //                 {readFrom:"AZAffinity",
+    //                  client_az:az
+    //                 }
+    //             );
+    //             const client_for_testing_az = await GlideClusterClient.createClient(config2);
+    //             // First, check if azs is a record (object with node responses)
+    //             const azs = await client_for_testing_az.customCommand(["CONFIG", "GET","availability-zone"],
+    //                 { route: "allNodes" }  // This routes the command to all nodes in the cluster
+    //                 );
+    //                 // First, check if azs is a record (object with node responses)
+    //                 if (typeof azs === 'object' && azs !== null && !Array.isArray(azs)) {
+    //                     const allAZsMatch = Object.values(azs as Record<string, GlideReturnType>).every(node => {
+    //                         if (Array.isArray(node) && node.length > 1 && node[1] !== null) {
+    //                             // If node response is an array format, check the second element (index 1)
+    //                             return node[1].toString() === az;
+    //                         } else if (node && typeof node === 'object' && 'availability-zone' in node && node["availability-zone"] !== null) {
+    //                             // If node response is an object format, check the 'availability-zone' key
+    //                             return node["availability-zone"].toString() === az;
+    //                         }
+    //                         return false; // Handle case where node format is invalid
+    //                     });
+    //                     expect(allAZsMatch).toBe(true);
+    //                 } else {
+    //                     throw new Error("Unexpected response format from CONFIG GET command");
+    //                 }
+    //                 // Perform GET_CALLS number of GET operations
+    //                 for (let i = 0; i < GET_CALLS; i++) {
+    //                     await client_for_testing_az.get("foo");
+    //                 }
+
+    //                 // Get INFO from all nodes
+    //                 const info_result = await client_for_testing_az.customCommand(
+    //                     ["INFO", "ALL"],
+    //                     { route: "allNodes" }
+    //                 );
+
+    //                 // Check that all replicas have the same number of GET calls
+    //                 if (typeof info_result === 'object' && info_result !== null && !Array.isArray(info_result)) {
+    //                     const matching_entries_count = Object.values(info_result as Record<string, GlideReturnType>)
+    //                         .filter(value => {
+    //                             if (value === null) return false;
+    //                             const valueStr = value.toString();
+    //                             return valueStr.includes(get_cmdstat) && valueStr.includes(az);
+    //                         })
+    //                         .length;
+
+    //                     expect(matching_entries_count).toBe(n_replicas);
+    //                 } else {
+    //                     throw new Error("Unexpected response format from INFO command");
+    //                 }
+    //                 // Close the client
+    //                 await client_for_testing_az.close();
+    //         });
+    //     });
+    // });
+
+
+
+    
+    // describe("GlideClient - AZAffinity Read Strategy Test", () => {
+    //     let testsFailed = 0;
+    //     let replicaAddresses: [string, number][] = [];
+    //     let azAffinityClient: GlideClusterClient;
+        
+    //     beforeAll(async () => {
+    //         // Retrieve all addresses from the existing cluster
+    //         const clusterAddresses = cluster.getAddresses();
+    //         expect(clusterAddresses.length).toBe(6); // 3 Primaries + 3 Replicas
+    
+    //         // Wait for the cluster to be in a healthy state
+    //         const [firstHost, firstPort] = clusterAddresses[0];
+    //         const clusterClient = await GlideClusterClient.createClient(
+    //             getClientConfigurationOption(
+    //                 [[firstHost, firstPort]],
+    //                 ProtocolVersion.RESP3,
+    //             ),
+    //         );
+    
+    //         let clusterStateOk = false;
+    //         let retries = 10;
+    //         while (!clusterStateOk && retries > 0) {
+    //             const clusterInfo: GlideReturnType = await clusterClient.customCommand(["CLUSTER", "INFO"]);
+    //             if (typeof clusterInfo === 'string' && clusterInfo.includes("cluster_state:ok")) {
+    //                 clusterStateOk = true;
+    //             } else {
+    //                 console.log("Waiting for cluster to become healthy...");
+    //                 await new Promise(resolve => setTimeout(resolve, 1000));
+    //                 retries--;
+    //             }
+    //         }
+    //         expect(clusterStateOk).toBe(true);
+    
+    //         // Use CLUSTER NODES to identify replica nodes
+    //         const clusterNodesOutput: GlideReturnType = await clusterClient.customCommand(["CLUSTER", "NODES"]);
+    //         if (typeof clusterNodesOutput !== 'string') {
+    //             throw new Error("Unexpected CLUSTER NODES output");
+    //         }
+    
+    //         const nodesInfo = parseClusterNodes(clusterNodesOutput);
+    
+    //         // Collect replica addresses
+    //         replicaAddresses = nodesInfo
+    //             .filter(node => node.role === 'replica')
+    //             .map(node => [node.ip, node.port]);
+    
+    //         // Ensure we have found 3 replicas
+    //         expect(replicaAddresses.length).toBe(3);
+    
+    //         // Assign Availability Zones to Replicas using CONFIG SET
+    //         for (let i = 0; i < replicaAddresses.length; i++) {
+    //             const [host, port] = replicaAddresses[i];
+    //             const client = await GlideClusterClient.createClient(
+    //                 getClientConfigurationOption(
+    //                     [[host, port]],
+    //                     ProtocolVersion.RESP3,
+    //                 ),
+    //             );
+    //             // Assign AZs using CONFIG SET
+    //             const az = `us-east1a${i}`; // us-east1a0, us-east1a1, us-east1a2
+    //             await client.customCommand(["CONFIG", "SET", "availability-zone", az]);
+    //             await client.close();
+    //         }
+
+    //         // Logging for verification
+    //         replicaAddresses.forEach(([host, port], index) => {
+    //             console.log(`Replica ${index + 1} assigned to AZ${index}: ${host}:${port}`);
+    //         });
+
+    //         await clusterClient.close();
+    //     }, TIMEOUT);
+
+    
+    //     afterEach(async () => {
+    //         await flushAndCloseClient(true, cluster.getAddresses(), azAffinityClient);
+    //     });
+    
+    //     afterAll(async () => {
+    //         if (testsFailed === 0) {
+    //             await cluster.close();
+    //         } else {
+    //             await cluster.close(true);
+    //         }
+    //     }, TIMEOUT);
+    
+    //     it("should route GET commands to the replica in 'us-east1a'", async () => {
+    //         try {
+    //             // Step 1: Configure the GlideClient for cluster interactions
+    //             azAffinityClient = await GlideClusterClient.createClient(
+    //                 getClientConfigurationOption(
+    //                     cluster.getAddresses(),
+    //                     ProtocolVersion.RESP3,
+    //                     { 
+    //                         readFrom: "AZAffinity", // Use AZAffinity read strategy
+    //                     },
+    //                 ),
+    //             );
+        
+    //             // Step 2: Perform SET operations to populate keys
+    //             const totalKeys = 4;
+    //             for (let i = 0; i < totalKeys; i++) {
+    //                 const key = `foo${i}`;
+    //                 const value = `bar${i}`;
+    //                 await azAffinityClient.set(key, value);
+    //             }
+        
+    //             // Step 3: Perform GET operations and track execution
+    //             for (let i = 0; i < totalKeys; i++) {
+    //                 const key = `foo${i}`;
+    //                 const value = `bar${i}`;
+    //                 const result: GlideReturnType = await azAffinityClient.get(key);
+        
+    //                 if (typeof result === 'string') {
+    //                     expect(result).toBe(value);
+    //                 } else {
+    //                     throw new Error(`Expected string but received ${typeof result}`);
+    //                 }
+    //             }
+        
+    //             // Step 4: Retrieve Command Statistics from All Replicas
+    //             const replicaClients = await Promise.all(replicaAddresses.map(([host, port]) =>
+    //                 GlideClusterClient.createClient(
+    //                     getClientConfigurationOption(
+    //                         [[host, port]],
+    //                         ProtocolVersion.RESP3,
+    //                     ),
+    //                 )
+    //             ));
+        
+    //             const infoResponses: GlideReturnType[] = await Promise.all(replicaClients.map(client =>
+    //                 client.customCommand(["INFO", "commandstats"])
+    //             ));
+        
+    //             // Close all replica clients after fetching stats
+    //             await Promise.all(replicaClients.map(client => client.close()));
+        
+    //             const parseGetCalls = (info: GlideReturnType): number => {
+    //                 if (isInfoResponse(info)) {
+    //                     const commandstats = info['commandstats'];
+    //                     if (isCommandStatsInfo(commandstats)) {
+    //                         const cmdstat_get = commandstats['cmdstat_get'];
+    //                         if (cmdstat_get && typeof cmdstat_get === 'object') {
+    //                             const calls = cmdstat_get['calls'];
+    //                             if (typeof calls === 'string' || typeof calls === 'number') {
+    //                                 return parseInt(calls.toString(), 10);
+    //                             }
+    //                         }
+    //                     }
+    //                 }
+    //                 return 0;
+    //             };
+    //             // Aggregate GET calls across all replicas
+    //             let totalGetCalls = 0;
+    //             const replicaGetCalls = replicaAddresses.map((address, index) => {
+    //                 const info = infoResponses[index];
+    //                 const calls = parseGetCalls(info);
+    //                 totalGetCalls += calls;
+    //                 return calls;
+    //             });
+
+    //             // Logging for debugging
+    //             console.log(`Total GET calls: ${totalGetCalls}`);
+    //             replicaGetCalls.forEach((calls, index) => {
+    //                 console.log(`Replica ${index + 1} at ${replicaAddresses[index][0]}:${replicaAddresses[index][1]} handled ${calls} GET calls`);
+    //             });
+        
+    //             // Step 5: Assertions
+    //             expect(totalGetCalls).toBe(totalKeys); // All GETs should be handled by replicas
+        
+    //             // Optionally, check that a specific replica handled all GETs
+    //             const specificReplicaIndex = 0; // Index of 'us-east1a0' replica
+    //             expect(replicaGetCalls[specificReplicaIndex]).toBe(totalKeys);
+    //             replicaGetCalls.forEach((calls, index) => {
+    //                 if (index !== specificReplicaIndex) {
+    //                     expect(calls).toBe(0);
+    //                 }
+    //             });
+    //         } catch (error) {
+    //             testsFailed++;
+    //             console.error("Test failed with error:", error);
+    //             throw error; // Re-throw to fail the test
+    //         } finally {
+    //             // Ensure cleanup
+    //             if (azAffinityClient) {
+    //                 await azAffinityClient.close();
+    //             }
+    //         }
+    //     });
+    // });    
+// // Helper function to parse CLUSTER NODES output
+// function parseClusterNodes(clusterNodesOutput: string): Array<{id: string, ip: string, port: number, role: string}> {
+//     const nodesInfo = [];
+//     const lines = clusterNodesOutput.trim().split('\n');
+//     for (const line of lines) {
+//         if (line.trim() === '') continue;
+//         const parts = line.split(' ');
+//         const id = parts[0];
+//         const addr = parts[1];
+//         const flags = parts[2].split(',');
+//         const role = flags.includes('master') ? 'master' : (flags.includes('slave') || flags.includes('replica') ? 'replica' : 'unknown');
+//         const [ip, portStr] = addr.split(':');
+//         const port = parseInt(portStr.split('@')[0], 10);
+//         nodesInfo.push({ id, ip, port, role });
+//     }
+//     return nodesInfo;
+// }
+// // Interface representing the structure of cmdstat_get
+// interface CmdStatGet {
+//     [statName: string]: string | number;
+// }
+
+// // Interface representing the commandstats section
+// interface CommandStatsInfo {
+//     [commandName: string]: CmdStatGet;
+// }
+
+// // Interface representing the entire INFO command response
+// interface InfoResponse {
+//     [section: string]: any;
+//     commandstats?: CommandStatsInfo;
+// }
+
+// // Type guard to check if an object is an InfoResponse
+// function isInfoResponse(obj: any): obj is InfoResponse {
+//     return typeof obj === 'object' && obj !== null;
+// }
+
+// // Type guard to check if an object is CommandStatsInfo
+// function isCommandStatsInfo(obj: any): obj is CommandStatsInfo {
+//     return typeof obj === 'object' && obj !== null;
+// }

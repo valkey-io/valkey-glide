@@ -24,7 +24,7 @@ import {
     RequestError,
     Script,
     Transaction,
-    convertGlideRecordToRecord,
+    convertGlideRecordToRecord
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import { command_request } from "../src/ProtobufMessage";
