@@ -19,6 +19,7 @@ import {
     FtAggregateReturnType,
     FtSearchOptions,
     FtSearchReturnType,
+    GlideClient,
     GlideClusterClient,
     GlideFt,
     GlideJson,
@@ -29,6 +30,7 @@ import {
     ProtocolVersion,
     RequestError,
     SortOrder,
+    Transaction,
     VectorField,
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils";
@@ -3460,4 +3462,29 @@ describe("Server Module Tests", () => {
             );
         });
     });
+
+    describe.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "GlideJson",
+        async (protocol) => {
+            let client: GlideClient;
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            afterEach(async () => {
+                await flushAndCloseClient(true, cluster.getAddresses(), client);
+            });
+            const transaction = new Transaction();
+            const expectedRes = await transactionMultiJsonTest(
+                transaction,
+                cluster.getVersion(),
+            );
+            transaction.select(0);
+            const result = await client.exec(transaction);
+            expectedRes.push(["select(0)", "OK"]);
+
+            validateTransactionResponse(result, expectedRes);
+            client.close();
+        },
+    );
 });
