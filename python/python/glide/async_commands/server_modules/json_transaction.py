@@ -19,6 +19,7 @@
 
 from typing import List, Optional, Union, cast
 
+from gglide.async_commands.transaction import TTransaction
 from glide.async_commands.core import ConditionalChange
 from glide.async_commands.server_modules.json import (
     JsonArrIndexOptions,
@@ -27,7 +28,6 @@ from glide.async_commands.server_modules.json import (
 )
 from glide.constants import TEncodable
 from glide.protobuf.command_request_pb2 import RequestType
-from gglide.async_commands.transaction import TTransaction
 
 
 def set(
