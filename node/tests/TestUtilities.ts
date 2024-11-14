@@ -1713,7 +1713,7 @@ export async function transactionMultiJson(
 ): Promise<[string, GlideReturnType][]> {
     const responseData: [string, GlideReturnType][] = [];
     const key = "key1" + uuidv4();
-    const jsonValue3 = { a: [1, 2], b: [3, 4], c: "c" };
+    const jsonValue3 = { a: [1, 2], b: [3, 4], c: 'c' };
     GlideMultiJson.set(baseTransaction, key, "$", JSON.stringify(jsonValue3));
     responseData.push(['set(key3, "$")', "OK"]);
 
@@ -1742,8 +1742,8 @@ export async function transactionMultiJson(
     responseData.push(['nummultby(key, "$.a[*]", 10.0)', "[110,120]"]);
 
     // // JSON.STRAPPEND
-    GlideMultiJson.strappend(baseTransaction, key, '-test', { path: "$.c" });
-    responseData.push(['strappend(key2, \'"-test"\', "$.c")', [8]]);
+    GlideMultiJson.strappend(baseTransaction, key, '-test', { path: "$..c" });
+    responseData.push(['strappend(key2, \'"-test"\', "$..c")', [8]]);
 
     // // JSON.STRLEN
     // GlideMultiJson.strlen(baseTransaction, key2, { path: "$..a" });
