@@ -134,7 +134,6 @@ mod auth {
             create_connection(None, ConnectionType::Cluster, Some(&cluster_context), None).await;
         assert!(connection_should_fail.is_err());
         let err = connection_should_fail.err().unwrap();
-        println!("{}", err.to_string());
         assert!(err.to_string().contains("Authentication required."));
 
         // Test that we can connect with password

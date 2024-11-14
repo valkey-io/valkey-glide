@@ -1969,8 +1969,6 @@ where
     }
 
     /// Handles MOVED errors by updating the client's slot and node mappings based on the new primary's role:
-    /// /// Updates the slot and node mappings in response to a MOVED error.
-    /// This function handles various scenarios based on the new primary's role:
     ///
     /// 1. **No Change**: If the new primary is already the current slot owner, no updates are needed.
     /// 2. **Failover**: If the new primary is a replica within the same shard (indicating a failover),
@@ -2550,7 +2548,7 @@ where
                     if let Some(future) = future {
                         self.in_flight_requests.push(Box::pin(Request {
                             retry_params,
-                            request: Some(request),
+                            request,
                             future,
                         }));
                     }
