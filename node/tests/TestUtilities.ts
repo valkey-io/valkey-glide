@@ -1651,18 +1651,19 @@ export async function transactionMultiJsonTest(
 
     const jsonValue2 = { a: 1, b: ["one", "two"] };
     GlideMultiJson.set(baseTransaction, key1, "$", JSON.stringify(jsonValue2));
+    responseData.push(['set(key1, "$", "{ "a": 1, b: ["one", "two"] }")', "OK"])
 
     // JSON.GET
     GlideMultiJson.get(baseTransaction, key1, { path: "$.a" });
     responseData.push(['get(key1, ["$.a", "$.b"])', '{"$.a":[1],"$.b":[["one","two"]]}']);
 
-    // // JSON.ARRAPPEND
-    // GlideMultiJson.arrappend(baseTransaction, key1, "$.b", ['"3"', '"4"']);
-    // responseData.push(['arrappend(key1, "$.b", [\'"3"\', \'"4"\'])', [4]]);
+    // JSON.ARRAPPEND
+    GlideMultiJson.arrappend(baseTransaction, key1, "$.b", ['"3"', '"4"']);
+    responseData.push(['arrappend(key1, "$.b", [\'"3"\', \'"4"\'])', [4]]);
 
-    // // JSON.ARRINDEX
-    // GlideMultiJson.arrindex(baseTransaction, key1, "$.b", '"one"');
-    // responseData.push(['arrindex(key1, "$..b", \'"one"\')', [0]]);
+    // JSON.ARRINDEX
+    GlideMultiJson.arrindex(baseTransaction, key1, "$.b", '"one"');
+    responseData.push(['arrindex(key1, "$..b", \'"one"\')', [0]]);
 
     // // JSON.ARRINSERT
     // GlideMultiJson.arrinsert(baseTransaction, key1, "$.b", 4, ['"5"']);
