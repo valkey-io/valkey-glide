@@ -1717,7 +1717,7 @@ export async function transactionMultiJsonTest(
 
     // New key for NUMINCRBY
     const key3 = "key3" + uuidv4();
-    const jsonValue3 = { c: [1, 2], d: true, e: ["hello", "clouds"], f: { "a": "hello" } };
+    const jsonValue3 = { c: [1, 2], d: true, e: ["hello", "clouds"], f: { a: "hello" } };
     GlideMultiJson.set(baseTransaction, key3, "$", JSON.stringify(jsonValue3));
     responseData.push(['set(key3, "$")', "OK"]);
 
