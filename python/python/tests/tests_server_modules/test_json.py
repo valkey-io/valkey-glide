@@ -1963,7 +1963,7 @@ class TestJson:
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def json_transaction_test(self, glide_client: GlideClusterClient):
+    async def test_json_transaction(self, glide_client: GlideClusterClient):
         transaction = ClusterTransaction()
 
         key = get_random_string(5)
@@ -1977,4 +1977,4 @@ class TestJson:
         assert isinstance(result, list)
         assert result[0] == OK
         assert isinstance(result[1], bytes)
-        assert OuterJson.loads(result[1]) == json_value
+        assert OuterJson.loads(result[1]) == [json_value]
