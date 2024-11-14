@@ -55,6 +55,7 @@ use std::{
     task::{self, Poll},
     time::SystemTime,
 };
+use strum_macros::Display;
 #[cfg(feature = "tokio-comp")]
 use tokio::task::JoinHandle;
 
@@ -106,10 +107,10 @@ use self::{
     connections_container::{ConnectionAndAddress, ConnectionType, ConnectionsMap},
     connections_logic::connect_and_check,
 };
+use crate::types::RetryMethod;
 
-pub(crate) const MUTEX_WRITE_ERR: &str = "Failed to obtain write lock for mutex. Poisoned mutex";
-pub(crate) const MUTEX_READ_ERR: &str = "Failed to obtain read lock for mutex. Poisoned mutex";
-
+pub(crate) const MUTEX_READ_ERR: &str = "Failed to obtain read lock. Poisoned mutex?";
+const MUTEX_WRITE_ERR: &str = "Failed to obtain write lock. Poisoned mutex?";
 /// This represents an async Redis Cluster connection. It stores the
 /// underlying connections maintained for each node in the cluster, as well
 /// as common parameters for connecting to nodes and executing commands.
@@ -294,8 +295,7 @@ where
             })
             .map(|response| match response {
                 Response::ClusterScanResult(new_scan_state_ref, key) => (new_scan_state_ref, key),
-                Response::Single(_) => unreachable!(),
-                Response::Multiple(_) => unreachable!(),
+                Response::Single(_) | Response::Multiple(_) => unreachable!(),
             })
     }
 
@@ -332,8 +332,7 @@ where
             })
             .map(|response| match response {
                 Response::Single(value) => value,
-                Response::Multiple(_) => unreachable!(),
-                Response::ClusterScanResult(_, _) => unreachable!(),
+                Response::ClusterScanResult(..) | Response::Multiple(_) => unreachable!(),
             })
     }
 
@@ -357,15 +356,57 @@ where
                 sender,
             })
             .await
+            .map_err(|err| {
+                RedisError::from(io::Error::new(io::ErrorKind::BrokenPipe, err.to_string()))
+            })?;
+
+        receiver
+            .await
+            .unwrap_or_else(|err| {
+                Err(RedisError::from(io::Error::new(
+                    io::ErrorKind::BrokenPipe,
+                    err.to_string(),
+                )))
+            })
+            .map(|response| match response {
+                Response::Multiple(values) => values,
+                Response::ClusterScanResult(..) | Response::Single(_) => unreachable!(),
+            })
+    }
+    /// Update the password used to authenticate with all cluster servers
+    pub async fn update_connection_password(
+        &mut self,
+        password: Option<String>,
+    ) -> RedisResult<Value> {
+        self.route_operation_request(Operation::UpdateConnectionPassword(password))
+            .await
+    }
+
+    /// Routes an operation request to the appropriate handler.
+    async fn route_operation_request(
+        &mut self,
+        operation_request: Operation,
+    ) -> RedisResult<Value> {
+        let (sender, receiver) = oneshot::channel();
+        self.0
+            .send(Message {
+                cmd: CmdArg::OperationRequest(operation_request),
+                sender,
+            })
+            .await
             .map_err(|_| RedisError::from(io::Error::from(io::ErrorKind::BrokenPipe)))?;
 
         receiver
             .await
-            .unwrap_or_else(|_| Err(RedisError::from(io::Error::from(io::ErrorKind::BrokenPipe))))
+            .unwrap_or_else(|err| {
+                Err(RedisError::from(io::Error::new(
+                    io::ErrorKind::BrokenPipe,
+                    err.to_string(),
+                )))
+            })
             .map(|response| match response {
-                Response::Multiple(values) => values,
-                Response::Single(_) => unreachable!(),
-                Response::ClusterScanResult(_, _) => unreachable!(),
+                Response::Single(values) => values,
+                Response::ClusterScanResult(..) | Response::Multiple(_) => unreachable!(),
             })
     }
 }
@@ -410,7 +451,7 @@ type ConnectionsContainer<C> =
 
 pub(crate) struct InnerCore<C> {
     pub(crate) conn_lock: StdRwLock<ConnectionsContainer<C>>,
-    cluster_params: ClusterParams,
+    cluster_params: StdRwLock<ClusterParams>,
     pending_requests: Mutex<Vec<PendingRequest<C>>>,
     slot_refresh_state: SlotRefreshState,
     initial_nodes: Vec<ConnectionInfo>,
@@ -425,6 +466,29 @@ impl<C> InnerCore<C>
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
 {
+    fn get_cluster_param<T, F>(&self, f: F) -> Result<T, RedisError>
+    where
+        F: FnOnce(&ClusterParams) -> T,
+        T: Clone,
+    {
+        self.cluster_params
+            .read()
+            .map(|guard| f(&guard).clone())
+            .map_err(|_| RedisError::from((ErrorKind::ClientError, MUTEX_READ_ERR)))
+    }
+
+    fn set_cluster_param<F>(&self, f: F) -> Result<(), RedisError>
+    where
+        F: FnOnce(&mut ClusterParams),
+    {
+        self.cluster_params
+            .write()
+            .map(|mut params| {
+                f(&mut params);
+            })
+            .map_err(|_| RedisError::from((ErrorKind::ClientError, MUTEX_WRITE_ERR)))
+    }
+
     // return address of node for slot
     pub(crate) async fn get_address_from_slot(
         &self,
@@ -615,6 +679,14 @@ enum CmdArg<C> {
         // struct containing the arguments for the cluster scan command - scan state cursor, match pattern, count and object type.
         cluster_scan_args: ClusterScanArgs,
     },
+    // Operational requests which are connected to the internal state of the connection and not send as a command to the server.
+    OperationRequest(Operation),
+}
+
+// Operation requests which are connected to the internal state of the connection and not send as a command to the server.
+#[derive(Clone)]
+enum Operation {
+    UpdateConnectionPassword(Option<String>),
 }
 
 fn route_for_pipeline(pipeline: &crate::Pipeline) -> RedisResult<Option<Route>> {
@@ -656,16 +728,17 @@ fn route_for_pipeline(pipeline: &crate::Pipeline) -> RedisResult<Option<Route>> 
 }
 
 fn boxed_sleep(duration: Duration) -> BoxFuture<'static, ()> {
-    #[cfg(feature = "tokio-comp")]
-    return Box::pin(tokio::time::sleep(duration));
+    Box::pin(tokio::time::sleep(duration))
 }
 
+#[derive(Debug, Display)]
 pub(crate) enum Response {
     Single(Value),
     ClusterScanResult(ScanStateRC, Vec<Value>),
     Multiple(Vec<Value>),
 }
 
+#[derive(Debug)]
 pub(crate) enum OperationTarget {
     Node { address: String },
     FanOut,
@@ -679,7 +752,7 @@ impl From<String> for OperationTarget {
     }
 }
 
-struct Message<C> {
+struct Message<C: Sized> {
     cmd: CmdArg<C>,
     sender: oneshot::Sender<RedisResult<Response>>,
 }
@@ -740,6 +813,10 @@ impl<C> RequestInfo<C> {
                 CmdArg::ClusterScan { .. } => {
                     unreachable!()
                 }
+                // Operation requests are not routed.
+                CmdArg::OperationRequest(_) => {
+                    unreachable!()
+                }
             }
         }
     }
@@ -772,6 +849,10 @@ impl<C> RequestInfo<C> {
             }
             // cluster_scan is sent as a normal command internally so we will not reach that point.
             CmdArg::ClusterScan { .. } => {
+                unreachable!()
+            }
+            // Operation requests are not routed.
+            CmdArg::OperationRequest { .. } => {
                 unreachable!()
             }
         }
@@ -867,7 +948,7 @@ impl<C> Future for Request<C> {
                     let retry_method = err.retry_method();
                     let next = if err.kind() == ErrorKind::AllConnectionsUnavailable {
                         Next::ReconnectToInitialNodes { request: None }.into()
-                    } else if matches!(err.retry_method(), crate::types::RetryMethod::MovedRedirect)
+                    } else if matches!(err.retry_method(), RetryMethod::MovedRedirect)
                         || matches!(target, OperationTarget::NotFound)
                     {
                         Next::RefreshSlots {
@@ -875,8 +956,8 @@ impl<C> Future for Request<C> {
                             sleep_duration: None,
                         }
                         .into()
-                    } else if matches!(retry_method, crate::types::RetryMethod::Reconnect)
-                        || matches!(retry_method, crate::types::RetryMethod::ReconnectAndRetry)
+                    } else if matches!(retry_method, RetryMethod::Reconnect)
+                        || matches!(retry_method, RetryMethod::ReconnectAndRetry)
                     {
                         if let OperationTarget::Node { address } = target {
                             Next::Reconnect {
@@ -928,7 +1009,7 @@ impl<C> Future for Request<C> {
                 warn!("Received request error {} on node {:?}.", err, address);
 
                 match err.retry_method() {
-                    crate::types::RetryMethod::AskRedirect => {
+                    RetryMethod::AskRedirect => {
                         let mut request = this.request.take().unwrap();
                         request.info.set_redirect(
                             err.redirect_node()
@@ -936,7 +1017,7 @@ impl<C> Future for Request<C> {
                         );
                         Next::Retry { request }.into()
                     }
-                    crate::types::RetryMethod::MovedRedirect => {
+                    RetryMethod::MovedRedirect => {
                         let mut request = this.request.take().unwrap();
                         request.info.set_redirect(
                             err.redirect_node()
@@ -948,7 +1029,7 @@ impl<C> Future for Request<C> {
                         }
                         .into()
                     }
-                    crate::types::RetryMethod::WaitAndRetry => {
+                    RetryMethod::WaitAndRetry => {
                         let sleep_duration = this.retry_params.wait_time_for_retry(request.retry);
                         // Sleep and retry.
                         this.future.set(RequestState::Sleep {
@@ -956,34 +1037,31 @@ impl<C> Future for Request<C> {
                         });
                         self.poll(cx)
                     }
-                    crate::types::RetryMethod::Reconnect
-                    | crate::types::RetryMethod::ReconnectAndRetry => {
+                    RetryMethod::Reconnect | RetryMethod::ReconnectAndRetry => {
                         let mut request = this.request.take().unwrap();
                         // TODO should we reset the redirect here?
                         request.info.reset_routing();
                         warn!("disconnected from {:?}", address);
-                        let should_retry = matches!(
-                            err.retry_method(),
-                            crate::types::RetryMethod::ReconnectAndRetry
-                        );
+                        let should_retry =
+                            matches!(err.retry_method(), RetryMethod::ReconnectAndRetry);
                         Next::Reconnect {
                             request: should_retry.then_some(request),
                             target: address,
                         }
                         .into()
                     }
-                    crate::types::RetryMethod::WaitAndRetryOnPrimaryRedirectOnReplica => {
+                    RetryMethod::WaitAndRetryOnPrimaryRedirectOnReplica => {
                         Next::RetryBusyLoadingError {
                             request: this.request.take().unwrap(),
                             address,
                         }
                         .into()
                     }
-                    crate::types::RetryMethod::RetryImmediately => Next::Retry {
+                    RetryMethod::RetryImmediately => Next::Retry {
                         request: this.request.take().unwrap(),
                     }
                     .into(),
-                    crate::types::RetryMethod::NoRetry => {
+                    RetryMethod::NoRetry => {
                         self.respond(Err(err));
                         Next::Done.into()
                     }
@@ -1051,7 +1129,7 @@ where
                 cluster_params.read_from_replicas,
                 0,
             )),
-            cluster_params: cluster_params.clone(),
+            cluster_params: StdRwLock::new(cluster_params.clone()),
             pending_requests: Mutex::new(Vec::new()),
             slot_refresh_state: SlotRefreshState::new(slots_refresh_rate_limiter),
             initial_nodes: initial_nodes.to_vec(),
@@ -1211,10 +1289,17 @@ where
     // Being used when all cluster connections are unavailable.
     fn reconnect_to_initial_nodes(inner: Arc<InnerCore<C>>) -> impl Future<Output = ()> {
         let inner = inner.clone();
-        async move {
+        let cluster_params = match inner.get_cluster_param(|params| params.clone()) {
+            Ok(params) => params,
+            Err(err) => {
+                warn!("Failed to get cluster params: {}", err);
+                return async {}.boxed();
+            }
+        };
+        Box::pin(async move {
             let connection_map = match Self::create_initial_connections(
                 &inner.initial_nodes,
-                &inner.cluster_params,
+                &cluster_params,
                 inner.glide_connection_options.clone(),
             )
             .await
@@ -1238,7 +1323,7 @@ where
             {
                 warn!("Can't refresh slots with initial nodes: `{err}`");
             };
-        }
+        })
     }
 
     // Validate all existing user connections and try to reconnect if necessary.
@@ -1329,7 +1414,7 @@ where
                 };
 
                 // Override subscriptions for this connection
-                let mut cluster_params = inner.cluster_params.clone();
+                let mut cluster_params = inner.cluster_params.read().expect(MUTEX_READ_ERR).clone();
                 let subs_guard = inner.subscriptions_by_address.read().await;
                 cluster_params.pubsub_subscriptions = subs_guard.get(&address).cloned();
                 drop(subs_guard);
@@ -1591,7 +1676,9 @@ where
     }
 
     async fn refresh_pubsub_subscriptions(inner: Arc<InnerCore<C>>) {
-        if inner.cluster_params.protocol != crate::types::ProtocolVersion::RESP3 {
+        if inner.cluster_params.read().expect(MUTEX_READ_ERR).protocol
+            != crate::types::ProtocolVersion::RESP3
+        {
             return;
         }
 
@@ -1679,10 +1766,7 @@ where
     /// Returns true if change was detected, otherwise false.
     async fn check_for_topology_diff(inner: Arc<InnerCore<C>>) -> bool {
         let num_of_nodes = inner.conn_lock.read().expect(MUTEX_READ_ERR).len();
-        // TODO: Starting from Rust V1.67, integers has logarithms support.
-        // When we no longer need to support Rust versions < 1.67, remove fast_math and transition to the ilog2 function.
-        let num_of_nodes_to_query =
-            std::cmp::max(fast_math::log2_raw(num_of_nodes as f32) as usize, 1);
+        let num_of_nodes_to_query = std::cmp::max(num_of_nodes.ilog2() as usize, 1);
         let (res, failed_connections) = calculate_topology_from_random_nodes(
             &inner,
             num_of_nodes_to_query,
@@ -1790,7 +1874,9 @@ where
             .fold(
                 ConnectionsMap(DashMap::with_capacity(nodes_len)),
                 |connections, (addr, node)| async {
-                    let mut cluster_params = inner.cluster_params.clone();
+                    let mut cluster_params = inner
+                        .get_cluster_param(|params| params.clone())
+                        .expect(MUTEX_READ_ERR);
                     let subs_guard = inner.subscriptions_by_address.read().await;
                     cluster_params.pubsub_subscriptions = subs_guard.get(addr).cloned();
                     drop(subs_guard);
@@ -1811,12 +1897,15 @@ where
             .await;
 
         info!("refresh_slots found nodes:\n{new_connections}");
-        // Replace the current slot map and connection vector with the new ones
+        // Reset the current slot map and connection vector with the new ones
         let mut write_guard = inner.conn_lock.write().expect(MUTEX_WRITE_ERR);
+        let read_from_replicas = inner
+            .get_cluster_param(|params| params.read_from_replicas)
+            .expect(MUTEX_READ_ERR);
         *write_guard = ConnectionsContainer::new(
             new_slots,
             new_connections,
-            inner.cluster_params.read_from_replicas,
+            read_from_replicas,
             topology_hash,
         );
         Ok(())
@@ -2005,6 +2094,13 @@ where
                     Err(err) => Err((OperationTarget::FanOut, err)),
                 }
             }
+            CmdArg::OperationRequest(operation_request) => match operation_request {
+                Operation::UpdateConnectionPassword(password) => {
+                    core.set_cluster_param(|params| params.password = password)
+                        .expect(MUTEX_WRITE_ERR);
+                    Ok(Response::Single(Value::Okay))
+                }
+            },
         }
     }
 
@@ -2099,7 +2195,7 @@ where
         let (address, mut conn) = match conn_check {
             ConnectionCheck::Found((address, connection)) => (address, connection.await),
             ConnectionCheck::OnlyAddress(addr) => {
-                let mut this_conn_params = core.cluster_params.clone();
+                let mut this_conn_params = core.get_cluster_param(|params| params.clone())?;
                 let subs_guard = core.subscriptions_by_address.read().await;
                 this_conn_params.pubsub_subscriptions = subs_guard.get(addr.as_str()).cloned();
                 drop(subs_guard);
@@ -2197,6 +2293,7 @@ where
         info: RequestInfo<C>,
         address: String,
         retry: u32,
+        retry_params: RetryParams,
     ) -> OperationResult {
         let is_primary = core
             .conn_lock
@@ -2213,7 +2310,7 @@ where
                 .remove_node(&address);
         } else {
             // If the connection is primary, just sleep and retry
-            let sleep_duration = core.cluster_params.retry_params.wait_time_for_retry(retry);
+            let sleep_duration = retry_params.wait_time_for_retry(retry);
             boxed_sleep(sleep_duration).await;
         }
 
@@ -2221,8 +2318,11 @@ where
     }
 
     fn poll_complete(&mut self, cx: &mut task::Context<'_>) -> Poll<PollFlushAction> {
+        let retry_params = self
+            .inner
+            .get_cluster_param(|params| params.retry_params.clone())
+            .expect(MUTEX_READ_ERR);
         let mut poll_flush_action = PollFlushAction::None;
-
         let mut pending_requests_guard = self.inner.pending_requests.lock().unwrap();
         if !pending_requests_guard.is_empty() {
             let mut pending_requests = mem::take(&mut *pending_requests_guard);
@@ -2236,7 +2336,7 @@ where
 
                 let future = Self::try_request(request.info.clone(), self.inner.clone()).boxed();
                 self.in_flight_requests.push(Box::pin(Request {
-                    retry_params: self.inner.cluster_params.retry_params.clone(),
+                    retry_params: retry_params.clone(),
                     request: Some(request),
                     future: RequestState::Future { future },
                 }));
@@ -2246,6 +2346,7 @@ where
         drop(pending_requests_guard);
 
         loop {
+            let retry_params = retry_params.clone();
             let result = match Pin::new(&mut self.in_flight_requests).poll_next(cx) {
                 Poll::Ready(Some(result)) => result,
                 Poll::Ready(None) | Poll::Pending => break,
@@ -2255,7 +2356,7 @@ where
                 Next::Retry { request } => {
                     let future = Self::try_request(request.info.clone(), self.inner.clone());
                     self.in_flight_requests.push(Box::pin(Request {
-                        retry_params: self.inner.cluster_params.retry_params.clone(),
+                        retry_params: retry_params.clone(),
                         request: Some(request),
                         future: RequestState::Future {
                             future: Box::pin(future),
@@ -2269,9 +2370,10 @@ where
                         request.info.clone(),
                         address,
                         request.retry,
+                        retry_params.clone(),
                     );
                     self.in_flight_requests.push(Box::pin(Request {
-                        retry_params: self.inner.cluster_params.retry_params.clone(),
+                        retry_params: retry_params.clone(),
                         request: Some(request),
                         future: RequestState::Future {
                             future: Box::pin(future),
@@ -2299,7 +2401,7 @@ where
                             },
                         };
                         self.in_flight_requests.push(Box::pin(Request {
-                            retry_params: self.inner.cluster_params.retry_params.clone(),
+                            retry_params,
                             request: Some(request),
                             future,
                         }));
@@ -2524,13 +2626,20 @@ where
             .ok()
             .and_then(|value| get_host_and_port_from_addr(addr).map(|(host, _)| (host, value)))
     });
+    let tls_mode = inner
+        .get_cluster_param(|params| params.tls)
+        .expect(MUTEX_READ_ERR);
+
+    let read_from_replicas = inner
+        .get_cluster_param(|params| params.read_from_replicas)
+        .expect(MUTEX_READ_ERR);
     (
         calculate_topology(
             topology_values,
             curr_retry,
-            inner.cluster_params.tls,
+            tls_mode,
             num_of_nodes_to_query,
-            inner.cluster_params.read_from_replicas,
+            read_from_replicas,
         ),
         failed_addresses,
     )

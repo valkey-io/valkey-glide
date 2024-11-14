@@ -470,6 +470,19 @@ impl StandaloneClient {
             }
         });
     }
+
+    /// Update the password used to authenticate with the servers.
+    /// If the password is `None`, the password will be removed.
+    pub async fn update_connection_password(
+        &mut self,
+        password: Option<String>,
+    ) -> RedisResult<Value> {
+        self.get_connection(false)
+            .get_connection()
+            .await?
+            .update_connection_password(password.clone())
+            .await
+    }
 }
 
 async fn get_connection_and_replication_info(

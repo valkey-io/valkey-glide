@@ -9,7 +9,7 @@ from glide.async_commands.cluster_commands import ClusterCommands
 from glide.async_commands.command_args import ObjectType
 from glide.async_commands.core import CoreCommands
 from glide.async_commands.standalone_commands import StandaloneCommands
-from glide.config import BaseClientConfiguration
+from glide.config import BaseClientConfiguration, ServerCredentials
 from glide.constants import DEFAULT_READ_BYTES_SIZE, OK, TEncodable, TRequest, TResult
 from glide.exceptions import (
     ClosingError,
@@ -26,6 +26,7 @@ from glide.protobuf.connection_request_pb2 import ConnectionRequest
 from glide.protobuf.response_pb2 import RequestErrorType, Response
 from glide.protobuf_codec import PartialMessageException, ProtobufCodec
 from glide.routes import Route, set_protobuf_route
+from pyrsistent import optional
 
 from .glide import (
     DEFAULT_TIMEOUT_IN_MILLISECONDS,
@@ -531,6 +532,21 @@ class BaseClient(CoreCommands):
                     await self._process_push(response=response)
                 else:
                     await self._process_response(response=response)
+
+    async def _update_connection_password(
+        self, password: Optional[str], re_auth: bool
+    ) -> TResult:
+        request = CommandRequest()
+        request.callback_idx = self._get_callback_index()
+        request.update_connection_password.password = password
+        request.update_connection_password.re_auth = re_auth
+        response = await self._write_request_await_response(request)
+        # Update the client binding side password if managed to change core configuration password
+        if response is OK:
+            if self.config.credentials is None:
+                self.config.credentials = ServerCredentials(password=password or "")
+                self.config.credentials.password = password or ""
+        return response
 
 
 class GlideClusterClient(BaseClient, ClusterCommands):
