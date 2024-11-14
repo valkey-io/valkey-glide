@@ -260,7 +260,7 @@ __all__ = [
     "TrimByMaxLen",
     "TrimByMinId",
     "UpdateOptions",
-    "ClusterScanCursor"
+    "ClusterScanCursor",
     # PubSub
     "PubSubMsg",
     # Json

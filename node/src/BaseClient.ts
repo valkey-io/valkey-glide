@@ -915,7 +915,8 @@ export class BaseClient {
             | command_request.Command
             | command_request.Command[]
             | command_request.ScriptInvocation
-            | command_request.ClusterScan,
+            | command_request.ClusterScan
+            | command_request.UpdateConnectionPassword,
         options: WritePromiseOptions = {},
     ): Promise<T> {
         const route = toProtobufRoute(options?.route);
@@ -985,7 +986,8 @@ export class BaseClient {
             | command_request.Command
             | command_request.Command[]
             | command_request.ScriptInvocation
-            | command_request.ClusterScan,
+            | command_request.ClusterScan
+            | command_request.UpdateConnectionPassword,
         route?: command_request.Routes,
     ) {
         const message = Array.isArray(command)
@@ -1005,10 +1007,15 @@ export class BaseClient {
                       callbackIdx,
                       clusterScan: command,
                   })
-                : command_request.CommandRequest.create({
-                      callbackIdx,
-                      scriptInvocation: command,
-                  });
+                : command instanceof command_request.UpdateConnectionPassword
+                  ? command_request.CommandRequest.create({
+                        callbackIdx,
+                        updateConnectionPassword: command,
+                    })
+                  : command_request.CommandRequest.create({
+                        callbackIdx,
+                        scriptInvocation: command,
+                    });
         message.route = route;
 
         this.writeOrBufferRequest(
@@ -7671,5 +7678,47 @@ export class BaseClient {
             socket.end();
             throw err;
         }
+    }
+
+    /**
+     * Update the current connection with a new password.
+     *
+     * This method is useful in scenarios where the server password has changed or when utilizing short-lived passwords for enhanced security.
+     * It allows the client to update its password to reconnect upon disconnection without the need to recreate the client instance.
+     * This ensures that the internal reconnection mechanism can handle reconnection seamlessly, preventing the loss of in-flight commands.
+     *
+     * This method updates the client's internal password configuration and does not perform password rotation on the server side.
+     *
+     * @param password - The new password to update the current password, or `null` to remove the current password.
+     * @param reAuth - If `true`, the client will re-authenticate immediately with the new password. If `false`, the new password will be used for the next connection attempt.
+     * @returns Always `"OK"`.
+     *
+     * @example
+     * ```typescript
+     * await client.updateConnectionPassword("newPassword", true) // "OK"
+     * ```
+     */
+    async updateConnectionPassword(password: string | null, reAuth: boolean) {
+        const updateConnectionPassword =
+            command_request.UpdateConnectionPassword.create({
+                password: password,
+                reAuth,
+            });
+
+        const response = await this.createWritePromise<GlideString>(
+            updateConnectionPassword,
+        );
+
+        if (response === "OK" && !this.config?.credentials) {
+            this.config = {
+                ...this.config!,
+                credentials: {
+                    ...this.config!.credentials,
+                    password: password ? password : "",
+                },
+            };
+        }
+
+        return response;
     }
 }
