@@ -204,6 +204,53 @@ async def get(
     return cast(TJsonResponse[Optional[bytes]], await client.custom_command(args))
 
 
+async def mget(
+    client: TGlideClient,
+    keys: List[TEncodable],
+    path: TEncodable,
+) -> List[Optional[bytes]]:
+    """
+    Retrieves the JSON values at the specified `path` stored at multiple `keys`.
+
+    Note:
+        In cluster mode, if keys in `keys` map to different hash slots, the command
+        will be split across these slots and executed separately for each. This means the command
+        is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+        call will return the first encountered error, even though some requests may have succeeded
+        while others did not. If this behavior impacts your application logic, consider splitting
+        the request into sub-requests per slot to ensure atomicity.
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+        keys (List[TEncodable]): A list of keys for the JSON documents.
+        path (TEncodable): The path within the JSON documents.
+
+    Returns:
+        List[Optional[bytes]]:
+            For JSONPath (`path` starts with `$`):
+                Returns a list of byte representations of the values found at the given path for each key.
+                If `path` does not exist within the key, the entry will be an empty array.
+            For legacy path (`path` doesn't starts with `$`):
+                Returns a list of byte representations of the values found at the given path for each key.
+                If `path` does not exist within the key, the entry will be None.
+            If a key doesn't exist, the corresponding list element will be None.
+
+
+    Examples:
+        >>> from glide import json as glideJson
+        >>> import json
+        >>> json_strs = await glideJson.mget(client, ["doc1", "doc2"], "$")
+        >>> [json.loads(js) for js in json_strs]  # Parse JSON strings to Python data
+            [[{"a": 1.0, "b": 2}], [{"a": 2.0, "b": {"a": 3.0, "b" : 4.0}}]]  # JSON objects retrieved from keys `doc1` and `doc2`
+        >>> await glideJson.mget(client, ["doc1", "doc2"], "$.a")
+            [b"[1.0]", b"[2.0]"]  # Returns values at path '$.a' for the JSON documents stored at `doc1` and `doc2`.
+        >>> await glideJson.mget(client, ["doc1"], "$.non_existing_path")
+            [None]  # Returns an empty array since the path '$.non_existing_path' does not exist in the JSON document stored at `doc1`.
+    """
+    args = ["JSON.MGET"] + keys + [path]
+    return cast(TJsonResponse[Optional[bytes]], await client.custom_command(args))
+
+
 async def arrappend(
     client: TGlideClient,
     key: TEncodable,
