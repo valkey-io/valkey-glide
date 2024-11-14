@@ -1686,12 +1686,17 @@ export async function transactionMultiJsonTest(
     GlideMultiJson.arrlen(baseTransaction, key1, { path: "$.b" });
     responseData.push(['arrlen(key1, "$.b")', [5]]);
 
-    // // JSON.ARRPOP
-    // GlideMultiJson.arrpop(baseTransaction, key1, {
-    //     path: "$.b",
-    //     index: 4,
-    // });
-    // responseData.push(['arrpop(key1, {path: "$..b", index: 4})', [5]]);
+    // JSON.ARRPOP
+    GlideMultiJson.arrpop(baseTransaction, key1, {
+        path: "$.b",
+        index: 2,
+    });
+    responseData.push(['arrpop(key1, {path: "$.b", index: 4})', [5]]);
+
+    // JSON.GET to check JSON.ARRPOP was successful.
+    const jsonValueAfterArrpop = { a: 1.0, b: [1, 2, 3, 4] };
+    GlideMultiJson.get(baseTransaction, key1, { path: "." });
+    responseData.push(['get(key1, {path: "."})', JSON.stringify(jsonValueAfterArrpop)]);
 
     // // JSON.ARRTRIM
     // GlideMultiJson.arrtrim(baseTransaction, key1, "$.b", 2, 3);
