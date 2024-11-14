@@ -1715,20 +1715,19 @@ export async function transactionMultiJsonTest(
     // GlideMultiJson.debugFields(baseTransaction, key1, { path: "$." });
     // responseData.push(['debugFields(key1, "{ path: "$." }")', [1, 2]]);
 
-    // JSON.OBJLEN
-    GlideMultiJson.objlen(baseTransaction, key1, { path: "." });
-    responseData.push(['objlen(key1)', 2]);
-
-    // JSON.OBJKEY
-    GlideMultiJson.objkeys(baseTransaction, key1, { path: "$." });
-    responseData.push(['objkeys(key1, "..")', ["a", "b"]]);
-
-
     // new key for NUMINCRBY
     const key3 = "key3" + uuidv4();
     const jsonValue3 = { "c": [1, 2], "d": true, "e": ["hello", "clouds"], "f": { "a": "hello" } };
     GlideMultiJson.set(baseTransaction, key3, "$", JSON.stringify(jsonValue3));
     responseData.push(['set(key3, "$")', "OK"]);
+
+    // JSON.OBJLEN
+    GlideMultiJson.objlen(baseTransaction, key3, { path: "$." });
+    responseData.push(['objlen(key1)', 2]);
+
+    // JSON.OBJKEY
+    GlideMultiJson.objkeys(baseTransaction, key1, { path: "$." });
+    responseData.push(['objkeys(key1, "..")', ["c", "d", "e", "f"]]);
 
     // // JSON.NUMINCRBY
     // GlideMultiJson.numincrby(baseTransaction, key2, "$.c[*]", 10.0);
