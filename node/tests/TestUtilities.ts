@@ -1665,7 +1665,7 @@ export async function transactionMultiJsonTest(
     responseData.push(['arrappend(key1, "$.b", [\'"3"\', \'"4"\'])', [4]]);
 
     // JSON.GET
-    const jsonValueAfterAppend = { a: 1.0, b: ['"1"', '"2"', '"3"', '"4"'] };
+    const jsonValueAfterAppend = { a: 1.0, b: [1, 2, 3, 4] };
     GlideMultiJson.get(baseTransaction, key1, { path: "." });
     responseData.push(['get(key1, {path: "."})', JSON.stringify(jsonValueAfterAppend)]);
 
