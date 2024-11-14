@@ -2334,7 +2334,6 @@ describe("Server Module Tests", () => {
                     const result = await client.exec(clusterTransaction);
                     console.log("result =====");
                     console.log(result);
-                    expectedRes.push(["select(0)", "OK"]);
                     validateTransactionResponse(result, expectedRes);
                     client.close();
                 },
