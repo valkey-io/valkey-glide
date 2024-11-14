@@ -1682,9 +1682,9 @@ export async function transactionMultiJsonTest(
     GlideMultiJson.get(baseTransaction, key1, { path: "." });
     responseData.push(['get(key1, {path: "."})', JSON.stringify(jsonValueAfterArrInsert)]);
 
-    // // JSON.ARRLEN
-    // GlideMultiJson.arrlen(baseTransaction, key1, { path: "$.b" });
-    // responseData.push(['arrlen(key1, "$..b")', [5]]);
+    // JSON.ARRLEN
+    GlideMultiJson.arrlen(baseTransaction, key1, { path: "$.b" });
+    responseData.push(['arrlen(key1, "$.b")', [5]]);
 
     // // JSON.ARRPOP
     // GlideMultiJson.arrpop(baseTransaction, key1, {
