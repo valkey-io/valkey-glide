@@ -1712,9 +1712,9 @@ export async function transactionMultiJson(
     baseTransaction: ClusterTransaction,
 ): Promise<[string, GlideReturnType][]> {
     const responseData: [string, GlideReturnType][] = [];
-    const key3 = "key3" + uuidv4();
+    const key = "key1" + uuidv4();
     const jsonValue3 = { a: [1, 2], b: [3, 4] };
-    GlideMultiJson.set(baseTransaction, key3, "$", JSON.stringify(jsonValue3));
+    GlideMultiJson.set(baseTransaction, key, "$", JSON.stringify(jsonValue3));
     responseData.push(['set(key3, "$")', "OK"]);
 
     // JSON.DEBUG MEMORY
@@ -1730,11 +1730,11 @@ export async function transactionMultiJson(
     // responseData.push(['objlen(key3)', 2]);
 
     // JSON.OBJKEY
-    GlideMultiJson.objkeys(baseTransaction, key3, { path: "$." });
+    GlideMultiJson.objkeys(baseTransaction, key, { path: "$." });
     responseData.push(['objkeys(key1, "$.")', ["a", "b"]]);
 
     // // JSON.NUMINCRBY
-    // GlideMultiJson.numincrby(baseTransaction, key2, "$.c[*]", 10.0);
+    // GlideMultiJson.numincrby(baseTransaction, key3, "$.c[*]", 10.0);
     // responseData.push(['numincrby(key2, "$.c[*]", 10.0)', "[11,12]"]);
 
     // // JSON.NUMMULTBY
