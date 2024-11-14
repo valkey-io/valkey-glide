@@ -1172,7 +1172,6 @@ export class GlideMultiJson {
      * @param options - (Optional) Additional parameters:
      * - (Optional) `conditionalChange` - Set the value only if the given condition is met (within the key or path).
      *      Equivalent to [`XX` | `NX`] in the module API.
-     * - (Optional) `decoder`: see {@link DecoderOption}.
      *
      * @returns If the value is successfully set, returns `"OK"`.
      *       If `value` isn't set because of `conditionalChange`, returns `null`.
@@ -1194,7 +1193,7 @@ export class GlideMultiJson {
         key: GlideString,
         path: GlideString,
         value: GlideString,
-        options?: { conditionalChange: ConditionalChange } & DecoderOption,
+        options?: { conditionalChange: ConditionalChange },
     ): Transaction {
         const args: GlideString[] = ["JSON.SET", key, path, value];
 
@@ -1208,11 +1207,10 @@ export class GlideMultiJson {
     /**
      * Retrieves the JSON value at the specified `paths` stored at `key`.
      *
-     * @param transaction - The object to create the command and add to the transaction.
+     * @param transaction - A transaction to add commands to.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
      * - (Optional) Options for formatting the byte representation of the JSON data. See {@link JsonGetOptions}.
-     * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns
      *   - If one path is given:
      *     - For JSONPath (path starts with `$`):
@@ -1254,7 +1252,7 @@ export class GlideMultiJson {
     static get(
         transaction: Transaction,
         key: GlideString,
-        options?: JsonGetOptions & DecoderOption,
+        options?: JsonGetOptions,
     ): Transaction {
         const args = ["JSON.GET", key];
 
@@ -1270,7 +1268,7 @@ export class GlideMultiJson {
      * Inserts one or more values into the array at the specified `path` within the JSON
      * document stored at `key`, before the given `index`.
      *
-     * @param transaction - The object to create the command and add to the transaction.
+     * @param transaction - A transaction to add commands to.
      * @param key - The key of the JSON document.
      * @param path - The path within the JSON document.
      * @param index - The array index before which values are inserted.
@@ -1320,9 +1318,9 @@ export class GlideMultiJson {
     /**
      * Pops an element from the array located at `path` in the JSON document stored at `key`.
      *
-     * @param transaction - The object to create the command and add to the transaction.
+     * @param transaction - A transaction to add commands to.
      * @param key - The key of the JSON document.
-     * @param options - (Optional) See {@link JsonArrPopOptions} and {@link DecoderOption}.
+     * @param options - (Optional) See {@link JsonArrPopOptions}.
      * @returns
      * - For JSONPath (path starts with `$`):
      *       Returns an array with a strings for every possible path, representing the popped JSON
@@ -1358,7 +1356,7 @@ export class GlideMultiJson {
     static arrpop(
         transaction: Transaction,
         key: GlideString,
-        options?: JsonArrPopOptions & DecoderOption,
+        options?: JsonArrPopOptions,
     ): Transaction {
         const args = ["JSON.ARRPOP", key];
         if (options?.path) args.push(options?.path);
@@ -1371,7 +1369,7 @@ export class GlideMultiJson {
     /**
      * Retrieves the length of the array at the specified `path` within the JSON document stored at `key`.
      *
-     * @param transaction - The object to create the command and add to the transaction.
+     * @param transaction - A transaction to add commands to.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
      * - (Optional) `path`: The path within the JSON document. Defaults to the root (`"."`) if not specified.
@@ -1418,7 +1416,7 @@ export class GlideMultiJson {
      * If `end` >= size (size of the array), it is treated as size-1.
      * If `start` >= size or `start` > `end`, the array is emptied and 0 is returned.
      *
-     * @param transaction - The object to create the command and add to the transaction.
+     * @param transaction - A transaction to add commands to.
      * @param key - The key of the JSON document.
      * @param path - The path within the JSON document.
      * @param start - The start index, inclusive.
@@ -1480,7 +1478,7 @@ export class GlideMultiJson {
      * Out of range errors are treated by rounding the index to the array's `start` and `end.
      * If `start` > `end`, return `-1` (not found).
      *
-     * @param transaction - The object to create the command and add to the transaction.
+     * @param transaction - A transaction to add commands to.
      * @param key - The key of the JSON document.
      * @param path - The path within the JSON document.
      * @param scalar - The scalar value to search for.
@@ -1531,7 +1529,7 @@ export class GlideMultiJson {
     /**
      * Toggles a Boolean value stored at the specified `path` within the JSON document stored at `key`.
      *
-     * @param transaction - The object to create the command and add to the transaction.
+     * @param transaction - A transaction to add commands to.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
      * - (Optional) `path`: The path within the JSON document. Defaults to the root (`"."`) if not specified.
@@ -1583,7 +1581,7 @@ export class GlideMultiJson {
     /**
      * Deletes the JSON value at the specified `path` within the JSON document stored at `key`.
      *
-     * @param transaction - The object to create the command and add to the transaction.
+     * @param transaction - A transaction to add commands to.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
      * - (Optional) `path`: If `null`, deletes the entire JSON document at `key`.
@@ -1619,7 +1617,7 @@ export class GlideMultiJson {
      * Deletes the JSON value at the specified `path` within the JSON document stored at `key`. This command is
      * an alias of {@link del}.
      *
-     * @param transaction - The object to create the command and add to the transaction.
+     * @param transaction - A transaction to add commands to.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
      * - (Optional) `path`: If `null`, deletes the entire JSON document at `key`.
@@ -1654,7 +1652,7 @@ export class GlideMultiJson {
     /**
      * Reports the type of values at the given path.
      *
-     * @param transaction - The object to create the command and add to the transaction.
+     * @param transaction - A transaction to add commands to.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
      * - (Optional) `path`: Defaults to root (`"."`) if not provided.
@@ -1699,7 +1697,7 @@ export class GlideMultiJson {
      * Clears arrays or objects at the specified JSON path in the document stored at `key`.
      * Numeric values are set to `0`, boolean values are set to `false`, and string values are converted to empty strings.
      *
-     * @param transaction - The object to create the command and add to the transaction.
+     * @param transaction - A transaction to add commands to.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
      * - (Optional) `path`: The JSON path to the arrays or objects to be cleared. Defaults to root if not provided.
@@ -1759,11 +1757,10 @@ export class GlideMultiJson {
      * JSON arrays are represented as RESP arrays, where the first element is the simple string [, followed by the array's elements.
      * JSON objects are represented as RESP object, where the first element is the simple string {, followed by key-value pairs, each of which is a RESP bulk string.
      *
-     * @param transaction - The object to create the command and add to the transaction.
+     * @param transaction - A transaction to add commands to.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
      * - (Optional) `path`: The path within the JSON document, defaults to root (`"."`) if not provided.
-     * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns
      *     - For JSONPath (path starts with `$`):
      *       - Returns an array of replies for every possible path, indicating the RESP form of the JSON value.
@@ -1786,7 +1783,7 @@ export class GlideMultiJson {
     static resp(
         transaction: Transaction,
         key: GlideString,
-        options?: { path: GlideString } & DecoderOption,
+        options?: { path: GlideString },
     ): Transaction {
         const args = ["JSON.RESP", key];
 
@@ -1801,7 +1798,7 @@ export class GlideMultiJson {
      * Returns the length of the JSON string value stored at the specified `path` within
      * the JSON document stored at `key`.
      *
-     * @param transaction - The object to create the command and add to the transaction.
+     * @param transaction - A transaction to add commands to.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
      * - (Optional) `path`: The path within the JSON document, Defaults to root (`"."`) if not provided.
@@ -1850,7 +1847,7 @@ export class GlideMultiJson {
     /**
      * Appends the specified `value` to the string stored at the specified `path` within the JSON document stored at `key`.
      *
-     * @param transaction - The object to create the command and add to the transaction.
+     * @param transaction - A transaction to add commands to.
      * @param key - The key of the JSON document.
      * @param value - The value to append to the string. Must be wrapped with single quotes. For example, to append "foo", pass '"foo"'.
      * @param options - (Optional) Additional parameters:
@@ -1902,7 +1899,7 @@ export class GlideMultiJson {
      * Appends one or more `values` to the JSON array at the specified `path` within the JSON
      * document stored at `key`.
      *
-     * @param transaction - The object to create the command and add to the transaction.
+     * @param transaction - A transaction to add commands to.
      * @param key - The key of the JSON document.
      * @param path - The path within the JSON document.
      * @param values - The JSON values to be appended to the array.
@@ -1943,7 +1940,7 @@ export class GlideMultiJson {
     /**
      * Reports memory usage in bytes of a JSON object at the specified `path` within the JSON document stored at `key`.
      *
-     * @param transaction - The object to create the command and add to the transaction.
+     * @param transaction - A transaction to add commands to.
      * @param key - The key of the JSON document.
      * @param value - The value to append to the string. Must be wrapped with single quotes. For example, to append "foo", pass '"foo"'.
      * @param options - (Optional) Additional parameters:
@@ -1982,7 +1979,7 @@ export class GlideMultiJson {
     /**
      * Reports the number of fields at the specified `path` within the JSON document stored at `key`.
      *
-     * @param transaction - The object to create the command and add to the transaction.
+     * @param transaction - A transaction to add commands to.
      * @param key - The key of the JSON document.
      * @param value - The value to append to the string. Must be wrapped with single quotes. For example, to append "foo", pass '"foo"'.
      * @param options - (Optional) Additional parameters:
@@ -2021,7 +2018,7 @@ export class GlideMultiJson {
     /**
      * Increments or decrements the JSON value(s) at the specified `path` by `number` within the JSON document stored at `key`.
      *
-     * @param transaction - The object to create the command and add to the transaction.
+     * @param transaction - A transaction to add commands to.
      * @param key - The key of the JSON document.
      * @param path - The path within the JSON document.
      * @param num - The number to increment or decrement by.
@@ -2061,7 +2058,7 @@ export class GlideMultiJson {
     /**
      * Multiplies the JSON value(s) at the specified `path` by `number` within the JSON document stored at `key`.
      *
-     * @param transaction - The object to create the command and add to the transaction.
+     * @param transaction - A transaction to add commands to.
      * @param key - The key of the JSON document.
      * @param path - The path within the JSON document.
      * @param num - The number to multiply by.
@@ -2101,7 +2098,7 @@ export class GlideMultiJson {
     /**
      * Retrieves the number of key-value pairs in the object stored at the specified `path` within the JSON document stored at `key`.
      *
-     * @param transaction - The object to create the command and add to the transaction.
+     * @param transaction - A transaction to add commands to.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
      * - (Optional) `path`: The path within the JSON document, Defaults to root (`"."`) if not provided.
@@ -2143,7 +2140,7 @@ export class GlideMultiJson {
     /**
      * Retrieves key names in the object values at the specified `path` within the JSON document stored at `key`.
      *
-     * @param transaction - The object to create the command and add to the transaction.
+     * @param transaction - A transaction to add commands to.
      * @param key - The key of the JSON document.
      * @param options - (Optional) Additional parameters:
      * - (Optional) `path`: The path within the JSON document where the key names will be retrieved. Defaults to root (`"."`) if not provided.
