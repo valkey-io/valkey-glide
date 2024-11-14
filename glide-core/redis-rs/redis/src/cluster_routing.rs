@@ -1,13 +1,16 @@
 use rand::Rng;
-use std::cmp::min;
-use std::collections::HashMap;
 
 use crate::cluster_topology::get_slot;
 use crate::cmd::{Arg, Cmd};
 use crate::types::Value;
 use crate::{ErrorKind, RedisError, RedisResult};
+use core::cmp::Ordering;
 use std::borrow::Cow;
+use std::cmp::min;
+use std::collections::HashMap;
 use std::iter::Once;
+use std::sync::Arc;
+use std::sync::{RwLock, RwLockWriteGuard};
 
 #[derive(Clone)]
 pub(crate) enum Redirect {
@@ -1154,7 +1157,7 @@ impl Routable for Value {
     }
 }
 
-#[derive(Debug, Hash)]
+#[derive(Debug, Hash, Clone)]
 pub(crate) struct Slot {
     pub(crate) start: u16,
     pub(crate) end: u16,
@@ -1170,14 +1173,6 @@ impl Slot {
             master: m,
             replicas: r,
         }
-    }
-
-    pub fn start(&self) -> u16 {
-        self.start
-    }
-
-    pub fn end(&self) -> u16 {
-        self.end
     }
 
     #[allow(dead_code)] // used in tests
@@ -1204,32 +1199,173 @@ pub enum SlotAddr {
     ReplicaRequired,
 }
 
+/// Represents the result of checking a shard for the status of a node.
+///
+/// This enum indicates whether a given node is already the primary, has been promoted to a primary from a replica,
+/// or is not found in the shard at all.
+///
+/// Variants:
+/// - `AlreadyPrimary`: The specified node is already the primary for the shard, so no changes are needed.
+/// - `Promoted`: The specified node was found as a replica and successfully promoted to primary.
+/// - `NodeNotFound`: The specified node is neither the current primary nor a replica within the shard.
+#[derive(PartialEq, Debug)]
+pub(crate) enum ShardUpdateResult {
+    AlreadyPrimary,
+    Promoted,
+    NodeNotFound,
+}
+
+const READ_LK_ERR_SHARDADDRS: &str = "Failed to acquire read lock for ShardAddrs";
+const WRITE_LK_ERR_SHARDADDRS: &str = "Failed to acquire write lock for ShardAddrs";
 /// This is just a simplified version of [`Slot`],
 /// which stores only the master and [optional] replica
 /// to avoid the need to choose a replica each time
 /// a command is executed
-#[derive(Debug, Eq, PartialEq)]
-pub(crate) struct SlotAddrs {
-    pub(crate) primary: String,
-    pub(crate) replicas: Vec<String>,
+#[derive(Debug)]
+pub(crate) struct ShardAddrs {
+    primary: RwLock<Arc<String>>,
+    replicas: RwLock<Vec<Arc<String>>>,
 }
 
-impl SlotAddrs {
-    pub(crate) fn new(primary: String, replicas: Vec<String>) -> Self {
+impl PartialEq for ShardAddrs {
+    fn eq(&self, other: &Self) -> bool {
+        let self_primary = self.primary.read().expect(READ_LK_ERR_SHARDADDRS);
+        let other_primary = other.primary.read().expect(READ_LK_ERR_SHARDADDRS);
+
+        let self_replicas = self.replicas.read().expect(READ_LK_ERR_SHARDADDRS);
+        let other_replicas = other.replicas.read().expect(READ_LK_ERR_SHARDADDRS);
+
+        *self_primary == *other_primary && *self_replicas == *other_replicas
+    }
+}
+
+impl Eq for ShardAddrs {}
+
+impl PartialOrd for ShardAddrs {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for ShardAddrs {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let self_primary = self.primary.read().expect(READ_LK_ERR_SHARDADDRS);
+        let other_primary = other.primary.read().expect(READ_LK_ERR_SHARDADDRS);
+
+        let primary_cmp = self_primary.cmp(&other_primary);
+        if primary_cmp == Ordering::Equal {
+            let self_replicas = self.replicas.read().expect(READ_LK_ERR_SHARDADDRS);
+            let other_replicas = other.replicas.read().expect(READ_LK_ERR_SHARDADDRS);
+            return self_replicas.cmp(&other_replicas);
+        }
+
+        primary_cmp
+    }
+}
+
+impl ShardAddrs {
+    pub(crate) fn new(primary: Arc<String>, replicas: Vec<Arc<String>>) -> Self {
+        let primary = RwLock::new(primary);
+        let replicas = RwLock::new(replicas);
         Self { primary, replicas }
     }
 
-    pub(crate) fn from_slot(slot: Slot) -> Self {
-        SlotAddrs::new(slot.master, slot.replicas)
+    pub(crate) fn new_with_primary(primary: Arc<String>) -> Self {
+        Self::new(primary, Vec::default())
+    }
+
+    pub(crate) fn primary(&self) -> Arc<String> {
+        self.primary.read().expect(READ_LK_ERR_SHARDADDRS).clone()
+    }
+
+    pub(crate) fn replicas(&self) -> std::sync::RwLockReadGuard<Vec<Arc<String>>> {
+        self.replicas.read().expect(READ_LK_ERR_SHARDADDRS)
+    }
+
+    /// Attempts to update the shard roles based on the provided `new_primary`.
+    ///
+    /// This function evaluates whether the specified `new_primary` node is already
+    /// the primary, a replica that can be promoted to primary, or a node not present
+    /// in the shard. It handles three scenarios:
+    ///
+    /// 1. **Already Primary**: If the `new_primary` is already the current primary,
+    ///    the function returns `ShardUpdateResult::AlreadyPrimary` and no changes are made.
+    ///
+    /// 2. **Promoted**: If the `new_primary` is found in the list of replicas, it is promoted
+    ///    to primary by swapping it with the current primary, and the function returns
+    ///    `ShardUpdateResult::Promoted`.
+    ///
+    /// 3. **Node Not Found**: If the `new_primary` is neither the current primary nor a replica,
+    ///    the function returns `ShardUpdateResult::NodeNotFound` to indicate that the node is
+    ///    not part of the current shard.
+    ///
+    /// # Arguments:
+    /// * `new_primary` - Representing the node to be promoted or checked.
+    ///
+    /// # Returns:
+    /// * `ShardUpdateResult` - The result of the role update operation.
+    pub(crate) fn attempt_shard_role_update(&self, new_primary: Arc<String>) -> ShardUpdateResult {
+        let mut primary_lock = self.primary.write().expect(WRITE_LK_ERR_SHARDADDRS);
+        let mut replicas_lock = self.replicas.write().expect(WRITE_LK_ERR_SHARDADDRS);
+
+        // If the new primary is already the current primary, return early.
+        if *primary_lock == new_primary {
+            return ShardUpdateResult::AlreadyPrimary;
+        }
+
+        // If the new primary is found among replicas, swap it with the current primary.
+        if let Some(replica_idx) = Self::replica_index(&replicas_lock, new_primary.clone()) {
+            std::mem::swap(&mut *primary_lock, &mut replicas_lock[replica_idx]);
+            return ShardUpdateResult::Promoted;
+        }
+
+        // If the new primary isn't part of the shard.
+        ShardUpdateResult::NodeNotFound
+    }
+
+    fn replica_index(
+        replicas: &RwLockWriteGuard<'_, Vec<Arc<String>>>,
+        target_replica: Arc<String>,
+    ) -> Option<usize> {
+        replicas
+            .iter()
+            .position(|curr_replica| **curr_replica == *target_replica)
+    }
+
+    /// Removes the specified `replica_to_remove` from the shard's replica list if it exists.
+    /// This method searches for the replica's index and removes it from the list. If the replica
+    /// is not found, it returns an error.
+    ///
+    /// # Arguments
+    /// * `replica_to_remove` - The address of the replica to be removed.
+    ///
+    /// # Returns
+    /// * `RedisResult<()>` - `Ok(())` if the replica was successfully removed, or an error if the
+    ///   replica was not found.
+    pub(crate) fn remove_replica(&self, replica_to_remove: Arc<String>) -> RedisResult<()> {
+        let mut replicas_lock = self.replicas.write().expect(WRITE_LK_ERR_SHARDADDRS);
+        if let Some(index) = Self::replica_index(&replicas_lock, replica_to_remove.clone()) {
+            replicas_lock.remove(index);
+            Ok(())
+        } else {
+            Err(RedisError::from((
+                ErrorKind::ClientError,
+                "Couldn't remove replica",
+                format!("Replica {replica_to_remove:?} not found"),
+            )))
+        }
     }
 }
 
-impl<'a> IntoIterator for &'a SlotAddrs {
-    type Item = &'a String;
-    type IntoIter = std::iter::Chain<Once<&'a String>, std::slice::Iter<'a, String>>;
+impl<'a> IntoIterator for &'a ShardAddrs {
+    type Item = Arc<String>;
+    type IntoIter = std::iter::Chain<Once<Arc<String>>, std::vec::IntoIter<Arc<String>>>;
 
     fn into_iter(self) -> Self::IntoIter {
-        std::iter::once(&self.primary).chain(self.replicas.iter())
+        let primary = self.primary.read().expect(READ_LK_ERR_SHARDADDRS).clone();
+        let replicas = self.replicas.read().expect(READ_LK_ERR_SHARDADDRS).clone();
+
+        std::iter::once(primary).chain(replicas)
     }
 }
 
@@ -1270,10 +1406,12 @@ fn random_slot() -> u16 {
 mod tests_routing {
     use super::{
         command_for_multi_slot_indices, AggregateOp, MultiSlotArgPattern, MultipleNodeRoutingInfo,
-        ResponsePolicy, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
+        ResponsePolicy, Route, RoutingInfo, ShardAddrs, SingleNodeRoutingInfo, SlotAddr,
     };
+    use crate::cluster_routing::ShardUpdateResult;
     use crate::{cluster_topology::slot, cmd, parser::parse_redis_value, Value};
     use core::panic;
+    use std::sync::{Arc, RwLock};
 
     #[test]
     fn test_routing_info_mixed_capatalization() {
@@ -1823,5 +1961,45 @@ mod tests_routing {
         let input = vec![Value::Int(5)];
         let result = super::combine_map_results(input);
         assert!(result.is_err());
+    }
+
+    fn create_shard_addrs(primary: &str, replicas: Vec<&str>) -> ShardAddrs {
+        ShardAddrs {
+            primary: RwLock::new(Arc::new(primary.to_string())),
+            replicas: RwLock::new(
+                replicas
+                    .into_iter()
+                    .map(|r| Arc::new(r.to_string()))
+                    .collect(),
+            ),
+        }
+    }
+
+    #[test]
+    fn test_attempt_shard_role_update_already_primary() {
+        let shard_addrs = create_shard_addrs("node1:6379", vec!["node2:6379", "node3:6379"]);
+        let result = shard_addrs.attempt_shard_role_update(Arc::new("node1:6379".to_string()));
+        assert_eq!(result, ShardUpdateResult::AlreadyPrimary);
+    }
+
+    #[test]
+    fn test_attempt_shard_role_update_promoted() {
+        let shard_addrs = create_shard_addrs("node1:6379", vec!["node2:6379", "node3:6379"]);
+        let result = shard_addrs.attempt_shard_role_update(Arc::new("node2:6379".to_string()));
+        assert_eq!(result, ShardUpdateResult::Promoted);
+
+        let primary = shard_addrs.primary.read().unwrap().clone();
+        assert_eq!(primary.as_str(), "node2:6379");
+
+        let replicas = shard_addrs.replicas.read().unwrap();
+        assert_eq!(replicas.len(), 2);
+        assert!(replicas.iter().any(|r| r.as_str() == "node1:6379"));
+    }
+
+    #[test]
+    fn test_attempt_shard_role_update_node_not_found() {
+        let shard_addrs = create_shard_addrs("node1:6379", vec!["node2:6379", "node3:6379"]);
+        let result = shard_addrs.attempt_shard_role_update(Arc::new("node4:6379".to_string()));
+        assert_eq!(result, ShardUpdateResult::NodeNotFound);
     }
 }
