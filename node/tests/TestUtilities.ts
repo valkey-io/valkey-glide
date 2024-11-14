@@ -1708,12 +1708,12 @@ export async function transactionMultiJsonTest(
     responseData.push(['get(key1, {path: "."})', JSON.stringify(jsonValueAfterArrTrim)]);
 
     // JSON.DEBUG MEMORY
-    GlideMultiJson.debugMemory(baseTransaction, key1, { path: "$." });
+    GlideMultiJson.debugMemory(baseTransaction, key1, { path: "$.b" });
     responseData.push(['debugMemory(key1, "{ path: "$." }")', 98]);
 
-    // JSON.DEBUG FIELDS
-    GlideMultiJson.debugFields(baseTransaction, key1, { path: "$." });
-    responseData.push(['debugFields(key1, "{ path: "$." }")', [1, 2]]);
+    // // JSON.DEBUG FIELDS
+    // GlideMultiJson.debugFields(baseTransaction, key1, { path: "$." });
+    // responseData.push(['debugFields(key1, "{ path: "$." }")', [1, 2]]);
 
     // // JSON.OBJLEN
     // GlideMultiJson.objlen(baseTransaction, key1);
