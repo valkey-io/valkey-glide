@@ -1759,9 +1759,9 @@ export async function transactionMultiJson(
 
     // JSON.TOGGLE
     GlideMultiJson.toggle(baseTransaction, key, { path: "$.d" });
-    responseData.push(['toggle(key2, "$.d")', false]);
+    responseData.push(['toggle(key2, "$.d")', [false]]);
 
-    // // JSON.RESP
+    // JSON.RESP
     GlideMultiJson.resp(baseTransaction, key, { path: "$" });
     responseData.push(['resp(key, "$")', [
         [
