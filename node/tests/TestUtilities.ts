@@ -1713,7 +1713,7 @@ export async function transactionMultiJson(
 ): Promise<[string, GlideReturnType][]> {
     const responseData: [string, GlideReturnType][] = [];
     const key = "key1" + uuidv4();
-    const jsonValue3 = { a: [1, 2], b: [3, 4], c: 'c' };
+    const jsonValue3 = { a: [1, 2], b: [3, 4], c: 'c', d: true };
 
     // JSON.SET to create a key for testing commands.
     GlideMultiJson.set(baseTransaction, key, "$", JSON.stringify(jsonValue3));
@@ -1757,9 +1757,9 @@ export async function transactionMultiJson(
 
     // // JSON.MGET -> TODO
 
-    // // JSON.TOGGLE
-    // GlideMultiJson.toggle(baseTransaction, key2, "..d");
-    // responseData.push(['toggle(key2, "$..d")', false]);
+    // JSON.TOGGLE
+    GlideMultiJson.toggle(baseTransaction, key, { path: "$.d" });
+    responseData.push(['toggle(key2, "$.d")', false]);
 
     // // JSON.RESP
     // GlideMultiJson.resp(baseTransaction, key2, "$");
