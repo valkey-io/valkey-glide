@@ -2320,7 +2320,7 @@ describe("Server Module Tests", () => {
             );
 
             it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-                "can send GlideMultiJson transactions_%p",
+                "can send GlideMultiJson transactions_%p for ARR commands",
                 async (protocol) => {
                     client = await GlideClusterClient.createClient(
                         getClientConfigurationOption(
@@ -2342,7 +2342,7 @@ describe("Server Module Tests", () => {
             );
 
             it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-                "can send GlideMultiJson transactions_%p for ARR commands",
+                "can send GlideMultiJson transactions_%p",
                 async (protocol) => {
                     client = await GlideClusterClient.createClient(
                         getClientConfigurationOption(
