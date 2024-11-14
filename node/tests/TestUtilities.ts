@@ -1718,20 +1718,20 @@ export async function transactionMultiJson(
     responseData.push(['set(key3, "$")', "OK"]);
 
     // JSON.DEBUG MEMORY
-    GlideMultiJson.debugMemory(baseTransaction, key3, { path: "$.a" });
-    responseData.push(['debugMemory(key1, "{ path: "$.a" }")', 98]);
+    // GlideMultiJson.debugMemory(baseTransaction, key3, { path: "$.a" });
+    // responseData.push(['debugMemory(key1, "{ path: "$.a" }")', 98]);
 
     // JSON.DEBUG FIELDS
     // GlideMultiJson.debugFields(baseTransaction, key3, { path: "$." });
     // responseData.push(['debugFields(key1, "{ path: "$." }")', [1, 2]]);
 
     // JSON.OBJLEN
-    // GlideMultiJson.objlen(baseTransaction, key3, { path: "$." });
-    // responseData.push(['objlen(key1)', 2]);
+    GlideMultiJson.objlen(baseTransaction, key3, { path: "$." });
+    responseData.push(['objlen(key1)', 2]);
 
     // JSON.OBJKEY
-    // GlideMultiJson.objkeys(baseTransaction, key3, { path: "$." });
-    // responseData.push(['objkeys(key1, "..")', ["c", "d", "e", "f"]]);
+    GlideMultiJson.objkeys(baseTransaction, key3, { path: "$." });
+    responseData.push(['objkeys(key1, "..")', ["a", "b"]]);
 
     // // JSON.NUMINCRBY
     // GlideMultiJson.numincrby(baseTransaction, key2, "$.c[*]", 10.0);
