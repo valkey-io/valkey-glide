@@ -20,7 +20,9 @@ import glide.api.models.GlideString;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.json.JsonArrindexOptions;
 import glide.api.models.commands.json.JsonGetOptions;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
@@ -204,6 +206,96 @@ public class JsonTests {
         assertThrows(
                 ExecutionException.class,
                 () -> Json.arrappend(client, "non_existing_key", ".b", new String[] {"\"six\""}).get());
+    }
+
+    @Test
+    @SneakyThrows
+    public void arrindex() {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String key3 = UUID.randomUUID().toString();
+
+        String doc1 =
+                "{\"a\": [1, 3, true], \"b\": {\"a\": [3, 4, [\"value\", 3, false], 5], \"c\": {\"a\":"
+                        + " 42}}}";
+
+        String doc2 =
+                "{\"a\": [1, 3, true, \"foo\", \"meow\", \"m\", \"foo\", \"lol\", false], \"b\": {\"a\":"
+                        + " [3, 4, [\"value\", 3, false], 5], \"c\": {\"a\": 42}, \"empty\": []}}";
+
+        String doc3 = "{\"a\": 123123}";
+
+        assertEquals("OK", Json.set(client, key1, "$", doc1).get());
+        assertArrayEquals(
+                new Object[] {2L, -1L, null}, (Object[]) Json.arrindex(client, key1, "$..a", "true").get());
+
+        assertArrayEquals(
+                new Object[] {1L, 0L, null},
+                (Object[]) Json.arrindex(client, gs(key1), gs("$..a"), gs("3")).get());
+
+        assertEquals("OK", Json.set(client, key2, "$", doc2).get());
+
+        assertArrayEquals(
+                new Object[] {6L, -1L, null},
+                (Object[])
+                        Json.arrindex(client, key2, "$..a", "\"foo\"", new JsonArrindexOptions(6L, 8L)).get());
+
+        assertArrayEquals(
+                new Object[] {-1L, -1L, null},
+                (Object[])
+                        Json.arrindex(client, key2, "$..a", "null", new JsonArrindexOptions(6L, 8L)).get());
+        assertArrayEquals(
+                new Object[] {-1L, -1L, null},
+                (Object[])
+                        Json.arrindex(client, gs(key2), gs("$..a"), gs("null"), new JsonArrindexOptions(6L, 8L))
+                                .get());
+
+        assertArrayEquals(
+                new Object[] {6L, -1L, null},
+                (Object[])
+                        Json.arrindex(
+                                        client, gs(key2), gs("$..a"), gs("\"foo\""), new JsonArrindexOptions(6L, 8L))
+                                .get());
+
+        assertArrayEquals(
+                new Object[] {6L, -1L, null},
+                (Object[])
+                        Json.arrindex(client, key2, "$..a", "\"foo\"", new JsonArrindexOptions(6L)).get());
+
+        // value doesn't exist
+        assertArrayEquals(
+                new Object[] {null},
+                (Object[])
+                        Json.arrindex(client, key1, "$..b", "true", new JsonArrindexOptions(1L, 3L)).get());
+
+        // with legacy path
+        assertEquals(2L, Json.arrindex(client, key1, ".a", "true").get());
+
+        // element doesn't exist
+        assertEquals(-1L, Json.arrindex(client, key1, ".a", "\"nonexistent-element\"").get());
+
+        // empty array
+        assertThrows(
+                ExecutionException.class,
+                () -> Json.arrindex(client, key1, ".empty", "\"nonexistent-element\"").get());
+
+        assertEquals("OK", Json.set(client, key3, "$", doc3).get());
+
+        // wrong type error
+        assertThrows(ExecutionException.class, () -> Json.arrindex(client, key3, ".a", "42").get());
+
+        // JsonScalar is null
+        assertThrows(ExecutionException.class, () -> Json.arrindex(client, key3, ".a", "null").get());
+
+        // start index is larger than the end index
+        assertEquals(
+                -1L, Json.arrindex(client, key2, ".a", "false", new JsonArrindexOptions(4L, 2L)).get());
+
+        // end index is larger than the length of the array
+        assertEquals(
+                8L,
+                Json.arrindex(client, key2, ".a", "false", new JsonArrindexOptions(0L, 12378798798721L))
+                        .get());
     }
 
     @Test
@@ -847,6 +939,28 @@ public class JsonTests {
         assertArrayEquals(new Object[] {"a", "b"}, res);
         res = Json.objkeys(client, gs(key)).get();
         assertArrayEquals(new Object[] {gs("a"), gs("b")}, res);
+    }
+
+    @Test
+    @SneakyThrows
+    public void mget() {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        var data =
+                Map.of(
+                        key1, "{\"a\": 1, \"b\": [\"one\", \"two\"]}",
+                        key2, "{\"a\": 1, \"c\": false}");
+
+        for (var entry : data.entrySet()) {
+            assertEquals("OK", Json.set(client, entry.getKey(), "$", entry.getValue()).get());
+        }
+
+        var res1 =
+                Json.mget(client, new String[] {key1, key2, UUID.randomUUID().toString()}, "$.c").get();
+        assertArrayEquals(new String[] {"[]", "[false]", null}, res1);
+
+        var res2 = Json.mget(client, new GlideString[] {gs(key1), gs(key2)}, gs(".b[*]")).get();
+        assertArrayEquals(new GlideString[] {gs("\"one\""), null}, res2);
     }
 
     @Test

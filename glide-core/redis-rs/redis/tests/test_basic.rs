@@ -783,6 +783,10 @@ mod basic {
     #[serial_test::serial]
     fn test_pubsub_unsubscribe_no_subs() {
         let ctx = TestContext::new();
+        if version_greater_or_equal(&ctx, "7.2.4") {
+            // Skip for versions 7.2.4 and above
+            return;
+        }
         let mut con = ctx.connection();
 
         {
@@ -799,6 +803,10 @@ mod basic {
     #[serial_test::serial]
     fn test_pubsub_unsubscribe_one_sub() {
         let ctx = TestContext::new();
+        if version_greater_or_equal(&ctx, "7.2.4") {
+            // Skip for versions 7.2.4 and above
+            return;
+        }
         let mut con = ctx.connection();
 
         {
@@ -834,6 +842,10 @@ mod basic {
     #[serial_test::serial]
     fn scoped_pubsub() {
         let ctx = TestContext::new();
+        if version_greater_or_equal(&ctx, "7.2.4") {
+            // Skip for versions 7.2.4 and above
+            return;
+        }
         let mut con = ctx.connection();
 
         // Connection for subscriber api

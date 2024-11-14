@@ -2,6 +2,7 @@
 package glide.api.commands.servermodules;
 
 import static glide.api.models.GlideString.gs;
+import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 
 import glide.api.BaseClient;
@@ -10,6 +11,7 @@ import glide.api.GlideClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.commands.ConditionalChange;
+import glide.api.models.commands.json.JsonArrindexOptions;
 import glide.api.models.commands.json.JsonGetOptions;
 import glide.api.models.commands.json.JsonGetOptionsBinary;
 import glide.utils.ArgsBuilder;
@@ -22,10 +24,12 @@ public class Json {
     private static final String JSON_PREFIX = "JSON.";
     private static final String JSON_SET = JSON_PREFIX + "SET";
     private static final String JSON_GET = JSON_PREFIX + "GET";
+    private static final String JSON_MGET = JSON_PREFIX + "MGET";
     private static final String JSON_NUMINCRBY = JSON_PREFIX + "NUMINCRBY";
     private static final String JSON_NUMMULTBY = JSON_PREFIX + "NUMMULTBY";
     private static final String JSON_ARRAPPEND = JSON_PREFIX + "ARRAPPEND";
     private static final String JSON_ARRINSERT = JSON_PREFIX + "ARRINSERT";
+    private static final String JSON_ARRINDEX = JSON_PREFIX + "ARRINDEX";
     private static final String JSON_ARRLEN = JSON_PREFIX + "ARRLEN";
     private static final String[] JSON_DEBUG_MEMORY = new String[] {JSON_PREFIX + "DEBUG", "MEMORY"};
     private static final String[] JSON_DEBUG_FIELDS = new String[] {JSON_PREFIX + "DEBUG", "FIELDS"};
@@ -412,6 +416,85 @@ public class Json {
     }
 
     /**
+     * Retrieves the JSON values at the specified <code>path</code> stored at multiple <code>keys
+     * </code>.
+     *
+     * @apiNote When in cluster mode, if keys in <code>keys</code> map to different hash slots, the
+     *     command will be split across these slots and executed separately for each. This means the
+     *     command is atomic only at the slot level. If one or more slot-specific requests fail, the
+     *     entire call will return the first encountered error, even though some requests may have
+     *     succeeded while others did not. If this behavior impacts your application logic, consider
+     *     splitting the request into sub-requests per slot to ensure atomicity.
+     * @param client The client to execute the command.
+     * @param keys The keys of the JSON documents.
+     * @param path The path within the JSON documents.
+     * @return An array with requested values for each key.
+     *     <ul>
+     *       <li>For JSONPath (path starts with <code>$</code>): Returns a stringified JSON list
+     *           replies for every possible path, or a string representation of an empty array, if
+     *           path doesn't exist.
+     *       <li>For legacy path (path doesn't start with <code>$</code>): Returns a string
+     *           representation of the value in <code>path</code>. If <code>path</code> doesn't exist,
+     *           the corresponding array element will be <code>null</code>.
+     *     </ul>
+     *     If a <code>key</code> doesn't exist, the corresponding array element will be <code>null
+     *     </code>.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc1", "$", "{\"a\": 1, \"b\": [\"one\", \"two\"]}").get();
+     * Json.set(client, "doc2", "$", "{\"a\": 1, \"c\": false}").get();
+     * var res = Json.mget(client, new String[] { "doc1", "doc2", "non_existing" }, "$.c").get();
+     * assert Arrays.equals(res, new String[] { "[]", "[false]", null });
+     * }</pre>
+     */
+    public static CompletableFuture<String[]> mget(
+            @NonNull BaseClient client, @NonNull String[] keys, @NonNull String path) {
+        return Json.<Object[]>executeCommand(
+                        client, concatenateArrays(new String[] {JSON_MGET}, keys, new String[] {path}))
+                .thenApply(res -> castArray(res, String.class));
+    }
+
+    /**
+     * Retrieves the JSON values at the specified <code>path</code> stored at multiple <code>keys
+     * </code>.
+     *
+     * @apiNote When in cluster mode, if keys in <code>keys</code> map to different hash slots, the
+     *     command will be split across these slots and executed separately for each. This means the
+     *     command is atomic only at the slot level. If one or more slot-specific requests fail, the
+     *     entire call will return the first encountered error, even though some requests may have
+     *     succeeded while others did not. If this behavior impacts your application logic, consider
+     *     splitting the request into sub-requests per slot to ensure atomicity.
+     * @param client The client to execute the command.
+     * @param keys The keys of the JSON documents.
+     * @param path The path within the JSON documents.
+     * @return An array with requested values for each key.
+     *     <ul>
+     *       <li>For JSONPath (path starts with <code>$</code>): Returns a stringified JSON list
+     *           replies for every possible path, or a string representation of an empty array, if
+     *           path doesn't exist.
+     *       <li>For legacy path (path doesn't start with <code>$</code>): Returns a string
+     *           representation of the value in <code>path</code>. If <code>path</code> doesn't exist,
+     *           the corresponding array element will be <code>null</code>.
+     *     </ul>
+     *     If a <code>key</code> doesn't exist, the corresponding array element will be <code>null
+     *     </code>.
+     * @example
+     *     <pre>{@code
+     * Json.set(client, "doc1", "$", "{\"a\": 1, \"b\": [\"one\", \"two\"]}").get();
+     * Json.set(client, "doc2", "$", "{\"a\": 1, \"c\": false}").get();
+     * var res = Json.mget(client, new GlideString[] { gs("doc1"), gs("doc2"), gs("doc3") }, gs("$.c")).get();
+     * assert Arrays.equals(res, new GlideString[] { gs("[]"), gs("[false]"), null });
+     * }</pre>
+     */
+    public static CompletableFuture<GlideString[]> mget(
+            @NonNull BaseClient client, @NonNull GlideString[] keys, @NonNull GlideString path) {
+        return Json.<Object[]>executeCommand(
+                        client,
+                        concatenateArrays(new GlideString[] {gs(JSON_MGET)}, keys, new GlideString[] {path}))
+                .thenApply(res -> castArray(res, GlideString.class));
+    }
+
+    /**
      * Appends one or more <code>values</code> to the JSON array at the specified <code>path</code>
      * within the JSON document stored at <code>key</code>.
      *
@@ -601,6 +684,171 @@ public class Json {
                         .add(path)
                         .add(Integer.toString(index))
                         .add(values)
+                        .toArray());
+    }
+
+    /**
+     * Searches for the first occurrence of a <code>scalar</code> JSON value in the arrays at the
+     * path.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @param scalar The scalar value to search for.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>): Returns an array with a
+     *           list of integers for every possible path, indicating the index of the matching
+     *           element. The value is <code>-1</code> if not found. If a value is not an array, its
+     *           corresponding return value is <code>null</code>.
+     *       <li>For legacy path (path doesn't start with <code>$</code>): Returns an integer
+     *           representing the index of matching element, or <code>-1</code> if not found. If the
+     *           value at the <code>path</code> is not an array, an error is raised.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * Json.set(client, key, "$", "{\"a\": [\"value\", 3], \"b\": {\"a\": [3, [\"value\", false], 5]}}").get();
+     * var result = Json.arrindex(client, key, "$..a", "3").get();
+     * assert Arrays.equals((Object[]) result, new Object[] {1L, 0L});
+     *
+     * result = Json.arrindex(client, key, "$..a", "\"value\"").get();
+     * assert Arrays.equals((Object[]) result, new Object[] {0L, -1L});
+     * }</pre>
+     */
+    public static CompletableFuture<Object> arrindex(
+            @NonNull BaseClient client,
+            @NonNull String key,
+            @NonNull String path,
+            @NonNull String scalar) {
+        return arrindex(client, gs(key), gs(path), gs(scalar));
+    }
+
+    /**
+     * Searches for the first occurrence of a <code>scalar</code> JSON value in the arrays at the
+     * path.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @param scalar The scalar value to search for.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>): Returns an array with a
+     *           list of integers for every possible path, indicating the index of the matching
+     *           element. The value is <code>-1</code> if not found. If a value is not an array, its
+     *           corresponding return value is <code>null</code>.
+     *       <li>For legacy path (path doesn't start with <code>$</code>): Returns an integer
+     *           representing the index of matching element, or <code>-1</code> if not found. If the
+     *           value at the <code>path</code> is not an array, an error is raised.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * Json.set(client, key, "$", "{\"a\": [\"value\", 3], \"b\": {\"a\": [3, [\"value\", false], 5]}}").get();
+     * var result = Json.arrindex(client, gs(key), gs("$..a"), gs("3")).get();
+     * assert Arrays.equals((Object[]) result, new Object[] {1L, 0L});
+     *
+     * // Searches for the first occurrence of null in the arrays
+     * result = Json.arrindex(client, gs(key), gs("$..a"), gs("null")).get();
+     * assert Arrays.equals((Object[]) result, new Object[] {-1L, -1L});
+     * }</pre>
+     */
+    public static CompletableFuture<Object> arrindex(
+            @NonNull BaseClient client,
+            @NonNull GlideString key,
+            @NonNull GlideString path,
+            @NonNull GlideString scalar) {
+        return executeCommand(client, new GlideString[] {gs(JSON_ARRINDEX), key, path, scalar});
+    }
+
+    /**
+     * Searches for the first occurrence of a <code>scalar</code> JSON value in the arrays at the
+     * path.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @param scalar The scalar value to search for.
+     * @param options The additional options for the command. See <code>JsonArrindexOptions</code>.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>): Returns an array with a
+     *           list of integers for every possible path, indicating the index of the matching
+     *           element. The value is <code>-1</code> if not found. If a value is not an array, its
+     *           corresponding return value is <code>null</code>.
+     *       <li>For legacy path (path doesn't start with <code>$</code>): Returns an integer
+     *           representing the index of matching element, or <code>-1</code> if not found. If the
+     *           value at the <code>path</code> is not an array, an error is raised.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * Json.set(client, key, "$", "{\"a\": [\"value\", 3], \"b\": {\"a\": [3, [\"value\", false], 5]}}").get();
+     * var result = Json.arrindex(client, key, ".a", "3", new JsonArrindexOptions(0L)).get();
+     * assert Arrays.equals(1L, result);
+     * }</pre>
+     */
+    public static CompletableFuture<Object> arrindex(
+            @NonNull BaseClient client,
+            @NonNull String key,
+            @NonNull String path,
+            @NonNull String scalar,
+            @NonNull JsonArrindexOptions options) {
+
+        return executeCommand(
+                client,
+                new ArgsBuilder()
+                        .add(JSON_ARRINDEX)
+                        .add(key)
+                        .add(path)
+                        .add(scalar)
+                        .add(options.toArgs())
+                        .toArray());
+    }
+
+    /**
+     * Searches for the first occurrence of a <code>scalar</code> JSON value in the arrays at the
+     * path.
+     *
+     * @param client The client to execute the command.
+     * @param key The key of the JSON document.
+     * @param path The path within the JSON document.
+     * @param scalar The scalar value to search for.
+     * @param options The additional options for the command. See <code>JsonArrindexOptions</code>.
+     * @return
+     *     <ul>
+     *       <li>For JSONPath (<code>path</code> starts with <code>$</code>): Returns an array with a
+     *           list of integers for every possible path, indicating the index of the matching
+     *           element. The value is <code>-1</code> if not found. If a value is not an array, its
+     *           corresponding return value is <code>null</code>..
+     *       <li>For legacy path (path doesn't start with <code>$</code>): Returns an integer
+     *           representing the index of matching element, or <code>-1</code> if not found. If the
+     *           value at the <code>path</code> is not an array, an error is raised.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * Json.set(client, key, "$", "{\"a\": [\"value\", 3], \"b\": {\"a\": [3, [\"value\", false], 5]}}").get();
+     * var result = Json.arrindex(client, gs(key), gs(".a"), gs("3"), new JsonArrindexOptions(0L)).get();
+     * assert Arrays.equals(1L, result);
+     * }</pre>
+     */
+    public static CompletableFuture<Object> arrindex(
+            @NonNull BaseClient client,
+            @NonNull GlideString key,
+            @NonNull GlideString path,
+            @NonNull GlideString scalar,
+            @NonNull JsonArrindexOptions options) {
+
+        return executeCommand(
+                client,
+                new ArgsBuilder()
+                        .add(JSON_ARRINDEX)
+                        .add(key)
+                        .add(path)
+                        .add(scalar)
+                        .add(options.toArgs())
                         .toArray());
     }
 
