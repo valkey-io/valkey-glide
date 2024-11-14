@@ -1638,11 +1638,122 @@ export async function transactionMultiJsonTest(
 ): Promise<[string, GlideReturnType][]> {
     const responseData: [string, GlideReturnType][] = [];
     const key1 = "key1" + uuidv4();
+    const key2 = "key2" + uuidv4();
     const jsonValue = { a: 1.0, b: 2 };
+
+    // JSON.SET
     GlideMultiJson.set(baseTransaction, key1, "$", JSON.stringify(jsonValue));
     responseData.push(['set(key1, "bar")', "OK"]);
-    GlideMultiJson.set(baseTransaction, key1, "bar", JSON.stringify(jsonValue));
-    responseData.push(['set(key1, "bar", {returnOldValue: true})', "OK"]);
+    //GlideMultiJson.set(baseTransaction, key1, "bar", JSON.stringify(jsonValue));
+    //responseData.push(['set(key1, "bar", {returnOldValue: true})', "OK"]);
+
+    // JSON.CLEAR
+    GlideMultiJson.clear(baseTransaction, key1, "bar");
+    responseData.push(['clear(key1, "bar")', 1]);
+
+    const jsonValue2 = { a: 1, b: ["one", "two"] };
+    GlideMultiJson.set(baseTransaction, key1, "$", JSON.stringify(jsonValue2));
+
+    // JSON.GET
+    GlideMultiJson.get(baseTransaction, key1, ["$.a", "$.b"]);
+    responseData.push(['get(key1, ["$.a", "$.b"])', '{"$.a":[1],"$.b":[["one","two"]]}']);
+
+    // JSON.ARRAPPEND
+    GlideMultiJson.arrappend(baseTransaction, key1, "$.b", ['"3"', '"4"']);
+    responseData.push(['arrappend(key1, "$.b", [\'"3"\', \'"4"\'])', [4]]);
+
+    // JSON.ARRINDEX
+    GlideMultiJson.arrindex(baseTransaction, key1, "$..b", '"one"');
+    responseData.push(['arrindex(key1, "$..b", \'"one"\')', [0]]);
+
+    // JSON.ARRINSERT
+    GlideMultiJson.arrinsert(baseTransaction, key1, "$..b", 4, ['"5"']);
+    responseData.push(['arrinsert(key1, "$..b", 4, [\'"5"\'])', [5]]);
+
+    // JSON.ARRLEN
+    GlideMultiJson.arrlen(baseTransaction, key1, "$..b");
+    responseData.push(['arrlen(key1, "$..b")', [5]]);
+
+    // JSON.ARRPOP
+    GlideMultiJson.arrpop(baseTransaction, key1, {
+        path: "$..b",
+        index: 4,
+    });
+    responseData.push(['arrpop(key1, {path: "$..b", index: 4})', [5]]);
+
+    // JSON.ARRTRIM
+    GlideMultiJson.arrtrim(baseTransaction, key1, "$..b", 2, 3);
+    responseData.push(['arrtrim(key1, "$..b", 2, 3)', [2]]);
+
+    // JSON.DEBUG MEMORY
+    GlideMultiJson.debugMemory(baseTransaction, key1, "..");
+    responseData.push(['debugMemory(key1, "..")', 98]);
+
+    // JSON.DEBUG FIELDS
+    GlideMultiJson.debugFields(baseTransaction, key1, "$[*]");
+    responseData.push(['debugFields(key1, "$[*]")', [1, 2]]);
+
+    // JSON.OBJLEN
+    GlideMultiJson.objlen(baseTransaction, key1);
+    responseData.push(['objlen(key1)', 2]);
+
+    // JSON.OBJKEY
+    GlideMultiJson.objkeys(baseTransaction, key1, "..");
+    responseData.push(['objkeys(key1, "..")', ["a", "b"]]);
+
+
+    // use of second key
+    // new key for numincryby?
+    const jsonValue3 = {"c": [1, 2], "d": true, "e": ["hello", "clouds"], "f": {"a": "hello"}};
+    GlideMultiJson.set(baseTransaction, key2, "$", JSON.stringify(jsonValue3));
+    responseData.push(['set(key2, "$")', "OK"]);
+
+    // JSON.NUMINCRBY
+    GlideMultiJson.numincrby(baseTransaction, key2, "$.c[*]", 10.0);
+    responseData.push(['numincrby(key2, "$.c[*]", 10.0)', "[11,12]"]);
+
+    // JSON.NUMMULTBY
+    GlideMultiJson.nummultby(baseTransaction, key2, "$.c[*]", 10.0);
+    responseData.push(['nummultby(key2, "$.c[*]", 10.0)', "[110,120]"]);
+
+    // JSON.STRAPPEND
+    GlideMultiJson.strappend(baseTransaction, key2, '"bar"', "$..a");
+    responseData.push(['strappend(key2, \'"bar"\', "$..a")', [8]]);
+
+    // JSON.STRLEN
+    GlideMultiJson.strlen(baseTransaction, key2, "$..a");
+    responseData.push(['strlen(key2, "$..a")', [8]]);
+
+    // JSON.TYPE
+    GlideMultiJson.type(baseTransaction, key2, "$..a");
+    responseData.push(['type(key2, "$..a")', ["string"]]);
+
+    // JSON.MGET -> TODO
+
+    // JSON.TOGGLE
+    GlideMultiJson.toggle(baseTransaction, key2, "..d");
+    responseData.push(['toggle(key2, "$..d")', false]);
+
+    // JSON.RESP
+    GlideMultiJson.resp(baseTransaction, key2, "$");
+    responseData.push(['resp(key2, "$")', [
+        [
+            "(",
+            ["c", ["[", 110, 120]],
+            ["d", false],
+            ["e", ["[", "hello", "clouds"]],
+            ["f", ["{", ["a", "hellobar"]]],
+        ]
+    ]]);
+
+    // JSON.DEL
+    GlideMultiJson.del(baseTransaction, key2, "$..a");
+    responseData.push(['del(key2, "$..a")', 1]);
+
+    // JSON.FORGET
+    GlideMultiJson.forget(baseTransaction, key2, "$..a");
+    responseData.push(['forget(key2)', 1]);
+
     return responseData;
 }
 

@@ -2317,6 +2317,7 @@ describe("Server Module Tests", () => {
                     ).toBeNull();
                 },
             );
+
             it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
                 "can send transactions_%p",
                 async (protocol) => {
