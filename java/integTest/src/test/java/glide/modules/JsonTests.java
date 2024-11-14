@@ -22,6 +22,7 @@ import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.json.JsonArrindexOptions;
 import glide.api.models.commands.json.JsonGetOptions;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
@@ -938,6 +939,28 @@ public class JsonTests {
         assertArrayEquals(new Object[] {"a", "b"}, res);
         res = Json.objkeys(client, gs(key)).get();
         assertArrayEquals(new Object[] {gs("a"), gs("b")}, res);
+    }
+
+    @Test
+    @SneakyThrows
+    public void mget() {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        var data =
+                Map.of(
+                        key1, "{\"a\": 1, \"b\": [\"one\", \"two\"]}",
+                        key2, "{\"a\": 1, \"c\": false}");
+
+        for (var entry : data.entrySet()) {
+            assertEquals("OK", Json.set(client, entry.getKey(), "$", entry.getValue()).get());
+        }
+
+        var res1 =
+                Json.mget(client, new String[] {key1, key2, UUID.randomUUID().toString()}, "$.c").get();
+        assertArrayEquals(new String[] {"[]", "[false]", null}, res1);
+
+        var res2 = Json.mget(client, new GlideString[] {gs(key1), gs(key2)}, gs(".b[*]")).get();
+        assertArrayEquals(new GlideString[] {gs("\"one\""), null}, res2);
     }
 
     @Test
