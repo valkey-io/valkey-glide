@@ -1698,9 +1698,14 @@ export async function transactionMultiJsonTest(
     GlideMultiJson.get(baseTransaction, key1, { path: "." });
     responseData.push(['get(key1, {path: "."})', JSON.stringify(jsonValueAfterArrpop)]);
 
-    // // JSON.ARRTRIM
-    // GlideMultiJson.arrtrim(baseTransaction, key1, "$.b", 2, 3);
-    // responseData.push(['arrtrim(key1, "$..b", 2, 3)', [2]]);
+    // JSON.ARRTRIM
+    GlideMultiJson.arrtrim(baseTransaction, key1, "$.b", 1, 2);
+    responseData.push(['arrtrim(key1, "$.b", 2, 3)', [2]]);
+
+    // JSON.GET to check JSON.ARRTRIM was successful.
+    const jsonValueAfterArrTrim = { a: 1.0, b: [2, 3] };
+    GlideMultiJson.get(baseTransaction, key1, { path: "." });
+    responseData.push(['get(key1, {path: "."})', JSON.stringify(jsonValueAfterArrTrim)]);
 
     // // JSON.DEBUG MEMORY
     // GlideMultiJson.debugMemory(baseTransaction, key1, { path: "$." });
