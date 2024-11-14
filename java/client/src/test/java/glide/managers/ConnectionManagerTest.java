@@ -34,6 +34,7 @@ import glide.api.models.configuration.StandaloneSubscriptionConfiguration;
 import glide.api.models.exceptions.ClosingException;
 import glide.connectors.handlers.ChannelHandler;
 import io.netty.channel.ChannelFuture;
+
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -267,5 +268,38 @@ public class ConnectionManagerTest {
         assertTrue(executionException.getCause() instanceof ClosingException);
         assertEquals("Unexpected data in response", executionException.getCause().getMessage());
         verify(channel).close();
+    }
+
+    @SneakyThrows
+    @Test
+    public void test_convert_config_with_azaffinity_to_protobuf() {
+        // setup
+        String az = "us-east-1a";
+        GlideClientConfiguration config = GlideClientConfiguration.builder()
+            .address(NodeAddress.builder().host(DEFAULT_HOST).build())
+            .useTLS(true)
+            .readFrom(ReadFrom.AZ_AFFINITY)
+            .clientAZ(az)
+            .build();
+
+        ConnectionRequest request =
+            ConnectionRequest.newBuilder()
+                .addAddresses(ConnectionRequestOuterClass.NodeAddress.newBuilder().setHost(DEFAULT_HOST).setPort(DEFAULT_PORT).build())
+                .setTlsMode(TlsMode.SecureTls)
+                .setReadFrom(ConnectionRequestOuterClass.ReadFrom.AZAffinity)
+                .setClientAz(az)
+                .build();
+
+        CompletableFuture<Response> completedFuture = new CompletableFuture<>();
+        Response response = Response.newBuilder().setConstantResponse(ConstantResponse.OK).build();
+        completedFuture.complete(response);
+
+        // execute
+        when(channel.connect(eq(request))).thenReturn(completedFuture);
+        CompletableFuture<Void> result = connectionManager.connectToValkey(config);
+
+        // verify
+        assertNull(result.get());
+        verify(channel).connect(eq(request));
     }
 }

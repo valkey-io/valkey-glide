@@ -14,6 +14,7 @@ import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.ReadFrom;
 import glide.api.models.exceptions.ClosingException;
+import glide.api.models.exceptions.ConfigurationError;
 import glide.connectors.handlers.ChannelHandler;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
@@ -120,6 +121,10 @@ public class ConnectionManager {
 
         if (configuration.getInflightRequestsLimit() != null) {
             connectionRequestBuilder.setInflightRequestsLimit(configuration.getInflightRequestsLimit());
+        }
+
+        if (configuration.getReadFrom() == ReadFrom.AZ_AFFINITY && configuration.getClientAZ() == null) {
+            throw new ConfigurationError("client_az must be set when read_from is set to AZ_AFFINITY");
         }
 
         if (configuration.getClientAZ() != null) {
