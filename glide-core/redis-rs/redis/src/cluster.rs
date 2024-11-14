@@ -35,14 +35,6 @@
 //!     .expire(key, 60).ignore()
 //!     .query(&mut connection).unwrap();
 //! ```
-use std::cell::RefCell;
-use std::collections::HashSet;
-use std::str::FromStr;
-use std::thread;
-use std::time::Duration;
-
-use rand::{seq::IteratorRandom, thread_rng};
-
 pub use crate::cluster_client::{ClusterClient, ClusterClientBuilder};
 use crate::cluster_pipeline::UNROUTABLE_ERROR;
 pub use crate::cluster_pipeline::{cluster_pipe, ClusterPipeline};
@@ -63,6 +55,13 @@ use crate::{
     cluster_routing::{Redirect, Route, RoutingInfo},
     IntoConnectionInfo, PushInfo,
 };
+use rand::{seq::IteratorRandom, thread_rng};
+use std::cell::RefCell;
+use std::collections::HashSet;
+use std::str::FromStr;
+use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
 
 use tokio::sync::mpsc;
 
@@ -342,22 +341,20 @@ where
         let mut slots = self.slots.borrow_mut();
         *slots = self.create_new_slots()?;
 
-        let mut nodes = slots.values().flatten().collect::<Vec<_>>();
-        nodes.sort_unstable();
-        nodes.dedup();
-
+        let nodes = slots.all_node_addresses();
         let mut connections = self.connections.borrow_mut();
         *connections = nodes
             .into_iter()
             .filter_map(|addr| {
-                if connections.contains_key(addr) {
-                    let mut conn = connections.remove(addr).unwrap();
+                let addr = addr.to_string();
+                if connections.contains_key(&addr) {
+                    let mut conn = connections.remove(&addr).unwrap();
                     if conn.check_connection() {
                         return Some((addr.to_string(), conn));
                     }
                 }
 
-                if let Ok(mut conn) = self.connect(addr) {
+                if let Ok(mut conn) = self.connect(&addr) {
                     if conn.check_connection() {
                         return Some((addr.to_string(), conn));
                     }
@@ -423,7 +420,7 @@ where
         if let Some(addr) = slots.slot_addr_for_route(route) {
             Ok((
                 addr.to_string(),
-                self.get_connection_by_addr(connections, addr)?,
+                self.get_connection_by_addr(connections, &addr)?,
             ))
         } else {
             // try a random node next.  This is safe if slots are involved
@@ -491,13 +488,13 @@ where
     fn execute_on_all<'a>(
         &'a self,
         input: Input,
-        addresses: HashSet<&'a str>,
+        addresses: HashSet<Arc<String>>,
         connections: &'a mut HashMap<String, C>,
-    ) -> Vec<RedisResult<(&'a str, Value)>> {
+    ) -> Vec<RedisResult<(Arc<String>, Value)>> {
         addresses
             .into_iter()
             .map(|addr| {
-                let connection = self.get_connection_by_addr(connections, addr)?;
+                let connection = self.get_connection_by_addr(connections, &addr)?;
                 match input {
                     Input::Slice { cmd, routable: _ } => connection.req_packed_command(cmd),
                     Input::Cmd(cmd) => connection.req_command(cmd),
@@ -522,8 +519,8 @@ where
         input: Input,
         slots: &'a mut SlotMap,
         connections: &'a mut HashMap<String, C>,
-    ) -> Vec<RedisResult<(&'a str, Value)>> {
-        self.execute_on_all(input, slots.addresses_for_all_nodes(), connections)
+    ) -> Vec<RedisResult<(Arc<String>, Value)>> {
+        self.execute_on_all(input, slots.all_node_addresses(), connections)
     }
 
     fn execute_on_all_primaries<'a>(
@@ -531,7 +528,7 @@ where
         input: Input,
         slots: &'a mut SlotMap,
         connections: &'a mut HashMap<String, C>,
-    ) -> Vec<RedisResult<(&'a str, Value)>> {
+    ) -> Vec<RedisResult<(Arc<String>, Value)>> {
         self.execute_on_all(input, slots.addresses_for_all_primaries(), connections)
     }
 
@@ -541,7 +538,7 @@ where
         slots: &'a mut SlotMap,
         connections: &'a mut HashMap<String, C>,
         routes: &'b [(Route, Vec<usize>)],
-    ) -> Vec<RedisResult<(&'a str, Value)>>
+    ) -> Vec<RedisResult<(Arc<String>, Value)>>
     where
         'b: 'a,
     {
@@ -553,7 +550,7 @@ where
                     ErrorKind::IoError,
                     "Couldn't find connection",
                 )))?;
-                let connection = self.get_connection_by_addr(connections, addr)?;
+                let connection = self.get_connection_by_addr(connections, &addr)?;
                 let (_, indices) = routes.get(index).unwrap();
                 let cmd =
                     crate::cluster_routing::command_for_multi_slot_indices(&input, indices.iter());
