@@ -1715,13 +1715,13 @@ export async function transactionMultiJsonTest(
     // GlideMultiJson.debugFields(baseTransaction, key1, { path: "$." });
     // responseData.push(['debugFields(key1, "{ path: "$." }")', [1, 2]]);
 
-    // // JSON.OBJLEN
-    // GlideMultiJson.objlen(baseTransaction, key1);
-    // responseData.push(['objlen(key1)', 2]);
+    // JSON.OBJLEN
+    GlideMultiJson.objlen(baseTransaction, key1);
+    responseData.push(['objlen(key1)', 2]);
 
-    // // JSON.OBJKEY
-    // GlideMultiJson.objkeys(baseTransaction, key1, { path: "$." });
-    // responseData.push(['objkeys(key1, "..")', ["a", "b"]]);
+    // JSON.OBJKEY
+    GlideMultiJson.objkeys(baseTransaction, key1, { path: "$." });
+    responseData.push(['objkeys(key1, "..")', ["a", "b"]]);
 
 
     // // use of second key
