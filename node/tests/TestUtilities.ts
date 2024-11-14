@@ -1742,7 +1742,7 @@ export async function transactionMultiJson(
     responseData.push(['nummultby(key, "$.a[*]", 10.0)', "[110,120]"]);
 
     // // JSON.STRAPPEND
-    GlideMultiJson.strappend(baseTransaction, key, '-test', { path: "$.c" });
+    GlideMultiJson.strappend(baseTransaction, key, '"-test"', { path: "$.c" });
     responseData.push(['strappend(key2, \'"-test"\', "$.c")', [6]]);
 
     // // JSON.STRLEN
