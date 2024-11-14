@@ -170,6 +170,149 @@ class TestJson:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_json_mget(self, glide_client: TGlideClient):
+        key1 = get_random_string(5)
+        key2 = get_random_string(5)
+
+        json1_value = {"a": 1.0, "b": {"a": 1, "b": 2.5, "c": True}}
+        json2_value = {"a": 3.0, "b": {"a": 1, "b": 4}}
+
+        assert (
+            await json.set(glide_client, key1, "$", OuterJson.dumps(json1_value)) == OK
+        )
+        assert (
+            await json.set(glide_client, key2, "$", OuterJson.dumps(json2_value)) == OK
+        )
+
+        # Test with root JSONPath
+        result = await json.mget(
+            glide_client,
+            [key1, key2],
+            "$",
+        )
+        expected_result = [
+            b'[{"a":1.0,"b":{"a":1,"b":2.5,"c":true}}]',
+            b'[{"a":3.0,"b":{"a":1,"b":4}}]',
+        ]
+        assert result == expected_result
+
+        # Retrieves the full JSON objects from multiple keys.
+        result = await json.mget(
+            glide_client,
+            [key1, key2],
+            ".",
+        )
+        expected_result = [
+            b'{"a":1.0,"b":{"a":1,"b":2.5,"c":true}}',
+            b'{"a":3.0,"b":{"a":1,"b":4}}',
+        ]
+        assert result == expected_result
+
+        result = await json.mget(
+            glide_client,
+            [key1, key2],
+            "$.a",
+        )
+        expected_result = [b"[1.0]", b"[3.0]"]
+        assert result == expected_result
+
+        # Retrieves the value of the 'b' field for multiple keys.
+        result = await json.mget(
+            glide_client,
+            [key1, key2],
+            "$.b",
+        )
+        expected_result = [b'[{"a":1,"b":2.5,"c":true}]', b'[{"a":1,"b":4}]']
+        assert result == expected_result
+
+        # Retrieves all values of 'b' fields using recursive path for multiple keys
+        result = await json.mget(
+            glide_client,
+            [key1, key2],
+            "$..b",
+        )
+        expected_result = [b'[{"a":1,"b":2.5,"c":true},2.5]', b'[{"a":1,"b":4},4]']
+        assert result == expected_result
+
+        # retrieves the value of the nested 'b.b' field for multiple keys
+        result = await json.mget(
+            glide_client,
+            [key1, key2],
+            ".b.b",
+        )
+        expected_result = [b"2.5", b"4"]
+        assert result == expected_result
+
+        # JSONPath that exists in only one of the keys
+        result = await json.mget(
+            glide_client,
+            [key1, key2],
+            "$.b.c",
+        )
+        expected_result = [b"[true]", b"[]"]
+        assert result == expected_result
+
+        # Legacy path that exists in only one of the keys
+        result = await json.mget(
+            glide_client,
+            [key1, key2],
+            ".b.c",
+        )
+        expected_result = [b"true", None]
+        assert result == expected_result
+
+        # JSONPath doesn't exist
+        result = await json.mget(
+            glide_client,
+            [key1, key2],
+            "$non_existing_path",
+        )
+        expected_result = [b"[]", b"[]"]
+        assert result == expected_result
+
+        # Legacy path doesn't exist
+        result = await json.mget(
+            glide_client,
+            [key1, key2],
+            ".non_existing_path",
+        )
+        assert result == [None, None]
+
+        # JSONPath one key doesn't exist
+        result = await json.mget(
+            glide_client,
+            [key1, "{non_existing_key}"],
+            "$.a",
+        )
+        assert result == [b"[1.0]", None]
+
+        # Legacy path one key doesn't exist
+        result = await json.mget(
+            glide_client,
+            [key1, "{non_existing_key}"],
+            ".a",
+        )
+        assert result == [b"1.0", None]
+
+        # Both keys don't exist
+        result = await json.mget(
+            glide_client,
+            ["{non_existing_key}1", "{non_existing_key}2"],
+            "$a",
+        )
+        assert result == [None, None]
+
+        # Test with only one key
+        result = await json.mget(
+            glide_client,
+            [key1],
+            "$.a",
+        )
+        expected_result = [b"[1.0]"]
+        assert result == expected_result
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_json_del(self, glide_client: TGlideClient):
         key = get_random_string(5)
 
