@@ -1691,7 +1691,7 @@ export async function transactionMultiJsonTest(
         path: "$.b",
         index: 2,
     });
-    responseData.push(['arrpop(key1, {path: "$.b", index: 4})', [5]]);
+    responseData.push(['arrpop(key1, {path: "$.b", index: 4})', ['5']]);
 
     // JSON.GET to check JSON.ARRPOP was successful.
     const jsonValueAfterArrpop = { a: 1.0, b: [1, 2, 3, 4] };
