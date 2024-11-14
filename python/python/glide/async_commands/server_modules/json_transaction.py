@@ -70,7 +70,7 @@ def get(
     Retrieves the JSON value at the specified `paths` stored at `key`.
 
     Args:
-        client (TGlideClient): The client to execute the command.
+        transaction (TTransaction): The transaction to execute the command.
         key (TEncodable): The key of the JSON document.
         paths (Optional[Union[TEncodable, List[TEncodable]]]): The path or list of paths within the JSON document. Default to None.
         options (Optional[JsonGetOptions]): Options for formatting the byte representation of the JSON data. See `JsonGetOptions`.
@@ -112,7 +112,7 @@ def arrappend(
     Appends one or more `values` to the JSON array at the specified `path` within the JSON document stored at `key`.
 
     Args:
-        client (TGlideClient): The client to execute the command.
+        transaction (TTransaction): The transaction to execute the command.
         key (TEncodable): The key of the JSON document.
         path (TEncodable): Represents the path within the JSON document where the `values` will be appended.
         values (TEncodable): The values to append to the JSON array at the specified path.
@@ -155,7 +155,7 @@ def arrindex(
     If `options.start` exceeds `options.end`, `-1` is returned, indicating that the value was not found.
 
     Args:
-        client (TGlideClient): The client to execute the command.
+        transaction (TTransaction): The transaction to execute the command.
         key (TEncodable): The key of the JSON document.
         path (TEncodable): The path within the JSON document.
         value (TEncodable): The value to search for within the arrays.
@@ -195,7 +195,7 @@ def arrinsert(
     Inserts one or more values into the array at the specified `path` within the JSON document stored at `key`, before the given `index`.
 
     Args:
-        client (TGlideClient): The client to execute the command.
+        transaction (TTransaction): The transaction to execute the command.
         key (TEncodable): The key of the JSON document.
         path (TEncodable): The path within the JSON document.
         index (int): The array index before which values are inserted.
@@ -228,7 +228,7 @@ def arrlen(
     Retrieves the length of the array at the specified `path` within the JSON document stored at `key`.
 
     Args:
-        client (TGlideClient): The client to execute the command.
+        transaction (TTransaction): The transaction to execute the command.
         key (TEncodable): The key of the JSON document.
         path (Optional[TEncodable]): The path within the JSON document. Defaults to None.
 
@@ -260,7 +260,7 @@ def arrpop(
     If `options.index` is provided, it pops the element at that index instead of the last element.
 
     Args:
-        client (TGlideClient): The client to execute the command.
+        transaction (TTransaction): The transaction to execute the command.
         key (TEncodable): The key of the JSON document.
         options (Optional[JsonArrPopOptions]): Options including the path and optional index. See `JsonArrPopOptions`. Default to None.
             If not specified, attempts to pop the last element from the root value if it's an array.
@@ -299,7 +299,7 @@ def arrtrim(
     If `start` >= size or `start` > `end`, the array is emptied and 0 is returned.
 
     Args:
-        client (TGlideClient): The client to execute the command.
+        transaction (TTransaction): The transaction to execute the command.
         key (TEncodable): The key of the JSON document.
         path (TEncodable): The path within the JSON document.
         start (int): The start index, inclusive.
@@ -332,7 +332,7 @@ def clear(
     Numeric values are set to `0`, and boolean values are set to `False`, and string values are converted to empty strings.
 
     Args:
-        client (TGlideClient): The client to execute the command.
+        transaction (TTransaction): The transaction to execute the command.
         key (TEncodable): The key of the JSON document.
         path (Optional[str]): The path within the JSON document. Default to None.
 
@@ -365,7 +365,7 @@ def debug_fields(
             - Total: 2 (top-level) + 3 (from array) + 1 (from nested object) = 6 fields.
 
     Args:
-        client (TGlideClient): The client to execute the command.
+        transaction (TTransaction): The transaction to execute the command.
         key (TEncodable): The key of the JSON document.
         path (Optional[TEncodable]): The path within the JSON document. Defaults to root if not provided.
 
@@ -397,7 +397,7 @@ def debug_memory(
     Reports memory usage in bytes of a JSON value at the specified `path` within the JSON document stored at `key`.
 
     Args:
-        client (TGlideClient): The client to execute the command.
+        transaction (TTransaction): The transaction to execute the command.
         key (TEncodable): The key of the JSON document.
         path (Optional[TEncodable]): The path within the JSON document. Defaults to None.
 
@@ -429,7 +429,7 @@ def delete(
     Deletes the JSON value at the specified `path` within the JSON document stored at `key`.
 
     Args:
-        client (TGlideClient): The client to execute the command.
+        transaction (TTransaction): The transaction to execute the command.
         key (TEncodable): The key of the JSON document.
         path (Optional[TEncodable]): The path within the JSON document.
             If None, deletes the entire JSON document at `key`. Defaults to None.
@@ -451,7 +451,7 @@ def forget(
     Deletes the JSON value at the specified `path` within the JSON document stored at `key`.
 
     Args:
-        client (TGlideClient): The client to execute the command.
+        transaction (TTransaction): The transaction to execute the command.
         key (TEncodable): The key of the JSON document.
         path (Optional[TEncodable]): The path within the JSON document.
             If None, deletes the entire JSON document at `key`. Defaults to None.
@@ -474,7 +474,7 @@ def numincrby(
     Increments or decrements the JSON value(s) at the specified `path` by `number` within the JSON document stored at `key`.
 
     Args:
-        client (TGlideClient): The client to execute the command.
+        transaction (TTransaction): The transaction to execute the command.
         key (TEncodable): The key of the JSON document.
         path (TEncodable): The path within the JSON document.
         number (Union[int, float]): The number to increment or decrement by.
@@ -507,7 +507,7 @@ def nummultby(
     Multiplies the JSON value(s) at the specified `path` by `number` within the JSON document stored at `key`.
 
     Args:
-        client (TGlideClient): The client to execute the command.
+        transaction (TTransaction): The transaction to execute the command.
         key (TEncodable): The key of the JSON document.
         path (TEncodable): The path within the JSON document.
         number (Union[int, float]): The number to multiply by.
@@ -539,7 +539,7 @@ def objlen(
     Retrieves the number of key-value pairs in the object stored at the specified `path` within the JSON document stored at `key`.
 
     Args:
-        client (TGlideClient): The client to execute the command.
+        transaction (TTransaction): The transaction to execute the command.
         key (TEncodable): The key of the JSON document.
         path (Optional[TEncodable]): The path within the JSON document. Defaults to None.
 
@@ -571,7 +571,7 @@ def objkeys(
     Retrieves key names in the object values at the specified `path` within the JSON document stored at `key`.
 
     Args:
-        client (TGlideClient): The client to execute the command.
+        transaction (TTransaction): The transaction to execute the command.
         key (TEncodable): The key of the JSON document.
         path (Optional[TEncodable]): Represents the path within the JSON document where the key names will be retrieved.
             Defaults to None.
@@ -613,7 +613,7 @@ def resp(
     JSON objects are represented as RESP object, where the first element is the simple string {, followed by key-value pairs, each of which is a RESP bulk string.\n
 
     Args:
-        client (TGlideClient): The client to execute the command.
+        transaction (TTransaction): The transaction to execute the command.
         key (TEncodable): The key of the JSON document.
         path (Optional[TEncodable]): The path within the JSON document. Default to None.
 
@@ -646,7 +646,7 @@ def strappend(
     Appends the specified `value` to the string stored at the specified `path` within the JSON document stored at `key`.
 
     Args:
-        client (TGlideClient): The client to execute the command.
+        transaction (TTransaction): The transaction to execute the command.
         key (TEncodable): The key of the JSON document.
         value (TEncodable): The value to append to the string. Must be wrapped with single quotes. For example, to append "foo", pass '"foo"'.
         path (Optional[TEncodable]): The path within the JSON document. Default to None.
@@ -678,7 +678,7 @@ def strlen(
     Returns the length of the JSON string value stored at the specified `path` within the JSON document stored at `key`.
 
     Args:
-        client (TGlideClient): The client to execute the command.
+        transaction (TTransaction): The transaction to execute the command.
         key (TEncodable): The key of the JSON document.
         path (Optional[TEncodable]): The path within the JSON document. Default to None.
 
@@ -708,7 +708,7 @@ def toggle(
     Toggles a Boolean value stored at the specified `path` within the JSON document stored at `key`.
 
     Args:
-        client (TGlideClient): The client to execute the command.
+        transaction (TTransaction): The transaction to execute the command.
         key (TEncodable): The key of the JSON document.
         path (TEncodable): The path within the JSON document. Default to None.
 
@@ -736,7 +736,7 @@ def type(
     Retrieves the type of the JSON value at the specified `path` within the JSON document stored at `key`.
 
     Args:
-        client (TGlideClient): The client to execute the command.
+        transaction (TTransaction): The transaction to execute the command.
         key (TEncodable): The key of the JSON document.
         path (Optional[TEncodable]): The path within the JSON document. Default to None.
 
