@@ -1713,7 +1713,7 @@ export async function transactionMultiJson(
 ): Promise<[string, GlideReturnType][]> {
     const responseData: [string, GlideReturnType][] = [];
     const key = "key1" + uuidv4();
-    const jsonValue3 = { a: [1, 2], b: [3, 4] };
+    const jsonValue3 = { a: [1, 2], b: [3, 4], c: "c" };
     GlideMultiJson.set(baseTransaction, key, "$", JSON.stringify(jsonValue3));
     responseData.push(['set(key3, "$")', "OK"]);
 
@@ -1735,15 +1735,15 @@ export async function transactionMultiJson(
 
     // JSON.NUMINCRBY
     GlideMultiJson.numincrby(baseTransaction, key, "$.a[*]", 10.0);
-    responseData.push(['numincrby(key2, "$.a[*]", 10.0)', "[11,12]"]);
+    responseData.push(['numincrby(key, "$.a[*]", 10.0)', "[11,12]"]);
 
-    // // JSON.NUMMULTBY
-    // GlideMultiJson.nummultby(baseTransaction, key2, "$.c[*]", 10.0);
-    // responseData.push(['nummultby(key2, "$.c[*]", 10.0)', "[110,120]"]);
+    // JSON.NUMMULTBY
+    GlideMultiJson.nummultby(baseTransaction, key, "$.a[*]", 10.0);
+    responseData.push(['nummultby(key, "$.a[*]", 10.0)', "[110,120]"]);
 
     // // JSON.STRAPPEND
-    // GlideMultiJson.strappend(baseTransaction, key2, '"bar"', { path: "$..a" });
-    // responseData.push(['strappend(key2, \'"bar"\', "$..a")', [8]]);
+    GlideMultiJson.strappend(baseTransaction, key, '-test', { path: "$.c" });
+    responseData.push(['strappend(key2, \'"-test"\', "$.c")', [8]]);
 
     // // JSON.STRLEN
     // GlideMultiJson.strlen(baseTransaction, key2, { path: "$..a" });
