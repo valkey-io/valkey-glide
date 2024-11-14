@@ -19,7 +19,6 @@ import {
     FtAggregateReturnType,
     FtSearchOptions,
     FtSearchReturnType,
-    GlideClient,
     GlideClusterClient,
     GlideFt,
     GlideJson,
@@ -30,8 +29,7 @@ import {
     ProtocolVersion,
     RequestError,
     SortOrder,
-    Transaction,
-    VectorField,
+    VectorField
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import {
@@ -2339,6 +2337,25 @@ describe("Server Module Tests", () => {
                     client.close();
                 },
             );
+
+            it("GlideMultiJson test", async () => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+                const clusterTransaction = new ClusterTransaction();
+                const expectedRes = await transactionMultiJsonTest(
+                    clusterTransaction
+                );
+                const result = await client.exec(clusterTransaction);
+                console.log("result =====");
+                console.log(result);
+                expectedRes.push(["select(0)", "OK"]);
+                validateTransactionResponse(result, expectedRes);
+                client.close();
+            });
         },
     );
 
@@ -3462,29 +3479,4 @@ describe("Server Module Tests", () => {
             );
         });
     });
-
-    describe.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "GlideJson",
-        async (protocol) => {
-            let client: GlideClient;
-            client = await GlideClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
-            );
-
-            afterEach(async () => {
-                await flushAndCloseClient(true, cluster.getAddresses(), client);
-            });
-            const transaction = new Transaction();
-            const expectedRes = await transactionMultiJsonTest(
-                transaction,
-                cluster.getVersion(),
-            );
-            transaction.select(0);
-            const result = await client.exec(transaction);
-            expectedRes.push(["select(0)", "OK"]);
-
-            validateTransactionResponse(result, expectedRes);
-            client.close();
-        },
-    );
 });
