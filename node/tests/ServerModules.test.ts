@@ -2327,35 +2327,18 @@ describe("Server Module Tests", () => {
                             protocol,
                         ),
                     );
-                    const transaction = new ClusterTransaction();
-                    const expectedRes =
-                        await transactionMultiJsonTest(transaction);
-                    const result = await client.exec(transaction);
-                    console.log("result======");
+                    const clusterTransaction = new ClusterTransaction();
+                    const expectedRes = await transactionMultiJsonTest(
+                        clusterTransaction
+                    );
+                    const result = await client.exec(clusterTransaction);
+                    console.log("result =====");
                     console.log(result);
+                    expectedRes.push(["select(0)", "OK"]);
                     validateTransactionResponse(result, expectedRes);
                     client.close();
                 },
             );
-
-            it("GlideMultiJson test", async () => {
-                client = await GlideClusterClient.createClient(
-                    getClientConfigurationOption(
-                        cluster.getAddresses(),
-                        protocol,
-                    ),
-                );
-                const clusterTransaction = new ClusterTransaction();
-                const expectedRes = await transactionMultiJsonTest(
-                    clusterTransaction
-                );
-                const result = await client.exec(clusterTransaction);
-                console.log("result =====");
-                console.log(result);
-                expectedRes.push(["select(0)", "OK"]);
-                validateTransactionResponse(result, expectedRes);
-                client.close();
-            });
         },
     );
 
