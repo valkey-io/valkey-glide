@@ -1726,7 +1726,7 @@ export async function transactionMultiJson(
     // responseData.push(['debugFields(key1, "{ path: "$." }")', [1, 2]]);
 
     // JSON.OBJLEN
-    GlideMultiJson.objlen(baseTransaction, key3, { path: "$.a" });
+    GlideMultiJson.objlen(baseTransaction, key3, { path: "$" });
     responseData.push(['objlen(key1)', 2]);
 
     // JSON.OBJKEY
