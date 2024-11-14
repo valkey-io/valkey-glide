@@ -1717,12 +1717,12 @@ export async function transactionMultiJsonTest(
 
     // New key for NUMINCRBY
     const key3 = "key3" + uuidv4();
-    const jsonValue3 = { c: [1, 2], d: true, e: ["hello", "clouds"], f: { a: "hello" } };
+    const jsonValue3 = { a: [1, 2], b: [3, 4] };
     GlideMultiJson.set(baseTransaction, key3, "$", JSON.stringify(jsonValue3));
     responseData.push(['set(key3, "$")', "OK"]);
 
     // JSON.OBJLEN
-    // GlideMultiJson.objlen(baseTransaction, key3, { path: "$." });
+    // GlideMultiJson.objlen(baseTransaction, key2, { path: "$." });
     // responseData.push(['objlen(key1)', 2]);
 
     // JSON.OBJKEY
