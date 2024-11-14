@@ -441,7 +441,7 @@ public class Json {
      *     <pre>{@code
      * Json.set(client, "doc1", "$", "{\"a\": 1, \"b\": [\"one\", \"two\"]}").get();
      * Json.set(client, "doc2", "$", "{\"a\": 1, \"c\": false}").get();
-     * var res = Json.mget(client, new String[] { "doc1", "doc2", "doc3" }, "$.c").get();
+     * var res = Json.mget(client, new String[] { "doc1", "doc2", "non_existing" }, "$.c").get();
      * assert Arrays.equals(res, new String[] { "[]", "[false]", null });
      * }</pre>
      */
