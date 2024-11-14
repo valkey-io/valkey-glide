@@ -1656,12 +1656,12 @@ export async function transactionMultiJsonTest(
     GlideMultiJson.get(baseTransaction, key1, { path: "." });
     responseData.push(['get(key1, {path: "."})', JSON.stringify(jsonValue)]);
 
-    const jsonValue2 = { a: 1.0, b: ['1', '2'] };
+    const jsonValue2 = { a: 1.0, b: [1, 2] };
     GlideMultiJson.set(baseTransaction, key1, "$", JSON.stringify(jsonValue2));
     responseData.push(['set(key1, "$", "{ "a": 1, b: ["1", "2"] }")', "OK"]);
 
     // JSON.ARRAPPEND
-    GlideMultiJson.arrappend(baseTransaction, key1, "$.b", ['3', '4']);
+    GlideMultiJson.arrappend(baseTransaction, key1, "$.b", ["3", "4"]);
     responseData.push(['arrappend(key1, "$.b", [\'"3"\', \'"4"\'])', [4]]);
 
     // JSON.GET
