@@ -37,8 +37,9 @@ import {
     getClientConfigurationOption,
     getServerVersion,
     parseEndpoints,
-    transactionMultiJsonTest,
-    validateTransactionResponse,
+    transactionMultiJson,
+    transactionMultiJsonForArrCommands,
+    validateTransactionResponse
 } from "./TestUtilities";
 
 const TIMEOUT = 50000;
@@ -2319,7 +2320,7 @@ describe("Server Module Tests", () => {
             );
 
             it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-                "can send transactions_%p",
+                "can send GlideMultiJson transactions_%p",
                 async (protocol) => {
                     client = await GlideClusterClient.createClient(
                         getClientConfigurationOption(
@@ -2328,12 +2329,35 @@ describe("Server Module Tests", () => {
                         ),
                     );
                     const clusterTransaction = new ClusterTransaction();
-                    const expectedRes = await transactionMultiJsonTest(
+                    const expectedRes = await transactionMultiJsonForArrCommands(
                         clusterTransaction
                     );
                     const result = await client.exec(clusterTransaction);
                     console.log("result =====");
                     console.log(result);
+
+                    validateTransactionResponse(result, expectedRes);
+                    client.close();
+                },
+            );
+
+            it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+                "can send GlideMultiJson transactions_%p for ARR commands",
+                async (protocol) => {
+                    client = await GlideClusterClient.createClient(
+                        getClientConfigurationOption(
+                            cluster.getAddresses(),
+                            protocol,
+                        ),
+                    );
+                    const clusterTransaction = new ClusterTransaction();
+                    const expectedRes = await transactionMultiJson(
+                        clusterTransaction
+                    );
+                    const result = await client.exec(clusterTransaction);
+                    console.log("result 2 =====");
+                    console.log(result);
+
                     validateTransactionResponse(result, expectedRes);
                     client.close();
                 },

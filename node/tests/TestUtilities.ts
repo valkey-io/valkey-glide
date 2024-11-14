@@ -1633,12 +1633,11 @@ export async function transactionTest(
     return responseData;
 }
 
-export async function transactionMultiJsonTest(
+export async function transactionMultiJsonForArrCommands(
     baseTransaction: ClusterTransaction,
 ): Promise<[string, GlideReturnType][]> {
     const responseData: [string, GlideReturnType][] = [];
     const key1 = "key1" + uuidv4();
-    const key2 = "key2" + uuidv4();
     const jsonValue = { a: 1.0, b: 2 };
 
     // JSON.SET
@@ -1706,23 +1705,28 @@ export async function transactionMultiJsonTest(
     const jsonValueAfterArrTrim = { a: 1.0, b: [2, 3] };
     GlideMultiJson.get(baseTransaction, key1, { path: "." });
     responseData.push(['get(key1, {path: "."})', JSON.stringify(jsonValueAfterArrTrim)]);
+    return responseData;
+}
 
-    // JSON.DEBUG MEMORY
-    // GlideMultiJson.debugMemory(baseTransaction, key1, { path: "$.a" });
-    // responseData.push(['debugMemory(key1, "{ path: "$.a" }")', 98]);
-
-    // // JSON.DEBUG FIELDS
-    // GlideMultiJson.debugFields(baseTransaction, key1, { path: "$." });
-    // responseData.push(['debugFields(key1, "{ path: "$." }")', [1, 2]]);
-
-    // New key for NUMINCRBY
+export async function transactionMultiJson(
+    baseTransaction: ClusterTransaction,
+): Promise<[string, GlideReturnType][]> {
+    const responseData: [string, GlideReturnType][] = [];
     const key3 = "key3" + uuidv4();
     const jsonValue3 = { a: [1, 2], b: [3, 4] };
     GlideMultiJson.set(baseTransaction, key3, "$", JSON.stringify(jsonValue3));
     responseData.push(['set(key3, "$")', "OK"]);
 
+    // JSON.DEBUG MEMORY
+    GlideMultiJson.debugMemory(baseTransaction, key3, { path: "$.a" });
+    responseData.push(['debugMemory(key1, "{ path: "$.a" }")', 98]);
+
+    // JSON.DEBUG FIELDS
+    GlideMultiJson.debugFields(baseTransaction, key3, { path: "$." });
+    responseData.push(['debugFields(key1, "{ path: "$." }")', [1, 2]]);
+
     // JSON.OBJLEN
-    // GlideMultiJson.objlen(baseTransaction, key2, { path: "$." });
+    // GlideMultiJson.objlen(baseTransaction, key3, { path: "$." });
     // responseData.push(['objlen(key1)', 2]);
 
     // JSON.OBJKEY
