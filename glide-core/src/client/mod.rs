@@ -9,7 +9,9 @@ use futures::FutureExt;
 use logger_core::{log_info, log_warn};
 use redis::aio::ConnectionLike;
 use redis::cluster_async::ClusterConnection;
-use redis::cluster_routing::{Routable, RoutingInfo, SingleNodeRoutingInfo};
+use redis::cluster_routing::{
+    MultipleNodeRoutingInfo, ResponsePolicy, Routable, RoutingInfo, SingleNodeRoutingInfo,
+};
 use redis::{Cmd, ErrorKind, ObjectType, PushInfo, RedisError, RedisResult, ScanStateRC, Value};
 pub use standalone_client::StandaloneClient;
 use std::io;
@@ -259,9 +261,9 @@ impl Client {
                         if let Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)) =
                             routing
                         {
-                            let cmdname = cmd.command().unwrap_or_default();
-                            let cmdname = String::from_utf8_lossy(&cmdname);
-                            if redis::cluster_routing::is_readonly_cmd(cmdname.as_bytes()) {
+                            let cmd_name = cmd.command().unwrap_or_default();
+                            let cmd_name = String::from_utf8_lossy(&cmd_name);
+                            if redis::cluster_routing::is_readonly_cmd(cmd_name.as_bytes()) {
                                 // A read-only command, go ahead and send it to a random node
                                 RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)
                             } else {
@@ -270,7 +272,7 @@ impl Client {
                                 log_warn(
                                     "send_command",
                                     format!(
-                                        "User provided 'Random' routing which is not suitable for the writeable command '{cmdname}'. Changing it to 'RandomPrimary'"
+                                        "User provided 'Random' routing which is not suitable for the writeable command '{cmd_name}'. Changing it to 'RandomPrimary'"
                                     ),
                                 );
                                 RoutingInfo::SingleNode(SingleNodeRoutingInfo::RandomPrimary)
@@ -473,6 +475,34 @@ impl Client {
     pub fn release_inflight_request(&self) -> isize {
         self.inflight_requests_allowed
             .fetch_add(1, Ordering::SeqCst)
+    }
+
+    /// Update the password used to authenticate with the servers.
+    /// If None is passed, the password will be removed.
+    /// If `re_auth` is true, the new password will be used to re-authenticate with all of the nodes.
+    pub async fn update_connection_password(
+        &mut self,
+        password: Option<String>,
+        re_auth: bool,
+    ) -> RedisResult<Value> {
+        if re_auth {
+            let routing = RoutingInfo::MultiNode((
+                MultipleNodeRoutingInfo::AllNodes,
+                Some(ResponsePolicy::AllSucceeded),
+            ));
+            let mut cmd = redis::cmd("AUTH");
+            cmd.arg(&password);
+            self.send_command(&cmd, Some(routing)).await?;
+        }
+
+        match self.internal_client {
+            ClientWrapper::Standalone(ref mut client) => {
+                client.update_connection_password(password).await
+            }
+            ClientWrapper::Cluster { ref mut client } => {
+                client.update_connection_password(password).await
+            }
+        }
     }
 }
 
