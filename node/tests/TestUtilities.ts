@@ -1765,21 +1765,21 @@ export async function transactionMultiJson(
     GlideMultiJson.resp(baseTransaction, key, { path: "$" });
     responseData.push(['resp(key, "$")', [
         [
-            "(",
-            ["c", ["[", 110, 120]],
-            ["d", false],
-            ["e", ["[", "hello", "clouds"]],
-            ["f", ["{", ["a", "hellobar"]]],
+            "{",
+            ["a", ["[", 110, 120]],
+            ["b", ["[", 3, 4]],
+            ["c", "c-test"],
+            ["d", "false"]
         ]
     ]]);
 
-    // // JSON.DEL
-    // GlideMultiJson.del(baseTransaction, key2, "$..a");
-    // responseData.push(['del(key2, "$..a")', 1]);
+    // JSON.DEL
+    GlideMultiJson.del(baseTransaction, key, { path: "$.d" });
+    responseData.push(['del(key, { path: "$.d" })', 1]);
 
-    // // JSON.FORGET
-    // GlideMultiJson.forget(baseTransaction, key2, "$..a");
-    // responseData.push(['forget(key2)', 1]);
+    // JSON.FORGET
+    GlideMultiJson.forget(baseTransaction, key, { path: "$.c" });
+    responseData.push(['forget(key, {path: "$.c" })', 1]);
 
     return responseData;
 }
