@@ -14,7 +14,6 @@ import glide.api.GlideClient;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.RequestException;
-
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;

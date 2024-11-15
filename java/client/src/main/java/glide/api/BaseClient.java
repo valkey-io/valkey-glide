@@ -800,7 +800,8 @@ public abstract class BaseClient
      */
     public CompletableFuture<String> updateConnectionPassword(
             @NonNull String password, @NonNull PasswordUpdateMode mode) {
-        return commandManager.submitPasswordUpdate(Optional.of(password), mode, this::handleStringResponse);
+        return commandManager.submitPasswordUpdate(
+                Optional.of(password), mode, this::handleStringResponse);
     }
 
     /**

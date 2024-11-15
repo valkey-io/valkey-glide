@@ -6,13 +6,13 @@ import command_request.CommandRequestOuterClass;
 import command_request.CommandRequestOuterClass.Command;
 import command_request.CommandRequestOuterClass.Command.ArgsArray;
 import command_request.CommandRequestOuterClass.CommandRequest;
-import command_request.CommandRequestOuterClass.ReplaceConnectionPassword;
 import command_request.CommandRequestOuterClass.RequestType;
 import command_request.CommandRequestOuterClass.Routes;
 import command_request.CommandRequestOuterClass.ScriptInvocation;
 import command_request.CommandRequestOuterClass.ScriptInvocationPointers;
 import command_request.CommandRequestOuterClass.SimpleRoutes;
 import command_request.CommandRequestOuterClass.SlotTypes;
+import command_request.CommandRequestOuterClass.UpdateConnectionPassword;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
@@ -225,7 +225,7 @@ public class CommandManager {
      *
      * @param password A new password to set or empty value to remove the password.
      * @param mode Password update mode.
-     * @param responseHandler A response handler
+     * @param responseHandler A response handler.
      * @return A request promise.
      * @param <T> Type of the response.
      */
@@ -233,10 +233,10 @@ public class CommandManager {
             Optional<String> password,
             PasswordUpdateMode mode,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
-        var builder = ReplaceConnectionPassword.newBuilder().setReAuth(mode.getValue());
+        var builder = UpdateConnectionPassword.newBuilder().setReAuth(mode.getValue());
         password.ifPresent(builder::setPassword);
 
-        var command = CommandRequest.newBuilder().setReplaceConnectionPassword(builder.build());
+        var command = CommandRequest.newBuilder().setUpdateConnectionPassword(builder.build());
         return submitCommandToChannel(command, responseHandler);
     }
 
