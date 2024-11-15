@@ -139,7 +139,7 @@ func parseMap(response *C.struct_CommandResponse) (interface{}, error) {
 }
 
 func parseSet(response *C.struct_CommandResponse) (interface{}, error) {
-	if response.array_value == nil {
+	if response.sets_value == nil {
 		return nil, nil
 	}
 

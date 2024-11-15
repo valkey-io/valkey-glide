@@ -22,7 +22,7 @@ func (suite *GlideTestSuite) TestCustomCommandInfo() {
 	assert.True(suite.T(), strings.Contains(strResult, "# Stats"))
 }
 
-func (suite *GlideTestSuite) TestCustomCommandPing() {
+func (suite *GlideTestSuite) TestCustomCommandPing_StringResponse() {
 	client := suite.defaultClient()
 	result, err := client.CustomCommand([]string{"PING"})
 
@@ -45,7 +45,51 @@ func (suite *GlideTestSuite) TestCustomCommandClientInfo() {
 	assert.True(suite.T(), strings.Contains(strResult, fmt.Sprintf("name=%s", clientName)))
 }
 
-func (suite *GlideTestSuite) TestCustomCommandMGET() {
+func (suite *GlideTestSuite) TestCustomCommandGet_NullResponse() {
+	client := suite.defaultClient()
+	key := uuid.New().String()
+	result, err := client.CustomCommand([]string{"GET", key})
+
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), nil, result)
+}
+
+func (suite *GlideTestSuite) TestCustomCommandDel_LongResponse() {
+	client := suite.defaultClient()
+	key := uuid.New().String()
+	suite.verifyOK(client.Set(key, "value"))
+	result, err := client.CustomCommand([]string{"DEL", key})
+
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), int64(1), result.(int64))
+}
+
+func (suite *GlideTestSuite) TestCustomCommandHExists_BoolResponse() {
+	client := suite.defaultClient()
+	fields := map[string]string{"field1": "value1"}
+	key := uuid.New().String()
+
+	res1, err := client.HSet(key, fields)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), int64(1), res1.Value())
+
+	result, err := client.CustomCommand([]string{"HEXISTS", key, "field1"})
+
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), true, result.(bool))
+}
+
+func (suite *GlideTestSuite) TestCustomCommandIncrByFloat_FloatResponse() {
+	client := suite.defaultClient()
+	key := uuid.New().String()
+
+	result, err := client.CustomCommand([]string{"INCRBYFLOAT", key, fmt.Sprintf("%f", 0.1)})
+
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), float64(0.1), result.(float64))
+}
+
+func (suite *GlideTestSuite) TestCustomCommandMGet_ArrayResponse() {
 	clientName := "TEST_CLIENT_NAME"
 	config := api.NewGlideClientConfiguration().
 		WithAddress(&api.NodeAddress{Port: suite.standalonePorts[0]}).
@@ -69,6 +113,36 @@ func (suite *GlideTestSuite) TestCustomCommandMGET() {
 
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), values, result.([]interface{}))
+}
+
+func (suite *GlideTestSuite) TestCustomCommandConfigGet_MapResponse() {
+	client := suite.defaultClient()
+
+	if suite.serverVersion < "7.0.0" {
+		suite.T().Skip("This feature is added in version 7")
+	}
+	configMap := map[string]string{"timeout": "1000", "maxmemory": "1GB"}
+	result, err := client.ConfigSet(configMap)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result.Value())
+
+	result2, err := client.CustomCommand([]string{"CONFIG", "GET", "timeout", "maxmemory"})
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), map[interface{}]interface{}{"timeout": "1000", "maxmemory": "1073741824"}, result2)
+}
+
+func (suite *GlideTestSuite) TestCustomCommandConfigSMembers_SetResponse() {
+	client := suite.defaultClient()
+	key := uuid.NewString()
+	members := []string{"member1", "member2", "member3"}
+
+	res1, err := client.SAdd(key, members)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), int64(3), res1.Value())
+
+	result2, err := client.CustomCommand([]string{"SMEMBERS", key})
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), map[interface{}]struct{}{"member1": {}, "member2": {}, "member3": {}}, result2)
 }
 
 func (suite *GlideTestSuite) TestCustomCommand_invalidCommand() {
