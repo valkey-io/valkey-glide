@@ -1256,7 +1256,6 @@ export class GlideMultiJson {
      * @param client - The client to execute the command.
      * @param keys - The keys of the JSON documents.
      * @param path - The path within the JSON documents.
-     * @param options - (Optional) See {@link DecoderOption}.
      *
      * Command Response -
      * - For JSONPath (path starts with `$`):
@@ -1923,7 +1922,7 @@ export class GlideMultiJson {
     static objkeys(
         transaction: Transaction | ClusterTransaction,
         key: GlideString,
-        options?: { path: GlideString } & DecoderOption,
+        options?: { path: GlideString },
     ): Transaction | ClusterTransaction {
         const args = ["JSON.OBJKEYS", key];
 
