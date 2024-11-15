@@ -1727,28 +1727,30 @@ export async function transactionMultiJson(
     baseTransaction: ClusterTransaction,
 ): Promise<[string, GlideReturnType][]> {
     const responseData: [string, GlideReturnType][] = [];
-    const key = "key1" + uuidv4();
-    const jsonValue3 = { a: [1, 2], b: [3, 4], c: "c", d: true };
+    const key = "{key}:1" + uuidv4();
+    const key2 = "{key}:2" + uuidv4();
+    const key3 = "{key}:3" + uuidv4();
+    const jsonValue = { a: [1, 2], b: [3, 4], c: "c", d: true };
 
     // JSON.SET to create a key for testing commands.
-    GlideMultiJson.set(baseTransaction, key, "$", JSON.stringify(jsonValue3));
-    responseData.push(['set(key3, "$")', "OK"]);
+    GlideMultiJson.set(baseTransaction, key, "$", JSON.stringify(jsonValue));
+    responseData.push(['set(key, "$")', "OK"]);
 
     // JSON.DEBUG MEMORY
-    // GlideMultiJson.debugMemory(baseTransaction, key3, { path: "$.a" });
-    // responseData.push(['debugMemory(key1, "{ path: "$.a" }")', 98]);
+    GlideMultiJson.debugMemory(baseTransaction, key, { path: "$.a" });
+    responseData.push(['debugMemory(key, "{ path: "$.a" }")', [48]]);
 
     // JSON.DEBUG FIELDS
-    // GlideMultiJson.debugFields(baseTransaction, key3, { path: "$." });
-    // responseData.push(['debugFields(key1, "{ path: "$." }")', [1, 2]]);
+    GlideMultiJson.debugFields(baseTransaction, key, { path: "$.a" });
+    responseData.push(['debugFields(key, "{ path: "$.a" }")', [2]]);
 
     // JSON.OBJLEN
-    // GlideMultiJson.objlen(baseTransaction, key3, { path: "." });
-    // responseData.push(['objlen(key3)', 2]);
+    GlideMultiJson.objlen(baseTransaction, key, { path: "." });
+    responseData.push(["objlen(key)", 4]);
 
     // JSON.OBJKEY
-    // GlideMultiJson.objkeys(baseTransaction, key, { path: "$." });
-    // responseData.push(['objkeys(key1, "$.")', ["a", "b"]]);
+    GlideMultiJson.objkeys(baseTransaction, key, { path: "." });
+    responseData.push(['objkeys(key, "$.")', ["a", "b", "c", "d"]]);
 
     // JSON.NUMINCRBY
     GlideMultiJson.numincrby(baseTransaction, key, "$.a[*]", 10.0);
@@ -1760,7 +1762,7 @@ export async function transactionMultiJson(
 
     // // JSON.STRAPPEND
     GlideMultiJson.strappend(baseTransaction, key, '"-test"', { path: "$.c" });
-    responseData.push(['strappend(key2, \'"-test"\', "$.c")', [6]]);
+    responseData.push(['strappend(key, \'"-test"\', "$.c")', [6]]);
 
     // // JSON.STRLEN
     GlideMultiJson.strlen(baseTransaction, key, { path: "$.c" });
@@ -1771,6 +1773,7 @@ export async function transactionMultiJson(
     responseData.push(['type(key, "$.a")', ["array"]]);
 
     // JSON.MGET -> TODO
+    GlideMultiJson.mget(baseTransaction, [key, key2, key3]);
 
     // JSON.TOGGLE
     GlideMultiJson.toggle(baseTransaction, key, { path: "$.d" });
