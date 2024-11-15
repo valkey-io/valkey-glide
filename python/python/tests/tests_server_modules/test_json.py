@@ -2119,7 +2119,7 @@ class TestJson:
         json_transaction.set(transaction, key, "$", OuterJson.dumps(json_value1))
         json_transaction.get(transaction, key, ".")
 
-        # Test array commands
+        # Test array related commands
         json_transaction.set(transaction, key, "$", OuterJson.dumps(json_value2))
         json_transaction.arrappend(transaction, key, "$.b", ["3", "4"])
         json_transaction.arrindex(transaction, key, "$.b", "2")
@@ -2149,3 +2149,82 @@ class TestJson:
         assert result[10] == [2]  # arrtrim
         assert isinstance(result[11], bytes)
         assert OuterJson.loads(result[11]) == {"a": 1.0, "b": [2, 3]}  # get
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_json_transaction(self, glide_client: GlideClusterClient):
+        transaction = ClusterTransaction()
+
+        key = f"{{key}}-1{get_random_string(5)}"
+        key2 = f"{{key}}-2{get_random_string(5)}"
+        key3 = f"{{key}}-3{get_random_string(5)}"
+        json_value = {"a": [1, 2], "b": [3, 4], "c": "c", "d": True}
+
+        json_transaction.set(transaction, key, "$", OuterJson.dumps(json_value))
+
+        # Test debug commands
+        json_transaction.debug_memory(transaction, key, "$.a")
+        json_transaction.debug_fields(transaction, key, "$.a")
+
+        # Test obj commands
+        json_transaction.objlen(transaction, key, ".")
+        json_transaction.objkeys(transaction, key, ".")
+
+        # Test num commands
+        json_transaction.numincrby(transaction, key, "$.a[*]", 10.0)
+        json_transaction.nummultby(transaction, key, "$.a[*]", 10.0)
+
+        # Test str commands
+        json_transaction.strappend(transaction, key, '"-test"', "$.c")
+        json_transaction.strlen(transaction, key, "$.c")
+
+        # Test type command
+        json_transaction.type(transaction, key, "$.a")
+
+        # Test mget command
+        json_value2 = {"b": [3, 4], "c": "c", "d": True}
+        json_transaction.set(transaction, key2, "$", OuterJson.dumps(json_value2))
+        json_transaction.mget(transaction, [key, key2, key3], "$.a")
+
+        # Test toggle command
+        json_transaction.toggle(transaction, key, "$.d")
+
+        # Test resp command
+        json_transaction.resp(transaction, key, "$")
+
+        # Test del command
+        json_transaction.delete(transaction, key, "$.d")
+
+        # Test forget command
+        json_transaction.forget(transaction, key, "$.c")
+
+        result = await glide_client.exec(transaction)
+        assert isinstance(result, list)
+
+        assert result[0] == "OK"  # set
+        assert result[1] == [48]  # debug_memory
+        assert result[2] == [2]  # debug_field
+
+        assert result[3] == 4  # objlen
+        assert result[4] == [b"a", b"b", b"c", b"d"]  # objkeys
+        assert result[5] == b"[11,12]"  # numincrby
+        assert result[6] == b"[110,120]"  # nummultby
+        assert result[7] == [6]  # strappend
+        assert result[8] == [6]  # strlen
+        assert result[9] == [b"array"]  # type
+        assert result[10] == "OK"  # set
+        assert result[11] == [b"[[110,120]]", b"[]", None]  # mget
+        assert result[12] == [False]  # toggle
+
+        assert result[13] == [
+            [
+                b"{",
+                [b"a", [b"[", 110, 120]],
+                [b"b", [b"[", 3, 4]],
+                [b"c", b"c-test"],
+                [b"d", b"false"],
+            ]
+        ]  # resp
+
+        assert result[14] == 1  # del
+        assert result[15] == 1  # forget
