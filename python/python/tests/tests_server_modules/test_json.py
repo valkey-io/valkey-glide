@@ -2106,18 +2106,46 @@ class TestJson:
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_json_transaction(self, glide_client: GlideClusterClient):
+    async def test_json_transaction_array(self, glide_client: GlideClusterClient):
         transaction = ClusterTransaction()
 
         key = get_random_string(5)
+        json_value1 = {"a": 1.0, "b": 2}
+        json_value2 = {"a": 1.0, "b": [1, 2]}
 
-        json_value = {"a": 1.0, "b": 2}
-        json_transaction.set(transaction, key, "$", OuterJson.dumps(json_value))
-        json_transaction.get(transaction, key, "$")
+        # Test 'set', 'get', and 'clear' commands
+        json_transaction.set(transaction, key, "$", OuterJson.dumps(json_value1))
+        json_transaction.clear(transaction, key, "$")
+        json_transaction.set(transaction, key, "$", OuterJson.dumps(json_value1))
+        json_transaction.get(transaction, key, ".")
+
+        # Test array commands
+        json_transaction.set(transaction, key, "$", OuterJson.dumps(json_value2))
+        json_transaction.arrappend(transaction, key, "$.b", ["3", "4"])
+        json_transaction.arrindex(transaction, key, "$.b", "2")
+        json_transaction.arrinsert(transaction, key, "$.b", 2, ["5"])
+        json_transaction.arrlen(transaction, key, "$.b")
+        json_transaction.arrpop(
+            transaction, key, JsonArrPopOptions(path="$.b", index=2)
+        )
+        json_transaction.arrtrim(transaction, key, "$.b", 1, 2)
+        json_transaction.get(transaction, key, ".")
 
         result = await glide_client.exec(transaction)
-
         assert isinstance(result, list)
-        assert result[0] == OK
-        assert isinstance(result[1], bytes)
-        assert OuterJson.loads(result[1]) == [json_value]
+
+        assert result[0] == "OK"  # set
+        assert result[1] == 1  # clear
+        assert result[2] == "OK"  # set
+        assert isinstance(result[3], bytes)
+        assert OuterJson.loads(result[3]) == json_value1  # get
+
+        assert result[4] == "OK"  # set
+        assert result[5] == [4]  # arrappend
+        assert result[6] == [1]  # arrindex
+        assert result[7] == [5]  # arrinsert
+        assert result[8] == [5]  # arrlen
+        assert result[9] == [b"5"]  # arrpop
+        assert result[10] == [2]  # arrtrim
+        assert isinstance(result[11], bytes)
+        assert OuterJson.loads(result[11]) == {"a": 1.0, "b": [2, 3]}  # get
