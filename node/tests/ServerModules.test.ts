@@ -2309,8 +2309,6 @@ describe("Server Module Tests", () => {
                         clusterTransaction,
                     );
                 const result = await client.exec(clusterTransaction);
-                console.log("result =====");
-                console.log(result);
 
                 validateTransactionResponse(result, expectedRes);
                 client.close();
@@ -2327,8 +2325,6 @@ describe("Server Module Tests", () => {
                 const expectedRes =
                     await transactionMultiJson(clusterTransaction);
                 const result = await client.exec(clusterTransaction);
-                console.log("result 2 =====");
-                console.log(result);
 
                 validateTransactionResponse(result, expectedRes);
                 client.close();
