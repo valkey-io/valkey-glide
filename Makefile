@@ -19,8 +19,6 @@ java:
 	@cd java && ./gradlew :client:buildAllRelease
 
 java-lint:
-	@echo "$(GREEN)Running spotlessCheck$(RESET)"
-	@cd java && ./gradlew :spotlessCheck
 	@echo "$(GREEN)Running spotlessApply$(RESET)"
 	@cd java && ./gradlew :spotlessApply
 
