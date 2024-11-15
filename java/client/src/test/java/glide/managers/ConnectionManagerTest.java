@@ -32,9 +32,9 @@ import glide.api.models.configuration.ReadFrom;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration;
 import glide.api.models.exceptions.ClosingException;
+import glide.api.models.exceptions.ConfigurationError;
 import glide.connectors.handlers.ChannelHandler;
 import io.netty.channel.ChannelFuture;
-
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -275,20 +275,25 @@ public class ConnectionManagerTest {
     public void test_convert_config_with_azaffinity_to_protobuf() {
         // setup
         String az = "us-east-1a";
-        GlideClientConfiguration config = GlideClientConfiguration.builder()
-            .address(NodeAddress.builder().host(DEFAULT_HOST).build())
-            .useTLS(true)
-            .readFrom(ReadFrom.AZ_AFFINITY)
-            .clientAZ(az)
-            .build();
+        GlideClientConfiguration config =
+                GlideClientConfiguration.builder()
+                        .address(NodeAddress.builder().host(DEFAULT_HOST).build())
+                        .useTLS(true)
+                        .readFrom(ReadFrom.AZ_AFFINITY)
+                        .clientAZ(az)
+                        .build();
 
         ConnectionRequest request =
-            ConnectionRequest.newBuilder()
-                .addAddresses(ConnectionRequestOuterClass.NodeAddress.newBuilder().setHost(DEFAULT_HOST).setPort(DEFAULT_PORT).build())
-                .setTlsMode(TlsMode.SecureTls)
-                .setReadFrom(ConnectionRequestOuterClass.ReadFrom.AZAffinity)
-                .setClientAz(az)
-                .build();
+                ConnectionRequest.newBuilder()
+                        .addAddresses(
+                                ConnectionRequestOuterClass.NodeAddress.newBuilder()
+                                        .setHost(DEFAULT_HOST)
+                                        .setPort(DEFAULT_PORT)
+                                        .build())
+                        .setTlsMode(TlsMode.SecureTls)
+                        .setReadFrom(ConnectionRequestOuterClass.ReadFrom.AZAffinity)
+                        .setClientAz(az)
+                        .build();
 
         CompletableFuture<Response> completedFuture = new CompletableFuture<>();
         Response response = Response.newBuilder().setConstantResponse(ConstantResponse.OK).build();
@@ -301,5 +306,21 @@ public class ConnectionManagerTest {
         // verify
         assertNull(result.get());
         verify(channel).connect(eq(request));
+    }
+
+    @SneakyThrows
+    @Test
+    public void test_az_affinity_requires_client_az() {
+        // setup
+        String az = "us-east-1a";
+        GlideClientConfiguration config =
+                GlideClientConfiguration.builder()
+                        .address(NodeAddress.builder().host(DEFAULT_HOST).build())
+                        .useTLS(true)
+                        .readFrom(ReadFrom.AZ_AFFINITY)
+                        .build();
+
+        // verify
+        assertThrows(ConfigurationError.class, () -> connectionManager.connectToValkey(config));
     }
 }

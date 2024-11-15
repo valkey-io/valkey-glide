@@ -123,12 +123,12 @@ public class ConnectionManager {
             connectionRequestBuilder.setInflightRequestsLimit(configuration.getInflightRequestsLimit());
         }
 
-        if (configuration.getReadFrom() == ReadFrom.AZ_AFFINITY && configuration.getClientAZ() == null) {
-            throw new ConfigurationError("client_az must be set when read_from is set to AZ_AFFINITY");
-        }
-
-        if (configuration.getClientAZ() != null) {
-            connectionRequestBuilder.setClientAz(configuration.getClientAZ());
+        if (configuration.getReadFrom() == ReadFrom.AZ_AFFINITY) {
+            if (configuration.getClientAZ() != null) {
+                connectionRequestBuilder.setClientAz(configuration.getClientAZ());
+            } else {
+                throw new ConfigurationError("client_az must be set when read_from is set to AZ_AFFINITY");
+            }
         }
 
         return connectionRequestBuilder;
