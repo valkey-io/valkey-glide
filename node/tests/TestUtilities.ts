@@ -1649,10 +1649,7 @@ export async function transactionMultiJsonForArrCommands(
     responseData.push(['clear(key, "bar")', 1]);
 
     GlideMultiJson.set(baseTransaction, key, "$", JSON.stringify(jsonValue));
-    responseData.push([
-        'set(key, "$", "{ "a": 1, b: ["one", "two"] }")',
-        "OK",
-    ]);
+    responseData.push(['set(key, "$", "{ "a": 1, b: ["one", "two"] }")', "OK"]);
 
     // JSON.GET
     GlideMultiJson.get(baseTransaction, key, { path: "." });
