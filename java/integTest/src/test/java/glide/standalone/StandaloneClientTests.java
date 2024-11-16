@@ -6,19 +6,24 @@ import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.getRandomString;
 import static glide.api.BaseClient.OK;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.GlideClient;
+import glide.api.models.commands.PasswordUpdateMode;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.RequestException;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 @Timeout(10) // seconds
 public class StandaloneClientTests {
@@ -159,5 +164,45 @@ public class StandaloneClientTests {
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.set("key", "value").get());
         assertTrue(executionException.getCause() instanceof ClosingException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @EnumSource(PasswordUpdateMode.class)
+    public void password_update(PasswordUpdateMode mode) {
+        GlideClient client = GlideClient.createClient(commonClientConfig().build()).get();
+        var key = UUID.randomUUID().toString();
+        var pwd = UUID.randomUUID().toString();
+        client.set(key, "meow meow").get();
+
+        try (var testClient = GlideClient.createClient(commonClientConfig().build()).get()) {
+
+            // validate that we can get the value
+            assertEquals("meow meow", testClient.get(key).get());
+
+            // set the password and forcefully drop connection for the second client
+            assertEquals("OK", client.configSet(Map.of("requirepass", pwd)).get());
+            client.customCommand(new String[] {"CLIENT", "KILL", "TYPE", "NORMAL"}).get();
+
+            // client should reconnect, but will receive NOAUTH error
+            var exception = assertThrows(ExecutionException.class, () -> testClient.get(key).get());
+            assertInstanceOf(RequestException.class, exception.getCause());
+            assertTrue(exception.getMessage().toLowerCase().contains("noauth"));
+
+            assertEquals("OK", testClient.updateConnectionPassword(pwd, mode).get());
+
+            // after setting new password we should be able to work with the server
+            assertEquals("meow meow", testClient.get(key).get());
+
+            // unset the password and drop connection again
+            assertEquals("OK", client.configSet(Map.of("requirepass", "")).get());
+            client.customCommand(new String[] {"CLIENT", "KILL", "TYPE", "NORMAL"}).get();
+
+            // client should reconnect, but since no auth configured, able to get a value
+            assertEquals("meow meow", testClient.get(key).get());
+        } finally {
+            client.configSet(Map.of("requirepass", "")).get();
+            client.close();
+        }
     }
 }
