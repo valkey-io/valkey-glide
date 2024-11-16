@@ -1,4 +1,5 @@
 #### Changes
+<<<<<<< HEAD
 * Node, Python: Add allow uncovered slots scanning flag option in cluster scan ([#2814](https://github.com/valkey-io/valkey-glide/pull/2814), [#2815](https://github.com/valkey-io/valkey-glide/pull/2815))
 * Go: Add HINCRBY command ([#2847](https://github.com/valkey-io/valkey-glide/pull/2847))
 * Go: Add HINCRBYFLOAT command ([#2846](https://github.com/valkey-io/valkey-glide/pull/2846))
@@ -30,6 +31,13 @@
 * Node: Add `FT._ALIASLIST` command ([#2652](https://github.com/valkey-io/valkey-glide/pull/2652))
 * Python: Add `FT._ALIASLIST` command ([#2638](https://github.com/valkey-io/valkey-glide/pull/2638))
 * Node: Add `FT.ALIASADD`, `FT.ALIADDEL`, `FT.ALIASUPDATE` ([#2596](https://github.com/valkey-io/valkey-glide/pull/2596))
+=======
+* Node transaction commands json([#2690](https://github.com/valkey-io/valkey-glide/pull/2690))
+* Node, Python: Adding support for replacing connection configured password ([#2651](https://github.com/valkey-io/valkey-glide/pull/2651))
+* Node: Add FT._ALIASLIST command([#2652](https://github.com/valkey-io/valkey-glide/pull/2652))
+* Python: Python: `FT._ALIASLIST` command added([#2638](https://github.com/valkey-io/valkey-glide/pull/2638))
+* Node: alias commands added: FT.ALIASADD, FT.ALIADDEL, FT.ALIASUPDATE([#2596](https://github.com/valkey-io/valkey-glide/pull/2596))
+>>>>>>> ecfe7a6b (Node: transaction commands for json module (#2690))
 * Python code cleanup ([#2573](https://github.com/valkey-io/valkey-glide/pull/2573))
 * Python: Add `FT.PROFILE` command ([#2543](https://github.com/valkey-io/valkey-glide/pull/2543))
 * Python: Add `FT.AGGREGATE` command ([#2530](https://github.com/valkey-io/valkey-glide/pull/2530))
