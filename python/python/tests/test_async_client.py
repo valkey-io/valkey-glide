@@ -137,6 +137,7 @@ class TestGlideClients:
         assert len(value) == length
         await glide_client.set(key, value)
         assert await glide_client.get(key) == value.encode()
+        await glide_client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -202,6 +203,8 @@ class TestGlideClients:
             key = get_random_string(10)
             assert await auth_client.set(key, key) == OK
             assert await auth_client.get(key) == key.encode()
+            await auth_client.close()
+
         finally:
             # Reset the password
             auth_client = await create_client(
@@ -211,6 +214,7 @@ class TestGlideClients:
                 addresses=glide_client.config.addresses,
             )
             await auth_client.custom_command(["CONFIG", "SET", "requirepass", ""])
+            await auth_client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -254,6 +258,7 @@ class TestGlideClients:
                 # This client isn't authorized to perform SET
                 await testuser_client.set("foo", "bar")
             assert "NOPERM" in str(e)
+            await testuser_client.close()
         finally:
             # Delete this user
             await glide_client.custom_command(["ACL", "DELUSER", username])
@@ -265,6 +270,7 @@ class TestGlideClients:
         )
         client_info = await glide_client.custom_command(["CLIENT", "INFO"])
         assert b"db=4" in client_info
+        await glide_client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -277,6 +283,7 @@ class TestGlideClients:
         )
         client_info = await glide_client.custom_command(["CLIENT", "INFO"])
         assert b"name=TEST_CLIENT_NAME" in client_info
+        await glide_client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -8473,6 +8480,7 @@ class TestCommands:
         with pytest.raises(RequestError) as e:
             assert await glide_client.function_kill()
         assert "NotBusy" in str(e)
+        await test_client.close()
 
     @pytest.mark.parametrize("cluster_mode", [False, True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -8523,6 +8531,7 @@ class TestCommands:
             endless_fcall_route_call(),
             wait_and_function_kill(),
         )
+        await test_client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
