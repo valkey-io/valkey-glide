@@ -309,10 +309,4 @@ impl ConnectionLike for ConnectionManager {
         // always return false due to automatic reconnect
         false
     }
-
-    fn get_az(&self) -> Option<String> {
-        None
-    }
-
-    fn set_az(&mut self, _az: Option<String>) {}
 }

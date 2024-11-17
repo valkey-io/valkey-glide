@@ -2829,12 +2829,6 @@ where
     fn is_closed(&self) -> bool {
         false
     }
-
-    fn get_az(&self) -> Option<String> {
-        None
-    }
-
-    fn set_az(&mut self, _az: Option<String>) {}
 }
 
 /// Implements the process of connecting to a Redis server

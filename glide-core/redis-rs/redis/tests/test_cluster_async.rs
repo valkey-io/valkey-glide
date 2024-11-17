@@ -184,13 +184,23 @@ mod cluster_async {
             .unwrap();
 
         let info_result = redis::from_owned_redis_value::<HashMap<String, String>>(info).unwrap();
-        let get_cmdstat = format!("cmdstat_get:calls={}", n);
+        let get_cmdstat = format!("cmdstat_get:calls=");
+        let n_get_cmdstat = format!("cmdstat_get:calls={}", n);
         let client_az = format!("availability_zone:{}", az);
 
-        let matching_entries_count = info_result
-            .values()
-            .filter(|value| value.contains(&get_cmdstat) && value.contains(&client_az))
-            .count();
+        let mut matching_entries_count: usize = 0;
+
+        for value in info_result.values() {
+            if value.contains(&get_cmdstat) {
+                if value.contains(&client_az) && value.contains(&n_get_cmdstat) {
+                    matching_entries_count += 1;
+                } else {
+                    panic!(
+                        "Invalid entry found: {}. Expected cmdstat_get:calls={} and availability_zone={}",
+                        value, n, az);
+                }
+            }
+        }
 
         assert_eq!(
             (matching_entries_count.try_into() as Result<u16, _>).unwrap(),
@@ -260,14 +270,23 @@ mod cluster_async {
             .unwrap();
 
         let info_result = redis::from_owned_redis_value::<HashMap<String, String>>(info).unwrap();
-        // println!("{:?}", info_result);
-        let get_cmdstat = format!("cmdstat_get:calls={}", n);
+        let get_cmdstat = format!("cmdstat_get:calls=");
+        let n_get_cmdstat = format!("cmdstat_get:calls={}", n);
         let client_az = format!("availability_zone:{}", az);
 
-        let matching_entries_count = info_result
-            .values()
-            .filter(|value| value.contains(&get_cmdstat) && value.contains(&client_az))
-            .count();
+        let mut matching_entries_count: usize = 0;
+
+        for value in info_result.values() {
+            if value.contains(&get_cmdstat) {
+                if value.contains(&client_az) && value.contains(&n_get_cmdstat) {
+                    matching_entries_count += 1;
+                } else {
+                    panic!(
+                        "Invalid entry found: {}. Expected cmdstat_get:calls={} and availability_zone={}",
+                        value, n, az);
+                }
+            }
+        }
 
         assert_eq!(
             (matching_entries_count.try_into() as Result<u16, _>).unwrap(),
@@ -748,12 +767,6 @@ mod cluster_async {
         fn is_closed(&self) -> bool {
             true
         }
-
-        fn get_az(&self) -> Option<String> {
-            None
-        }
-
-        fn set_az(&mut self, _az: Option<String>) {}
     }
 
     #[test]

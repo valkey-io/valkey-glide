@@ -89,10 +89,12 @@ pub trait ConnectionLike {
     fn is_closed(&self) -> bool;
 
     /// Get the connection availibility zone
-    fn get_az(&self) -> Option<String>;
+    fn get_az(&self) -> Option<String> {
+        None
+    }
 
     /// Set the connection availibility zone
-    fn set_az(&mut self, az: Option<String>);
+    fn set_az(&mut self, _az: Option<String>) {}
 }
 
 /// Implements ability to notify about disconnection events

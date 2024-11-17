@@ -372,12 +372,6 @@ impl aio::ConnectionLike for MockConnection {
     fn is_closed(&self) -> bool {
         false
     }
-
-    fn get_az(&self) -> Option<String> {
-        None
-    }
-
-    fn set_az(&mut self, _az: Option<String>) {}
 }
 
 impl redis::ConnectionLike for MockConnection {
