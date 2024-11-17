@@ -105,7 +105,7 @@ impl Client {
         &self,
         _push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     ) -> RedisResult<crate::aio::Connection> {
-        let (con, _ip, _az) = match Runtime::locate() {
+        let (con, _ip) = match Runtime::locate() {
             #[cfg(feature = "tokio-comp")]
             Runtime::Tokio => {
                 self.get_simple_async_connection::<crate::aio::tokio::Tokio>(None)
@@ -160,21 +160,17 @@ impl Client {
             Ok(Err(e)) => Err(e),
             Err(elapsed) => Err(elapsed.into()),
         }
-        .map(|(conn, _ip, _az)| conn)
+        .map(|(conn, _ip)| conn)
     }
 
-    /// For TCP connections: returns (async connection, Some(the direct IP address, Some(az)))
-    /// For Unix connections, returns (async connection, None, None)
+    /// For TCP connections: returns (async connection, Some(the direct IP address))
+    /// For Unix connections, returns (async connection, None)
     #[cfg(feature = "tokio-comp")]
     #[cfg_attr(docsrs, doc(cfg(feature = "tokio-comp")))]
-    pub async fn get_multiplexed_async_connection_ip_and_az(
+    pub async fn get_multiplexed_async_connection_ip(
         &self,
         glide_connection_options: GlideConnectionOptions,
-    ) -> RedisResult<(
-        crate::aio::MultiplexedConnection,
-        Option<IpAddr>,
-        Option<String>,
-    )> {
+    ) -> RedisResult<(crate::aio::MultiplexedConnection, Option<IpAddr>)> {
         match Runtime::locate() {
             #[cfg(feature = "tokio-comp")]
             Runtime::Tokio => {
@@ -212,7 +208,7 @@ impl Client {
             .await;
 
         match result {
-            Ok(Ok((connection, _ip, _az))) => Ok(connection),
+            Ok(Ok((connection, _ip))) => Ok(connection),
             Ok(Err(e)) => Err(e),
             Err(elapsed) => Err(elapsed.into()),
         }
@@ -396,15 +392,11 @@ impl Client {
         response_timeout: std::time::Duration,
         socket_addr: Option<SocketAddr>,
         glide_connection_options: GlideConnectionOptions,
-    ) -> RedisResult<(
-        crate::aio::MultiplexedConnection,
-        Option<IpAddr>,
-        Option<String>,
-    )>
+    ) -> RedisResult<(crate::aio::MultiplexedConnection, Option<IpAddr>)>
     where
         T: crate::aio::RedisRuntime,
     {
-        let (connection, driver, ip, az) = self
+        let (connection, driver, ip) = self
             .create_multiplexed_async_connection_inner::<T>(
                 response_timeout,
                 socket_addr,
@@ -412,7 +404,7 @@ impl Client {
             )
             .await?;
         T::spawn(driver);
-        Ok((connection, ip, az))
+        Ok((connection, ip))
     }
 
     async fn create_multiplexed_async_connection_inner<T>(
@@ -424,12 +416,11 @@ impl Client {
         crate::aio::MultiplexedConnection,
         impl std::future::Future<Output = ()>,
         Option<IpAddr>,
-        Option<String>,
     )>
     where
         T: crate::aio::RedisRuntime,
     {
-        let (con, ip, az) = self.get_simple_async_connection::<T>(socket_addr).await?;
+        let (con, ip) = self.get_simple_async_connection::<T>(socket_addr).await?;
         crate::aio::MultiplexedConnection::new_with_response_timeout(
             &self.connection_info,
             con,
@@ -437,7 +428,7 @@ impl Client {
             glide_connection_options,
         )
         .await
-        .map(|res| (res.0, res.1, ip, az))
+        .map(|res| (res.0, res.1, ip))
     }
 
     async fn get_simple_async_connection<T>(
@@ -446,14 +437,13 @@ impl Client {
     ) -> RedisResult<(
         Pin<Box<dyn crate::aio::AsyncStream + Send + Sync>>,
         Option<IpAddr>,
-        Option<String>,
     )>
     where
         T: crate::aio::RedisRuntime,
     {
-        let (conn, ip, az) =
+        let (conn, ip) =
             crate::aio::connect_simple::<T>(&self.connection_info, socket_addr).await?;
-        Ok((conn.boxed(), ip, az))
+        Ok((conn.boxed(), ip))
     }
 
     #[cfg(feature = "connection-manager")]

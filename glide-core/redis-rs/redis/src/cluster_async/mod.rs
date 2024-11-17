@@ -2843,7 +2843,7 @@ pub trait Connect: Sized {
         connection_timeout: Duration,
         socket_addr: Option<SocketAddr>,
         glide_connection_options: GlideConnectionOptions,
-    ) -> RedisFuture<'a, (Self, Option<IpAddr>, Option<String>)>
+    ) -> RedisFuture<'a, (Self, Option<IpAddr>)>
     where
         T: IntoConnectionInfo + Send + 'a;
 }
@@ -2855,7 +2855,7 @@ impl Connect for MultiplexedConnection {
         connection_timeout: Duration,
         socket_addr: Option<SocketAddr>,
         glide_connection_options: GlideConnectionOptions,
-    ) -> RedisFuture<'a, (MultiplexedConnection, Option<IpAddr>, Option<String>)>
+    ) -> RedisFuture<'a, (MultiplexedConnection, Option<IpAddr>)>
     where
         T: IntoConnectionInfo + Send + 'a,
     {

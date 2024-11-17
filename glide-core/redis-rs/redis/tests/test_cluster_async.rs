@@ -724,12 +724,12 @@ mod cluster_async {
             connection_timeout: std::time::Duration,
             socket_addr: Option<SocketAddr>,
             glide_connection_options: GlideConnectionOptions,
-        ) -> RedisFuture<'a, (Self, Option<IpAddr>, Option<String>)>
+        ) -> RedisFuture<'a, (Self, Option<IpAddr>)>
         where
             T: IntoConnectionInfo + Send + 'a,
         {
             Box::pin(async move {
-                let (inner, _ip, _az) = MultiplexedConnection::connect(
+                let (inner, _ip) = MultiplexedConnection::connect(
                     info,
                     response_timeout,
                     connection_timeout,
@@ -737,7 +737,7 @@ mod cluster_async {
                     glide_connection_options,
                 )
                 .await?;
-                Ok((ErrorConnection { inner }, None, None))
+                Ok((ErrorConnection { inner }, None))
             })
         }
     }
