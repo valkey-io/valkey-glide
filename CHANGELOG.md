@@ -494,6 +494,7 @@
 * Node: Added LINDEX command ([#999](https://github.com/valkey-io/valkey-glide/pull/999))
 * Python, Node: Added ZPOPMAX command ([#996](https://github.com/valkey-io/valkey-glide/pull/996), [#1009](https://github.com/valkey-io/valkey-glide/pull/1009))
 * Python: Added DBSIZE command ([#1040](https://github.com/valkey-io/valkey-glide/pull/1040))
+* [Core: Log directory can now be modified by using the environment variable `GLIDE_LOG`][1]
 
 #### Features
 
@@ -513,3 +514,6 @@
 Preview release of **GLIDE for Redis** a Polyglot Redis client.
 
 See the [README](README.md) for additional information.
+
+
+[1]: https://github.com/valkey-io/valkey-glide/issues/2704
