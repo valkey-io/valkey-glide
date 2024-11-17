@@ -99,6 +99,8 @@ uuid = { version = "1.6.1", optional = true }
 
 telemetrylib = { path = "../../telemetry" }
 
+lazy_static = "1"
+
 [features]
 default = [
     "acl",
@@ -153,7 +155,6 @@ bigdecimal = ["dep:bigdecimal"]
 num-bigint = []
 uuid = ["dep:uuid"]
 disable-client-setinfo = []
-valkey-gte-8 = []
 
 # Deprecated features
 tls = ["tls-native-tls"] # use "tls-native-tls" instead
