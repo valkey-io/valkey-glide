@@ -86,6 +86,9 @@ pub struct GlideConnectionOptions {
     #[cfg(feature = "aio")]
     /// Passive disconnect notifier
     pub disconnect_notifier: Option<Box<dyn DisconnectNotifier>>,
+    /// If ReadFromReplica strategy is set to AZAffinity, this parameter will be set to 'true'.
+    /// In this case, an INFO command will be triggered in the connection's setup to update the connection's 'availability_zone' property.
+    pub discover_az: bool,
 }
 
 /// To enable async support you need to enable the feature: `tokio-comp`
@@ -164,7 +167,7 @@ impl Client {
     /// For Unix connections, returns (async connection, None)
     #[cfg(feature = "tokio-comp")]
     #[cfg_attr(docsrs, doc(cfg(feature = "tokio-comp")))]
-    pub async fn get_multiplexed_async_connection_and_ip(
+    pub async fn get_multiplexed_async_connection_ip(
         &self,
         glide_connection_options: GlideConnectionOptions,
     ) -> RedisResult<(crate::aio::MultiplexedConnection, Option<IpAddr>)> {

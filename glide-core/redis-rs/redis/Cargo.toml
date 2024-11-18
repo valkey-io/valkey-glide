@@ -99,6 +99,8 @@ uuid = { version = "1.6.1", optional = true }
 
 telemetrylib = { path = "../../telemetry" }
 
+lazy_static = "1"
+
 [features]
 default = [
     "acl",
