@@ -4,12 +4,14 @@ use glide_core::client::FINISHED_SCAN_CURSOR;
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 use glide_core::start_socket_listener;
+use glide_core::Telemetry;
 use glide_core::MAX_REQUEST_ARGS_LENGTH;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBool, PyBytes, PyDict, PyFloat, PyList, PySet, PyString};
 use pyo3::Python;
 use redis::Value;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 pub const DEFAULT_TIMEOUT_IN_MILLISECONDS: u32 =
@@ -129,14 +131,14 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
 
     #[pyfunction]
     fn get_statistics(_py: Python) -> PyResult<PyObject> {
-        let mut stats_map = std::collections::HashMap::<String, String>::new();
+        let mut stats_map = HashMap::<String, String>::new();
         stats_map.insert(
             "total_connections".to_string(),
-            glide_core::Telemetry::total_connections().to_string(),
+            Telemetry::total_connections().to_string(),
         );
         stats_map.insert(
             "total_clients".to_string(),
-            glide_core::Telemetry::total_clients().to_string(),
+            Telemetry::total_clients().to_string(),
         );
 
         Python::with_gil(|py| {
