@@ -20,7 +20,7 @@ mod test_connect_and_check {
     use super::*;
     use crate::support::{get_mock_connection_handler, ShouldReturnConnectionError};
     use redis::cluster_async::testing::{
-        connect_and_check, ConnectAndCheckResult, ConnectionWithIp,
+        connect_and_check, ConnectAndCheckResult, ConnectionDetails,
     };
 
     fn assert_partial_result(
@@ -233,7 +233,7 @@ mod test_connect_and_check {
             port: 6379,
         };
         let node = AsyncClusterNode::new(
-            ConnectionWithIp {
+            ConnectionDetails {
                 conn: user_conn,
                 ip: Some(ip),
             }
@@ -280,7 +280,7 @@ mod test_connect_and_check {
         };
         let prev_ip = Some(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)));
         let node = AsyncClusterNode::new(
-            ConnectionWithIp {
+            ConnectionDetails {
                 conn: user_conn,
                 ip: prev_ip,
             }
@@ -336,13 +336,13 @@ mod test_connect_and_check {
         };
 
         let node = AsyncClusterNode::new(
-            ConnectionWithIp {
+            ConnectionDetails {
                 conn: old_user_conn,
                 ip: Some(prev_ip),
             }
             .into_future(),
             Some(
-                ConnectionWithIp {
+                ConnectionDetails {
                     conn: management_conn,
                     ip: Some(prev_ip),
                 }
@@ -373,17 +373,17 @@ mod test_connect_and_check {
 mod test_check_node_connections {
 
     use super::*;
-    use redis::cluster_async::testing::{check_node_connections, ConnectionWithIp};
+    use redis::cluster_async::testing::{check_node_connections, ConnectionDetails};
     fn create_node_with_all_connections(name: &str) -> AsyncClusterNode<MockConnection> {
         let ip = None;
         AsyncClusterNode::new(
-            ConnectionWithIp {
+            ConnectionDetails {
                 conn: get_mock_connection_with_port(name, 1, 6380),
                 ip,
             }
             .into_future(),
             Some(
-                ConnectionWithIp {
+                ConnectionDetails {
                     conn: get_mock_connection_with_port(name, 2, 6381),
                     ip,
                 }
@@ -460,7 +460,7 @@ mod test_check_node_connections {
 
         let ip = None;
         let node = AsyncClusterNode::new(
-            ConnectionWithIp {
+            ConnectionDetails {
                 conn: get_mock_connection(name, 1),
                 ip,
             }
@@ -544,7 +544,7 @@ mod test_check_node_connections {
         );
 
         let node = AsyncClusterNode::new(
-            ConnectionWithIp {
+            ConnectionDetails {
                 conn: get_mock_connection(name, 1),
                 ip: None,
             }

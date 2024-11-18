@@ -417,6 +417,7 @@ pub struct MultiplexedConnection {
     response_timeout: Duration,
     protocol: ProtocolVersion,
     push_manager: PushManager,
+    availability_zone: Option<String>,
     password: Option<String>,
 }
 
@@ -479,11 +480,16 @@ impl MultiplexedConnection {
             .with_push_manager(pm)
             .with_protocol(connection_info.redis.protocol)
             .with_password(connection_info.redis.password.clone())
+            .with_availability_zone(None)
             .build()
             .await?;
 
         let driver = {
-            let auth = setup_connection(&connection_info.redis, &mut con);
+            let auth = setup_connection(
+                &connection_info.redis,
+                &mut con,
+                glide_connection_options.discover_az,
+            );
 
             futures_util::pin_mut!(auth);
 
@@ -575,6 +581,11 @@ impl MultiplexedConnection {
         self.pipeline.set_push_manager(push_manager).await;
     }
 
+    /// For external visibilty (glide-core)
+    pub fn get_availability_zone(&self) -> Option<String> {
+        self.availability_zone.clone()
+    }
+
     /// Replace the password used to authenticate with the server.
     /// If `None` is provided, the password will be removed.
     pub async fn update_connection_password(
@@ -599,6 +610,8 @@ pub struct MultiplexedConnectionBuilder {
     push_manager: Option<PushManager>,
     protocol: Option<ProtocolVersion>,
     password: Option<String>,
+    /// Represents the node's availability zone
+    availability_zone: Option<String>,
 }
 
 impl MultiplexedConnectionBuilder {
@@ -611,6 +624,7 @@ impl MultiplexedConnectionBuilder {
             push_manager: None,
             protocol: None,
             password: None,
+            availability_zone: None,
         }
     }
 
@@ -644,6 +658,12 @@ impl MultiplexedConnectionBuilder {
         self
     }
 
+    /// Sets the avazilability zone for the `MultiplexedConnectionBuilder`.
+    pub fn with_availability_zone(mut self, az: Option<String>) -> Self {
+        self.availability_zone = az;
+        self
+    }
+
     /// Builds and returns a new `MultiplexedConnection` instance using the configured settings.
     pub async fn build(self) -> RedisResult<MultiplexedConnection> {
         let db = self.db.unwrap_or_default();
@@ -661,6 +681,7 @@ impl MultiplexedConnectionBuilder {
             push_manager,
             protocol,
             password,
+            availability_zone: self.availability_zone,
         };
 
         Ok(con)
@@ -687,6 +708,16 @@ impl ConnectionLike for MultiplexedConnection {
 
     fn is_closed(&self) -> bool {
         self.pipeline.is_closed()
+    }
+
+    /// Get the node's availability zone
+    fn get_az(&self) -> Option<String> {
+        self.availability_zone.clone()
+    }
+
+    /// Set the node's availability zone
+    fn set_az(&mut self, az: Option<String>) {
+        self.availability_zone = az;
     }
 }
 impl MultiplexedConnection {

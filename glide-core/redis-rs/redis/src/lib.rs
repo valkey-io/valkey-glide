@@ -448,7 +448,8 @@ pub mod cluster;
 
 #[cfg(feature = "cluster")]
 #[cfg_attr(docsrs, doc(cfg(feature = "cluster")))]
-mod cluster_slotmap;
+/// Used for ReadFromReplicaStrategy information.
+pub mod cluster_slotmap;
 
 #[cfg(feature = "cluster-async")]
 pub use crate::commands::ScanStateRC;
