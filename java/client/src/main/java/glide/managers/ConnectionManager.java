@@ -123,12 +123,13 @@ public class ConnectionManager {
             connectionRequestBuilder.setInflightRequestsLimit(configuration.getInflightRequestsLimit());
         }
 
+        if (configuration.getReadFrom() == ReadFrom.AZ_AFFINITY
+                && configuration.getClientAZ() == null) {
+            throw new ConfigurationError("client_az must be set when read_from is set to AZ_AFFINITY");
+        }
+
         if (configuration.getReadFrom() == ReadFrom.AZ_AFFINITY) {
-            if (configuration.getClientAZ() != null) {
-                connectionRequestBuilder.setClientAz(configuration.getClientAZ());
-            } else {
-                throw new ConfigurationError("client_az must be set when read_from is set to AZ_AFFINITY");
-            }
+            connectionRequestBuilder.setClientAz(configuration.getClientAZ());
         }
 
         return connectionRequestBuilder;
@@ -209,13 +210,14 @@ public class ConnectionManager {
      * @return Protobuf defined ReadFrom enum
      */
     private ConnectionRequestOuterClass.ReadFrom mapReadFromEnum(ReadFrom readFrom) {
-        if (readFrom == ReadFrom.PREFER_REPLICA) {
-            return ConnectionRequestOuterClass.ReadFrom.PreferReplica;
-        } else if (readFrom == ReadFrom.AZ_AFFINITY) {
-            return ConnectionRequestOuterClass.ReadFrom.AZAffinity;
+        switch (readFrom) {
+            case PREFER_REPLICA:
+                return ConnectionRequestOuterClass.ReadFrom.PreferReplica;
+            case AZ_AFFINITY:
+                return ConnectionRequestOuterClass.ReadFrom.AZAffinity;
+            default:
+                return ConnectionRequestOuterClass.ReadFrom.Primary;
         }
-
-        return ConnectionRequestOuterClass.ReadFrom.Primary;
     }
 
     /** Check a response received from Glide. */

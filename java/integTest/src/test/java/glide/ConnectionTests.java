@@ -75,15 +75,15 @@ public class ConnectionTests {
                                 new String[] {"INFO", "REPLICATION"},
                                 new RequestRoutingConfiguration.SlotKeyRoute("key", PRIMARY))
                         .get();
-        int nReplicas =
-                Integer.parseInt(
+        long nReplicas =
+                Long.parseLong(
                         Stream.of(((String) clusterInfo.getSingleValue()).split("\\R"))
                                 .map(line -> line.split(":", 2))
                                 .filter(parts -> parts.length == 2 && parts[0].trim().equals("connected_slaves"))
                                 .map(parts -> parts[1].trim())
                                 .findFirst()
                                 .get());
-        int nGetCalls = 3 * nReplicas;
+        long nGetCalls = 3 * nReplicas;
         String getCmdstat = String.format("cmdstat_get:calls=%d", 3);
 
         // Setting AZ for all Nodes
@@ -116,14 +116,9 @@ public class ConnectionTests {
         Map<String, String> infoData = infoResult.getMultiValue();
 
         // Check that all replicas have the same number of GET calls
-        int count = 0;
-        for (var entry : infoData.entrySet()) {
-            System.out.println(entry.getValue());
-            if (entry.getValue().contains(getCmdstat)) {
-                count++;
-            }
-        }
-        assertEquals(nReplicas, count);
+        long matchingEntries =
+                infoData.values().stream().filter(value -> value.contains(getCmdstat)).count();
+        assertEquals(nReplicas, matchingEntries);
         azTestClient.close();
     }
 
@@ -174,13 +169,11 @@ public class ConnectionTests {
         Map<String, String> infoData = infoResult.getMultiValue();
 
         // Check that all replicas have the same number of GET calls
-        int matching_entries_count = 0;
-        for (var entry : infoData.entrySet()) {
-            if (entry.getValue().contains(getCmdstat) && entry.getValue().contains(az)) {
-                ++matching_entries_count;
-            }
-        }
-        assertEquals(matching_entries_count, 1);
+        long matchingEntries =
+                infoData.values().stream()
+                        .filter(value -> value.contains(getCmdstat) && value.contains(az))
+                        .count();
+        assertEquals(1, matchingEntries);
         azTestClient.close();
     }
 
@@ -210,13 +203,9 @@ public class ConnectionTests {
         Map<String, String> infoData = infoResult.getMultiValue();
 
         // Check that all replicas have the same number of GET calls
-        int matching_entries_count = 0;
-        for (var entry : infoData.entrySet()) {
-            if (entry.getValue().contains(getCmdstat)) {
-                ++matching_entries_count;
-            }
-        }
-        assertEquals(matching_entries_count, 1);
+        long matchingEntries =
+                infoData.values().stream().filter(value -> value.contains(getCmdstat)).count();
+        assertEquals(1, matchingEntries);
         azTestClient.close();
     }
 }

@@ -277,7 +277,7 @@ public class ConnectionManagerTest {
         String az = "us-east-1a";
         GlideClientConfiguration config =
                 GlideClientConfiguration.builder()
-                        .address(NodeAddress.builder().host(DEFAULT_HOST).build())
+                        .address(NodeAddress.builder().host(DEFAULT_HOST).port(DEFAULT_PORT).build())
                         .useTLS(true)
                         .readFrom(ReadFrom.AZ_AFFINITY)
                         .clientAZ(az)
@@ -315,7 +315,7 @@ public class ConnectionManagerTest {
         String az = "us-east-1a";
         GlideClientConfiguration config =
                 GlideClientConfiguration.builder()
-                        .address(NodeAddress.builder().host(DEFAULT_HOST).build())
+                        .address(NodeAddress.builder().host(DEFAULT_HOST).port(DEFAULT_PORT).build())
                         .useTLS(true)
                         .readFrom(ReadFrom.AZ_AFFINITY)
                         .build();
