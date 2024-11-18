@@ -1,4 +1,4 @@
-name: Nightly tests
+name: Full Matrix tests
 
 on:
     workflow_dispatch: # note: if started manually, it won't run all matrix
@@ -10,6 +10,10 @@ on:
             # GHA supports up to 10 inputs, there is no option for multi-choice
             core:
                 description: "Test GLIDE core"
+                type: boolean
+                default: true
+            redis-rs:
+                description: "Test Redis-RS client"
                 type: boolean
                 default: true
             node:
@@ -33,8 +37,8 @@ on:
                 type: boolean
                 default: false
 
-    schedule: # running tests by cron is disabled on forks by the condition defined for each job
-        - cron: "0 3 * * *" #  Runs at 03:00 (3 AM) UTC every day
+    schedule:
+        - cron: "0 3 * * *"
 
 concurrency:
     group: nightly-${{ github.head_ref || github.ref }}-${{ toJson(inputs) }}
@@ -54,6 +58,12 @@ jobs:
         uses: ./.github/workflows/rust.yml
         name: Run CI for GLIDE core lib
         secrets: inherit
+
+    # run-full-tests-for-redis-rs:
+    #     if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.redis-rs == true)
+    #     uses: ./.github/workflows/redis-rs.yml
+    #     name: Run CI for Redis-RS client
+    #     secrets: inherit
 
     run-full-tests-for-java:
         if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.java == true)
