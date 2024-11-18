@@ -55,7 +55,7 @@ pub static INITIATE_ONCE: InitiateOnce = InitiateOnce {
 };
 
 const FILE_DIRECTORY: &str = "glide-logs";
-const ENV_GLIDE_LOG: &str = "GLIDE_LOG";
+const ENV_GLIDE_LOG_DIR: &str = "GLIDE_LOG_DIR";
 
 /// Wraps [RollingFileAppender] to defer initialization until logging is required,
 /// allowing [init] to disable file logging on read-only filesystems.
@@ -152,7 +152,7 @@ pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
         let (stdout_layer, stdout_reload) = reload::Layer::new(stdout_fmt);
 
         // Check if the environment variable GLIDE_LOG is set
-        let logs_dir = directory_from_env(ENV_GLIDE_LOG).unwrap_or(FILE_DIRECTORY.to_string());
+        let logs_dir = directory_from_env(ENV_GLIDE_LOG_DIR).unwrap_or(FILE_DIRECTORY.to_string());
         let file_appender = LazyRollingFileAppender::new(
             Rotation::HOURLY,
             logs_dir,
@@ -209,7 +209,8 @@ pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
         }
         Some(file) => {
             // Check if the environment variable GLIDE_LOG is set
-            let logs_dir = directory_from_env(ENV_GLIDE_LOG).unwrap_or(FILE_DIRECTORY.to_string());
+            let logs_dir =
+                directory_from_env(ENV_GLIDE_LOG_DIR).unwrap_or(FILE_DIRECTORY.to_string());
             let file_appender = LazyRollingFileAppender::new(Rotation::HOURLY, logs_dir, file);
             let _ = reloads
                 .file_reload
@@ -286,8 +287,8 @@ mod tests {
         // Create the directory
         assert!(std::fs::create_dir_all(&dir_path).is_ok());
 
-        std::env::set_var(ENV_GLIDE_LOG, &dir_path);
-        assert!(directory_from_env(ENV_GLIDE_LOG).is_some());
+        std::env::set_var(ENV_GLIDE_LOG_DIR, &dir_path);
+        assert!(directory_from_env(ENV_GLIDE_LOG_DIR).is_some());
         assert!(std::fs::metadata(&dir_path).is_ok());
 
         // Case 2: try to create a new folder (i.e. the folder does not already exist)
@@ -297,14 +298,14 @@ mod tests {
         assert!(std::fs::create_dir_all(&dir_path).is_ok());
         assert!(std::fs::metadata(&dir_path).is_ok());
 
-        std::env::set_var(ENV_GLIDE_LOG, &dir_path);
-        assert!(directory_from_env(ENV_GLIDE_LOG).is_some());
+        std::env::set_var(ENV_GLIDE_LOG_DIR, &dir_path);
+        assert!(directory_from_env(ENV_GLIDE_LOG_DIR).is_some());
 
         // make sure we are starting fresh
         let _ = std::fs::remove_dir_all(&dir_path);
 
         // Case 3: empty variable is not acceptable
-        std::env::set_var(ENV_GLIDE_LOG, "");
-        assert!(directory_from_env(ENV_GLIDE_LOG).is_none());
+        std::env::set_var(ENV_GLIDE_LOG_DIR, "");
+        assert!(directory_from_env(ENV_GLIDE_LOG_DIR).is_none());
     }
 }
