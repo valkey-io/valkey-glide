@@ -128,7 +128,7 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     }
 
     #[pyfunction]
-    fn get_statistics(py: Python) -> PyResult<PyObject> {
+    fn get_statistics(_py: Python) -> PyResult<PyObject> {
         let mut stats_map = std::collections::HashMap::<String, String>::new();
         stats_map.insert(
             "total_connections".to_string(),
@@ -140,10 +140,10 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
         );
 
         Python::with_gil(|py| {
-            let py_dict = PyDict::new(py);
+            let py_dict = PyDict::new_bound(py);
 
             for (key, value) in stats_map {
-                py_dict.set_item(PyString::new(py, &key), PyString::new(py, &value))?;
+                py_dict.set_item(PyString::new_bound(py, &key), PyString::new_bound(py, &value))?;
             }
 
             Ok(py_dict.into_py(py))
