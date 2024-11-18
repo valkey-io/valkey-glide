@@ -121,7 +121,6 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(create_leaked_value, m)?)?;
     m.add_function(wrap_pyfunction!(create_leaked_bytes_vec, m)?)?;
     m.add_function(wrap_pyfunction!(get_statistics, m)?)?;
-    
 
     #[pyfunction]
     fn py_log(log_level: Level, log_identifier: String, message: String) {
@@ -131,8 +130,14 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     #[pyfunction]
     fn get_statistics(py: Python) -> PyResult<PyObject> {
         let mut stats_map = std::collections::HashMap::<String, String>::new();
-        stats_map.insert("total_connections".to_string(), glide_core::Telemetry::total_connections().to_string());
-        stats_map.insert("total_clients".to_string(), glide_core::Telemetry::total_clients().to_string());
+        stats_map.insert(
+            "total_connections".to_string(),
+            glide_core::Telemetry::total_connections().to_string(),
+        );
+        stats_map.insert(
+            "total_clients".to_string(),
+            glide_core::Telemetry::total_clients().to_string(),
+        );
 
         Python::with_gil(|py| {
             let py_dict = PyDict::new(py);
