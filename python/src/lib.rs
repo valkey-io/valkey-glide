@@ -143,7 +143,10 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
             let py_dict = PyDict::new_bound(py);
 
             for (key, value) in stats_map {
-                py_dict.set_item(PyString::new_bound(py, &key), PyString::new_bound(py, &value))?;
+                py_dict.set_item(
+                    PyString::new_bound(py, &key),
+                    PyString::new_bound(py, &value),
+                )?;
             }
 
             Ok(py_dict.into_py(py))
