@@ -20,11 +20,18 @@ pub(crate) struct SlotMapValue {
     pub(crate) last_used_replica: Arc<AtomicUsize>,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Copy)]
-pub(crate) enum ReadFromReplicaStrategy {
+#[derive(Debug, Default, Clone, PartialEq)]
+/// Represents the client's read from strategy.
+pub enum ReadFromReplicaStrategy {
     #[default]
+    /// Always get from primary, in order to get the freshest data.
     AlwaysFromPrimary,
+    /// Spread the read requests between all replicas in a round robin manner.
+    /// If no replica is available, route the requests to the primary.
     RoundRobin,
+    /// Spread the read requests between replicas in the same client's Aviliablity zone in a round robin manner,
+    /// falling back to other replicas or the primary if needed.
+    AZAffinity(String),
 }
 
 #[derive(Debug, Default)]
@@ -52,6 +59,7 @@ fn get_address_from_slot(
                 % addrs.replicas().len();
             addrs.replicas()[index].clone()
         }
+        ReadFromReplicaStrategy::AZAffinity(_az) => todo!(), // Drop sync client
     }
 }
 
@@ -129,7 +137,11 @@ impl SlotMap {
 
     pub fn slot_addr_for_route(&self, route: &Route) -> Option<Arc<String>> {
         self.slot_value_for_route(route).map(|slot_value| {
-            get_address_from_slot(slot_value, self.read_from_replica, route.slot_addr())
+            get_address_from_slot(
+                slot_value,
+                self.read_from_replica.clone(),
+                route.slot_addr(),
+            )
         })
     }
 
@@ -199,7 +211,7 @@ impl SlotMap {
             if slot_value.start <= slot {
                 Some(get_address_from_slot(
                     slot_value,
-                    self.read_from_replica,
+                    self.read_from_replica.clone(),
                     slot_addr,
                 ))
             } else {
