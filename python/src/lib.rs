@@ -7,7 +7,7 @@ use glide_core::start_socket_listener;
 use glide_core::MAX_REQUEST_ARGS_LENGTH;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
-use pyo3::types::{PyAny, PyBool, PyBytes, PyDict, PyFloat, PyList, PySet};
+use pyo3::types::{PyAny, PyBool, PyBytes, PyDict, PyFloat, PyList, PySet, PyString};
 use pyo3::Python;
 use redis::Value;
 use std::sync::Arc;
@@ -120,10 +120,29 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(value_from_pointer, m)?)?;
     m.add_function(wrap_pyfunction!(create_leaked_value, m)?)?;
     m.add_function(wrap_pyfunction!(create_leaked_bytes_vec, m)?)?;
+    m.add_function(wrap_pyfunction!(get_statistics, m)?)?;
+    
 
     #[pyfunction]
     fn py_log(log_level: Level, log_identifier: String, message: String) {
         log(log_level, log_identifier, message);
+    }
+
+    #[pyfunction]
+    fn get_statistics(py: Python) -> PyResult<PyObject> {
+        let mut stats_map = std::collections::HashMap::<String, String>::new();
+        stats_map.insert("total_connections".to_string(), glide_core::Telemetry::total_connections().to_string());
+        stats_map.insert("total_clients".to_string(), glide_core::Telemetry::total_clients().to_string());
+
+        Python::with_gil(|py| {
+            let py_dict = PyDict::new(py);
+
+            for (key, value) in stats_map {
+                py_dict.set_item(PyString::new(py, &key), PyString::new(py, &value))?;
+            }
+
+            Ok(py_dict.into_py(py))
+        })
     }
 
     #[pyfunction]
