@@ -5,15 +5,14 @@ import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.TestUtilities.getRandomString;
 import static glide.api.BaseClient.OK;
-import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.GlideClusterClient;
-import glide.api.models.commands.PasswordUpdateMode;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.RequestException;
@@ -21,10 +20,9 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 
 @Timeout(10) // seconds
 public class ClusterClientTests {
@@ -167,50 +165,117 @@ public class ClusterClientTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
-    @EnumSource(PasswordUpdateMode.class)
-    public void password_update(PasswordUpdateMode mode) {
-        GlideClusterClient client =
+    @Test
+    public void test_update_connection_password() {
+        GlideClusterClient adminClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
+        String pwd = UUID.randomUUID().toString();
 
-        var key = UUID.randomUUID().toString();
-        var pwd = UUID.randomUUID().toString();
-        client.set(key, "meow meow").get();
-
-        try (var testClient =
+        try (GlideClusterClient testClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
+            // validate that we can use the client
+            assertNotNull(testClient.info().get());
 
-            // validate that we can get the value
-            assertEquals("meow meow", testClient.get(key).get());
+            // Update password without re-authentication
+            assertEquals(OK, testClient.updateConnectionPassword(pwd, false).get());
 
-            // set the password and forcefully drop connection for the second client
-            assertEquals("OK", client.configSet(Map.of("requirepass", pwd)).get());
-            if (mode == PasswordUpdateMode.RE_AUTHENTICATE)
-                testClient.customCommand(new String[] {"RESET"}, ALL_NODES).get();
-            else client.customCommand(new String[] {"CLIENT", "KILL", "TYPE", "NORMAL"}, ALL_NODES).get();
+            // Verify client still works with old auth
+            assertNotNull(testClient.info().get());
 
-            // client should reconnect, but will receive NOAUTH error
-            var exception = assertThrows(ExecutionException.class, () -> testClient.get(key).get());
-            assertInstanceOf(RequestException.class, exception.getCause());
-            assertTrue(exception.getMessage().toLowerCase().contains("noauth"));
+            // Update server password
+            // Kill all other clients to force reconnection
+            assertEquals("OK", adminClient.configSet(Map.of("requirepass", pwd)).get());
+            adminClient.customCommand(new String[] {"CLIENT", "KILL", "TYPE", "NORMAL"}).get();
 
-            assertEquals("OK", testClient.updateConnectionPassword(pwd, mode).get());
+            Thread.sleep(1000);
 
-            // after setting new password we should be able to work with the server
-            assertEquals("meow meow", testClient.get(key).get());
-
-            // unset the password and drop connection again
-            assertEquals("OK", client.configSet(Map.of("requirepass", "")).get());
-
-            client.customCommand(new String[] {"CLIENT", "KILL", "TYPE", "NORMAL"}, ALL_NODES).get();
-
-            // client should reconnect, but since no auth configured, able to get a value
-            assertEquals("meow meow", testClient.get(key).get());
-        } catch (Exception e) {
-            e.printStackTrace();
+            // Verify client auto-reconnects with new password
+            assertNotNull(testClient.info().get());
         } finally {
-            client.configSet(Map.of("requirepass", "")).get();
-            client.close();
+            adminClient.configSet(Map.of("requirepass", "")).get();
+            adminClient.close();
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void test_update_connection_password_auth_non_valid_pass() {
+        // Test Client fails on call to updateConnectionPassword with invalid parameters
+        try (GlideClusterClient testClient =
+                GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
+            var emptyPasswordException =
+                    assertThrows(
+                            ExecutionException.class, () -> testClient.updateConnectionPassword("", true).get());
+            assertInstanceOf(RequestException.class, emptyPasswordException.getCause());
+
+            var noPasswordException =
+                    assertThrows(
+                            ExecutionException.class, () -> testClient.updateConnectionPassword(true).get());
+            assertInstanceOf(RequestException.class, noPasswordException.getCause());
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void test_update_connection_password_no_server_auth() {
+        var pwd = UUID.randomUUID().toString();
+
+        try (GlideClusterClient testClient =
+                GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
+            // validate that we can use the client
+            assertNotNull(testClient.info().get());
+
+            // Test that immediate re-authentication fails when no server password is set.
+            var exception =
+                    assertThrows(
+                            ExecutionException.class, () -> testClient.updateConnectionPassword(pwd, true).get());
+            assertInstanceOf(RequestException.class, exception.getCause());
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void test_update_connection_password_long() {
+        var pwd = RandomStringUtils.randomAlphabetic(1000);
+
+        try (GlideClusterClient testClient =
+                GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
+            // validate that we can use the client
+            assertNotNull(testClient.info().get());
+
+            // Test replacing connection password with a long password string.
+            assertEquals(OK, testClient.updateConnectionPassword(pwd, false).get());
+        }
+    }
+
+    @Timeout(50)
+    @SneakyThrows
+    @Test
+    public void test_replace_password_immediateAuth_wrong_password() {
+        var pwd = UUID.randomUUID().toString();
+        var notThePwd = UUID.randomUUID().toString();
+
+        GlideClusterClient adminClient =
+                GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
+        try (GlideClusterClient testClient =
+                GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
+            // validate that we can use the client
+            assertNotNull(testClient.info().get());
+
+            // set the password to something else
+            adminClient.configSet(Map.of("requirepass", notThePwd)).get();
+
+            // Test that re-authentication fails when using wrong password.
+            var exception =
+                    assertThrows(
+                            ExecutionException.class, () -> testClient.updateConnectionPassword(pwd, true).get());
+            assertInstanceOf(RequestException.class, exception.getCause());
+
+            // But using something else password returns OK
+            assertEquals(OK, testClient.updateConnectionPassword(notThePwd, true).get());
+        } finally {
+            adminClient.configSet(Map.of("requirepass", "")).get();
+            adminClient.close();
         }
     }
 }

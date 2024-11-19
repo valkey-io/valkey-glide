@@ -218,7 +218,6 @@ import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
-import glide.api.models.commands.PasswordUpdateMode;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.LexRange;
 import glide.api.models.commands.RangeOptions.RangeQuery;
@@ -787,10 +786,15 @@ public abstract class BaseClient
      * that the internal reconnection mechanism can handle reconnection seamlessly, preventing the
      * loss of in-flight commands.
      *
+     * @param immediateAuth A <code>boolean</code> flag. If <code>true</code>, the client will
+     *     authenticate immediately with the new password against all connections, Using <code>AUTH
+     *     </code> command. <br>
+     *     If password supplied is an empty string, the client will not perform auth and a warning
+     *     will be returned. <br>
+     *     The default is `false`.
      * @apiNote This method updates the client's internal password configuration and does not perform
      *     password rotation on the server side.
      * @param password A new password to set.
-     * @param mode Password update mode, see {@link PasswordUpdateMode}.
      * @return <code>"OK"</code>.
      * @example
      *     <pre>{@code
@@ -799,9 +803,9 @@ public abstract class BaseClient
      * }</pre>
      */
     public CompletableFuture<String> updateConnectionPassword(
-            @NonNull String password, @NonNull PasswordUpdateMode mode) {
+            @NonNull String password, boolean immediateAuth) {
         return commandManager.submitPasswordUpdate(
-                Optional.of(password), mode, this::handleStringResponse);
+                Optional.of(password), immediateAuth, this::handleStringResponse);
     }
 
     /**
@@ -815,16 +819,22 @@ public abstract class BaseClient
      *
      * @apiNote This method updates the client's internal password configuration and does not perform
      *     password rotation on the server side.
-     * @param mode Password update mode, see {@link PasswordUpdateMode}.
+     * @param immediateAuth A <code>boolean</code> flag. If <code>true</code>, the client will
+     *     authenticate immediately with the new password against all connections, Using <code>AUTH
+     *     </code> command. <br>
+     *     If password supplied is an empty string, the client will not perform auth and a warning
+     *     will be returned. <br>
+     *     The default is `false`.
      * @return <code>"OK"</code>.
      * @example
      *     <pre>{@code
-     * String response = client.resetConnectionPassword(RE_AUTHENTICATE).get();
+     * String response = client.resetConnectionPassword(true).get();
      * assert response.equals("OK");
      * }</pre>
      */
-    public CompletableFuture<String> updateConnectionPassword(@NonNull PasswordUpdateMode mode) {
-        return commandManager.submitPasswordUpdate(Optional.empty(), mode, this::handleStringResponse);
+    public CompletableFuture<String> updateConnectionPassword(boolean immediateAuth) {
+        return commandManager.submitPasswordUpdate(
+                Optional.empty(), immediateAuth, this::handleStringResponse);
     }
 
     @Override

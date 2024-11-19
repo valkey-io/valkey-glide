@@ -7,12 +7,12 @@ import static glide.TestUtilities.getRandomString;
 import static glide.api.BaseClient.OK;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.GlideClient;
-import glide.api.models.commands.PasswordUpdateMode;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.RequestException;
@@ -20,10 +20,11 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 @Timeout(10) // seconds
 public class StandaloneClientTests {
@@ -167,42 +168,119 @@ public class StandaloneClientTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
-    @EnumSource(PasswordUpdateMode.class)
-    public void password_update(PasswordUpdateMode mode) {
-        GlideClient client = GlideClient.createClient(commonClientConfig().build()).get();
-        var key = UUID.randomUUID().toString();
+    @Test
+    public void test_update_connection_password_auth_non_valid_pass() {
+        // Test Client fails on call to updateConnectionPassword with invalid parameters
+        try (var testClient = GlideClient.createClient(commonClientConfig().build()).get()) {
+            var emptyPasswordException =
+                    assertThrows(
+                            ExecutionException.class, () -> testClient.updateConnectionPassword("", true).get());
+            assertInstanceOf(RequestException.class, emptyPasswordException.getCause());
+
+            var noPasswordException =
+                    assertThrows(
+                            ExecutionException.class, () -> testClient.updateConnectionPassword(true).get());
+            assertInstanceOf(RequestException.class, noPasswordException.getCause());
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void test_update_connection_password_no_server_auth() {
         var pwd = UUID.randomUUID().toString();
-        client.set(key, "meow meow").get();
 
         try (var testClient = GlideClient.createClient(commonClientConfig().build()).get()) {
+            // validate that we can use the client
+            assertNotNull(testClient.info().get());
 
-            // validate that we can get the value
-            assertEquals("meow meow", testClient.get(key).get());
-
-            // set the password and forcefully drop connection for the second client
-            assertEquals("OK", client.configSet(Map.of("requirepass", pwd)).get());
-            client.customCommand(new String[] {"CLIENT", "KILL", "TYPE", "NORMAL"}).get();
-
-            // client should reconnect, but will receive NOAUTH error
-            var exception = assertThrows(ExecutionException.class, () -> testClient.get(key).get());
+            // Test that immediate re-authentication fails when no server password is set.
+            var exception =
+                    assertThrows(
+                            ExecutionException.class, () -> testClient.updateConnectionPassword(pwd, true).get());
             assertInstanceOf(RequestException.class, exception.getCause());
-            assertTrue(exception.getMessage().toLowerCase().contains("noauth"));
+        }
+    }
 
-            assertEquals("OK", testClient.updateConnectionPassword(pwd, mode).get());
+    @SneakyThrows
+    @Test
+    public void test_update_connection_password_long() {
+        var pwd = RandomStringUtils.randomAlphabetic(1000);
 
-            // after setting new password we should be able to work with the server
-            assertEquals("meow meow", testClient.get(key).get());
+        try (var testClient = GlideClient.createClient(commonClientConfig().build()).get()) {
+            // validate that we can use the client
+            assertNotNull(testClient.info().get());
 
-            // unset the password and drop connection again
-            assertEquals("OK", client.configSet(Map.of("requirepass", "")).get());
-            client.customCommand(new String[] {"CLIENT", "KILL", "TYPE", "NORMAL"}).get();
+            // Test replacing connection password with a long password string.
+            assertEquals(OK, testClient.updateConnectionPassword(pwd, false).get());
+        }
+    }
 
-            // client should reconnect, but since no auth configured, able to get a value
-            assertEquals("meow meow", testClient.get(key).get());
+    @Timeout(50)
+    @SneakyThrows
+    @Test
+    public void test_replace_password_immediateAuth_wrong_password() {
+        var pwd = UUID.randomUUID().toString();
+        var notThePwd = UUID.randomUUID().toString();
+
+        GlideClient adminClient = GlideClient.createClient(commonClientConfig().build()).get();
+        try (var testClient = GlideClient.createClient(commonClientConfig().build()).get()) {
+            // validate that we can use the client
+            assertNotNull(testClient.info().get());
+
+            // set the password to something else
+            adminClient.configSet(Map.of("requirepass", notThePwd)).get();
+
+            // Test that re-authentication fails when using wrong password.
+            var exception =
+                    assertThrows(
+                            ExecutionException.class, () -> testClient.updateConnectionPassword(pwd, true).get());
+            assertInstanceOf(RequestException.class, exception.getCause());
+
+            // But using something else password returns OK
+            assertEquals(OK, testClient.updateConnectionPassword(notThePwd, true).get());
         } finally {
-            client.configSet(Map.of("requirepass", "")).get();
-            client.close();
+            adminClient.configSet(Map.of("requirepass", "")).get();
+            adminClient.close();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void test_update_connection_password_connection_lost_before_password_update(
+            boolean immediateAuth) {
+        GlideClient adminClient = GlideClient.createClient(commonClientConfig().build()).get();
+        var pwd = UUID.randomUUID().toString();
+
+        try (var testClient = GlideClient.createClient(commonClientConfig().build()).get()) {
+            // validate that we can use the client
+            assertNotNull(testClient.info().get());
+
+            // set the password and forcefully drop connection for the testClient
+            assertEquals("OK", adminClient.configSet(Map.of("requirepass", pwd)).get());
+            adminClient.customCommand(new String[] {"CLIENT", "KILL", "TYPE", "NORMAL"}).get();
+
+            /*
+             * Some explanation for the curious mind:
+             * Our library is abstracting a connection or connections, with a lot of mechanism around it, making it behave like what we call a "client".
+             * When using standalone mode, the client is a single connection, so on disconnection the first thing it planned to do is to reconnect.
+             *
+             * There's no reason to get other commands and to take care of them since to serve commands we need to be connected.
+             *
+             * Hence, the client will try to reconnect and will not listen try to take care of new tasks, but will let them wait in line,
+             * so the update connection password will not be able to reach the connection and will return an error.
+             * For future versions, standalone will be considered as a different animal then it is now, since standalone is not necessarily one node.
+             * It can be replicated and have a lot of nodes, and to be what we like to call "one shard cluster".
+             * So, in the future, we will have many existing connection and request can be managed also when one connection is locked,
+             */
+            var exception =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> testClient.updateConnectionPassword(pwd, immediateAuth).get());
+            assertInstanceOf(RequestException.class, exception.getCause());
+        } finally {
+            adminClient.configSet(Map.of("requirepass", "")).get();
+            adminClient.close();
         }
     }
 }
