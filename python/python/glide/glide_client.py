@@ -33,6 +33,7 @@ from .glide import (
     MAX_REQUEST_ARGS_LEN,
     ClusterScanCursor,
     create_leaked_bytes_vec,
+    get_statistics,
     start_socket_listener_external,
     value_from_pointer,
 )
@@ -532,6 +533,9 @@ class BaseClient(CoreCommands):
                     await self._process_push(response=response)
                 else:
                     await self._process_response(response=response)
+
+    async def get_statistics(self) -> dict:
+        return get_statistics()
 
     async def _update_connection_password(
         self, password: Optional[str], re_auth: bool
