@@ -101,7 +101,7 @@ describe("GlideClusterClient", () => {
 
     afterEach(async () => {
         await flushAndCloseClient(true, cluster.getAddresses(), client);
-        await flushAndCloseClient(true, azCluster.getAddresses(), client);
+        await flushAndCloseClient(true, azCluster.getAddresses(), azClient);
     });
 
     afterAll(async () => {
@@ -121,7 +121,6 @@ describe("GlideClusterClient", () => {
                 protocol,
                 configOverrides,
             );
-
             client = await GlideClusterClient.createClient(configCurrent);
 
             const configNew = getClientConfigurationOption(
@@ -129,9 +128,9 @@ describe("GlideClusterClient", () => {
                 protocol,
                 configOverrides,
             );
-
             azClient = await GlideClusterClient.createClient(configNew);
 
+            testsFailed += 1;
             return {
                 client,
                 azClient,

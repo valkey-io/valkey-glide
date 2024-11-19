@@ -52,7 +52,9 @@ const TIMEOUT = 50000;
 describe("GlideClient", () => {
     let testsFailed = 0;
     let cluster: ValkeyCluster;
+    let azCluster: ValkeyCluster;
     let client: GlideClient;
+    let azClient: GlideClient;
     beforeAll(async () => {
         const standaloneAddresses = global.STAND_ALONE_ENDPOINT;
         cluster = standaloneAddresses
@@ -62,17 +64,28 @@ describe("GlideClient", () => {
                   getServerVersion,
               )
             : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
+
+        azCluster = standaloneAddresses
+            ? await ValkeyCluster.initFromExistingCluster(
+                  false,
+                  parseEndpoints(standaloneAddresses),
+                  getServerVersion,
+              )
+            : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);            
     }, 20000);
 
     afterEach(async () => {
         await flushAndCloseClient(false, cluster.getAddresses(), client);
+        await flushAndCloseClient(false, azCluster.getAddresses(), azClient);
     });
 
     afterAll(async () => {
         if (testsFailed === 0) {
             await cluster.close();
+            await azCluster.close()
         } else {
             await cluster.close(true);
+            await azCluster.close()
         }
     }, TIMEOUT);
 
@@ -1516,13 +1529,13 @@ describe("GlideClient", () => {
                     // Stage 1: Configure nodes
                     client_for_config_set = await GlideClient.createClient(
                         getClientConfigurationOption(
-                            cluster.getAddresses(),
+                            azCluster.getAddresses(),
                             protocol,
                         ),
                     );
 
                     // Skip test if version is below 8.0.0
-                    if (cluster.checkIfServerVersionLessThan("8.0.0")) {
+                    if (azCluster.checkIfServerVersionLessThan("8.0.0")) {
                         console.log(
                             "Skipping test: requires Valkey 8.0.0 or higher",
                         );
@@ -1533,6 +1546,7 @@ describe("GlideClient", () => {
                         "CONFIG",
                         "RESETSTAT",
                     ]);
+                    
                     await client_for_config_set.customCommand([
                         "CONFIG",
                         "SET",
@@ -1543,7 +1557,7 @@ describe("GlideClient", () => {
                     // Stage 2: Create AZ affinity client and verify configuration
                     client_for_testing_az = await GlideClient.createClient(
                         getClientConfigurationOption(
-                            cluster.getAddresses(),
+                            azCluster.getAddresses(),
                             protocol,
                             {
                                 readFrom: "AZAffinity" as ReadFrom,
@@ -1625,13 +1639,13 @@ describe("GlideClient", () => {
                     // Stage 1: Configure nodes
                     client_for_config_set = await GlideClient.createClient(
                         getClientConfigurationOption(
-                            cluster.getAddresses(),
+                            azCluster.getAddresses(),
                             protocol,
                         ),
                     );
 
                     // Skip test if version is below 8.0.0
-                    if (cluster.checkIfServerVersionLessThan("8.0.0")) {
+                    if (azCluster.checkIfServerVersionLessThan("8.0.0")) {
                         console.log(
                             "Skipping test: requires Valkey 8.0.0 or higher",
                         );
@@ -1653,7 +1667,7 @@ describe("GlideClient", () => {
                     // Stage 2: Create AZ affinity client and verify configuration
                     client_for_testing_az = await GlideClient.createClient(
                         getClientConfigurationOption(
-                            cluster.getAddresses(),
+                            azCluster.getAddresses(),
                             protocol,
                             {
                                 readFrom: "AZAffinity",
@@ -1701,7 +1715,7 @@ describe("GlideClient", () => {
                 let client_for_testing_az;
 
                 try {
-                    if (cluster.checkIfServerVersionLessThan("8.0.0")) {
+                    if (azCluster.checkIfServerVersionLessThan("8.0.0")) {
                         console.log(
                             "Skipping test: requires Valkey 8.0.0 or higher",
                         );
@@ -1710,7 +1724,7 @@ describe("GlideClient", () => {
 
                     client_for_testing_az = await GlideClient.createClient(
                         getClientConfigurationOption(
-                            cluster.getAddresses(),
+                            azCluster.getAddresses(),
                             protocol,
                             {
                                 readFrom: "AZAffinity",
@@ -1755,10 +1769,18 @@ describe("GlideClient", () => {
                 protocol,
                 configOverrides,
             );
+            client = await GlideClient.createClient(config);
+
+            const configNew = getClientConfigurationOption(
+                azCluster.getAddresses(),
+                protocol,
+                configOverrides,
+            );
 
             testsFailed += 1;
+            azClient = await GlideClient.createClient(configNew);
             client = await GlideClient.createClient(config);
-            return { client, cluster };
+            return { client, cluster, azClient, azCluster };
         },
         close: (testSucceeded: boolean) => {
             if (testSucceeded) {
