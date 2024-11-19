@@ -510,7 +510,7 @@ message ClusterScan {
 
 message UpdateConnectionPassword {
     optional string password = 1;
-    bool re_auth = 2;
+    bool immediate_auth = 2;
 }
 
 message CommandRequest {

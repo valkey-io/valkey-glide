@@ -153,6 +153,10 @@ pub enum ErrorKind {
 
     /// Not all slots are covered by the cluster
     NotAllSlotsCovered,
+
+    /// Used when an error occurs on when user perform wrong usage of management operation.
+    /// E.g. not allowed configuration change.
+    UserOperationError,
 }
 
 #[derive(PartialEq, Debug)]
@@ -900,6 +904,7 @@ impl RedisError {
             ErrorKind::RESP3NotSupported => "resp3 is not supported by server",
             ErrorKind::ParseError => "parse error",
             ErrorKind::NotAllSlotsCovered => "not all slots are covered",
+            ErrorKind::UserOperationError => "Wrong usage of management operation",
         }
     }
 
@@ -1095,6 +1100,7 @@ impl RedisError {
             ErrorKind::NotAllSlotsCovered => RetryMethod::NoRetry,
             ErrorKind::FatalReceiveError => RetryMethod::Reconnect,
             ErrorKind::FatalSendError => RetryMethod::ReconnectAndRetry,
+            ErrorKind::UserOperationError => RetryMethod::NoRetry,
         }
     }
 }
