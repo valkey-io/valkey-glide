@@ -187,8 +187,6 @@ public class ClusterClientTests {
             assertEquals("OK", adminClient.configSet(Map.of("requirepass", pwd)).get());
             adminClient.customCommand(new String[] {"CLIENT", "KILL", "TYPE", "NORMAL"}).get();
 
-            Thread.sleep(1000);
-
             // Verify client auto-reconnects with new password
             assertNotNull(testClient.info().get());
         } finally {
