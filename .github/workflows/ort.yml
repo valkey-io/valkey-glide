@@ -43,7 +43,11 @@ jobs:
           - name: Checkout target branch
             uses: actions/checkout@v4
             with:
-              ref: ${{ env.TARGET_BRANCH }}
+                ref: ${{ env.TARGET_BRANCH }}
+                repository: ${{ github.event.pull_request.head.repo.full_name }}
+                token: ${{ secrets.GITHUB_TOKEN }}
+                fetch-depth: 0 # Fetch all history for all branches and tags
+
 
           - name: Setup target commit
             run: |
@@ -251,10 +255,32 @@ jobs:
                 GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                 INPUT_VERSION: ${{ github.event.inputs.version }}
 
-            ### Warn of outdated attributions for PR ###
+          ### Warn of outdated attributions for PR ###
           - name: Warn of outdated attributions due to the PR
-            if: ${{ env.FOUND_DIFF  == 'true' && github.event_name == 'pull_request' }}
-            uses: actions/github-script@v6
-            with:
-              script: |
-                core.warning('WARNING! Note the attribution files differ with this PR, make sure an updating PR is issued using scheduled or manual run of this workflow!');
+            if: ${{ env.FOUND_DIFF == 'true' && github.event_name == 'pull_request' }}
+            run: |
+                ATTRIBUTION_FILES=(
+                  "${{ env.PYTHON_ATTRIBUTIONS }}"
+                  "${{ env.NODE_ATTRIBUTIONS }}"
+                  "${{ env.RUST_ATTRIBUTIONS }}"
+                  "${{ env.JAVA_ATTRIBUTIONS }}"
+                )
+
+                MESSAGE="WARNING! The attribution files differ in this PR. Please ensure an updating PR is issued using a scheduled or manual run of this workflow!"
+
+                # Echo the message to the console
+                echo "$MESSAGE"
+
+                # Emit a general warning in the action log
+                echo "::warning::$MESSAGE"
+
+                # Loop through the attribution files
+                for FILE in "${ATTRIBUTION_FILES[@]}"; do
+                  if git diff --quiet "$FILE"; then
+                    continue
+                  else
+                    # Emit a warning associated with the changed file
+                    echo "::warning file=$FILE::WARNING! The attribution file '$FILE' differs in this PR."
+                  fi
+                done
+
