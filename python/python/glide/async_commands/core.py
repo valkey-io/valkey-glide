@@ -393,11 +393,11 @@ class CoreCommands(Protocol):
     ) -> TResult: ...
 
     async def _update_connection_password(
-        self, password: Optional[str], re_auth: bool
+        self, password: Optional[str], immediate_auth: bool
     ) -> TResult: ...
 
     async def update_connection_password(
-        self, password: Optional[str], re_auth: bool
+        self, password: Optional[str], immediate_auth=False
     ) -> TOK:
         """
         Update the current connection password with a new password.
@@ -412,20 +412,23 @@ class CoreCommands(Protocol):
         handle reconnection seamlessly, preventing the loss of in-flight commands.
 
         Args:
-            password (Optional[str]): The new password to use for the connection,
+            password (`Optional[str]`): The new password to use for the connection,
             if `None` the password will be removed.
-            re_auth (bool):
-                - `True`: The client will re-authenticate immediately with the new password.
-                - `False`: The new password will be used for the next connection attempt.
+            immediate_auth (`bool`):
+                - `True`: The client will authenticate immediately with the new password against all connections, Using `AUTH` command.
+                          If password supplied is an empty string, auth will not be performed and warning will be returned.
+                          The default is `False`.
 
         Returns:
-            TOK: A simple OK response.
+            TOK: A simple OK response. If `immediate_auth=True` returns OK if the reauthenticate succeed.
 
         Example:
-            >>> await client.update_connection_password("new_password", re_auth=True)
+            >>> await client.update_connection_password("new_password", immediate_auth=True)
             'OK'
         """
-        return cast(TOK, await self._update_connection_password(password, re_auth))
+        return cast(
+            TOK, await self._update_connection_password(password, immediate_auth)
+        )
 
     async def set(
         self,

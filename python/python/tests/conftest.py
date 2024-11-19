@@ -11,9 +11,11 @@ from glide.config import (
     ProtocolVersion,
     ServerCredentials,
 )
+from glide.exceptions import ClosingError, RequestError
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.logger import Level as logLevel
 from glide.logger import Logger
+from glide.routes import AllNodes
 from tests.utils.cluster import ValkeyCluster
 from tests.utils.utils import check_if_server_version_lt
 
@@ -204,11 +206,26 @@ def pytest_collection_modifyitems(config, items):
                     )
 
 
-@pytest.fixture()
+@pytest.fixture(scope="function")
 async def glide_client(
-    request, cluster_mode: bool, protocol: ProtocolVersion
+    request,
+    cluster_mode: bool,
+    protocol: ProtocolVersion,
 ) -> AsyncGenerator[TGlideClient, None]:
     "Get async socket client for tests"
+    client = await create_client(request, cluster_mode, protocol=protocol)
+    yield client
+    await test_teardown(request, cluster_mode, protocol)
+    await client.close()
+
+
+@pytest.fixture(scope="function")
+async def management_client(
+    request,
+    cluster_mode: bool,
+    protocol: ProtocolVersion,
+) -> AsyncGenerator[TGlideClient, None]:
+    "Get async socket client for tests, used to manage the state when tests are on the client ability to connect"
     client = await create_client(request, cluster_mode, protocol=protocol)
     yield client
     await test_teardown(request, cluster_mode, protocol)
@@ -268,17 +285,81 @@ async def create_client(
         return await GlideClient.create(config)
 
 
+NEW_PASSWORD = "new_secure_password"
+WRONG_PASSWORD = "wrong_password"
+
+
+async def auth_client(client: TGlideClient, password):
+    """
+    Authenticates the given TGlideClient server connected.
+    """
+    if isinstance(client, GlideClient):
+        await client.custom_command(["AUTH", password])
+    elif isinstance(client, GlideClusterClient):
+        await client.custom_command(["AUTH", password], route=AllNodes())
+
+
+async def config_set_new_password(client: TGlideClient, password):
+    """
+    Sets a new password for the given TGlideClient server connected.
+    This function updates the server to require a new password.
+    """
+    if isinstance(client, GlideClient):
+        await client.config_set({"requirepass": password})
+    elif isinstance(client, GlideClusterClient):
+        await client.config_set({"requirepass": password}, route=AllNodes())
+
+
+async def kill_connections(client: TGlideClient):
+    """
+    Kills all connections to the given TGlideClient server connected.
+    """
+    if isinstance(client, GlideClient):
+        await client.custom_command(["CLIENT", "KILL", "TYPE", "normal"])
+    elif isinstance(client, GlideClusterClient):
+        await client.custom_command(
+            ["CLIENT", "KILL", "TYPE", "normal"], route=AllNodes()
+        )
+
+
 async def test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
     """
     Perform teardown tasks such as flushing all data from the cluster.
 
-    We create a new client here because some tests load lots of data to the cluster,
-    which might cause the client to time out during flushing. Therefore, we create
-    a client with a custom timeout to ensure the operation completes successfully.
+    If authentication is required, attempt to connect with the known password,
+    reset it back to empty, and proceed with teardown.
     """
-    client = await create_client(request, cluster_mode, protocol=protocol, timeout=2000)
-    await client.custom_command(["FLUSHALL"])
-    await client.close()
+    credentials = None
+    try:
+        # Try connecting without credentials
+        client = await create_client(
+            request, cluster_mode, protocol=protocol, timeout=2000
+        )
+        await client.custom_command(["FLUSHALL"])
+        await client.close()
+    except ClosingError as e:
+        # Check if the error is due to authentication
+        if "NOAUTH" in str(e):
+            # Use the known password to authenticate
+            credentials = ServerCredentials(password=NEW_PASSWORD)
+            client = await create_client(
+                request,
+                cluster_mode,
+                protocol=protocol,
+                timeout=2000,
+                credentials=credentials,
+            )
+            try:
+                await auth_client(client, NEW_PASSWORD)
+                # Reset the server password back to empty
+                await config_set_new_password(client, "")
+                await client.update_connection_password(None)
+                # Perform the teardown
+                await client.custom_command(["FLUSHALL"])
+            finally:
+                await client.close()
+        else:
+            raise e
 
 
 @pytest.fixture(autouse=True)
