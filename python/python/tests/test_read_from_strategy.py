@@ -40,7 +40,6 @@ class TestAZAffinity:
         """Test that the client with AZ affinity strategy routes in a round-robin manner to all replicas within the specified AZ"""
 
         az = "us-east-1a"
-
         client_for_config_set = await create_client(
             request,
             cluster_mode,
