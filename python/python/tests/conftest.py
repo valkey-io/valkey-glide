@@ -311,7 +311,7 @@ async def skip_if_version_below(request):
 
 
 @pytest.fixture(scope="module")
-def multiple_replica_cluster(request):
+def multiple_replicas_cluster(request):
     """
     Fixture to create a special cluster with 4 replicas for specific tests.
     """

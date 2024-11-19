@@ -13,7 +13,7 @@ from tests.utils.utils import get_first_result
 
 
 @pytest.mark.asyncio
-@pytest.mark.usefixtures("multiple_replica_cluster")
+@pytest.mark.usefixtures("multiple_replicas_cluster")
 class TestAZAffinity:
     async def _get_num_replicas(self, client: GlideClusterClient) -> int:
         info_replicas = get_first_result(
@@ -35,7 +35,7 @@ class TestAZAffinity:
         request,
         cluster_mode: bool,
         protocol: ProtocolVersion,
-        multiple_replica_cluster,
+        multiple_replicas_cluster,
     ):
         """Test that the client with AZ affinity strategy routes in a round-robin manner to all replicas within the specified AZ"""
 
@@ -44,7 +44,7 @@ class TestAZAffinity:
         client_for_config_set = await create_client(
             request,
             cluster_mode,
-            addresses=multiple_replica_cluster.nodes_addr,
+            addresses=multiple_replicas_cluster.nodes_addr,
             protocol=protocol,
             timeout=2000,
         )
@@ -57,7 +57,7 @@ class TestAZAffinity:
         client_for_testing_az = await create_client(
             request,
             cluster_mode,
-            addresses=multiple_replica_cluster.nodes_addr,
+            addresses=multiple_replicas_cluster.nodes_addr,
             protocol=protocol,
             read_from=ReadFrom.AZ_AFFINITY,
             timeout=2000,
@@ -106,7 +106,7 @@ class TestAZAffinity:
         request,
         cluster_mode: bool,
         protocol: ProtocolVersion,
-        multiple_replica_cluster,
+        multiple_replicas_cluster,
     ):
         """Test that the client with az affinity strategy will only route to the 1 replica with the same az"""
         az = "us-east-1a"
@@ -116,9 +116,9 @@ class TestAZAffinity:
         client_for_config_set = await create_client(
             request,
             cluster_mode,
+            addresses=multiple_replicas_cluster.nodes_addr,
             protocol=protocol,
             timeout=2000,
-            addresses=multiple_replica_cluster.nodes_addr,
         )
 
         # Reset the availability zone for all nodes
@@ -139,7 +139,7 @@ class TestAZAffinity:
         client_for_testing_az = await create_client(
             request,
             cluster_mode,
-            addresses=multiple_replica_cluster.nodes_addr,
+            addresses=multiple_replicas_cluster.nodes_addr,
             protocol=protocol,
             read_from=ReadFrom.AZ_AFFINITY,
             timeout=2000,
@@ -179,14 +179,14 @@ class TestAZAffinity:
         request,
         cluster_mode: bool,
         protocol: ProtocolVersion,
-        multiple_replica_cluster,
+        multiple_replicas_cluster,
     ):
         GET_CALLS = 4
 
         client_for_testing_az = await create_client(
             request,
             cluster_mode,
-            addresses=multiple_replica_cluster.nodes_addr,
+            addresses=multiple_replicas_cluster.nodes_addr,
             protocol=protocol,
             read_from=ReadFrom.AZ_AFFINITY,
             timeout=2000,
@@ -205,7 +205,6 @@ class TestAZAffinity:
             [InfoSection.COMMAND_STATS, InfoSection.SERVER], AllNodes()
         )
 
-        # Check that a replica has all the GET calls
         matching_entries_count = sum(
             1 for value in info_result.values() if get_cmdstat in value.decode()
         )
