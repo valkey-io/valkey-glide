@@ -53,7 +53,7 @@ def test_periodic_checks_interval_to_protobuf():
     assert request.periodic_checks_manual_interval.duration_in_sec == 30
 
 
-def test_convert_config_with_azaffinity_to_protobuf(self):
+def test_convert_config_with_azaffinity_to_protobuf():
     az = "us-east-1a"
     config = BaseClientConfiguration(
         [NodeAddress("127.0.0.1")],
