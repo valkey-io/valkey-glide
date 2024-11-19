@@ -180,6 +180,11 @@ class BaseClientConfiguration:
         self.inflight_requests_limit = inflight_requests_limit
         self.client_az = client_az
 
+        if read_from == ReadFrom.AZ_AFFINITY and not client_az:
+            raise ValueError(
+                "client_az mus t be set when read_from is set to AZ_AFFINITY"
+            )
+
     def _create_a_protobuf_conn_request(
         self, cluster_mode: bool = False
     ) -> ConnectionRequest:
@@ -468,11 +473,6 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         )
         self.periodic_checks = periodic_checks
         self.pubsub_subscriptions = pubsub_subscriptions
-
-        if read_from == ReadFrom.AZ_AFFINITY and not client_az:
-            raise ValueError(
-                "client_az must be set when read_from is set to AZ_AFFINITY"
-            )
 
     def _create_a_protobuf_conn_request(
         self, cluster_mode: bool = False
