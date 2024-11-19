@@ -31,7 +31,11 @@ class TestAZAffinity:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_routing_by_slot_to_replica_with_az_affinity_strategy_to_all_replicas(
-        self, request, cluster_mode: bool, protocol: ProtocolVersion, multiple_replica_cluster
+        self,
+        request,
+        cluster_mode: bool,
+        protocol: ProtocolVersion,
+        multiple_replica_cluster,
     ):
         """Test that the client with AZ affinity strategy routes in a round-robin manner to all replicas within the specified AZ"""
 
@@ -98,7 +102,11 @@ class TestAZAffinity:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_routing_with_az_affinity_strategy_to_1_replica(
-        self, request, cluster_mode: bool, protocol: ProtocolVersion, multiple_replica_cluster
+        self,
+        request,
+        cluster_mode: bool,
+        protocol: ProtocolVersion,
+        multiple_replica_cluster,
     ):
         """Test that the client with az affinity strategy will only route to the 1 replica with the same az"""
         az = "us-east-1a"
@@ -167,7 +175,11 @@ class TestAZAffinity:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_az_affinity_non_existing_az(
-        self, request, cluster_mode: bool, protocol: ProtocolVersion, multiple_replica_cluster
+        self,
+        request,
+        cluster_mode: bool,
+        protocol: ProtocolVersion,
+        multiple_replica_cluster,
     ):
         GET_CALLS = 4
 
