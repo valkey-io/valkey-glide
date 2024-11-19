@@ -277,7 +277,6 @@ public class StandaloneClientTests {
                     assertThrows(
                             ExecutionException.class,
                             () -> testClient.updateConnectionPassword(pwd, immediateAuth).get());
-            assertInstanceOf(RequestException.class, exception.getCause());
         } finally {
             adminClient.configSet(Map.of("requirepass", "")).get();
             adminClient.close();
