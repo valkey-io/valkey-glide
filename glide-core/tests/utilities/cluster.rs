@@ -298,6 +298,25 @@ pub async fn setup_default_client(cluster: &RedisCluster) -> Client {
     create_cluster_client(Some(cluster), test_config).await
 }
 
+pub async fn setup_cluster_with_replicas(
+    configuration: TestConfiguration,
+    replicas_num: u16,
+    primaries_num: u16,
+) -> ClusterTestBasics {
+    let cluster = if !configuration.shared_server {
+        Some(RedisCluster::new(
+            configuration.use_tls,
+            &configuration.connection_info,
+            Some(primaries_num),
+            Some(replicas_num),
+        ))
+    } else {
+        None
+    };
+    let client = create_cluster_client(cluster.as_ref(), configuration).await;
+    ClusterTestBasics { cluster, client }
+}
+
 pub async fn setup_test_basics(use_tls: bool) -> ClusterTestBasics {
     setup_test_basics_internal(TestConfiguration {
         use_tls,

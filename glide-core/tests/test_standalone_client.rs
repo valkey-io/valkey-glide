@@ -276,6 +276,18 @@ mod standalone_client_tests {
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_from_replica_az_affinity() {
+        test_read_from_replica(ReadFromReplicaTestConfig {
+            read_from: ReadFrom::AZAffinity,
+            expected_primary_reads: 0,
+            expected_replica_reads: vec![1, 1, 1],
+            ..Default::default()
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_read_from_replica_round_robin_skip_disconnected_replicas() {
         test_read_from_replica(ReadFromReplicaTestConfig {
             read_from: ReadFrom::PreferReplica,
