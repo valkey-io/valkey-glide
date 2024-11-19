@@ -76,10 +76,11 @@ describe("Auth tests", () => {
             try {
                 await managementClient.customCommand(["AUTH", "new_password"]);
                 await managementClient.configSet({ requirepass: "" });
-                await managementClient.flushall();
             } catch {
                 // Ignore errors
             }
+
+            await managementClient.flushall();
 
             try {
                 await client.updateConnectionPassword("");
@@ -98,17 +99,9 @@ describe("Auth tests", () => {
     });
 
     afterAll(async () => {
-        if (cmdCluster) {
-            await cmdCluster.close();
-        }
-
-        if (cmeCluster) {
-            await cmeCluster.close();
-        }
-
-        if (managementClient) {
-            managementClient.close();
-        }
+        await cmdCluster?.close();
+        await cmeCluster?.close();
+        managementClient?.close();
     });
 
     const runTest = async (
@@ -233,9 +226,12 @@ describe("Auth tests", () => {
             it("test_update_connection_password_long", async () => {
                 await runTest(async (client: BaseClient) => {
                     const longPassword = "p".repeat(1000);
-                    await expect(
-                        client.updateConnectionPassword(longPassword, false),
-                    ).resolves.toBe("OK");
+                    expect(
+                        await client.updateConnectionPassword(
+                            longPassword,
+                            false,
+                        ),
+                    ).toEqual("OK");
                     await client.configSet({
                         requirepass: "",
                     });
@@ -270,9 +266,12 @@ describe("Auth tests", () => {
                         await client.configSet({ requirepass: NEW_PASSWORD });
 
                         // Update client password with re-auth
-                        await expect(
-                            client.updateConnectionPassword(NEW_PASSWORD, true),
-                        ).resolves.toBe("OK");
+                        expect(
+                            await client.updateConnectionPassword(
+                                NEW_PASSWORD,
+                                true,
+                            ),
+                        ).toEqual("OK");
 
                         // Verify client works with new auth
                         await client.set("test_key", "test_value");
@@ -287,6 +286,8 @@ describe("Auth tests", () => {
              * Test changing server password when connection is lost before password update.
              * Verifies that the client will not be able to reach the connection under the abstraction and return an error.
              *
+             * **Note: This test is only supported for standalone mode, bellow explanation why*
+             *
              * Some explanation for the curious mind:
              * Our library is abstracting a connection or connections, with a lot of mechanism around it, making it behave like what we call a "client".
              * When using standalone mode, the client is a single connection, so on disconnection the first thing it planned to do is to reconnect.
@@ -295,7 +296,7 @@ describe("Auth tests", () => {
              * so the update connection password will not be able to reach the connection and will return an error.
              * For future versions, standalone will be considered as a different animal then it is now, since standalone is not necessarily one node.
              * It can be replicated and have a lot of nodes, and to be what we like to call "one shard cluster".
-             * So, in the future, we will have many existing connection and request can be managed also when one connection is locked,
+             * So, in the future, we will have many existing connection and request can be managed also when one connection is locked.
              *
              */
             it("test_update_connection_password_connection_lost_before_password_update", async () => {
