@@ -100,7 +100,7 @@ class JsonArrPopOptions:
 
     def to_args(self) -> List[TEncodable]:
         """
-        Get the options as a list of arguments for the JSON.ARRPOP command.
+        Get the options as a list of arguments for the `JSON.ARRPOP` command.
 
         Returns:
             List[TEncodable]: A list containing the path and, if specified, the index.
@@ -204,53 +204,6 @@ async def get(
     return cast(TJsonResponse[Optional[bytes]], await client.custom_command(args))
 
 
-async def mget(
-    client: TGlideClient,
-    keys: List[TEncodable],
-    path: TEncodable,
-) -> List[Optional[bytes]]:
-    """
-    Retrieves the JSON values at the specified `path` stored at multiple `keys`.
-
-    Note:
-        In cluster mode, if keys in `keys` map to different hash slots, the command
-        will be split across these slots and executed separately for each. This means the command
-        is atomic only at the slot level. If one or more slot-specific requests fail, the entire
-        call will return the first encountered error, even though some requests may have succeeded
-        while others did not. If this behavior impacts your application logic, consider splitting
-        the request into sub-requests per slot to ensure atomicity.
-
-    Args:
-        client (TGlideClient): The client to execute the command.
-        keys (List[TEncodable]): A list of keys for the JSON documents.
-        path (TEncodable): The path within the JSON documents.
-
-    Returns:
-        List[Optional[bytes]]:
-            For JSONPath (`path` starts with `$`):
-                Returns a list of byte representations of the values found at the given path for each key.
-                If `path` does not exist within the key, the entry will be an empty array.
-            For legacy path (`path` doesn't starts with `$`):
-                Returns a list of byte representations of the values found at the given path for each key.
-                If `path` does not exist within the key, the entry will be None.
-            If a key doesn't exist, the corresponding list element will be None.
-
-
-    Examples:
-        >>> from glide import glide_json
-        >>> import json
-        >>> json_strs = await glide_json.mget(client, ["doc1", "doc2"], "$")
-        >>> [json.loads(js) for js in json_strs]  # Parse JSON strings to Python data
-            [[{"a": 1.0, "b": 2}], [{"a": 2.0, "b": {"a": 3.0, "b" : 4.0}}]]  # JSON objects retrieved from keys `doc1` and `doc2`
-        >>> await glide_json.mget(client, ["doc1", "doc2"], "$.a")
-            [b"[1.0]", b"[2.0]"]  # Returns values at path '$.a' for the JSON documents stored at `doc1` and `doc2`.
-        >>> await glide_json.mget(client, ["doc1"], "$.non_existing_path")
-            [None]  # Returns an empty array since the path '$.non_existing_path' does not exist in the JSON document stored at `doc1`.
-    """
-    args = ["JSON.MGET"] + keys + [path]
-    return cast(TJsonResponse[Optional[bytes]], await client.custom_command(args))
-
-
 async def arrappend(
     client: TGlideClient,
     key: TEncodable,
@@ -324,7 +277,7 @@ async def arrindex(
             Defaults to the full array if not provided. See `JsonArrIndexOptions`.
 
     Returns:
-        Optional[Union[int, List[int]]]:
+        Optional[TJsonResponse[int]]:
             For JSONPath (`path` starts with `$`):
                 Returns an array of integers for every possible path, indicating of the first occurrence of `value` within the array,
                 or None for JSON values matching the path that are not an array.
@@ -336,6 +289,7 @@ async def arrindex(
                 If multiple paths match, the index of the value from the first matching array is returned.
                 If the JSON value at the `path` is not an array or if `path` does not exist, an error is raised.
             If `key` does not exist, an error is raised.
+        For more information about the returned type, see `TJsonResponse`.
 
     Examples:
         >>> from glide import glide_json
@@ -398,6 +352,7 @@ async def arrinsert(
                 If `path` doesn't exist or the value at `path` is not an array, an error is raised.
             If the index is out of bounds, an error is raised.
             If `key` doesn't exist, an error is raised.
+        For more information about the returned type, see `TJsonResponse`.
 
     Examples:
         >>> from glide import glide_json
@@ -443,6 +398,7 @@ async def arrlen(
                 If multiple paths match, the length of the first array match is returned.
                 If the JSON value at `path` is not a array or if `path` doesn't exist, an error is raised.
             If `key` doesn't exist, None is returned.
+        For more information about the returned type, see `TJsonResponse`.
 
     Examples:
         >>> from glide import glide_json
@@ -500,6 +456,7 @@ async def arrpop(
                 If multiple paths match, the value from the first matching array that is not empty is returned.
                 If the JSON value at `options.path` is not a array or if `options.path` doesn't exist, an error is raised.
             If `key` doesn't exist, an error is raised.
+        For more information about the returned type, see `TJsonResponse`.
 
     Examples:
         >>> from glide import glide_json
@@ -567,6 +524,7 @@ async def arrtrim(
                 If multiple paths match, the length of the first trimmed array match is returned.
                 If `path` doesn't exist, or the value at `path` is not an array, an error is raised.
             If `key` doesn't exist, an error is raised.
+        For more information about the returned type, see `TJsonResponse`.
 
     Examples:
         >>> from glide import glide_json
@@ -673,6 +631,7 @@ async def debug_fields(
                 If `path` doesn't exist, an error is raised.
             If `path` is not provided, it reports the total number of fields in the entire JSON document.
             If `key` doesn't exist, None is returned.
+        For more information about the returned type, see `TJsonUniversalResponse`.
 
     Examples:
         >>> from glide import glide_json
@@ -723,6 +682,7 @@ async def debug_memory(
                 If `path` doesn't exist, an error is raised.
             If `path` is not provided, it reports the total memory usage in bytes in the entire JSON document.
             If `key` doesn't exist, None is returned.
+        For more information about the returned type, see `TJsonUniversalResponse`.
 
     Examples:
         >>> from glide import glide_json
@@ -816,6 +776,53 @@ async def forget(
         Optional[int],
         await client.custom_command(["JSON.FORGET", key] + ([path] if path else [])),
     )
+
+
+async def mget(
+    client: TGlideClient,
+    keys: List[TEncodable],
+    path: TEncodable,
+) -> List[Optional[bytes]]:
+    """
+    Retrieves the JSON values at the specified `path` stored at multiple `keys`.
+
+    Note:
+        In cluster mode, if keys in `keys` map to different hash slots, the command
+        will be split across these slots and executed separately for each. This means the command
+        is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+        call will return the first encountered error, even though some requests may have succeeded
+        while others did not. If this behavior impacts your application logic, consider splitting
+        the request into sub-requests per slot to ensure atomicity.
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+        keys (List[TEncodable]): A list of keys for the JSON documents.
+        path (TEncodable): The path within the JSON documents.
+
+    Returns:
+        List[Optional[bytes]]:
+            For JSONPath (`path` starts with `$`):
+                Returns a list of byte representations of the values found at the given path for each key.
+                If `path` does not exist within the key, the entry will be an empty array.
+            For legacy path (`path` doesn't starts with `$`):
+                Returns a list of byte representations of the values found at the given path for each key.
+                If `path` does not exist within the key, the entry will be None.
+            If a key doesn't exist, the corresponding list element will be None.
+
+
+    Examples:
+        >>> from glide import glide_json
+        >>> import json
+        >>> json_strs = await glide_json.mget(client, ["doc1", "doc2"], "$")
+        >>> [json.loads(js) for js in json_strs]  # Parse JSON strings to Python data
+            [[{"a": 1.0, "b": 2}], [{"a": 2.0, "b": {"a": 3.0, "b" : 4.0}}]]  # JSON objects retrieved from keys `doc1` and `doc2`
+        >>> await glide_json.mget(client, ["doc1", "doc2"], "$.a")
+            [b"[1.0]", b"[2.0]"]  # Returns values at path '$.a' for the JSON documents stored at `doc1` and `doc2`.
+        >>> await glide_json.mget(client, ["doc1"], "$.non_existing_path")
+            [None]  # Returns an empty array since the path '$.non_existing_path' does not exist in the JSON document stored at `doc1`.
+    """
+    args = ["JSON.MGET"] + keys + [path]
+    return cast(TJsonResponse[Optional[bytes]], await client.custom_command(args))
 
 
 async def numincrby(
@@ -926,6 +933,7 @@ async def objlen(
                 If multiple paths match, the length of the first object match is returned.
                 If the JSON value at `path` is not an object or if `path` doesn't exist, an error is raised.
             If `key` doesn't exist, None is returned.
+        For more information about the returned type, see `TJsonResponse`.
 
 
     Examples:
@@ -980,6 +988,7 @@ async def objkeys(
                 If a value matching the path is not an object, an error is raised.
                 If `path` doesn't exist, None is returned.
             If `key` doesn't exist, None is returned.
+        For more information about the returned type, see `TJsonUniversalResponse`.
 
     Examples:
         >>> from glide import glide_json
@@ -1036,6 +1045,7 @@ async def resp(
                 If multiple paths match, the value of the first JSON value match is returned.
                 If `path` doesn't exist, an error is raised.
             If `key` doesn't exist, an None is returned.
+        For more information about the returned type, see `TJsonUniversalResponse`.
 
     Examples:
         >>> from glide import glide_json
@@ -1222,6 +1232,7 @@ async def type(
                 If multiple paths match, the type of the first JSON value match is returned.
                 If `path` doesn't exist, None will be returned.
             If `key` doesn't exist, None is returned.
+        For more information about the returned type, see `TJsonUniversalResponse`.
 
     Examples:
         >>> from glide import glide_json
