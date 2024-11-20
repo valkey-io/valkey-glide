@@ -2398,4 +2398,37 @@ describe("GlideClusterClient", () => {
             },
         );
     });
+    describe("GlideClusterClient - Get Statistics", () => {
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            "should return valid statistics using protocol %p",
+            async (protocol) => {
+                let glideClientForTesting;
+    
+                try {
+                    // Create a GlideClusterClient instance for testing
+                    glideClientForTesting = await GlideClusterClient.createClient(
+                        getClientConfigurationOption(
+                            cluster.getAddresses(),
+                            protocol,
+                            {
+                                requestTimeout: 2000,
+                            },
+                        ),
+                    );
+    
+                    // Fetch statistics using get_statistics method
+                    const stats = await glideClientForTesting.getStatistics();
+    
+                    // Assertions to check if stats object has correct structure
+                    expect(typeof stats).toBe("object");
+                    expect(stats).toHaveProperty("total_connections");
+                    expect(stats).toHaveProperty("total_clients");
+                    expect(Object.keys(stats)).toHaveLength(2);
+                } finally {
+                    // Ensure the client is properly closed
+                    await glideClientForTesting?.close();
+                }
+            },
+        );
+    });
 });
