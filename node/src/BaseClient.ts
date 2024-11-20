@@ -7735,7 +7735,7 @@ export class BaseClient {
      *
      * @return Return an object that contains the statistics collected internally by GLIDE core
      */
-    public async getStatistics(): Promise<object> {
+    public getStatistics(): object {
         return getStatistics();
     }
 }
