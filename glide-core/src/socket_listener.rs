@@ -529,7 +529,7 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
                             update_connection_password_command
                                 .password
                                 .map(|chars| chars.to_string()),
-                            update_connection_password_command.re_auth,
+                            update_connection_password_command.immediate_auth,
                         )
                         .await
                         .map_err(|err| err.into()),

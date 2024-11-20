@@ -12,6 +12,7 @@ use redis::cluster_async::ClusterConnection;
 use redis::cluster_routing::{
     MultipleNodeRoutingInfo, ResponsePolicy, Routable, RoutingInfo, SingleNodeRoutingInfo,
 };
+use redis::cluster_slotmap::ReadFromReplicaStrategy;
 use redis::{Cmd, ErrorKind, ObjectType, PushInfo, RedisError, RedisResult, ScanStateRC, Value};
 pub use standalone_client::StandaloneClient;
 use std::io;
@@ -479,28 +480,63 @@ impl Client {
 
     /// Update the password used to authenticate with the servers.
     /// If None is passed, the password will be removed.
-    /// If `re_auth` is true, the new password will be used to re-authenticate with all of the nodes.
+    /// If `immediate_auth` is true, the password will be used to authenticate with the servers immediately using the `AUTH` command.
+    /// The default behavior is to update the password without authenticating immediately.
+    /// If the password is empty or None, and `immediate_auth` is true, the password will be updated and an error will be returned.
     pub async fn update_connection_password(
         &mut self,
         password: Option<String>,
-        re_auth: bool,
+        immediate_auth: bool,
     ) -> RedisResult<Value> {
-        if re_auth {
-            let routing = RoutingInfo::MultiNode((
-                MultipleNodeRoutingInfo::AllNodes,
-                Some(ResponsePolicy::AllSucceeded),
-            ));
-            let mut cmd = redis::cmd("AUTH");
-            cmd.arg(&password);
-            self.send_command(&cmd, Some(routing)).await?;
-        }
-
-        match self.internal_client {
-            ClientWrapper::Standalone(ref mut client) => {
-                client.update_connection_password(password).await
+        let timeout = self.request_timeout;
+        // The password update operation is wrapped in a timeout to prevent it from blocking indefinitely.
+        // If the operation times out, an error is returned.
+        // Since the password update operation is not a command that go through the regular command pipeline,
+        // it is not have the regular timeout handling, as such we need to handle it separately.
+        match tokio::time::timeout(timeout, async {
+            match self.internal_client {
+                ClientWrapper::Standalone(ref mut client) => {
+                    client.update_connection_password(password.clone()).await
+                }
+                ClientWrapper::Cluster { ref mut client } => {
+                    client.update_connection_password(password.clone()).await
+                }
             }
-            ClientWrapper::Cluster { ref mut client } => {
-                client.update_connection_password(password).await
+        })
+        .await
+        {
+            Ok(result) => {
+                if immediate_auth {
+                    self.send_immediate_auth(password).await
+                } else {
+                    result
+                }
+            }
+            Err(_elapsed) => Err(RedisError::from((
+                ErrorKind::IoError,
+                "Password update operation timed out, please check the connection",
+            ))),
+        }
+    }
+
+    async fn send_immediate_auth(&mut self, password: Option<String>) -> RedisResult<Value> {
+        match &password {
+            Some(pw) if pw.is_empty() => Err(RedisError::from((
+                ErrorKind::UserOperationError,
+                "Empty password provided for authentication",
+            ))),
+            None => Err(RedisError::from((
+                ErrorKind::UserOperationError,
+                "No password provided for authentication",
+            ))),
+            Some(password) => {
+                let routing = RoutingInfo::MultiNode((
+                    MultipleNodeRoutingInfo::AllNodes,
+                    Some(ResponsePolicy::AllSucceeded),
+                ));
+                let mut cmd = redis::cmd("AUTH");
+                cmd.arg(password);
+                self.send_command(&cmd, Some(routing)).await
             }
         }
     }
@@ -542,8 +578,6 @@ async fn create_cluster_client(
         .into_iter()
         .map(|address| get_connection_info(&address, tls_mode, redis_connection_info.clone()))
         .collect();
-    let read_from = request.read_from.unwrap_or_default();
-    let read_from_replicas = !matches!(read_from, ReadFrom::Primary); // TODO - implement different read from replica strategies.
     let periodic_topology_checks = match request.periodic_checks {
         Some(PeriodicCheck::Disabled) => None,
         Some(PeriodicCheck::Enabled) => Some(DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL),
@@ -553,9 +587,12 @@ async fn create_cluster_client(
     let mut builder = redis::cluster::ClusterClientBuilder::new(initial_nodes)
         .connection_timeout(INTERNAL_CONNECTION_TIMEOUT)
         .retries(DEFAULT_RETRIES);
-    if read_from_replicas {
-        builder = builder.read_from_replicas();
-    }
+    let read_from_strategy = request.read_from.unwrap_or_default();
+    builder = builder.read_from(match read_from_strategy {
+        ReadFrom::AZAffinity(az) => ReadFromReplicaStrategy::AZAffinity(az),
+        ReadFrom::PreferReplica => ReadFromReplicaStrategy::RoundRobin,
+        ReadFrom::Primary => ReadFromReplicaStrategy::AlwaysFromPrimary,
+    });
     if let Some(interval_duration) = periodic_topology_checks {
         builder = builder.periodic_topology_checks(interval_duration);
     }
@@ -649,12 +686,14 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
     let database_id = format!("\ndatabase ID: {}", request.database_id);
     let rfr_strategy = request
         .read_from
+        .clone()
         .map(|rfr| {
             format!(
                 "\nRead from Replica mode: {}",
                 match rfr {
                     ReadFrom::Primary => "Only primary",
                     ReadFrom::PreferReplica => "Prefer replica",
+                    ReadFrom::AZAffinity(_) => "Prefer replica in user's availability zone",
                 }
             )
         })

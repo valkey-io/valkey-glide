@@ -26,7 +26,7 @@ mod connections_container;
 mod connections_logic;
 /// Exposed only for testing.
 pub mod testing {
-    pub use super::connections_container::ConnectionWithIp;
+    pub use super::connections_container::ConnectionDetails;
     pub use super::connections_logic::*;
 }
 use crate::{
@@ -1153,9 +1153,15 @@ where
             None
         };
 
+        let discover_az = matches!(
+            cluster_params.read_from_replicas,
+            crate::cluster_slotmap::ReadFromReplicaStrategy::AZAffinity(_)
+        );
+
         let glide_connection_options = GlideConnectionOptions {
             push_sender,
             disconnect_notifier,
+            discover_az,
         };
 
         let connections = Self::create_initial_connections(
@@ -1171,7 +1177,7 @@ where
             conn_lock: StdRwLock::new(ConnectionsContainer::new(
                 Default::default(),
                 connections,
-                cluster_params.read_from_replicas,
+                cluster_params.read_from_replicas.clone(),
                 0,
             )),
             cluster_params: StdRwLock::new(cluster_params.clone()),
@@ -1510,12 +1516,24 @@ where
             convert_result(receiver.await)
         };
 
+        // Sanity
+        if receivers.is_empty() {
+            return Err(RedisError::from((
+                ErrorKind::ClientError,
+                "Client internal error",
+                "Failed to aggregate results for multi-slot command. Maybe a malformed command?"
+                    .to_string(),
+            )));
+        }
+
         // TODO - once Value::Error will be merged, these will need to be updated to handle this new value.
         match response_policy {
             Some(ResponsePolicy::AllSucceeded) => {
                 future::try_join_all(receivers.into_iter().map(get_receiver))
                     .await
-                    .map(|mut results| results.pop().unwrap()) // unwrap is safe, since at least one function succeeded
+                    .map(|mut results| {
+                        results.pop().unwrap() // unwrap is safe, since at least one function succeeded
+                    })
             }
             Some(ResponsePolicy::OneSucceeded) => future::select_ok(
                 receivers
@@ -1957,7 +1975,7 @@ where
         // Reset the current slot map and connection vector with the new ones
         let mut write_guard = inner.conn_lock.write().expect(MUTEX_WRITE_ERR);
         let read_from_replicas = inner
-            .get_cluster_param(|params| params.read_from_replicas)
+            .get_cluster_param(|params| params.read_from_replicas.clone())
             .expect(MUTEX_READ_ERR);
         *write_guard = ConnectionsContainer::new(
             new_slots,
@@ -2777,7 +2795,7 @@ where
         .expect(MUTEX_READ_ERR);
 
     let read_from_replicas = inner
-        .get_cluster_param(|params| params.read_from_replicas)
+        .get_cluster_param(|params| params.read_from_replicas.clone())
         .expect(MUTEX_READ_ERR);
     (
         calculate_topology(
