@@ -125,7 +125,7 @@ public class ConnectionManager {
 
         if (configuration.getReadFrom() == ReadFrom.AZ_AFFINITY
                 && configuration.getClientAZ() == null) {
-            throw new ConfigurationError("client_az must be set when read_from is set to AZ_AFFINITY");
+            throw new ConfigurationError("`clientAZ` must be set when read_from is set to `AZ_AFFINITY`");
         }
 
         if (configuration.getReadFrom() == ReadFrom.AZ_AFFINITY) {
