@@ -32,7 +32,7 @@ from glide.async_commands.core import (
     InsertPosition,
     UpdateOptions,
 )
-from glide.async_commands.server_modules import ft, json
+from glide.async_commands.server_modules import ft, glide_json
 from glide.async_commands.server_modules.ft_options.ft_aggregate_options import (
     FtAggregateApply,
     FtAggregateClause,
@@ -67,7 +67,7 @@ from glide.async_commands.server_modules.ft_options.ft_search_options import (
     FtSearchOptions,
     ReturnField,
 )
-from glide.async_commands.server_modules.json import (
+from glide.async_commands.server_modules.glide_json import (
     JsonArrIndexOptions,
     JsonArrPopOptions,
     JsonGetOptions,
@@ -264,7 +264,7 @@ __all__ = [
     # PubSub
     "PubSubMsg",
     # Json
-    "json",
+    "glide_json",
     "JsonGetOptions",
     "JsonArrIndexOptions",
     "JsonArrPopOptions",
