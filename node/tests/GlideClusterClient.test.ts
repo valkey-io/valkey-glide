@@ -2095,7 +2095,6 @@ describe("GlideClusterClient", () => {
                     const n_replicas = await getNumberOfReplicas(
                         client_for_config_set,
                     );
-                    console.log(n_replicas);
 
                     if (n_replicas === 0) {
                         throw new Error(
@@ -2390,7 +2389,6 @@ describe("GlideClusterClient", () => {
                         );
                     }
 
-                    console.log(matchingEntriesCount);
                     // Validate that only one replica handled the GET calls
                     expect(matchingEntriesCount).toBe(4);
                 } finally {
