@@ -574,6 +574,18 @@ export interface BaseClientConfiguration {
      * used.
      */
     inflightRequestsLimit?: number;
+    /**
+     * Availability Zone of the client.
+     * If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within the specified AZ if exits.
+     *
+     * @example
+     * ```typescript
+     * // Example configuration for setting client availability zone and read strategy
+     * configuration.clientAz = 'us-east-1a'; // Sets the client's availability zone
+     * configuration.readFrom = 'AZAffinity'; // Directs read operations to nodes within the same AZ
+     * ```
+     */
+    clientAz?: string;
 }
 
 /**
@@ -719,6 +731,7 @@ export class BaseClient {
     private readonly pubsubFutures: [PromiseFunction, ErrorFunction][] = [];
     private pendingPushNotification: response.Response[] = [];
     private readonly inflightRequestsLimit: number;
+    private readonly clientAz: string | undefined;
     private config: BaseClientConfiguration | undefined;
 
     protected configurePubsub(
@@ -7578,6 +7591,7 @@ export class BaseClient {
             readFrom,
             authenticationInfo,
             inflightRequestsLimit: options.inflightRequestsLimit,
+            clientAz: options.clientAz ?? null,
         };
     }
 
