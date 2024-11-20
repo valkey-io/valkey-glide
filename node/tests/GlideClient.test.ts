@@ -71,7 +71,7 @@ describe("GlideClient", () => {
                   parseEndpoints(standaloneAddresses),
                   getServerVersion,
               )
-            : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);            
+            : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
     }, 20000);
 
     afterEach(async () => {
@@ -82,10 +82,10 @@ describe("GlideClient", () => {
     afterAll(async () => {
         if (testsFailed === 0) {
             await cluster.close();
-            await azCluster.close()
+            await azCluster.close();
         } else {
             await cluster.close(true);
-            await azCluster.close()
+            await azCluster.close();
         }
     }, TIMEOUT);
 
@@ -1546,7 +1546,7 @@ describe("GlideClient", () => {
                         "CONFIG",
                         "RESETSTAT",
                     ]);
-                    
+
                     await client_for_config_set.customCommand([
                         "CONFIG",
                         "SET",

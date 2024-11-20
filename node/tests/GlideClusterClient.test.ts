@@ -2359,29 +2359,32 @@ describe("GlideClusterClient", () => {
                             { route: "allNodes" },
                         );
 
+                    let matchingEntriesCount = 0;
+
                     if (
                         typeof info_result === "object" &&
                         info_result !== null
                     ) {
                         const values = Object.values(info_result);
-                        const matching_entries_count = values.filter(
-                            (value) => {
-                                if (
-                                    !value ||
-                                    typeof value !== "object" ||
-                                    !("value" in value)
-                                )
-                                    return false;
-                                return value.value.includes(get_cmdstat);
-                            },
-                        ).length;
+                        matchingEntriesCount = values.filter((value) => {
+                            if (
+                                !value ||
+                                typeof value !== "object" ||
+                                !("value" in value)
+                            ) {
+                                return false;
+                            }
 
-                        expect(matching_entries_count).toBe(1);
+                            return value.value.includes(get_cmdstat);
+                        }).length;
                     } else {
                         throw new Error(
                             "Unexpected response format from INFO command",
                         );
                     }
+
+                    // Expect only one replica to have handled the GET commands
+                    expect(matchingEntriesCount).toBe(1);
                 } finally {
                     await client_for_testing_az?.close();
                 }
