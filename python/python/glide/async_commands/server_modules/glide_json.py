@@ -136,7 +136,7 @@ async def set(
 
     Examples:
         >>> from glide import glide_json
-        >>> import json as json
+        >>> import json
         >>> value = {'a': 1.0, 'b': 2}
         >>> json_str = json.dumps(value)
         >>> await glide_json.set(client, "doc", "$", json_str)
@@ -182,7 +182,7 @@ async def get(
 
     Examples:
         >>> from glide import glide_json, JsonGetOptions
-        >>> import  as json
+        >>> import json
         >>> json_str = await glide_json.get(client, "doc", "$")
         >>> json.loads(str(json_str)) # Parse JSON string to Python data
             [{"a": 1.0, "b" :2}]  # JSON object retrieved from the key `doc` using json.loads()
@@ -237,14 +237,14 @@ async def mget(
 
 
     Examples:
-        >>> from glide import json as glideJson
+        >>> from glide import glide_json
         >>> import json
-        >>> json_strs = await glideJson.mget(client, ["doc1", "doc2"], "$")
+        >>> json_strs = await glide_json.mget(client, ["doc1", "doc2"], "$")
         >>> [json.loads(js) for js in json_strs]  # Parse JSON strings to Python data
             [[{"a": 1.0, "b": 2}], [{"a": 2.0, "b": {"a": 3.0, "b" : 4.0}}]]  # JSON objects retrieved from keys `doc1` and `doc2`
-        >>> await glideJson.mget(client, ["doc1", "doc2"], "$.a")
+        >>> await glide_json.mget(client, ["doc1", "doc2"], "$.a")
             [b"[1.0]", b"[2.0]"]  # Returns values at path '$.a' for the JSON documents stored at `doc1` and `doc2`.
-        >>> await glideJson.mget(client, ["doc1"], "$.non_existing_path")
+        >>> await glide_json.mget(client, ["doc1"], "$.non_existing_path")
             [None]  # Returns an empty array since the path '$.non_existing_path' does not exist in the JSON document stored at `doc1`.
     """
     args = ["JSON.MGET"] + keys + [path]
@@ -1088,7 +1088,7 @@ async def strappend(
 
     Examples:
         >>> from glide import glide_json
-        >>> import json as json
+        >>> import json
         >>> await glide_json.set(client, "doc", "$", json.dumps({"a":"foo", "nested": {"a": "hello"}, "nested2": {"a": 31}}))
             'OK'
         >>> await glide_json.strappend(client, "doc", json.dumps("baz"), "$..a")
@@ -1182,7 +1182,7 @@ async def toggle(
 
     Examples:
         >>> from glide import glide_json
-        >>> import json as json
+        >>> import json
         >>> await glide_json.set(client, "doc", "$", json.dumps({"bool": True, "nested": {"bool": False, "nested": {"bool": 10}}}))
             'OK'
         >>> await glide_json.toggle(client, "doc", "$.bool")
