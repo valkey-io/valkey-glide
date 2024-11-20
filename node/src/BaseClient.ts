@@ -7,6 +7,7 @@ import {
     DEFAULT_TIMEOUT_IN_MILLISECONDS,
     Script,
     StartSocketConnection,
+    getStatistics,
     valueFromSplitPointer,
 } from "glide-rs";
 import * as net from "net";
@@ -7742,5 +7743,13 @@ export class BaseClient {
         }
 
         return response;
+    }
+    /**
+     * Return a statistics
+     *
+     * @return Return an object that contains the statistics collected internally by GLIDE core
+     */
+    public async getStatistics(): Promise<object> {
+        return getStatistics();
     }
 }
