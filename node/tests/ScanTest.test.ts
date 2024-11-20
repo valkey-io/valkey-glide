@@ -18,7 +18,6 @@ import {
     flushAndCloseClient,
     getClientConfigurationOption,
     getServerVersion,
-    parseCommandLineArgs,
     parseEndpoints,
 } from "./TestUtilities";
 
@@ -30,7 +29,7 @@ describe("Scan GlideClusterClient", () => {
     let cluster: ValkeyCluster;
     let client: GlideClusterClient;
     beforeAll(async () => {
-        const clusterAddresses = parseCommandLineArgs()["cluster-endpoints"];
+        const clusterAddresses = global.CLUSTER_ENDPOINTS;
         // Connect to cluster or create a new one based on the parsed addresses
         cluster = clusterAddresses
             ? await ValkeyCluster.initFromExistingCluster(
@@ -40,7 +39,7 @@ describe("Scan GlideClusterClient", () => {
               )
             : // setting replicaCount to 1 to facilitate tests routed to replicas
               await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
-    }, 20000);
+    }, 40000);
 
     afterEach(async () => {
         await flushAndCloseClient(true, cluster.getAddresses(), client);
@@ -49,6 +48,8 @@ describe("Scan GlideClusterClient", () => {
     afterAll(async () => {
         if (testsFailed === 0) {
             await cluster.close();
+        } else {
+            await cluster.close(true);
         }
     });
 
@@ -383,8 +384,7 @@ describe("Scan GlideClient", () => {
     let cluster: ValkeyCluster;
     let client: GlideClient;
     beforeAll(async () => {
-        const standaloneAddresses =
-            parseCommandLineArgs()["standalone-endpoints"];
+        const standaloneAddresses = global.STAND_ALONE_ENDPOINT;
         cluster = standaloneAddresses
             ? await ValkeyCluster.initFromExistingCluster(
                   false,
@@ -401,6 +401,8 @@ describe("Scan GlideClient", () => {
     afterAll(async () => {
         if (testsFailed === 0) {
             await cluster.close();
+        } else {
+            await cluster.close(true);
         }
     });
 

@@ -746,8 +746,7 @@ impl SentinelClient {
     }
 }
 
-/// To enable async support you need to chose one of the supported runtimes and active its
-/// corresponding feature: `tokio-comp` or `async-std-comp`
+/// To enable async support you need to enable the feature: `tokio-comp`
 #[cfg(feature = "aio")]
 #[cfg_attr(docsrs, doc(cfg(feature = "aio")))]
 impl SentinelClient {
@@ -768,7 +767,7 @@ impl SentinelClient {
 
     /// Returns an async connection from the client, using the same logic from
     /// `SentinelClient::get_connection`.
-    #[cfg(any(feature = "tokio-comp", feature = "async-std-comp"))]
+    #[cfg(feature = "tokio-comp")]
     pub async fn get_async_connection(&mut self) -> RedisResult<AsyncConnection> {
         let client = self.async_get_client().await?;
         client

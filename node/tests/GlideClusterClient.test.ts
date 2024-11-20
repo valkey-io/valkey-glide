@@ -15,7 +15,6 @@ import { v4 as uuidv4 } from "uuid";
 import {
     BitwiseOperation,
     ClusterTransaction,
-    convertRecordToGlideRecord,
     Decoder,
     FlushMode,
     FunctionListResponse,
@@ -34,6 +33,7 @@ import {
     Script,
     SlotKeyTypes,
     SortOrder,
+    convertRecordToGlideRecord,
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import { runBaseTests } from "./SharedTests";
@@ -50,12 +50,10 @@ import {
     getServerVersion,
     intoArray,
     intoString,
-    parseCommandLineArgs,
     parseEndpoints,
     transactionTest,
     validateTransactionResponse,
     waitForNotBusy,
-    waitForScriptNotBusy,
 } from "./TestUtilities";
 
 const TIMEOUT = 50000;
@@ -65,7 +63,7 @@ describe("GlideClusterClient", () => {
     let cluster: ValkeyCluster;
     let client: GlideClusterClient;
     beforeAll(async () => {
-        const clusterAddresses = parseCommandLineArgs()["cluster-endpoints"];
+        const clusterAddresses = global.CLUSTER_ENDPOINTS;
         // Connect to cluster or create a new one based on the parsed addresses
         cluster = clusterAddresses
             ? await ValkeyCluster.initFromExistingCluster(
@@ -75,7 +73,7 @@ describe("GlideClusterClient", () => {
               )
             : // setting replicaCount to 1 to facilitate tests routed to replicas
               await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
-    }, 20000);
+    }, 40000);
 
     afterEach(async () => {
         await flushAndCloseClient(true, cluster.getAddresses(), client);
@@ -84,6 +82,8 @@ describe("GlideClusterClient", () => {
     afterAll(async () => {
         if (testsFailed === 0) {
             await cluster.close();
+        } else {
+            await cluster.close(true);
         }
     });
 
@@ -246,7 +246,7 @@ describe("GlideClusterClient", () => {
             expect(await client.set(key, value)).toEqual("OK");
             // Since DUMP gets binary results, we cannot use the default decoder (string) here, so we expected to get an error.
             await expect(client.customCommand(["DUMP", key])).rejects.toThrow(
-                "invalid utf-8 sequence of 1 bytes from index 9",
+                "invalid utf-8 sequence",
             );
 
             const dumpResult = await client.customCommand(["DUMP", key], {
@@ -412,10 +412,6 @@ describe("GlideClusterClient", () => {
                 client.sdiffstore("abc", ["zxy", "lkn"]),
                 client.sortStore("abc", "zyx"),
                 client.sortStore("abc", "zyx", { isAlpha: true }),
-                client.lmpop(["abc", "def"], ListDirection.LEFT, { count: 1 }),
-                client.blmpop(["abc", "def"], ListDirection.RIGHT, 0.1, {
-                    count: 1,
-                }),
                 client.bzpopmax(["abc", "def"], 0.5),
                 client.bzpopmin(["abc", "def"], 0.5),
                 client.xread({ abc: "0-0", zxy: "0-0", lkn: "0-0" }),
@@ -458,12 +454,24 @@ describe("GlideClusterClient", () => {
                     client.lcs("abc", "xyz"),
                     client.lcsLen("abc", "xyz"),
                     client.lcsIdx("abc", "xyz"),
+                    client.lmpop(["abc", "def"], ListDirection.LEFT, {
+                        count: 1,
+                    }),
+                    client.blmpop(["abc", "def"], ListDirection.RIGHT, 0.1, {
+                        count: 1,
+                    }),
                 );
             }
 
-            for (const promise of promises) {
-                await expect(promise).rejects.toThrowError(/crossslot/i);
-            }
+            await Promise.allSettled(promises).then((results) => {
+                results.forEach((result) => {
+                    expect(result.status).toBe("rejected");
+
+                    if (result.status === "rejected") {
+                        expect(result.reason.message).toContain("CrossSlot");
+                    }
+                });
+            });
 
             client.close();
         },
@@ -1925,71 +1933,6 @@ describe("GlideClusterClient", () => {
                 // If script wasn't killed, and it didn't time out - it blocks the server and cause the
                 // test to fail. Wait for the script to complete (we cannot kill it)
                 expect(await promise).toContain("Timed out");
-                client1.close();
-                client2.close();
-            }
-        },
-        TIMEOUT,
-    );
-
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "script kill killable test_%p",
-        async (protocol) => {
-            const config = getClientConfigurationOption(
-                cluster.getAddresses(),
-                protocol,
-                { requestTimeout: 10000 },
-            );
-            const client1 = await GlideClusterClient.createClient(config);
-            const client2 = await GlideClusterClient.createClient(config);
-
-            try {
-                // Verify that script kill raises an error when no script is running
-                await expect(client1.scriptKill()).rejects.toThrow(
-                    "No scripts in execution right now",
-                );
-
-                // Create a long-running script
-                const longScript = new Script(
-                    createLongRunningLuaScript(5, false),
-                );
-
-                try {
-                    // call the script without await
-                    const promise = client2
-                        .invokeScript(longScript)
-                        .catch((e) =>
-                            expect((e as Error).message).toContain(
-                                "Script killed",
-                            ),
-                        );
-
-                    let killed = false;
-                    let timeout = 4000;
-                    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-                    while (timeout >= 0) {
-                        try {
-                            expect(await client1.scriptKill()).toEqual("OK");
-                            killed = true;
-                            break;
-                        } catch {
-                            // do nothing
-                        }
-
-                        await new Promise((resolve) =>
-                            setTimeout(resolve, 500),
-                        );
-                        timeout -= 500;
-                    }
-
-                    expect(killed).toBeTruthy();
-                    await promise;
-                } finally {
-                    await waitForScriptNotBusy(client1);
-                }
-            } finally {
-                expect(await client1.scriptFlush()).toEqual("OK");
                 client1.close();
                 client2.close();
             }

@@ -2,7 +2,10 @@ name: lint-ts
 
 on:
     push:
-        branches: ["main"]
+        branches:
+            - main
+            - release-*
+            - v*
         paths:
             - benchmarks/node/**
             - node/**

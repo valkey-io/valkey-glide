@@ -8,7 +8,7 @@ repository = "https://github.com/redis-rs/redis-rs"
 documentation = "https://docs.rs/redis"
 license = "BSD-3-Clause"
 edition = "2021"
-rust-version = "1.65"
+rust-version = "1.67"
 readme = "../README.md"
 
 [package.metadata.docs.rs]
@@ -47,13 +47,11 @@ pin-project-lite = { version = "0.2", optional = true }
 tokio-util = { version = "0.7", optional = true }
 tokio = { version = "1", features = ["rt", "net", "time", "sync"] }
 socket2 = { version = "0.5", features = ["all"], optional = true }
-fast-math = { version = "0.1.1", optional = true }
 dispose = { version = "0.5.0", optional = true }
 
 # Only needed for the connection manager
 arc-swap = { version = "1.7.1" }
 futures = { version = "0.3.3", optional = true }
-tokio-retry = { version = "0.3.0", optional = true }
 
 # Only needed for the r2d2 feature
 r2d2 = { version = "0.8.8", optional = true }
@@ -61,31 +59,24 @@ r2d2 = { version = "0.8.8", optional = true }
 # Only needed for cluster
 crc16 = { version = "0.4", optional = true }
 rand = { version = "0.8", optional = true }
-derivative = { version = "2.2.0", optional = true }
 
 # Only needed for async cluster
 dashmap = { version = "6.0", optional = true }
 
-# Only needed for async_std support
-async-std = { version = "1.8.0", optional = true }
 async-trait = { version = "0.1.24", optional = true }
-# To avoid conflicts, backoff-std-async.version != backoff-tokio.version so we could run tests with --all-features
-backoff-std-async = { package = "backoff", version = "0.3.0", optional = true, features = ["async-std"] }
 
-# Only needed for tokio support 
-backoff-tokio = { package = "backoff", version = "0.4.0", optional = true, features = ["tokio"] }
+# Only needed for tokio support
+tokio-retry2 = { version = "0.5", features = ["jitter"], optional = true }
 
 # Only needed for native tls
 native-tls = { version = "0.2", optional = true }
 tokio-native-tls = { version = "0.3", optional = true }
-async-native-tls = { version = "0.4", optional = true }
 
 # Only needed for rustls
 rustls = { version = "0.22", optional = true }
 webpki-roots = { version = "0.26", optional = true }
 rustls-native-certs = { version = "0.7", optional = true }
 tokio-rustls = { version = "0.25", optional = true }
-futures-rustls = { version = "0.25", optional = true }
 rustls-pemfile = { version = "2", optional = true }
 rustls-pki-types = { version = "1", optional = true }
 
@@ -102,30 +93,58 @@ num-bigint = "0.4.4"
 ahash = { version = "0.8.11", optional = true }
 
 tracing = "0.1"
-arcstr = "1.1.5"
 
 # Optional uuid support
 uuid = { version = "1.6.1", optional = true }
 
+telemetrylib = { path = "../../telemetry" }
+
+lazy_static = "1"
+
 [features]
-default = ["acl", "streams", "geospatial", "script", "keep-alive"]
+default = [
+    "acl",
+    "streams",
+    "geospatial",
+    "script",
+    "keep-alive",
+    "tokio-comp",
+    "tokio-rustls-comp",
+    "connection-manager",
+    "cluster",
+    "cluster-async",
+]
 acl = []
-aio = ["bytes", "pin-project-lite", "futures-util", "futures-util/alloc", "futures-util/sink", "tokio/io-util", "tokio-util", "tokio-util/codec", "combine/tokio", "async-trait", "fast-math", "dispose"]
+aio = [
+    "bytes",
+    "pin-project-lite",
+    "futures-util",
+    "futures-util/alloc",
+    "futures-util/sink",
+    "tokio/io-util",
+    "tokio-util",
+    "tokio-util/codec",
+    "combine/tokio",
+    "async-trait",
+    "dispose",
+]
 geospatial = []
 json = ["serde", "serde/derive", "serde_json"]
-cluster = ["crc16", "rand", "derivative"]
+cluster = ["crc16", "rand"]
 script = ["sha1_smol"]
 tls-native-tls = ["native-tls"]
-tls-rustls = ["rustls", "rustls-native-certs", "rustls-pemfile", "rustls-pki-types"]
+tls-rustls = [
+    "rustls",
+    "rustls-native-certs",
+    "rustls-pemfile",
+    "rustls-pki-types",
+]
 tls-rustls-insecure = ["tls-rustls"]
 tls-rustls-webpki-roots = ["tls-rustls", "webpki-roots"]
-async-std-comp = ["aio", "async-std", "backoff-std-async"]
-async-std-native-tls-comp = ["async-std-comp", "async-native-tls", "tls-native-tls"]
-async-std-rustls-comp = ["async-std-comp", "futures-rustls", "tls-rustls"]
-tokio-comp = ["aio", "tokio/net", "backoff-tokio"]
+tokio-comp = ["aio", "tokio/net", "tokio-retry2"]
 tokio-native-tls-comp = ["tokio-comp", "tls-native-tls", "tokio-native-tls"]
 tokio-rustls-comp = ["tokio-comp", "tls-rustls", "tokio-rustls"]
-connection-manager = ["futures", "aio", "tokio-retry"]
+connection-manager = ["futures", "aio", "tokio-retry2"]
 streams = []
 cluster-async = ["cluster", "futures", "futures-util", "dashmap"]
 keep-alive = ["socket2"]
@@ -139,7 +158,6 @@ disable-client-setinfo = []
 
 # Deprecated features
 tls = ["tls-native-tls"] # use "tls-native-tls" instead
-async-std-tls-comp = ["async-std-native-tls-comp"] # use "async-std-native-tls-comp" instead
 
 [dev-dependencies]
 rand = "0.8"
@@ -151,19 +169,22 @@ futures-time = "3"
 criterion = "0.4"
 partial-io = { version = "0.5", features = ["tokio", "quickcheck1"] }
 quickcheck = "1.0.3"
-tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread", "time"] }
+tokio = { version = "1", features = [
+    "rt",
+    "macros",
+    "rt-multi-thread",
+    "time",
+] }
 tempfile = "=3.6.0"
 once_cell = "1"
 anyhow = "1"
 sscanf = "0.4.1"
+serial_test = "2"
+versions = "6.3"
 
 [[test]]
 name = "test_async"
 required-features = ["tokio-comp"]
-
-[[test]]
-name = "test_async_async_std"
-required-features = ["async-std-comp"]
 
 [[test]]
 name = "parser"
@@ -178,7 +199,7 @@ required-features = ["json", "serde/derive"]
 
 [[test]]
 name = "test_cluster_async"
-required-features = ["cluster-async"]
+required-features = ["cluster-async", "tokio-comp"]
 
 [[test]]
 name = "test_async_cluster_connections_logic"
@@ -225,3 +246,6 @@ required-features = ["connection-manager"]
 [[example]]
 name = "streams"
 required-features = ["streams"]
+
+[package.metadata.cargo-machete]
+ignored = ["strum"]

@@ -2,6 +2,92 @@
 #![cfg(feature = "cluster-async")]
 mod support;
 
+use std::cell::Cell;
+use tokio::sync::Mutex;
+
+use lazy_static::lazy_static;
+
+lazy_static! {
+    static ref CLUSTER_VERSION: Mutex<Cell<usize>> = Mutex::<Cell<usize>>::default();
+}
+
+/// Check if the current cluster version is less than `min_version`.
+/// At first, the func check for the Valkey version and if none exists, then the Redis version is checked.
+async fn engine_version_less_than(min_version: &str) -> bool {
+    let test_version = crate::get_cluster_version().await;
+    let min_version_usize = crate::version_to_usize(min_version).unwrap();
+    if test_version < min_version_usize {
+        println!(
+            "The engine version is {:?}, which is lower than {:?}",
+            test_version, min_version
+        );
+        return true;
+    }
+    return false;
+}
+
+/// Static function to get the engine version. When version looks like 8.0.0 -> 80000 and 12.0.1 -> 120001.
+async fn get_cluster_version() -> usize {
+    let cluster_version = CLUSTER_VERSION.lock().await;
+    if cluster_version.get() == 0 {
+        let cluster = crate::support::TestClusterContext::new(3, 0);
+
+        let mut connection = cluster.async_connection(None).await;
+
+        let cmd = redis::cmd("INFO");
+        let info = connection
+            .route_command(
+                &cmd,
+                redis::cluster_routing::RoutingInfo::SingleNode(
+                    redis::cluster_routing::SingleNodeRoutingInfo::Random,
+                ),
+            )
+            .await
+            .unwrap();
+
+        let info_result = redis::from_owned_redis_value::<String>(info).unwrap();
+
+        cluster_version.set(
+            parse_version_from_info(info_result.clone())
+                .expect(format!("Invalid version string in INFO : {info_result}").as_str()),
+        );
+    }
+    return cluster_version.get();
+}
+
+fn parse_version_from_info(info: String) -> Option<usize> {
+    // check for valkey_version
+    if let Some(version) = info
+        .lines()
+        .find_map(|line| line.strip_prefix("valkey_version:"))
+    {
+        return version_to_usize(version);
+    }
+
+    // check for redis_version if no valkey_version was found
+    if let Some(version) = info
+        .lines()
+        .find_map(|line| line.strip_prefix("redis_version:"))
+    {
+        return version_to_usize(version);
+    }
+    None
+}
+
+/// Takes a version string (e.g., 8.2.1) and converts it to a usize (e.g., 80201)
+/// version 12.10.0 will became 121000
+fn version_to_usize(version: &str) -> Option<usize> {
+    version
+        .split('.')
+        .enumerate()
+        .map(|(index, part)| {
+            part.parse::<usize>()
+                .ok()
+                .map(|num| num * 10_usize.pow(2 * (2 - index) as u32))
+        })
+        .sum()
+}
+
 #[cfg(test)]
 mod cluster_async {
     use std::{
@@ -35,7 +121,6 @@ mod cluster_async {
     };
 
     use crate::support::*;
-
     use tokio::sync::mpsc;
     fn broken_pipe_error() -> RedisError {
         RedisError::from(std::io::Error::new(
@@ -99,6 +184,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_basic_cmd() {
         let cluster = TestClusterContext::new(3, 0);
 
@@ -120,7 +206,194 @@ mod cluster_async {
         .unwrap();
     }
 
+    #[tokio::test]
+    async fn test_routing_by_slot_to_replica_with_az_affinity_strategy_to_half_replicas() {
+        // Skip test if version is less then Valkey 8.0
+        if crate::engine_version_less_than("8.0").await {
+            return;
+        }
+
+        let replica_num: u16 = 4;
+        let primaries_num: u16 = 3;
+        let replicas_num_in_client_az = replica_num / 2;
+        let cluster =
+            TestClusterContext::new((replica_num * primaries_num) + primaries_num, replica_num);
+        let az: String = "us-east-1a".to_string();
+
+        let mut connection = cluster.async_connection(None).await;
+        let cluster_addresses: Vec<_> = cluster
+            .cluster
+            .servers
+            .iter()
+            .map(|server| server.connection_info())
+            .collect();
+
+        let mut cmd = redis::cmd("CONFIG");
+        cmd.arg(&["SET", "availability-zone", &az.clone()]);
+
+        for _ in 0..replicas_num_in_client_az {
+            connection
+                .route_command(
+                    &cmd,
+                    RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
+                        12182, // foo key is mapping to 12182 slot
+                        SlotAddr::ReplicaRequired,
+                    ))),
+                )
+                .await
+                .unwrap();
+        }
+
+        let mut client = ClusterClient::builder(cluster_addresses.clone())
+            .read_from(redis::cluster_slotmap::ReadFromReplicaStrategy::AZAffinity(
+                az.clone(),
+            ))
+            .build()
+            .unwrap()
+            .get_async_connection(None)
+            .await
+            .unwrap();
+
+        // Each replica in the client az will return the value of foo n times
+        let n = 4;
+        for _ in 0..n * replicas_num_in_client_az {
+            let mut cmd = redis::cmd("GET");
+            cmd.arg("foo");
+            let _res: RedisResult<Value> = cmd.query_async(&mut client).await;
+        }
+
+        let mut cmd = redis::cmd("INFO");
+        cmd.arg("ALL");
+        let info = connection
+            .route_command(
+                &cmd,
+                RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None)),
+            )
+            .await
+            .unwrap();
+
+        let info_result = redis::from_owned_redis_value::<HashMap<String, String>>(info).unwrap();
+        let get_cmdstat = format!("cmdstat_get:calls=");
+        let n_get_cmdstat = format!("cmdstat_get:calls={}", n);
+        let client_az = format!("availability_zone:{}", az);
+
+        let mut matching_entries_count: usize = 0;
+
+        for value in info_result.values() {
+            if value.contains(&get_cmdstat) {
+                if value.contains(&client_az) && value.contains(&n_get_cmdstat) {
+                    matching_entries_count += 1;
+                } else {
+                    panic!(
+                        "Invalid entry found: {}. Expected cmdstat_get:calls={} and availability_zone={}",
+                        value, n, az);
+                }
+            }
+        }
+
+        assert_eq!(
+            (matching_entries_count.try_into() as Result<u16, _>).unwrap(),
+            replicas_num_in_client_az,
+            "Test failed: expected exactly '{}' entries with '{}' and '{}', found {}",
+            replicas_num_in_client_az,
+            get_cmdstat,
+            client_az,
+            matching_entries_count
+        );
+    }
+
+    #[tokio::test]
+    async fn test_routing_by_slot_to_replica_with_az_affinity_strategy_to_all_replicas() {
+        // Skip test if version is less then Valkey 8.0
+        if crate::engine_version_less_than("8.0").await {
+            return;
+        }
+
+        let replica_num: u16 = 4;
+        let primaries_num: u16 = 3;
+        let cluster =
+            TestClusterContext::new((replica_num * primaries_num) + primaries_num, replica_num);
+        let az: String = "us-east-1a".to_string();
+
+        let mut connection = cluster.async_connection(None).await;
+        let cluster_addresses: Vec<_> = cluster
+            .cluster
+            .servers
+            .iter()
+            .map(|server| server.connection_info())
+            .collect();
+
+        let mut cmd = redis::cmd("CONFIG");
+        cmd.arg(&["SET", "availability-zone", &az.clone()]);
+
+        connection
+            .route_command(
+                &cmd,
+                RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None)),
+            )
+            .await
+            .unwrap();
+
+        let mut client = ClusterClient::builder(cluster_addresses.clone())
+            .read_from(redis::cluster_slotmap::ReadFromReplicaStrategy::AZAffinity(
+                az.clone(),
+            ))
+            .build()
+            .unwrap()
+            .get_async_connection(None)
+            .await
+            .unwrap();
+
+        // Each replica will return the value of foo n times
+        let n = 4;
+        for _ in 0..(n * replica_num) {
+            let mut cmd = redis::cmd("GET");
+            cmd.arg("foo");
+            let _res: RedisResult<Value> = cmd.query_async(&mut client).await;
+        }
+
+        let mut cmd = redis::cmd("INFO");
+        cmd.arg("ALL");
+        let info = connection
+            .route_command(
+                &cmd,
+                RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None)),
+            )
+            .await
+            .unwrap();
+
+        let info_result = redis::from_owned_redis_value::<HashMap<String, String>>(info).unwrap();
+        let get_cmdstat = format!("cmdstat_get:calls=");
+        let n_get_cmdstat = format!("cmdstat_get:calls={}", n);
+        let client_az = format!("availability_zone:{}", az);
+
+        let mut matching_entries_count: usize = 0;
+
+        for value in info_result.values() {
+            if value.contains(&get_cmdstat) {
+                if value.contains(&client_az) && value.contains(&n_get_cmdstat) {
+                    matching_entries_count += 1;
+                } else {
+                    panic!(
+                        "Invalid entry found: {}. Expected cmdstat_get:calls={} and availability_zone={}",
+                        value, n, az);
+                }
+            }
+        }
+
+        assert_eq!(
+            (matching_entries_count.try_into() as Result<u16, _>).unwrap(),
+            replica_num,
+            "Test failed: expected exactly '{}' entries with '{}' and '{}', found {}",
+            replica_num.to_string(),
+            get_cmdstat,
+            client_az,
+            matching_entries_count
+        );
+    }
+
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_basic_eval() {
         let cluster = TestClusterContext::new(3, 0);
 
@@ -140,6 +413,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_basic_script() {
         let cluster = TestClusterContext::new(3, 0);
 
@@ -159,6 +433,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_route_flush_to_specific_node() {
         let cluster = TestClusterContext::new(3, 0);
 
@@ -194,6 +469,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_route_flush_to_node_by_address() {
         let cluster = TestClusterContext::new(3, 0);
 
@@ -234,6 +510,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_route_info_to_nodes() {
         let cluster = TestClusterContext::new(12, 1);
 
@@ -313,6 +590,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_resp3() {
         if use_protocol() == ProtocolVersion::RESP2 {
             return;
@@ -352,6 +630,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_basic_pipe() {
         let cluster = TestClusterContext::new(3, 0);
 
@@ -371,6 +650,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_multi_shard_commands() {
         let cluster = TestClusterContext::new(3, 0);
 
@@ -389,6 +669,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_basic_failover() {
         block_on_all(async move {
             test_failover(&TestClusterContext::new(6, 1), 10, 123, false).await;
@@ -582,6 +863,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_error_in_inner_connection() {
         let cluster = TestClusterContext::new(3, 0);
 
@@ -606,30 +888,7 @@ mod cluster_async {
     }
 
     #[test]
-    #[cfg(all(not(feature = "tokio-comp"), feature = "async-std-comp"))]
-    fn test_async_cluster_async_std_basic_cmd() {
-        let cluster = TestClusterContext::new(3, 0);
-
-        block_on_all_using_async_std(async {
-            let mut connection = cluster.async_connection(None).await;
-            redis::cmd("SET")
-                .arg("test")
-                .arg("test_data")
-                .query_async(&mut connection)
-                .await?;
-            redis::cmd("GET")
-                .arg("test")
-                .clone()
-                .query_async(&mut connection)
-                .map_ok(|res: String| {
-                    assert_eq!(res, "test_data");
-                })
-                .await
-        })
-        .unwrap();
-    }
-
-    #[test]
+    #[serial_test::serial]
     fn test_async_cluster_can_connect_to_server_that_sends_cluster_slots_without_host_name() {
         let name =
             "test_async_cluster_can_connect_to_server_that_sends_cluster_slots_without_host_name";
@@ -665,6 +924,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_can_connect_to_server_that_sends_cluster_slots_with_null_host_name() {
         let name =
             "test_async_cluster_can_connect_to_server_that_sends_cluster_slots_with_null_host_name";
@@ -697,6 +957,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_cannot_connect_to_server_with_unknown_host_name() {
         let name = "test_async_cluster_cannot_connect_to_server_with_unknown_host_name";
         let handler = move |cmd: &[u8], _| {
@@ -727,6 +988,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_can_connect_to_server_that_sends_cluster_slots_with_partial_nodes_with_unknown_host_name(
     ) {
         let name = "test_async_cluster_can_connect_to_server_that_sends_cluster_slots_with_partial_nodes_with_unknown_host_name";
@@ -772,6 +1034,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_retries() {
         let name = "tryagain";
 
@@ -804,6 +1067,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_tryagain_exhaust_retries() {
         let name = "tryagain_exhaust_retries";
 
@@ -862,6 +1126,7 @@ mod cluster_async {
         }
     }
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_move_error_when_new_node_is_added() {
         let name = "rebuild_with_extra_nodes";
 
@@ -1008,7 +1273,7 @@ mod cluster_async {
             .query_async::<_, Option<i32>>(&mut connection)
             .await;
         assert_eq!(res, Ok(Some(123)));
-        // If there is a majority in the topology views, or if it's a 2-nodes cluster, we shall be able to calculate the topology on the first try, 
+        // If there is a majority in the topology views, or if it's a 2-nodes cluster, we shall be able to calculate the topology on the first try,
         // so each node will be queried only once with CLUSTER SLOTS.
         // Otherwise, if we don't have a majority, we expect to see the refresh_slots function being called with the maximum retry number.
         let expected_calls = if has_a_majority || num_of_nodes == 2 {num_of_nodes} else {DEFAULT_NUMBER_OF_REFRESH_SLOTS_RETRIES * num_of_nodes};
@@ -1021,9 +1286,6 @@ mod cluster_async {
                 let sleep_duration = core::time::Duration::from_millis(100);
                 #[cfg(feature = "tokio-comp")]
                 tokio::time::sleep(sleep_duration).await;
-
-                #[cfg(all(not(feature = "tokio-comp"), feature = "async-std-comp"))]
-                async_std::task::sleep(sleep_duration).await;
             }
         }
         panic!("Failed to reach to the expected topology refresh retries. Found={refreshed_calls}, Expected={expected_calls}")
@@ -1244,6 +1506,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_refresh_topology_after_moved_error_all_nodes_agree_get_succeed() {
         let ports = get_ports(3);
         test_async_cluster_refresh_topology_after_moved_assert_get_succeed_and_expected_retries(
@@ -1254,6 +1517,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_refresh_topology_in_client_init_all_nodes_agree_get_succeed() {
         let ports = get_ports(3);
         test_async_cluster_refresh_topology_in_client_init_get_succeed(
@@ -1263,6 +1527,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_refresh_topology_after_moved_error_with_no_majority_get_succeed() {
         for num_of_nodes in 2..4 {
             let ports = get_ports(num_of_nodes);
@@ -1275,6 +1540,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_refresh_topology_in_client_init_with_no_majority_get_succeed() {
         for num_of_nodes in 2..4 {
             let ports = get_ports(num_of_nodes);
@@ -1286,6 +1552,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_refresh_topology_even_with_zero_retries() {
         let name = "test_async_cluster_refresh_topology_even_with_zero_retries";
 
@@ -1297,7 +1564,7 @@ mod cluster_async {
             handler: _handler,
             ..
         } = MockEnv::with_client_builder(
-            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(0)                
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(0)
             // Disable the rate limiter to refresh slots immediately on the MOVED error.
             .slots_refresh_rate_limit(Duration::from_secs(0), 0),
             name,
@@ -1376,6 +1643,556 @@ mod cluster_async {
     }
 
     #[test]
+    fn test_async_cluster_update_slots_based_on_moved_error_indicates_slot_migration() {
+        // This test simulates the scenario where the client receives a MOVED error indicating that a key is now
+        // stored on the primary node of another shard.
+        // It ensures that the new slot now owned by the primary and its associated replicas.
+        let name = "test_async_cluster_update_slots_based_on_moved_error_indicates_slot_migration";
+        let slots_config = vec![
+            MockSlotRange {
+                primary_port: 6379,
+                replica_ports: vec![7000],
+                slot_range: (0..8000),
+            },
+            MockSlotRange {
+                primary_port: 6380,
+                replica_ports: vec![7001],
+                slot_range: (8001..16380),
+            },
+        ];
+
+        let moved_from_port = 6379;
+        let moved_to_port = 6380;
+        let new_shard_replica_port = 7001;
+
+        // Tracking moved and replica requests for validation
+        let moved_requests = Arc::new(atomic::AtomicUsize::new(0));
+        let cloned_moved_requests = moved_requests.clone();
+        let replica_requests = Arc::new(atomic::AtomicUsize::new(0));
+        let cloned_replica_requests = moved_requests.clone();
+
+        // Test key and slot
+        let key = "test";
+        let key_slot = 6918;
+
+        // Mock environment setup
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")])
+                    .slots_refresh_rate_limit(Duration::from_secs(1000000), 0) // Rate limiter to disable slot refresh
+                    .read_from_replicas(), // Allow reads from replicas
+            name,
+            move |cmd: &[u8], port| {
+                if contains_slice(cmd, b"PING")
+                    || contains_slice(cmd, b"SETNAME")
+                    || contains_slice(cmd, b"READONLY")
+                {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+
+                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                    let slots = create_topology_from_config(name, slots_config.clone());
+                    return Err(Ok(slots));
+                }
+
+                if contains_slice(cmd, b"SET") {
+                    if port == moved_to_port {
+                        // Simulate primary OK response
+                        Err(Ok(Value::SimpleString("OK".into())))
+                    } else if port == moved_from_port {
+                        // Simulate MOVED error for other port
+                        moved_requests.fetch_add(1, Ordering::Relaxed);
+                        Err(parse_redis_value(
+                            format!("-MOVED {key_slot} {name}:{moved_to_port}\r\n").as_bytes(),
+                        ))
+                    } else {
+                        panic!("unexpected port for SET command: {port:?}.\n
+                            Expected one of: moved_to_port={moved_to_port}, moved_from_port={moved_from_port}");
+                    }
+                } else if contains_slice(cmd, b"GET") {
+                    if new_shard_replica_port == port {
+                        // Simulate replica response for GET after slot migration
+                        replica_requests.fetch_add(1, Ordering::Relaxed);
+                        Err(Ok(Value::BulkString(b"123".to_vec())))
+                    } else {
+                        panic!("unexpected port for GET command: {port:?}, Expected: {new_shard_replica_port:?}");
+                    }
+                } else {
+                    panic!("unexpected command {cmd:?}")
+                }
+            },
+        );
+
+        // First request: Trigger MOVED error and reroute
+        let value = runtime.block_on(
+            cmd("SET")
+                .arg(key)
+                .arg("bar")
+                .query_async::<_, Option<Value>>(&mut connection),
+        );
+        assert_eq!(value, Ok(Some(Value::SimpleString("OK".to_owned()))));
+
+        // Second request: Should be routed directly to the new primary node if the slots map is updated
+        let value = runtime.block_on(
+            cmd("SET")
+                .arg(key)
+                .arg("bar")
+                .query_async::<_, Option<Value>>(&mut connection),
+        );
+        assert_eq!(value, Ok(Some(Value::SimpleString("OK".to_owned()))));
+
+        // Handle slot migration scenario: Ensure the new shard's replicas are accessible
+        let value = runtime.block_on(
+            cmd("GET")
+                .arg(key)
+                .query_async::<_, Option<i32>>(&mut connection),
+        );
+        assert_eq!(value, Ok(Some(123)));
+        assert_eq!(cloned_replica_requests.load(Ordering::Relaxed), 1);
+
+        // Assert there was only a single MOVED error
+        assert_eq!(cloned_moved_requests.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn test_async_cluster_update_slots_based_on_moved_error_indicates_failover() {
+        // This test simulates a failover scenario, where the client receives a MOVED error and the replica becomes the new primary.
+        // The test verifies that the client updates the slot mapping to promote the replica to the primary and routes future requests
+        // to the new primary, ensuring other slots in the shard are also handled by the new primary.
+        let name = "test_async_cluster_update_slots_based_on_moved_error_indicates_failover";
+        let slots_config = vec![
+            MockSlotRange {
+                primary_port: 6379,
+                replica_ports: vec![7001],
+                slot_range: (0..8000),
+            },
+            MockSlotRange {
+                primary_port: 6380,
+                replica_ports: vec![7002],
+                slot_range: (8001..16380),
+            },
+        ];
+
+        let moved_from_port = 6379;
+        let moved_to_port = 7001;
+
+        // Tracking moved for validation
+        let moved_requests = Arc::new(atomic::AtomicUsize::new(0));
+        let cloned_moved_requests = moved_requests.clone();
+
+        // Test key and slot
+        let key = "test";
+        let key_slot = 6918;
+
+        // Mock environment setup
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")])
+                .slots_refresh_rate_limit(Duration::from_secs(1000000), 0), // Rate limiter to disable slot refresh
+            name,
+            move |cmd: &[u8], port| {
+                if contains_slice(cmd, b"PING")
+                    || contains_slice(cmd, b"SETNAME")
+                    || contains_slice(cmd, b"READONLY")
+                {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+
+                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                    let slots = create_topology_from_config(name, slots_config.clone());
+                    return Err(Ok(slots));
+                }
+
+                if contains_slice(cmd, b"SET") {
+                    if port == moved_to_port {
+                        // Simulate primary OK response
+                        Err(Ok(Value::SimpleString("OK".into())))
+                    } else if port == moved_from_port {
+                        // Simulate MOVED error for other port
+                        moved_requests.fetch_add(1, Ordering::Relaxed);
+                        Err(parse_redis_value(
+                            format!("-MOVED {key_slot} {name}:{moved_to_port}\r\n").as_bytes(),
+                        ))
+                    } else {
+                        panic!("unexpected port for SET command: {port:?}.\n
+                            Expected one of: moved_to_port={moved_to_port}, moved_from_port={moved_from_port}");
+                    }
+                } else {
+                    panic!("unexpected command {cmd:?}")
+                }
+            },
+        );
+
+        // First request: Trigger MOVED error and reroute
+        let value = runtime.block_on(
+            cmd("SET")
+                .arg(key)
+                .arg("bar")
+                .query_async::<_, Option<Value>>(&mut connection),
+        );
+        assert_eq!(value, Ok(Some(Value::SimpleString("OK".to_owned()))));
+
+        // Second request: Should be routed directly to the new primary node if the slots map is updated
+        let value = runtime.block_on(
+            cmd("SET")
+                .arg(key)
+                .arg("bar")
+                .query_async::<_, Option<Value>>(&mut connection),
+        );
+        assert_eq!(value, Ok(Some(Value::SimpleString("OK".to_owned()))));
+
+        // Handle failover scenario: Ensure other slots in the same shard are updated to the new primary
+        let key_slot_1044 = "foo2";
+        let value = runtime.block_on(
+            cmd("SET")
+                .arg(key_slot_1044)
+                .arg("bar2")
+                .query_async::<_, Option<Value>>(&mut connection),
+        );
+        assert_eq!(value, Ok(Some(Value::SimpleString("OK".to_owned()))));
+
+        // Assert there was only a single MOVED error
+        assert_eq!(cloned_moved_requests.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn test_async_cluster_update_slots_based_on_moved_error_indicates_new_primary() {
+        // This test simulates the scenario where the client receives a MOVED error indicating that the key now belongs to
+        // an entirely new primary node that wasn't previously known. The test verifies that the client correctly adds the new
+        // primary node to its slot map and routes future requests to the new node.
+        let name = "test_async_cluster_update_slots_based_on_moved_error_indicates_new_primary";
+        let slots_config = vec![
+            MockSlotRange {
+                primary_port: 6379,
+                replica_ports: vec![],
+                slot_range: (0..8000),
+            },
+            MockSlotRange {
+                primary_port: 6380,
+                replica_ports: vec![],
+                slot_range: (8001..16380),
+            },
+        ];
+
+        let moved_from_port = 6379;
+        let moved_to_port = 6381;
+
+        // Tracking moved for validation
+        let moved_requests = Arc::new(atomic::AtomicUsize::new(0));
+        let cloned_moved_requests = moved_requests.clone();
+
+        // Test key and slot
+        let key = "test";
+        let key_slot = 6918;
+
+        // Mock environment setup
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")])
+            .slots_refresh_rate_limit(Duration::from_secs(1000000), 0) // Rate limiter to disable slot refresh
+            .read_from_replicas(), // Allow reads from replicas
+            name,
+            move |cmd: &[u8], port| {
+                if contains_slice(cmd, b"PING")
+                    || contains_slice(cmd, b"SETNAME")
+                    || contains_slice(cmd, b"READONLY")
+                {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+
+                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                    let slots = create_topology_from_config(name, slots_config.clone());
+                    return Err(Ok(slots));
+                }
+
+                if contains_slice(cmd, b"SET") {
+                    if port == moved_to_port {
+                        // Simulate primary OK response
+                        Err(Ok(Value::SimpleString("OK".into())))
+                    } else if port == moved_from_port {
+                        // Simulate MOVED error for other port
+                        moved_requests.fetch_add(1, Ordering::Relaxed);
+                        Err(parse_redis_value(
+                            format!("-MOVED {key_slot} {name}:{moved_to_port}\r\n").as_bytes(),
+                        ))
+                    } else {
+                        panic!("unexpected port for SET command: {port:?}.\n
+                    Expected one of: moved_to_port={moved_to_port}, moved_from_port={moved_from_port}");
+                    }
+                } else if contains_slice(cmd, b"GET") {
+                    if moved_to_port == port {
+                        // Simulate primary response for GET
+                        Err(Ok(Value::BulkString(b"123".to_vec())))
+                    } else {
+                        panic!(
+                            "unexpected port for GET command: {port:?}, Expected: {moved_to_port}"
+                        );
+                    }
+                } else {
+                    panic!("unexpected command {cmd:?}")
+                }
+            },
+        );
+
+        // First request: Trigger MOVED error and reroute
+        let value = runtime.block_on(
+            cmd("SET")
+                .arg(key)
+                .arg("bar")
+                .query_async::<_, Option<Value>>(&mut connection),
+        );
+        assert_eq!(value, Ok(Some(Value::SimpleString("OK".to_owned()))));
+
+        // Second request: Should be routed directly to the new primary node if the slots map is updated
+        let value = runtime.block_on(
+            cmd("SET")
+                .arg(key)
+                .arg("bar")
+                .query_async::<_, Option<Value>>(&mut connection),
+        );
+        assert_eq!(value, Ok(Some(Value::SimpleString("OK".to_owned()))));
+
+        // Third request: The new primary should have no replicas so it should be directed to it
+        let value = runtime.block_on(
+            cmd("GET")
+                .arg(key)
+                .query_async::<_, Option<i32>>(&mut connection),
+        );
+        assert_eq!(value, Ok(Some(123)));
+
+        // Assert there was only a single MOVED error
+        assert_eq!(cloned_moved_requests.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn test_async_cluster_update_slots_based_on_moved_error_indicates_replica_of_different_shard() {
+        // This test simulates a scenario where the client receives a MOVED error indicating that a key
+        // has been moved to a replica in a different shard. The replica is then promoted to primary and
+        // no longer exists in the shard’s replica set.
+        // The test validates that the key gets correctly routed to the new primary and ensures that the
+        // shard updates its mapping accordingly, with only one MOVED error encountered during the process.
+
+        let name = "test_async_cluster_update_slots_based_on_moved_error_indicates_replica_of_different_shard";
+        let slots_config = vec![
+            MockSlotRange {
+                primary_port: 6379,
+                replica_ports: vec![7000],
+                slot_range: (0..8000),
+            },
+            MockSlotRange {
+                primary_port: 6380,
+                replica_ports: vec![7001],
+                slot_range: (8001..16380),
+            },
+        ];
+
+        let moved_from_port = 6379;
+        let moved_to_port = 7001;
+        let primary_shard2 = 6380;
+
+        // Tracking moved for validation
+        let moved_requests = Arc::new(atomic::AtomicUsize::new(0));
+        let cloned_moved_requests = moved_requests.clone();
+
+        // Test key and slot of the first shard
+        let key = "test";
+        let key_slot = 6918;
+
+        // Test key of the second shard
+        let key_shard2 = "foo"; // slot 12182
+
+        // Mock environment setup
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")])
+                    .slots_refresh_rate_limit(Duration::from_secs(1000000), 0) // Rate limiter to disable slot refresh
+                    .read_from_replicas(), // Allow reads from replicas
+            name,
+            move |cmd: &[u8], port| {
+                if contains_slice(cmd, b"PING")
+                    || contains_slice(cmd, b"SETNAME")
+                    || contains_slice(cmd, b"READONLY")
+                {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+
+                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                    let slots = create_topology_from_config(name, slots_config.clone());
+                    return Err(Ok(slots));
+                }
+
+                if contains_slice(cmd, b"SET") {
+                    if port == moved_to_port {
+                        // Simulate primary OK response
+                        Err(Ok(Value::SimpleString("OK".into())))
+                    } else if port == moved_from_port {
+                        // Simulate MOVED error for other port
+                        moved_requests.fetch_add(1, Ordering::Relaxed);
+                        Err(parse_redis_value(
+                            format!("-MOVED {key_slot} {name}:{moved_to_port}\r\n").as_bytes(),
+                        ))
+                    } else {
+                        panic!("unexpected port for SET command: {port:?}.\n
+                            Expected one of: moved_to_port={moved_to_port}, moved_from_port={moved_from_port}");
+                    }
+                } else if contains_slice(cmd, b"GET") {
+                    if port == primary_shard2 {
+                        // Simulate second shard primary response for GET
+                        Err(Ok(Value::BulkString(b"123".to_vec())))
+                    } else {
+                        panic!("unexpected port for GET command: {port:?}, Expected: {primary_shard2:?}");
+                    }
+                } else {
+                    panic!("unexpected command {cmd:?}")
+                }
+            },
+        );
+
+        // First request: Trigger MOVED error and reroute
+        let value = runtime.block_on(
+            cmd("SET")
+                .arg(key)
+                .arg("bar")
+                .query_async::<_, Option<Value>>(&mut connection),
+        );
+        assert_eq!(value, Ok(Some(Value::SimpleString("OK".to_owned()))));
+
+        // Second request: Should be routed directly to the new primary node if the slots map is updated
+        let value = runtime.block_on(
+            cmd("SET")
+                .arg(key)
+                .arg("bar")
+                .query_async::<_, Option<Value>>(&mut connection),
+        );
+        assert_eq!(value, Ok(Some(Value::SimpleString("OK".to_owned()))));
+
+        // Third request: Verify that the promoted replica is no longer part of the second shard replicas by
+        // ensuring the response is received from the shard's primary
+        let value = runtime.block_on(
+            cmd("GET")
+                .arg(key_shard2)
+                .query_async::<_, Option<i32>>(&mut connection),
+        );
+        assert_eq!(value, Ok(Some(123)));
+
+        // Assert there was only a single MOVED error
+        assert_eq!(cloned_moved_requests.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn test_async_cluster_update_slots_based_on_moved_error_no_change() {
+        // This test simulates a scenario where the client receives a MOVED error, but the new primary is the
+        // same as the old primary (no actual change). It ensures that no additional slot map
+        // updates are required and that the subsequent requests are still routed to the same primary node, with
+        // only one MOVED error encountered.
+        let name = "test_async_cluster_update_slots_based_on_moved_error_no_change";
+        let slots_config = vec![
+            MockSlotRange {
+                primary_port: 6379,
+                replica_ports: vec![7000],
+                slot_range: (0..8000),
+            },
+            MockSlotRange {
+                primary_port: 6380,
+                replica_ports: vec![7001],
+                slot_range: (8001..16380),
+            },
+        ];
+
+        let moved_from_port = 6379;
+        let moved_to_port = 6379;
+
+        // Tracking moved for validation
+        let moved_requests = Arc::new(atomic::AtomicUsize::new(0));
+        let cloned_moved_requests = moved_requests.clone();
+
+        // Test key and slot of the first shard
+        let key = "test";
+        let key_slot = 6918;
+
+        // Mock environment setup
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")])
+                .slots_refresh_rate_limit(Duration::from_secs(1000000), 0), // Rate limiter to disable slot refresh
+            name,
+            move |cmd: &[u8], port| {
+                if contains_slice(cmd, b"PING")
+                    || contains_slice(cmd, b"SETNAME")
+                    || contains_slice(cmd, b"READONLY")
+                {
+                    return Err(Ok(Value::SimpleString("OK".into())));
+                }
+
+                if contains_slice(cmd, b"CLUSTER") && contains_slice(cmd, b"SLOTS") {
+                    let slots = create_topology_from_config(name, slots_config.clone());
+                    return Err(Ok(slots));
+                }
+
+                if contains_slice(cmd, b"SET") {
+                    if port == moved_to_port {
+                        if moved_requests.load(Ordering::Relaxed) == 0 {
+                            moved_requests.fetch_add(1, Ordering::Relaxed);
+                            Err(parse_redis_value(
+                                format!("-MOVED {key_slot} {name}:{moved_to_port}\r\n").as_bytes(),
+                            ))
+                        } else {
+                            Err(Ok(Value::SimpleString("OK".into())))
+                        }
+                    } else {
+                        panic!("unexpected port for SET command: {port:?}.\n
+                            Expected one of: moved_to_port={moved_to_port}, moved_from_port={moved_from_port}");
+                    }
+                } else {
+                    panic!("unexpected command {cmd:?}")
+                }
+            },
+        );
+
+        // First request: Trigger MOVED error and reroute
+        let value = runtime.block_on(
+            cmd("SET")
+                .arg(key)
+                .arg("bar")
+                .query_async::<_, Option<Value>>(&mut connection),
+        );
+        assert_eq!(value, Ok(Some(Value::SimpleString("OK".to_owned()))));
+
+        // Second request: Should be still routed to the same primary node
+        let value = runtime.block_on(
+            cmd("SET")
+                .arg(key)
+                .arg("bar")
+                .query_async::<_, Option<Value>>(&mut connection),
+        );
+        assert_eq!(value, Ok(Some(Value::SimpleString("OK".to_owned()))));
+
+        // Assert there was only a single MOVED error
+        assert_eq!(cloned_moved_requests.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    #[serial_test::serial]
     fn test_async_cluster_reconnect_even_with_zero_retries() {
         let name = "test_async_cluster_reconnect_even_with_zero_retries";
 
@@ -1457,6 +2274,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_refresh_slots_rate_limiter_skips_refresh() {
         let ports = get_ports(3);
         test_async_cluster_refresh_slots_rate_limiter_helper(
@@ -1467,6 +2285,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_refresh_slots_rate_limiter_does_refresh_when_wait_duration_passed() {
         let ports = get_ports(3);
         test_async_cluster_refresh_slots_rate_limiter_helper(
@@ -1477,6 +2296,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_ask_redirect() {
         let name = "node";
         let completed = Arc::new(AtomicI32::new(0));
@@ -1526,6 +2346,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_ask_save_new_connection() {
         let name = "node";
         let ping_attempts = Arc::new(AtomicI32::new(0));
@@ -1568,6 +2389,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_reset_routing_if_redirect_fails() {
         let name = "test_async_cluster_reset_routing_if_redirect_fails";
         let completed = Arc::new(AtomicI32::new(0));
@@ -1606,6 +2428,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_ask_redirect_even_if_original_call_had_no_route() {
         let name = "node";
         let completed = Arc::new(AtomicI32::new(0));
@@ -1657,6 +2480,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_ask_error_when_new_node_is_added() {
         let name = "ask_with_extra_nodes";
 
@@ -1711,6 +2535,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_replica_read() {
         let name = "node";
 
@@ -1815,16 +2640,19 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_fan_out_to_all_primaries() {
         test_async_cluster_fan_out("FLUSHALL", vec![6379, 6381], None);
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_fan_out_to_all_nodes() {
         test_async_cluster_fan_out("CONFIG SET", vec![6379, 6380, 6381, 6382], None);
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_fan_out_once_to_each_primary_when_no_replicas_are_available() {
         test_async_cluster_fan_out(
             "CONFIG SET",
@@ -1845,6 +2673,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_fan_out_once_even_if_primary_has_multiple_slot_ranges() {
         test_async_cluster_fan_out(
             "CONFIG SET",
@@ -1875,6 +2704,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_route_according_to_passed_argument() {
         let name = "test_async_cluster_route_according_to_passed_argument";
 
@@ -1939,6 +2769,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_fan_out_and_aggregate_numeric_response_with_min() {
         let name = "test_async_cluster_fan_out_and_aggregate_numeric_response";
         let mut cmd = Cmd::new();
@@ -1969,6 +2800,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_fan_out_and_aggregate_logical_array_response() {
         let name = "test_async_cluster_fan_out_and_aggregate_logical_array_response";
         let mut cmd = Cmd::new();
@@ -2019,6 +2851,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_fan_out_and_return_one_succeeded_response() {
         let name = "test_async_cluster_fan_out_and_return_one_succeeded_response";
         let mut cmd = Cmd::new();
@@ -2053,6 +2886,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_fan_out_and_fail_one_succeeded_if_there_are_no_successes() {
         let name = "test_async_cluster_fan_out_and_fail_one_succeeded_if_there_are_no_successes";
         let mut cmd = Cmd::new();
@@ -2085,6 +2919,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_fan_out_and_return_all_succeeded_response() {
         let name = "test_async_cluster_fan_out_and_return_all_succeeded_response";
         let cmd = cmd("FLUSHALL");
@@ -2111,6 +2946,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_fan_out_and_fail_all_succeeded_if_there_is_a_single_failure() {
         let name = "test_async_cluster_fan_out_and_fail_all_succeeded_if_there_is_a_single_failure";
         let cmd = cmd("FLUSHALL");
@@ -2144,6 +2980,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_first_succeeded_non_empty_or_all_empty_return_value_ignoring_nil_and_err_resps(
     ) {
         let name =
@@ -2182,6 +3019,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_first_succeeded_non_empty_or_all_empty_return_err_if_all_resps_are_nil_and_errors(
     ) {
         let name =
@@ -2215,6 +3053,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_first_succeeded_non_empty_or_all_empty_return_nil_if_all_resp_nil() {
         let name =
             "test_async_cluster_first_succeeded_non_empty_or_all_empty_return_nil_if_all_resp_nil";
@@ -2242,6 +3081,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_fan_out_and_return_map_of_results_for_special_response_policy() {
         let name = "foo";
         let mut cmd = Cmd::new();
@@ -2282,6 +3122,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_fan_out_and_combine_arrays_of_values() {
         let name = "foo";
         let cmd = cmd("KEYS");
@@ -2315,6 +3156,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_split_multi_shard_command_and_combine_arrays_of_values() {
         let name = "test_async_cluster_split_multi_shard_command_and_combine_arrays_of_values";
         let mut cmd = cmd("MGET");
@@ -2355,6 +3197,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_handle_asking_error_in_split_multi_shard_command() {
         let name = "test_async_cluster_handle_asking_error_in_split_multi_shard_command";
         let mut cmd = cmd("MGET");
@@ -2404,6 +3247,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_pass_errors_from_split_multi_shard_command() {
         let name = "test_async_cluster_pass_errors_from_split_multi_shard_command";
         let mut cmd = cmd("MGET");
@@ -2431,6 +3275,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_handle_missing_slots_in_split_multi_shard_command() {
         let name = "test_async_cluster_handle_missing_slots_in_split_multi_shard_command";
         let mut cmd = cmd("MGET");
@@ -2464,6 +3309,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_with_username_and_password() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -2496,6 +3342,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_io_error() {
         let name = "node";
         let completed = Arc::new(AtomicI32::new(0));
@@ -2514,8 +3361,8 @@ mod cluster_async {
                 match port {
                     6380 => panic!("Node should not be called"),
                     _ => match completed.fetch_add(1, Ordering::SeqCst) {
-                        0..=1 => Err(Err(RedisError::from(std::io::Error::new(
-                            std::io::ErrorKind::ConnectionReset,
+                        0..=1 => Err(Err(RedisError::from((
+                            ErrorKind::FatalSendError,
                             "mock-io-error",
                         )))),
                         _ => Err(Ok(Value::BulkString(b"123".to_vec()))),
@@ -2534,6 +3381,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_non_retryable_error_should_not_retry() {
         let name = "node";
         let completed = Arc::new(AtomicI32::new(0));
@@ -2570,6 +3418,82 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_non_retryable_io_error_should_not_retry() {
+        let name = "test_async_cluster_non_retryable_io_error_should_not_retry";
+        let requests = atomic::AtomicUsize::new(0);
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(3),
+            name,
+            move |cmd: &[u8], _port| {
+                respond_startup_two_nodes(name, cmd)?;
+                let i = requests.fetch_add(1, atomic::Ordering::SeqCst);
+                match i {
+                    0 => Err(Err(RedisError::from((ErrorKind::IoError, "io-error")))),
+                    _ => {
+                        panic!("Expected not to be retried!")
+                    }
+                }
+            },
+        );
+        runtime
+            .block_on(async move {
+                let res = cmd("INCR")
+                    .arg("foo")
+                    .query_async::<_, Option<i32>>(&mut connection)
+                    .await;
+                assert!(res.is_err());
+                let err = res.unwrap_err();
+                assert!(err.is_io_error());
+                Ok::<_, RedisError>(())
+            })
+            .unwrap();
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_async_cluster_retry_safe_io_error_should_be_retried() {
+        let name = "test_async_cluster_retry_safe_io_error_should_be_retried";
+        let requests = atomic::AtomicUsize::new(0);
+        let MockEnv {
+            runtime,
+            async_connection: mut connection,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]).retries(3),
+            name,
+            move |cmd: &[u8], _port| {
+                respond_startup_two_nodes(name, cmd)?;
+                let i = requests.fetch_add(1, atomic::Ordering::SeqCst);
+                match i {
+                    0 => Err(Err(RedisError::from((
+                        ErrorKind::FatalSendError,
+                        "server didn't receive the request, safe to retry",
+                    )))),
+                    _ => Err(Ok(Value::Int(1))),
+                }
+            },
+        );
+        runtime
+            .block_on(async move {
+                let res = cmd("INCR")
+                    .arg("foo")
+                    .query_async::<_, i32>(&mut connection)
+                    .await;
+                assert!(res.is_ok());
+                let value = res.unwrap();
+                assert_eq!(value, 1);
+                Ok::<_, RedisError>(())
+            })
+            .unwrap();
+    }
+
+    #[test]
+    #[serial_test::serial]
     fn test_async_cluster_read_from_primary() {
         let name = "node";
         let found_ports = Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -2627,6 +3551,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_round_robin_read_from_replica() {
         let name = "node";
         let found_ports = Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -2713,6 +3638,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_handle_complete_server_disconnect_without_panicking() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -2741,6 +3667,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_test_fast_reconnect() {
         // Note the 3 seconds connection check to differentiate between notifications and periodic
         let cluster = TestClusterContext::new_with_cluster_client_builder(
@@ -2851,6 +3778,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_restore_resp3_pubsub_state_passive_disconnect() {
         let redis_ver = std::env::var("REDIS_VERSION").unwrap_or_default();
         let use_sharded = redis_ver.starts_with("7.");
@@ -3020,6 +3948,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_restore_resp3_pubsub_state_after_scale_out() {
         let redis_ver = std::env::var("REDIS_VERSION").unwrap_or_default();
         let use_sharded = redis_ver.starts_with("7.");
@@ -3151,10 +4080,17 @@ mod cluster_async {
             };
 
             // wait for new topology discovery
+            let max_requests = 5;
+            let mut i = 0;
+            let mut cmd = redis::cmd("INFO");
+            cmd.arg("SERVER");
             loop {
-                let mut cmd = redis::cmd("INFO");
-                cmd.arg("SERVER");
-                let res = publishing_con
+                if i == max_requests {
+                    panic!("Failed to recover and discover new topology");
+                }
+                i += 1;
+
+                if let Ok(res) = publishing_con
                     .route_command(
                         &cmd,
                         RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
@@ -3162,21 +4098,21 @@ mod cluster_async {
                             SlotAddr::Master,
                         ))),
                     )
-                    .await;
-                assert!(res.is_ok());
-                let res = res.unwrap();
-                match res {
-                    Value::VerbatimString { format: _, text } => {
-                        if text.contains(format!("tcp_port:{}", last_server_port).as_str()) {
-                            // new topology rediscovered
-                            break;
+                    .await
+                {
+                    match res {
+                        Value::VerbatimString { format: _, text } => {
+                            if text.contains(format!("tcp_port:{}", last_server_port).as_str()) {
+                                // new topology rediscovered
+                                break;
+                            }
+                        }
+                        _ => {
+                            panic!("Wrong return type for INFO SERVER command: {:?}", res);
                         }
                     }
-                    _ => {
-                        panic!("Wrong return type for INFO SERVER command: {:?}", res);
-                    }
+                    sleep(futures_time::time::Duration::from_secs(1)).await;
                 }
-                sleep(futures_time::time::Duration::from_secs(1)).await;
             }
 
             // sleep for one one cycle of topology refresh
@@ -3215,7 +4151,7 @@ mod cluster_async {
 
             if use_sharded {
                 // validate SPUBLISH
-                let result = cmd("SPUBLISH")
+                let result = redis::cmd("SPUBLISH")
                     .arg("test_channel_?")
                     .arg("test_message")
                     .query_async(&mut publishing_con)
@@ -3258,6 +4194,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_resp3_pubsub() {
         let redis_ver = std::env::var("REDIS_VERSION").unwrap_or_default();
         let use_sharded = redis_ver.starts_with("7.");
@@ -3372,6 +4309,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_periodic_checks_update_topology_after_failover() {
         // This test aims to validate the functionality of periodic topology checks by detecting and updating topology changes.
         // We will repeatedly execute CLUSTER NODES commands against the primary node responsible for slot 0, recording its node ID.
@@ -3442,6 +4380,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_recover_disconnected_management_connections() {
         // This test aims to verify that the management connections used for periodic checks are reconnected, in case that they get killed.
         // In order to test this, we choose a single node, kill all connections to it which aren't user connections, and then wait until new
@@ -3494,6 +4433,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_with_client_name() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -3530,6 +4470,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_reroute_from_replica_if_in_loading_state() {
         /* Test replica in loading state. The expected behaviour is that the request will be directed to a different replica or the primary.
         depends on the read from replica policy. */
@@ -3585,6 +4526,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_read_from_primary_when_primary_loading() {
         // Test primary in loading state. The expected behaviour is that the request will be retried until the primary is no longer in loading state.
         let name = "test_async_cluster_read_from_primary_when_primary_loading";
@@ -3639,6 +4581,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_can_be_created_with_partial_slot_coverage() {
         let name = "test_async_cluster_can_be_created_with_partial_slot_coverage";
         let slots_config = Some(vec![
@@ -3679,6 +4622,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_reconnect_after_complete_server_disconnect() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -3714,14 +4658,32 @@ mod cluster_async {
                 false,
             );
 
-            let result = connection.req_packed_command(&cmd).await.unwrap();
-            assert_eq!(result, Value::SimpleString("PONG".to_string()));
-            Ok::<_, RedisError>(())
+            let max_requests = 5;
+            let mut i = 0;
+            let mut last_err = None;
+            loop {
+                if i == max_requests {
+                    break;
+                }
+                i += 1;
+                match connection.req_packed_command(&cmd).await {
+                    Ok(result) => {
+                        assert_eq!(result, Value::SimpleString("PONG".to_string()));
+                        return Ok::<_, RedisError>(());
+                    }
+                    Err(err) => {
+                        last_err = Some(err);
+                        let _ = sleep(futures_time::time::Duration::from_secs(1)).await;
+                    }
+                }
+            }
+            panic!("Failed to recover after all nodes went down. Last error: {last_err:?}");
         })
         .unwrap();
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_reconnect_after_complete_server_disconnect_route_to_many() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -3742,24 +4704,43 @@ mod cluster_async {
             );
 
             let cmd = cmd("PING");
-            // explicitly route to all primaries and request all succeeded
-            let result = connection
-                .route_command(
-                    &cmd,
-                    RoutingInfo::MultiNode((
-                        MultipleNodeRoutingInfo::AllMasters,
-                        Some(redis::cluster_routing::ResponsePolicy::AllSucceeded),
-                    )),
-                )
-                .await;
-            assert!(result.is_ok());
 
-            Ok::<_, RedisError>(())
+            let max_requests = 5;
+            let mut i = 0;
+            let mut last_err = None;
+            loop {
+                if i == max_requests {
+                    break;
+                }
+                i += 1;
+                // explicitly route to all primaries and request all succeeded
+                match connection
+                    .route_command(
+                        &cmd,
+                        RoutingInfo::MultiNode((
+                            MultipleNodeRoutingInfo::AllMasters,
+                            Some(redis::cluster_routing::ResponsePolicy::AllSucceeded),
+                        )),
+                    )
+                    .await
+                {
+                    Ok(result) => {
+                        assert_eq!(result, Value::SimpleString("PONG".to_string()));
+                        return Ok::<_, RedisError>(());
+                    }
+                    Err(err) => {
+                        last_err = Some(err);
+                        let _ = sleep(futures_time::time::Duration::from_secs(1)).await;
+                    }
+                }
+            }
+            panic!("Failed to recover after all nodes went down. Last error: {last_err:?}");
         })
         .unwrap();
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_blocking_command_when_cluster_drops() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -3787,6 +4768,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_saves_reconnected_connection() {
         let name = "test_async_cluster_saves_reconnected_connection";
         let ping_attempts = Arc::new(AtomicI32::new(0));
@@ -3825,7 +4807,10 @@ mod cluster_async {
                     if connect_attempt > 5 {
                         panic!("Too many pings!");
                     }
-                    Err(Err(broken_pipe_error()))
+                    Err(Err(RedisError::from((
+                        ErrorKind::FatalSendError,
+                        "mock-io-error",
+                    ))))
                 } else {
                     respond_startup_two_nodes(name, cmd)?;
                     let past_get_attempts = get_attempts.fetch_add(1, Ordering::Relaxed);
@@ -3833,7 +4818,10 @@ mod cluster_async {
                     if past_get_attempts == 0 {
                         // Error once with io-error, ensure connection is reestablished w/out calling
                         // other node (i.e., not doing a full slot rebuild)
-                        Err(Err(broken_pipe_error()))
+                        Err(Err(RedisError::from((
+                            ErrorKind::FatalSendError,
+                            "mock-io-error",
+                        ))))
                     } else {
                         Err(Ok(Value::BulkString(b"123".to_vec())))
                     }
@@ -3856,6 +4844,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_periodic_checks_use_management_connection() {
         let cluster = TestClusterContext::new_with_cluster_client_builder(
             3,
@@ -3936,24 +4925,27 @@ mod cluster_async {
     }
 
     async fn kill_connection(killer_connection: &mut ClusterConnection, connection_to_kill: &str) {
+        let default_routing = RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
+            Route::new(0, SlotAddr::Master),
+        ));
+        kill_connection_with_routing(killer_connection, connection_to_kill, default_routing).await;
+    }
+
+    async fn kill_connection_with_routing(
+        killer_connection: &mut ClusterConnection,
+        connection_to_kill: &str,
+        routing: RoutingInfo,
+    ) {
         let mut cmd = redis::cmd("CLIENT");
         cmd.arg("KILL");
         cmd.arg("ID");
         cmd.arg(connection_to_kill);
-        // Kill the management connection in the primary node that holds slot 0
-        assert!(killer_connection
-            .route_command(
-                &cmd,
-                RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
-                    0,
-                    SlotAddr::Master,
-                )),),
-            )
-            .await
-            .is_ok());
+        // Kill the management connection for the routing node
+        assert!(killer_connection.route_command(&cmd, routing).await.is_ok());
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_only_management_connection_is_reconnected_after_connection_failure() {
         // This test will check two aspects:
         // 1. Ensuring that after a disconnection in the management connection, a new management connection is established.
@@ -4023,6 +5015,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_dont_route_to_a_random_on_non_key_based_cmd() {
         // This test verifies that non-key-based commands do not get routed to a random node
         // when no connection is found for the given route. Instead, the appropriate error
@@ -4087,6 +5080,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_route_to_random_on_key_based_cmd() {
         // This test verifies that key-based commands get routed to a random node
         // when no connection is found for the given route. The command should
@@ -4143,6 +5137,7 @@ mod cluster_async {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_async_cluster_do_not_retry_when_receiver_was_dropped() {
         let name = "test_async_cluster_do_not_retry_when_receiver_was_dropped";
         let cmd = cmd("FAKE_COMMAND");
@@ -4196,6 +5191,7 @@ mod cluster_async {
         use super::*;
 
         #[test]
+        #[serial_test::serial]
         fn test_async_cluster_basic_cmd_with_mtls() {
             let cluster = TestClusterContext::new_with_mtls(3, 0);
             block_on_all(async move {
@@ -4218,6 +5214,7 @@ mod cluster_async {
         }
 
         #[test]
+        #[serial_test::serial]
         fn test_async_cluster_should_not_connect_without_mtls_enabled() {
             let cluster = TestClusterContext::new_with_mtls(3, 0);
             block_on_all(async move {

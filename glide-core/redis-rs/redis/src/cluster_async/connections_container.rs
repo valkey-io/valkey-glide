@@ -1,55 +1,81 @@
 use crate::cluster_async::ConnectionFuture;
-use crate::cluster_routing::{Route, SlotAddr};
+use crate::cluster_routing::{Route, ShardAddrs, SlotAddr};
 use crate::cluster_slotmap::{ReadFromReplicaStrategy, SlotMap, SlotMapValue};
 use crate::cluster_topology::TopologyHash;
 use dashmap::DashMap;
 use futures::FutureExt;
 use rand::seq::IteratorRandom;
 use std::net::IpAddr;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
+use telemetrylib::Telemetry;
 
-/// A struct that encapsulates a network connection along with its associated IP address.
+/// Count the number of connections in a connections_map object
+macro_rules! count_connections {
+    ($conn_map:expr) => {{
+        let mut count = 0usize;
+        for a in $conn_map {
+            count = count.saturating_add(if a.management_connection.is_some() {
+                2
+            } else {
+                1
+            });
+        }
+        count
+    }};
+}
+
+/// A struct that encapsulates a network connection along with its associated IP address and AZ.
 #[derive(Clone, Eq, PartialEq, Debug)]
-pub struct ConnectionWithIp<Connection> {
+pub struct ConnectionDetails<Connection> {
     /// The actual connection
     pub conn: Connection,
     /// The IP associated with the connection
     pub ip: Option<IpAddr>,
+    /// The availability zone associated with the connection
+    pub az: Option<String>,
 }
 
-impl<Connection> ConnectionWithIp<Connection>
+impl<Connection> ConnectionDetails<Connection>
 where
     Connection: Clone + Send + 'static,
 {
-    /// Consumes the current instance and returns a new `ConnectionWithIp`
+    /// Consumes the current instance and returns a new `ConnectionDetails`
     /// where the connection is wrapped in a future.
     #[doc(hidden)]
-    pub fn into_future(self) -> ConnectionWithIp<ConnectionFuture<Connection>> {
-        ConnectionWithIp {
+    pub fn into_future(self) -> ConnectionDetails<ConnectionFuture<Connection>> {
+        ConnectionDetails {
             conn: async { self.conn }.boxed().shared(),
             ip: self.ip,
+            az: self.az,
         }
     }
 }
 
-impl<Connection> From<(Connection, Option<IpAddr>)> for ConnectionWithIp<Connection> {
-    fn from(val: (Connection, Option<IpAddr>)) -> Self {
-        ConnectionWithIp {
+impl<Connection> From<(Connection, Option<IpAddr>, Option<String>)>
+    for ConnectionDetails<Connection>
+{
+    fn from(val: (Connection, Option<IpAddr>, Option<String>)) -> Self {
+        ConnectionDetails {
             conn: val.0,
             ip: val.1,
+            az: val.2,
         }
     }
 }
 
-impl<Connection> From<ConnectionWithIp<Connection>> for (Connection, Option<IpAddr>) {
-    fn from(val: ConnectionWithIp<Connection>) -> Self {
-        (val.conn, val.ip)
+impl<Connection> From<ConnectionDetails<Connection>>
+    for (Connection, Option<IpAddr>, Option<String>)
+{
+    fn from(val: ConnectionDetails<Connection>) -> Self {
+        (val.conn, val.ip, val.az)
     }
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct ClusterNode<Connection> {
-    pub user_connection: ConnectionWithIp<Connection>,
-    pub management_connection: Option<ConnectionWithIp<Connection>>,
+    pub user_connection: ConnectionDetails<Connection>,
+    pub management_connection: Option<ConnectionDetails<Connection>>,
 }
 
 impl<Connection> ClusterNode<Connection>
@@ -57,12 +83,21 @@ where
     Connection: Clone,
 {
     pub fn new(
-        user_connection: ConnectionWithIp<Connection>,
-        management_connection: Option<ConnectionWithIp<Connection>>,
+        user_connection: ConnectionDetails<Connection>,
+        management_connection: Option<ConnectionDetails<Connection>>,
     ) -> Self {
         Self {
             user_connection,
             management_connection,
+        }
+    }
+
+    /// Return the number of underlying connections managed by this instance of ClusterNode
+    pub fn connections_count(&self) -> usize {
+        if self.management_connection.is_some() {
+            2
+        } else {
+            1
         }
     }
 
@@ -106,6 +141,13 @@ pub(crate) struct ConnectionsContainer<Connection> {
     topology_hash: TopologyHash,
 }
 
+impl<Connection> Drop for ConnectionsContainer<Connection> {
+    fn drop(&mut self) {
+        let count = count_connections!(&self.connection_map);
+        Telemetry::decr_total_connections(count);
+    }
+}
+
 impl<Connection> Default for ConnectionsContainer<Connection> {
     fn default() -> Self {
         Self {
@@ -129,12 +171,28 @@ where
         read_from_replica_strategy: ReadFromReplicaStrategy,
         topology_hash: TopologyHash,
     ) -> Self {
+        let connection_map = connection_map.0;
+
+        // Update the telemetry with the number of connections
+        let count = count_connections!(&connection_map);
+        Telemetry::incr_total_connections(count);
+
         Self {
-            connection_map: connection_map.0,
+            connection_map,
             slot_map,
             read_from_replica_strategy,
             topology_hash,
         }
+    }
+
+    /// Returns an iterator over the nodes in the `slot_map`, yielding pairs of the node address and its associated shard addresses.
+    pub(crate) fn slot_map_nodes(
+        &self,
+    ) -> impl Iterator<Item = (Arc<String>, Arc<ShardAddrs>)> + '_ {
+        self.slot_map
+            .nodes_map()
+            .iter()
+            .map(|item| (item.key().clone(), item.value().clone()))
     }
 
     // Extends the current connection map with the provided one
@@ -142,16 +200,23 @@ where
         &mut self,
         other_connection_map: ConnectionsMap<Connection>,
     ) {
+        let conn_count_before = count_connections!(&self.connection_map);
         self.connection_map.extend(other_connection_map.0);
+        let conn_count_after = count_connections!(&self.connection_map);
+        // Update the number of connections by the difference
+        Telemetry::incr_total_connections(conn_count_after.saturating_sub(conn_count_before));
+    }
+
+    /// Returns the availability zone associated with the connection in address
+    pub(crate) fn az_for_address(&self, address: &str) -> Option<String> {
+        self.connection_map
+            .get(address)
+            .map(|item| item.value().user_connection.az.clone())?
     }
 
     /// Returns true if the address represents a known primary node.
     pub(crate) fn is_primary(&self, address: &String) -> bool {
-        self.connection_for_address(address).is_some()
-            && self
-                .slot_map
-                .values()
-                .any(|slot_addrs| slot_addrs.primary.as_str() == address)
+        self.connection_for_address(address).is_some() && self.slot_map.is_primary(address)
     }
 
     fn round_robin_read_from_replica(
@@ -159,26 +224,66 @@ where
         slot_map_value: &SlotMapValue,
     ) -> Option<ConnectionAndAddress<Connection>> {
         let addrs = &slot_map_value.addrs;
-        let initial_index = slot_map_value
-            .latest_used_replica
-            .load(std::sync::atomic::Ordering::Relaxed);
+        let initial_index = slot_map_value.last_used_replica.load(Ordering::Relaxed);
         let mut check_count = 0;
         loop {
             check_count += 1;
 
             // Looped through all replicas, no connected replica was found.
-            if check_count > addrs.replicas.len() {
-                return self.connection_for_address(addrs.primary.as_str());
+            if check_count > addrs.replicas().len() {
+                return self.connection_for_address(addrs.primary().as_str());
             }
-            let index = (initial_index + check_count) % addrs.replicas.len();
-            if let Some(connection) = self.connection_for_address(addrs.replicas[index].as_str()) {
-                let _ = slot_map_value.latest_used_replica.compare_exchange_weak(
+            let index = (initial_index + check_count) % addrs.replicas().len();
+            if let Some(connection) = self.connection_for_address(addrs.replicas()[index].as_str())
+            {
+                let _ = slot_map_value.last_used_replica.compare_exchange_weak(
                     initial_index,
                     index,
-                    std::sync::atomic::Ordering::Relaxed,
-                    std::sync::atomic::Ordering::Relaxed,
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
                 );
                 return Some(connection);
+            }
+        }
+    }
+
+    /// Returns the node's connection in the same availability zone as `client_az` in round robin strategy if exits,
+    /// if not, will fall back to any available replica or primary.
+    pub(crate) fn round_robin_read_from_replica_with_az_awareness(
+        &self,
+        slot_map_value: &SlotMapValue,
+        client_az: String,
+    ) -> Option<ConnectionAndAddress<Connection>> {
+        let addrs = &slot_map_value.addrs;
+        let initial_index = slot_map_value.last_used_replica.load(Ordering::Relaxed);
+        let mut retries = 0usize;
+
+        loop {
+            retries = retries.saturating_add(1);
+            // Looped through all replicas; no connected replica found in the same availability zone.
+            if retries > addrs.replicas().len() {
+                // Attempt a fallback to any available replica or primary if needed.
+                return self.round_robin_read_from_replica(slot_map_value);
+            }
+
+            // Calculate index based on initial index and check count.
+            let index = (initial_index + retries) % addrs.replicas().len();
+            let replica = &addrs.replicas()[index];
+
+            // Check if this replica’s availability zone matches the user’s availability zone.
+            if let Some((address, connection_details)) =
+                self.connection_details_for_address(replica.as_str())
+            {
+                if self.az_for_address(&address) == Some(client_az.clone()) {
+                    // Attempt to update `latest_used_replica` with the index of this replica.
+                    let _ = slot_map_value.last_used_replica.compare_exchange_weak(
+                        initial_index,
+                        index,
+                        Ordering::Relaxed,
+                        Ordering::Relaxed,
+                    );
+                    return Some((address, connection_details.conn));
+                }
             }
         }
     }
@@ -186,21 +291,36 @@ where
     fn lookup_route(&self, route: &Route) -> Option<ConnectionAndAddress<Connection>> {
         let slot_map_value = self.slot_map.slot_value_for_route(route)?;
         let addrs = &slot_map_value.addrs;
-        if addrs.replicas.is_empty() {
-            return self.connection_for_address(addrs.primary.as_str());
+        if addrs.replicas().is_empty() {
+            return self.connection_for_address(addrs.primary().as_str());
         }
 
         match route.slot_addr() {
-            SlotAddr::Master => self.connection_for_address(addrs.primary.as_str()),
-            SlotAddr::ReplicaOptional => match self.read_from_replica_strategy {
+            // Master strategy will be in use when the command is not read_only
+            SlotAddr::Master => self.connection_for_address(addrs.primary().as_str()),
+            // ReplicaOptional strategy will be in use when the command is read_only
+            SlotAddr::ReplicaOptional => match &self.read_from_replica_strategy {
                 ReadFromReplicaStrategy::AlwaysFromPrimary => {
-                    self.connection_for_address(addrs.primary.as_str())
+                    self.connection_for_address(addrs.primary().as_str())
                 }
                 ReadFromReplicaStrategy::RoundRobin => {
                     self.round_robin_read_from_replica(slot_map_value)
                 }
+                ReadFromReplicaStrategy::AZAffinity(az) => self
+                    .round_robin_read_from_replica_with_az_awareness(
+                        slot_map_value,
+                        az.to_string(),
+                    ),
             },
-            SlotAddr::ReplicaRequired => self.round_robin_read_from_replica(slot_map_value),
+            // when the user strategy per command is replica_preffered
+            SlotAddr::ReplicaRequired => match &self.read_from_replica_strategy {
+                ReadFromReplicaStrategy::AZAffinity(az) => self
+                    .round_robin_read_from_replica_with_az_awareness(
+                        slot_map_value,
+                        az.to_string(),
+                    ),
+                _ => self.round_robin_read_from_replica(slot_map_value),
+            },
         }
     }
 
@@ -232,7 +352,7 @@ where
         self.slot_map
             .addresses_for_all_primaries()
             .into_iter()
-            .flat_map(|addr| self.connection_for_address(addr))
+            .flat_map(|addr| self.connection_for_address(&addr))
     }
 
     pub(crate) fn node_for_address(&self, address: &str) -> Option<ClusterNode<Connection>> {
@@ -251,20 +371,33 @@ where
         })
     }
 
+    pub(crate) fn connection_details_for_address(
+        &self,
+        address: &str,
+    ) -> Option<ConnectionAndAddress<ConnectionDetails<Connection>>> {
+        self.connection_map.get(address).map(|item| {
+            let (address, conn) = (item.key(), item.value());
+            (address.clone(), conn.user_connection.clone())
+        })
+    }
+
     pub(crate) fn random_connections(
         &self,
         amount: usize,
         conn_type: ConnectionType,
-    ) -> impl Iterator<Item = ConnectionAndAddress<Connection>> + '_ {
-        self.connection_map
-            .iter()
-            .choose_multiple(&mut rand::thread_rng(), amount)
-            .into_iter()
-            .map(move |item| {
-                let (address, node) = (item.key(), item.value());
-                let conn = node.get_connection(&conn_type);
-                (address.clone(), conn)
-            })
+    ) -> Option<Vec<ConnectionAndAddress<Connection>>> {
+        (!self.connection_map.is_empty()).then_some({
+            self.connection_map
+                .iter()
+                .choose_multiple(&mut rand::thread_rng(), amount)
+                .into_iter()
+                .map(move |item| {
+                    let (address, node) = (item.key(), item.value());
+                    let conn = node.get_connection(&conn_type);
+                    (address.clone(), conn)
+                })
+                .collect::<Vec<_>>()
+        })
     }
 
     pub(crate) fn replace_or_add_connection_for_address(
@@ -273,18 +406,33 @@ where
         node: ClusterNode<Connection>,
     ) -> String {
         let address = address.into();
-        self.connection_map.insert(address.clone(), node);
+
+        // Increase the total number of connections by the number of connections managed by `node`
+        Telemetry::incr_total_connections(node.connections_count());
+
+        if let Some(old_conn) = self.connection_map.insert(address.clone(), node) {
+            // We are replacing a node. Reduce the counter by the number of connections managed by
+            // the old connection
+            Telemetry::decr_total_connections(old_conn.connections_count());
+        };
         address
     }
 
     pub(crate) fn remove_node(&self, address: &String) -> Option<ClusterNode<Connection>> {
-        self.connection_map
-            .remove(address)
-            .map(|(_key, value)| value)
+        if let Some((_key, old_conn)) = self.connection_map.remove(address) {
+            Telemetry::decr_total_connections(old_conn.connections_count());
+            Some(old_conn)
+        } else {
+            None
+        }
     }
 
     pub(crate) fn len(&self) -> usize {
         self.connection_map.len()
+    }
+
+    pub(crate) fn connection_map(&self) -> &DashMap<String, ClusterNode<Connection>> {
+        &self.connection_map
     }
 
     pub(crate) fn get_current_topology_hash(&self) -> TopologyHash {
@@ -310,8 +458,9 @@ mod tests {
     {
         pub(crate) fn new_only_with_user_conn(user_connection: Connection) -> Self {
             let ip = None;
+            let az = None;
             Self {
-                user_connection: (user_connection, ip).into(),
+                user_connection: (user_connection, ip, az).into(),
                 management_connection: None,
             }
         }
@@ -346,20 +495,88 @@ mod tests {
     fn create_cluster_node(
         connection: usize,
         use_management_connections: bool,
+        node_az: Option<String>,
     ) -> ClusterNode<usize> {
         let ip = None;
         ClusterNode::new(
-            (connection, ip).into(),
+            (connection, ip, node_az.clone()).into(),
             if use_management_connections {
-                Some((connection * 10, ip).into())
+                Some((connection * 10, ip, node_az).into())
             } else {
                 None
             },
         )
     }
 
+    fn create_container_with_az_strategy(
+        use_management_connections: bool,
+    ) -> ConnectionsContainer<usize> {
+        let slot_map = SlotMap::new(
+            vec![
+                Slot::new(1, 1000, "primary1".to_owned(), Vec::new()),
+                Slot::new(
+                    1002,
+                    2000,
+                    "primary2".to_owned(),
+                    vec!["replica2-1".to_owned()],
+                ),
+                Slot::new(
+                    2001,
+                    3000,
+                    "primary3".to_owned(),
+                    vec![
+                        "replica3-1".to_owned(),
+                        "replica3-2".to_owned(),
+                        "replica3-3".to_owned(),
+                    ],
+                ),
+            ],
+            ReadFromReplicaStrategy::AlwaysFromPrimary, // this argument shouldn't matter, since we overload the RFR strategy.
+        );
+        let connection_map = DashMap::new();
+        connection_map.insert(
+            "primary1".into(),
+            create_cluster_node(1, use_management_connections, None),
+        );
+        connection_map.insert(
+            "primary2".into(),
+            create_cluster_node(2, use_management_connections, None),
+        );
+        connection_map.insert(
+            "primary3".into(),
+            create_cluster_node(3, use_management_connections, None),
+        );
+        connection_map.insert(
+            "replica2-1".into(),
+            create_cluster_node(21, use_management_connections, None),
+        );
+        connection_map.insert(
+            "replica3-1".into(),
+            create_cluster_node(31, use_management_connections, Some("use-1a".to_string())),
+        );
+        connection_map.insert(
+            "replica3-2".into(),
+            create_cluster_node(32, use_management_connections, Some("use-1b".to_string())),
+        );
+        connection_map.insert(
+            "replica3-3".into(),
+            create_cluster_node(33, use_management_connections, Some("use-1a".to_string())),
+        );
+        connection_map.insert(
+            "replica3-3".into(),
+            create_cluster_node(33, use_management_connections, Some("use-1a".to_string())),
+        );
+
+        ConnectionsContainer {
+            slot_map,
+            connection_map,
+            read_from_replica_strategy: ReadFromReplicaStrategy::AZAffinity("use-1a".to_string()),
+            topology_hash: 0,
+        }
+    }
+
     fn create_container_with_strategy(
-        stragey: ReadFromReplicaStrategy,
+        strategy: ReadFromReplicaStrategy,
         use_management_connections: bool,
     ) -> ConnectionsContainer<usize> {
         let slot_map = SlotMap::new(
@@ -383,33 +600,33 @@ mod tests {
         let connection_map = DashMap::new();
         connection_map.insert(
             "primary1".into(),
-            create_cluster_node(1, use_management_connections),
+            create_cluster_node(1, use_management_connections, None),
         );
         connection_map.insert(
             "primary2".into(),
-            create_cluster_node(2, use_management_connections),
+            create_cluster_node(2, use_management_connections, None),
         );
         connection_map.insert(
             "primary3".into(),
-            create_cluster_node(3, use_management_connections),
+            create_cluster_node(3, use_management_connections, None),
         );
         connection_map.insert(
             "replica2-1".into(),
-            create_cluster_node(21, use_management_connections),
+            create_cluster_node(21, use_management_connections, None),
         );
         connection_map.insert(
             "replica3-1".into(),
-            create_cluster_node(31, use_management_connections),
+            create_cluster_node(31, use_management_connections, None),
         );
         connection_map.insert(
             "replica3-2".into(),
-            create_cluster_node(32, use_management_connections),
+            create_cluster_node(32, use_management_connections, None),
         );
 
         ConnectionsContainer {
             slot_map,
             connection_map,
-            read_from_replica_strategy: stragey,
+            read_from_replica_strategy: strategy,
             topology_hash: 0,
         }
     }
@@ -583,6 +800,95 @@ mod tests {
     }
 
     #[test]
+    fn get_connection_for_az_affinity_route() {
+        let container = create_container_with_az_strategy(false);
+
+        // slot number is not exits
+        assert!(container
+            .connection_for_route(&Route::new(1001, SlotAddr::ReplicaOptional))
+            .is_none());
+        // Get the replica that holds the slot 1002
+        assert_eq!(
+            21,
+            container
+                .connection_for_route(&Route::new(1002, SlotAddr::ReplicaOptional))
+                .unwrap()
+                .1
+        );
+
+        // Get the Primary that holds the slot 1500
+        assert_eq!(
+            2,
+            container
+                .connection_for_route(&Route::new(1500, SlotAddr::Master))
+                .unwrap()
+                .1
+        );
+
+        // receive one of the replicas that holds the slot 2001 and is in the availability zone of the client ("use-1a")
+        assert!(one_of(
+            container.connection_for_route(&Route::new(2001, SlotAddr::ReplicaRequired)),
+            &[31, 33],
+        ));
+
+        // remove the replica in the same client's az and get the other replica in the same az
+        remove_nodes(&container, &["replica3-3"]);
+        assert_eq!(
+            31,
+            container
+                .connection_for_route(&Route::new(2001, SlotAddr::ReplicaOptional))
+                .unwrap()
+                .1
+        );
+
+        // remove the replica in the same clients az and get the other replica
+        remove_nodes(&container, &["replica3-1"]);
+        assert_eq!(
+            32,
+            container
+                .connection_for_route(&Route::new(2001, SlotAddr::ReplicaOptional))
+                .unwrap()
+                .1
+        );
+
+        // remove the last replica and get the primary
+        remove_nodes(&container, &["replica3-2"]);
+        assert_eq!(
+            3,
+            container
+                .connection_for_route(&Route::new(2001, SlotAddr::ReplicaOptional))
+                .unwrap()
+                .1
+        );
+    }
+
+    #[test]
+    fn get_connection_for_az_affinity_route_round_robin() {
+        let container = create_container_with_az_strategy(false);
+
+        let mut addresses = vec![
+            container
+                .connection_for_route(&Route::new(2001, SlotAddr::ReplicaOptional))
+                .unwrap()
+                .1,
+            container
+                .connection_for_route(&Route::new(2001, SlotAddr::ReplicaOptional))
+                .unwrap()
+                .1,
+            container
+                .connection_for_route(&Route::new(2001, SlotAddr::ReplicaOptional))
+                .unwrap()
+                .1,
+            container
+                .connection_for_route(&Route::new(2001, SlotAddr::ReplicaOptional))
+                .unwrap()
+                .1,
+        ];
+        addresses.sort();
+        assert_eq!(addresses, vec![31, 31, 33, 33]);
+    }
+
+    #[test]
     fn get_connection_by_address() {
         let container = create_container();
 
@@ -633,6 +939,8 @@ mod tests {
 
         let random_connections: HashSet<_> = container
             .random_connections(3, ConnectionType::User)
+            .expect("No connections found")
+            .into_iter()
             .map(|pair| pair.1)
             .collect();
 
@@ -647,12 +955,9 @@ mod tests {
         let container = create_container();
         remove_all_connections(&container);
 
-        assert_eq!(
-            0,
-            container
-                .random_connections(1, ConnectionType::User)
-                .count()
-        );
+        assert!(container
+            .random_connections(1, ConnectionType::User)
+            .is_none());
     }
 
     #[test]
@@ -665,6 +970,8 @@ mod tests {
         );
         let random_connections: Vec<_> = container
             .random_connections(1, ConnectionType::User)
+            .expect("No connections found")
+            .into_iter()
             .collect();
 
         assert_eq!(vec![(address, 4)], random_connections);
@@ -675,6 +982,8 @@ mod tests {
         let container = create_container();
         let mut random_connections: Vec<_> = container
             .random_connections(1000, ConnectionType::User)
+            .expect("No connections found")
+            .into_iter()
             .map(|pair| pair.1)
             .collect();
         random_connections.sort();
@@ -687,6 +996,8 @@ mod tests {
         let container = create_container_with_strategy(ReadFromReplicaStrategy::RoundRobin, true);
         let mut random_connections: Vec<_> = container
             .random_connections(1000, ConnectionType::PreferManagement)
+            .expect("No connections found")
+            .into_iter()
             .map(|pair| pair.1)
             .collect();
         random_connections.sort();
@@ -863,7 +1174,7 @@ mod tests {
         assert!(container.connection_for_address(&new_node).is_none());
         // Create new connection map
         let new_connection_map = DashMap::new();
-        new_connection_map.insert(new_node.clone(), create_cluster_node(1, false));
+        new_connection_map.insert(new_node.clone(), create_cluster_node(1, false, None));
 
         // Extend the current connection map
         container.extend_connection_map(ConnectionsMap(new_connection_map));

@@ -12,11 +12,8 @@ inputs:
 
 runs:
     using: "composite"
-
     steps:
         - uses: actions/checkout@v4
-          with:
-              submodules: recursive
 
         - name: Install Rust toolchain and protoc
           uses: ./.github/workflows/install-rust-and-protoc
@@ -24,8 +21,6 @@ runs:
               github-token: ${{ inputs.github-token }}
 
         - uses: Swatinem/rust-cache@v2
-          with:
-              github-token: ${{ inputs.github-token }}
 
         - run: cargo fmt --all -- --check
           working-directory: ${{ inputs.cargo-toml-folder }}
@@ -38,11 +33,11 @@ runs:
           # We run clippy without features
         - run: cargo clippy --all-targets -- -D warnings
           working-directory: ${{ inputs.cargo-toml-folder }}
-          shell: bash          
+          shell: bash
 
         - run: |
               cargo update
-              cargo install --locked --version 0.15.1 cargo-deny
+              cargo install --locked cargo-deny
               cargo deny check --config ${GITHUB_WORKSPACE}/deny.toml
           working-directory: ${{ inputs.cargo-toml-folder }}
           shell: bash

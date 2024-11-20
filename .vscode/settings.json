@@ -14,7 +14,7 @@
         "node/rust-client/Cargo.toml",
         "logger_core/Cargo.toml",
         "csharp/lib/Cargo.toml",
-        "submodules/redis-rs/Cargo.toml",
+        "glide-core/redis-rs/Cargo.toml",
         "benchmarks/rust/Cargo.toml",
         "java/Cargo.toml"
     ],
@@ -27,7 +27,7 @@
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,
     "[github-actions-workflow]": {
-        "editor.defaultFormatter": "redhat.vscode-yaml"
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
     },
     "yaml.schemas": {
         "https://json.schemastore.org/github-workflow.json": [
@@ -58,5 +58,6 @@
         "black"
     ],
     "rust-analyzer.cargo.features": "all",
-    "dotnet.defaultSolution": "csharp/csharp.sln"
+    "dotnet.defaultSolution": "csharp/csharp.sln",
+    "java.compile.nullAnalysis.mode": "automatic"
 }

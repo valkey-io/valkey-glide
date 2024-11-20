@@ -1119,6 +1119,7 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void non_UTF8_GlideString_map_of_arrays(BaseClient client) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"));
         byte[] nonUTF8Bytes = new byte[] {(byte) 0xEE};
         GlideString key = gs(UUID.randomUUID().toString());
         GlideString nonUTF8Key = gs(new byte[] {(byte) 0xFE});

@@ -1,7 +1,5 @@
 #![allow(deprecated)]
 
-#[cfg(feature = "async-std-comp")]
-use super::async_std;
 use super::ConnectionLike;
 use super::{setup_connection, AsyncStream, RedisRuntime};
 use crate::cmd::{cmd, Cmd};
@@ -9,12 +7,10 @@ use crate::connection::{
     resp2_is_pub_sub_state_cleared, resp3_is_pub_sub_state_cleared, ConnectionAddr, ConnectionInfo,
     Msg, RedisConnectionInfo,
 };
-#[cfg(any(feature = "tokio-comp", feature = "async-std-comp"))]
+#[cfg(feature = "tokio-comp")]
 use crate::parser::ValueCodec;
 use crate::types::{ErrorKind, FromRedisValue, RedisError, RedisFuture, RedisResult, Value};
 use crate::{from_owned_redis_value, ProtocolVersion, ToRedisArgs};
-#[cfg(all(not(feature = "tokio-comp"), feature = "async-std-comp"))]
-use ::async_std::net::ToSocketAddrs;
 use ::tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 #[cfg(feature = "tokio-comp")]
 use ::tokio::net::lookup_host;
@@ -26,9 +22,8 @@ use futures_util::{
 };
 use std::net::{IpAddr, SocketAddr};
 use std::pin::Pin;
-#[cfg(any(feature = "tokio-comp", feature = "async-std-comp"))]
+#[cfg(feature = "tokio-comp")]
 use tokio_util::codec::Decoder;
-use tracing::info;
 
 /// Represents a stateful redis TCP connection.
 #[deprecated(note = "aio::Connection is deprecated. Use aio::MultiplexedConnection instead.")]
@@ -55,27 +50,6 @@ fn test() {
     assert_sync::<Connection>();
 }
 
-impl<C> Connection<C> {
-    pub(crate) fn map<D>(self, f: impl FnOnce(C) -> D) -> Connection<D> {
-        let Self {
-            con,
-            buf,
-            decoder,
-            db,
-            pubsub,
-            protocol,
-        } = self;
-        Connection {
-            con: f(con),
-            buf,
-            decoder,
-            db,
-            pubsub,
-            protocol,
-        }
-    }
-}
-
 impl<C> Connection<C>
 where
     C: Unpin + AsyncRead + AsyncWrite + Send,
@@ -91,7 +65,7 @@ where
             pubsub: false,
             protocol: connection_info.protocol,
         };
-        setup_connection(connection_info, &mut rv).await?;
+        setup_connection(connection_info, &mut rv, false).await?;
         Ok(rv)
     }
 
@@ -192,30 +166,6 @@ where
         // cancelled *and* all unsubscribe messages were received.
         Ok(())
     }
-}
-
-#[cfg(feature = "async-std-comp")]
-#[cfg_attr(docsrs, doc(cfg(feature = "async-std-comp")))]
-impl<C> Connection<async_std::AsyncStdWrapped<C>>
-where
-    C: Unpin + ::async_std::io::Read + ::async_std::io::Write + Send,
-{
-    /// Constructs a new `Connection` out of a `async_std::io::AsyncRead + async_std::io::AsyncWrite` object
-    /// and a `RedisConnectionInfo`
-    pub async fn new_async_std(connection_info: &RedisConnectionInfo, con: C) -> RedisResult<Self> {
-        Connection::new(connection_info, async_std::AsyncStdWrapped::new(con)).await
-    }
-}
-
-pub(crate) async fn connect<C>(
-    connection_info: &ConnectionInfo,
-    socket_addr: Option<SocketAddr>,
-) -> RedisResult<Connection<C>>
-where
-    C: Unpin + RedisRuntime + AsyncRead + AsyncWrite + Send,
-{
-    let (con, _ip) = connect_simple::<C>(connection_info, socket_addr).await?;
-    Connection::new(&connection_info.redis, con).await
 }
 
 impl<C> ConnectionLike for Connection<C>
@@ -436,8 +386,6 @@ pub(crate) async fn get_socket_addrs(
 ) -> RedisResult<impl Iterator<Item = SocketAddr> + Send + '_> {
     #[cfg(feature = "tokio-comp")]
     let socket_addrs = lookup_host((host, port)).await?;
-    #[cfg(all(not(feature = "tokio-comp"), feature = "async-std-comp"))]
-    let socket_addrs = (host, port).to_socket_addrs().await?;
 
     let mut socket_addrs = socket_addrs.peekable();
     match socket_addrs.peek() {
@@ -454,7 +402,7 @@ fn log_conn_creation<T>(conn_type: &str, node: T, ip: Option<IpAddr>)
 where
     T: std::fmt::Debug,
 {
-    info!(
+    tracing::debug!(
         "Creating {conn_type} connection for node: {node:?}{}",
         ip.map(|ip| format!(", IP: {:?}", ip)).unwrap_or_default()
     );

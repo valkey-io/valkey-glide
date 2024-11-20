@@ -3,7 +3,7 @@
  */
 use crate::client::ConnectionRetryStrategy;
 use std::time::Duration;
-use tokio_retry::strategy::{jitter, ExponentialBackoff};
+use tokio_retry2::strategy::{jitter_range, ExponentialBackoff};
 
 #[derive(Clone, Debug)]
 pub(super) struct RetryStrategy {
@@ -27,7 +27,7 @@ impl RetryStrategy {
     pub(super) fn get_iterator(&self) -> impl Iterator<Item = Duration> {
         ExponentialBackoff::from_millis(self.exponent_base as u64)
             .factor(self.factor as u64)
-            .map(jitter)
+            .map(jitter_range(0.8, 1.2))
             .take(self.number_of_retries as usize)
     }
 }
@@ -56,6 +56,7 @@ pub(crate) fn get_exponential_backoff(
 }
 
 #[cfg(feature = "socket-layer")]
+#[allow(dead_code)]
 pub(crate) fn get_fixed_interval_backoff(
     fixed_interval: u32,
     number_of_retries: u32,
@@ -77,23 +78,39 @@ mod tests {
         let mut counter = 0;
         for duration in intervals {
             counter += 1;
-            assert!(duration.as_millis() <= interval_duration as u128);
+            let upper_limit = (interval_duration as f32 * 1.2) as u128;
+            let lower_limit = (interval_duration as f32 * 0.8) as u128;
+            assert!(
+                lower_limit <= duration.as_millis() || duration.as_millis() <= upper_limit,
+                "{:?}ms <= {:?}ms <= {:?}ms",
+                lower_limit,
+                duration.as_millis(),
+                upper_limit
+            );
         }
         assert_eq!(counter, retries);
     }
 
     #[test]
     fn test_exponential_backoff_with_jitter() {
-        let retries = 3;
-        let base = 10;
-        let factor = 5;
+        let retries = 5;
+        let base = 2;
+        let factor = 100;
         let intervals = get_exponential_backoff(base, factor, retries).get_iterator();
 
         let mut counter = 0;
         for duration in intervals {
             counter += 1;
             let unjittered_duration = factor * (base.pow(counter));
-            assert!(duration.as_millis() <= unjittered_duration as u128);
+            let upper_limit = (unjittered_duration as f32 * 1.2) as u128;
+            let lower_limit = (unjittered_duration as f32 * 0.8) as u128;
+            assert!(
+                lower_limit <= duration.as_millis() || duration.as_millis() <= upper_limit,
+                "{:?}ms <= {:?}ms <= {:?}ms",
+                lower_limit,
+                duration.as_millis(),
+                upper_limit
+            );
         }
 
         assert_eq!(counter, retries);

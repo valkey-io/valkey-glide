@@ -7,8 +7,7 @@ use crate::{
     aio::{ConnectionLike, MultiplexedConnection, Runtime},
     Client,
 };
-#[cfg(all(not(feature = "tokio-comp"), feature = "async-std-comp"))]
-use ::async_std::net::ToSocketAddrs;
+
 use arc_swap::ArcSwap;
 use futures::{
     future::{self, Shared},
@@ -16,8 +15,8 @@ use futures::{
 };
 use futures_util::future::BoxFuture;
 use std::sync::Arc;
-use tokio_retry::strategy::{jitter, ExponentialBackoff};
-use tokio_retry::Retry;
+use tokio_retry2::strategy::{jitter, ExponentialBackoff};
+use tokio_retry2::{Retry, RetryError};
 
 /// A `ConnectionManager` is a proxy that wraps a [multiplexed
 /// connection][multiplexed-connection] and automatically reconnects to the
@@ -79,12 +78,12 @@ macro_rules! reconnect_if_dropped {
     };
 }
 
-/// Handle a connection result. If there's an I/O error, reconnect.
+/// Handle a connection result. If the connection has dropped, reconnect.
 /// Propagate any error.
-macro_rules! reconnect_if_io_error {
+macro_rules! reconnect_if_conn_dropped {
     ($self:expr, $result:expr, $current:expr) => {
         if let Err(e) = $result {
-            if e.is_io_error() {
+            if e.is_connection_dropped() {
                 $self.reconnect($current);
             }
             return Err(e);
@@ -192,12 +191,15 @@ impl ConnectionManager {
         connection_timeout: std::time::Duration,
     ) -> RedisResult<MultiplexedConnection> {
         let retry_strategy = exponential_backoff.map(jitter).take(number_of_retries);
-        Retry::spawn(retry_strategy, || {
-            client.get_multiplexed_async_connection_with_timeouts(
-                response_timeout,
-                connection_timeout,
-                GlideConnectionOptions::default(),
-            )
+        Retry::spawn(retry_strategy, || async {
+            client
+                .get_multiplexed_async_connection_with_timeouts(
+                    response_timeout,
+                    connection_timeout,
+                    GlideConnectionOptions::default(),
+                )
+                .await
+                .map_err(RetryError::transient)
         })
         .await
     }
@@ -250,7 +252,7 @@ impl ConnectionManager {
             .clone()
             .await
             .map_err(|e| e.clone_mostly("Reconnecting failed"));
-        reconnect_if_io_error!(self, connection_result, guard);
+        reconnect_if_conn_dropped!(self, connection_result, guard);
         let result = connection_result?.send_packed_command(cmd).await;
         reconnect_if_dropped!(self, &result, guard);
         result
@@ -271,7 +273,7 @@ impl ConnectionManager {
             .clone()
             .await
             .map_err(|e| e.clone_mostly("Reconnecting failed"));
-        reconnect_if_io_error!(self, connection_result, guard);
+        reconnect_if_conn_dropped!(self, connection_result, guard);
         let result = connection_result?
             .send_packed_commands(cmd, offset, count)
             .await;

@@ -8,10 +8,7 @@ use std::io;
 use std::str::{from_utf8, Utf8Error};
 use std::string::FromUtf8Error;
 
-#[cfg(feature = "ahash")]
-pub(crate) use ahash::{AHashMap as HashMap, AHashSet as HashSet};
 use num_bigint::BigInt;
-#[cfg(not(feature = "ahash"))]
 pub(crate) use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
 
@@ -118,6 +115,14 @@ pub enum ErrorKind {
     /// not native to the system.  This is usually the case if
     /// the cause is another error.
     IoError,
+    /// An error indicating that a fatal error occurred while attempting to send a request to the server,
+    /// meaning the connection was closed before the request was transmitted. Since the server did not process the request,
+    /// it is safe to retry the request.
+    FatalSendError,
+    /// An error indicating that a fatal error occurred while trying to receive a response,
+    /// likely due to the closure of the underlying connection. It is unclear whether
+    /// the server processed the request, making it unsafe to retry the request.
+    FatalReceiveError,
     /// An error raised that was identified on the client before execution.
     ClientError,
     /// An extension error.  This is an error created by the server
@@ -131,7 +136,7 @@ pub enum ErrorKind {
     NoValidReplicasFoundBySentinel,
     /// At least one sentinel connection info is required
     EmptySentinelList,
-    /// Attempted to kill a script/function while they werent' executing
+    /// Attempted to kill a script/function while they weren't executing
     NotBusy,
     /// Used when no valid node connections remain in the cluster connection
     AllConnectionsUnavailable,
@@ -148,6 +153,10 @@ pub enum ErrorKind {
 
     /// Not all slots are covered by the cluster
     NotAllSlotsCovered,
+
+    /// Used when an error occurs on when user perform wrong usage of management operation.
+    /// E.g. not allowed configuration change.
+    UserOperationError,
 }
 
 #[derive(PartialEq, Debug)]
@@ -176,6 +185,12 @@ pub(crate) enum ServerError {
         kind: ServerErrorKind,
         detail: Option<String>,
     },
+}
+
+impl From<tokio::time::error::Elapsed> for RedisError {
+    fn from(_: tokio::time::error::Elapsed) -> Self {
+        RedisError::from((ErrorKind::IoError, "Operation timed out"))
+    }
 }
 
 impl From<ServerError> for RedisError {
@@ -802,6 +817,7 @@ impl fmt::Debug for RedisError {
 
 pub(crate) enum RetryMethod {
     Reconnect,
+    ReconnectAndRetry,
     NoRetry,
     RetryImmediately,
     WaitAndRetry,
@@ -870,6 +886,10 @@ impl RedisError {
             ErrorKind::CrossSlot => "cross-slot",
             ErrorKind::MasterDown => "master down",
             ErrorKind::IoError => "I/O error",
+            ErrorKind::FatalSendError => {
+                "failed to send the request to the server due to a fatal error - the request was not transmitted"
+            }
+            ErrorKind::FatalReceiveError => "a fatal error occurred while attempting to receive a response from the server",
             ErrorKind::ExtensionError => "extension error",
             ErrorKind::ClientError => "client error",
             ErrorKind::ReadOnly => "read-only",
@@ -884,6 +904,7 @@ impl RedisError {
             ErrorKind::RESP3NotSupported => "resp3 is not supported by server",
             ErrorKind::ParseError => "parse error",
             ErrorKind::NotAllSlotsCovered => "not all slots are covered",
+            ErrorKind::UserOperationError => "Wrong usage of management operation",
         }
     }
 
@@ -942,6 +963,12 @@ impl RedisError {
 
     /// Returns true if error was caused by a dropped connection.
     pub fn is_connection_dropped(&self) -> bool {
+        if matches!(
+            self.kind(),
+            ErrorKind::FatalSendError | ErrorKind::FatalReceiveError
+        ) {
+            return true;
+        }
         match self.repr {
             ErrorRepr::IoError(ref err) => matches!(
                 err.kind(),
@@ -957,7 +984,7 @@ impl RedisError {
     pub fn is_unrecoverable_error(&self) -> bool {
         match self.retry_method() {
             RetryMethod::Reconnect => true,
-
+            RetryMethod::ReconnectAndRetry => true,
             RetryMethod::NoRetry => false,
             RetryMethod::RetryImmediately => false,
             RetryMethod::WaitAndRetry => false,
@@ -1064,12 +1091,16 @@ impl RedisError {
 
                     io::ErrorKind::PermissionDenied => RetryMethod::NoRetry,
                     io::ErrorKind::Unsupported => RetryMethod::NoRetry,
+                    io::ErrorKind::TimedOut => RetryMethod::NoRetry,
 
                     _ => RetryMethod::RetryImmediately,
                 },
                 _ => RetryMethod::RetryImmediately,
             },
             ErrorKind::NotAllSlotsCovered => RetryMethod::NoRetry,
+            ErrorKind::FatalReceiveError => RetryMethod::Reconnect,
+            ErrorKind::FatalSendError => RetryMethod::ReconnectAndRetry,
+            ErrorKind::UserOperationError => RetryMethod::NoRetry,
         }
     }
 }
@@ -1120,9 +1151,9 @@ impl InfoDict {
     /// the INFO command.  Each line is a key, value pair with the
     /// key and value separated by a colon (`:`).  Lines starting with a
     /// hash (`#`) are ignored.
-    pub fn new(kvpairs: &str) -> InfoDict {
+    pub fn new(key_val_pairs: &str) -> InfoDict {
         let mut map = HashMap::new();
-        for line in kvpairs.lines() {
+        for line in key_val_pairs.lines() {
             if line.is_empty() || line.starts_with('#') {
                 continue;
             }
@@ -1150,7 +1181,7 @@ impl InfoDict {
         self.map.get(*key)
     }
 
-    /// Checks if a key is contained in the info dicf.
+    /// Checks if a key is contained in the info dict.
     pub fn contains_key(&self, key: &&str) -> bool {
         self.find(key).is_some()
     }
@@ -1226,7 +1257,7 @@ pub trait ToRedisArgs: Sized {
         NumericBehavior::NonNumeric
     }
 
-    /// Returns an indiciation if the value contained is exactly one
+    /// Returns an indication if the value contained is exactly one
     /// argument.  It returns false if it's zero or more than one.  This
     /// is used in some high level functions to intelligently switch
     /// between `GET` and `MGET` variants.
@@ -1372,7 +1403,7 @@ ryu_based_to_redis_impl!(f64, NumericBehavior::NumberIsFloat);
     feature = "bigdecimal",
     feature = "num-bigint"
 ))]
-macro_rules! bignum_to_redis_impl {
+macro_rules! big_num_to_redis_impl {
     ($t:ty) => {
         impl ToRedisArgs for $t {
             fn write_redis_args<W>(&self, out: &mut W)
@@ -1386,13 +1417,13 @@ macro_rules! bignum_to_redis_impl {
 }
 
 #[cfg(feature = "rust_decimal")]
-bignum_to_redis_impl!(rust_decimal::Decimal);
+big_num_to_redis_impl!(rust_decimal::Decimal);
 #[cfg(feature = "bigdecimal")]
-bignum_to_redis_impl!(bigdecimal::BigDecimal);
+big_num_to_redis_impl!(bigdecimal::BigDecimal);
 #[cfg(feature = "num-bigint")]
-bignum_to_redis_impl!(num_bigint::BigInt);
+big_num_to_redis_impl!(num_bigint::BigInt);
 #[cfg(feature = "num-bigint")]
-bignum_to_redis_impl!(num_bigint::BigUint);
+big_num_to_redis_impl!(num_bigint::BigUint);
 
 impl ToRedisArgs for bool {
     fn write_redis_args<W>(&self, out: &mut W)
@@ -1940,7 +1971,7 @@ impl FromRedisValue for String {
 /// Implement `FromRedisValue` for `$Type` (which should use the generic parameter `$T`).
 ///
 /// The implementation parses the value into a vec, and then passes the value through `$convert`.
-/// If `$convert` is ommited, it defaults to `Into::into`.
+/// If `$convert` is omitted, it defaults to `Into::into`.
 macro_rules! from_vec_from_redis_value {
     (<$T:ident> $Type:ty) => {
         from_vec_from_redis_value!(<$T> $Type; Into::into);
@@ -2140,16 +2171,16 @@ where
 {
     fn from_redis_value(v: &Value) -> RedisResult<BTreeSet<T>> {
         let v = get_inner_value(v);
-        let items = v
-            .as_sequence()
-            .ok_or_else(|| invalid_type_error_inner!(v, "Response type not btreeset compatible"))?;
+        let items = v.as_sequence().ok_or_else(|| {
+            invalid_type_error_inner!(v, "Response type not btree_set compatible")
+        })?;
         items.iter().map(|item| from_redis_value(item)).collect()
     }
     fn from_owned_redis_value(v: Value) -> RedisResult<BTreeSet<T>> {
         let v = get_owned_inner_value(v);
         let items = v
             .into_sequence()
-            .map_err(|v| invalid_type_error_inner!(v, "Response type not btreeset compatible"))?;
+            .map_err(|v| invalid_type_error_inner!(v, "Response type not btree_set compatible"))?;
         items
             .into_iter()
             .map(|item| from_owned_redis_value(item))

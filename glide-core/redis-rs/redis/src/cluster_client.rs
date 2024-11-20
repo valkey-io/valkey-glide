@@ -327,13 +327,13 @@ impl ClusterClientBuilder {
         self
     }
 
-    /// Sets maximal wait time in millisceonds between retries for the new ClusterClient.
+    /// Sets maximal wait time in milliseconds between retries for the new ClusterClient.
     pub fn max_retry_wait(mut self, max_wait: u64) -> ClusterClientBuilder {
         self.builder_params.retries_configuration.max_wait_time = max_wait;
         self
     }
 
-    /// Sets minimal wait time in millisceonds between retries for the new ClusterClient.
+    /// Sets minimal wait time in milliseconds between retries for the new ClusterClient.
     pub fn min_retry_wait(mut self, min_wait: u64) -> ClusterClientBuilder {
         self.builder_params.retries_configuration.min_wait_time = min_wait;
         self
@@ -387,6 +387,21 @@ impl ClusterClientBuilder {
         self
     }
 
+    /// Set the read strategy for this client.
+    ///
+    /// The parameter `read_strategy` can be one of:
+    /// `ReadFromReplicaStrategy::AZAffinity(availability_zone)` - attempt to access replicas in the same availability zone.
+    /// If no suitable replica is found (i.e. no replica could be found in the requested availability zone), choose any replica. Falling back to primary if needed.
+    /// `ReadFromReplicaStrategy::RoundRobin` - reads are distributed across replicas for load balancing using round-robin algorithm. Falling back to primary if needed.
+    /// `ReadFromReplicaStrategy::AlwaysFromPrimary` ensures all read and write queries are directed to the primary node.
+    ///
+    /// # Parameters
+    /// - `read_strategy`: defines the replica routing strategy.
+    pub fn read_from(mut self, read_strategy: ReadFromReplicaStrategy) -> ClusterClientBuilder {
+        self.builder_params.read_from_replicas = read_strategy;
+        self
+    }
+
     /// Enables periodic topology checks for this client.
     ///
     /// If enabled, periodic topology checks will be executed at the configured intervals to examine whether there
@@ -400,9 +415,9 @@ impl ClusterClientBuilder {
     }
 
     /// Enables periodic connections checks for this client.
-    /// If enabled, the conenctions to the cluster nodes will be validated periodicatly, per configured interval.
+    /// If enabled, the connections to the cluster nodes will be validated periodically, per configured interval.
     /// In addition, for tokio runtime, passive disconnections could be detected instantly,
-    /// triggering reestablishemnt, w/o waiting for the next periodic check.
+    /// triggering reestablishment, w/o waiting for the next periodic check.
     #[cfg(feature = "cluster-async")]
     pub fn periodic_connections_checks(mut self, interval: Duration) -> ClusterClientBuilder {
         self.builder_params.connections_validation_interval = Some(interval);

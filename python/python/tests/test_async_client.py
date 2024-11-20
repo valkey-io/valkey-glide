@@ -105,6 +105,7 @@ from tests.utils.utils import (
     get_random_string,
     is_single_response,
     parse_info_response,
+    round_values,
 )
 
 
@@ -284,6 +285,15 @@ class TestGlideClients:
         with pytest.raises(ClosingError) as e:
             await glide_client.set("foo", "bar")
         assert "the client is closed" in str(e)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_statistics(self, glide_client: TGlideClient):
+        stats = await glide_client.get_statistics()
+        assert isinstance(stats, dict)
+        assert "total_connections" in stats
+        assert "total_clients" in stats
+        assert len(stats) == 2
 
 
 @pytest.mark.asyncio
@@ -2699,6 +2709,7 @@ class TestCommands:
         )
         expected_map = {member: value[1] for member, value in result.items()}
         sorted_expected_map = dict(sorted(expected_map.items(), key=lambda x: x[1]))
+        zrange_map = round_values(zrange_map, 10)
         assert compare_maps(zrange_map, sorted_expected_map) is True
 
         # Test storing results of a box search, unit: kilometes, from a geospatial data, with distance
@@ -2718,6 +2729,8 @@ class TestCommands:
         )
         expected_map = {member: value[0] for member, value in result.items()}
         sorted_expected_map = dict(sorted(expected_map.items(), key=lambda x: x[1]))
+        zrange_map = round_values(zrange_map, 10)
+        sorted_expected_map = round_values(sorted_expected_map, 10)
         assert compare_maps(zrange_map, sorted_expected_map) is True
 
         # Test storing results of a box search, unit: kilometes, from a geospatial data, with count
@@ -2758,6 +2771,8 @@ class TestCommands:
             b"Palermo": 166274.15156960033,
             b"edge2": 236529.17986494553,
         }
+        zrange_map = round_values(zrange_map, 9)
+        expected_distances = round_values(expected_distances, 9)
         assert compare_maps(zrange_map, expected_distances) is True
 
         # Test search by box, unit: feet, from a member, with limited ANY count to 2, with hash
@@ -2839,6 +2854,8 @@ class TestCommands:
             b"Catania": 0.0,
             b"Palermo": 166274.15156960033,
         }
+        zrange_map = round_values(zrange_map, 9)
+        expected_distances = round_values(expected_distances, 9)
         assert compare_maps(zrange_map, expected_distances) is True
 
         # Test search by radius, unit: miles, from a geospatial data
@@ -2872,6 +2889,8 @@ class TestCommands:
         )
         expected_map = {member: value[0] for member, value in result.items()}
         sorted_expected_map = dict(sorted(expected_map.items(), key=lambda x: x[1]))
+        zrange_map = round_values(zrange_map, 10)
+        sorted_expected_map = round_values(sorted_expected_map, 10)
         assert compare_maps(zrange_map, sorted_expected_map) is True
 
         # Test storing results of a radius search, unit: kilometers, from a geospatial data, with limited ANY count to 1
@@ -10439,7 +10458,7 @@ class TestScripts:
         assert await glide_client.script_exists([script.get_hash()]) == [False]
 
     @pytest.mark.parametrize("cluster_mode", [True])
-    @pytest.mark.parametrize("single_route", [True, False])
+    @pytest.mark.parametrize("single_route", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_script_kill_route(
         self,

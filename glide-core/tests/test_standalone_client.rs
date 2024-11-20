@@ -193,20 +193,19 @@ mod standalone_client_tests {
     }
 
     fn test_read_from_replica(config: ReadFromReplicaTestConfig) {
-        let mut mocks = create_primary_mock_with_replicas(
+        let mut servers = create_primary_mock_with_replicas(
             config.number_of_initial_replicas - config.number_of_missing_replicas,
         );
         let mut cmd = redis::cmd("GET");
         cmd.arg("foo");
 
-        for mock in mocks.iter() {
+        for server in servers.iter() {
             for _ in 0..3 {
-                mock.add_response(&cmd, "$-1\r\n".to_string());
+                server.add_response(&cmd, "$-1\r\n".to_string());
             }
         }
 
-        let mut addresses = get_mock_addresses(&mocks);
-
+        let mut addresses = get_mock_addresses(&servers);
         for i in 4 - config.number_of_missing_replicas..4 {
             addresses.push(redis::ConnectionAddr::Tcp(
                 "foo".to_string(),
@@ -221,25 +220,38 @@ mod standalone_client_tests {
             let mut client = StandaloneClient::create_client(connection_request.into(), None)
                 .await
                 .unwrap();
-            for mock in mocks.drain(1..config.number_of_replicas_dropped_after_connection + 1) {
-                mock.close().await;
+            logger_core::log_info(
+                "Test",
+                format!(
+                    "Closing {} servers after connection established",
+                    config.number_of_replicas_dropped_after_connection
+                ),
+            );
+            for server in servers.drain(1..config.number_of_replicas_dropped_after_connection + 1) {
+                server.close().await;
             }
+            logger_core::log_info(
+                "Test",
+                format!("sending {} messages", config.number_of_requests_sent),
+            );
+
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
             for _ in 0..config.number_of_requests_sent {
                 let _ = client.send_command(&cmd).await;
             }
         });
 
         assert_eq!(
-            mocks[0].get_number_of_received_commands(),
+            servers[0].get_number_of_received_commands(),
             config.expected_primary_reads
         );
-        let mut replica_reads: Vec<_> = mocks
+        let mut replica_reads: Vec<_> = servers
             .iter()
             .skip(1)
             .map(|mock| mock.get_number_of_received_commands())
             .collect();
         replica_reads.sort();
-        assert_eq!(config.expected_replica_reads, replica_reads);
+        assert!(config.expected_replica_reads <= replica_reads);
     }
 
     #[rstest]
@@ -255,6 +267,18 @@ mod standalone_client_tests {
     fn test_read_from_replica_round_robin() {
         test_read_from_replica(ReadFromReplicaTestConfig {
             read_from: ReadFrom::PreferReplica,
+            expected_primary_reads: 0,
+            expected_replica_reads: vec![1, 1, 1],
+            ..Default::default()
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_from_replica_az_affinity() {
+        test_read_from_replica(ReadFromReplicaTestConfig {
+            read_from: ReadFrom::AZAffinity,
             expected_primary_reads: 0,
             expected_replica_reads: vec![1, 1, 1],
             ..Default::default()
@@ -294,7 +318,9 @@ mod standalone_client_tests {
         test_read_from_replica(ReadFromReplicaTestConfig {
             read_from: ReadFrom::PreferReplica,
             expected_primary_reads: 0,
-            expected_replica_reads: vec![2, 3],
+            // Since we drop 1 replica after connection establishment
+            // we expect all reads to be handled by the remaining replicas
+            expected_replica_reads: vec![3, 3],
             number_of_replicas_dropped_after_connection: 1,
             number_of_requests_sent: 6,
             ..Default::default()

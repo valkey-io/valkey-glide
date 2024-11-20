@@ -2,76 +2,88 @@ name: Go CI
 
 on:
     push:
-        branches: [ "main" ]
+        branches:
+            - main
+            - release-*
+            - v*
         paths:
             - glide-core/src/**
-            - submodules/**
+            - glide-core/redis-rs/redis/src/**
+            - utils/cluster_manager.py
             - go/**
             - .github/workflows/go.yml
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
-            - .github/workflows/install-valkey/action.yml
-            - .github/json_matrices/build-matrix.json
+            - .github/workflows/install-engine/action.yml
+            - .github/workflows/create-test-matrices/action.yml
+            - .github/json_matrices/**
     pull_request:
         paths:
             - glide-core/src/**
-            - submodules/**
+            - glide-core/redis-rs/redis/src/**
+            - utils/cluster_manager.py
             - go/**
             - .github/workflows/go.yml
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
-            - .github/workflows/install-valkey/action.yml
-            - .github/json_matrices/build-matrix.json
+            - .github/workflows/install-engine/action.yml
+            - .github/workflows/create-test-matrices/action.yml
+            - .github/json_matrices/**
     workflow_dispatch:
+        inputs:
+            full-matrix:
+                description: "Run the full engine, host, and language version matrix"
+                type: boolean
+                default: false
+            name:
+                required: false
+                type: string
+                description: "(Optional) Test run name"
+
+    workflow_call:
 
 concurrency:
-    group: go-${{ github.head_ref || github.ref }}
+    group: go-${{ github.head_ref || github.ref }}-${{ toJson(inputs) }}
     cancel-in-progress: true
 
+run-name:
+    # Set custom name if job is started manually and name is given
+    ${{ github.event_name == 'workflow_dispatch' && (inputs.name == '' && format('{0} @ {1} {2}', github.ref_name, github.sha, toJson(inputs)) || inputs.name) || '' }}
+
+env:
+    CARGO_TERM_COLOR: always
+
 jobs:
-    load-engine-matrix:
-      runs-on: ubuntu-latest
-      outputs:
-        matrix: ${{ steps.load-engine-matrix.outputs.matrix }}
-      steps:
-          - name: Checkout
-            uses: actions/checkout@v4
+    get-matrices:
+        runs-on: ubuntu-latest
+        outputs:
+            engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
+            host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
+            version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
+        steps:
+            - uses: actions/checkout@v4
+            - id: get-matrices
+              uses: ./.github/workflows/create-test-matrices
+              with:
+                  language-name: go
+                  # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
+                  run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
 
-          - name: Load the engine matrix
-            id: load-engine-matrix
-            shell: bash
-            run: echo "matrix=$(jq -c . < .github/json_matrices/engine-matrix.json)" >> $GITHUB_OUTPUT
-
-    build-and-test-go-client:
-        needs: load-engine-matrix
+    test-go:
+        needs: get-matrices
         timeout-minutes: 35
         strategy:
-            # Run all jobs
             fail-fast: false
             matrix:
-                go:
-                    - '1.22.0'
-                engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
-                host:
-                  - {
-                    OS: ubuntu,
-                    RUNNER: ubuntu-latest,
-                    TARGET: x86_64-unknown-linux-gnu
-                  }
-                  # - {
-                  #   OS: macos,
-                  #   RUNNER: macos-latest,
-                  #   TARGET: aarch64-apple-darwin
-                  # }
-
+                go: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output) }}
+                engine: ${{ fromJson(needs.get-matrices.outputs.engine-matrix-output) }}
+                host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
         runs-on: ${{ matrix.host.RUNNER }}
 
         steps:
             - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
 
             - name: Set up Go ${{ matrix.go }}
               uses: actions/setup-go@v5
@@ -99,14 +111,9 @@ jobs:
               working-directory: ./go
               run: make build
 
-            - name: Run linters
-              working-directory: ./go
-              run: make lint-ci
-
             - name: Run tests
               working-directory: ./go
-              run: |
-                make test
+              run: make test
 
             - uses: ./.github/workflows/test-benchmark
               with:
@@ -117,94 +124,106 @@ jobs:
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: reports-go-${{ matrix.go }}-redis-${{ matrix.redis }}-${{ matrix.os }}
+                  name: test-report-go-${{ matrix.go }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.RUNNER }}
                   path: |
                       utils/clusters/**
                       benchmarks/results/**
 
-    build-amazonlinux-latest:
-        if: github.repository_owner == 'valkey-io'
+    lint:
+        timeout-minutes: 10
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: ./.github/workflows/lint-rust
+              with:
+                  cargo-toml-folder: go
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Set up Go ${{ matrix.go }}
+              uses: actions/setup-go@v5
+              with:
+                  go-version: "1.22.0"
+                  cache-dependency-path: go/go.sum
+
+            - name: Install protoc
+              uses: ./.github/workflows/install-rust-and-protoc
+              with:
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Install and run linters
+              working-directory: go
+              run: |
+                  make install-dev-tools install-build-tools build lint-ci
+
+    get-containers:
+        runs-on: ubuntu-latest
+        if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
+        outputs:
+            engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
+            host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
+            version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
+
+        steps:
+            - uses: actions/checkout@v4
+            - id: get-matrices
+              uses: ./.github/workflows/create-test-matrices
+              with:
+                  language-name: go
+                  run-full-matrix: true
+                  containers: true
+
+    test-go-container:
+        runs-on: ${{ matrix.host.RUNNER }}
+        needs: [get-containers]
+        timeout-minutes: 25
         strategy:
-            # Run all jobs
             fail-fast: false
             matrix:
-                go:
-                    - 1.22.0
-        runs-on: ubuntu-latest
-        container: amazonlinux:latest
-        timeout-minutes: 15
+                go: ${{ fromJson(needs.get-containers.outputs.version-matrix-output) }}
+                engine: ${{ fromJson(needs.get-containers.outputs.engine-matrix-output) }}
+                host: ${{ fromJson(needs.get-containers.outputs.host-matrix-output) }}
+        container:
+            image: ${{ matrix.host.IMAGE }}
+            options: ${{ join(' -q ', matrix.host.CONTAINER_OPTIONS) }} # adding `-q` to bypass empty options
         steps:
             - name: Install git
               run: |
-                  yum -y remove git
-                  yum -y remove git-*
-                  yum -y install https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
                   yum update
-                  yum install -y git
-                  git --version
-
-            - uses: actions/checkout@v4
-
-            - name: Checkout submodules
-              run: |
+                  yum install -y git tar
                   git config --global --add safe.directory "$GITHUB_WORKSPACE"
-                  git submodule update --init --recursive
-
-            - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
-              with:
-                  os: "amazon-linux"
-                  target: "x86_64-unknown-linux-gnu"
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-                  engine-version: "7.2.5"
-
-            - name: Install Go
-              run: |
-                  yum -y install wget
-                  yum -y install tar
-                  wget https://go.dev/dl/go${{ matrix.go }}.linux-amd64.tar.gz
-                  tar -C /usr/local -xzf go${{ matrix.go }}.linux-amd64.tar.gz
-                  echo "/usr/local/go/bin" >> $GITHUB_PATH
-                  echo "$HOME/go/bin" >> $GITHUB_PATH
-
-            - name: Install tools for Go ${{ matrix.go }}
-              working-directory: ./go
-              run: make install-tools-go${{ matrix.go }}
-
-            - name: Set LD_LIBRARY_PATH
-              run: echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$GITHUB_WORKSPACE/go/target/release/deps/" >> $GITHUB_ENV
-
-            - name: Build client
-              working-directory: ./go
-              run: make build
-
-            - name: Run linters
-              working-directory: ./go
-              run: make lint-ci
-
-            - name: Run tests
-              working-directory: ./go
-              run: |
-                make test
-
-            - name: Upload cluster manager logs
-              if: always()
-              continue-on-error: true
-              uses: actions/upload-artifact@v4
-              with:
-                  name: cluster-manager-logs-${{ matrix.go }}-redis-6-amazonlinux
-                  path: |
-                      utils/clusters/**
-
-    lint-rust:
-        timeout-minutes: 15
-        runs-on: ubuntu-latest
-        steps:
+                  echo IMAGE=amazonlinux:latest | sed -r 's/:/-/g' >> $GITHUB_ENV
+            # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
             - uses: actions/checkout@v4
               with:
                   submodules: recursive
 
-            - uses: ./.github/workflows/lint-rust
+            - name: Set up Go ${{ matrix.go }}
+              uses: actions/setup-go@v5
               with:
-                  cargo-toml-folder: ./go
-              name: lint go rust
+                  go-version: ${{ matrix.go }}
+                  cache-dependency-path: go/go.sum
+
+            - name: Install shared software dependencies
+              uses: ./.github/workflows/install-shared-dependencies
+              with:
+                  os: ${{ matrix.host.OS }}
+                  target: ${{ matrix.host.TARGET }}
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  engine-version: ${{ matrix.engine.version }}
+
+            - name: Install & build & test
+              working-directory: go
+              run: |
+                  LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$GITHUB_WORKSPACE/go/target/release/deps/
+                  make install-tools-go${{ matrix.go }} build test
+
+            - name: Upload test reports
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: test-reports-go-${{ matrix.go }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ env.IMAGE }}-${{ matrix.host.ARCH }}
+                  path: |
+                      utils/clusters/**
+                      benchmarks/results/**
