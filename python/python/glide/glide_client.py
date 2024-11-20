@@ -26,7 +26,6 @@ from glide.protobuf.connection_request_pb2 import ConnectionRequest
 from glide.protobuf.response_pb2 import RequestErrorType, Response
 from glide.protobuf_codec import PartialMessageException, ProtobufCodec
 from glide.routes import Route, set_protobuf_route
-from pyrsistent import optional
 
 from .glide import (
     DEFAULT_TIMEOUT_IN_MILLISECONDS,
