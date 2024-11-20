@@ -169,7 +169,7 @@ public class StandaloneClientTests {
 
     @SneakyThrows
     @Test
-    public void test_update_connection_password_auth_non_valid_pass() {
+    public void update_connection_password_auth_non_valid_pass() {
         // Test Client fails on call to updateConnectionPassword with invalid parameters
         try (var testClient = GlideClient.createClient(commonClientConfig().build()).get()) {
             var emptyPasswordException =
@@ -186,7 +186,7 @@ public class StandaloneClientTests {
 
     @SneakyThrows
     @Test
-    public void test_update_connection_password_no_server_auth() {
+    public void update_connection_password_no_server_auth() {
         var pwd = UUID.randomUUID().toString();
 
         try (var testClient = GlideClient.createClient(commonClientConfig().build()).get()) {
@@ -203,7 +203,7 @@ public class StandaloneClientTests {
 
     @SneakyThrows
     @Test
-    public void test_update_connection_password_long() {
+    public void update_connection_password_long() {
         var pwd = RandomStringUtils.randomAlphabetic(1000);
 
         try (var testClient = GlideClient.createClient(commonClientConfig().build()).get()) {
@@ -218,7 +218,7 @@ public class StandaloneClientTests {
     @Timeout(50)
     @SneakyThrows
     @Test
-    public void test_replace_password_immediateAuth_wrong_password() {
+    public void replace_password_immediateAuth_wrong_password() {
         var pwd = UUID.randomUUID().toString();
         var notThePwd = UUID.randomUUID().toString();
 
@@ -247,7 +247,7 @@ public class StandaloneClientTests {
     @SneakyThrows
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void test_update_connection_password_connection_lost_before_password_update(
+    public void update_connection_password_connection_lost_before_password_update(
             boolean immediateAuth) {
         GlideClient adminClient = GlideClient.createClient(commonClientConfig().build()).get();
         var pwd = UUID.randomUUID().toString();
