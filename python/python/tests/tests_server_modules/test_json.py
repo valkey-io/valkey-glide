@@ -7,8 +7,8 @@ import typing
 
 import pytest
 from glide.async_commands.core import ConditionalChange, InfoSection
-from glide.async_commands.server_modules import json
-from glide.async_commands.server_modules.json import (
+from glide.async_commands.server_modules import glide_json as json
+from glide.async_commands.server_modules.glide_json import (
     JsonArrIndexOptions,
     JsonArrPopOptions,
     JsonGetOptions,

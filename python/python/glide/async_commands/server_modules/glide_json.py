@@ -3,16 +3,16 @@
 
     Examples:
 
-        >>> from glide import json
-        >>> import json as jsonpy
+        >>> from glide import glide_json
+        >>> import json
         >>> value = {'a': 1.0, 'b': 2}
-        >>> json_str = jsonpy.dumps(value) # Convert Python dictionary to JSON string using json.dumps()
+        >>> json_str = json.dumps(value) # Convert Python dictionary to JSON string using json.dumps()
         >>> await json.set(client, "doc", "$", json_str)
             'OK'  # Indicates successful setting of the value at path '$' in the key stored at `doc`.
-        >>> json_get = await json.get(client, "doc", "$") # Returns the value at path '$' in the JSON document stored at `doc` as JSON string.
+        >>> json_get = await glide_json.get(client, "doc", "$") # Returns the value at path '$' in the JSON document stored at `doc` as JSON string.
         >>> print(json_get)
             b"[{\"a\":1.0,\"b\":2}]" 
-        >>> jsonpy.loads(str(json_get))
+        >>> json.loads(str(json_get))
             [{"a": 1.0, "b" :2}] # JSON object retrieved from the key `doc` using json.loads()
         """
 from typing import List, Optional, Union, cast
@@ -100,7 +100,7 @@ class JsonArrPopOptions:
 
     def to_args(self) -> List[TEncodable]:
         """
-        Get the options as a list of arguments for the JSON.ARRPOP command.
+        Get the options as a list of arguments for the `JSON.ARRPOP` command.
 
         Returns:
             List[TEncodable]: A list containing the path and, if specified, the index.
@@ -135,11 +135,11 @@ async def set(
             If `value` isn't set because of `set_condition`, returns None.
 
     Examples:
-        >>> from glide import json
-        >>> import json as jsonpy
+        >>> from glide import glide_json
+        >>> import json
         >>> value = {'a': 1.0, 'b': 2}
-        >>> json_str = jsonpy.dumps(value)
-        >>> await json.set(client, "doc", "$", json_str)
+        >>> json_str = json.dumps(value)
+        >>> await glide_json.set(client, "doc", "$", json_str)
             'OK'  # Indicates successful setting of the value at path '$' in the key stored at `doc`.
     """
     args = ["JSON.SET", key, path, value]
@@ -181,16 +181,16 @@ async def get(
         For more information about the returned type, see `TJsonResponse`.
 
     Examples:
-        >>> from glide import json, JsonGetOptions
-        >>> import  as jsonpy
-        >>> json_str = await json.get(client, "doc", "$")
-        >>> jsonpy.loads(str(json_str)) # Parse JSON string to Python data
+        >>> from glide import glide_json, JsonGetOptions
+        >>> import json
+        >>> json_str = await glide_json.get(client, "doc", "$")
+        >>> json.loads(str(json_str)) # Parse JSON string to Python data
             [{"a": 1.0, "b" :2}]  # JSON object retrieved from the key `doc` using json.loads()
-        >>> await json.get(client, "doc", "$")
+        >>> await glide_json.get(client, "doc", "$")
             b"[{\"a\":1.0,\"b\":2}]"  # Returns the value at path '$' in the JSON document stored at `doc`.
-        >>> await json.get(client, "doc", ["$.a", "$.b"], JsonGetOptions(indent="  ", newline="\n", space=" "))
+        >>> await glide_json.get(client, "doc", ["$.a", "$.b"], JsonGetOptions(indent="  ", newline="\n", space=" "))
             b"{\n \"$.a\": [\n  1.0\n ],\n \"$.b\": [\n  2\n ]\n}"  # Returns the values at paths '$.a' and '$.b' in the JSON document stored at `doc`, with specified formatting options.
-        >>> await json.get(client, "doc", "$.non_existing_path")
+        >>> await glide_json.get(client, "doc", "$.non_existing_path")
             b"[]"  # Returns an empty array since the path '$.non_existing_path' does not exist in the JSON document stored at `doc`.
     """
     args = ["JSON.GET", key]
@@ -201,53 +201,6 @@ async def get(
             paths = [paths]
         args.extend(paths)
 
-    return cast(TJsonResponse[Optional[bytes]], await client.custom_command(args))
-
-
-async def mget(
-    client: TGlideClient,
-    keys: List[TEncodable],
-    path: TEncodable,
-) -> List[Optional[bytes]]:
-    """
-    Retrieves the JSON values at the specified `path` stored at multiple `keys`.
-
-    Note:
-        In cluster mode, if keys in `keys` map to different hash slots, the command
-        will be split across these slots and executed separately for each. This means the command
-        is atomic only at the slot level. If one or more slot-specific requests fail, the entire
-        call will return the first encountered error, even though some requests may have succeeded
-        while others did not. If this behavior impacts your application logic, consider splitting
-        the request into sub-requests per slot to ensure atomicity.
-
-    Args:
-        client (TGlideClient): The client to execute the command.
-        keys (List[TEncodable]): A list of keys for the JSON documents.
-        path (TEncodable): The path within the JSON documents.
-
-    Returns:
-        List[Optional[bytes]]:
-            For JSONPath (`path` starts with `$`):
-                Returns a list of byte representations of the values found at the given path for each key.
-                If `path` does not exist within the key, the entry will be an empty array.
-            For legacy path (`path` doesn't starts with `$`):
-                Returns a list of byte representations of the values found at the given path for each key.
-                If `path` does not exist within the key, the entry will be None.
-            If a key doesn't exist, the corresponding list element will be None.
-
-
-    Examples:
-        >>> from glide import json as glideJson
-        >>> import json
-        >>> json_strs = await glideJson.mget(client, ["doc1", "doc2"], "$")
-        >>> [json.loads(js) for js in json_strs]  # Parse JSON strings to Python data
-            [[{"a": 1.0, "b": 2}], [{"a": 2.0, "b": {"a": 3.0, "b" : 4.0}}]]  # JSON objects retrieved from keys `doc1` and `doc2`
-        >>> await glideJson.mget(client, ["doc1", "doc2"], "$.a")
-            [b"[1.0]", b"[2.0]"]  # Returns values at path '$.a' for the JSON documents stored at `doc1` and `doc2`.
-        >>> await glideJson.mget(client, ["doc1"], "$.non_existing_path")
-            [None]  # Returns an empty array since the path '$.non_existing_path' does not exist in the JSON document stored at `doc1`.
-    """
-    args = ["JSON.MGET"] + keys + [path]
     return cast(TJsonResponse[Optional[bytes]], await client.custom_command(args))
 
 
@@ -281,15 +234,15 @@ async def arrappend(
         For more information about the returned type, see `TJsonResponse`.
 
     Examples:
-        >>> from glide import json as valkeyJson
+        >>> from glide import glide_json
         >>> import json
-        >>> await valkeyJson.set(client, "doc", "$", '{"a": 1, "b": ["one", "two"]}')
+        >>> await glide_json.set(client, "doc", "$", '{"a": 1, "b": ["one", "two"]}')
             'OK'  # Indicates successful setting of the value at path '$' in the key stored at `doc`.
-        >>> await valkeyJson.arrappend(client, "doc", ["three"], "$.b")
+        >>> await glide_json.arrappend(client, "doc", ["three"], "$.b")
             [3]  # Returns the new length of the array at path '$.b' after appending the value.
-        >>> await valkeyJson.arrappend(client, "doc", ["four"], ".b")
+        >>> await glide_json.arrappend(client, "doc", ["four"], ".b")
             4 # Returns the new length of the array at path '.b' after appending the value.
-        >>> json.loads(await valkeyJson.get(client, "doc", "."))
+        >>> json.loads(await glide_json.get(client, "doc", "."))
             {"a": 1, "b": ["one", "two", "three", "four"]}  # Returns the updated JSON document
     """
     args = ["JSON.ARRAPPEND", key, path] + values
@@ -324,7 +277,7 @@ async def arrindex(
             Defaults to the full array if not provided. See `JsonArrIndexOptions`.
 
     Returns:
-        Optional[Union[int, List[int]]]:
+        Optional[TJsonResponse[int]]:
             For JSONPath (`path` starts with `$`):
                 Returns an array of integers for every possible path, indicating of the first occurrence of `value` within the array,
                 or None for JSON values matching the path that are not an array.
@@ -336,28 +289,29 @@ async def arrindex(
                 If multiple paths match, the index of the value from the first matching array is returned.
                 If the JSON value at the `path` is not an array or if `path` does not exist, an error is raised.
             If `key` does not exist, an error is raised.
+        For more information about the returned type, see `TJsonResponse`.
 
     Examples:
-        >>> from glide import json
-        >>> await json.set(client, "doc", "$", '[[], ["a"], ["a", "b"], ["a", "b", "c"]]')
+        >>> from glide import glide_json
+        >>> await glide_json.set(client, "doc", "$", '[[], ["a"], ["a", "b"], ["a", "b", "c"]]')
             'OK'
-        >>> await json.arrindex(client, "doc", "$[*]", '"b"')
+        >>> await glide_json.arrindex(client, "doc", "$[*]", '"b"')
             [-1, -1, 1, 1]
-        >>> await json.set(client, "doc", ".", '{"children": ["John", "Jack", "Tom", "Bob", "Mike"]}')
+        >>> await glide_json.set(client, "doc", ".", '{"children": ["John", "Jack", "Tom", "Bob", "Mike"]}')
             'OK'
-        >>> await json.arrindex(client, "doc", ".children", '"Tom"')
+        >>> await glide_json.arrindex(client, "doc", ".children", '"Tom"')
             2
-        >>> await json.set(client, "doc", "$", '{"fruits": ["apple", "banana", "cherry", "banana", "grape"]}')
+        >>> await glide_json.set(client, "doc", "$", '{"fruits": ["apple", "banana", "cherry", "banana", "grape"]}')
             'OK'
-        >>> await json.arrindex(client, "doc", "$.fruits", '"banana"', JsonArrIndexOptions(start=2, end=4))
+        >>> await glide_json.arrindex(client, "doc", "$.fruits", '"banana"', JsonArrIndexOptions(start=2, end=4))
             3
-        >>> await json.set(client, "k", ".", '[1, 2, "a", 4, "a", 6, 7, "b"]')
+        >>> await glide_json.set(client, "k", ".", '[1, 2, "a", 4, "a", 6, 7, "b"]')
             'OK'
-        >>> await json.arrindex(client, "k", ".", '"b"', JsonArrIndexOptions(start=4, end=0))
+        >>> await glide_json.arrindex(client, "k", ".", '"b"', JsonArrIndexOptions(start=4, end=0))
             7  # "b" found at index 7 within the specified range, treating end=0 as the entire array's end.
-        >>> await json.arrindex(client, "k", ".", '"b"', JsonArrIndexOptions(start=4, end=-1))
+        >>> await glide_json.arrindex(client, "k", ".", '"b"', JsonArrIndexOptions(start=4, end=-1))
             7  # "b" found at index 7, with end=-1 covering the full array to its last element.
-        >>> await json.arrindex(client, "k", ".", '"b"', JsonArrIndexOptions(start=4, end=7))
+        >>> await glide_json.arrindex(client, "k", ".", '"b"', JsonArrIndexOptions(start=4, end=7))
             -1  # "b" not found within the range from index 4 to exclusive end at index 7.
     """
     args = ["JSON.ARRINDEX", key, path, value]
@@ -398,21 +352,22 @@ async def arrinsert(
                 If `path` doesn't exist or the value at `path` is not an array, an error is raised.
             If the index is out of bounds, an error is raised.
             If `key` doesn't exist, an error is raised.
+        For more information about the returned type, see `TJsonResponse`.
 
     Examples:
-        >>> from glide import json
-        >>> await json.set(client, "doc", "$", '[[], ["a"], ["a", "b"]]')
+        >>> from glide import glide_json
+        >>> await glide_json.set(client, "doc", "$", '[[], ["a"], ["a", "b"]]')
             'OK'
-        >>> await json.arrinsert(client, "doc", "$[*]", 0, ['"c"', '{"key": "value"}', "true", "null", '["bar"]'])
+        >>> await glide_json.arrinsert(client, "doc", "$[*]", 0, ['"c"', '{"key": "value"}', "true", "null", '["bar"]'])
             [5, 6, 7]  # New lengths of arrays after insertion
-        >>> await json.get(client, "doc")
+        >>> await glide_json.get(client, "doc")
             b'[["c",{"key":"value"},true,null,["bar"]],["c",{"key":"value"},true,null,["bar"],"a"],["c",{"key":"value"},true,null,["bar"],"a","b"]]'
 
-        >>> await json.set(client, "doc", "$", '[[], ["a"], ["a", "b"]]')
+        >>> await glide_json.set(client, "doc", "$", '[[], ["a"], ["a", "b"]]')
             'OK'
-        >>> await json.arrinsert(client, "doc", ".", 0, ['"c"'])
+        >>> await glide_json.arrinsert(client, "doc", ".", 0, ['"c"'])
             4  # New length of the root array after insertion
-        >>> await json.get(client, "doc")
+        >>> await glide_json.get(client, "doc")
             b'[\"c\",[],[\"a\"],[\"a\",\"b\"]]'
     """
     args = ["JSON.ARRINSERT", key, path, str(index)] + values
@@ -443,25 +398,26 @@ async def arrlen(
                 If multiple paths match, the length of the first array match is returned.
                 If the JSON value at `path` is not a array or if `path` doesn't exist, an error is raised.
             If `key` doesn't exist, None is returned.
+        For more information about the returned type, see `TJsonResponse`.
 
     Examples:
-        >>> from glide import json
-        >>> await json.set(client, "doc", "$", '{"a": [1, 2, 3], "b": {"a": [1, 2], "c": {"a": 42}}}')
+        >>> from glide import glide_json
+        >>> await glide_json.set(client, "doc", "$", '{"a": [1, 2, 3], "b": {"a": [1, 2], "c": {"a": 42}}}')
             'OK'  # JSON is successfully set for doc
-        >>> await json.arrlen(client, "doc", "$")
+        >>> await glide_json.arrlen(client, "doc", "$")
             [None]  # No array at the root path.
-        >>> await json.arrlen(client, "doc", "$.a")
+        >>> await glide_json.arrlen(client, "doc", "$.a")
             [3]  # Retrieves the length of the array at path $.a.
-        >>> await json.arrlen(client, "doc", "$..a")
+        >>> await glide_json.arrlen(client, "doc", "$..a")
             [3, 2, None]  # Retrieves lengths of arrays found at all levels of the path `$..a`.
-        >>> await json.arrlen(client, "doc", "..a")
+        >>> await glide_json.arrlen(client, "doc", "..a")
             3  # Legacy path retrieves the first array match at path `..a`.
-        >>> await json.arrlen(client, "non_existing_key", "$.a")
+        >>> await glide_json.arrlen(client, "non_existing_key", "$.a")
             None  # Returns None because the key does not exist.
 
-        >>> await json.set(client, "doc", "$", '[1, 2, 3, 4]')
+        >>> await glide_json.set(client, "doc", "$", '[1, 2, 3, 4]')
             'OK'  # JSON is successfully set for doc
-        >>> await json.arrlen(client, "doc")
+        >>> await glide_json.arrlen(client, "doc")
             4  # Retrieves lengths of array in root.
     """
     args = ["JSON.ARRLEN", key]
@@ -500,29 +456,30 @@ async def arrpop(
                 If multiple paths match, the value from the first matching array that is not empty is returned.
                 If the JSON value at `options.path` is not a array or if `options.path` doesn't exist, an error is raised.
             If `key` doesn't exist, an error is raised.
+        For more information about the returned type, see `TJsonResponse`.
 
     Examples:
-        >>> from glide import json
-        >>> await json.set(client, "doc", "$", '{"a": [1, 2, true], "b": {"a": [3, 4, ["value", 3, false], 5], "c": {"a": 42}}}')
+        >>> from glide import glide_json
+        >>> await glide_json.set(client, "doc", "$", '{"a": [1, 2, true], "b": {"a": [3, 4, ["value", 3, false], 5], "c": {"a": 42}}}')
             b'OK'
-        >>> await json.arrpop(client, "doc", JsonArrPopOptions(path="$.a", index=1))
+        >>> await glide_json.arrpop(client, "doc", JsonArrPopOptions(path="$.a", index=1))
             [b'2']  # Pop second element from array at path $.a
-        >>> await json.arrpop(client, "doc", JsonArrPopOptions(path="$..a"))
+        >>> await glide_json.arrpop(client, "doc", JsonArrPopOptions(path="$..a"))
             [b'true', b'5', None]  # Pop last elements from all arrays matching path `$..a`
 
         #### Using a legacy path (..) to pop the first matching array
-        >>> await json.arrpop(client, "doc", JsonArrPopOptions(path="..a"))
+        >>> await glide_json.arrpop(client, "doc", JsonArrPopOptions(path="..a"))
             b"1"  # First match popped (from array at path ..a)
 
         #### Even though only one value is returned from `..a`, subsequent arrays are also affected
-        >>> await json.get(client, "doc", "$..a")
+        >>> await glide_json.get(client, "doc", "$..a")
             b"[[], [3, 4], 42]"  # Remaining elements after pop show the changes
 
-        >>> await json.set(client, "doc", "$", '[[], ["a"], ["a", "b", "c"]]')
+        >>> await glide_json.set(client, "doc", "$", '[[], ["a"], ["a", "b", "c"]]')
             b'OK'  # JSON is successfully set
-        >>> await json.arrpop(client, "doc", JsonArrPopOptions(path=".", index=-1))
+        >>> await glide_json.arrpop(client, "doc", JsonArrPopOptions(path=".", index=-1))
             b'["a","b","c"]'  # Pop last elements at path `.`
-        >>> await json.arrpop(client, "doc")
+        >>> await glide_json.arrpop(client, "doc")
             b'["a"]'  # Pop last elements at path `.`
     """
     args = ["JSON.ARRPOP", key]
@@ -567,21 +524,22 @@ async def arrtrim(
                 If multiple paths match, the length of the first trimmed array match is returned.
                 If `path` doesn't exist, or the value at `path` is not an array, an error is raised.
             If `key` doesn't exist, an error is raised.
+        For more information about the returned type, see `TJsonResponse`.
 
     Examples:
-        >>> from glide import json
-        >>> await json.set(client, "doc", "$", '[[], ["a"], ["a", "b"], ["a", "b", "c"]]')
+        >>> from glide import glide_json
+        >>> await glide_json.set(client, "doc", "$", '[[], ["a"], ["a", "b"], ["a", "b", "c"]]')
             'OK'
-        >>> await json.arrtrim(client, "doc", "$[*]", 0, 1)
+        >>> await glide_json.arrtrim(client, "doc", "$[*]", 0, 1)
             [0, 1, 2, 2]
-        >>> await json.get(client, "doc")
+        >>> await glide_json.get(client, "doc")
             b'[[],[\"a\"],[\"a\",\"b\"],[\"a\",\"b\"]]'
 
-        >>> await json.set(client, "doc", "$", '{"children": ["John", "Jack", "Tom", "Bob", "Mike"]}')
+        >>> await glide_json.set(client, "doc", "$", '{"children": ["John", "Jack", "Tom", "Bob", "Mike"]}')
             'OK'
-        >>> await json.arrtrim(client, "doc", ".children", 0, 1)
+        >>> await glide_json.arrtrim(client, "doc", ".children", 0, 1)
             2
-        >>> await json.get(client, "doc", ".children")
+        >>> await glide_json.get(client, "doc", ".children")
             b'["John","Jack"]'
     """
     return cast(
@@ -611,28 +569,28 @@ async def clear(
         If `key doesn't exist, an error is raised.
 
     Examples:
-        >>> from glide import json
-        >>> await json.set(client, "doc", "$", '{"obj":{"a":1, "b":2}, "arr":[1,2,3], "str": "foo", "bool": true, "int": 42, "float": 3.14, "nullVal": null}')
+        >>> from glide import glide_json
+        >>> await glide_json.set(client, "doc", "$", '{"obj":{"a":1, "b":2}, "arr":[1,2,3], "str": "foo", "bool": true, "int": 42, "float": 3.14, "nullVal": null}')
             'OK'  # JSON document is successfully set.
-        >>> await json.clear(client, "doc", "$.*")
+        >>> await glide_json.clear(client, "doc", "$.*")
             6      # 6 values are cleared (arrays/objects/strings/numbers/booleans), but `null` remains as is.
-        >>> await json.get(client, "doc", "$")
+        >>> await glide_json.get(client, "doc", "$")
             b'[{"obj":{},"arr":[],"str":"","bool":false,"int":0,"float":0.0,"nullVal":null}]'
-        >>> await json.clear(client, "doc", "$.*")
+        >>> await glide_json.clear(client, "doc", "$.*")
             0  # No further clearing needed since the containers are already empty and the values are defaults.
 
-        >>> await json.set(client, "doc", "$", '{"a": 1, "b": {"a": [5, 6, 7], "b": {"a": true}}, "c": {"a": "value", "b": {"a": 3.5}}, "d": {"a": {"foo": "foo"}}, "nullVal": null}')
+        >>> await glide_json.set(client, "doc", "$", '{"a": 1, "b": {"a": [5, 6, 7], "b": {"a": true}}, "c": {"a": "value", "b": {"a": 3.5}}, "d": {"a": {"foo": "foo"}}, "nullVal": null}')
             'OK'
-        >>> await json.clear(client, "doc", "b.a[1:3]")
+        >>> await glide_json.clear(client, "doc", "b.a[1:3]")
             2  # 2 elements (`6` and `7`) are cleared.
-        >>> await json.clear(client, "doc", "b.a[1:3]")
+        >>> await glide_json.clear(client, "doc", "b.a[1:3]")
             0 # No elements cleared since specified slice has already been cleared.
-        >>> await json.get(client, "doc", "$..a")
+        >>> await glide_json.get(client, "doc", "$..a")
             b'[1,[5,0,0],true,"value",3.5,{"foo":"foo"}]'
 
-        >>> await json.clear(client, "doc", "$..a")
+        >>> await glide_json.clear(client, "doc", "$..a")
             6  # All numeric, boolean, and string values across paths are cleared.
-        >>> await json.get(client, "doc", "$..a")
+        >>> await glide_json.get(client, "doc", "$..a")
             b'[0,[],false,"",0.0,{}]'
     """
     args = ["JSON.CLEAR", key]
@@ -673,21 +631,22 @@ async def debug_fields(
                 If `path` doesn't exist, an error is raised.
             If `path` is not provided, it reports the total number of fields in the entire JSON document.
             If `key` doesn't exist, None is returned.
+        For more information about the returned type, see `TJsonUniversalResponse`.
 
     Examples:
-        >>> from glide import json
-        >>> await json.set(client, "k1", "$", '[1, 2.3, "foo", true, null, {}, [], {"a":1, "b":2}, [1,2,3]]')
+        >>> from glide import glide_json
+        >>> await glide_json.set(client, "k1", "$", '[1, 2.3, "foo", true, null, {}, [], {"a":1, "b":2}, [1,2,3]]')
             'OK'
-        >>> await json.debug_fields(client, "k1", "$[*]")
+        >>> await glide_json.debug_fields(client, "k1", "$[*]")
             [1, 1, 1, 1, 1, 0, 0, 2, 3]
-        >>> await json.debug_fields(client, "k1", ".")
+        >>> await glide_json.debug_fields(client, "k1", ".")
             14 # 9 top-level fields + 5 nested address fields
 
-        >>> await json.set(client, "k1", "$", '{"firstName":"John","lastName":"Smith","age":27,"weight":135.25,"isAlive":true,"address":{"street":"21 2nd Street","city":"New York","state":"NY","zipcode":"10021-3100"},"phoneNumbers":[{"type":"home","number":"212 555-1234"},{"type":"office","number":"646 555-4567"}],"children":[],"spouse":null}')
+        >>> await glide_json.set(client, "k1", "$", '{"firstName":"John","lastName":"Smith","age":27,"weight":135.25,"isAlive":true,"address":{"street":"21 2nd Street","city":"New York","state":"NY","zipcode":"10021-3100"},"phoneNumbers":[{"type":"home","number":"212 555-1234"},{"type":"office","number":"646 555-4567"}],"children":[],"spouse":null}')
             'OK'
-        >>> await json.debug_fields(client, "k1")
+        >>> await glide_json.debug_fields(client, "k1")
             19
-        >>> await json.debug_fields(client, "k1", ".address")
+        >>> await glide_json.debug_fields(client, "k1", ".address")
             4
     """
     args = ["JSON.DEBUG", "FIELDS", key]
@@ -723,19 +682,20 @@ async def debug_memory(
                 If `path` doesn't exist, an error is raised.
             If `path` is not provided, it reports the total memory usage in bytes in the entire JSON document.
             If `key` doesn't exist, None is returned.
+        For more information about the returned type, see `TJsonUniversalResponse`.
 
     Examples:
-        >>> from glide import json
-        >>> await json.set(client, "k1", "$", '[1, 2.3, "foo", true, null, {}, [], {"a":1, "b":2}, [1,2,3]]')
+        >>> from glide import glide_json
+        >>> await glide_json.set(client, "k1", "$", '[1, 2.3, "foo", true, null, {}, [], {"a":1, "b":2}, [1,2,3]]')
             'OK'
-        >>> await json.debug_memory(client, "k1", "$[*]")
+        >>> await glide_json.debug_memory(client, "k1", "$[*]")
             [16, 16, 19, 16, 16, 16, 16, 66, 64]
 
-        >>> await json.set(client, "k1", "$", '{"firstName":"John","lastName":"Smith","age":27,"weight":135.25,"isAlive":true,"address":{"street":"21 2nd Street","city":"New York","state":"NY","zipcode":"10021-3100"},"phoneNumbers":[{"type":"home","number":"212 555-1234"},{"type":"office","number":"646 555-4567"}],"children":[],"spouse":null}')
+        >>> await glide_json.set(client, "k1", "$", '{"firstName":"John","lastName":"Smith","age":27,"weight":135.25,"isAlive":true,"address":{"street":"21 2nd Street","city":"New York","state":"NY","zipcode":"10021-3100"},"phoneNumbers":[{"type":"home","number":"212 555-1234"},{"type":"office","number":"646 555-4567"}],"children":[],"spouse":null}')
             'OK'
-        >>> await json.debug_memory(client, "k1")
+        >>> await glide_json.debug_memory(client, "k1")
             472
-        >>> await json.debug_memory(client, "k1", ".phoneNumbers")
+        >>> await glide_json.debug_memory(client, "k1", ".phoneNumbers")
             164
     """
     args = ["JSON.DEBUG", "MEMORY", key]
@@ -766,14 +726,14 @@ async def delete(
         If `key` or `path` doesn't exist, returns 0.
 
     Examples:
-        >>> from glide import json
-        >>> await json.set(client, "doc", "$", '{"a": 1, "nested": {"a": 2, "b": 3}}')
+        >>> from glide import glide_json
+        >>> await glide_json.set(client, "doc", "$", '{"a": 1, "nested": {"a": 2, "b": 3}}')
             'OK'  # Indicates successful setting of the value at path '$' in the key stored at `doc`.
-        >>> await json.delete(client, "doc", "$..a")
+        >>> await glide_json.delete(client, "doc", "$..a")
             2  # Indicates successful deletion of the specific values in the key stored at `doc`.
-        >>> await json.get(client, "doc", "$")
+        >>> await glide_json.get(client, "doc", "$")
             "[{\"nested\":{\"b\":3}}]"  # Returns the value at path '$' in the JSON document stored at `doc`.
-        >>> await json.delete(client, "doc")
+        >>> await glide_json.delete(client, "doc")
             1  # Deletes the entire JSON document stored at `doc`.
     """
 
@@ -801,14 +761,14 @@ async def forget(
         If `key` or `path` doesn't exist, returns 0.
 
     Examples:
-        >>> from glide import json
-        >>> await json.set(client, "doc", "$", '{"a": 1, "nested": {"a": 2, "b": 3}}')
+        >>> from glide import glide_json
+        >>> await glide_json.set(client, "doc", "$", '{"a": 1, "nested": {"a": 2, "b": 3}}')
             'OK'  # Indicates successful setting of the value at path '$' in the key stored at `doc`.
-        >>> await json.forget(client, "doc", "$..a")
+        >>> await glide_json.forget(client, "doc", "$..a")
             2  # Indicates successful deletion of the specific values in the key stored at `doc`.
-        >>> await json.get(client, "doc", "$")
+        >>> await glide_json.get(client, "doc", "$")
             "[{\"nested\":{\"b\":3}}]"  # Returns the value at path '$' in the JSON document stored at `doc`.
-        >>> await json.forget(client, "doc")
+        >>> await glide_json.forget(client, "doc")
             1  # Deletes the entire JSON document stored at `doc`.
     """
 
@@ -816,6 +776,53 @@ async def forget(
         Optional[int],
         await client.custom_command(["JSON.FORGET", key] + ([path] if path else [])),
     )
+
+
+async def mget(
+    client: TGlideClient,
+    keys: List[TEncodable],
+    path: TEncodable,
+) -> List[Optional[bytes]]:
+    """
+    Retrieves the JSON values at the specified `path` stored at multiple `keys`.
+
+    Note:
+        In cluster mode, if keys in `keys` map to different hash slots, the command
+        will be split across these slots and executed separately for each. This means the command
+        is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+        call will return the first encountered error, even though some requests may have succeeded
+        while others did not. If this behavior impacts your application logic, consider splitting
+        the request into sub-requests per slot to ensure atomicity.
+
+    Args:
+        client (TGlideClient): The client to execute the command.
+        keys (List[TEncodable]): A list of keys for the JSON documents.
+        path (TEncodable): The path within the JSON documents.
+
+    Returns:
+        List[Optional[bytes]]:
+            For JSONPath (`path` starts with `$`):
+                Returns a list of byte representations of the values found at the given path for each key.
+                If `path` does not exist within the key, the entry will be an empty array.
+            For legacy path (`path` doesn't starts with `$`):
+                Returns a list of byte representations of the values found at the given path for each key.
+                If `path` does not exist within the key, the entry will be None.
+            If a key doesn't exist, the corresponding list element will be None.
+
+
+    Examples:
+        >>> from glide import glide_json
+        >>> import json
+        >>> json_strs = await glide_json.mget(client, ["doc1", "doc2"], "$")
+        >>> [json.loads(js) for js in json_strs]  # Parse JSON strings to Python data
+            [[{"a": 1.0, "b": 2}], [{"a": 2.0, "b": {"a": 3.0, "b" : 4.0}}]]  # JSON objects retrieved from keys `doc1` and `doc2`
+        >>> await glide_json.mget(client, ["doc1", "doc2"], "$.a")
+            [b"[1.0]", b"[2.0]"]  # Returns values at path '$.a' for the JSON documents stored at `doc1` and `doc2`.
+        >>> await glide_json.mget(client, ["doc1"], "$.non_existing_path")
+            [None]  # Returns an empty array since the path '$.non_existing_path' does not exist in the JSON document stored at `doc1`.
+    """
+    args = ["JSON.MGET"] + keys + [path]
+    return cast(TJsonResponse[Optional[bytes]], await client.custom_command(args))
 
 
 async def numincrby(
@@ -847,12 +854,12 @@ async def numincrby(
             If the result is out of the range of 64-bit IEEE double, an error is raised.
 
     Examples:
-        >>> from glide import json
-        >>> await json.set(client, "doc", "$", '{"a": [], "b": [1], "c": [1, 2], "d": [1, 2, 3]}')
+        >>> from glide import glide_json
+        >>> await glide_json.set(client, "doc", "$", '{"a": [], "b": [1], "c": [1, 2], "d": [1, 2, 3]}')
             'OK'
-        >>> await json.numincrby(client, "doc", "$.d[*]", 10)
+        >>> await glide_json.numincrby(client, "doc", "$.d[*]", 10)
             b'[11,12,13]'  # Increment each element in `d` array by 10.
-        >>> await json.numincrby(client, "doc", ".c[1]", 10)
+        >>> await glide_json.numincrby(client, "doc", ".c[1]", 10)
             b'12'  # Increment the second element in the `c` array by 10.
     """
     args = ["JSON.NUMINCRBY", key, path, str(number)]
@@ -889,12 +896,12 @@ async def nummultby(
             If the result is out of the range of 64-bit IEEE double, an error is raised.
 
     Examples:
-        >>> from glide import json
-        >>> await json.set(client, "doc", "$", '{"a": [], "b": [1], "c": [1, 2], "d": [1, 2, 3]}')
+        >>> from glide import glide_json
+        >>> await glide_json.set(client, "doc", "$", '{"a": [], "b": [1], "c": [1, 2], "d": [1, 2, 3]}')
             'OK'
-        >>> await json.nummultby(client, "doc", "$.d[*]", 2)
+        >>> await glide_json.nummultby(client, "doc", "$.d[*]", 2)
             b'[2,4,6]'  # Multiplies each element in the `d` array by 2.
-        >>> await json.nummultby(client, "doc", ".c[1]", 2)
+        >>> await glide_json.nummultby(client, "doc", ".c[1]", 2)
             b'4'  # Multiplies the second element in the `c` array by 2.
     """
     args = ["JSON.NUMMULTBY", key, path, str(number)]
@@ -926,23 +933,24 @@ async def objlen(
                 If multiple paths match, the length of the first object match is returned.
                 If the JSON value at `path` is not an object or if `path` doesn't exist, an error is raised.
             If `key` doesn't exist, None is returned.
+        For more information about the returned type, see `TJsonResponse`.
 
 
     Examples:
-        >>> from glide import json
-        >>> await json.set(client, "doc", "$", '{"a": 1.0, "b": {"a": {"x": 1, "y": 2}, "b": 2.5, "c": true}}')
+        >>> from glide import glide_json
+        >>> await glide_json.set(client, "doc", "$", '{"a": 1.0, "b": {"a": {"x": 1, "y": 2}, "b": 2.5, "c": true}}')
             b'OK'  # Indicates successful setting of the value at the root path '$' in the key `doc`.
-        >>> await json.objlen(client, "doc", "$")
+        >>> await glide_json.objlen(client, "doc", "$")
             [2]  # Returns the number of key-value pairs at the root object, which has 2 keys: 'a' and 'b'.
-        >>> await json.objlen(client, "doc", ".")
+        >>> await glide_json.objlen(client, "doc", ".")
             2  # Returns the number of key-value pairs for the object matching the path '.', which has 2 keys: 'a' and 'b'.
-        >>> await json.objlen(client, "doc", "$.b")
+        >>> await glide_json.objlen(client, "doc", "$.b")
             [3]  # Returns the length of the object at path '$.b', which has 3 keys: 'a', 'b', and 'c'.
-        >>> await json.objlen(client, "doc", ".b")
+        >>> await glide_json.objlen(client, "doc", ".b")
             3  # Returns the length of the nested object at path '.b', which has 3 keys.
-        >>> await json.objlen(client, "doc", "$..a")
+        >>> await glide_json.objlen(client, "doc", "$..a")
             [None, 2]
-        >>> await json.objlen(client, "doc")
+        >>> await glide_json.objlen(client, "doc")
             2  # Returns the number of key-value pairs for the object matching the path '.', which has 2 keys: 'a' and 'b'.
     """
     args = ["JSON.OBJLEN", key]
@@ -980,18 +988,19 @@ async def objkeys(
                 If a value matching the path is not an object, an error is raised.
                 If `path` doesn't exist, None is returned.
             If `key` doesn't exist, None is returned.
+        For more information about the returned type, see `TJsonUniversalResponse`.
 
     Examples:
-        >>> from glide import json
-        >>> await json.set(client, "doc", "$", '{"a": 1.0, "b": {"a": {"x": 1, "y": 2}, "b": 2.5, "c": true}}')
+        >>> from glide import glide_json
+        >>> await glide_json.set(client, "doc", "$", '{"a": 1.0, "b": {"a": {"x": 1, "y": 2}, "b": 2.5, "c": true}}')
             b'OK'  # Indicates successful setting of the value at the root path '$' in the key `doc`.
-        >>> await json.objkeys(client, "doc", "$")
+        >>> await glide_json.objkeys(client, "doc", "$")
             [[b"a", b"b"]]  # Returns a list of arrays containing the key names for objects matching the path '$'.
-        >>> await json.objkeys(client, "doc", ".")
+        >>> await glide_json.objkeys(client, "doc", ".")
             [b"a", b"b"]  # Returns key names for the object matching the path '.' as it is the only match.
-        >>> await json.objkeys(client, "doc", "$.b")
+        >>> await glide_json.objkeys(client, "doc", "$.b")
             [[b"a", b"b", b"c"]]  # Returns key names as a nested list for objects matching the JSONPath '$.b'.
-        >>> await json.objkeys(client, "doc", ".b")
+        >>> await glide_json.objkeys(client, "doc", ".b")
             [b"a", b"b", b"c"]  # Returns key names for the nested object at path '.b'.
     """
     args = ["JSON.OBJKEYS", key]
@@ -1036,14 +1045,15 @@ async def resp(
                 If multiple paths match, the value of the first JSON value match is returned.
                 If `path` doesn't exist, an error is raised.
             If `key` doesn't exist, an None is returned.
+        For more information about the returned type, see `TJsonUniversalResponse`.
 
     Examples:
-        >>> from glide import json
-        >>> await json.set(client, "doc", "$", '{"a": [1, 2, 3], "b": {"a": [1, 2], "c": {"a": 42}}}')
+        >>> from glide import glide_json
+        >>> await glide_json.set(client, "doc", "$", '{"a": [1, 2, 3], "b": {"a": [1, 2], "c": {"a": 42}}}')
             'OK'
-        >>> await json.resp(client, "doc", "$..a")
+        >>> await glide_json.resp(client, "doc", "$..a")
             [[b"[", 1, 2, 3],[b"[", 1, 2],42]
-        >>> await json.resp(client, "doc", "..a")
+        >>> await glide_json.resp(client, "doc", "..a")
             [b"[", 1, 2, 3]
     """
     args = ["JSON.RESP", key]
@@ -1087,15 +1097,15 @@ async def strappend(
         For more information about the returned type, see `TJsonResponse`.
 
     Examples:
-        >>> from glide import json
-        >>> import json as jsonpy
-        >>> await json.set(client, "doc", "$", jsonpy.dumps({"a":"foo", "nested": {"a": "hello"}, "nested2": {"a": 31}}))
+        >>> from glide import glide_json
+        >>> import json
+        >>> await glide_json.set(client, "doc", "$", json.dumps({"a":"foo", "nested": {"a": "hello"}, "nested2": {"a": 31}}))
             'OK'
-        >>> await json.strappend(client, "doc", jsonpy.dumps("baz"), "$..a")
+        >>> await glide_json.strappend(client, "doc", json.dumps("baz"), "$..a")
             [6, 8, None]  # The new length of the string values at path '$..a' in the key stored at `doc` after the append operation.
-        >>> await json.strappend(client, "doc", '"foo"', "nested.a")
+        >>> await glide_json.strappend(client, "doc", '"foo"', "nested.a")
             11  # The length of the string value after appending "foo" to the string at path 'nested.array' in the key stored at `doc`.
-        >>> jsonpy.loads(await json.get(client, jsonpy.dumps("doc"), "$"))
+        >>> json.loads(await glide_json.get(client, json.dumps("doc"), "$"))
             [{"a":"foobaz", "nested": {"a": "hellobazfoo"}, "nested2": {"a": 31}}] # The updated JSON value in the key stored at `doc`.
     """
 
@@ -1133,17 +1143,17 @@ async def strlen(
         For more information about the returned type, see `TJsonResponse`.
 
     Examples:
-        >>> from glide import json
-        >>> import jsonpy
-        >>> await json.set(client, "doc", "$", jsonpy.dumps({"a":"foo", "nested": {"a": "hello"}, "nested2": {"a": 31}}))
+        >>> from glide import glide_json
+        >>> import json
+        >>> await glide_json.set(client, "doc", "$", json.dumps({"a":"foo", "nested": {"a": "hello"}, "nested2": {"a": 31}}))
             'OK'
-        >>> await json.strlen(client, "doc", "$..a")
+        >>> await glide_json.strlen(client, "doc", "$..a")
             [3, 5, None]  # The length of the string values at path '$..a' in the key stored at `doc`.
-        >>> await json.strlen(client, "doc", "nested.a")
+        >>> await glide_json.strlen(client, "doc", "nested.a")
             5  # The length of the JSON value at path 'nested.a' in the key stored at `doc`.
-        >>> await json.strlen(client, "doc", "$")
+        >>> await glide_json.strlen(client, "doc", "$")
             [None]  # Returns an array with None since the value at root path does in the JSON document stored at `doc` is not a string.
-        >>> await json.strlen(client, "non_existing_key", ".")
+        >>> await glide_json.strlen(client, "non_existing_key", ".")
             None  # `key` doesn't exist.
     """
 
@@ -1181,15 +1191,15 @@ async def toggle(
         For more information about the returned type, see `TJsonResponse`.
 
     Examples:
-        >>> from glide import json
-        >>> import json as jsonpy
-        >>> await json.set(client, "doc", "$", jsonpy.dumps({"bool": True, "nested": {"bool": False, "nested": {"bool": 10}}}))
+        >>> from glide import glide_json
+        >>> import json
+        >>> await glide_json.set(client, "doc", "$", json.dumps({"bool": True, "nested": {"bool": False, "nested": {"bool": 10}}}))
             'OK'
-        >>> await json.toggle(client, "doc", "$.bool")
+        >>> await glide_json.toggle(client, "doc", "$.bool")
             [False, True, None]  # Indicates successful toggling of the Boolean values at path '$.bool' in the key stored at `doc`.
-        >>> await json.toggle(client, "doc", "bool")
+        >>> await glide_json.toggle(client, "doc", "bool")
             True  # Indicates successful toggling of the Boolean value at path 'bool' in the key stored at `doc`.
-        >>> jsonpy.loads(await json.get(client, "doc", "$"))
+        >>> json.loads(await glide_json.get(client, "doc", "$"))
             [{"bool": True, "nested": {"bool": True, "nested": {"bool": 10}}}] # The updated JSON value in the key stored at `doc`.
     """
 
@@ -1222,16 +1232,17 @@ async def type(
                 If multiple paths match, the type of the first JSON value match is returned.
                 If `path` doesn't exist, None will be returned.
             If `key` doesn't exist, None is returned.
+        For more information about the returned type, see `TJsonUniversalResponse`.
 
     Examples:
-        >>> from glide import json
-        >>> await json.set(client, "doc", "$", '{"a": 1, "nested": {"a": 2, "b": 3}}')
+        >>> from glide import glide_json
+        >>> await glide_json.set(client, "doc", "$", '{"a": 1, "nested": {"a": 2, "b": 3}}')
             'OK'
-        >>> await json.type(client, "doc", "$.nested")
+        >>> await glide_json.type(client, "doc", "$.nested")
             [b'object']  # Indicates the type of the value at path '$.nested' in the key stored at `doc`.
-        >>> await json.type(client, "doc", "$.nested.a")
+        >>> await glide_json.type(client, "doc", "$.nested.a")
             [b'integer']  # Indicates the type of the value at path '$.nested.a' in the key stored at `doc`.
-        >>> await json.type(client, "doc", "$[*]")
+        >>> await glide_json.type(client, "doc", "$[*]")
             [b'integer',  b'object']  # Array of types in all top level elements.
     """
     args = ["JSON.TYPE", key]
