@@ -7707,20 +7707,24 @@ export class BaseClient {
      *
      * This method updates the client's internal password configuration and does not perform password rotation on the server side.
      *
-     * @param password - The new password to update the current password, or `null` to remove the current password.
-     * @param reAuth - If `true`, the client will re-authenticate immediately with the new password. If `false`, the new password will be used for the next connection attempt.
-     * @returns Always `"OK"`.
+     * @param password - `String | null`. The new password to update the current password, or `null` to remove the current password.
+     * @param immidiateAuth - A `boolean` flag. If `true`, the client will authenticate immediately with the new password against all connections, Using `AUTH` command.
+     *                 If password supplied is an empty string, the client will not perform auth and instead a warning will be returned.
+     *                 The default is `false`.
      *
      * @example
      * ```typescript
      * await client.updateConnectionPassword("newPassword", true) // "OK"
      * ```
      */
-    async updateConnectionPassword(password: string | null, reAuth: boolean) {
+    async updateConnectionPassword(
+        password: string | null,
+        immediateAuth = false,
+    ) {
         const updateConnectionPassword =
             command_request.UpdateConnectionPassword.create({
-                password: password,
-                reAuth,
+                password,
+                immediateAuth,
             });
 
         const response = await this.createWritePromise<GlideString>(

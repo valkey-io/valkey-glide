@@ -106,13 +106,29 @@ describe("Server Module Tests", () => {
                 let result = await GlideJson.get(client, key, { path: "." });
                 expect(JSON.parse(result.toString())).toEqual(jsonValue);
 
+                // binary buffer test
+                result = await GlideJson.get(client, Buffer.from(key), {
+                    path: Buffer.from("."),
+                    decoder: Decoder.Bytes,
+                });
+                expect(result).toEqual(Buffer.from(JSON.stringify(jsonValue)));
+
+                expect(
+                    await GlideJson.set(
+                        client,
+                        Buffer.from(key),
+                        Buffer.from("$"),
+                        Buffer.from(JSON.stringify({ a: 1.0, b: 3 })),
+                    ),
+                ).toBe("OK");
+
                 // JSON.get with array of paths
                 result = await GlideJson.get(client, key, {
                     path: ["$.a", "$.b"],
                 });
                 expect(JSON.parse(result.toString())).toEqual({
                     "$.a": [1.0],
-                    "$.b": [2],
+                    "$.b": [3],
                 });
 
                 // JSON.get with non-existing key
@@ -1300,8 +1316,9 @@ describe("Server Module Tests", () => {
                 expect(
                     await GlideJson.resp(client, Buffer.from(key), {
                         path: Buffer.from("..a"),
+                        decoder: Decoder.Bytes,
                     }),
-                ).toEqual(["[", 1, 2, 3]);
+                ).toEqual([Buffer.from("["), 1, 2, 3]);
             });
 
             it("json.arrtrim tests", async () => {

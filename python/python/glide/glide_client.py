@@ -26,7 +26,6 @@ from glide.protobuf.connection_request_pb2 import ConnectionRequest
 from glide.protobuf.response_pb2 import RequestErrorType, Response
 from glide.protobuf_codec import PartialMessageException, ProtobufCodec
 from glide.routes import Route, set_protobuf_route
-from pyrsistent import optional
 
 from .glide import (
     DEFAULT_TIMEOUT_IN_MILLISECONDS,
@@ -525,7 +524,7 @@ class BaseClient(CoreCommands):
                         read_bytes, read_bytes_view, offset, Response
                     )
                 except PartialMessageException:
-                    # Recieved only partial response, break the inner loop
+                    # Received only partial response, break the inner loop
                     remaining_read_bytes = read_bytes[offset:]
                     break
                 response = cast(Response, response)
@@ -538,12 +537,13 @@ class BaseClient(CoreCommands):
         return get_statistics()
 
     async def _update_connection_password(
-        self, password: Optional[str], re_auth: bool
+        self, password: Optional[str], immediate_auth: bool
     ) -> TResult:
         request = CommandRequest()
         request.callback_idx = self._get_callback_index()
-        request.update_connection_password.password = password
-        request.update_connection_password.re_auth = re_auth
+        if password is not None:
+            request.update_connection_password.password = password
+        request.update_connection_password.immediate_auth = immediate_auth
         response = await self._write_request_await_response(request)
         # Update the client binding side password if managed to change core configuration password
         if response is OK:

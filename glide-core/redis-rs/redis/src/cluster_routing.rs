@@ -26,7 +26,7 @@ pub enum LogicalAggregateOp {
     // Or, omitted due to dead code warnings. ATM this value isn't constructed anywhere
 }
 
-/// Numerical aggreagting operators.
+/// Numerical aggregating operators.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AggregateOp {
     /// Choose minimal value
@@ -512,6 +512,10 @@ where
     }
 
     let mut routes: Vec<(Route, Vec<usize>)> = routes.into_iter().collect();
+    if routes.is_empty() {
+        return None;
+    }
+
     Some(if routes.len() == 1 {
         RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(routes.pop().unwrap().0))
     } else {
