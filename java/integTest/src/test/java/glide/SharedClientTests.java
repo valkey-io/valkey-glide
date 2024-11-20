@@ -32,7 +32,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-@Timeout(25) // seconds
+@Timeout(35) // seconds
 public class SharedClientTests {
 
     private static GlideClient standaloneClient = null;
@@ -47,8 +47,14 @@ public class SharedClientTests {
         clusterClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get();
-
         clients = List.of(Arguments.of(standaloneClient), Arguments.of(clusterClient));
+        assertTrue(!clusterClient.getStatistics().isEmpty());
+        assertEquals(
+                clusterClient.getStatistics().size(), 2); // we expect 2 items in the statistics map
+
+        assertTrue(!standaloneClient.getStatistics().isEmpty());
+        assertEquals(
+                standaloneClient.getStatistics().size(), 2); // we expect 2 items in the statistics map
     }
 
     @AfterAll

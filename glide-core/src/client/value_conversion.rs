@@ -1132,8 +1132,8 @@ pub(crate) fn convert_to_expected_type(
                 let res = vec![
                     convert_to_expected_type(array.remove(0), *type_of_query)?,
                     convert_to_expected_type(array.remove(0), Some(ExpectedReturnType::Map {
-                    key_type: &None,
-                    value_type: &None,
+                    key_type: &Some(ExpectedReturnType::SimpleString),
+                    value_type: &Some(ExpectedReturnType::Double),
                 }))?];
 
                 Ok(Value::Array(res))
@@ -1393,10 +1393,12 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
 
     // TODO use enum to avoid mistakes
     match command.as_slice() {
-        b"HGETALL" | b"CONFIG GET" | b"FT.CONFIG GET" | b"HELLO" => Some(ExpectedReturnType::Map {
-            key_type: &None,
-            value_type: &None,
-        }),
+        b"HGETALL" | b"CONFIG GET" | b"FT.CONFIG GET" | b"FT._ALIASLIST" | b"HELLO" => {
+            Some(ExpectedReturnType::Map {
+                key_type: &None,
+                value_type: &None,
+            })
+        }
         b"XCLAIM" => {
             if cmd.position(b"JUSTID").is_some() {
                 Some(ExpectedReturnType::ArrayOfStrings)

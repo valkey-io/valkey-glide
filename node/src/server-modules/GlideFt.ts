@@ -12,7 +12,12 @@ import {
 } from "../BaseClient";
 import { GlideClient } from "../GlideClient";
 import { GlideClusterClient } from "../GlideClusterClient";
-import { Field, FtCreateOptions, FtSearchOptions } from "./GlideFtOptions";
+import {
+    Field,
+    FtAggregateOptions,
+    FtCreateOptions,
+    FtSearchOptions,
+} from "./GlideFtOptions";
 
 /** Response type of {@link GlideFt.info | ft.info} command. */
 export type FtInfoReturnType = Record<
@@ -31,6 +36,11 @@ export type FtSearchReturnType = [
     GlideRecord<GlideRecord<GlideString>>,
 ];
 
+/**
+ * Response type for the {@link GlideFt.aggregate | ft.aggregate} command.
+ */
+export type FtAggregateReturnType = GlideRecord<GlideReturnType>[];
+
 /** Module for Vector Search commands. */
 export class GlideFt {
     /**
@@ -40,7 +50,6 @@ export class GlideFt {
      * @param indexName - The index name for the index to be created.
      * @param schema - The fields of the index schema, specifying the fields and their types.
      * @param options - (Optional) Options for the `FT.CREATE` command. See {@link FtCreateOptions}.
-     *
      * @returns If the index is successfully created, returns "OK".
      *
      * @example
@@ -192,7 +201,6 @@ export class GlideFt {
      *
      * @param client - The client to execute the command.
      * @param indexName - The index name.
-     *
      * @returns "OK"
      *
      * @example
@@ -213,12 +221,115 @@ export class GlideFt {
     }
 
     /**
+     * Lists all indexes.
+     *
+     * @param client - The client to execute the command.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns An array of index names.
+     *
+     * @example
+     * ```typescript
+     * console.log(await GlideFt.list(client)); // Output: ["index1", "index2"]
+     * ```
+     */
+    static async list(
+        client: GlideClient | GlideClusterClient,
+        options?: DecoderOption,
+    ): Promise<GlideString[]> {
+        return _handleCustomCommand(client, ["FT._LIST"], options) as Promise<
+            GlideString[]
+        >;
+    }
+
+    /**
+     * Runs a search query on an index, and perform aggregate transformations on the results.
+     *
+     * @param client - The client to execute the command.
+     * @param indexName - The index name.
+     * @param query - The text query to search.
+     * @param options - Additional parameters for the command - see {@link FtAggregateOptions} and {@link DecoderOption}.
+     * @returns Results of the last stage of the pipeline.
+     *
+     * @example
+     * ```typescript
+     * const options: FtAggregateOptions = {
+     *      loadFields: ["__key"],
+     *      clauses: [
+     *          {
+     *              type: "GROUPBY",
+     *              properties: ["@condition"],
+     *              reducers: [
+     *                  {
+     *                      function: "TOLIST",
+     *                      args: ["__key"],
+     *                      name: "bicycles",
+     *                  },
+     *              ],
+     *          },
+     *      ],
+     *  };
+     * const result = await GlideFt.aggregate(client, "myIndex", "*", options);
+     * console.log(result); // Output:
+     * // [
+     * //     [
+     * //         {
+     * //             key: "condition",
+     * //             value: "refurbished"
+     * //         },
+     * //         {
+     * //             key: "bicycles",
+     * //             value: [ "bicycle:9" ]
+     * //         }
+     * //     ],
+     * //     [
+     * //         {
+     * //             key: "condition",
+     * //             value: "used"
+     * //         },
+     * //         {
+     * //             key: "bicycles",
+     * //             value: [ "bicycle:1", "bicycle:2", "bicycle:3" ]
+     * //         }
+     * //     ],
+     * //     [
+     * //         {
+     * //             key: "condition",
+     * //             value: "new"
+     * //         },
+     * //         {
+     * //             key: "bicycles",
+     * //             value: [ "bicycle:0", "bicycle:5" ]
+     * //         }
+     * //     ]
+     * // ]
+     * ```
+     */
+    static async aggregate(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        query: GlideString,
+        options?: DecoderOption & FtAggregateOptions,
+    ): Promise<FtAggregateReturnType> {
+        const args: GlideString[] = [
+            "FT.AGGREGATE",
+            indexName,
+            query,
+            ..._addFtAggregateOptions(options),
+        ];
+
+        return _handleCustomCommand(
+            client,
+            args,
+            options,
+        ) as Promise<FtAggregateReturnType>;
+    }
+
+    /**
      * Returns information about a given index.
      *
      * @param client - The client to execute the command.
      * @param indexName - The index name.
      * @param options - (Optional) See {@link DecoderOption}.
-     *
      * @returns Nested maps with info about the index. See example for more details.
      *
      * @example
@@ -279,6 +390,62 @@ export class GlideFt {
     }
 
     /**
+     * Parse a query and return information about how that query was parsed.
+     *
+     * @param client - The client to execute the command.
+     * @param indexName - The index name.
+     * @param query - The text query to search. It is the same as the query passed as
+     * an argument to {@link search | FT.SEARCH} or {@link aggregate | FT.AGGREGATE}.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns A query execution plan.
+     *
+     * @example
+     * ```typescript
+     * const result = GlideFt.explain(client, "myIndex", "@price:[0 10]");
+     * console.log(result); // Output: "Field {\n\tprice\n\t0\n\t10\n}"
+     * ```
+     */
+    static explain(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        query: GlideString,
+        options?: DecoderOption,
+    ): Promise<GlideString> {
+        const args = ["FT.EXPLAIN", indexName, query];
+
+        return _handleCustomCommand(client, args, options);
+    }
+
+    /**
+     * Parse a query and return information about how that query was parsed.
+     * Same as {@link explain | FT.EXPLAIN}, except that the results are
+     * displayed in a different format.
+     *
+     * @param client - The client to execute the command.
+     * @param indexName - The index name.
+     * @param query - The text query to search. It is the same as the query passed as
+     * an argument to {@link search | FT.SEARCH} or {@link aggregate | FT.AGGREGATE}.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns A query execution plan.
+     *
+     * @example
+     * ```typescript
+     * const result = GlideFt.explaincli(client, "myIndex", "@price:[0 10]");
+     * console.log(result); // Output: ["Field {", "price", "0", "10", "}"]
+     * ```
+     */
+    static explaincli(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        query: GlideString,
+        options?: DecoderOption,
+    ): Promise<GlideString[]> {
+        const args = ["FT.EXPLAINCLI", indexName, query];
+
+        return _handleCustomCommand(client, args, options);
+    }
+
+    /**
      * Uses the provided query expression to locate keys within an index. Once located, the count
      * and/or content of indexed fields within those keys can be returned.
      *
@@ -286,7 +453,6 @@ export class GlideFt {
      * @param indexName - The index name to search into.
      * @param query - The text query to search.
      * @param options - (Optional) See {@link FtSearchOptions} and {@link DecoderOption}.
-     *
      * @returns A two-element array, where the first element is the number of documents in the result set, and the
      * second element has the format: `GlideRecord<GlideRecord<GlideString>>`:
      * a mapping between document names and a map of their attributes.
@@ -339,71 +505,388 @@ export class GlideFt {
         query: GlideString,
         options?: FtSearchOptions & DecoderOption,
     ): Promise<FtSearchReturnType> {
-        const args: GlideString[] = ["FT.SEARCH", indexName, query];
-
-        if (options) {
-            // RETURN
-            if (options.returnFields) {
-                const returnFields: GlideString[] = [];
-                options.returnFields.forEach((returnField) =>
-                    returnField.alias
-                        ? returnFields.push(
-                              returnField.fieldIdentifier,
-                              "AS",
-                              returnField.alias,
-                          )
-                        : returnFields.push(returnField.fieldIdentifier),
-                );
-                args.push(
-                    "RETURN",
-                    returnFields.length.toString(),
-                    ...returnFields,
-                );
-            }
-
-            // TIMEOUT
-            if (options.timeout) {
-                args.push("TIMEOUT", options.timeout.toString());
-            }
-
-            // PARAMS
-            if (options.params) {
-                args.push("PARAMS", (options.params.length * 2).toString());
-                options.params.forEach((param) =>
-                    args.push(param.key, param.value),
-                );
-            }
-
-            // LIMIT
-            if (options.limit) {
-                args.push(
-                    "LIMIT",
-                    options.limit.offset.toString(),
-                    options.limit.count.toString(),
-                );
-            }
-
-            // COUNT
-            if (options.count) {
-                args.push("COUNT");
-            }
-        }
+        const args: GlideString[] = [
+            "FT.SEARCH",
+            indexName,
+            query,
+            ..._addFtSearchOptions(options),
+        ];
 
         return _handleCustomCommand(client, args, options) as Promise<
             [number, GlideRecord<GlideRecord<GlideString>>]
         >;
+    }
+
+    /**
+     * Runs a search query and collects performance profiling information.
+     *
+     * @param client - The client to execute the command.
+     * @param indexName - The index name.
+     * @param query - The text query to search.
+     * @param options - (Optional) See {@link FtSearchOptions} and {@link DecoderOption}. Additionally:
+     * - `limited` (Optional) - Either provide a full verbose output or some brief version.
+     *
+     * @returns A two-element array. The first element contains results of the search query being profiled, the
+     *     second element stores profiling information.
+     *
+     * @example
+     * ```typescript
+     * // Example of running profile on a search query
+     * const vector = Buffer.alloc(24);
+     * const result = await GlideFt.profileSearch(client, "json_idx1", "*=>[KNN 2 @VEC $query_vec]", {params: [{key: "query_vec", value: vector}]});
+     * console.log(result); // Output:
+     * // result[0] contains `FT.SEARCH` response with the given query
+     * // result[1] contains profiling data as a `Record<string, number>`
+     * ```
+     */
+    static async profileSearch(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        query: GlideString,
+        options?: DecoderOption &
+            FtSearchOptions & {
+                limited?: boolean;
+            },
+    ): Promise<[FtSearchReturnType, Record<string, number>]> {
+        const args: GlideString[] = ["FT.PROFILE", indexName, "SEARCH"];
+
+        if (options?.limited) {
+            args.push("LIMITED");
+        }
+
+        args.push("QUERY", query);
+
+        if (options) {
+            args.push(..._addFtSearchOptions(options));
+        }
+
+        return (
+            _handleCustomCommand(
+                client,
+                args,
+                options as DecoderOption,
+            ) as Promise<[FtSearchReturnType, GlideRecord<number>]>
+        ).then((v) => [v[0], convertGlideRecordToRecord(v[1])]);
+    }
+
+    /**
+     * Runs an aggregate query and collects performance profiling information.
+     *
+     * @param client - The client to execute the command.
+     * @param indexName - The index name.
+     * @param query - The text query to search.
+     * @param options - (Optional) See {@link FtAggregateOptions} and {@link DecoderOption}. Additionally:
+     * - `limited` (Optional) - Either provide a full verbose output or some brief version.
+     *
+     * @returns A two-element array. The first element contains results of the aggregate query being profiled, the
+     *     second element stores profiling information.
+     *
+     * @example
+     * ```typescript
+     * // Example of running profile on an aggregate query
+     * const options: FtAggregateOptions = {
+     *      loadFields: ["__key"],
+     *      clauses: [
+     *          {
+     *              type: "GROUPBY",
+     *              properties: ["@condition"],
+     *              reducers: [
+     *                  {
+     *                      function: "TOLIST",
+     *                      args: ["__key"],
+     *                      name: "bicycles",
+     *                  },
+     *              ],
+     *          },
+     *      ],
+     *  };
+     * const result = await GlideFt.profileAggregate(client, "myIndex", "*", options);
+     * console.log(result); // Output:
+     * // result[0] contains `FT.AGGREGATE` response with the given query
+     * // result[1] contains profiling data as a `Record<string, number>`
+     * ```
+     */
+    static async profileAggregate(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        query: GlideString,
+        options?: DecoderOption &
+            FtAggregateOptions & {
+                limited?: boolean;
+            },
+    ): Promise<[FtAggregateReturnType, Record<string, number>]> {
+        const args: GlideString[] = ["FT.PROFILE", indexName, "AGGREGATE"];
+
+        if (options?.limited) {
+            args.push("LIMITED");
+        }
+
+        args.push("QUERY", query);
+
+        if (options) {
+            args.push(..._addFtAggregateOptions(options));
+        }
+
+        return (
+            _handleCustomCommand(
+                client,
+                args,
+                options as DecoderOption,
+            ) as Promise<[FtAggregateReturnType, GlideRecord<number>]>
+        ).then((v) => [v[0], convertGlideRecordToRecord(v[1])]);
+    }
+
+    /**
+     * Adds an alias for an index. The new alias name can be used anywhere that an index name is required.
+     *
+     * @param client - The client to execute the command.
+     * @param indexName - The alias to be added to the index.
+     * @param alias - The index name for which the alias has to be added.
+     * @returns `"OK"`
+     *
+     * @example
+     * ```typescript
+     * // Example usage of FT.ALIASADD to add an alias for an index.
+     * await GlideFt.aliasadd(client, "index", "alias"); // "OK"
+     * ```
+     */
+    static async aliasadd(
+        client: GlideClient | GlideClusterClient,
+        indexName: GlideString,
+        alias: GlideString,
+    ): Promise<"OK"> {
+        const args: GlideString[] = ["FT.ALIASADD", alias, indexName];
+        return _handleCustomCommand(client, args, {
+            decoder: Decoder.String,
+        }) as Promise<"OK">;
+    }
+
+    /**
+     * Deletes an existing alias for an index.
+     *
+     * @param client - The client to execute the command.
+     * @param alias -  The existing alias to be deleted for an index.
+     * @returns `"OK"`
+     *
+     * @example
+     * ```typescript
+     * // Example usage of FT.ALIASDEL to delete an existing alias.
+     * await GlideFt.aliasdel(client, "alias"); // "OK"
+     * ```
+     */
+    static async aliasdel(
+        client: GlideClient | GlideClusterClient,
+        alias: GlideString,
+    ): Promise<"OK"> {
+        const args: GlideString[] = ["FT.ALIASDEL", alias];
+        return _handleCustomCommand(client, args, {
+            decoder: Decoder.String,
+        }) as Promise<"OK">;
+    }
+
+    /**
+     * Updates an existing alias to point to a different physical index. This command only affects future references to the alias.
+     *
+     * @param client - The client to execute the command.
+     * @param alias - The alias name. This alias will now be pointed to a different index.
+     * @param indexName - The index name for which an existing alias has to updated.
+     * @returns `"OK"`
+     *
+     * @example
+     * ```typescript
+     * // Example usage of FT.ALIASUPDATE to update an alias to point to a different index.
+     * await GlideFt.aliasupdate(client, "newAlias", "index"); // "OK"
+     * ```
+     */
+    static async aliasupdate(
+        client: GlideClient | GlideClusterClient,
+        alias: GlideString,
+        indexName: GlideString,
+    ): Promise<"OK"> {
+        const args: GlideString[] = ["FT.ALIASUPDATE", alias, indexName];
+        return _handleCustomCommand(client, args, {
+            decoder: Decoder.String,
+        }) as Promise<"OK">;
+    }
+
+    /**
+     * List the index aliases.
+     *
+     * @param client - The client to execute the command.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns A map of index aliases for indices being aliased.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of FT._ALIASLIST to query index aliases
+     * const result = await GlideFt.aliaslist(client);
+     * console.log(result); // Output:
+     * //[{"key": "alias1", "value": "index1"}, {"key": "alias2", "value": "index2"}]
+     * ```
+     */
+    static async aliaslist(
+        client: GlideClient | GlideClusterClient,
+        options?: DecoderOption,
+    ): Promise<GlideRecord<GlideString>> {
+        const args: GlideString[] = ["FT._ALIASLIST"];
+        return _handleCustomCommand(client, args, options);
     }
 }
 
 /**
  * @internal
  */
-async function _handleCustomCommand(
+function _addFtAggregateOptions(options?: FtAggregateOptions): GlideString[] {
+    if (!options) return [];
+
+    const args: GlideString[] = [];
+
+    if (options.loadAll) args.push("LOAD", "*");
+    else if (options.loadFields)
+        args.push(
+            "LOAD",
+            options.loadFields.length.toString(),
+            ...options.loadFields,
+        );
+
+    if (options.timeout) args.push("TIMEOUT", options.timeout.toString());
+
+    if (options.params) {
+        args.push(
+            "PARAMS",
+            (options.params.length * 2).toString(),
+            ...options.params.flatMap((param) => [param.key, param.value]),
+        );
+    }
+
+    if (options.clauses) {
+        for (const clause of options.clauses) {
+            switch (clause.type) {
+                case "LIMIT":
+                    args.push(
+                        clause.type,
+                        clause.offset.toString(),
+                        clause.count.toString(),
+                    );
+                    break;
+                case "FILTER":
+                    args.push(clause.type, clause.expression);
+                    break;
+                case "GROUPBY":
+                    args.push(
+                        clause.type,
+                        clause.properties.length.toString(),
+                        ...clause.properties,
+                    );
+
+                    for (const reducer of clause.reducers) {
+                        args.push(
+                            "REDUCE",
+                            reducer.function,
+                            reducer.args.length.toString(),
+                            ...reducer.args,
+                        );
+                        if (reducer.name) args.push("AS", reducer.name);
+                    }
+
+                    break;
+                case "SORTBY":
+                    args.push(
+                        clause.type,
+                        (clause.properties.length * 2).toString(),
+                    );
+                    for (const property of clause.properties)
+                        args.push(property.property, property.order);
+                    if (clause.max) args.push("MAX", clause.max.toString());
+                    break;
+                case "APPLY":
+                    args.push(
+                        clause.type,
+                        clause.expression,
+                        "AS",
+                        clause.name,
+                    );
+                    break;
+                default:
+                    throw new Error(
+                        "Unknown clause type in FtAggregateOptions",
+                    );
+            }
+        }
+    }
+
+    return args;
+}
+
+/**
+ * @internal
+ */
+function _addFtSearchOptions(options?: FtSearchOptions): GlideString[] {
+    if (!options) return [];
+
+    const args: GlideString[] = [];
+
+    // RETURN
+    if (options.returnFields) {
+        const returnFields: GlideString[] = [];
+        options.returnFields.forEach((returnField) =>
+            returnField.alias
+                ? returnFields.push(
+                      returnField.fieldIdentifier,
+                      "AS",
+                      returnField.alias,
+                  )
+                : returnFields.push(returnField.fieldIdentifier),
+        );
+        args.push("RETURN", returnFields.length.toString(), ...returnFields);
+    }
+
+    // TIMEOUT
+    if (options.timeout) {
+        args.push("TIMEOUT", options.timeout.toString());
+    }
+
+    // PARAMS
+    if (options.params) {
+        args.push(
+            "PARAMS",
+            (options.params.length * 2).toString(),
+            ...options.params.flatMap((param) => [param.key, param.value]),
+        );
+    }
+
+    // LIMIT
+    if (options.limit) {
+        args.push(
+            "LIMIT",
+            options.limit.offset.toString(),
+            options.limit.count.toString(),
+        );
+    }
+
+    // COUNT
+    if (options.count) {
+        args.push("COUNT");
+    }
+
+    return args;
+}
+
+/**
+ * @internal
+ */
+async function _handleCustomCommand<T>(
     client: GlideClient | GlideClusterClient,
     args: GlideString[],
     decoderOption: DecoderOption = {},
-): Promise<GlideReturnType> {
+): Promise<T> {
     return client instanceof GlideClient
-        ? (client as GlideClient).customCommand(args, decoderOption)
-        : (client as GlideClusterClient).customCommand(args, decoderOption);
+        ? ((client as GlideClient).customCommand(
+              args,
+              decoderOption,
+          ) as Promise<T>)
+        : ((client as GlideClusterClient).customCommand(
+              args,
+              decoderOption,
+          ) as Promise<T>);
 }

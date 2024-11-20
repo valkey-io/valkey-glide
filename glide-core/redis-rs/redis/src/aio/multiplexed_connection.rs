@@ -31,6 +31,9 @@ use std::time::Duration;
 #[cfg(feature = "tokio-comp")]
 use tokio_util::codec::Decoder;
 
+// Default connection timeout in ms
+const DEFAULT_CONNECTION_ATTEMPT_TIMEOUT: Duration = Duration::from_millis(250);
+
 // Senders which the result of a single request are sent through
 type PipelineOutput = oneshot::Sender<RedisResult<Value>>;
 
@@ -76,7 +79,7 @@ struct PipelineMessage<S> {
 /// interface provided by `Pipeline` an easy interface of request to response, hiding the `Stream`
 /// and `Sink`.
 #[derive(Clone)]
-struct Pipeline<SinkItem> {
+pub(crate) struct Pipeline<SinkItem> {
     sender: mpsc::Sender<PipelineMessage<SinkItem>>,
     push_manager: Arc<ArcSwap<PushManager>>,
     is_stream_closed: Arc<AtomicBool>,
@@ -399,6 +402,7 @@ where
         self.push_manager.store(Arc::new(push_manager));
     }
 
+    /// Checks if the pipeline is closed.
     pub fn is_closed(&self) -> bool {
         self.is_stream_closed.load(Ordering::Relaxed)
     }
@@ -413,6 +417,8 @@ pub struct MultiplexedConnection {
     response_timeout: Duration,
     protocol: ProtocolVersion,
     push_manager: PushManager,
+    availability_zone: Option<String>,
+    password: Option<String>,
 }
 
 impl Debug for MultiplexedConnection {
@@ -455,37 +461,35 @@ impl MultiplexedConnection {
     where
         C: Unpin + AsyncRead + AsyncWrite + Send + 'static,
     {
-        fn boxed(
-            f: impl Future<Output = ()> + Send + 'static,
-        ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
-            Box::pin(f)
-        }
-
-        #[cfg(not(feature = "tokio-comp"))]
-        compile_error!("tokio-comp feature is required for aio feature");
-
-        let redis_connection_info = &connection_info.redis;
         let codec = ValueCodec::default()
             .framed(stream)
             .and_then(|msg| async move { msg });
         let (mut pipeline, driver) =
             Pipeline::new(codec, glide_connection_options.disconnect_notifier);
-        let driver = boxed(driver);
+        let driver = Box::pin(driver);
         let pm = PushManager::default();
         if let Some(sender) = glide_connection_options.push_sender {
             pm.replace_sender(sender);
         }
 
         pipeline.set_push_manager(pm.clone()).await;
-        let mut con = MultiplexedConnection {
-            pipeline,
-            db: connection_info.redis.db,
-            response_timeout,
-            push_manager: pm,
-            protocol: redis_connection_info.protocol,
-        };
+
+        let mut con = MultiplexedConnection::builder(pipeline)
+            .with_db(connection_info.redis.db)
+            .with_response_timeout(response_timeout)
+            .with_push_manager(pm)
+            .with_protocol(connection_info.redis.protocol)
+            .with_password(connection_info.redis.password.clone())
+            .with_availability_zone(None)
+            .build()
+            .await?;
+
         let driver = {
-            let auth = setup_connection(&connection_info.redis, &mut con);
+            let auth = setup_connection(
+                &connection_info.redis,
+                &mut con,
+                glide_connection_options.discover_az,
+            );
 
             futures_util::pin_mut!(auth);
 
@@ -502,6 +506,7 @@ impl MultiplexedConnection {
                 }
             }
         };
+
         Ok((con, driver))
     }
 
@@ -575,6 +580,112 @@ impl MultiplexedConnection {
         self.push_manager = push_manager.clone();
         self.pipeline.set_push_manager(push_manager).await;
     }
+
+    /// For external visibilty (glide-core)
+    pub fn get_availability_zone(&self) -> Option<String> {
+        self.availability_zone.clone()
+    }
+
+    /// Replace the password used to authenticate with the server.
+    /// If `None` is provided, the password will be removed.
+    pub async fn update_connection_password(
+        &mut self,
+        password: Option<String>,
+    ) -> RedisResult<Value> {
+        self.password = password;
+        Ok(Value::Okay)
+    }
+
+    /// Creates a new `MultiplexedConnectionBuilder` for constructing a `MultiplexedConnection`.
+    pub(crate) fn builder(pipeline: Pipeline<Vec<u8>>) -> MultiplexedConnectionBuilder {
+        MultiplexedConnectionBuilder::new(pipeline)
+    }
+}
+
+/// A builder for creating `MultiplexedConnection` instances.
+pub struct MultiplexedConnectionBuilder {
+    pipeline: Pipeline<Vec<u8>>,
+    db: Option<i64>,
+    response_timeout: Option<Duration>,
+    push_manager: Option<PushManager>,
+    protocol: Option<ProtocolVersion>,
+    password: Option<String>,
+    /// Represents the node's availability zone
+    availability_zone: Option<String>,
+}
+
+impl MultiplexedConnectionBuilder {
+    /// Creates a new builder with the required pipeline
+    pub(crate) fn new(pipeline: Pipeline<Vec<u8>>) -> Self {
+        Self {
+            pipeline,
+            db: None,
+            response_timeout: None,
+            push_manager: None,
+            protocol: None,
+            password: None,
+            availability_zone: None,
+        }
+    }
+
+    /// Sets the database index for the `MultiplexedConnectionBuilder`.
+    pub fn with_db(mut self, db: i64) -> Self {
+        self.db = Some(db);
+        self
+    }
+
+    /// Sets the response timeout for the `MultiplexedConnectionBuilder`.
+    pub fn with_response_timeout(mut self, timeout: Duration) -> Self {
+        self.response_timeout = Some(timeout);
+        self
+    }
+
+    /// Sets the push manager for the `MultiplexedConnectionBuilder`.
+    pub fn with_push_manager(mut self, push_manager: PushManager) -> Self {
+        self.push_manager = Some(push_manager);
+        self
+    }
+
+    /// Sets the protocol version for the `MultiplexedConnectionBuilder`.
+    pub fn with_protocol(mut self, protocol: ProtocolVersion) -> Self {
+        self.protocol = Some(protocol);
+        self
+    }
+
+    /// Sets the password for the `MultiplexedConnectionBuilder`.
+    pub fn with_password(mut self, password: Option<String>) -> Self {
+        self.password = password;
+        self
+    }
+
+    /// Sets the avazilability zone for the `MultiplexedConnectionBuilder`.
+    pub fn with_availability_zone(mut self, az: Option<String>) -> Self {
+        self.availability_zone = az;
+        self
+    }
+
+    /// Builds and returns a new `MultiplexedConnection` instance using the configured settings.
+    pub async fn build(self) -> RedisResult<MultiplexedConnection> {
+        let db = self.db.unwrap_or_default();
+        let response_timeout = self
+            .response_timeout
+            .unwrap_or(DEFAULT_CONNECTION_ATTEMPT_TIMEOUT);
+        let push_manager = self.push_manager.unwrap_or_default();
+        let protocol = self.protocol.unwrap_or_default();
+        let password = self.password;
+
+        let con = MultiplexedConnection {
+            pipeline: self.pipeline,
+            db,
+            response_timeout,
+            push_manager,
+            protocol,
+            password,
+            availability_zone: self.availability_zone,
+        };
+
+        Ok(con)
+    }
 }
 
 impl ConnectionLike for MultiplexedConnection {
@@ -597,6 +708,16 @@ impl ConnectionLike for MultiplexedConnection {
 
     fn is_closed(&self) -> bool {
         self.pipeline.is_closed()
+    }
+
+    /// Get the node's availability zone
+    fn get_az(&self) -> Option<String> {
+        self.availability_zone.clone()
+    }
+
+    /// Set the node's availability zone
+    fn set_az(&mut self, az: Option<String>) {
+        self.availability_zone = az;
     }
 }
 impl MultiplexedConnection {

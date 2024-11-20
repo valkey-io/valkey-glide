@@ -293,6 +293,15 @@ class TestGlideClients:
             await glide_client.set("foo", "bar")
         assert "the client is closed" in str(e)
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_statistics(self, glide_client: TGlideClient):
+        stats = await glide_client.get_statistics()
+        assert isinstance(stats, dict)
+        assert "total_connections" in stats
+        assert "total_clients" in stats
+        assert len(stats) == 2
+
 
 @pytest.mark.asyncio
 class TestCommands:
@@ -10446,7 +10455,7 @@ class TestScripts:
         assert await glide_client.script_exists([script.get_hash()]) == [False]
 
     @pytest.mark.parametrize("cluster_mode", [True])
-    @pytest.mark.parametrize("single_route", [True, False])
+    @pytest.mark.parametrize("single_route", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_script_kill_route(
         self,

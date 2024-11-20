@@ -375,7 +375,7 @@ async fn invoke_script(
 
 async fn send_transaction(
     request: Transaction,
-    mut client: Client,
+    client: &mut Client,
     routing: Option<RoutingInfo>,
 ) -> ClientUsageResult<Value> {
     let mut pipeline = redis::Pipeline::with_capacity(request.commands.capacity());
@@ -461,7 +461,7 @@ fn get_route(
     }
 }
 
-fn handle_request(request: CommandRequest, client: Client, writer: Rc<Writer>) {
+fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer>) {
     task::spawn_local(async move {
         let mut updated_inflight_counter = true;
         let client_clone = client.clone();
@@ -489,7 +489,7 @@ fn handle_request(request: CommandRequest, client: Client, writer: Rc<Writer>) {
                     }
                     command_request::Command::Transaction(transaction) => {
                         match get_route(request.route.0, None) {
-                            Ok(routes) => send_transaction(transaction, client, routes).await,
+                            Ok(routes) => send_transaction(transaction, &mut client, routes).await,
                             Err(e) => Err(e),
                         }
                     }
@@ -522,6 +522,17 @@ fn handle_request(request: CommandRequest, client: Client, writer: Rc<Writer>) {
                             Err(e) => Err(e),
                         }
                     }
+                    command_request::Command::UpdateConnectionPassword(
+                        update_connection_password_command,
+                    ) => client
+                        .update_connection_password(
+                            update_connection_password_command
+                                .password
+                                .map(|chars| chars.to_string()),
+                            update_connection_password_command.immediate_auth,
+                        )
+                        .await
+                        .map_err(|err| err.into()),
                 },
                 None => {
                     log_debug(

@@ -9,11 +9,14 @@ from glide.config import (
     GlideClusterClientConfiguration,
     NodeAddress,
     ProtocolVersion,
+    ReadFrom,
     ServerCredentials,
 )
+from glide.exceptions import ClosingError, RequestError
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.logger import Level as logLevel
 from glide.logger import Logger
+from glide.routes import AllNodes
 from tests.utils.cluster import ValkeyCluster
 from tests.utils.utils import check_if_server_version_lt
 
@@ -130,6 +133,7 @@ def create_clusters(tls, load_module, cluster_endpoints, standalone_endpoints):
             cluster_mode=True,
             load_module=load_module,
             addresses=cluster_endpoints,
+            replica_count=2,
         )
         pytest.standalone_cluster = ValkeyCluster(
             tls=tls,
@@ -204,11 +208,26 @@ def pytest_collection_modifyitems(config, items):
                     )
 
 
-@pytest.fixture()
+@pytest.fixture(scope="function")
 async def glide_client(
-    request, cluster_mode: bool, protocol: ProtocolVersion
+    request,
+    cluster_mode: bool,
+    protocol: ProtocolVersion,
 ) -> AsyncGenerator[TGlideClient, None]:
     "Get async socket client for tests"
+    client = await create_client(request, cluster_mode, protocol=protocol)
+    yield client
+    await test_teardown(request, cluster_mode, protocol)
+    await client.close()
+
+
+@pytest.fixture(scope="function")
+async def management_client(
+    request,
+    cluster_mode: bool,
+    protocol: ProtocolVersion,
+) -> AsyncGenerator[TGlideClient, None]:
+    "Get async socket client for tests, used to manage the state when tests are on the client ability to connect"
     client = await create_client(request, cluster_mode, protocol=protocol)
     yield client
     await test_teardown(request, cluster_mode, protocol)
@@ -231,6 +250,8 @@ async def create_client(
         GlideClientConfiguration.PubSubSubscriptions
     ] = None,
     inflight_requests_limit: Optional[int] = None,
+    read_from: ReadFrom = ReadFrom.PRIMARY,
+    client_az: Optional[str] = None,
 ) -> Union[GlideClient, GlideClusterClient]:
     # Create async socket client
     use_tls = request.config.getoption("--tls")
@@ -248,6 +269,8 @@ async def create_client(
             request_timeout=timeout,
             pubsub_subscriptions=cluster_mode_pubsub,
             inflight_requests_limit=inflight_requests_limit,
+            read_from=read_from,
+            client_az=client_az,
         )
         return await GlideClusterClient.create(cluster_config)
     else:
@@ -264,21 +287,87 @@ async def create_client(
             request_timeout=timeout,
             pubsub_subscriptions=standalone_mode_pubsub,
             inflight_requests_limit=inflight_requests_limit,
+            read_from=read_from,
+            client_az=client_az,
         )
         return await GlideClient.create(config)
+
+
+NEW_PASSWORD = "new_secure_password"
+WRONG_PASSWORD = "wrong_password"
+
+
+async def auth_client(client: TGlideClient, password):
+    """
+    Authenticates the given TGlideClient server connected.
+    """
+    if isinstance(client, GlideClient):
+        await client.custom_command(["AUTH", password])
+    elif isinstance(client, GlideClusterClient):
+        await client.custom_command(["AUTH", password], route=AllNodes())
+
+
+async def config_set_new_password(client: TGlideClient, password):
+    """
+    Sets a new password for the given TGlideClient server connected.
+    This function updates the server to require a new password.
+    """
+    if isinstance(client, GlideClient):
+        await client.config_set({"requirepass": password})
+    elif isinstance(client, GlideClusterClient):
+        await client.config_set({"requirepass": password}, route=AllNodes())
+
+
+async def kill_connections(client: TGlideClient):
+    """
+    Kills all connections to the given TGlideClient server connected.
+    """
+    if isinstance(client, GlideClient):
+        await client.custom_command(["CLIENT", "KILL", "TYPE", "normal"])
+    elif isinstance(client, GlideClusterClient):
+        await client.custom_command(
+            ["CLIENT", "KILL", "TYPE", "normal"], route=AllNodes()
+        )
 
 
 async def test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
     """
     Perform teardown tasks such as flushing all data from the cluster.
 
-    We create a new client here because some tests load lots of data to the cluster,
-    which might cause the client to time out during flushing. Therefore, we create
-    a client with a custom timeout to ensure the operation completes successfully.
+    If authentication is required, attempt to connect with the known password,
+    reset it back to empty, and proceed with teardown.
     """
-    client = await create_client(request, cluster_mode, protocol=protocol, timeout=2000)
-    await client.custom_command(["FLUSHALL"])
-    await client.close()
+    credentials = None
+    try:
+        # Try connecting without credentials
+        client = await create_client(
+            request, cluster_mode, protocol=protocol, timeout=2000
+        )
+        await client.custom_command(["FLUSHALL"])
+        await client.close()
+    except ClosingError as e:
+        # Check if the error is due to authentication
+        if "NOAUTH" in str(e):
+            # Use the known password to authenticate
+            credentials = ServerCredentials(password=NEW_PASSWORD)
+            client = await create_client(
+                request,
+                cluster_mode,
+                protocol=protocol,
+                timeout=2000,
+                credentials=credentials,
+            )
+            try:
+                await auth_client(client, NEW_PASSWORD)
+                # Reset the server password back to empty
+                await config_set_new_password(client, "")
+                await client.update_connection_password(None)
+                # Perform the teardown
+                await client.custom_command(["FLUSHALL"])
+            finally:
+                await client.close()
+        else:
+            raise e
 
 
 @pytest.fixture(autouse=True)
@@ -300,3 +389,26 @@ async def skip_if_version_below(request):
                 reason=f"This feature added in version {min_version}",
                 allow_module_level=True,
             )
+
+
+# @pytest.fixture(scope="module")
+# def multiple_replicas_cluster(request):
+#     """
+#     Fixture to create a special cluster with 4 replicas for specific tests.
+#     """
+#     tls = request.config.getoption("--tls")
+#     load_module = request.config.getoption("--load-module")
+#     cluster_endpoints = request.config.getoption("--cluster-endpoints")
+
+#     if not cluster_endpoints:
+#         multiple_replica_cluster = ValkeyCluster(
+#             tls=tls,
+#             cluster_mode=True,
+#             load_module=load_module,
+#             addresses=cluster_endpoints,
+#             replica_count=4,
+#         )
+#         yield multiple_replica_cluster
+#         multiple_replica_cluster.__del__()
+#     else:
+#         yield None

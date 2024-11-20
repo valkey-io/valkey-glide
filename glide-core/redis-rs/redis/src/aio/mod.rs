@@ -3,7 +3,10 @@ use crate::cmd::{cmd, Cmd};
 use crate::connection::{
     get_resp3_hello_command_error, PubSubSubscriptionKind, RedisConnectionInfo,
 };
-use crate::types::{ErrorKind, ProtocolVersion, RedisFuture, RedisResult, Value};
+use crate::types::{
+    ErrorKind, FromRedisValue, InfoDict, ProtocolVersion, RedisError, RedisFuture, RedisResult,
+    Value,
+};
 use crate::PushKind;
 use ::tokio::io::{AsyncRead, AsyncWrite};
 use async_trait::async_trait;
@@ -84,6 +87,14 @@ pub trait ConnectionLike {
 
     /// Returns the state of the connection
     fn is_closed(&self) -> bool;
+
+    /// Get the connection availibility zone
+    fn get_az(&self) -> Option<String> {
+        None
+    }
+
+    /// Set the connection availibility zone
+    fn set_az(&mut self, _az: Option<String>) {}
 }
 
 /// Implements ability to notify about disconnection events
@@ -105,8 +116,40 @@ impl Clone for Box<dyn DisconnectNotifier> {
     }
 }
 
+// Helper function to extract and update availability zone from INFO command
+async fn update_az_from_info<C>(con: &mut C) -> RedisResult<()>
+where
+    C: ConnectionLike,
+{
+    let info_res = con.req_packed_command(&cmd("INFO")).await;
+
+    match info_res {
+        Ok(value) => {
+            let info_dict: InfoDict = FromRedisValue::from_redis_value(&value)?;
+            if let Some(node_az) = info_dict.get::<String>("availability_zone") {
+                con.set_az(Some(node_az));
+            }
+            Ok(())
+        }
+        Err(e) => {
+            // Handle the error case for the INFO command
+            Err(RedisError::from((
+                ErrorKind::ResponseError,
+                "Failed to execute INFO command. ",
+                format!("{:?}", e),
+            )))
+        }
+    }
+}
+
 // Initial setup for every connection.
-async fn setup_connection<C>(connection_info: &RedisConnectionInfo, con: &mut C) -> RedisResult<()>
+async fn setup_connection<C>(
+    connection_info: &RedisConnectionInfo,
+    con: &mut C,
+    // This parameter is set to 'true' if ReadFromReplica strategy is set to AZAffinity.
+    // An INFO command will be triggered in the connection's setup to update the 'availability_zone' property.
+    discover_az: bool,
+) -> RedisResult<()>
 where
     C: ConnectionLike,
 {
@@ -179,6 +222,10 @@ where
                 "Redis server refused to set client name"
             )),
         }
+    }
+
+    if discover_az {
+        update_az_from_info(con).await?;
     }
 
     // result is ignored, as per the command's instructions.

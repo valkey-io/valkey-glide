@@ -15,8 +15,8 @@ use futures::{
 };
 use futures_util::future::BoxFuture;
 use std::sync::Arc;
-use tokio_retry::strategy::{jitter, ExponentialBackoff};
-use tokio_retry::Retry;
+use tokio_retry2::strategy::{jitter, ExponentialBackoff};
+use tokio_retry2::{Retry, RetryError};
 
 /// A `ConnectionManager` is a proxy that wraps a [multiplexed
 /// connection][multiplexed-connection] and automatically reconnects to the
@@ -191,12 +191,15 @@ impl ConnectionManager {
         connection_timeout: std::time::Duration,
     ) -> RedisResult<MultiplexedConnection> {
         let retry_strategy = exponential_backoff.map(jitter).take(number_of_retries);
-        Retry::spawn(retry_strategy, || {
-            client.get_multiplexed_async_connection_with_timeouts(
-                response_timeout,
-                connection_timeout,
-                GlideConnectionOptions::default(),
-            )
+        Retry::spawn(retry_strategy, || async {
+            client
+                .get_multiplexed_async_connection_with_timeouts(
+                    response_timeout,
+                    connection_timeout,
+                    GlideConnectionOptions::default(),
+                )
+                .await
+                .map_err(RetryError::transient)
         })
         .await
     }

@@ -498,7 +498,10 @@ export type ReadFrom =
     | "primary"
     /** Spread the requests between all replicas in a round robin manner.
         If no replica is available, route the requests to the primary.*/
-    | "preferReplica";
+    | "preferReplica"
+    /** Spread the requests between replicas in the same client's Aviliablity zone in a round robin manner.
+        If no replica is available, route the requests to the primary.*/
+    | "AZAffinity";
 
 /**
  * Configuration settings for creating a client. Shared settings for standalone and cluster clients.
@@ -571,6 +574,18 @@ export interface BaseClientConfiguration {
      * used.
      */
     inflightRequestsLimit?: number;
+    /**
+     * Availability Zone of the client.
+     * If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within the specified AZ if exits.
+     *
+     * @example
+     * ```typescript
+     * // Example configuration for setting client availability zone and read strategy
+     * configuration.clientAz = 'us-east-1a'; // Sets the client's availability zone
+     * configuration.readFrom = 'AZAffinity'; // Directs read operations to nodes within the same AZ
+     * ```
+     */
+    clientAz?: string;
 }
 
 /**
@@ -716,6 +731,7 @@ export class BaseClient {
     private readonly pubsubFutures: [PromiseFunction, ErrorFunction][] = [];
     private pendingPushNotification: response.Response[] = [];
     private readonly inflightRequestsLimit: number;
+    private readonly clientAz: string | undefined;
     private config: BaseClientConfiguration | undefined;
 
     protected configurePubsub(
@@ -915,7 +931,8 @@ export class BaseClient {
             | command_request.Command
             | command_request.Command[]
             | command_request.ScriptInvocation
-            | command_request.ClusterScan,
+            | command_request.ClusterScan
+            | command_request.UpdateConnectionPassword,
         options: WritePromiseOptions = {},
     ): Promise<T> {
         const route = toProtobufRoute(options?.route);
@@ -985,7 +1002,8 @@ export class BaseClient {
             | command_request.Command
             | command_request.Command[]
             | command_request.ScriptInvocation
-            | command_request.ClusterScan,
+            | command_request.ClusterScan
+            | command_request.UpdateConnectionPassword,
         route?: command_request.Routes,
     ) {
         const message = Array.isArray(command)
@@ -1005,10 +1023,15 @@ export class BaseClient {
                       callbackIdx,
                       clusterScan: command,
                   })
-                : command_request.CommandRequest.create({
-                      callbackIdx,
-                      scriptInvocation: command,
-                  });
+                : command instanceof command_request.UpdateConnectionPassword
+                  ? command_request.CommandRequest.create({
+                        callbackIdx,
+                        updateConnectionPassword: command,
+                    })
+                  : command_request.CommandRequest.create({
+                        callbackIdx,
+                        scriptInvocation: command,
+                    });
         message.route = route;
 
         this.writeOrBufferRequest(
@@ -1396,6 +1419,14 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/del/|valkey.io} for details.
      *
+     * @remarks In cluster mode, if keys in `keys` map to different hash slots,
+     * the command will be split across these slots and executed separately for each.
+     * This means the command is atomic only at the slot level. If one or more slot-specific
+     * requests fail, the entire call will return the first encountered error, even
+     * though some requests may have succeeded while others did not.
+     * If this behavior impacts your application logic, consider splitting the
+     * request into sub-requests per slot to ensure atomicity.
+     *
      * @param keys - The keys we wanted to remove.
      * @returns The number of keys that were removed.
      *
@@ -1496,7 +1527,14 @@ export class BaseClient {
     /** Retrieve the values of multiple keys.
      *
      * @see {@link https://valkey.io/commands/mget/|valkey.io} for details.
-     * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+     *
+     * @remarks In cluster mode, if keys in `keys` map to different hash slots,
+     * the command will be split across these slots and executed separately for each.
+     * This means the command is atomic only at the slot level. If one or more slot-specific
+     * requests fail, the entire call will return the first encountered error, even
+     * though some requests may have succeeded while others did not.
+     * If this behavior impacts your application logic, consider splitting the
+     * request into sub-requests per slot to ensure atomicity.
      *
      * @param keys - A list of keys to retrieve values for.
      * @param options - (Optional) See {@link DecoderOption}.
@@ -1522,10 +1560,18 @@ export class BaseClient {
     /** Set multiple keys to multiple values in a single operation.
      *
      * @see {@link https://valkey.io/commands/mset/|valkey.io} for details.
-     * @remarks When in cluster mode, the command may route to multiple nodes when keys in `keyValueMap` map to different hash slots.
+     *
+     * @remarks In cluster mode, if keys in `keyValueMap` map to different hash slots,
+     * the command will be split across these slots and executed separately for each.
+     * This means the command is atomic only at the slot level. If one or more slot-specific
+     * requests fail, the entire call will return the first encountered error, even
+     * though some requests may have succeeded while others did not.
+     * If this behavior impacts your application logic, consider splitting the
+     * request into sub-requests per slot to ensure atomicity.
      *
      * @param keysAndValues - A list of key-value pairs to set.
-     * @returns always "OK".
+     *
+     * @returns A simple "OK" response.
      *
      * @example
      * ```typescript
@@ -3434,6 +3480,14 @@ export class BaseClient {
     /**
      * Returns the number of keys in `keys` that exist in the database.
      *
+     * @remarks In cluster mode, if keys in `keys` map to different hash slots,
+     * the command will be split across these slots and executed separately for each.
+     * This means the command is atomic only at the slot level. If one or more slot-specific
+     * requests fail, the entire call will return the first encountered error, even
+     * though some requests may have succeeded while others did not.
+     * If this behavior impacts your application logic, consider splitting the
+     * request into sub-requests per slot to ensure atomicity.
+     *
      * @see {@link https://valkey.io/commands/exists/|valkey.io} for details.
      *
      * @param keys - The keys list to check.
@@ -3455,6 +3509,14 @@ export class BaseClient {
      * Removes the specified keys. A key is ignored if it does not exist.
      * This command, similar to {@link del}, removes specified keys and ignores non-existent ones.
      * However, this command does not block the server, while {@link https://valkey.io/commands/del|`DEL`} does.
+     *
+     * @remarks In cluster mode, if keys in `keys` map to different hash slots,
+     * the command will be split across these slots and executed separately for each.
+     * This means the command is atomic only at the slot level. If one or more slot-specific
+     * requests fail, the entire call will return the first encountered error, even
+     * though some requests may have succeeded while others did not.
+     * If this behavior impacts your application logic, consider splitting the
+     * request into sub-requests per slot to ensure atomicity.
      *
      * @see {@link https://valkey.io/commands/unlink/|valkey.io} for details.
      *
@@ -5947,6 +6009,7 @@ export class BaseClient {
     > = {
         primary: connection_request.ReadFrom.Primary,
         preferReplica: connection_request.ReadFrom.PreferReplica,
+        AZAffinity: connection_request.ReadFrom.AZAffinity,
     };
 
     /**
@@ -7081,7 +7144,14 @@ export class BaseClient {
      * Updates the last access time of the specified keys.
      *
      * @see {@link https://valkey.io/commands/touch/|valkey.io} for more details.
-     * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+     *
+     * @remarks In cluster mode, if keys in `keys` map to different hash slots,
+     * the command will be split across these slots and executed separately for each.
+     * This means the command is atomic only at the slot level. If one or more slot-specific
+     * requests fail, the entire call will return the first encountered error, even
+     * though some requests may have succeeded while others did not.
+     * If this behavior impacts your application logic, consider splitting the
+     * request into sub-requests per slot to ensure atomicity.
      *
      * @param keys - The keys to update the last access time of.
      * @returns The number of keys that were updated. A key is ignored if it doesn't exist.
@@ -7104,7 +7174,14 @@ export class BaseClient {
      * transaction. Executing a transaction will automatically flush all previously watched keys.
      *
      * @see {@link https://valkey.io/commands/watch/|valkey.io} and {@link https://valkey.io/topics/transactions/#cas|Valkey Glide Wiki} for more details.
-     * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+     *
+     * @remarks In cluster mode, if keys in `keys` map to different hash slots,
+     * the command will be split across these slots and executed separately for each.
+     * This means the command is atomic only at the slot level. If one or more slot-specific
+     * requests fail, the entire call will return the first encountered error, even
+     * though some requests may have succeeded while others did not.
+     * If this behavior impacts your application logic, consider splitting the
+     * request into sub-requests per slot to ensure atomicity.
      *
      * @param keys - The keys to watch.
      * @returns A simple `"OK"` response.
@@ -7514,6 +7591,7 @@ export class BaseClient {
             readFrom,
             authenticationInfo,
             inflightRequestsLimit: options.inflightRequestsLimit,
+            clientAz: options.clientAz ?? null,
         };
     }
 
@@ -7618,5 +7696,51 @@ export class BaseClient {
             socket.end();
             throw err;
         }
+    }
+
+    /**
+     * Update the current connection with a new password.
+     *
+     * This method is useful in scenarios where the server password has changed or when utilizing short-lived passwords for enhanced security.
+     * It allows the client to update its password to reconnect upon disconnection without the need to recreate the client instance.
+     * This ensures that the internal reconnection mechanism can handle reconnection seamlessly, preventing the loss of in-flight commands.
+     *
+     * This method updates the client's internal password configuration and does not perform password rotation on the server side.
+     *
+     * @param password - `String | null`. The new password to update the current password, or `null` to remove the current password.
+     * @param immidiateAuth - A `boolean` flag. If `true`, the client will authenticate immediately with the new password against all connections, Using `AUTH` command.
+     *                 If password supplied is an empty string, the client will not perform auth and instead a warning will be returned.
+     *                 The default is `false`.
+     *
+     * @example
+     * ```typescript
+     * await client.updateConnectionPassword("newPassword", true) // "OK"
+     * ```
+     */
+    async updateConnectionPassword(
+        password: string | null,
+        immediateAuth = false,
+    ) {
+        const updateConnectionPassword =
+            command_request.UpdateConnectionPassword.create({
+                password,
+                immediateAuth,
+            });
+
+        const response = await this.createWritePromise<GlideString>(
+            updateConnectionPassword,
+        );
+
+        if (response === "OK" && !this.config?.credentials) {
+            this.config = {
+                ...this.config!,
+                credentials: {
+                    ...this.config!.credentials,
+                    password: password ? password : "",
+                },
+            };
+        }
+
+        return response;
     }
 }

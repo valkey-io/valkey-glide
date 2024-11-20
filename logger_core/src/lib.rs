@@ -24,6 +24,9 @@ use tracing_subscriber::{
     prelude::*,
     reload::{self, Handle},
 };
+
+use std::str::FromStr;
+
 // Layer-Filter pair determines whether a log will be collected
 type InnerFiltered = Filtered<Layer<Registry>, LevelFilter, Registry>;
 // A Reloadable pair of layer-filter
@@ -139,11 +142,18 @@ pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
         let (file_layer, file_reload) = reload::Layer::new(file_fmt);
 
         // Enable logging only from allowed crates
+        let log_level = if let Ok(level) = std::env::var("RUST_LOG") {
+            let trace_level = tracing::Level::from_str(&level).unwrap_or(tracing::Level::TRACE);
+            LevelFilter::from(trace_level)
+        } else {
+            LevelFilter::TRACE
+        };
+
         let targets_filter = filter::Targets::new()
-            .with_target("glide", LevelFilter::TRACE)
-            .with_target("redis", LevelFilter::TRACE)
-            .with_target("logger_core", LevelFilter::TRACE)
-            .with_target(std::env!("CARGO_PKG_NAME"), LevelFilter::TRACE);
+            .with_target("glide", log_level)
+            .with_target("redis", log_level)
+            .with_target("logger_core", log_level)
+            .with_target(std::env!("CARGO_PKG_NAME"), log_level);
 
         tracing_subscriber::registry()
             .with(stdout_layer)

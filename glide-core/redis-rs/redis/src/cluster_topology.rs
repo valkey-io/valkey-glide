@@ -8,7 +8,6 @@ use crate::cluster_slotmap::{ReadFromReplicaStrategy, SlotMap};
 use crate::{cluster::TlsMode, ErrorKind, RedisError, RedisResult, Value};
 #[cfg(all(feature = "cluster-async", not(feature = "tokio-comp")))]
 use async_std::sync::RwLock;
-use derivative::Derivative;
 use std::collections::{hash_map::DefaultHasher, HashMap};
 use std::hash::{Hash, Hasher};
 use std::sync::atomic::AtomicBool;
@@ -21,11 +20,10 @@ use tracing::info;
 // Exponential backoff constants for retrying a slot refresh
 /// The default number of refresh topology retries in the same call
 pub const DEFAULT_NUMBER_OF_REFRESH_SLOTS_RETRIES: usize = 3;
-/// The default maximum interval between two retries of the same call for topology refresh
-pub const DEFAULT_REFRESH_SLOTS_RETRY_MAX_INTERVAL: Duration = Duration::from_secs(1);
-/// The default initial interval for retrying topology refresh
-pub const DEFAULT_REFRESH_SLOTS_RETRY_INITIAL_INTERVAL: Duration = Duration::from_millis(500);
-
+/// The default base duration for retrying topology refresh
+pub const DEFAULT_REFRESH_SLOTS_RETRY_BASE_DURATION_MILLIS: u64 = 500;
+/// The default base factor for retrying topology refresh
+pub const DEFAULT_REFRESH_SLOTS_RETRY_BASE_FACTOR: f64 = 1.5;
 // Constants for the intervals between two independent consecutive refresh slots calls
 /// The default wait duration between two consecutive refresh slots calls
 #[cfg(feature = "cluster-async")]
@@ -58,16 +56,20 @@ impl SlotRefreshState {
     }
 }
 
-#[derive(Derivative)]
-#[derivative(PartialEq, Eq)]
 #[derive(Debug)]
 pub(crate) struct TopologyView {
     pub(crate) hash_value: TopologyHash,
-    #[derivative(PartialEq = "ignore")]
     pub(crate) nodes_count: u16,
-    #[derivative(PartialEq = "ignore")]
     slots_and_count: (u16, Vec<Slot>),
 }
+
+impl PartialEq for TopologyView {
+    fn eq(&self, other: &Self) -> bool {
+        self.hash_value == other.hash_value
+    }
+}
+
+impl Eq for TopologyView {}
 
 pub(crate) fn slot(key: &[u8]) -> u16 {
     crc16::State::<crc16::XMODEM>::calculate(key) % SLOT_SIZE
@@ -300,7 +302,7 @@ pub(crate) fn calculate_topology<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cluster_routing::SlotAddrs;
+    use crate::cluster_routing::ShardAddrs;
 
     #[test]
     fn test_get_hashtag() {
@@ -456,10 +458,11 @@ mod tests {
         assert_eq!(calculate_hash(&res1), calculate_hash(&res2));
         assert_eq!(res1.0, res2.0);
         assert_eq!(res1.1.len(), res2.1.len());
-        let equality_check =
-            res1.1.iter().zip(&res2.1).all(|(first, second)| {
-                first.start() == second.start() && first.end() == second.end()
-            });
+        let equality_check = res1
+            .1
+            .iter()
+            .zip(&res2.1)
+            .all(|(first, second)| first.start == second.start && first.end == second.end);
         assert!(equality_check);
         let replicas_check = res1
             .1
@@ -502,8 +505,21 @@ mod tests {
         }
     }
 
-    fn get_node_addr(name: &str, port: u16) -> SlotAddrs {
-        SlotAddrs::new(format!("{name}:{port}"), Vec::new())
+    fn get_node_addr(name: &str, port: u16) -> Arc<ShardAddrs> {
+        Arc::new(ShardAddrs::new(format!("{name}:{port}").into(), Vec::new()))
+    }
+
+    fn collect_shard_addrs(slot_map: &SlotMap) -> Vec<Arc<ShardAddrs>> {
+        let mut shard_addrs: Vec<Arc<ShardAddrs>> = slot_map
+            .nodes_map()
+            .iter()
+            .map(|map_item| {
+                let shard_addrs = map_item.value();
+                shard_addrs.clone()
+            })
+            .collect();
+        shard_addrs.sort_unstable();
+        shard_addrs
     }
 
     #[test]
@@ -524,9 +540,9 @@ mod tests {
             ReadFromReplicaStrategy::AlwaysFromPrimary,
         )
         .unwrap();
-        let res: Vec<_> = topology_view.values().collect();
+        let res = collect_shard_addrs(&topology_view);
         let node_1 = get_node_addr("node1", 6379);
-        let expected: Vec<&SlotAddrs> = vec![&node_1];
+        let expected = vec![node_1];
         assert_eq!(res, expected);
     }
 
@@ -566,10 +582,10 @@ mod tests {
             ReadFromReplicaStrategy::AlwaysFromPrimary,
         )
         .unwrap();
-        let res: Vec<_> = topology_view.values().collect();
+        let res = collect_shard_addrs(&topology_view);
         let node_1 = get_node_addr("node1", 6379);
         let node_2 = get_node_addr("node2", 6380);
-        let expected: Vec<&SlotAddrs> = vec![&node_1, &node_2];
+        let expected = vec![node_1, node_2];
         assert_eq!(res, expected);
     }
 
@@ -589,10 +605,10 @@ mod tests {
             ReadFromReplicaStrategy::AlwaysFromPrimary,
         )
         .unwrap();
-        let res: Vec<_> = topology_view.values().collect();
+        let res = collect_shard_addrs(&topology_view);
         let node_1 = get_node_addr("node1", 6379);
         let node_2 = get_node_addr("node2", 6380);
-        let expected: Vec<&SlotAddrs> = vec![&node_1, &node_2];
+        let expected = vec![node_1, node_2];
         assert_eq!(res, expected);
     }
 
@@ -613,10 +629,10 @@ mod tests {
             ReadFromReplicaStrategy::AlwaysFromPrimary,
         )
         .unwrap();
-        let res: Vec<_> = topology_view.values().collect();
+        let res = collect_shard_addrs(&topology_view);
         let node_1 = get_node_addr("node3", 6381);
         let node_2 = get_node_addr("node4", 6382);
-        let expected: Vec<&SlotAddrs> = vec![&node_1, &node_2];
+        let expected = vec![node_1, node_2];
         assert_eq!(res, expected);
     }
 
@@ -637,9 +653,9 @@ mod tests {
             ReadFromReplicaStrategy::AlwaysFromPrimary,
         )
         .unwrap();
-        let res: Vec<_> = topology_view.values().collect();
+        let res = collect_shard_addrs(&topology_view);
         let node_1 = get_node_addr("node1", 6379);
-        let expected: Vec<&SlotAddrs> = vec![&node_1];
+        let expected = vec![node_1];
         assert_eq!(res, expected);
     }
 }
