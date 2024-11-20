@@ -27,7 +27,6 @@ import {
     InfoOptions,
     ListDirection,
     ProtocolVersion,
-    ReadFrom,
     RequestError,
     Routes,
     ScoreFilter,
