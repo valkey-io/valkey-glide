@@ -576,8 +576,7 @@ export interface BaseClientConfiguration {
     inflightRequestsLimit?: number;
     /**
      * Availability Zone of the client.
-     * This setting ensures that read operations are directed to nodes within the specified AZ.
-     * If not set, the AZAffinity strategy will not be applied, and read operations will follow the selected ReadFrom strategy without AZ-based routing.
+     * If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within the specified AZ if exits.
      *
      * @example
      * ```typescript

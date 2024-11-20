@@ -2322,70 +2322,75 @@ describe("GlideClusterClient", () => {
                 const GET_CALLS = 4;
                 const get_cmdstat = `cmdstat_get:calls=${GET_CALLS}`;
                 let client_for_testing_az;
-
+    
                 try {
+                    // Skip test if server version is below 8.0.0
                     if (azCluster.checkIfServerVersionLessThan("8.0.0")) {
                         console.log(
                             "Skipping test: requires Valkey 8.0.0 or higher",
                         );
                         return;
                     }
-
-                    client_for_testing_az =
-                        await GlideClusterClient.createClient(
-                            getClientConfigurationOption(
-                                azCluster.getAddresses(),
-                                protocol,
-                                {
-                                    readFrom: "AZAffinity",
-                                    clientAz: "non-existing-az",
-                                    requestTimeout: 2000,
-                                },
-                            ),
-                        );
-
-                    await client_for_testing_az.customCommand([
-                        "CONFIG",
-                        "RESETSTAT",
-                    ]);
-
+    
+                    // Create a client configured for AZAffinity with a non-existing AZ
+                    client_for_testing_az = await GlideClusterClient.createClient(
+                        getClientConfigurationOption(
+                            azCluster.getAddresses(),
+                            protocol,
+                            {
+                                readFrom: "AZAffinity",
+                                clientAz: "non-existing-az",
+                                requestTimeout: 2000,
+                            },
+                        ),
+                    );
+    
+                    // Reset command stats on all nodes
+                    await client_for_testing_az.customCommand(
+                        ["CONFIG", "RESETSTAT"],
+                        { route: "allNodes" },
+                    );
+    
+                    // Issue GET commands
                     for (let i = 0; i < GET_CALLS; i++) {
                         await client_for_testing_az.get("foo");
                     }
-
-                    const info_result =
-                        await client_for_testing_az.customCommand(
-                            ["INFO", "COMMANDSTATS"],
-                            { route: "allNodes" },
-                        );
-
+    
+                    // Fetch command stats from all nodes
+                    const info_result = await client_for_testing_az.customCommand(
+                        ["INFO", "COMMANDSTATS"],
+                        { route: "allNodes" },
+                    );
+    
+                    // Inline matching logic
                     let matchingEntriesCount = 0;
-
+    
                     if (
                         typeof info_result === "object" &&
                         info_result !== null
                     ) {
-                        const values = Object.values(info_result);
-                        matchingEntriesCount = values.filter((value) => {
+                        const nodeResponses = Object.values(info_result);
+    
+                        for (const response of nodeResponses) {
                             if (
-                                !value ||
-                                typeof value !== "object" ||
-                                !("value" in value)
+                                response &&
+                                typeof response === "object" &&
+                                "value" in response &&
+                                response.value.includes(get_cmdstat)
                             ) {
-                                return false;
+                                matchingEntriesCount++;
                             }
-
-                            return value.value.includes(get_cmdstat);
-                        }).length;
+                        }
                     } else {
                         throw new Error(
                             "Unexpected response format from INFO command",
                         );
                     }
-
-                    // Expect only one replica to have handled the GET commands
+    
+                    // Validate that only one replica handled the GET calls
                     expect(matchingEntriesCount).toBe(1);
                 } finally {
+                    // Cleanup: Close the client after test execution
                     await client_for_testing_az?.close();
                 }
             },
