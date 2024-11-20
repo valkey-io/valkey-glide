@@ -75,6 +75,9 @@ public abstract class BaseClientConfiguration {
      */
     private final Integer inflightRequestsLimit;
 
-    /** TBD */
+    /**
+     * Availability Zone of the client. If ReadFrom strategy is AZAffinity, this setting ensures that
+     * readonly commands are directed to replicas within the specified AZ if exits.
+     */
     private final String clientAZ;
 }

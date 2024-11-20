@@ -2,6 +2,7 @@
 package glide;
 
 import static glide.TestConfiguration.SERVER_VERSION;
+import static glide.TestUtilities.azClusterClientConfig;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.api.BaseClient.OK;
@@ -43,7 +44,7 @@ public class ConnectionTests {
     @SneakyThrows
     public GlideClusterClient createAzTestClient(String az) {
         return GlideClusterClient.createClient(
-                        commonClusterClientConfig()
+                        azClusterClientConfig()
                                 .readFrom(ReadFrom.AZ_AFFINITY)
                                 .clientAZ(az)
                                 .requestTimeout(2000)
@@ -101,23 +102,20 @@ public class ConnectionTests {
             assertEquals(az, entry.getValue().get("availability-zone"));
         }
 
-        // set test data and perform GET operations
-        azTestClient.set("foo", "value").get();
-
         // execute GET commands
         for (int i = 0; i < nGetCalls; i++) {
             azTestClient.get("foo").get();
         }
 
         ClusterValue<String> infoResult =
-                azTestClient
-                        .info(new InfoOptions.Section[] {InfoOptions.Section.COMMANDSTATS}, ALL_NODES)
-                        .get();
+                azTestClient.info(new InfoOptions.Section[] {InfoOptions.Section.ALL}, ALL_NODES).get();
         Map<String, String> infoData = infoResult.getMultiValue();
 
         // Check that all replicas have the same number of GET calls
         long matchingEntries =
-                infoData.values().stream().filter(value -> value.contains(getCmdstat)).count();
+                infoData.values().stream()
+                        .filter(value -> value.contains(getCmdstat) && value.contains(az))
+                        .count();
         assertEquals(nReplicas, matchingEntries);
         azTestClient.close();
     }
@@ -177,21 +175,17 @@ public class ConnectionTests {
         azTestClient.close();
     }
 
-    /**
-     * Test that the client with az affinity strategy will only route to the 1 replica with the same
-     * az.
-     */
     @SneakyThrows
     @Test
     public void test_az_affinity_non_existing_az() {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0"), "Skip for versions below 8");
 
-        String az = "us-east-1a";
         int nGetCalls = 4;
-        String getCmdstat = String.format("cmdstat_get:calls=%d", nGetCalls);
+        int nReplicaCalls = 1;
+        String getCmdstat = String.format("cmdstat_get:calls=%d", nReplicaCalls);
 
-        GlideClusterClient azTestClient = createAzTestClient(az);
-        assertEquals(azTestClient.configResetStat().get(), OK);
+        GlideClusterClient azTestClient = createAzTestClient("non-existing-az");
+        assertEquals(azTestClient.configResetStat(ALL_NODES).get(), OK);
 
         // execute GET commands
         for (int i = 0; i < nGetCalls; i++) {
@@ -199,13 +193,15 @@ public class ConnectionTests {
         }
 
         ClusterValue<String> infoResult =
-                azTestClient.info(new InfoOptions.Section[] {InfoOptions.Section.ALL}, ALL_NODES).get();
+                azTestClient
+                        .info(new InfoOptions.Section[] {InfoOptions.Section.COMMANDSTATS}, ALL_NODES)
+                        .get();
         Map<String, String> infoData = infoResult.getMultiValue();
 
-        // Check that all replicas have the same number of GET calls
+        //  We expect the calls to be distributed evenly among the replicas
         long matchingEntries =
                 infoData.values().stream().filter(value -> value.contains(getCmdstat)).count();
-        assertEquals(1, matchingEntries);
+        assertEquals(4, matchingEntries);
         azTestClient.close();
     }
 }

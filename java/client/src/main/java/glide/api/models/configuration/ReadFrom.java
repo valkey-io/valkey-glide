@@ -11,8 +11,8 @@ public enum ReadFrom {
      */
     PREFER_REPLICA,
     /**
-     * Spread the requests between replicas in the same client's AZ (Aviliablity zone) in a
-     * round-robin manner. If no replica is available, route the requests to the primary.
+     * Spread the read requests between replicas in the same client's AZ (Aviliablity zone) in a
+     * round-robin manner, falling back to other replicas or the primary if needed.
      */
     AZ_AFFINITY,
 }
