@@ -2322,7 +2322,7 @@ describe("GlideClusterClient", () => {
                 const GET_CALLS = 4;
                 const get_cmdstat = `cmdstat_get:calls=${GET_CALLS}`;
                 let client_for_testing_az;
-    
+
                 try {
                     // Skip test if server version is below 8.0.0
                     if (azCluster.checkIfServerVersionLessThan("8.0.0")) {
@@ -2331,46 +2331,48 @@ describe("GlideClusterClient", () => {
                         );
                         return;
                     }
-    
+
                     // Create a client configured for AZAffinity with a non-existing AZ
-                    client_for_testing_az = await GlideClusterClient.createClient(
-                        getClientConfigurationOption(
-                            azCluster.getAddresses(),
-                            protocol,
-                            {
-                                readFrom: "AZAffinity",
-                                clientAz: "non-existing-az",
-                                requestTimeout: 2000,
-                            },
-                        ),
-                    );
-    
+                    client_for_testing_az =
+                        await GlideClusterClient.createClient(
+                            getClientConfigurationOption(
+                                azCluster.getAddresses(),
+                                protocol,
+                                {
+                                    readFrom: "AZAffinity",
+                                    clientAz: "non-existing-az",
+                                    requestTimeout: 2000,
+                                },
+                            ),
+                        );
+
                     // Reset command stats on all nodes
                     await client_for_testing_az.customCommand(
                         ["CONFIG", "RESETSTAT"],
                         { route: "allNodes" },
                     );
-    
+
                     // Issue GET commands
                     for (let i = 0; i < GET_CALLS; i++) {
                         await client_for_testing_az.get("foo");
                     }
-    
+
                     // Fetch command stats from all nodes
-                    const info_result = await client_for_testing_az.customCommand(
-                        ["INFO", "COMMANDSTATS"],
-                        { route: "allNodes" },
-                    );
-    
+                    const info_result =
+                        await client_for_testing_az.customCommand(
+                            ["INFO", "COMMANDSTATS"],
+                            { route: "allNodes" },
+                        );
+
                     // Inline matching logic
                     let matchingEntriesCount = 0;
-    
+
                     if (
                         typeof info_result === "object" &&
                         info_result !== null
                     ) {
                         const nodeResponses = Object.values(info_result);
-    
+
                         for (const response of nodeResponses) {
                             if (
                                 response &&
@@ -2386,7 +2388,7 @@ describe("GlideClusterClient", () => {
                             "Unexpected response format from INFO command",
                         );
                     }
-    
+
                     // Validate that only one replica handled the GET calls
                     expect(matchingEntriesCount).toBe(1);
                 } finally {
