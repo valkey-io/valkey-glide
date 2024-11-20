@@ -2418,7 +2418,7 @@ describe("GlideClusterClient", () => {
                         );
 
                     // Fetch statistics using get_statistics method
-                    const stats = await glideClientForTesting.getStatistics();
+                    const stats = glideClientForTesting.getStatistics();
 
                     // Assertions to check if stats object has correct structure
                     expect(typeof stats).toBe("object");
