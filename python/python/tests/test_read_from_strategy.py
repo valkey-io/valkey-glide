@@ -13,7 +13,7 @@ from tests.utils.utils import get_first_result
 
 
 @pytest.mark.asyncio
-@pytest.mark.usefixtures("multiple_replicas_cluster")
+# @pytest.mark.usefixtures("multiple_replicas_cluster")
 class TestAZAffinity:
     async def _get_num_replicas(self, client: GlideClusterClient) -> int:
         info_replicas = get_first_result(
@@ -35,7 +35,7 @@ class TestAZAffinity:
         request,
         cluster_mode: bool,
         protocol: ProtocolVersion,
-        multiple_replicas_cluster,
+        # multiple_replicas_cluster,
     ):
         """Test that the client with az affinity strategy will only route to the 1 replica with the same az"""
         az = "us-east-1a"
@@ -45,7 +45,7 @@ class TestAZAffinity:
         client_for_config_set = await create_client(
             request,
             cluster_mode,
-            addresses=multiple_replicas_cluster.nodes_addr,
+            # addresses=multiple_replicas_cluster.nodes_addr,
             protocol=protocol,
             timeout=2000,
         )
@@ -66,7 +66,7 @@ class TestAZAffinity:
         client_for_testing_az = await create_client(
             request,
             cluster_mode,
-            addresses=multiple_replicas_cluster.nodes_addr,
+            # addresses=multiple_replicas_cluster.nodes_addr,
             protocol=protocol,
             read_from=ReadFrom.AZ_AFFINITY,
             timeout=2000,
@@ -106,7 +106,7 @@ class TestAZAffinity:
         request,
         cluster_mode: bool,
         protocol: ProtocolVersion,
-        multiple_replicas_cluster,
+        # multiple_replicas_cluster,
     ):
         """Test that the client with AZ affinity strategy routes in a round-robin manner to all replicas within the specified AZ"""
 
@@ -114,7 +114,7 @@ class TestAZAffinity:
         client_for_config_set = await create_client(
             request,
             cluster_mode,
-            addresses=multiple_replicas_cluster.nodes_addr,
+            # addresses=multiple_replicas_cluster.nodes_addr,
             protocol=protocol,
             timeout=2000,
         )
@@ -126,7 +126,7 @@ class TestAZAffinity:
         client_for_testing_az = await create_client(
             request,
             cluster_mode,
-            addresses=multiple_replicas_cluster.nodes_addr,
+            # addresses=multiple_replicas_cluster.nodes_addr,
             protocol=protocol,
             read_from=ReadFrom.AZ_AFFINITY,
             timeout=2000,
@@ -147,7 +147,7 @@ class TestAZAffinity:
         )
 
         n_replicas = await self._get_num_replicas(client_for_testing_az)
-        GET_CALLS = 3 * n_replicas
+        GET_CALLS = 4 * n_replicas
         get_cmdstat = f"cmdstat_get:calls={GET_CALLS // n_replicas}"
 
         for _ in range(GET_CALLS):
@@ -168,46 +168,46 @@ class TestAZAffinity:
         await client_for_config_set.close()
         await client_for_testing_az.close()
 
-    # @pytest.mark.skip_if_version_below("8.0.0")
-    # @pytest.mark.parametrize("cluster_mode", [True])
-    # @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    # async def test_az_affinity_non_existing_az(
-    #     self,
-    #     request,
-    #     cluster_mode: bool,
-    #     protocol: ProtocolVersion,
-    #     multiple_replicas_cluster,
-    # ):
-    #     GET_CALLS = 4
+    @pytest.mark.skip_if_version_below("8.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_az_affinity_non_existing_az(
+        self,
+        request,
+        cluster_mode: bool,
+        protocol: ProtocolVersion,
+        # multiple_replicas_cluster,
+    ):
+        GET_CALLS = 4
 
-    #     client_for_testing_az = await create_client(
-    #         request,
-    #         cluster_mode,
-    #         addresses=multiple_replicas_cluster.nodes_addr,
-    #         protocol=protocol,
-    #         read_from=ReadFrom.AZ_AFFINITY,
-    #         timeout=2000,
-    #         client_az="non-existing-az",
-    #     )
-    #     assert await client_for_testing_az.config_resetstat() == OK
+        client_for_testing_az = await create_client(
+            request,
+            cluster_mode,
+            # addresses=multiple_replicas_cluster.nodes_addr,
+            protocol=protocol,
+            read_from=ReadFrom.AZ_AFFINITY,
+            timeout=2000,
+            client_az="non-existing-az",
+        )
+        assert await client_for_testing_az.config_resetstat() == OK
 
-    #     for _ in range(GET_CALLS):
-    #         await client_for_testing_az.get("foo")
+        for _ in range(GET_CALLS):
+            await client_for_testing_az.get("foo")
 
-    #     n_replicas = await self._get_num_replicas(client_for_testing_az)
-    #     # We expect the calls to be distributed evenly among the replicas
-    #     get_cmdstat = f"cmdstat_get:calls={GET_CALLS // n_replicas}"
+        n_replicas = await self._get_num_replicas(client_for_testing_az)
+        # We expect the calls to be distributed evenly among the replicas
+        get_cmdstat = f"cmdstat_get:calls={GET_CALLS // n_replicas}"
 
-    #     info_result = await client_for_testing_az.info(
-    #         [InfoSection.COMMAND_STATS, InfoSection.SERVER], AllNodes()
-    #     )
+        info_result = await client_for_testing_az.info(
+            [InfoSection.COMMAND_STATS, InfoSection.SERVER], AllNodes()
+        )
 
-    #     matching_entries_count = sum(
-    #         1 for value in info_result.values() if get_cmdstat in value.decode()
-    #     )
-    #     assert matching_entries_count == GET_CALLS
+        matching_entries_count = sum(
+            1 for value in info_result.values() if get_cmdstat in value.decode()
+        )
+        assert matching_entries_count == n_replicas
 
-    #     await client_for_testing_az.close()
+        await client_for_testing_az.close()
 
     @pytest.mark.skip_if_version_below("8.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
