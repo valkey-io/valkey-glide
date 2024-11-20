@@ -27,7 +27,6 @@ import {
     InfoOptions,
     ListDirection,
     ProtocolVersion,
-    ReadFrom,
     RequestError,
     Routes,
     ScoreFilter,
@@ -2001,122 +2000,123 @@ describe("GlideClusterClient", () => {
                 await client.close();
             }
         },
-    );describe("GlideClusterClient - AZAffinity with Non-existing AZ", () => {
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "should route commands to a replica when AZ does not exist using protocol %p",
-        async (protocol) => {
-            const GET_CALLS = 4;
-            const replica_calls = 1;
-            const get_cmdstat = `cmdstat_get:calls=${replica_calls}`;
-            let client_for_testing_az;
+    );
+    describe("GlideClusterClient - AZAffinity with Non-existing AZ", () => {
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            "should route commands to a replica when AZ does not exist using protocol %p",
+            async (protocol) => {
+                const GET_CALLS = 4;
+                const replica_calls = 1;
+                const get_cmdstat = `cmdstat_get:calls=${replica_calls}`;
+                let client_for_testing_az;
 
-            try {
-                // Skip test if server version is below 8.0.0
-                if (azCluster.checkIfServerVersionLessThan("8.0.0")) {
-                    console.log(
-                        "Skipping test: requires Valkey 8.0.0 or higher",
-                    );
-                    return;
-                }
+                try {
+                    // Skip test if server version is below 8.0.0
+                    if (azCluster.checkIfServerVersionLessThan("8.0.0")) {
+                        console.log(
+                            "Skipping test: requires Valkey 8.0.0 or higher",
+                        );
+                        return;
+                    }
 
-                // Create a client configured for AZAffinity with a non-existing AZ
-                client_for_testing_az =
-                    await GlideClusterClient.createClient(
-                        getClientConfigurationOption(
-                            azCluster.getAddresses(),
-                            protocol,
-                            {
-                                readFrom: "AZAffinity",
-                                clientAz: "non-existing-az",
-                                requestTimeout: 2000,
-                            },
-                        ),
-                    );
+                    // Create a client configured for AZAffinity with a non-existing AZ
+                    client_for_testing_az =
+                        await GlideClusterClient.createClient(
+                            getClientConfigurationOption(
+                                azCluster.getAddresses(),
+                                protocol,
+                                {
+                                    readFrom: "AZAffinity",
+                                    clientAz: "non-existing-az",
+                                    requestTimeout: 2000,
+                                },
+                            ),
+                        );
 
-                // Reset command stats on all nodes
-                await client_for_testing_az.customCommand(
-                    ["CONFIG", "RESETSTAT"],
-                    { route: "allNodes" },
-                );
-
-                // Issue GET commands
-                for (let i = 0; i < GET_CALLS; i++) {
-                    await client_for_testing_az.get("foo");
-                }
-
-                // Fetch command stats from all nodes
-                const info_result =
+                    // Reset command stats on all nodes
                     await client_for_testing_az.customCommand(
-                        ["INFO", "COMMANDSTATS"],
+                        ["CONFIG", "RESETSTAT"],
                         { route: "allNodes" },
                     );
 
-                // Inline matching logic
-                let matchingEntriesCount = 0;
-
-                if (
-                    typeof info_result === "object" &&
-                    info_result !== null
-                ) {
-                    const nodeResponses = Object.values(info_result);
-
-                    for (const response of nodeResponses) {
-                        if (
-                            response &&
-                            typeof response === "object" &&
-                            "value" in response &&
-                            response.value.includes(get_cmdstat)
-                        ) {
-                            matchingEntriesCount++;
-                        }
+                    // Issue GET commands
+                    for (let i = 0; i < GET_CALLS; i++) {
+                        await client_for_testing_az.get("foo");
                     }
-                } else {
-                    throw new Error(
-                        "Unexpected response format from INFO command",
-                    );
+
+                    // Fetch command stats from all nodes
+                    const info_result =
+                        await client_for_testing_az.customCommand(
+                            ["INFO", "COMMANDSTATS"],
+                            { route: "allNodes" },
+                        );
+
+                    // Inline matching logic
+                    let matchingEntriesCount = 0;
+
+                    if (
+                        typeof info_result === "object" &&
+                        info_result !== null
+                    ) {
+                        const nodeResponses = Object.values(info_result);
+
+                        for (const response of nodeResponses) {
+                            if (
+                                response &&
+                                typeof response === "object" &&
+                                "value" in response &&
+                                response.value.includes(get_cmdstat)
+                            ) {
+                                matchingEntriesCount++;
+                            }
+                        }
+                    } else {
+                        throw new Error(
+                            "Unexpected response format from INFO command",
+                        );
+                    }
+
+                    // Validate that only one replica handled the GET calls
+                    expect(matchingEntriesCount).toBe(4);
+                } finally {
+                    // Cleanup: Close the client after test execution
+                    await client_for_testing_az?.close();
                 }
+            },
+        );
+        describe("GlideClusterClient - Get Statistics", () => {
+            it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+                "should return valid statistics using protocol %p",
+                async (protocol) => {
+                    let glideClientForTesting;
 
-                // Validate that only one replica handled the GET calls
-                expect(matchingEntriesCount).toBe(4);
-            } finally {
-                // Cleanup: Close the client after test execution
-                await client_for_testing_az?.close();
-            }
-        },
-    );
+                    try {
+                        // Create a GlideClusterClient instance for testing
+                        glideClientForTesting =
+                            await GlideClusterClient.createClient(
+                                getClientConfigurationOption(
+                                    cluster.getAddresses(),
+                                    protocol,
+                                    {
+                                        requestTimeout: 2000,
+                                    },
+                                ),
+                            );
+
+                        // Fetch statistics using get_statistics method
+                        const stats = glideClientForTesting.getStatistics();
+
+                        // Assertions to check if stats object has correct structure
+                        expect(typeof stats).toBe("object");
+                        expect(stats).toHaveProperty("total_connections");
+                        expect(stats).toHaveProperty("total_clients");
+                        expect(Object.keys(stats)).toHaveLength(2);
+                    } finally {
+                        // Ensure the client is properly closed
+                        await glideClientForTesting?.close();
+                    }
+                },
+            );
+        });
+    });
 });
-
-describe("GlideClusterClient - Get Statistics", () => {
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "should return valid statistics using protocol %p",
-        async (protocol) => {
-            let glideClientForTesting;
-
-            try {
-                // Create a GlideClusterClient instance for testing
-                glideClientForTesting = await GlideClusterClient.createClient(
-                    getClientConfigurationOption(
-                        cluster.getAddresses(),
-                        protocol,
-                        {
-                            requestTimeout: 2000,
-                        },
-                    ),
-                );
-
-                // Fetch statistics using get_statistics method
-                const stats = glideClientForTesting.getStatistics();
-
-                // Assertions to check if stats object has correct structure
-                expect(typeof stats).toBe("object");
-                expect(stats).toHaveProperty("total_connections");
-                expect(stats).toHaveProperty("total_clients");
-                expect(Object.keys(stats)).toHaveLength(2);
-            } finally {
-                // Ensure the client is properly closed
-                await glideClientForTesting?.close();
-            }
-        },
-    );
-});
-
