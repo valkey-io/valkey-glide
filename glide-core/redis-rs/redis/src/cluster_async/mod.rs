@@ -1516,12 +1516,24 @@ where
             convert_result(receiver.await)
         };
 
+        // Sanity
+        if receivers.is_empty() {
+            return Err(RedisError::from((
+                ErrorKind::ClientError,
+                "Client internal error",
+                "Failed to aggregate results for multi-slot command. Maybe a malformed command?"
+                    .to_string(),
+            )));
+        }
+
         // TODO - once Value::Error will be merged, these will need to be updated to handle this new value.
         match response_policy {
             Some(ResponsePolicy::AllSucceeded) => {
                 future::try_join_all(receivers.into_iter().map(get_receiver))
                     .await
-                    .map(|mut results| results.pop().unwrap()) // unwrap is safe, since at least one function succeeded
+                    .map(|mut results| {
+                        results.pop().unwrap() // unwrap is safe, since at least one function succeeded
+                    })
             }
             Some(ResponsePolicy::OneSucceeded) => future::select_ok(
                 receivers
