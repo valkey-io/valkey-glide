@@ -638,6 +638,21 @@ pub(crate) mod shared_client_tests {
         });
     }
 
+    #[test]
+    #[serial_test::serial]
+    fn test_multi_key_no_args_in_cluster() {
+        block_on_all(async {
+            let cluster = cluster::setup_default_cluster().await;
+            println!("Creating 1st cluster client...");
+            let mut c1 = cluster::setup_default_client(&cluster).await;
+            let result = c1.send_command(&redis::cmd("MSET"), None).await;
+            assert!(result.is_err());
+            let e = result.unwrap_err();
+            assert!(e.kind().clone().eq(&redis::ErrorKind::ResponseError));
+            assert!(e.to_string().contains("wrong number of arguments"));
+        });
+    }
+
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
