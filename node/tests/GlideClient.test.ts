@@ -51,10 +51,20 @@ const TIMEOUT = 50000;
 describe("GlideClient", () => {
     let testsFailed = 0;
     let cluster: ValkeyCluster;
+    let azCluster: ValkeyCluster;
     let client: GlideClient;
+    let azClient: GlideClient;
     beforeAll(async () => {
         const standaloneAddresses = global.STAND_ALONE_ENDPOINT;
         cluster = standaloneAddresses
+            ? await ValkeyCluster.initFromExistingCluster(
+                  false,
+                  parseEndpoints(standaloneAddresses),
+                  getServerVersion,
+              )
+            : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
+
+        azCluster = standaloneAddresses
             ? await ValkeyCluster.initFromExistingCluster(
                   false,
                   parseEndpoints(standaloneAddresses),
@@ -65,13 +75,16 @@ describe("GlideClient", () => {
 
     afterEach(async () => {
         await flushAndCloseClient(false, cluster.getAddresses(), client);
+        await flushAndCloseClient(false, azCluster.getAddresses(), azClient);
     });
 
     afterAll(async () => {
         if (testsFailed === 0) {
             await cluster.close();
+            await azCluster.close();
         } else {
             await cluster.close(true);
+            await azCluster.close();
         }
     }, TIMEOUT);
 
@@ -1500,7 +1513,6 @@ describe("GlideClient", () => {
             }
         },
     );
-
     runBaseTests({
         init: async (protocol, configOverrides) => {
             const config = getClientConfigurationOption(
@@ -1508,10 +1520,18 @@ describe("GlideClient", () => {
                 protocol,
                 configOverrides,
             );
+            client = await GlideClient.createClient(config);
+
+            const configNew = getClientConfigurationOption(
+                azCluster.getAddresses(),
+                protocol,
+                configOverrides,
+            );
 
             testsFailed += 1;
+            azClient = await GlideClient.createClient(configNew);
             client = await GlideClient.createClient(config);
-            return { client, cluster };
+            return { client, cluster, azClient, azCluster };
         },
         close: (testSucceeded: boolean) => {
             if (testSucceeded) {
