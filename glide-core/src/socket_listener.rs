@@ -345,7 +345,13 @@ async fn cluster_scan(cluster_scan: ClusterScan, mut client: Client) -> ClientUs
     };
 
     client
-        .cluster_scan(&cluster_scan_cursor, &match_pattern, count, object_type)
+        .cluster_scan(
+            &cluster_scan_cursor,
+            &match_pattern,
+            count,
+            object_type,
+            cluster_scan.allow_non_covered_slots,
+        )
         .await
         .map_err(|err| err.into())
 }

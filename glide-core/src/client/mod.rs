@@ -310,6 +310,7 @@ impl Client {
         match_pattern: &'a Option<Vec<u8>>,
         count: Option<usize>,
         object_type: Option<ObjectType>,
+        allow_non_covered_slots: bool,
     ) -> RedisResult<Value> {
         match self.internal_client {
             ClientWrapper::Standalone(_) => {
@@ -324,12 +325,18 @@ impl Client {
                                 pattern,
                                 count,
                                 object_type,
+                                allow_non_covered_slots,
                             )
                             .await?
                     }
                     None => {
                         client
-                            .cluster_scan(scan_state_cursor.clone(), count, object_type)
+                            .cluster_scan(
+                                scan_state_cursor.clone(),
+                                count,
+                                object_type,
+                                allow_non_covered_slots,
+                            )
                             .await?
                     }
                 };

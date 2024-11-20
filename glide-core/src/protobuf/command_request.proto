@@ -506,6 +506,7 @@ message ClusterScan {
     optional bytes match_pattern = 2;
     optional int64 count = 3;
     optional string object_type = 4;
+    bool allow_non_covered_slots = 5;
 }
 
 message UpdateConnectionPassword {
