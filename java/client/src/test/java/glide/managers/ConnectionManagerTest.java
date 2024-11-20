@@ -310,7 +310,7 @@ public class ConnectionManagerTest {
 
     @SneakyThrows
     @Test
-    public void test_az_affinity_requires_client_az() {
+    public void test_az_affinity_without_client_az_throws_ConfigurationError() {
         // setup
         String az = "us-east-1a";
         GlideClientConfiguration config =
