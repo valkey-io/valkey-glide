@@ -50,9 +50,7 @@ class AnomalousSymbolVisitor(ast.NodeVisitor):
         # only scan top level symbols
         if isinstance(node, ast.Module):
             # super().generic_visit() will visit all children
-            return super().generic_visit(
-                node
-            )
+            return super().generic_visit(node)
         else:
             return
 
