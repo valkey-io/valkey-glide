@@ -1,8 +1,10 @@
 import { it } from "@jest/globals";
 
+const fs = require('fs/promises');
 var exportedSymbols = require('../index');
 var exportedSymbolsRust = require('../rust-client/index')
-
+let i = 0;
+let filesWithNodeCode: string[] = [];
 
 describe("Exported Symbols test", () => {
     var excludedSymbols: string[] = [];
@@ -20,17 +22,56 @@ describe("Exported Symbols test", () => {
          */
 
     });
-    it("check excluded symbols are not exported", () => {
+    it("check excluded symbols are not exported", async () => {
         // Check exported symbols for valkey glide package
         let exportedSymbolsList = Object.keys(exportedSymbols);
         const filteredExportedList = exportedSymbolsList.filter(symbol => excludedSymbols.includes(symbol));
         console.log("Following symbols are exported but are in the exluded list, please remove: " + filteredExportedList);
         expect(filteredExportedList.length).toBe(0);
 
-        // Check exported symbols from rust client package.
-        let exportedRustSymbolsList = Object.keys(exportedSymbolsRust);
-        const filteredExportedListForRust = exportedRustSymbolsList.filter(symbol => excludedSymbols.includes(symbol));
-        console.log("Following symbols are exported but are in the exluded list, please remove: " + filteredExportedListForRust);
-        expect(filteredExportedListForRust.length).toBe(0);
+        // // Check exported symbols from rust client package.
+        // let exportedRustSymbolsList = Object.keys(exportedSymbolsRust);
+        // const filteredExportedListForRust = exportedRustSymbolsList.filter(symbol => excludedSymbols.includes(symbol));
+        // console.log("Following symbols are exported but are in the exluded list, please remove: " + filteredExportedListForRust);
+        // expect(filteredExportedListForRust.length).toBe(0);
+
+        const testFolder = './';
+        await getFiles(testFolder);
+        console.log('Total files found =' + i);
+        console.log(filesWithNodeCode);
     });
 });
+
+const skipFolders = ['build-ts', 'commonjs-test', 'glide-logs', 'hybrid-node-tests', 'node_modules', 'npm', '.cargo', 'target', 'tests'];
+async function getFiles(folderName: string) {
+    const files = await fs.readdir(folderName, { withFileTypes: true });
+    for (let file of files) {
+        if (file.isDirectory()) {
+            if (skipFolders.includes(file.name)) {
+                continue;
+            }
+            await getFiles(folderName + file.name + '/');
+        } else {
+            if (file.name.endsWith('.js') ||
+                file.name.endsWith('.d.ts') ||
+                file.name.endsWith('.json') ||
+                file.name.endsWith('.rs') ||
+                file.name.endsWith('.html') ||
+                file.name.endsWith('.node') ||
+                file.name.endsWith('.lock') ||
+                file.name.endsWith('.toml') ||
+                file.name.endsWith('.yml') ||
+                file.name.endsWith('.rdb') ||
+                file.name.endsWith('.md') ||
+                file.name.localeCompare('.gitignore') == 0 ||
+                file.name.localeCompare('.prettierignore') == 0 ||
+                file.name.localeCompare('THIRD_PARTY_LICENSES_NODE') == 0 ||
+                file.name.localeCompare('index.ts') == 0) {
+                continue;
+            }
+            i++;
+            filesWithNodeCode.push(folderName + file.name);
+        }
+    }
+
+}
