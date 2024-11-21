@@ -35,7 +35,6 @@ class TestAZAffinity:
         request,
         cluster_mode: bool,
         protocol: ProtocolVersion,
-        # multiple_replicas_cluster,
     ):
         """Test that the client with az affinity strategy will only route to the 1 replica with the same az"""
         az = "us-east-1a"
@@ -66,7 +65,6 @@ class TestAZAffinity:
         client_for_testing_az = await create_client(
             request,
             cluster_mode,
-            # addresses=multiple_replicas_cluster.nodes_addr,
             protocol=protocol,
             read_from=ReadFrom.AZ_AFFINITY,
             timeout=2000,
@@ -106,7 +104,6 @@ class TestAZAffinity:
         request,
         cluster_mode: bool,
         protocol: ProtocolVersion,
-        # multiple_replicas_cluster,
     ):
         """Test that the client with AZ affinity strategy routes in a round-robin manner to all replicas within the specified AZ"""
 
@@ -126,7 +123,6 @@ class TestAZAffinity:
         client_for_testing_az = await create_client(
             request,
             cluster_mode,
-            # addresses=multiple_replicas_cluster.nodes_addr,
             protocol=protocol,
             read_from=ReadFrom.AZ_AFFINITY,
             timeout=2000,
@@ -176,7 +172,6 @@ class TestAZAffinity:
         request,
         cluster_mode: bool,
         protocol: ProtocolVersion,
-        # multiple_replicas_cluster,
     ):
         GET_CALLS = 4
 

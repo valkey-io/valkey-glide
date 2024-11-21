@@ -389,26 +389,3 @@ async def skip_if_version_below(request):
                 reason=f"This feature added in version {min_version}",
                 allow_module_level=True,
             )
-
-
-# @pytest.fixture(scope="module")
-# def multiple_replicas_cluster(request):
-#     """
-#     Fixture to create a special cluster with 4 replicas for specific tests.
-#     """
-#     tls = request.config.getoption("--tls")
-#     load_module = request.config.getoption("--load-module")
-#     cluster_endpoints = request.config.getoption("--cluster-endpoints")
-
-#     if not cluster_endpoints:
-#         multiple_replica_cluster = ValkeyCluster(
-#             tls=tls,
-#             cluster_mode=True,
-#             load_module=load_module,
-#             addresses=cluster_endpoints,
-#             replica_count=4,
-#         )
-#         yield multiple_replica_cluster
-#         multiple_replica_cluster.__del__()
-#     else:
-#         yield None
