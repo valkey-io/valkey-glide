@@ -52,3 +52,18 @@ def test_periodic_checks_interval_to_protobuf():
     config.periodic_checks = PeriodicChecksManualInterval(30)
     request = config._create_a_protobuf_conn_request(cluster_mode=True)
     assert request.periodic_checks_manual_interval.duration_in_sec == 30
+
+
+def test_convert_config_with_azaffinity_to_protobuf():
+    az = "us-east-1a"
+    config = BaseClientConfiguration(
+        [NodeAddress("127.0.0.1")],
+        use_tls=True,
+        read_from=ReadFrom.AZ_AFFINITY,
+        client_az=az,
+    )
+    request = config._create_a_protobuf_conn_request()
+    assert isinstance(request, ConnectionRequest)
+    assert request.tls_mode is TlsMode.SecureTls
+    assert request.read_from == ProtobufReadFrom.AZAffinity
+    assert request.client_az == az

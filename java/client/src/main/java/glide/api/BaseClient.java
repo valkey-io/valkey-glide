@@ -777,6 +777,66 @@ public abstract class BaseClient
         return response;
     }
 
+    /**
+     * Update the current connection with a new password.
+     *
+     * <p>This method is useful in scenarios where the server password has changed or when utilizing
+     * short-lived passwords for enhanced security. It allows the client to update its password to
+     * reconnect upon disconnection without the need to recreate the client instance. This ensures
+     * that the internal reconnection mechanism can handle reconnection seamlessly, preventing the
+     * loss of in-flight commands.
+     *
+     * @param immediateAuth A <code>boolean</code> flag. If <code>true</code>, the client will
+     *     authenticate immediately with the new password against all connections, Using <code>AUTH
+     *     </code> command. <br>
+     *     If password supplied is an empty string, the client will not perform auth and a warning
+     *     will be returned. <br>
+     *     The default is `false`.
+     * @apiNote This method updates the client's internal password configuration and does not perform
+     *     password rotation on the server side.
+     * @param password A new password to set.
+     * @return <code>"OK"</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.resetConnectionPassword("new_password", RE_AUTHENTICATE).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    public CompletableFuture<String> updateConnectionPassword(
+            @NonNull String password, boolean immediateAuth) {
+        return commandManager.submitPasswordUpdate(
+                Optional.of(password), immediateAuth, this::handleStringResponse);
+    }
+
+    /**
+     * Update the current connection by removing the password.
+     *
+     * <p>This method is useful in scenarios where the server password has changed or when utilizing
+     * short-lived passwords for enhanced security. It allows the client to update its password to
+     * reconnect upon disconnection without the need to recreate the client instance. This ensures
+     * that the internal reconnection mechanism can handle reconnection seamlessly, preventing the
+     * loss of in-flight commands.
+     *
+     * @apiNote This method updates the client's internal password configuration and does not perform
+     *     password rotation on the server side.
+     * @param immediateAuth A <code>boolean</code> flag. If <code>true</code>, the client will
+     *     authenticate immediately with the new password against all connections, Using <code>AUTH
+     *     </code> command. <br>
+     *     If password supplied is an empty string, the client will not perform auth and a warning
+     *     will be returned. <br>
+     *     The default is `false`.
+     * @return <code>"OK"</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.resetConnectionPassword(true).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    public CompletableFuture<String> updateConnectionPassword(boolean immediateAuth) {
+        return commandManager.submitPasswordUpdate(
+                Optional.empty(), immediateAuth, this::handleStringResponse);
+    }
+
     @Override
     public CompletableFuture<Long> del(@NonNull String[] keys) {
         return commandManager.submitNewCommand(Del, keys, this::handleLongResponse);
