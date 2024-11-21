@@ -7,26 +7,31 @@ let filesWithNodeCode: string[] = [];
 let getActualSymbolsList: string[] = [];
 
 describe("Exported Symbols test", () => {
-    var excludedSymbols: string[] = [];
+    var excludedSymbolList: string[] = [];
     beforeAll(() => {
         /**
          * Add Excluded symbols
          * Example:
          * excludedSymbols.push('convertGlideRecord');
          */
-
     });
     it("check excluded symbols are not exported", async () => {
         // Check exported symbols for valkey glide package
-        let exportedSymbolsList = Object.keys(exportedSymbols);
-        const filteredExportedList = exportedSymbolsList.filter(symbol => excludedSymbols.includes(symbol));
-        console.log("Following symbols are exported but are in the exluded list, please remove: " + filteredExportedList);
+        let exportedSymbolsList = Object.keys(exportedSymbols);  // exportedList
+        const filteredExportedList = exportedSymbolsList.filter(symbol => excludedSymbolList.includes(symbol));
+        console.log("Following symbols are exported but are in the exlcuded list, please remove: " + filteredExportedList);
         expect(filteredExportedList.length).toBe(0);
 
         const testFolder = './';
         await getFiles(testFolder);
         console.log('Total files found =' + i);
         console.log(filesWithNodeCode);
+
+        let actualSymbolList: string[] = [];  //Actual list
+
+        //1. Test if actualSymbolList - exportedSymbolsList = excludedSymbolList
+        //2. If actualSymbolList - exportedSymbolsList != excludedSymbolList, 
+        //   throw an error that either some symbol not exported or there is some error in the error list.
     });
 });
 
