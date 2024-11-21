@@ -2,7 +2,7 @@
 * Node: Client API for retrieving internal statistics ([#2727](https://github.com/valkey-io/valkey-glide/pull/2727))
 * Python: Client API for retrieving internal statistics ([#2707](https://github.com/valkey-io/valkey-glide/pull/2707))
 * Node, Python, Java: Adding support for replacing connection configured password ([#2651](https://github.com/valkey-io/valkey-glide/pull/2651), [#2659](https://github.com/valkey-io/valkey-glide/pull/2659), [#2677](https://github.com/valkey-io/valkey-glide/pull/2677))
-* Python: AZ Affinity - Python Wrapper Support ([#2676](https://github.com/valkey-io/valkey-glide/pull/2676))
+* Node, Python, Java: AZ Affinity - Python Wrapper Support ([#2686](https://github.com/valkey-io/valkey-glide/pull/2686), [#2676](https://github.com/valkey-io/valkey-glide/pull/2676), [#2678](https://github.com/valkey-io/valkey-glide/pull/2678))
 * Node: Add FT._ALIASLIST command([#2652](https://github.com/valkey-io/valkey-glide/pull/2652))
 * Python: Python: `FT._ALIASLIST` command added([#2638](https://github.com/valkey-io/valkey-glide/pull/2638))
 * Node: alias commands added: FT.ALIASADD, FT.ALIADDEL, FT.ALIASUPDATE([#2596](https://github.com/valkey-io/valkey-glide/pull/2596))
@@ -90,7 +90,6 @@
 * Core: Improve retry logic and update unmaintained dependencies for Rust lint CI ([#2673](https://github.com/valkey-io/valkey-glide/pull/2643))
 * Core: Release the read lock while creating connections in `refresh_connections` ([#2630](https://github.com/valkey-io/valkey-glide/issues/2630))
 * Core: SlotMap refactor - Added NodesMap, Update the slot map upon MOVED errors  ([#2682](https://github.com/valkey-io/valkey-glide/issues/2682))
-* Java: AZ Affinity - Java Wrapper Support ([#2678](https://github.com/valkey-io/valkey-glide/pull/2678))
 
 #### Breaking Changes
 
