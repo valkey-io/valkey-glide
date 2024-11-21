@@ -948,3 +948,141 @@ func (client *baseClient) Del(keys []string) (Result[int64], error) {
 
 	return handleLongResponse(result)
 }
+
+func (client *baseClient) Exists(keys []string) (Result[int64], error) {
+	result, err := client.executeCommand(C.Exists, keys)
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) Expire(key string, seconds int64) (Result[bool], error) {
+	secondsStr := strconv.FormatInt(seconds, 10)
+	result, err := client.executeCommand(C.Expire, []string{key, secondsStr})
+	if err != nil {
+		return CreateNilBoolResult(), err
+	}
+
+	return handleBooleanResponse(result)
+}
+
+func (client *baseClient) ExpireWithOptions(key string, seconds int64, options *ExpireOptions) (Result[bool], error) {
+	secondsStr := strconv.FormatInt(seconds, 10)
+	optionArgs, err := options.toArgs()
+	if err != nil {
+		return CreateNilBoolResult(), err
+	}
+	result, err := client.executeCommand(C.Expire, append([]string{key, secondsStr}, optionArgs...))
+	if err != nil {
+		return CreateNilBoolResult(), err
+	}
+	return handleBooleanResponse(result)
+}
+
+func (client *baseClient) ExpireAt(key string, unixTimestampInSeconds int64) (Result[bool], error) {
+	timestampStr := strconv.FormatInt(unixTimestampInSeconds, 10)
+	result, err := client.executeCommand(C.ExpireAt, []string{key, timestampStr})
+	if err != nil {
+		return CreateNilBoolResult(), err
+	}
+
+	return handleBooleanResponse(result)
+}
+
+func (client *baseClient) ExpireAtWithOptions(key string, unixTimestampInSeconds int64, options *ExpireOptions) (Result[bool], error) {
+	timestampStr := strconv.FormatInt(unixTimestampInSeconds, 10)
+	optionArgs, err := options.toArgs()
+	if err != nil {
+		return CreateNilBoolResult(), err
+	}
+	result, err := client.executeCommand(C.ExpireAt, append([]string{key, timestampStr}, optionArgs...))
+	if err != nil {
+		return CreateNilBoolResult(), err
+	}
+	return handleBooleanResponse(result)
+}
+
+func (client *baseClient) PExpire(key string, milliseconds int64) (Result[bool], error) {
+
+	milliSecondsStr := strconv.FormatInt(milliseconds, 10)
+	result, err := client.executeCommand(C.PExpire, []string{key, milliSecondsStr})
+	if err != nil {
+		return CreateNilBoolResult(), err
+	}
+	return handleBooleanResponse(result)
+}
+
+func (client *baseClient) PExpireWithOptions(key string, milliseconds int64, options *ExpireOptions) (Result[bool], error) {
+
+	milliSecondsStr := strconv.FormatInt(milliseconds, 10)
+	optionArgs, err := options.toArgs()
+	if err != nil {
+		return CreateNilBoolResult(), err
+	}
+	result, err := client.executeCommand(C.PExpire, append([]string{key, milliSecondsStr}, optionArgs...))
+	if err != nil {
+		return CreateNilBoolResult(), err
+	}
+	return handleBooleanResponse(result)
+}
+
+func (client *baseClient) PExpireAt(key string, unixTimestampInMilliSeconds int64) (Result[bool], error) {
+
+	timestampStr := strconv.FormatInt(unixTimestampInMilliSeconds, 10)
+	result, err := client.executeCommand(C.PExpireAt, []string{key, timestampStr})
+	if err != nil {
+		return CreateNilBoolResult(), err
+	}
+	return handleBooleanResponse(result)
+}
+
+func (client *baseClient) PExpireAtWithOptions(key string, unixTimestampInMilliSeconds int64, options *ExpireOptions) (Result[bool], error) {
+	timestampStr := strconv.FormatInt(unixTimestampInMilliSeconds, 10)
+	optionArgs, err := options.toArgs()
+	if err != nil {
+		return CreateNilBoolResult(), err
+	}
+	result, err := client.executeCommand(C.PExpireAt, append([]string{key, timestampStr}, optionArgs...))
+	if err != nil {
+		return CreateNilBoolResult(), err
+	}
+	return handleBooleanResponse(result)
+}
+
+func (client *baseClient) ExpireTime(key string) (Result[int64], error) {
+	result, err := client.executeCommand(C.ExpireTime, []string{key})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) PExpireTime(key string) (Result[int64], error) {
+	result, err := client.executeCommand(C.PExpireTime, []string{key})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) TTL(key string) (Result[int64], error) {
+	result, err := client.executeCommand(C.TTL, []string{key})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) PTTL(key string) (Result[int64], error) {
+	result, err := client.executeCommand(C.PTTL, []string{key})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}

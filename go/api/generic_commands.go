@@ -30,4 +30,300 @@ type GenericBaseCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/del/
 	Del(keys []string) (Result[int64], error)
+
+	// Exists returns the number of keys that exist in the database
+	//
+	// Note:
+	//When in cluster mode, the command may route to multiple nodes when keys map to different hash slots.
+	//
+	// Parameters:
+	// keys - One or more keys to delete.
+	//
+	// Return value:
+	// Returns the number of existing keys.
+	//
+	// Example:
+	// result, err := client.Exists([]string{"key1", "key2", "key3"})
+	//	if err != nil {
+	//	    // handle error
+	//	}
+	//	fmt.Println(result) // Output: 2
+	//
+	// [valkey.io]: https://valkey.io/commands/exists/
+	Exists(keys []string) (Result[int64], error)
+
+	// Expire sets a timeout on key. After the timeout has expired, the key will automatically be deleted
+	//
+	// If key already has an existing expire set, the time to live is updated to the new value.
+	// If seconds is a non-positive number, the key will be deleted rather than expired.
+	// The timeout will only be cleared by commands that delete or overwrite the contents of key
+	//
+	// Parameters:
+	// key - The key to expire.
+	// seconds - Time in seconds for the key to expire
+	//
+	// Return value:
+	// A Result[bool] containing true is expiry is set.
+	//
+	// Example:
+	// result, err := client.Expire("key", 1)
+	//	if err != nil {
+	//	    // handle error
+	//	}
+	//	fmt.Println(result) // Output: true
+	//
+	// [valkey.io]: https://valkey.io/commands/expire/
+	Expire(key string, seconds int64) (Result[bool], error)
+
+	// Expire sets a timeout on key. After the timeout has expired, the key will automatically be deleted
+	//
+	// If key already has an existing expire set, the time to live is updated to the new value.
+	// If seconds is a non-positive number, the key will be deleted rather than expired.
+	// The timeout will only be cleared by commands that delete or overwrite the contents of key
+	//
+	// Parameters:
+	// key - The key to expire.
+	// seconds - Time in seconds for the key to expire
+	// option - The option  to set expiry - NX, XX, GT, LT
+	//
+	// Return value:
+	// A Result[bool] containing true is expiry is set.
+	//
+	// Example:
+	// result, err := client.Expire("key", 1, api.OnlyIfDoesNotExist)
+	//	if err != nil {
+	//	    // handle error
+	//	}
+	//	fmt.Println(result) // Output: true
+	//
+	// [valkey.io]: https://valkey.io/commands/expire/
+	ExpireWithOptions(key string, seconds int64, options *ExpireOptions) (Result[bool], error)
+
+	// ExpireAt sets a timeout on key. It takes an absolute Unix timestamp (seconds since January 1, 1970) instead of specifying the number of seconds.
+	// A timestamp in the past will delete the key immediately. After the timeout has expired, the key will automatically be deleted.
+	// If key already has an existing expire set, the time to live is updated to the new value.
+	// The timeout will only be cleared by commands that delete or overwrite the contents of key
+	// If key already has an existing expire set, the time to live is updated to the new value.
+	// If seconds is a non-positive number, the key will be deleted rather than expired.
+	// The timeout will only be cleared by commands that delete or overwrite the contents of key
+	//
+	// Parameters:
+	// key - The key to expire.
+	// unixTimestampInSeconds - Absolute Unix timestamp
+	//
+	// Return value:
+	// A Result[bool] containing true is expiry is set.
+	//
+	// Example:
+	// result, err := client.ExpireAt("key", time.Now().Unix())
+	//	if err != nil {
+	//	    // handle error
+	//	}
+	//	fmt.Println(result) // Output: true
+	//
+	// [valkey.io]: https://valkey.io/commands/expireat/
+	ExpireAt(key string, unixTimestampInSeconds int64) (Result[bool], error)
+
+	// ExpireAt sets a timeout on key. It takes an absolute Unix timestamp (seconds since January 1, 1970) instead of specifying the number of seconds.
+	// A timestamp in the past will delete the key immediately. After the timeout has expired, the key will automatically be deleted.
+	// If key already has an existing expire set, the time to live is updated to the new value.
+	// The timeout will only be cleared by commands that delete or overwrite the contents of key
+	// If key already has an existing expire set, the time to live is updated to the new value.
+	// If seconds is a non-positive number, the key will be deleted rather than expired.
+	// The timeout will only be cleared by commands that delete or overwrite the contents of key
+	//
+	// Parameters:
+	// key - The key to expire.
+	// unixTimestampInSeconds - Absolute Unix timestamp
+	// option - The option  to set expiry - NX, XX, GT, LT
+	//
+	// Return value:
+	// A Result[bool] containing true is expiry is set.
+	//
+	// Example:
+	// result, err := client.ExpireAt("key", time.Now().Unix(), api.OnlyIfDoesNotExist)
+	//	if err != nil {
+	//	    // handle error
+	//	}
+	//	fmt.Println(result) // Output: true
+	//
+	// [valkey.io]: https://valkey.io/commands/expireat/
+	ExpireAtWithOptions(key string, unixTimestampInSeconds int64, options *ExpireOptions) (Result[bool], error)
+
+	// Sets a timeout on key in milliseconds. After the timeout has expired, the key will automatically be deleted.
+	// If key already has an existing expire set, the time to live is updated to the new value.
+	// If milliseconds is a non-positive number, the key will be deleted rather than expired
+	// The timeout will only be cleared by commands that delete or overwrite the contents of key.
+
+	// Parameters:
+	// key - The key to set timeout on it.
+	// milliseconds - The timeout in milliseconds.
+	//
+	// Return value:
+	// A Result[bool] containing true is expiry is set.
+	//
+	// Example:
+	// result, err := client.PExpire("key", int64(5 * 1000))
+	//	if err != nil {
+	//	    // handle error
+	//	}
+	//	fmt.Println(result) // Output: true
+	//
+	//  [valkey.io]: https://valkey.io/commands/pexpire/
+	PExpire(key string, milliseconds int64) (Result[bool], error)
+
+	// Sets a timeout on key in milliseconds. After the timeout has expired, the key will automatically be deleted.
+	// If key already has an existing expire set, the time to live is updated to the new value.
+	// If milliseconds is a non-positive number, the key will be deleted rather than expired
+	// The timeout will only be cleared by commands that delete or overwrite the contents of key.
+	//
+	// Parameters:
+	// key - The key to set timeout on it.
+	// milliseconds - The timeout in milliseconds.
+	// option - The option  to set expiry - NX, XX, GT, LT
+	//
+	// Return value:
+	// A Result[bool] containing true is expiry is set.
+	//
+	// Example:
+	// result, err := client.PExpire("key", int64(5 * 1000), api.OnlyIfDoesNotExist)
+	//	if err != nil {
+	//	    // handle error
+	//	}
+	//	fmt.Println(result) // Output: true
+	//
+	//	[valkey.io]: https://valkey.io/commands/pexpire/
+	PExpireWithOptions(key string, milliseconds int64, options *ExpireOptions) (Result[bool], error)
+
+	// Sets a timeout on key. It takes an absolute Unix timestamp (milliseconds since
+	// January 1, 1970) instead of specifying the number of milliseconds.
+	// A timestamp in the past will delete the key immediately. After the timeout has
+	// expired, the key will automatically be deleted
+	// If key already has an existing expire set, the time to live is
+	// updated to the new value/
+	// The timeout will only be cleared by commands that delete or overwrite the contents of key
+	//
+	// Parameters:
+	// key - The key to set timeout on it.
+	// unixMilliseconds - The timeout in an absolute Unix timestamp.
+	//
+	// Return value:
+	// A Result[bool] containing true is expiry is set.
+	//
+	// Example:
+	// result, err := client.PExpire("key", time.Now().Unix()*1000)
+	//	if err != nil {
+	//	    // handle error
+	//	}
+	//	fmt.Println(result) // Output: true
+	//	[valkey.io]: https://valkey.io/commands/pexpireat/
+	PExpireAt(key string, unixTimestampInMilliSeconds int64) (Result[bool], error)
+
+	// Sets a timeout on key. It takes an absolute Unix timestamp (milliseconds since
+	// January 1, 1970) instead of specifying the number of milliseconds.
+	// A timestamp in the past will delete the key immediately. After the timeout has
+	// expired, the key will automatically be deleted
+	// If key already has an existing expire set, the time to live is
+	// updated to the new value/
+	// The timeout will only be cleared by commands that delete or overwrite the contents of key
+	//
+	// Parameters:
+	// key - The key to set timeout on it.
+	// unixMilliseconds - The timeout in an absolute Unix timestamp.
+	// option - The option  to set expiry - NX, XX, GT, LT
+	//
+	// Return value:
+	// A Result[bool] containing true is expiry is set.
+	//
+	// Example:
+	// result, err := client.PExpire("key", time.Now().Unix()*1000, api.OnlyIfDoesNotExist)
+	//	if err != nil {
+	//	    // handle error
+	//	}
+	//	fmt.Println(result) // Output: true
+	//
+	//	[valkey.io]: https://valkey.io/commands/pexpireat/
+	PExpireAtWithOptions(key string, unixTimestampInMilliSeconds int64, options *ExpireOptions) (Result[bool], error)
+
+	// Expire Time returns the absolute Unix timestamp (since January 1, 1970) at which the given key
+	// will expire, in seconds.
+	//
+	// Parameters:
+	// key - The key to determine the expiration value of.
+	//
+	// Return value:
+	// The expiration Unix timestamp in seconds.
+	// -2 if key does not exist or -1 is key exists but has no associated expiration.
+	//
+	// Example:
+	//
+	// result, err := client.ExpireTime("key")
+	//	if err != nil {
+	//	    // handle error
+	//	}
+	//	fmt.Println(result) // Output: 1732118030
+	//
+	// [valkey.io]: https://valkey.io/commands/expiretime/
+	ExpireTime(key string) (Result[int64], error)
+
+	// PExpire Time returns the absolute Unix timestamp (since January 1, 1970) at which the given key
+	// will expire, in milliseconds.
+	//
+	// Parameters:
+	// key - The key to determine the expiration value of.
+	//
+	// Return value:
+	// The expiration Unix timestamp in milliseconds.
+	// -2 if key does not exist or -1 is key exists but has no associated expiration.
+	//
+	// Example:
+	//
+	// result, err := client.PExpireTime("key")
+	//	if err != nil {
+	//	    // handle error
+	//	}
+	//	fmt.Println(result) // Output: 33177117420000
+	//
+	// [valkey.io]: https://valkey.io/commands/pexpiretime/
+	PExpireTime(key string) (Result[int64], error)
+
+	// TTL returns the remaining time to live of key that has a timeout, in seconds.
+	//
+	// Parameters:
+	// key - The key to return its timeout.
+	//
+	// Return value:
+	// Returns TTL in seconds,
+	// -2 if key does not exist, or -1 if key exists but has no associated expiration.
+	//
+	// Example:
+	//
+	// result, err := client.TTL("key")
+	//	if err != nil {
+	//	    // handle error
+	//	}
+	//	fmt.Println(result) // Output: 3
+	//
+	// [valkey.io]: https://valkey.io/commands/ttl/
+	TTL(key string) (Result[int64], error)
+
+	// PTTL returns the remaining time to live of key that has a timeout, in milliseconds.
+	//
+	// Parameters:
+	// key - The key to return its timeout.
+	//
+	// Return value:
+	// Returns TTL in milliseconds,
+	// -2 if key does not exist, or -1 if key exists but has no associated expiration.
+	//
+	// Example:
+	//
+	// result, err := client.PTTL("key")
+	//	if err != nil {
+	//	    // handle error
+	//	}
+	//	fmt.Println(result) // Output: 1000
+	//
+	// [valkey.io]: https://valkey.io/commands/pttl/
+	PTTL(key string) (Result[int64], error)
 }

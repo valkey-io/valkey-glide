@@ -70,6 +70,28 @@ func (opts *SetOptions) toArgs() ([]string, error) {
 	return args, err
 }
 
+type ExpireOptions struct {
+	ExpireConditionalSet ExpireConditionalSet
+}
+
+func NewExpireOptionsBuilder() *ExpireOptions {
+	return &ExpireOptions{}
+}
+
+func (expireOptions *ExpireOptions) SetExpireConditionalSet(expireConditionalSet ExpireConditionalSet) *ExpireOptions {
+	expireOptions.ExpireConditionalSet = expireConditionalSet
+	return expireOptions
+}
+
+func (opts *ExpireOptions) toArgs() ([]string, error) {
+	args := []string{}
+	var err error
+	if opts.ExpireConditionalSet != "" {
+		args = append(args, string(opts.ExpireConditionalSet))
+	}
+	return args, err
+}
+
 // GetExOptions represents optional arguments for the [api.StringCommands.GetExWithOptions] command.
 //
 // See [valkey.io]
@@ -118,6 +140,19 @@ const (
 	OnlyIfExists ConditionalSet = "XX"
 	// OnlyIfDoesNotExist only sets the key if it does not already exist. Equivalent to "NX" in the valkey API.
 	OnlyIfDoesNotExist ConditionalSet = "NX"
+)
+
+type ExpireConditionalSet string
+
+const (
+	// HasExistingExpiry only sets the key if it already exists. Equivalent to "XX" in the valkey API.
+	HasExistingExpiry ExpireConditionalSet = "XX"
+	// HasNoExpiry only sets the key if it does not already exist. Equivalent to "NX" in the valkey API.
+	HasNoExpiry ExpireConditionalSet = "NX"
+	// NewExpiryGreaterThanCurrent only sets the key if its greater than current. Equivalent to "GT" in the valkey API.
+	NewExpiryGreaterThanCurrent ExpireConditionalSet = "GT"
+	// NewExpiryLessThanCurrent only sets the key if its lesser than current. Equivalent to "LT" in the valkey API.
+	NewExpiryLessThanCurrent ExpireConditionalSet = "LT"
 )
 
 // Expiry is used to configure the lifetime of a value.
