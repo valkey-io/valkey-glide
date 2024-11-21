@@ -90,7 +90,7 @@
 * Core: Improve retry logic and update unmaintained dependencies for Rust lint CI ([#2673](https://github.com/valkey-io/valkey-glide/pull/2643))
 * Core: Release the read lock while creating connections in `refresh_connections` ([#2630](https://github.com/valkey-io/valkey-glide/issues/2630))
 * Core: SlotMap refactor - Added NodesMap, Update the slot map upon MOVED errors  ([#2682](https://github.com/valkey-io/valkey-glide/issues/2682))
-* Java: AZ Affinity Support ([#2678](https://github.com/valkey-io/valkey-glide/pull/2678))
+* Java: AZ Affinity - Java Wrapper Support ([#2678](https://github.com/valkey-io/valkey-glide/pull/2678))
 
 #### Breaking Changes
 
