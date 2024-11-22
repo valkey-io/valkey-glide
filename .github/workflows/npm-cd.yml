@@ -354,9 +354,6 @@ jobs:
               shell: bash
               working-directory: ./utils
               run: |
-                  # Error on purpose to test the unpublishing
-                  echo "Error on purpose to test the unpublishing"
-                  exit 1
                   npm install
                   npm install -g typescript
                   npx tsc -p ./tsconfig.json
@@ -382,42 +379,51 @@ jobs:
                   npm install --no-save @valkey/valkey-glide@${{ env.NPM_TAG }}
                   npm run test
 
-            - name: Unpublish packages on failure
-              if: ${{ always() }} && ${{ failure() }}
+            - name: Deprecating packages on failure
+              if: ${{ failure() }}
               shell: bash
+              env:
+                  GH_EVENT_NAME: ${{ github.event_name }}
+                  GH_EVENT_INPUT_VERSION: ${{ github.event.inputs.version }}
+                  GH_REF: ${{ github.ref }}
+                  NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
+                  PLATFORM_MATRIX: ${{ needs.load-platform-matrix.outputs.PLATFORM_MATRIX }}
               run: |
                   # Detect OS and install jq
-                  if [[ "$OSTYPE" == "darwin"* ]]; then
+                  if [[ "${OSTYPE}" == "darwin"* ]]; then
                       brew install jq || true  
                   elif command -v apk > /dev/null; then
                       apk add --no-cache jq    
                   else
                       sudo apt-get update && sudo apt-get install -y jq
                   fi
-                  # Set RELEASE_VERSION correctly
-                  if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-                      RELEASE_VERSION="${{ github.event.inputs.version }}"
+
+                  # Set RELEASE_VERSION correctly using environment variables
+                  if [[ "${GH_EVENT_NAME}" == "workflow_dispatch" ]]; then
+                      RELEASE_VERSION="${GH_EVENT_INPUT_VERSION}"
                   else
-                      RELEASE_VERSION="${GITHUB_REF#refs/tags/v}"
+                      RELEASE_VERSION="${GH_REF#refs/tags/v}"
                   fi
 
-                  echo "Release version for unpublishing: ${RELEASE_VERSION}"
+                  # Validate RELEASE_VERSION
+                  if [[ ! "${RELEASE_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$ ]]; then
+                      echo "Invalid release version format: ${RELEASE_VERSION}"
+                      exit 1
+                  fi
 
-                  # Unpublish base package
-                  npm unpublish "@valkey/valkey-glide@${RELEASE_VERSION}" --force || true
+                  echo "Release version for Deprecating: ${RELEASE_VERSION}"
+
+                  # Deprecating base package
+                  npm deprecate "@valkey/valkey-glide@${RELEASE_VERSION}" "This version has been deprecated" --force || true
 
                   # Process platform matrix
-                  echo '${{ needs.load-platform-matrix.outputs.PLATFORM_MATRIX }}' > platform_matrix.json
+                  echo "${PLATFORM_MATRIX}" > platform_matrix.json
 
                   while read -r pkg; do
                       package_name="@valkey/valkey-glide-${pkg}"
-                      echo "Unpublishing ${package_name}@${RELEASE_VERSION}"
-                      npm unpublish "${package_name}@${RELEASE_VERSION}" --force || true
+                      echo "Deprecating ${package_name}@${RELEASE_VERSION}"
+                      npm deprecate "${package_name}@${RELEASE_VERSION}" "This version has been deprecated" --force || true
                   done < <(jq -r '.[] | "\(.NAMED_OS)\(.TARGET | test("musl") | if . then "-musl" else "" end)-\(.ARCH)"' platform_matrix.json)
-              env:
-                  NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
-                  EVENT_NAME: ${{ github.event_name }}
-                  INPUT_VERSION: ${{ github.event.inputs.version }}
 
             # Reset the repository to make sure we get the clean checkout of the action later in other actions.
             # It is not required since in other actions we are cleaning before the action, but it is a good practice to do it here as well.
