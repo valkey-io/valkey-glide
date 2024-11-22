@@ -134,8 +134,8 @@ Before starting this step, make sure you've installed all software requirements.
     ```bash
     # For go1.22:
     make install-dev-tools
-    # For go1.18:
-    make install-dev-tools-go1.18
+    # For go1.20:
+    make install-dev-tools-go1.20
     ```
 
 ### Test
@@ -201,8 +201,8 @@ Run from the main `/go` folder
     ```bash
     # For go1.22:
     make install-dev-tools
-    # For go1.18:
-    make install-dev-tools-go1.18
+    # For go1.22:
+    make install-dev-tools-go1.22
 
     make lint
     ```
