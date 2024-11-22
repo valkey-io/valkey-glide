@@ -23,7 +23,6 @@ async def is_cluster_ready(client: GlideClusterClient, count: int) -> bool:
     while True:
         if asyncio.get_event_loop().time() - start > timeout:
             return False
-        print(asyncio.get_event_loop().time() - start)
         nodes_raw = await client.custom_command(["CLUSTER", "NODES"])
         node_bytes_raw = cast(bytes, nodes_raw)
         parsed_nodes = [
