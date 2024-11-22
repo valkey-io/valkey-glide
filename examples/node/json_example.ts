@@ -9,7 +9,7 @@ async function executeJsonCommands() {
     const addresses = [
         {
             host: "localhost",
-            port: 6380,
+            port: 6379,
         },
     ];
     // Check `GlideClientConfiguration/GlideClusterClientConfiguration` for additional options.
@@ -48,6 +48,3 @@ setFileLogger();
 setConsoleLogger();
 // Enable for standalone mode
 await executeJsonCommands();
-
-// Enable for cluster mode
-// await sendPingToRandomNodeInCluster();
