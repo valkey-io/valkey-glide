@@ -9,6 +9,7 @@ from glide.config import (
     GlideClusterClientConfiguration,
     NodeAddress,
     ProtocolVersion,
+    ReadFrom,
     ServerCredentials,
 )
 from glide.exceptions import ClosingError, RequestError
@@ -132,6 +133,7 @@ def create_clusters(tls, load_module, cluster_endpoints, standalone_endpoints):
             cluster_mode=True,
             load_module=load_module,
             addresses=cluster_endpoints,
+            replica_count=2,
         )
         pytest.standalone_cluster = ValkeyCluster(
             tls=tls,
@@ -248,6 +250,8 @@ async def create_client(
         GlideClientConfiguration.PubSubSubscriptions
     ] = None,
     inflight_requests_limit: Optional[int] = None,
+    read_from: ReadFrom = ReadFrom.PRIMARY,
+    client_az: Optional[str] = None,
 ) -> Union[GlideClient, GlideClusterClient]:
     # Create async socket client
     use_tls = request.config.getoption("--tls")
@@ -265,6 +269,8 @@ async def create_client(
             request_timeout=timeout,
             pubsub_subscriptions=cluster_mode_pubsub,
             inflight_requests_limit=inflight_requests_limit,
+            read_from=read_from,
+            client_az=client_az,
         )
         return await GlideClusterClient.create(cluster_config)
     else:
@@ -281,6 +287,8 @@ async def create_client(
             request_timeout=timeout,
             pubsub_subscriptions=standalone_mode_pubsub,
             inflight_requests_limit=inflight_requests_limit,
+            read_from=read_from,
+            client_az=client_az,
         )
         return await GlideClient.create(config)
 
