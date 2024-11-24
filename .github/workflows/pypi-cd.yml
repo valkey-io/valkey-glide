@@ -146,7 +146,7 @@ jobs:
               with:
                   working-directory: ./python
                   target: ${{ matrix.build.TARGET }}
-                  args: --release --strip --out wheels -i ${{ github.event_name != 'pull_request' && 'python3.8 python3.9 python3.10 python3.11 python3.12 python3.13' || 'python3.12' }}
+                  args: --release --strip --out wheels -i ${{ github.event_name != 'pull_request' && 'python3.12 python3.13' || 'python3.12' }}
                   manylinux: auto
                   container: ${{ matrix.build.CONTAINER != '' && matrix.build.CONTAINER || '2014' }}
                   before-script-linux: |
@@ -174,10 +174,9 @@ jobs:
               if: startsWith(matrix.build.NAMED_OS, 'darwin')
               uses: PyO3/maturin-action@v1
               with:
-                  maturin-version: latest
                   working-directory: ./python
                   target: ${{ matrix.build.TARGET }}
-                  args: --release --strip --out wheels -i  ${{ github.event_name != 'pull_request' && 'python3.8 python3.9 python3.10 python3.11 python3.12 python3.13' || 'python3.12' }}
+                  args: --release --strip --out wheels -i  ${{ github.event_name != 'pull_request' && 'python3.12 python3.13' || 'python3.12' }}
 
             - name: Upload Python wheels
               if: github.event_name != 'pull_request'
