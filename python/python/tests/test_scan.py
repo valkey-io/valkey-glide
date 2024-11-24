@@ -350,7 +350,10 @@ class TestScan:
             while not cursor.is_finished():
                 result = await glide_client_scoped.scan(cursor)
                 cursor = cast(ClusterScanCursor, result[0])
-        assert "please check the cluster configuration" in str(e_info.value)
+        assert (
+            "Could not find an address covering a slot, SCAN operation cannot continue"
+            in str(e_info.value)
+        )
         # Scan with allow_non_covered_slots=True
         while not cursor.is_finished():
             result = await glide_client_scoped.scan(
