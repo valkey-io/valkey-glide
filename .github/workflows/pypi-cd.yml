@@ -116,8 +116,13 @@ jobs:
               if: ${{ !contains(matrix.build.RUNNER, 'self-hosted') }}
               uses: actions/setup-python@v5
               with:
-                  python-version: "3.12"
-
+                  python-version: |
+                    3.8
+                    3.9
+                    3.10
+                    3.11
+                    3.12
+                    3.13
             - name: Update package version in config.toml
               uses: ./.github/workflows/update-glide-version
               with:
@@ -174,10 +179,10 @@ jobs:
               if: startsWith(matrix.build.NAMED_OS, 'darwin')
               uses: PyO3/maturin-action@v1
               with:
-                  maturin-version: "0.13.0" # Due to a bug in later versions
+                  maturin-version: "0.14.14" # Due to a bug in later versions
                   working-directory: ./python
                   target: ${{ matrix.build.TARGET }}
-                  args: --release --strip --out wheels -i  ${{ github.event_name != 'pull_request' && 'python3.8 python3.9 python3.10 python3.11 python3.12 python3.13' || 'python3.12' }}
+                  args: --release --strip --out wheels -i  ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13' || 'python3.12' }}
 
             - name: Upload Python wheels
               if: github.event_name != 'pull_request'
