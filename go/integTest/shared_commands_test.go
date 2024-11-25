@@ -3241,3 +3241,57 @@ func (suite *GlideTestSuite) TestPTTL_WithExpiredKey() {
 		assert.Equal(suite.T(), int64(-2), resPTTL.Value())
 	})
 }
+
+func (suite *GlideTestSuite) TestType() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		// Test 1: Check if the value is string
+		suite.verifyOK(client.Set(keyName, initialValue))
+		result, err := client.Type(keyName)
+		assert.Nil(suite.T(), err)
+		assert.IsType(suite.T(), result, api.CreateStringResult("string"), "Value is string")
+
+		//Test 2: Check if the value is list
+		key1 := "{key}-1" + uuid.NewString()
+		resultLPush, err := client.LPush(key1, []string{"one", "two", "three"})
+		assert.Equal(suite.T(), int64(3), resultLPush.Value())
+		assert.Nil(suite.T(), err)
+		resultType, err := client.Type(key1)
+		assert.Nil(suite.T(), err)
+		assert.IsType(suite.T(), resultType, api.CreateStringResult("list"), "Value is list")
+
+	})
+}
+
+func (suite *GlideTestSuite) TestTouch() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		// Test 1: Check if an touch valid key
+		suite.verifyOK(client.Set(keyName, initialValue))
+		suite.verifyOK(client.Set("anotherKey", "anotherValue"))
+		result, err := client.Touch([]string{keyName, "anotherKey"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), result.Value(), "The touch should be 2")
+
+		// Test 1: Check if an touch invalid key
+		resultInvalidKey, err := client.Touch([]string{"invalidKey", "invalidKey1"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), resultInvalidKey.Value(), "The touch should be 0")
+
+	})
+}
+
+func (suite *GlideTestSuite) TestUnlink() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		// Test 1: Check if an unlink valid key
+		suite.verifyOK(client.Set(keyName, initialValue))
+		suite.verifyOK(client.Set("anotherKey", "anotherValue"))
+		resultValidKey, err := client.Unlink([]string{keyName, "anotherKey"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), resultValidKey.Value(), "The unlink should be 2")
+
+		// Test 2: Check if an unlink for invalid key
+		resultInvalidKey, err := client.Unlink([]string{"invalidKey2", "invalidKey3"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), resultInvalidKey.Value(), "The unlink should be 0")
+
+	})
+}
