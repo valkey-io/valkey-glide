@@ -506,6 +506,67 @@ export type ReadFrom =
 
 /**
  * Configuration settings for creating a client. Shared settings for standalone and cluster clients.
+ *
+ * @remarks
+ * The `BaseClientConfiguration` interface defines the foundational configuration options used when creating a client to connect to a Valkey server or cluster. It includes connection details, authentication, communication protocols, and various settings that influence the client's behavior and interaction with the server.
+ *
+ * ### Connection Details
+ *
+ * - **Addresses**: Use the `addresses` property to specify the hostnames and ports of the server(s) to connect to.
+ *   - **Cluster Mode**: In cluster mode, the client will discover other nodes based on the provided addresses.
+ *   - **Standalone Mode**: In standalone mode, only the provided nodes will be used.
+ *
+ * ### Security Settings
+ *
+ * - **TLS**: Enable secure communication using `useTLS`.
+ * - **Authentication**: Provide `credentials` to authenticate with the server.
+ *
+ * ### Communication Settings
+ *
+ * - **Request Timeout**: Set `requestTimeout` to specify how long the client should wait for a request to complete.
+ * - **Protocol Version**: Choose the serialization protocol using `protocol`.
+ *
+ * ### Client Identification
+ *
+ * - **Client Name**: Set `clientName` to identify the client connection.
+ *
+ * ### Read Strategy
+ *
+ * - Use `readFrom` to specify the client's read strategy (e.g., primary, preferReplica, AZAffinity).
+ *
+ * ### Availability Zone
+ *
+ * - Use `clientAz` to specify the client's availability zone, which can influence read operations when using `readFrom: 'AZAffinity'`.
+ *
+ * ### Decoder Settings
+ *
+ * - **Default Decoder**: Set `defaultDecoder` to specify how responses are decoded by default.
+ *
+ * ### Concurrency Control
+ *
+ * - **Inflight Requests Limit**: Control the number of concurrent requests using `inflightRequestsLimit`.
+ *
+ * @example
+ * ```typescript
+ * const config: BaseClientConfiguration = {
+ *   addresses: [
+ *     { host: 'redis-node-1.example.com', port: 6379 },
+ *     { host: 'redis-node-2.example.com' }, // Defaults to port 6379
+ *   ],
+ *   useTLS: true,
+ *   credentials: {
+ *     username: 'myUser',
+ *     password: 'myPassword',
+ *   },
+ *   requestTimeout: 5000, // 5 seconds
+ *   protocol: ProtocolVersion.RESP3,
+ *   clientName: 'myValkeyClient',
+ *   readFrom: ReadFrom.AZAffinity,
+ *   clientAz: 'us-east-1a',
+ *   defaultDecoder: Decoder.String,
+ *   inflightRequestsLimit: 1000,
+ * };
+ * ```
  */
 export interface BaseClientConfiguration {
     /**
