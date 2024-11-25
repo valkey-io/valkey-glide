@@ -100,7 +100,7 @@ export namespace GlideClientConfiguration {
 }
 
 /**
- * Configuration options for creating a `GlideClient`.
+ * Configuration options for creating a {@link GlideClient | GlideClient}.
  *
  * Extends `BaseClientConfiguration` with properties specific to `GlideClient`, such as database selection,
  * reconnection strategies, and Pub/Sub subscription settings.
@@ -200,8 +200,9 @@ export class GlideClient extends BaseClient {
      * @remarks
      * Use this static method to create and connect a `GlideClient` to a standalone Valkey Glide server. The client will automatically handle connection establishment, including any authentication and TLS configurations.
      *
-     * ### Example - Connecting to a Standalone Server
+     * @example
      * ```typescript
+     * // Connecting to a Standalone Server
      * import { GlideClient, GlideClientConfiguration } from '@valkey/valkey-glide';
      *
      * const client = await GlideClient.createClient({
@@ -231,7 +232,7 @@ export class GlideClient extends BaseClient {
      * });
      * ```
      *
-     * ### Remarks
+     * @remarks
      * - **Authentication**: If `credentials` are provided, the client will attempt to authenticate using the specified username and password.
      * - **TLS**: If `useTLS` is set to `true`, the client will establish a secure connection using TLS.
      * - **Reconnection Strategy**: The `connectionBackoff` settings define how the client will attempt to reconnect in case of disconnections.

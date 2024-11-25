@@ -144,7 +144,7 @@ export namespace GlideClusterClientConfiguration {
     }
 }
 /**
- * Configuration options for creating a `GlideClusterClient`.
+ * Configuration options for creating a {@link GlideClusterClient | GlideClusterClient}.
  *
  * Extends `BaseClientConfiguration` with properties specific to `GlideClusterClient`, such as periodic topology checks
  * and Pub/Sub subscription settings.
@@ -544,7 +544,7 @@ export class GlideClusterClient extends BaseClient {
      * });
      * ```
      *
-     * ### Remarks
+     * @remarks
      * - **Cluster Topology Discovery**: The client will automatically discover the cluster topology based on the seed addresses provided.
      * - **Authentication**: If `credentials` are provided, the client will attempt to authenticate using the specified username and password.
      * - **TLS**: If `useTLS` is set to `true`, the client will establish secure connections using TLS.
