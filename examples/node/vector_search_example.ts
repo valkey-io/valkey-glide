@@ -28,15 +28,6 @@ async function executeVssCommands() {
 }
 
 async function vssCreateAndSearch(client: GlideClient | GlideClusterClient) {
-    // const value = '{"a": 1.0, "b":2}';
-    // const result = await GlideJson.set(client, "doc", "$", value);
-    // console.log(result); // 'OK' - Indicates successful setting of the value at path '$' in the key stored at `doc`.
-    // const result2 = await GlideJson.get(client, "doc", { path: ["$"] });
-    // console.log(result2);
-
-    // expect(result).toBe("OK");
-    // expect(result2).toBe(value);
-
     const vectorField_1: VectorField = {
         type: "VECTOR",
         name: "vec",
