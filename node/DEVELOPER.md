@@ -126,28 +126,37 @@ To run tests, use the following command:
 npm test
 ```
 
-To execute a specific test, include the [`testNamePattern`](https://jestjs.io/docs/cli#--testnamepatternregex) option. For example:
+Simplified test suite skips few time consuming tests and runs faster:
 
 ```bash
-npm run test -- --testNamePattern="transaction"
+npm test-minimum
+```
+
+To execute a specific test, use the [`testNamePattern`](https://jestjs.io/docs/cli#--testnamepatternregex) option with `test-dbg` script. For example:
+
+```bash
+npm run test-dbg -- --testNamePattern="transaction"
 ```
 
 IT suite starts the server for testing - standalone and cluster installation using `cluster_manager` script.
 To run the integration tests with existing servers, run the following command:
 
 ```bash
-npm run test -- --cluster-endpoints=localhost:7000 --standalone-endpoints=localhost:6379
+npm run test-dbg -- --cluster-endpoints=localhost:7000 --standalone-endpoints=localhost:6379
 
 # If those endpoints use TLS, add `--tls=true` (applies to both endpoints)
-npm run test -- --cluster-endpoints=localhost:7000 --standalone-endpoints=localhost:6379 --tls=true
+npm run test-dbg -- --cluster-endpoints=localhost:7000 --standalone-endpoints=localhost:6379 --tls=true
 ```
 
-By default, the server_modules tests do not run using `npm run test`. After pointing to a server with JSON and VSS modules setup,
-run the following command:
+Parameters `cluster-endpoints`, `standalone-endpoints` and `tls` could be used with all test suites.
+
+By default, the server modules tests do not run using `npm run test`. This test suite also does not start the server.
+In order to run these tests, use:
 
 ```bash
-npm run test-modules
+npm run test-modules -- --cluster-endpoints=<address>:<port>
 ```
+Note: these tests don't run with standalone server as of now.
 
 ### REPL (interactive shell)
 
