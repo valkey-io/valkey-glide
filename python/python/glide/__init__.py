@@ -48,6 +48,7 @@ from glide.async_commands.server_modules.ft_options.ft_create_options import (
     DataType,
     DistanceMetricType,
     Field,
+    FieldType,
     FtCreateOptions,
     NumericField,
     TagField,
@@ -61,6 +62,7 @@ from glide.async_commands.server_modules.ft_options.ft_create_options import (
 )
 from glide.async_commands.server_modules.ft_options.ft_profile_options import (
     FtProfileOptions,
+    QueryType,
 )
 from glide.async_commands.server_modules.ft_options.ft_search_options import (
     FtSearchLimit,
@@ -293,6 +295,7 @@ __all__ = [
     "DataType",
     "DistanceMetricType",
     "Field",
+    "FieldType",
     "FtCreateOptions",
     "NumericField",
     "TagField",
@@ -316,4 +319,5 @@ __all__ = [
     "FtAggregateSortBy",
     "FtAggregateSortProperty",
     "FtProfileOptions",
+    "QueryType",
 ]
