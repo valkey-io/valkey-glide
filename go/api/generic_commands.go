@@ -91,7 +91,7 @@ type GenericBaseCommands interface {
 	// result.IsNil(): false
 	//
 	// [valkey.io]: https://valkey.io/commands/expire/
-	ExpireWithOptions(key string, seconds int64, expireConditionalSet ExpireConditionalSet) (Result[bool], error)
+	ExpireWithOptions(key string, seconds int64, expireCondition ExpireCondition) (Result[bool], error)
 
 	// ExpireAt sets a timeout on key. It takes an absolute Unix timestamp (seconds since January 1, 1970) instead of specifying the number of seconds.
 	// A timestamp in the past will delete the key immediately. After the timeout has expired, the key will automatically be deleted.
@@ -138,7 +138,7 @@ type GenericBaseCommands interface {
 	// result.IsNil(): false
 	//
 	// [valkey.io]: https://valkey.io/commands/expireat/
-	ExpireAtWithOptions(key string, unixTimestampInSeconds int64, expireConditionalSet ExpireConditionalSet) (Result[bool], error)
+	ExpireAtWithOptions(key string, unixTimestampInSeconds int64, expireCondition ExpireCondition) (Result[bool], error)
 
 	// Sets a timeout on key in milliseconds. After the timeout has expired, the key will automatically be deleted.
 	// If key already has an existing expire set, the time to live is updated to the new value.
@@ -179,7 +179,7 @@ type GenericBaseCommands interface {
 	// result.IsNil(): false
 	//
 	//	[valkey.io]: https://valkey.io/commands/pexpire/
-	PExpireWithOptions(key string, milliseconds int64, expireConditionalSet ExpireConditionalSet) (Result[bool], error)
+	PExpireWithOptions(key string, milliseconds int64, expireCondition ExpireCondition) (Result[bool], error)
 
 	// Sets a timeout on key. It takes an absolute Unix timestamp (milliseconds since
 	// January 1, 1970) instead of specifying the number of milliseconds.
@@ -226,7 +226,7 @@ type GenericBaseCommands interface {
 	// result.IsNil(): false
 	//
 	//	[valkey.io]: https://valkey.io/commands/pexpireat/
-	PExpireAtWithOptions(key string, unixTimestampInMilliSeconds int64, expireConditionalSet ExpireConditionalSet) (Result[bool], error)
+	PExpireAtWithOptions(key string, unixTimestampInMilliSeconds int64, expireCondition ExpireCondition) (Result[bool], error)
 
 	// Expire Time returns the absolute Unix timestamp (since January 1, 1970) at which the given key
 	// will expire, in seconds.

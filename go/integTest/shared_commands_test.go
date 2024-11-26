@@ -2506,9 +2506,11 @@ func (suite *GlideTestSuite) TestDel_MultipleKeys() {
 
 func (suite *GlideTestSuite) TestExists() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		value := uuid.New().String()
 		// Test 1: Check if an existing key returns 1
-		suite.verifyOK(client.Set(keyName, initialValue))
-		result, err := client.Exists([]string{keyName})
+		suite.verifyOK(client.Set(key, initialValue))
+		result, err := client.Exists([]string{key})
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(1), result.Value(), "The key should exist")
 
@@ -2518,9 +2520,11 @@ func (suite *GlideTestSuite) TestExists() {
 		assert.Equal(suite.T(), int64(0), result.Value(), "The non-existent key should not exist")
 
 		// Test 3: Multiple keys, some exist, some do not
-		suite.verifyOK(client.Set("existingKey", initialValue))
-		suite.verifyOK(client.Set("testKey", initialValue))
-		result, err = client.Exists([]string{"testKey", "existingKey", "anotherNonExistentKey"})
+		existingKey := uuid.New().String()
+		testKey := uuid.New().String()
+		suite.verifyOK(client.Set(existingKey, value))
+		suite.verifyOK(client.Set(testKey, value))
+		result, err = client.Exists([]string{testKey, existingKey, "anotherNonExistentKey"})
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(2), result.Value(), "Two keys should exist")
 	})
