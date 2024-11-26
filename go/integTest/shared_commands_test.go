@@ -594,7 +594,7 @@ func (suite *GlideTestSuite) TestPing_NoArgument() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		result, err := client.Ping()
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), "PONG", result)
+		assert.Equal(suite.T(), "PONG", result.Value())
 	})
 }
 
@@ -603,7 +603,7 @@ func (suite *GlideTestSuite) TestPing_WithArgument() {
 		// Passing "Hello" as the message
 		result, err := client.PingWithMessage("Hello")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), "Hello", result)
+		assert.Equal(suite.T(), "Hello", result.Value())
 	})
 }
 
