@@ -15,7 +15,7 @@
         "long": "^5.2.3",
         "npmignore": "^0.3.1",
         "protobufjs": "^7.4.0",
-        "@valkey/valkey-glide": "1.1.0"
+        "@valkey/valkey-glide": "1.2.0-rc16"
     },
     "bundleDependencies": [
         "glide-rs"
