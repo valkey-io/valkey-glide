@@ -5,16 +5,18 @@ import static glide.api.logging.Logger.Level.ERROR;
 import static glide.api.logging.Logger.Level.INFO;
 import static glide.api.logging.Logger.Level.WARN;
 import static glide.api.logging.Logger.log;
+import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
 
-import glide.api.GlideClient;
+import glide.api.GlideClusterClient;
 import glide.api.commands.servermodules.Json;
 import glide.api.logging.Logger;
-import glide.api.models.configuration.GlideClientConfiguration;
+import glide.api.models.ClusterValue;
+import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ConnectionException;
 import glide.api.models.exceptions.TimeoutException;
-
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CancellationException;
@@ -24,48 +26,57 @@ import java.util.concurrent.ExecutionException;
 public class GlideJsonExample {
 
     /**
-     * Creates and returns a <code>GlideClient</code> instance.
+     * Creates and returns a <code>GlideClusterClient</code> instance.
      *
-     * <p>This function initializes a <code>GlideClient</code> with the provided list of nodes. The
-     * list may contain either only primary node or a mix of primary and replica nodes. The <code>
-     * GlideClient
-     * </code> use these nodes to connect to the Standalone setup servers.
+     * <p>This function initializes a <code>GlideClusterClient</code> with the provided list of nodes.
+     * The list may contain the address of one or more cluster nodes, and the client will
+     * automatically discover all nodes in the cluster.
      *
-     * @return A <code>GlideClient</code> connected to the provided node address.
+     * @return A <code>GlideClusterClient</code> connected to the discovered nodes.
      * @throws CancellationException if the operation is cancelled.
      * @throws ExecutionException if the client fails due to execution errors.
      * @throws InterruptedException if the operation is interrupted.
      */
-    public static GlideClient createClient(List<NodeAddress> nodeList)
+    public static GlideClusterClient createClient(List<NodeAddress> nodeList)
             throws CancellationException, ExecutionException, InterruptedException {
-        // Check `GlideClientConfiguration` for additional options.
-        GlideClientConfiguration config =
-                GlideClientConfiguration.builder()
+        // Check `GlideClusterClientConfiguration` for additional options.
+        GlideClusterClientConfiguration config =
+                GlideClusterClientConfiguration.builder()
                         .addresses(nodeList)
                         // Enable this field if the servers are configured with TLS.
                         // .useTLS(true);
                         .build();
 
-        GlideClient client = GlideClient.createClient(config).get();
+        GlideClusterClient client = GlideClusterClient.createClient(config).get();
         return client;
     }
 
     /**
-     * Executes the main logic of the application, performing basic operations such as JSON.SET and JSON.GET using the provided <code>GlideClusterClient</code>.
+     * Executes the main logic of the application, performing basic operations such as JSON.SET and
+     * JSON.GET using the provided <code>GlideClusterClient</code>.
      *
      * @param client An instance of <code>GlideClusterClient</code>.
      * @throws ExecutionException if an execution error occurs during operations.
      * @throws InterruptedException if the operation is interrupted.
      */
-    public static void appLogic(GlideClusterClient client) throws ExecutionException, InterruptedException {
-    
-        // TODO: test example against memorydb instance
+    public static void appLogic(GlideClusterClient client)
+            throws ExecutionException, InterruptedException {
 
-        CompletableFuture<String> setResponse = Json.set(client, key, "$", "{\"a\": 1.0,\"b\": 2}");
-        System.out.println("The set response is " + setResponse.get());  // The response should be "OK"
+        CompletableFuture<String> setResponse = Json.set(client, "key", "$", "{\"a\": 1.0,\"b\": 2}");
+        System.out.println("The set response is " + setResponse.get()); // The response should be "OK"
 
-        CompletableFuture<String> getResponse = Json.get(client, key, "$.a", "$.b");
-        System.out.println("The get response is " + getResponse.get());  // The response should be "{\"$.a\":[1.0],\"$.b\":[2]}"
+        CompletableFuture<String> getResponse = Json.get(client, "key", new String[] {"$.a", "$.b"});
+        System.out.println(
+                "The get response is "
+                        + getResponse.get()); // The response should be "{\"$.a\":[1.0],\"$.b\":[2]}"
+
+        // Send INFO REPLICATION with routing option to all nodes
+        ClusterValue<String> infoResponse =
+                client.info(new Section[] {Section.REPLICATION}, ALL_NODES).get();
+        log(
+                INFO,
+                "app",
+                "INFO REPLICATION responses from all nodes are " + infoResponse.getMultiValue());
     }
 
     /**
@@ -80,7 +91,7 @@ public class GlideJsonExample {
                 Collections.singletonList(NodeAddress.builder().host("localhost").port(6379).build());
 
         while (true) {
-            try (GlideClient client = createClient(nodeList)) {
+            try (GlideClusterClient client = createClient(nodeList)) {
                 appLogic(client);
                 return;
             } catch (CancellationException e) {
@@ -119,7 +130,7 @@ public class GlideJsonExample {
     }
 
     /**
-     * The entry point of the standalone example. This method sets up the logger configuration and
+     * The entry point of the cluster example. This method sets up the logger configuration and
      * executes the main application logic.
      *
      * @param args Command-line arguments passed to the application.
