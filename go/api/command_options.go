@@ -70,28 +70,6 @@ func (opts *SetOptions) toArgs() ([]string, error) {
 	return args, err
 }
 
-type ExpireOptions struct {
-	ExpireConditionalSet ExpireConditionalSet
-}
-
-func NewExpireOptionsBuilder() *ExpireOptions {
-	return &ExpireOptions{}
-}
-
-func (expireOptions *ExpireOptions) SetExpireConditionalSet(expireConditionalSet ExpireConditionalSet) *ExpireOptions {
-	expireOptions.ExpireConditionalSet = expireConditionalSet
-	return expireOptions
-}
-
-func (opts *ExpireOptions) toArgs() ([]string, error) {
-	args := []string{}
-	var err error
-	if opts.ExpireConditionalSet != "" {
-		args = append(args, string(opts.ExpireConditionalSet))
-	}
-	return args, err
-}
-
 // GetExOptions represents optional arguments for the [api.StringCommands.GetExWithOptions] command.
 //
 // See [valkey.io]
@@ -154,6 +132,21 @@ const (
 	// NewExpiryLessThanCurrent only sets the key if its lesser than current. Equivalent to "LT" in the valkey API.
 	NewExpiryLessThanCurrent ExpireConditionalSet = "LT"
 )
+
+func (expireConditionalSet ExpireConditionalSet) toString() (string, error) {
+	switch expireConditionalSet {
+	case HasExistingExpiry:
+		return string(HasExistingExpiry), nil
+	case HasNoExpiry:
+		return string(HasNoExpiry), nil
+	case NewExpiryGreaterThanCurrent:
+		return string(NewExpiryGreaterThanCurrent), nil
+	case NewExpiryLessThanCurrent:
+		return string(NewExpiryLessThanCurrent), nil
+	default:
+		return "", &RequestError{"Invalid expire condition"}
+	}
+}
 
 // Expiry is used to configure the lifetime of a value.
 type Expiry struct {

@@ -2528,9 +2528,10 @@ func (suite *GlideTestSuite) TestExists() {
 
 func (suite *GlideTestSuite) TestExpire() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "TestExpire"
+		key := uuid.New().String()
+		value := uuid.New().String()
 
-		suite.verifyOK(client.Set(key, initialValue))
+		suite.verifyOK(client.Set(key, value))
 
 		result, err := client.Expire(key, 1)
 		assert.Nil(suite.T(), err, "Expected no error from Expire command")
@@ -2546,7 +2547,7 @@ func (suite *GlideTestSuite) TestExpire() {
 
 func (suite *GlideTestSuite) TestExpire_KeyDoesNotExist() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "TestExpire_KeyDoesNotExist"
+		key := uuid.New().String()
 		// Trying to set an expiry on a non-existent key
 		result, err := client.Expire(key, 1)
 		assert.Nil(suite.T(), err)
@@ -2556,12 +2557,12 @@ func (suite *GlideTestSuite) TestExpire_KeyDoesNotExist() {
 
 func (suite *GlideTestSuite) TestExpireWithOptions_HasNoExpiry() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "TestExpireWithOptions_HasNoExpiry"
+		key := uuid.New().String()
+		value := uuid.New().String()
 
-		suite.verifyOK(client.Set(key, initialValue))
+		suite.verifyOK(client.Set(key, value))
 
-		opts := api.NewExpireOptionsBuilder().SetExpireConditionalSet(api.HasNoExpiry)
-		result, err := client.ExpireWithOptions(key, 2, opts)
+		result, err := client.ExpireWithOptions(key, 2, api.HasNoExpiry)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), result.Value())
 
@@ -2571,8 +2572,7 @@ func (suite *GlideTestSuite) TestExpireWithOptions_HasNoExpiry() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "", resultGet.Value())
 
-		opts = api.NewExpireOptionsBuilder().SetExpireConditionalSet(api.HasNoExpiry)
-		result, err = client.ExpireWithOptions(key, 1, opts)
+		result, err = client.ExpireWithOptions(key, 1, api.HasNoExpiry)
 		assert.Nil(suite.T(), err)
 		assert.False(suite.T(), result.Value())
 	})
@@ -2580,21 +2580,16 @@ func (suite *GlideTestSuite) TestExpireWithOptions_HasNoExpiry() {
 
 func (suite *GlideTestSuite) TestExpireWithOptions_HasExistingExpiry() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "test_key"
+		key := uuid.New().String()
+		value := uuid.New().String()
 
-		suite.verifyOK(client.Set(key, initialValue))
+		suite.verifyOK(client.Set(key, value))
 
-		eOptions := &api.ExpireOptions{
-			ExpireConditionalSet: api.HasNoExpiry,
-		}
-		resexp, err := client.ExpireWithOptions(key, 20, eOptions)
+		resexp, err := client.ExpireWithOptions(key, 20, api.HasNoExpiry)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resexp.Value())
 
-		expireOptions := &api.ExpireOptions{
-			ExpireConditionalSet: api.HasExistingExpiry,
-		}
-		resultExpire, err := client.ExpireWithOptions(key, 1, expireOptions)
+		resultExpire, err := client.ExpireWithOptions(key, 1, api.HasExistingExpiry)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpire.Value())
 
@@ -2609,20 +2604,15 @@ func (suite *GlideTestSuite) TestExpireWithOptions_HasExistingExpiry() {
 
 func (suite *GlideTestSuite) TestExpireWithOptions_NewExpiryGreaterThanCurrent() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "key_new_expiry_gt"
-		suite.verifyOK(client.Set(key, initialValue))
+		key := uuid.New().String()
+		value := uuid.New().String()
+		suite.verifyOK(client.Set(key, value))
 
-		opts := &api.ExpireOptions{
-			ExpireConditionalSet: api.HasNoExpiry,
-		}
-		resultExpire, err := client.ExpireWithOptions(key, 2, opts)
+		resultExpire, err := client.ExpireWithOptions(key, 2, api.HasNoExpiry)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpire.Value())
 
-		expireOptions := &api.ExpireOptions{
-			ExpireConditionalSet: api.NewExpiryGreaterThanCurrent,
-		}
-		resultExpire, err = client.ExpireWithOptions(key, 5, expireOptions)
+		resultExpire, err = client.ExpireWithOptions(key, 5, api.NewExpiryGreaterThanCurrent)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpire.Value())
 		time.Sleep(6 * time.Second)
@@ -2634,29 +2624,21 @@ func (suite *GlideTestSuite) TestExpireWithOptions_NewExpiryGreaterThanCurrent()
 
 func (suite *GlideTestSuite) TestExpireWithOptions_NewExpiryLessThanCurrent() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "key_new_expiry_lt"
+		key := uuid.New().String()
+		value := uuid.New().String()
 
-		suite.verifyOK(client.Set(key, initialValue))
+		suite.verifyOK(client.Set(key, value))
 
-		initialExpireOptions := &api.ExpireOptions{
-			ExpireConditionalSet: api.HasNoExpiry,
-		}
-		resultExpire, err := client.ExpireWithOptions(key, 10, initialExpireOptions)
+		resultExpire, err := client.ExpireWithOptions(key, 10, api.HasNoExpiry)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpire.Value())
 
-		expireOptions := &api.ExpireOptions{
-			ExpireConditionalSet: api.NewExpiryLessThanCurrent,
-		}
-		resultExpire, err = client.ExpireWithOptions(key, 5, expireOptions)
+		resultExpire, err = client.ExpireWithOptions(key, 5, api.NewExpiryLessThanCurrent)
 		assert.Nil(suite.T(), err)
 
 		assert.True(suite.T(), resultExpire.Value())
 
-		expireOptions = &api.ExpireOptions{
-			ExpireConditionalSet: api.NewExpiryGreaterThanCurrent,
-		}
-		resultExpire, err = client.ExpireWithOptions(key, 15, expireOptions)
+		resultExpire, err = client.ExpireWithOptions(key, 15, api.NewExpiryGreaterThanCurrent)
 		assert.Nil(suite.T(), err)
 
 		assert.True(suite.T(), resultExpire.Value())
@@ -2670,24 +2652,21 @@ func (suite *GlideTestSuite) TestExpireWithOptions_NewExpiryLessThanCurrent() {
 
 func (suite *GlideTestSuite) TestExpireAtWithOptions_HasNoExpiry() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "expire_at_with_no_expiry_test_key"
-		resultSet, err := client.Set(key, "value")
+		key := uuid.New().String()
+		value := uuid.New().String()
+		resultSet, err := client.Set(key, value)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultSet.Value() != "")
 
-		options := &api.ExpireOptions{
-			ExpireConditionalSet: api.HasNoExpiry,
-		}
-
 		futureTimestamp := time.Now().Add(10 * time.Second).Unix()
 
-		resultExpire, err := client.ExpireAtWithOptions(key, futureTimestamp, options)
+		resultExpire, err := client.ExpireAtWithOptions(key, futureTimestamp, api.HasNoExpiry)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpire.Value())
 		resultExpireAt, err := client.ExpireAt(key, futureTimestamp)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpireAt.Value())
-		resultExpireWithOptions, err := client.ExpireAtWithOptions(key, futureTimestamp+10, options)
+		resultExpireWithOptions, err := client.ExpireAtWithOptions(key, futureTimestamp+10, api.HasNoExpiry)
 		assert.Nil(suite.T(), err)
 		assert.False(suite.T(), resultExpireWithOptions.Value())
 	})
@@ -2695,8 +2674,9 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_HasNoExpiry() {
 
 func (suite *GlideTestSuite) TestExpireAtWithOptions_HasExistingExpiry() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "expire_at_with_existing_expiry_test_key"
-		resultSet, err := client.Set(key, "value")
+		key := uuid.New().String()
+		value := uuid.New().String()
+		resultSet, err := client.Set(key, value)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultSet.Value() != "")
 
@@ -2705,20 +2685,17 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_HasExistingExpiry() {
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpireAt.Value())
 
-		options := &api.ExpireOptions{
-			ExpireConditionalSet: api.HasExistingExpiry,
-		}
-
-		resultExpireWithOptions, err := client.ExpireAtWithOptions(key, futureTimestamp+10, options)
+		resultExpireWithOptions, err := client.ExpireAtWithOptions(key, futureTimestamp+10, api.HasExistingExpiry)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpireWithOptions.Value())
 	})
 }
 func (suite *GlideTestSuite) TestExpireAtWithOptions_NewExpiryGreaterThanCurrent() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "expire_at_with_new_expiry_greater_test_key"
+		key := uuid.New().String()
+		value := uuid.New().String()
 
-		resultSet, err := client.Set(key, "value")
+		resultSet, err := client.Set(key, value)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultSet.Value() != "")
 
@@ -2727,11 +2704,8 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_NewExpiryGreaterThanCurrent
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpireAt.Value())
 
-		options := &api.ExpireOptions{
-			ExpireConditionalSet: api.NewExpiryGreaterThanCurrent,
-		}
 		newFutureTimestamp := time.Now().Add(20 * time.Second).Unix()
-		resultExpireWithOptions, err := client.ExpireAtWithOptions(key, newFutureTimestamp, options)
+		resultExpireWithOptions, err := client.ExpireAtWithOptions(key, newFutureTimestamp, api.NewExpiryGreaterThanCurrent)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpireWithOptions.Value())
 	})
@@ -2739,9 +2713,10 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_NewExpiryGreaterThanCurrent
 
 func (suite *GlideTestSuite) TestExpireAtWithOptions_NewExpiryLessThanCurrent() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "expire_at_with_new_expiry_lesser_test_key"
+		key := uuid.New().String()
+		value := uuid.New().String()
 
-		resultSet, err := client.Set(key, "value")
+		resultSet, err := client.Set(key, value)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultSet.Value() != "")
 
@@ -2750,12 +2725,8 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_NewExpiryLessThanCurrent() 
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpireAt.Value())
 
-		options := &api.ExpireOptions{
-			ExpireConditionalSet: api.NewExpiryLessThanCurrent,
-		}
-
 		newFutureTimestamp := time.Now().Add(5 * time.Second).Unix()
-		resultExpireWithOptions, err := client.ExpireAtWithOptions(key, newFutureTimestamp, options)
+		resultExpireWithOptions, err := client.ExpireAtWithOptions(key, newFutureTimestamp, api.NewExpiryLessThanCurrent)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpireWithOptions.Value())
 
@@ -2769,9 +2740,10 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_NewExpiryLessThanCurrent() 
 
 func (suite *GlideTestSuite) TestPExpire() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "test_key_with_pexpire"
+		key := uuid.New().String()
+		value := uuid.New().String()
 
-		resultSet, err := client.Set(key, "value")
+		resultSet, err := client.Set(key, value)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultSet.Value() != "")
 
@@ -2788,9 +2760,10 @@ func (suite *GlideTestSuite) TestPExpire() {
 
 func (suite *GlideTestSuite) TestPExpireWithOptions_HasExistingExpiry() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "test_key_with_has_existing_expiry"
+		key := uuid.New().String()
+		value := uuid.New().String()
 
-		resultSet, err := client.Set(key, "value")
+		resultSet, err := client.Set(key, value)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultSet.Value() != "")
 
@@ -2799,12 +2772,9 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_HasExistingExpiry() {
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpire.Value())
 
-		options := &api.ExpireOptions{
-			ExpireConditionalSet: api.HasExistingExpiry,
-		}
 		newExpire := 1000
 
-		resultExpireWithOptions, err := client.PExpireWithOptions(key, int64(newExpire), options)
+		resultExpireWithOptions, err := client.PExpireWithOptions(key, int64(newExpire), api.HasExistingExpiry)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpireWithOptions.Value())
 
@@ -2817,18 +2787,16 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_HasExistingExpiry() {
 
 func (suite *GlideTestSuite) TestPExpireWithOptions_HasNoExpiry() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "test_key_with_no_expiry"
+		key := uuid.New().String()
+		value := uuid.New().String()
 
-		resultSet, err := client.Set(key, "value")
+		resultSet, err := client.Set(key, value)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultSet.Value() != "")
 
-		options := &api.ExpireOptions{
-			ExpireConditionalSet: api.HasNoExpiry,
-		}
 		newExpire := 500
 
-		resultExpireWithOptions, err := client.PExpireWithOptions(key, int64(newExpire), options)
+		resultExpireWithOptions, err := client.PExpireWithOptions(key, int64(newExpire), api.HasNoExpiry)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpireWithOptions.Value())
 
@@ -2841,9 +2809,10 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_HasNoExpiry() {
 
 func (suite *GlideTestSuite) TestPExpireWithOptions_NewExpiryGreaterThanCurrent() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "test_key_with_new_expiry_greater_than_current"
+		key := uuid.New().String()
+		value := uuid.New().String()
 
-		resultSet, err := client.Set(key, "value")
+		resultSet, err := client.Set(key, value)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultSet.Value() != "")
 
@@ -2852,12 +2821,9 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_NewExpiryGreaterThanCurrent(
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpire.Value())
 
-		options := &api.ExpireOptions{
-			ExpireConditionalSet: api.NewExpiryGreaterThanCurrent,
-		}
 		newExpire := 1000
 
-		resultExpireWithOptions, err := client.PExpireWithOptions(key, int64(newExpire), options)
+		resultExpireWithOptions, err := client.PExpireWithOptions(key, int64(newExpire), api.NewExpiryGreaterThanCurrent)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpireWithOptions.Value())
 
@@ -2870,9 +2836,10 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_NewExpiryGreaterThanCurrent(
 
 func (suite *GlideTestSuite) TestPExpireWithOptions_NewExpiryLessThanCurrent() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "test_key_with_new_expiry_less_than_current"
+		key := uuid.New().String()
+		value := uuid.New().String()
 
-		resultSet, err := client.Set(key, "value")
+		resultSet, err := client.Set(key, value)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultSet.Value() != "")
 
@@ -2881,12 +2848,9 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_NewExpiryLessThanCurrent() {
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpire.Value())
 
-		options := &api.ExpireOptions{
-			ExpireConditionalSet: api.NewExpiryLessThanCurrent,
-		}
 		newExpire := 200
 
-		resultExpireWithOptions, err := client.PExpireWithOptions(key, int64(newExpire), options)
+		resultExpireWithOptions, err := client.PExpireWithOptions(key, int64(newExpire), api.NewExpiryLessThanCurrent)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpireWithOptions.Value())
 
@@ -2899,19 +2863,21 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_NewExpiryLessThanCurrent() {
 
 func (suite *GlideTestSuite) TestPExpireAt() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		resultSet, err := client.Set("key", "value")
+		key := uuid.New().String()
+		value := uuid.New().String()
+		resultSet, err := client.Set(key, value)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultSet.Value() != "")
 
 		expireAfterMilliseconds := time.Now().Unix() * 1000
-		resultPExpireAt, err := client.PExpireAt("key", expireAfterMilliseconds)
+		resultPExpireAt, err := client.PExpireAt(key, expireAfterMilliseconds)
 		assert.Nil(suite.T(), err)
 
 		assert.True(suite.T(), resultPExpireAt.Value())
 
 		time.Sleep(6 * time.Second)
 
-		resultpExists, err := client.Exists([]string{"key"})
+		resultpExists, err := client.Exists([]string{key})
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(0), resultpExists.Value())
 	})
@@ -2919,15 +2885,13 @@ func (suite *GlideTestSuite) TestPExpireAt() {
 
 func (suite *GlideTestSuite) TestPExpireAtWithOptions_HasNoExpiry() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "test_key_no_expiry"
+		key := uuid.New().String()
+		value := uuid.New().String()
 
-		suite.verifyOK(client.Set(key, "value"))
+		suite.verifyOK(client.Set(key, value))
 
 		timestamp := time.Now().Unix() * 1000
-		options := &api.ExpireOptions{
-			ExpireConditionalSet: api.HasNoExpiry,
-		}
-		result, err := client.PExpireAtWithOptions(key, timestamp, options)
+		result, err := client.PExpireAtWithOptions(key, timestamp, api.HasNoExpiry)
 
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), result.Value())
@@ -2941,19 +2905,17 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_HasNoExpiry() {
 
 func (suite *GlideTestSuite) TestPExpireAtWithOptions_HasExistingExpiry() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "test_key_with_existing_expiry"
+		key := uuid.New().String()
+		value := uuid.New().String()
 
-		suite.verifyOK(client.Set(key, "value"))
+		suite.verifyOK(client.Set(key, value))
 		initialExpire := 500
 		resultExpire, err := client.PExpire(key, int64(initialExpire))
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpire.Value())
-		options := &api.ExpireOptions{
-			ExpireConditionalSet: api.HasExistingExpiry,
-		}
 		newExpire := time.Now().Unix()*1000 + 1000
 
-		resultExpireWithOptions, err := client.PExpireAtWithOptions(key, newExpire, options)
+		resultExpireWithOptions, err := client.PExpireAtWithOptions(key, newExpire, api.HasExistingExpiry)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpireWithOptions.Value())
 
@@ -2966,9 +2928,10 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_HasExistingExpiry() {
 
 func (suite *GlideTestSuite) TestPExpireAtWithOptions_NewExpiryGreaterThanCurrent() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "test_key_with_new_expiry_greater_than_current"
+		key := uuid.New().String()
+		value := uuid.New().String()
 
-		suite.verifyOK(client.Set(key, "value"))
+		suite.verifyOK(client.Set(key, value))
 
 		initialExpire := 500
 		resultExpire, err := client.PExpire(key, int64(initialExpire))
@@ -2976,11 +2939,8 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_NewExpiryGreaterThanCurren
 		assert.True(suite.T(), resultExpire.Value())
 
 		newExpire := time.Now().Unix()*1000 + 1000
-		options := &api.ExpireOptions{
-			ExpireConditionalSet: api.NewExpiryGreaterThanCurrent,
-		}
 
-		resultExpireWithOptions, err := client.PExpireAtWithOptions(key, newExpire, options)
+		resultExpireWithOptions, err := client.PExpireAtWithOptions(key, newExpire, api.NewExpiryGreaterThanCurrent)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpireWithOptions.Value())
 
@@ -2993,9 +2953,10 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_NewExpiryGreaterThanCurren
 
 func (suite *GlideTestSuite) TestPExpireAtWithOptions_NewExpiryLessThanCurrent() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "test_key_with_new_expiry_less_than_current"
+		key := uuid.New().String()
+		value := uuid.New().String()
 
-		suite.verifyOK(client.Set(key, "value"))
+		suite.verifyOK(client.Set(key, value))
 
 		initialExpire := 1000
 		resultExpire, err := client.PExpire(key, int64(initialExpire))
@@ -3003,11 +2964,8 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_NewExpiryLessThanCurrent()
 		assert.True(suite.T(), resultExpire.Value())
 
 		newExpire := time.Now().Unix()*1000 + 500
-		options := &api.ExpireOptions{
-			ExpireConditionalSet: api.NewExpiryLessThanCurrent,
-		}
 
-		resultExpireWithOptions, err := client.PExpireAtWithOptions(key, newExpire, options)
+		resultExpireWithOptions, err := client.PExpireAtWithOptions(key, newExpire, api.NewExpiryLessThanCurrent)
 		assert.Nil(suite.T(), err)
 
 		assert.True(suite.T(), resultExpireWithOptions.Value())
@@ -3021,8 +2979,8 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_NewExpiryLessThanCurrent()
 
 func (suite *GlideTestSuite) TestExpireTime() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "TestExpireTimeKey"
-		value := "TestValue"
+		key := uuid.New().String()
+		value := uuid.New().String()
 
 		suite.verifyOK(client.Set(key, value))
 
@@ -3049,7 +3007,8 @@ func (suite *GlideTestSuite) TestExpireTime() {
 
 func (suite *GlideTestSuite) TestExpireTime_KeyDoesNotExist() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "NonExistentKey"
+
+		key := uuid.New().String()
 
 		// Call ExpireTime on a key that doesn't exist
 		expiryResult, err := client.ExpireTime(key)
@@ -3060,8 +3019,8 @@ func (suite *GlideTestSuite) TestExpireTime_KeyDoesNotExist() {
 
 func (suite *GlideTestSuite) TestPExpireTime() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "TestPExpireTimeKey"
-		value := "TestValue"
+		key := uuid.New().String()
+		value := uuid.New().String()
 
 		suite.verifyOK(client.Set(key, value))
 
@@ -3088,7 +3047,7 @@ func (suite *GlideTestSuite) TestPExpireTime() {
 
 func (suite *GlideTestSuite) TestPExpireTime_KeyDoesNotExist() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "NonExistentKey"
+		key := uuid.New().String()
 
 		// Call ExpireTime on a key that doesn't exist
 		expiryResult, err := client.PExpireTime(key)
@@ -3099,12 +3058,14 @@ func (suite *GlideTestSuite) TestPExpireTime_KeyDoesNotExist() {
 
 func (suite *GlideTestSuite) TestTTL_WithValidKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		suite.verifyOK(client.Set("key", "value"))
+		key := uuid.New().String()
+		value := uuid.New().String()
+		suite.verifyOK(client.Set(key, value))
 
-		resExpire, err := client.Expire("key", 1)
+		resExpire, err := client.Expire(key, 1)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resExpire.Value())
-		resTTL, err := client.TTL("key")
+		resTTL, err := client.TTL(key)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), resTTL.Value(), int64(1))
 	})
@@ -3112,15 +3073,17 @@ func (suite *GlideTestSuite) TestTTL_WithValidKey() {
 
 func (suite *GlideTestSuite) TestTTL_WithExpiredKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		suite.verifyOK(client.Set("key", "value"))
+		key := uuid.New().String()
+		value := uuid.New().String()
+		suite.verifyOK(client.Set(key, value))
 
-		resExpire, err := client.Expire("key", 1)
+		resExpire, err := client.Expire(key, 1)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resExpire.Value())
 
 		time.Sleep(2 * time.Second)
 
-		resTTL, err := client.TTL("key")
+		resTTL, err := client.TTL(key)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(-2), resTTL.Value())
 	})
@@ -3128,13 +3091,15 @@ func (suite *GlideTestSuite) TestTTL_WithExpiredKey() {
 
 func (suite *GlideTestSuite) TestPTTL_WithValidKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		suite.verifyOK(client.Set("key", "value"))
+		key := uuid.New().String()
+		value := uuid.New().String()
+		suite.verifyOK(client.Set(key, value))
 
-		resExpire, err := client.Expire("key", 1)
+		resExpire, err := client.Expire(key, 1)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resExpire.Value())
 
-		resPTTL, err := client.PTTL("key")
+		resPTTL, err := client.PTTL(key)
 		assert.Nil(suite.T(), err)
 		assert.Greater(suite.T(), resPTTL.Value(), int64(900))
 	})
@@ -3142,15 +3107,17 @@ func (suite *GlideTestSuite) TestPTTL_WithValidKey() {
 
 func (suite *GlideTestSuite) TestPTTL_WithExpiredKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		suite.verifyOK(client.Set("key", "value"))
+		key := uuid.New().String()
+		value := uuid.New().String()
+		suite.verifyOK(client.Set(key, value))
 
-		resExpire, err := client.Expire("key", 1)
+		resExpire, err := client.Expire(key, 1)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resExpire.Value())
 
 		time.Sleep(2 * time.Second)
 
-		resPTTL, err := client.PTTL("key")
+		resPTTL, err := client.PTTL(key)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(-2), resPTTL.Value())
 	})

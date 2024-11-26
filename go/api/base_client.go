@@ -959,8 +959,7 @@ func (client *baseClient) Exists(keys []string) (Result[int64], error) {
 }
 
 func (client *baseClient) Expire(key string, seconds int64) (Result[bool], error) {
-	secondsStr := strconv.FormatInt(seconds, 10)
-	result, err := client.executeCommand(C.Expire, []string{key, secondsStr})
+	result, err := client.executeCommand(C.Expire, []string{key, utils.IntToString(seconds)})
 	if err != nil {
 		return CreateNilBoolResult(), err
 	}
@@ -968,13 +967,12 @@ func (client *baseClient) Expire(key string, seconds int64) (Result[bool], error
 	return handleBooleanResponse(result)
 }
 
-func (client *baseClient) ExpireWithOptions(key string, seconds int64, options *ExpireOptions) (Result[bool], error) {
-	secondsStr := strconv.FormatInt(seconds, 10)
-	optionArgs, err := options.toArgs()
+func (client *baseClient) ExpireWithOptions(key string, seconds int64, expireConditionalSet ExpireConditionalSet) (Result[bool], error) {
+	expireConditionalSetStr, err := expireConditionalSet.toString()
 	if err != nil {
 		return CreateNilBoolResult(), err
 	}
-	result, err := client.executeCommand(C.Expire, append([]string{key, secondsStr}, optionArgs...))
+	result, err := client.executeCommand(C.Expire, append([]string{key, utils.IntToString(seconds), expireConditionalSetStr}))
 	if err != nil {
 		return CreateNilBoolResult(), err
 	}
@@ -982,8 +980,7 @@ func (client *baseClient) ExpireWithOptions(key string, seconds int64, options *
 }
 
 func (client *baseClient) ExpireAt(key string, unixTimestampInSeconds int64) (Result[bool], error) {
-	timestampStr := strconv.FormatInt(unixTimestampInSeconds, 10)
-	result, err := client.executeCommand(C.ExpireAt, []string{key, timestampStr})
+	result, err := client.executeCommand(C.ExpireAt, []string{key, utils.IntToString(unixTimestampInSeconds)})
 	if err != nil {
 		return CreateNilBoolResult(), err
 	}
@@ -991,13 +988,12 @@ func (client *baseClient) ExpireAt(key string, unixTimestampInSeconds int64) (Re
 	return handleBooleanResponse(result)
 }
 
-func (client *baseClient) ExpireAtWithOptions(key string, unixTimestampInSeconds int64, options *ExpireOptions) (Result[bool], error) {
-	timestampStr := strconv.FormatInt(unixTimestampInSeconds, 10)
-	optionArgs, err := options.toArgs()
+func (client *baseClient) ExpireAtWithOptions(key string, unixTimestampInSeconds int64, expireConditionalSet ExpireConditionalSet) (Result[bool], error) {
+	expireConditionalSetStr, err := expireConditionalSet.toString()
 	if err != nil {
 		return CreateNilBoolResult(), err
 	}
-	result, err := client.executeCommand(C.ExpireAt, append([]string{key, timestampStr}, optionArgs...))
+	result, err := client.executeCommand(C.ExpireAt, append([]string{key, utils.IntToString(unixTimestampInSeconds), expireConditionalSetStr}))
 	if err != nil {
 		return CreateNilBoolResult(), err
 	}
@@ -1005,23 +1001,19 @@ func (client *baseClient) ExpireAtWithOptions(key string, unixTimestampInSeconds
 }
 
 func (client *baseClient) PExpire(key string, milliseconds int64) (Result[bool], error) {
-
-	milliSecondsStr := strconv.FormatInt(milliseconds, 10)
-	result, err := client.executeCommand(C.PExpire, []string{key, milliSecondsStr})
+	result, err := client.executeCommand(C.PExpire, []string{key, utils.IntToString(milliseconds)})
 	if err != nil {
 		return CreateNilBoolResult(), err
 	}
 	return handleBooleanResponse(result)
 }
 
-func (client *baseClient) PExpireWithOptions(key string, milliseconds int64, options *ExpireOptions) (Result[bool], error) {
-
-	milliSecondsStr := strconv.FormatInt(milliseconds, 10)
-	optionArgs, err := options.toArgs()
+func (client *baseClient) PExpireWithOptions(key string, milliseconds int64, expireConditionalSet ExpireConditionalSet) (Result[bool], error) {
+	expireConditionalSetStr, err := expireConditionalSet.toString()
 	if err != nil {
 		return CreateNilBoolResult(), err
 	}
-	result, err := client.executeCommand(C.PExpire, append([]string{key, milliSecondsStr}, optionArgs...))
+	result, err := client.executeCommand(C.PExpire, append([]string{key, utils.IntToString(milliseconds), expireConditionalSetStr}))
 	if err != nil {
 		return CreateNilBoolResult(), err
 	}
@@ -1029,22 +1021,19 @@ func (client *baseClient) PExpireWithOptions(key string, milliseconds int64, opt
 }
 
 func (client *baseClient) PExpireAt(key string, unixTimestampInMilliSeconds int64) (Result[bool], error) {
-
-	timestampStr := strconv.FormatInt(unixTimestampInMilliSeconds, 10)
-	result, err := client.executeCommand(C.PExpireAt, []string{key, timestampStr})
+	result, err := client.executeCommand(C.PExpireAt, []string{key, utils.IntToString(unixTimestampInMilliSeconds)})
 	if err != nil {
 		return CreateNilBoolResult(), err
 	}
 	return handleBooleanResponse(result)
 }
 
-func (client *baseClient) PExpireAtWithOptions(key string, unixTimestampInMilliSeconds int64, options *ExpireOptions) (Result[bool], error) {
-	timestampStr := strconv.FormatInt(unixTimestampInMilliSeconds, 10)
-	optionArgs, err := options.toArgs()
+func (client *baseClient) PExpireAtWithOptions(key string, unixTimestampInMilliSeconds int64, expireConditionalSet ExpireConditionalSet) (Result[bool], error) {
+	expireConditionalSetStr, err := expireConditionalSet.toString()
 	if err != nil {
 		return CreateNilBoolResult(), err
 	}
-	result, err := client.executeCommand(C.PExpireAt, append([]string{key, timestampStr}, optionArgs...))
+	result, err := client.executeCommand(C.PExpireAt, append([]string{key, utils.IntToString(unixTimestampInMilliSeconds), expireConditionalSetStr}))
 	if err != nil {
 		return CreateNilBoolResult(), err
 	}
