@@ -14,7 +14,8 @@
         "glide-rs": "file:rust-client",
         "long": "^5.2.3",
         "npmignore": "^0.3.1",
-        "protobufjs": "^7.4.0"
+        "protobufjs": "^7.4.0",
+        "@valkey/valkey-glide": "1.1.0"
     },
     "bundleDependencies": [
         "glide-rs"

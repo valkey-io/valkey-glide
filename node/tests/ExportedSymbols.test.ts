@@ -1,10 +1,12 @@
-import { it } from "@jest/globals";
+import { beforeAll, it } from "@jest/globals";
+import { describe } from "node:test";
 import * as ts from "typescript";
 
 const fs = require('fs/promises');
 const f = require('fs');
 
-var exportedSymbols = require('../npm/glide/index');
+var exportedSymbols = require('@valkey/valkey-glide');
+// var exportedSymbols = [];
 let i = 0;
 let filesWithNodeCode: string[] = [];
 let getActualSymbolsList: any[] = [];
@@ -105,6 +107,11 @@ function visit(node: ts.Node, depth = 0) {
         for (let c of node.getChildren()) {
             if (c.getText().trim() == "export") {
                 f = 1;
+                break;
+            } else if (c.getText().trim().includes("@internal")) {
+                console.log('depth=' + depth + ", ts.SyntaxKind===" + ts.SyntaxKind[node.kind] + ", name=" + name + ", c.text" + c.getText() + ", @internal");
+                f = 0;
+                break;
             }
         }
         if (f == 1) {
