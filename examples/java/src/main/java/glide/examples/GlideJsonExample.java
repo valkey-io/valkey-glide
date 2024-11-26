@@ -51,14 +51,15 @@ public class GlideJsonExample {
     }
 
     /**
-     * Executes the main logic of the application, performing basic operations such as SET, GET, and
-     * PING using the provided <code>GlideClusterClient</code>.
+     * Executes the main logic of the application, performing basic operations such as JSON.SET and JSON.GET using the provided <code>GlideClusterClient</code>.
      *
      * @param client An instance of <code>GlideClusterClient</code>.
      * @throws ExecutionException if an execution error occurs during operations.
      * @throws InterruptedException if the operation is interrupted.
      */
     public static void appLogic(GlideClusterClient client) throws ExecutionException, InterruptedException {
+    
+        // TODO: test example against memorydb instance
 
         CompletableFuture<String> setResponse = Json.set(client, key, "$", "{\"a\": 1.0,\"b\": 2}");
         System.out.println("The set response is " + setResponse.get());  // The response should be "OK"

@@ -53,8 +53,7 @@ public class GlideFtExample {
     }
 
     /**
-     * Executes the main logic of the application, performing basic operations such as SET, GET, and
-     * PING using the provided <code>GlideClient</code>.
+     * Executes the main logic of the application, performing basic operations such as FT.CREATE and FT.SEARCH using the provided <code>GlideClient</code>.
      *
      * @param client An instance of <code>GlideClient</code>.
      * @throws ExecutionException if an execution error occurs during operations.
@@ -62,6 +61,8 @@ public class GlideFtExample {
      */
     public static void appLogic(GlideClient client) throws ExecutionException, InterruptedException {
 
+    // TODO: test example against memorydb instance
+    
         // Create a vector
         CompletableFuture<String> create = FT.create(
             client,
