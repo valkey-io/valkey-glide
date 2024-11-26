@@ -77,7 +77,7 @@ public class GlideFtExample {
                         FTCreateOptions.builder()
                                 .dataType(DataType.HASH)
                                 .prefixes(new String[] {prefix})
-                                .build()); // ok
+                                .build()); // "OK"
 
         CompletableFuture<Long> hsetResponse =
                 client.hset(
