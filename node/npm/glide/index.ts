@@ -11,7 +11,8 @@ let globalObject = global as unknown;
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 function loadNativeBinding() {
-    let nativeBinding = null;
+    let nativeBinding = [];
+    const scope = process.env.scope || "@scope";
 
     switch (platform) {
         case "linux":
@@ -19,13 +20,13 @@ function loadNativeBinding() {
                 case "x64":
                     switch (familySync()) {
                         case GLIBC:
-                            nativeBinding = require("@scope/valkey-glide-linux-x64");
+                            nativeBinding = require(`${scope}valkey-glide-linux-x64`);
                             break;
                         case MUSL:
-                            nativeBinding = require("@scope/valkey-glide-linux-musl-x64");
+                            nativeBinding = require(`${scope}valkey-glide-linux-musl-x64`);
                             break;
                         default:
-                            nativeBinding = require("@scope/valkey-glide-linux-x64");
+                            nativeBinding = require(`${scope}valkey-glide-linux-x64`);
                             break;
                     }
 
@@ -33,13 +34,13 @@ function loadNativeBinding() {
                 case "arm64":
                     switch (familySync()) {
                         case GLIBC:
-                            nativeBinding = require("@scope/valkey-glide-linux-arm64");
+                            nativeBinding = require(`${scope}valkey-glide-linux-arm64`);
                             break;
                         case MUSL:
-                            nativeBinding = require("@scope/valkey-glide-linux-musl-arm64");
+                            nativeBinding = require(`${scope}valkey-glide-linux-musl-arm64`);
                             break;
                         default:
-                            nativeBinding = require("@scope/valkey-glide-linux-arm64");
+                            nativeBinding = require(`${scope}valkey-glide-linux-arm64`);
                             break;
                     }
 
@@ -54,10 +55,10 @@ function loadNativeBinding() {
         case "darwin":
             switch (arch) {
                 case "x64":
-                    nativeBinding = require("@scope/valkey-glide-darwin-x64");
+                    nativeBinding = require(`${scope}valkey-glide-darwin-x64`);
                     break;
                 case "arm64":
-                    nativeBinding = require("@scope/valkey-glide-darwin-arm64");
+                    nativeBinding = require(`${scope}valkey-glide-darwin-arm64`);
                     break;
                 default:
                     throw new Error(

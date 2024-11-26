@@ -1,5 +1,5 @@
 {
-    "name": "@valkey/valkey-glide",
+    "name": "@valkey/valkey-glide-impl",
     "description": "General Language Independent Driver for the Enterprise (GLIDE) for Valkey",
     "main": "build-ts/index.js",
     "module": "build-ts/index.js",
@@ -14,8 +14,7 @@
         "glide-rs": "file:rust-client",
         "long": "^5.2.3",
         "npmignore": "^0.3.1",
-        "protobufjs": "^7.4.0",
-        "@valkey/valkey-glide": "1.2.0-rc16"
+        "protobufjs": "^7.4.0"
     },
     "bundleDependencies": [
         "glide-rs"
