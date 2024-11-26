@@ -16,7 +16,7 @@ jobs:
               id: get-branches
               run: |
                   # Get all branches matching 'release-*' and include 'main'
-                  branches=$(git ls-remote --heads origin | awk -F'/' '/refs\/heads\/release-/ {print $NF}')
+                  branches=$(git ls-remote --heads origin | awk -F'/' '/refs\/heads\/release-/ {printf $NF" "}')
                   branches="main $branches"
                   echo "::set-output name=branches::$branches"
               env:
