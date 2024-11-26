@@ -12,8 +12,7 @@
         "clean": "rm -rf build-ts/",
         "copy-declaration-files": "cp ../../build-ts/*.d.ts build-ts/ && cp ../../build-ts/src/*.d.ts build-ts/src/  && cp ../../build-ts/src/server-modules/*.d.ts build-ts/src/server-modules/",
         "build": "tsc && mkdir -p build-ts/src && npm run copy-declaration-files",
-        "build:test": "npm run build:package && npm i && npm run build",
-        "build:package": "pkg_name=valkey-glide && package_version=99.99.0 && scope=@valkey/ && envsubst < package.json.tmpl > \"package.json\"",
+        "build:test": "npm i && npm run build",
         "test": "jest --verbose"
     },
     "files": [
