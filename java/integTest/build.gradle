@@ -47,7 +47,7 @@ ext {
 
 tasks.register('stopAllAfterTests', Exec) {
     workingDir "${project.rootDir}/../utils"
-    commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'redis-cluster', '--keep-folder'
+    commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster', '--keep-folder'
 }
 
 // We need to call for stop before and after the test, but gradle doesn't support executing a task
@@ -55,7 +55,7 @@ tasks.register('stopAllAfterTests', Exec) {
 // We need to call for stop in case if previous test run was interrupted/crashed and didn't stop.
 tasks.register('stopAllBeforeTests', Exec) {
     workingDir "${project.rootDir}/../utils"
-    commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'redis-cluster'
+    commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster'
     ignoreExitValue true // ignore fail if servers are stopped before
 }
 
