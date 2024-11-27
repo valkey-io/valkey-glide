@@ -17,7 +17,7 @@ describe("Exported Symbols test", () => {
         const filesWithNodeCode = await getFiles(implBuildFolder);
         console.log(filesWithNodeCode);
 
-        const internallyExported = [];
+        const internallyExported: any = [];
 
         for (const file of filesWithNodeCode) {
             const sourceCode = await f.readFile(file, 'utf8');
