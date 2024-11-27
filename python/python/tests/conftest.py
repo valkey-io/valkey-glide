@@ -12,7 +12,7 @@ from glide.config import (
     ReadFrom,
     ServerCredentials,
 )
-from glide.exceptions import ClosingError, RequestError
+from glide.exceptions import ClosingError
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.logger import Level as logLevel
 from glide.logger import Logger
