@@ -57,7 +57,6 @@ Additionally, consider installing the Gradle plugin, [OS Detector](https://githu
 There are 4 types of classifiers for Valkey GLIDE which are
 ```
 osx-aarch_64
-osx-x86_64
 linux-aarch_64
 linux-x86_64
 ```
@@ -69,11 +68,6 @@ Gradle:
 // osx-aarch_64
 dependencies {
     implementation group: 'io.valkey', name: 'valkey-glide', version: '1.+', classifier: 'osx-aarch_64'
-}
-
-// osx-x86_64
-dependencies {
-    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.+', classifier: 'osx-x86_64'
 }
 
 // linux-aarch_64
@@ -107,14 +101,6 @@ Maven:
    <version>[1.0.0,2.0.0)</version>
 </dependency>
 
-<!--osx-x86_64-->
-<dependency>
-   <groupId>io.valkey</groupId>
-   <artifactId>valkey-glide</artifactId>
-   <classifier>osx-x86_64</classifier>
-   <version>[1.0.0,2.0.0)</version>
-</dependency>
-
 <!--linux-aarch_64-->
 <dependency>
    <groupId>io.valkey</groupId>
@@ -137,9 +123,6 @@ SBT:
 ```scala
 // osx-aarch_64
 libraryDependencies += "io.valkey" % "valkey-glide" % "1.+" classifier "osx-aarch_64"
-
-// osx-x86_64
-libraryDependencies += "io.valkey" % "valkey-glide" % "1.+" classifier "osx-x86_64"
 
 // linux-aarch_64
 libraryDependencies += "io.valkey" % "valkey-glide" % "1.+" classifier "linux-aarch_64"
