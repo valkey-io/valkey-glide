@@ -11,7 +11,7 @@
         "lint:fix": "eslint . --fix",
         "clean": "rm -rf build-ts/",
         "copy-declaration-files": "cp ../../build-ts/*.d.ts build-ts/ && cp ../../build-ts/src/*.d.ts build-ts/src/  && cp ../../build-ts/src/server-modules/*.d.ts build-ts/src/server-modules/",
-        "build": "tsc && mkdir -p build-ts/src && npm run copy-declaration-files",
+        "build": "tsc && mkdir -p build-ts/src && mkdir -p build-ts/src/server-modules && npm run copy-declaration-files",
         "build:test": "npm i && npm run build",
         "test": "jest --verbose"
     },

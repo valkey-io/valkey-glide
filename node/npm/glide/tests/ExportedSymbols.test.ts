@@ -10,8 +10,6 @@ describe("Exported Symbols test", () => {
 
         // Check exported symbols for valkey glide package
         const exportedSymbolsList = Object.keys(glideApi).sort();  // exportedList
-        // console.log(exportedSymbolsList);
-        // console.log(exportedSymbolsList.length);
 
         const implBuildFolder = './build-ts/';
         // const rustClientBuildFolder = './node_modules/@valkey/valkey-glide-impl/rust-client/';
@@ -20,7 +18,7 @@ describe("Exported Symbols test", () => {
         console.log(filesWithNodeCode);
 
         const internallyExported = [];
-        
+
         for (const file of filesWithNodeCode) {
             const sourceCode = await f.readFile(file, 'utf8');
             const sourceFile = await ts.createSourceFile(file, sourceCode, ts.ScriptTarget.Latest, true);
@@ -28,9 +26,14 @@ describe("Exported Symbols test", () => {
         }
 
         internallyExported.sort();
-        // console.log(internallyExported);
-        // console.log(internallyExported.length);
 
+        let missingSymbols = internallyExported.filter((e: string) => !exportedSymbolsList.includes(e));
+        let doesNotExistExports = exportedSymbolsList.filter((e: string | any) => !internallyExported.includes(e));
+
+        console.log("Missing exports=");
+        console.log(missingSymbols);
+        console.log("Exports does not exist=");
+        console.log(doesNotExistExports);
         expect(exportedSymbolsList).toEqual(internallyExported);
     });
 });
@@ -48,19 +51,19 @@ async function getFiles(folderName: string): Promise<string[]> {
 
     const skipFolders = [
         // 'build-ts', 
-        'commonjs-test', 
-        'glide-logs', 
-        'hybrid-node-tests', 
-        'node_modules', 
-        'npm', 
-        '.cargo', 
-        'target', 
+        'commonjs-test',
+        'glide-logs',
+        'hybrid-node-tests',
+        'node_modules',
+        'npm',
+        '.cargo',
+        'target',
         'tests'
     ];
 
     const filesWithNodeCode = [];
 
-    for (const  file of files) {
+    for (const file of files) {
         if (file.isDirectory()) {
             if (skipFolders.includes(file.name)) {
                 continue;
@@ -96,7 +99,7 @@ async function getFiles(folderName: string): Promise<string[]> {
             filesWithNodeCode.push(folderName + file.name);
         }
     }
-    
+
     return filesWithNodeCode;
 }
 
@@ -114,13 +117,13 @@ function visitRoot(root: ts.Node) {
 
         console.log(resultList);
     }
-    
+
     return resultList;
 }
 
 function visit(node: ts.Node) {
     let name: string | undefined = "";
-    
+
     switch (node.kind) {
         case ts.SyntaxKind.FirstStatement:
         case ts.SyntaxKind.ExportDeclaration:
@@ -165,11 +168,11 @@ function visit(node: ts.Node) {
         // console.log(debug);
         return name;
     }
-    
+
     if (isExported && isInternal) {
         // marked correctly... no-op
     }
-    
+
     if (!isExported && isInternal) {
         // no-op
     }
@@ -178,7 +181,7 @@ function visit(node: ts.Node) {
         // these are okay for now... 
         // debug.push(`PRIVATE??? name=unnamed kind=${ts.SyntaxKind[node.kind]} text=${node.getText()}`);
     }
-    
+
     // if (debug.length > 0) {
     //     console.log(debug);
     // }
