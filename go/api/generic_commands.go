@@ -331,7 +331,7 @@ type GenericBaseCommands interface {
 	//	if err != nil {
 	//	    // handle error
 	//	}
-	//	fmt.Println(result) // Output: int
+	//	fmt.Println(result.Value()) // Output: int
 	//
 	// [valkey.io]: Https://valkey.io/commands/unlink/
 	Unlink(keys []string) (Result[int64], error)
@@ -352,7 +352,7 @@ type GenericBaseCommands interface {
 	//	if err != nil {
 	//	    // handle error
 	//	}
-	//	fmt.Println(result) // Output: int
+	//	fmt.Println(result.Value()) // Output: int
 	//
 	// [valkey.io]: Https://valkey.io/commands/touch/
 	Touch(keys []string) (Result[int64], error)
@@ -374,7 +374,7 @@ type GenericBaseCommands interface {
 	//	if err != nil {
 	//	    // handle error
 	//	}
-	//	fmt.Println(result) // Output: string
+	//	fmt.Println(result.Value()) // Output: string
 	//
 	// [valkey.io]: Https://valkey.io/commands/type/
 	Type(key string) (Result[string], error)
