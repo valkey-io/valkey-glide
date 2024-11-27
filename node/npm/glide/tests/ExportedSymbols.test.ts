@@ -1,4 +1,4 @@
-import { beforeAll, it } from "@jest/globals";
+import { it } from "@jest/globals";
 import * as f from 'fs/promises';
 import { describe } from "node:test";
 import * as ts from "typescript";
@@ -6,38 +6,32 @@ import * as glideApi from "../";
 
 describe("Exported Symbols test", () => {
 
-    beforeAll(() => {
-        /**
-         * Add Excluded symbols
-         * Example:
-         * excludedSymbols.push('convertGlideRecord');
-         */
-    });
-
     it("check excluded symbols are not exported", async () => {
 
         // Check exported symbols for valkey glide package
         const exportedSymbolsList = Object.keys(glideApi).sort();  // exportedList
-        console.log(exportedSymbolsList);
-        console.log(exportedSymbolsList.length);
+        // console.log(exportedSymbolsList);
+        // console.log(exportedSymbolsList.length);
 
-        const testFolder = './build-ts/';
-        const filesWithNodeCode = await getFiles(testFolder);
+        const implBuildFolder = './build-ts/';
+        // const rustClientBuildFolder = './node_modules/@valkey/valkey-glide-impl/rust-client/';
+        // const filesWithNodeCode = [...await getFiles(implBuildFolder), ...await getFiles(rustClientBuildFolder)];
+        const filesWithNodeCode = await getFiles(implBuildFolder);
         console.log(filesWithNodeCode);
 
-        const actualExported = [];
+        const internallyExported = [];
         
         for (const file of filesWithNodeCode) {
             const sourceCode = await f.readFile(file, 'utf8');
             const sourceFile = await ts.createSourceFile(file, sourceCode, ts.ScriptTarget.Latest, true);
-            actualExported.push(...visitRoot(sourceFile));
+            internallyExported.push(...visitRoot(sourceFile));
         }
 
-        actualExported.sort();
-        console.log(actualExported);
-        console.log(actualExported.length);
+        internallyExported.sort();
+        // console.log(internallyExported);
+        // console.log(internallyExported.length);
 
-        expect(exportedSymbolsList).toEqual(actualExported);
+        expect(exportedSymbolsList).toEqual(internallyExported);
     });
 });
 
@@ -52,25 +46,25 @@ async function getFiles(folderName: string): Promise<string[]> {
 
     const files = await f.readdir(folderName, { withFileTypes: true });
 
-    // const skipFolders = [
-    //     'build-ts', 
-    //     'commonjs-test', 
-    //     'glide-logs', 
-    //     'hybrid-node-tests', 
-    //     'node_modules', 
-    //     'npm', 
-    //     '.cargo', 
-    //     'target', 
-    //     'tests'
-    // ];
+    const skipFolders = [
+        // 'build-ts', 
+        'commonjs-test', 
+        'glide-logs', 
+        'hybrid-node-tests', 
+        'node_modules', 
+        'npm', 
+        '.cargo', 
+        'target', 
+        'tests'
+    ];
 
     const filesWithNodeCode = [];
 
     for (const  file of files) {
         if (file.isDirectory()) {
-            // if (skipFolders.includes(file.name)) {
-            //     continue;
-            // }
+            if (skipFolders.includes(file.name)) {
+                continue;
+            }
 
             filesWithNodeCode.push(...(await getFiles(folderName + file.name + '/')));
         } else {
