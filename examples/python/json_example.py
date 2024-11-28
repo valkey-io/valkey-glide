@@ -1,68 +1,69 @@
 import asyncio
-from typing import List, Tuple
+from typing import List, Tuple, Optional
+
+from glide.async_commands.server_modules import glide_json as json
 
 from glide import (
+    AllNodes,
     ClosingError,
     ConnectionError,
-    GlideClient,
-    GlideClientConfiguration,
+    GlideClusterClient,
+    GlideClusterClientConfiguration,
+    InfoSection,
     Logger,
     LogLevel,
     NodeAddress,
     RequestError,
-    TimeoutError
+    TimeoutError,
 )
-
-from python.glade.async_commands.server_modules import glide_json
 
 
 async def create_client(
-    nodes_list: List[Tuple[str, int]] = [("localhost", 6379)]
-) -> GlideClient:
+    nodes_list: Optional[List[Tuple[str, int]]] = None
+) -> GlideClusterClient:
     """
-    Creates and returns a GlideClient instance.
+    Creates and returns a GlideClusterClient instance.
 
-    This function initializes a GlideClient with the provided list of nodes.
-    The nodes_list may contain either only primary node or a mix of primary
-    and replica nodes. The GlideClient use these nodes to connect to
-    the Standalone setup servers.
+    This function initializes a GlideClusterClient with the provided list of nodes.
+    The nodes_list may contain the address of one or more cluster nodes, and the
+    client will automatically discover all nodes in the cluster.
 
     Args:
         nodes_list (List[Tuple[str, int]]): A list of tuples where each tuple
             contains a host (str) and port (int). Defaults to [("localhost", 6379)].
 
     Returns:
-        GlideClient: An instance of GlideClient connected to the specified nodes.
+        GlideClusterClient: An instance of GlideClusterClient connected to the discovered nodes.
     """
-    addresses = []
-    for host, port in nodes_list:
-        addresses.append(NodeAddress(host, port))
-
-    # Check `GlideClientConfiguration` for additional options.
-    config = GlideClientConfiguration(
-        addresses,
+    if nodes_list is None:
+        nodes_list = [("localhost", 6379)]
+    addresses = [NodeAddress(host, port) for host, port in nodes_list]
+    # Check `GlideClusterClientConfiguration` for additional options.
+    config = GlideClusterClientConfiguration(
+        addresses=addresses,
+        client_name="test_cluster_client",
         # Enable this field if the servers are configured with TLS.
         # use_tls=True
     )
-    return await GlideClient.create(config)
+    return await GlideClusterClient.create(config)
 
-
-async def app_logic(client: TGlideClient):
+async def app_logic(client: GlideClusterClient):
     """
     Executes the main logic of the application, performing basic operations
     such as JSON.SET and JSON.GET using the provided GlideClient.
 
     Args:
-        client (TGlideClient): An instance of GlideClient.
+        client (GlideClusterClient): An instance of GlideClient.
     """
 
     json_value = {"a": 1.0, "b": 2}
+    json_str = json.dumps(value) 
     # Send SET and GET
-    set_response = await json.set(client, "key", "$")
-    Logger.log(LogLevel.INFO, "app", f"Set response is = {set_response!r}")
+    set_response = await json.set(client, "key", "$", json_str)
+    Logger.log(LogLevel.INFO, "app", f"Set response is = {set_response!r}")  # 'OK'
 
     get_response = await json.get(client, "key", "$")
-    Logger.log(LogLevel.INFO, "app", f"Get response is = {get_response.decode()!r}")
+    Logger.log(LogLevel.INFO, "app", f"Get response is = {get_response.decode()!r}") # "[{\"a\":1.0,\"b\":2}]" 
 
 
 async def exec_app_logic():
@@ -84,12 +85,13 @@ async def exec_app_logic():
                     "glide",
                     f"Authentication error encountered: {e}",
                 )
-                raise e
-            Logger.log(
-                LogLevel.WARN,
-                "glide",
-                f"Client has closed and needs to be re-created: {e}",
-            )
+            else:
+                Logger.log(
+                    LogLevel.WARN,
+                    "glide",
+                    f"Client has closed and needs to be re-created: {e}",
+                )
+            raise e
         except TimeoutError as e:
             # A request timed out. You may choose to retry the execution based on your application's logic
             Logger.log(LogLevel.ERROR, "glide", f"TimeoutError encountered: {e}")
@@ -112,7 +114,7 @@ async def exec_app_logic():
                 Logger.log(
                     LogLevel.WARN,
                     "glide",
-                    f"Encountered an error while closing the client: {e}",
+                    f"Error encountered while closing the client: {e}",
                 )
 
 
