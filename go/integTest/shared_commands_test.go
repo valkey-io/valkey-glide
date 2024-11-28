@@ -2952,18 +2952,18 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_NewExpiryGreaterThanCurren
 
 		suite.verifyOK(client.Set(key, value))
 
-		initialExpire := 500
-		resultExpire, err := client.PExpire(key, int64(initialExpire))
+		initialExpire := time.Now().UnixMilli() + 1000
+		resultExpire, err := client.PExpireAt(key, initialExpire)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpire.Value())
 
-		newExpire := time.Now().Unix()*1000 + 1000
+		newExpire := time.Now().UnixMilli() + 2000
 
 		resultExpireWithOptions, err := client.PExpireAtWithOptions(key, newExpire, api.NewExpiryGreaterThanCurrent)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resultExpireWithOptions.Value())
 
-		time.Sleep(1100 * time.Millisecond)
+		time.Sleep(2100 * time.Millisecond)
 		resultExist, err := client.Exists([]string{key})
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(0), resultExist.Value())
