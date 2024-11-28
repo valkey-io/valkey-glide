@@ -56,8 +56,6 @@ async def app_logic(client: TGlideClient):
         client (TGlideClient): An instance of GlideClient.
     """
 
-    # TODO: test against memory db instance
-
     json_value = {"a": 1.0, "b": 2}
     # Send SET and GET
     set_response = await json.set(client, "key", "$")
