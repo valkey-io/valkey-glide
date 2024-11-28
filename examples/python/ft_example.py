@@ -57,19 +57,29 @@ async def app_logic(client: GlideClusterClient):
     Args:
         client (GlideClusterClient): An instance of GlideClient.
     """
-
-    # TODO: test against memory db instance
-
     # Create a vector
-    create_response = await ft.create(client, "index",
+    index = prefix + str(uuid.uuid4())
+    create_response = await ft.create(client, index,
                     schema=[
                         NumericField("$.a", "a"),
                         NumericField("$.b", "b"),
                     ],
                 options=FtCreateOptions(DataType.JSON),
             )
-    Logger.log(LogLevel.INFO, "app", f"Create response is = {create_response!r}")
+    Logger.log(LogLevel.INFO, "app", f"Create response is = {create_response!r}")   # 'OK'
 
+    # Create a json key.
+    assert (
+        await GlideJson.set(glide_client, json_key1, "$", json.dumps(json_value1))
+        == OK
+    )
+    assert (
+        await GlideJson.set(glide_client, json_key2, "$", json.dumps(json_value2))
+        == OK
+    )
+    
+    time.sleep(self.sleep_wait_time)
+    
     # Search for the vector
     search_response = await ft.search(glide_client, index, "*", options=ft_search_options)
     ft_search_options = FtSearchOptions(
