@@ -1,6 +1,4 @@
-/**
- * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
- */
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 use glide_core::start_socket_listener as start_socket_listener_core;
 
 // Protocol constants to expose to Java.

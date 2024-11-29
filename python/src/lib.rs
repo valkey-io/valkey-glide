@@ -1,8 +1,6 @@
 use bytes::Bytes;
 use glide_core::client::FINISHED_SCAN_CURSOR;
-/**
- * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
- */
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 use glide_core::start_socket_listener;
 use glide_core::MAX_REQUEST_ARGS_LENGTH;
 use pyo3::exceptions::PyTypeError;

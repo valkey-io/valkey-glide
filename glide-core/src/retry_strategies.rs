@@ -1,6 +1,4 @@
-/**
- * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
- */
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 use crate::client::ConnectionRetryStrategy;
 use std::time::Duration;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
