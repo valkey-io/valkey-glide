@@ -390,6 +390,7 @@ class CoreCommands(Protocol):
         match: Optional[TEncodable] = ...,
         count: Optional[int] = ...,
         type: Optional[ObjectType] = ...,
+        allow_non_covered_slots: bool = ...,
     ) -> TResult: ...
 
     async def _update_connection_password(
