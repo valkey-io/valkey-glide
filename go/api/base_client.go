@@ -1102,3 +1102,19 @@ func (client *baseClient) PTTL(key string) (Result[int64], error) {
 
 	return handleLongResponse(result)
 }
+
+func (client *baseClient) Rename(key string, newKey string) (Result[string], error) {
+	result, err := client.executeCommand(C.Rename, []string{key, newKey})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNullResponse(result)
+}
+
+func (client *baseClient) Renamenx(key string, newKey string) (Result[bool], error) {
+	result, err := client.executeCommand(C.RenameNX, []string{key, newKey})
+	if err != nil {
+		return CreateNilBoolResult(), err
+	}
+	return handleBooleanResponse(result)
+}
