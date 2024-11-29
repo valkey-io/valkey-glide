@@ -5,12 +5,19 @@ import static glide.api.logging.Logger.Level.ERROR;
 import static glide.api.logging.Logger.Level.INFO;
 import static glide.api.logging.Logger.Level.WARN;
 import static glide.api.logging.Logger.log;
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
 
 import glide.api.GlideClusterClient;
 import glide.api.commands.servermodules.FT;
 import glide.api.logging.Logger;
 import glide.api.models.ClusterValue;
+import glide.api.models.commands.FT.FTCreateOptions;
+import glide.api.models.commands.FT.FTCreateOptions.DataType;
+import glide.api.models.commands.FT.FTCreateOptions.DistanceMetric;
+import glide.api.models.commands.FT.FTCreateOptions.FieldInfo;
+import glide.api.models.commands.FT.FTCreateOptions.VectorFieldHnsw;
+import glide.api.models.commands.FT.FTSearchOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
@@ -26,6 +33,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
 public class GlideFtExample {
+
+    /** Waiting interval to let server process the data before querying */
+    private static final int DATA_PROCESSING_TIMEOUT = 1000; // ms
 
     /**
      * Creates and returns a <code>GlideClusterClient</code> instance.
@@ -86,7 +96,7 @@ public class GlideFtExample {
                                 gs("vec"),
                                 gs(
                                         new byte[] {
-                                            (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0
+                                            0, 0, 0, 0, 0, 0, 0, 0
                                         }))); // response is 1L which represents the number of fields that were added.
 
         hsetResponse =
@@ -96,33 +106,20 @@ public class GlideFtExample {
                                 gs("vec"),
                                 gs(
                                         new byte[] {
-                                            (byte) 0,
-                                            (byte) 0,
-                                            (byte) 0,
-                                            (byte) 0,
-                                            (byte) 0,
-                                            (byte) 0,
-                                            (byte) 0x80,
-                                            (byte) 0xBF
+                                            0, 0, 0, 0, 0, 0, (byte) 0x80, (byte) 0xBF
                                         }))); // response is 1L which represents the number of fields that were added.
         Thread.sleep(DATA_PROCESSING_TIMEOUT); // let server digest the data and update
 
         // These are the optional arguments used for the FT.search command
         var options =
                 FTSearchOptions.builder()
-                        .params(
-                                Map.of(
-                                        gs("query_vec"),
-                                        gs(
-                                                new byte[] {
-                                                    (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0,
-                                                    (byte) 0
-                                                })))
+                        .params(Map.of(gs("query_vec"), gs(new byte[] {0, 0, 0, 0, 0, 0, 0, 0})))
                         .build();
         String query = "*=>[KNN 2 @VEC $query_vec]"; // This is the text query to search for
         CompletableFuture<Object[]> searchResponse = FT.search(client, index, query, options);
 
-        // When you call .get() on searchResponse, the result will be an Object[] as shown in the commented assert test below. 
+        // When you call .get() on searchResponse, the result will be an Object[] as shown in the
+        // commented assert test below.
         // assertArrayEquals(
         //         new Object[] {
         //             2L,
@@ -136,12 +133,12 @@ public class GlideFtExample {
         //                             gs("vec"),
         //                             gs(
         //                                     new byte[] {
-        //                                         (byte) 0,
-        //                                         (byte) 0,
-        //                                         (byte) 0,
-        //                                         (byte) 0,
-        //                                         (byte) 0,
-        //                                         (byte) 0,
+        //                                         0,
+        //                                         0,
+        //                                         0,
+        //                                         0,
+        //                                         0,
+        //                                         0,
         //                                         (byte) 0x80,
         //                                         (byte) 0xBF
         //                                     })))
