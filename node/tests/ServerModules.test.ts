@@ -15,10 +15,14 @@ import {
     convertGlideRecordToRecord,
     Decoder,
     FtAggregateOptions,
+    FtAggregateReturnType,
+    FtSearchOptions,
     FtSearchReturnType,
     GlideClusterClient,
     GlideFt,
     GlideJson,
+    GlideRecord,
+    GlideString,
     InfoOptions,
     JsonGetOptions,
     ProtocolVersion,
@@ -102,13 +106,29 @@ describe("Server Module Tests", () => {
                 let result = await GlideJson.get(client, key, { path: "." });
                 expect(JSON.parse(result.toString())).toEqual(jsonValue);
 
+                // binary buffer test
+                result = await GlideJson.get(client, Buffer.from(key), {
+                    path: Buffer.from("."),
+                    decoder: Decoder.Bytes,
+                });
+                expect(result).toEqual(Buffer.from(JSON.stringify(jsonValue)));
+
+                expect(
+                    await GlideJson.set(
+                        client,
+                        Buffer.from(key),
+                        Buffer.from("$"),
+                        Buffer.from(JSON.stringify({ a: 1.0, b: 3 })),
+                    ),
+                ).toBe("OK");
+
                 // JSON.get with array of paths
                 result = await GlideJson.get(client, key, {
                     path: ["$.a", "$.b"],
                 });
                 expect(JSON.parse(result.toString())).toEqual({
                     "$.a": [1.0],
-                    "$.b": [2],
+                    "$.b": [3],
                 });
 
                 // JSON.get with non-existing key
@@ -257,6 +277,41 @@ describe("Server Module Tests", () => {
                     space: Buffer.from("*"),
                 } as JsonGetOptions);
                 expect(result3).toEqual(expectedResult2);
+            });
+
+            it("json.mget", async () => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+                const data = {
+                    [key1]: '{"a": 1, "b": ["one", "two"]}',
+                    [key2]: '{"a": 1, "c": false}',
+                };
+
+                for (const key of Object.keys(data)) {
+                    await GlideJson.set(client, key, ".", data[key]);
+                }
+
+                expect(
+                    await GlideJson.mget(
+                        client,
+                        [key1, key2, uuidv4()],
+                        Buffer.from("$.c"),
+                    ),
+                ).toEqual(["[]", "[false]", null]);
+                expect(
+                    await GlideJson.mget(
+                        client,
+                        [Buffer.from(key1), key2],
+                        ".b[*]",
+                        { decoder: Decoder.Bytes },
+                    ),
+                ).toEqual([Buffer.from('"one"'), null]);
             });
 
             it("json.arrinsert", async () => {
@@ -1261,8 +1316,9 @@ describe("Server Module Tests", () => {
                 expect(
                     await GlideJson.resp(client, Buffer.from(key), {
                         path: Buffer.from("..a"),
+                        decoder: Decoder.Bytes,
                     }),
-                ).toEqual(["[", 1, 2, 3]);
+                ).toEqual([Buffer.from("["), 1, 2, 3]);
             });
 
             it("json.arrtrim tests", async () => {
@@ -1460,13 +1516,49 @@ describe("Server Module Tests", () => {
                 await expect(GlideJson.strlen(client, key)).rejects.toThrow(
                     RequestError,
                 );
-
                 // Binary buffer test
                 expect(
                     await GlideJson.strlen(client, Buffer.from(key), {
                         path: Buffer.from("$..a"),
                     }),
                 ).toEqual([3, 5, null]);
+            });
+
+            it("json.arrappend", async () => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+                const key = uuidv4();
+                let doc = { a: 1, b: ["one", "two"] };
+                expect(
+                    await GlideJson.set(client, key, "$", JSON.stringify(doc)),
+                ).toBe("OK");
+
+                expect(
+                    await GlideJson.arrappend(client, key, Buffer.from("$.b"), [
+                        '"three"',
+                    ]),
+                ).toEqual([3]);
+                expect(
+                    await GlideJson.arrappend(client, key, ".b", [
+                        '"four"',
+                        '"five"',
+                    ]),
+                ).toEqual(5);
+                doc = JSON.parse(
+                    (await GlideJson.get(client, key, { path: "." })) as string,
+                );
+                expect(doc).toEqual({
+                    a: 1,
+                    b: ["one", "two", "three", "four", "five"],
+                });
+
+                expect(
+                    await GlideJson.arrappend(client, key, "$.a", ['"value"']),
+                ).toEqual([null]);
             });
 
             it("json.strappend tests", async () => {
@@ -2038,6 +2130,207 @@ describe("Server Module Tests", () => {
                     ).toEqual(19);
                 },
             );
+
+            it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+                "json.objlen tests",
+                async (protocol) => {
+                    client = await GlideClusterClient.createClient(
+                        getClientConfigurationOption(
+                            cluster.getAddresses(),
+                            protocol,
+                        ),
+                    );
+                    const key = uuidv4();
+                    const jsonValue = {
+                        a: 1.0,
+                        b: { a: { x: 1, y: 2 }, b: 2.5, c: true },
+                    };
+
+                    // setup
+                    expect(
+                        await GlideJson.set(
+                            client,
+                            key,
+                            "$",
+                            JSON.stringify(jsonValue),
+                        ),
+                    ).toBe("OK");
+
+                    expect(
+                        await GlideJson.objlen(client, key, { path: "$" }),
+                    ).toEqual([2]);
+
+                    expect(
+                        await GlideJson.objlen(client, key, { path: "." }),
+                    ).toEqual(2);
+
+                    expect(
+                        await GlideJson.objlen(client, key, { path: "$.." }),
+                    ).toEqual([2, 3, 2]);
+
+                    expect(
+                        await GlideJson.objlen(client, key, { path: ".." }),
+                    ).toEqual(2);
+
+                    expect(
+                        await GlideJson.objlen(client, key, { path: "$..b" }),
+                    ).toEqual([3, null]);
+
+                    expect(
+                        await GlideJson.objlen(client, key, { path: "..b" }),
+                    ).toEqual(3);
+
+                    expect(
+                        await GlideJson.objlen(client, Buffer.from(key), {
+                            path: Buffer.from("..a"),
+                        }),
+                    ).toEqual(2);
+
+                    expect(await GlideJson.objlen(client, key)).toEqual(2);
+
+                    // path doesn't exist
+                    expect(
+                        await GlideJson.objlen(client, key, {
+                            path: "$.non_existing_path",
+                        }),
+                    ).toEqual([]);
+
+                    await expect(
+                        GlideJson.objlen(client, key, {
+                            path: "non_existing_path",
+                        }),
+                    ).rejects.toThrow(RequestError);
+
+                    // Value at path isnt an object
+                    expect(
+                        await GlideJson.objlen(client, key, {
+                            path: "$.non_existing_path",
+                        }),
+                    ).toEqual([]);
+
+                    await expect(
+                        GlideJson.objlen(client, key, { path: ".a" }),
+                    ).rejects.toThrow(RequestError);
+
+                    // Non-existing key
+                    expect(
+                        await GlideJson.objlen(client, "non_existing_key", {
+                            path: "$",
+                        }),
+                    ).toBeNull();
+
+                    expect(
+                        await GlideJson.objlen(client, "non_existing_key", {
+                            path: ".",
+                        }),
+                    ).toBeNull();
+
+                    expect(
+                        await GlideJson.set(
+                            client,
+                            key,
+                            "$",
+                            '{"a": 1, "b": 2, "c":3, "d":4}',
+                        ),
+                    ).toBe("OK");
+                    expect(await GlideJson.objlen(client, key)).toEqual(4);
+                },
+            );
+
+            it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+                "json.objkeys tests",
+                async (protocol) => {
+                    client = await GlideClusterClient.createClient(
+                        getClientConfigurationOption(
+                            cluster.getAddresses(),
+                            protocol,
+                        ),
+                    );
+                    const key = uuidv4();
+                    const jsonValue = {
+                        a: 1.0,
+                        b: { a: { x: 1, y: 2 }, b: 2.5, c: true },
+                    };
+
+                    // setup
+                    expect(
+                        await GlideJson.set(
+                            client,
+                            key,
+                            "$",
+                            JSON.stringify(jsonValue),
+                        ),
+                    ).toBe("OK");
+
+                    expect(
+                        await GlideJson.objkeys(client, key, { path: "$" }),
+                    ).toEqual([["a", "b"]]);
+
+                    expect(
+                        await GlideJson.objkeys(client, key, {
+                            path: ".",
+                            decoder: Decoder.Bytes,
+                        }),
+                    ).toEqual([Buffer.from("a"), Buffer.from("b")]);
+
+                    expect(
+                        await GlideJson.objkeys(client, Buffer.from(key), {
+                            path: Buffer.from("$.."),
+                        }),
+                    ).toEqual([
+                        ["a", "b"],
+                        ["a", "b", "c"],
+                        ["x", "y"],
+                    ]);
+
+                    expect(
+                        await GlideJson.objkeys(client, key, { path: ".." }),
+                    ).toEqual(["a", "b"]);
+
+                    expect(
+                        await GlideJson.objkeys(client, key, { path: "$..b" }),
+                    ).toEqual([["a", "b", "c"], []]);
+
+                    expect(
+                        await GlideJson.objkeys(client, key, { path: "..b" }),
+                    ).toEqual(["a", "b", "c"]);
+
+                    // path doesn't exist
+                    expect(
+                        await GlideJson.objkeys(client, key, {
+                            path: "$.non_existing_path",
+                        }),
+                    ).toEqual([]);
+
+                    expect(
+                        await GlideJson.objkeys(client, key, {
+                            path: "non_existing_path",
+                        }),
+                    ).toBeNull();
+
+                    // Value at path isnt an object
+                    expect(
+                        await GlideJson.objkeys(client, key, { path: "$.a" }),
+                    ).toEqual([[]]);
+
+                    await expect(
+                        GlideJson.objkeys(client, key, { path: ".a" }),
+                    ).rejects.toThrow(RequestError);
+
+                    // Non-existing key
+                    expect(
+                        await GlideJson.objkeys(client, "non_existing_key", {
+                            path: "$",
+                        }),
+                    ).toBeNull();
+
+                    expect(
+                        await GlideJson.objkeys(client, "non_existing_key", {
+                            path: ".",
+                        }),
+                    ).toBeNull();
+                },
+            );
         },
     );
 
@@ -2262,7 +2555,80 @@ describe("Server Module Tests", () => {
         });
 
         it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-            "FT.AGGREGATE ft.aggregate",
+            "FT.INFO ft.info",
+            async (protocol) => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+
+                const index = uuidv4();
+                expect(
+                    await GlideFt.create(
+                        client,
+                        Buffer.from(index),
+                        [
+                            {
+                                type: "VECTOR",
+                                name: "$.vec",
+                                alias: "VEC",
+                                attributes: {
+                                    algorithm: "HNSW",
+                                    distanceMetric: "COSINE",
+                                    dimensions: 42,
+                                },
+                            },
+                            { type: "TEXT", name: "$.name" },
+                        ],
+                        { dataType: "JSON", prefixes: ["123"] },
+                    ),
+                ).toEqual("OK");
+
+                let response = await GlideFt.info(client, Buffer.from(index));
+
+                expect(response).toMatchObject({
+                    index_name: index,
+                    key_type: "JSON",
+                    key_prefixes: ["123"],
+                    fields: [
+                        {
+                            identifier: "$.name",
+                            type: "TEXT",
+                            field_name: "$.name",
+                            option: "",
+                        },
+                        {
+                            identifier: "$.vec",
+                            type: "VECTOR",
+                            field_name: "VEC",
+                            option: "",
+                            vector_params: {
+                                distance_metric: "COSINE",
+                                dimension: 42,
+                            },
+                        },
+                    ],
+                });
+
+                response = await GlideFt.info(client, index, {
+                    decoder: Decoder.Bytes,
+                });
+                expect(response).toMatchObject({
+                    index_name: Buffer.from(index),
+                });
+
+                expect(await GlideFt.dropindex(client, index)).toEqual("OK");
+                // querying a missing index
+                await expect(GlideFt.info(client, index)).rejects.toThrow(
+                    "Index not found",
+                );
+            },
+        );
+
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            "FT.AGGREGATE on JSON",
             async (protocol) => {
                 client = await GlideClusterClient.createClient(
                     getClientConfigurationOption(
@@ -2274,8 +2640,7 @@ describe("Server Module Tests", () => {
                 const isResp3 = protocol == ProtocolVersion.RESP3;
                 const prefixBicycles = "{bicycles}:";
                 const indexBicycles = prefixBicycles + uuidv4();
-                const prefixMovies = "{movies}:";
-                const indexMovies = prefixMovies + uuidv4();
+                const query = "*";
 
                 // FT.CREATE idx:bicycle ON JSON PREFIX 1 bicycle: SCHEMA $.model AS model TEXT $.description AS
                 // description TEXT $.price AS price NUMERIC $.condition AS condition TAG SEPARATOR ,
@@ -2403,7 +2768,7 @@ describe("Server Module Tests", () => {
                 );
 
                 // FT.AGGREGATE idx:bicycle * LOAD 1 __key GROUPBY 1 @condition REDUCE COUNT 0 AS bicycles
-                let options: FtAggregateOptions = {
+                const options: FtAggregateOptions = {
                     loadFields: ["__key"],
                     clauses: [
                         {
@@ -2419,15 +2784,13 @@ describe("Server Module Tests", () => {
                         },
                     ],
                 };
-                let aggreg = (
-                    await GlideFt.aggregate(client, indexBicycles, "*", options)
-                )
-                    .map(convertGlideRecordToRecord)
-                    // elements (records in array) could be reordered
-                    .sort((a, b) =>
-                        a["condition"]! > b["condition"]! ? 1 : -1,
-                    );
-                expect(aggreg).toEqual([
+                const aggreg = await GlideFt.aggregate(
+                    client,
+                    indexBicycles,
+                    query,
+                    options,
+                );
+                const expectedAggreg = [
                     {
                         condition: "new",
                         bicycles: isResp3 ? 5 : "5",
@@ -2440,7 +2803,54 @@ describe("Server Module Tests", () => {
                         condition: "used",
                         bicycles: isResp3 ? 4 : "4",
                     },
-                ]);
+                ];
+                expect(
+                    aggreg
+                        .map(convertGlideRecordToRecord)
+                        // elements (records in array) could be reordered
+                        .sort((a, b) =>
+                            a["condition"]! > b["condition"]! ? 1 : -1,
+                        ),
+                ).toEqual(expectedAggreg);
+
+                const aggregProfile: [
+                    FtAggregateReturnType,
+                    Record<string, number>,
+                ] = await GlideFt.profileAggregate(
+                    client,
+                    indexBicycles,
+                    "*",
+                    options,
+                );
+                // profile metrics and categories are subject to change
+                expect(aggregProfile[1]).toBeTruthy();
+                expect(
+                    aggregProfile[0]
+                        .map(convertGlideRecordToRecord)
+                        // elements (records in array) could be reordered
+                        .sort((a, b) =>
+                            a["condition"]! > b["condition"]! ? 1 : -1,
+                        ),
+                ).toEqual(expectedAggreg);
+
+                await GlideFt.dropindex(client, indexBicycles);
+            },
+        );
+
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            "FT.AGGREGATE on HASH",
+            async (protocol) => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+
+                const isResp3 = protocol == ProtocolVersion.RESP3;
+                const prefixMovies = "{movies}:";
+                const indexMovies = prefixMovies + uuidv4();
+                const query = "*";
 
                 // FT.CREATE idx:movie ON hash PREFIX 1 "movie:" SCHEMA title TEXT release_year NUMERIC
                 // rating NUMERIC genre TAG votes NUMERIC
@@ -2503,7 +2913,7 @@ describe("Server Module Tests", () => {
                 // FT.AGGREGATE idx:movie * LOAD * APPLY ceil(@rating) as r_rating GROUPBY 1 @genre REDUCE
                 // COUNT 0 AS nb_of_movies REDUCE SUM 1 votes AS nb_of_votes REDUCE AVG 1 r_rating AS avg_rating
                 // SORTBY 4 @avg_rating DESC @nb_of_votes DESC
-                options = {
+                const options: FtAggregateOptions = {
                     loadAll: true,
                     clauses: [
                         {
@@ -2547,13 +2957,13 @@ describe("Server Module Tests", () => {
                         },
                     ],
                 };
-                aggreg = (
-                    await GlideFt.aggregate(client, indexMovies, "*", options)
-                )
-                    .map(convertGlideRecordToRecord)
-                    // elements (records in array) could be reordered
-                    .sort((a, b) => (a["genre"]! > b["genre"]! ? 1 : -1));
-                expect(aggreg).toEqual([
+                const aggreg = await GlideFt.aggregate(
+                    client,
+                    indexMovies,
+                    query,
+                    options,
+                );
+                const expectedAggreg = [
                     {
                         genre: "Action",
                         nb_of_movies: isResp3 ? 2.0 : "2",
@@ -2572,15 +2982,172 @@ describe("Server Module Tests", () => {
                         nb_of_votes: isResp3 ? 559490.0 : "559490",
                         avg_rating: isResp3 ? 9.0 : "9",
                     },
-                ]);
+                ];
+                expect(
+                    aggreg
+                        .map(convertGlideRecordToRecord)
+                        // elements (records in array) could be reordered
+                        .sort((a, b) => (a["genre"]! > b["genre"]! ? 1 : -1)),
+                ).toEqual(expectedAggreg);
+
+                const aggregProfile: [
+                    FtAggregateReturnType,
+                    Record<string, number>,
+                ] = await GlideFt.profileAggregate(
+                    client,
+                    indexMovies,
+                    query,
+                    options,
+                );
+                // profile metrics and categories are subject to change
+                expect(aggregProfile[1]).toBeTruthy();
+                expect(
+                    aggregProfile[0]
+                        .map(convertGlideRecordToRecord)
+                        // elements (records in array) could be reordered
+                        .sort((a, b) => (a["genre"]! > b["genre"]! ? 1 : -1)),
+                ).toEqual(expectedAggreg);
 
                 await GlideFt.dropindex(client, indexMovies);
-                await GlideFt.dropindex(client, indexBicycles);
             },
         );
 
         it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-            "FT.INFO ft.info",
+            "FT.SEARCH binary on HASH",
+            async (protocol) => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+                const prefix = "{" + uuidv4() + "}:";
+                const index = prefix + "index";
+                const query = "*=>[KNN 2 @VEC $query_vec]";
+
+                // setup a hash index:
+                expect(
+                    await GlideFt.create(
+                        client,
+                        index,
+                        [
+                            {
+                                type: "VECTOR",
+                                name: "vec",
+                                alias: "VEC",
+                                attributes: {
+                                    algorithm: "HNSW",
+                                    distanceMetric: "L2",
+                                    dimensions: 2,
+                                },
+                            },
+                        ],
+                        {
+                            dataType: "HASH",
+                            prefixes: [prefix],
+                        },
+                    ),
+                ).toEqual("OK");
+
+                const binaryValue1 = Buffer.alloc(8);
+                expect(
+                    await client.hset(Buffer.from(prefix + "0"), [
+                        // value of <Buffer 00 00 00 00 00 00 00 00 00>
+                        { field: "vec", value: binaryValue1 },
+                    ]),
+                ).toEqual(1);
+
+                const binaryValue2: Buffer = Buffer.alloc(8);
+                binaryValue2[6] = 0x80;
+                binaryValue2[7] = 0xbf;
+                expect(
+                    await client.hset(Buffer.from(prefix + "1"), [
+                        // value of <Buffer 00 00 00 00 00 00 00 80 BF>
+                        { field: "vec", value: binaryValue2 },
+                    ]),
+                ).toEqual(1);
+
+                // let server digest the data and update index
+                const sleep = new Promise((resolve) =>
+                    setTimeout(resolve, DATA_PROCESSING_TIMEOUT),
+                );
+                await sleep;
+
+                // With the `COUNT` parameters - returns only the count
+                const optionsWithCount: FtSearchOptions = {
+                    params: [{ key: "query_vec", value: binaryValue1 }],
+                    timeout: 10000,
+                    count: true,
+                };
+                const binaryResultCount: FtSearchReturnType =
+                    await GlideFt.search(client, index, query, {
+                        decoder: Decoder.Bytes,
+                        ...optionsWithCount,
+                    });
+                expect(binaryResultCount).toEqual([2]);
+
+                const options: FtSearchOptions = {
+                    params: [{ key: "query_vec", value: binaryValue1 }],
+                    timeout: 10000,
+                };
+                const binaryResult: FtSearchReturnType = await GlideFt.search(
+                    client,
+                    index,
+                    query,
+                    {
+                        decoder: Decoder.Bytes,
+                        ...options,
+                    },
+                );
+
+                const expectedBinaryResult: FtSearchReturnType = [
+                    2,
+                    [
+                        {
+                            key: Buffer.from(prefix + "1"),
+                            value: [
+                                {
+                                    key: Buffer.from("vec"),
+                                    value: binaryValue2,
+                                },
+                                {
+                                    key: Buffer.from("__VEC_score"),
+                                    value: Buffer.from("1"),
+                                },
+                            ],
+                        },
+                        {
+                            key: Buffer.from(prefix + "0"),
+                            value: [
+                                {
+                                    key: Buffer.from("vec"),
+                                    value: binaryValue1,
+                                },
+                                {
+                                    key: Buffer.from("__VEC_score"),
+                                    value: Buffer.from("0"),
+                                },
+                            ],
+                        },
+                    ],
+                ];
+                expect(binaryResult).toEqual(expectedBinaryResult);
+
+                const binaryProfileResult: [
+                    FtSearchReturnType,
+                    Record<string, number>,
+                ] = await GlideFt.profileSearch(client, index, query, {
+                    decoder: Decoder.Bytes,
+                    ...options,
+                });
+                // profile metrics and categories are subject to change
+                expect(binaryProfileResult[1]).toBeTruthy();
+                expect(binaryProfileResult[0]).toEqual(expectedBinaryResult);
+            },
+        );
+
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            "FT.SEARCH binary on JSON",
             async (protocol) => {
                 client = await GlideClusterClient.createClient(
                     getClientConfigurationOption(
@@ -2589,66 +3156,96 @@ describe("Server Module Tests", () => {
                     ),
                 );
 
-                const index = uuidv4();
+                const prefix = "{" + uuidv4() + "}:";
+                const index = prefix + "index";
+                const query = "*";
+
+                // set string values
                 expect(
-                    await GlideFt.create(
+                    await GlideJson.set(
                         client,
-                        Buffer.from(index),
-                        [
-                            {
-                                type: "VECTOR",
-                                name: "$.vec",
-                                alias: "VEC",
-                                attributes: {
-                                    algorithm: "HNSW",
-                                    distanceMetric: "COSINE",
-                                    dimensions: 42,
-                                },
-                            },
-                            { type: "TEXT", name: "$.name" },
-                        ],
-                        { dataType: "JSON", prefixes: ["123"] },
+                        prefix + "1",
+                        "$",
+                        '[{"arr": 42}, {"val": "hello"}, {"val": "world"}]',
                     ),
                 ).toEqual("OK");
 
-                let response = await GlideFt.info(client, Buffer.from(index));
-
-                expect(response).toMatchObject({
-                    index_name: index,
-                    key_type: "JSON",
-                    key_prefixes: ["123"],
-                    fields: [
-                        {
-                            identifier: "$.name",
-                            type: "TEXT",
-                            field_name: "$.name",
-                            option: "",
-                        },
-                        {
-                            identifier: "$.vec",
-                            type: "VECTOR",
-                            field_name: "VEC",
-                            option: "",
-                            vector_params: {
-                                distance_metric: "COSINE",
-                                dimension: 42,
+                // setup a json index:
+                expect(
+                    await GlideFt.create(
+                        client,
+                        index,
+                        [
+                            {
+                                type: "NUMERIC",
+                                name: "$..arr",
+                                alias: "arr",
                             },
+                            {
+                                type: "TEXT",
+                                name: "$..val",
+                                alias: "val",
+                            },
+                        ],
+                        {
+                            dataType: "JSON",
+                            prefixes: [prefix],
+                        },
+                    ),
+                ).toEqual("OK");
+
+                // let server digest the data and update index
+                const sleep = new Promise((resolve) =>
+                    setTimeout(resolve, DATA_PROCESSING_TIMEOUT),
+                );
+                await sleep;
+
+                const optionsWithLimit: FtSearchOptions = {
+                    returnFields: [
+                        { fieldIdentifier: "$..arr", alias: "myarr" },
+                        { fieldIdentifier: "$..val", alias: "myval" },
+                    ],
+                    timeout: 10000,
+                    limit: { offset: 0, count: 2 },
+                };
+                const stringResult: FtSearchReturnType = await GlideFt.search(
+                    client,
+                    index,
+                    query,
+                    optionsWithLimit,
+                );
+                const expectedStringResult: FtSearchReturnType = [
+                    1,
+                    [
+                        {
+                            key: prefix + "1",
+                            value: [
+                                {
+                                    key: "myarr",
+                                    value: "42",
+                                },
+                                {
+                                    key: "myval",
+                                    value: "hello",
+                                },
+                            ],
                         },
                     ],
-                });
+                ];
+                expect(stringResult).toEqual(expectedStringResult);
 
-                response = await GlideFt.info(client, index, {
-                    decoder: Decoder.Bytes,
-                });
-                expect(response).toMatchObject({
-                    index_name: Buffer.from(index),
-                });
-
-                expect(await GlideFt.dropindex(client, index)).toEqual("OK");
-                // querying a missing index
-                await expect(GlideFt.info(client, index)).rejects.toThrow(
-                    "Index not found",
+                const stringProfileResult: [
+                    FtSearchReturnType,
+                    Record<string, number>,
+                ] = await GlideFt.profileSearch(
+                    client,
+                    index,
+                    query,
+                    optionsWithLimit,
                 );
+                // profile metrics and categories are subject to change
+                expect(stringProfileResult[1]).toBeTruthy();
+                expect(stringProfileResult[0]).toEqual(expectedStringResult);
             },
         );
 
@@ -2715,209 +3312,6 @@ describe("Server Module Tests", () => {
             await expect(
                 GlideFt.explaincli(client, index, "*"),
             ).rejects.toThrow("Index not found");
-        });
-
-        it("FT.SEARCH binary test", async () => {
-            client = await GlideClusterClient.createClient(
-                getClientConfigurationOption(
-                    cluster.getAddresses(),
-                    ProtocolVersion.RESP3,
-                ),
-            );
-            const prefix = "{" + uuidv4() + "}:";
-            const index = prefix + "index";
-
-            // setup a hash index:
-            expect(
-                await GlideFt.create(
-                    client,
-                    index,
-                    [
-                        {
-                            type: "VECTOR",
-                            name: "vec",
-                            alias: "VEC",
-                            attributes: {
-                                algorithm: "HNSW",
-                                distanceMetric: "L2",
-                                dimensions: 2,
-                            },
-                        },
-                    ],
-                    {
-                        dataType: "HASH",
-                        prefixes: [prefix],
-                    },
-                ),
-            ).toEqual("OK");
-
-            const binaryValue1 = Buffer.alloc(8);
-            expect(
-                await client.hset(Buffer.from(prefix + "0"), [
-                    // value of <Buffer 00 00 00 00 00 00 00 00 00>
-                    { field: "vec", value: binaryValue1 },
-                ]),
-            ).toEqual(1);
-
-            const binaryValue2: Buffer = Buffer.alloc(8);
-            binaryValue2[6] = 0x80;
-            binaryValue2[7] = 0xbf;
-            expect(
-                await client.hset(Buffer.from(prefix + "1"), [
-                    // value of <Buffer 00 00 00 00 00 00 00 80 BF>
-                    { field: "vec", value: binaryValue2 },
-                ]),
-            ).toEqual(1);
-
-            // let server digest the data and update index
-            const sleep = new Promise((resolve) =>
-                setTimeout(resolve, DATA_PROCESSING_TIMEOUT),
-            );
-            await sleep;
-
-            // With the `COUNT` parameters - returns only the count
-            const binaryResultCount: FtSearchReturnType = await GlideFt.search(
-                client,
-                index,
-                "*=>[KNN 2 @VEC $query_vec]",
-                {
-                    params: [{ key: "query_vec", value: binaryValue1 }],
-                    timeout: 10000,
-                    count: true,
-                    decoder: Decoder.Bytes,
-                },
-            );
-            expect(binaryResultCount).toEqual([2]);
-
-            const binaryResult: FtSearchReturnType = await GlideFt.search(
-                client,
-                index,
-                "*=>[KNN 2 @VEC $query_vec]",
-                {
-                    params: [{ key: "query_vec", value: binaryValue1 }],
-                    timeout: 10000,
-                    decoder: Decoder.Bytes,
-                },
-            );
-
-            const expectedBinaryResult: FtSearchReturnType = [
-                2,
-                [
-                    {
-                        key: Buffer.from(prefix + "1"),
-                        value: [
-                            {
-                                key: Buffer.from("vec"),
-                                value: binaryValue2,
-                            },
-                            {
-                                key: Buffer.from("__VEC_score"),
-                                value: Buffer.from("1"),
-                            },
-                        ],
-                    },
-                    {
-                        key: Buffer.from(prefix + "0"),
-                        value: [
-                            {
-                                key: Buffer.from("vec"),
-                                value: binaryValue1,
-                            },
-                            {
-                                key: Buffer.from("__VEC_score"),
-                                value: Buffer.from("0"),
-                            },
-                        ],
-                    },
-                ],
-            ];
-            expect(binaryResult).toEqual(expectedBinaryResult);
-        });
-
-        it("FT.SEARCH string test", async () => {
-            client = await GlideClusterClient.createClient(
-                getClientConfigurationOption(
-                    cluster.getAddresses(),
-                    ProtocolVersion.RESP3,
-                ),
-            );
-
-            const prefix = "{" + uuidv4() + "}:";
-            const index = prefix + "index";
-
-            // set string values
-            expect(
-                await GlideJson.set(
-                    client,
-                    prefix + "1",
-                    "$",
-                    '[{"arr": 42}, {"val": "hello"}, {"val": "world"}]',
-                ),
-            ).toEqual("OK");
-
-            // setup a json index:
-            expect(
-                await GlideFt.create(
-                    client,
-                    index,
-                    [
-                        {
-                            type: "NUMERIC",
-                            name: "$..arr",
-                            alias: "arr",
-                        },
-                        {
-                            type: "TEXT",
-                            name: "$..val",
-                            alias: "val",
-                        },
-                    ],
-                    {
-                        dataType: "JSON",
-                        prefixes: [prefix],
-                    },
-                ),
-            ).toEqual("OK");
-
-            // let server digest the data and update index
-            const sleep = new Promise((resolve) =>
-                setTimeout(resolve, DATA_PROCESSING_TIMEOUT),
-            );
-            await sleep;
-
-            const stringResult: FtSearchReturnType = await GlideFt.search(
-                client,
-                index,
-                "*",
-                {
-                    returnFields: [
-                        { fieldIdentifier: "$..arr", alias: "myarr" },
-                        { fieldIdentifier: "$..val", alias: "myval" },
-                    ],
-                    timeout: 10000,
-                    decoder: Decoder.String,
-                    limit: { offset: 0, count: 2 },
-                },
-            );
-            const expectedStringResult: FtSearchReturnType = [
-                1,
-                [
-                    {
-                        key: prefix + "1",
-                        value: [
-                            {
-                                key: "myarr",
-                                value: "42",
-                            },
-                            {
-                                key: "myval",
-                                value: "hello",
-                            },
-                        ],
-                    },
-                ],
-            ];
-            expect(stringResult).toEqual(expectedStringResult);
         });
 
         it("FT.ALIASADD, FT.ALIASUPDATE and FT.ALIASDEL test", async () => {
@@ -2996,6 +3390,67 @@ describe("Server Module Tests", () => {
             expect(await GlideFt.dropindex(client, newIndex)).toEqual("OK");
             expect(await client.customCommand(["FT._LIST"])).not.toContain(
                 newIndex,
+            );
+        });
+
+        it("FT._ALIASLIST test", async () => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+            const index1 = uuidv4();
+            const alias1 = uuidv4() + "-alias";
+            const index2 = uuidv4();
+            const alias2 = uuidv4() + "-alias";
+
+            //Create the 2 test indexes.
+            expect(
+                await GlideFt.create(client, index1, [
+                    { type: "NUMERIC", name: "published_at" },
+                    { type: "TAG", name: "category" },
+                ]),
+            ).toEqual("OK");
+            expect(
+                await GlideFt.create(client, index2, [
+                    { type: "NUMERIC", name: "published_at" },
+                    { type: "TAG", name: "category" },
+                ]),
+            ).toEqual("OK");
+
+            //Check if the two indexes created successfully.
+            expect(await client.customCommand(["FT._LIST"])).toContain(index1);
+            expect(await client.customCommand(["FT._LIST"])).toContain(index2);
+
+            //Add aliases to the 2 indexes.
+            expect(await GlideFt.aliasadd(client, index1, alias1)).toBe("OK");
+            expect(await GlideFt.aliasadd(client, index2, alias2)).toBe("OK");
+
+            //Test if the aliaslist command return the added alias.
+            const result = await GlideFt.aliaslist(client);
+            const expected: GlideRecord<GlideString> = [
+                {
+                    key: alias2,
+                    value: index2,
+                },
+                {
+                    key: alias1,
+                    value: index1,
+                },
+            ];
+
+            const compareFunction = function (
+                a: { key: GlideString; value: GlideString },
+                b: { key: GlideString; value: GlideString },
+            ) {
+                return a.key.toString().localeCompare(b.key.toString()) > 0
+                    ? 1
+                    : -1;
+            };
+
+            expect(result.sort(compareFunction)).toEqual(
+                expected.sort(compareFunction),
             );
         });
     });

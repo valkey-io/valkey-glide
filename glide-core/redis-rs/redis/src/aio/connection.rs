@@ -24,7 +24,6 @@ use std::net::{IpAddr, SocketAddr};
 use std::pin::Pin;
 #[cfg(feature = "tokio-comp")]
 use tokio_util::codec::Decoder;
-use tracing::info;
 
 /// Represents a stateful redis TCP connection.
 #[deprecated(note = "aio::Connection is deprecated. Use aio::MultiplexedConnection instead.")]
@@ -66,7 +65,7 @@ where
             pubsub: false,
             protocol: connection_info.protocol,
         };
-        setup_connection(connection_info, &mut rv).await?;
+        setup_connection(connection_info, &mut rv, false).await?;
         Ok(rv)
     }
 
@@ -403,7 +402,7 @@ fn log_conn_creation<T>(conn_type: &str, node: T, ip: Option<IpAddr>)
 where
     T: std::fmt::Debug,
 {
-    info!(
+    tracing::debug!(
         "Creating {conn_type} connection for node: {node:?}{}",
         ip.map(|ip| format!(", IP: {:?}", ip)).unwrap_or_default()
     );

@@ -392,6 +392,44 @@ class CoreCommands(Protocol):
         type: Optional[ObjectType] = ...,
     ) -> TResult: ...
 
+    async def _update_connection_password(
+        self, password: Optional[str], immediate_auth: bool
+    ) -> TResult: ...
+
+    async def update_connection_password(
+        self, password: Optional[str], immediate_auth=False
+    ) -> TOK:
+        """
+        Update the current connection password with a new password.
+
+        **Note:** This method updates the client's internal password configuration and does
+        not perform password rotation on the server side.
+
+        This method is useful in scenarios where the server password has changed or when
+        utilizing short-lived passwords for enhanced security. It allows the client to
+        update its password to reconnect upon disconnection without the need to recreate
+        the client instance. This ensures that the internal reconnection mechanism can
+        handle reconnection seamlessly, preventing the loss of in-flight commands.
+
+        Args:
+            password (`Optional[str]`): The new password to use for the connection,
+            if `None` the password will be removed.
+            immediate_auth (`bool`):
+                - `True`: The client will authenticate immediately with the new password against all connections, Using `AUTH` command.
+                          If password supplied is an empty string, auth will not be performed and warning will be returned.
+                          The default is `False`.
+
+        Returns:
+            TOK: A simple OK response. If `immediate_auth=True` returns OK if the reauthenticate succeed.
+
+        Example:
+            >>> await client.update_connection_password("new_password", immediate_auth=True)
+            'OK'
+        """
+        return cast(
+            TOK, await self._update_connection_password(password, immediate_auth)
+        )
+
     async def set(
         self,
         key: TEncodable,

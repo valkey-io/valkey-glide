@@ -47,8 +47,16 @@ public class SharedClientTests {
         clusterClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get();
-
         clients = List.of(Arguments.of(standaloneClient), Arguments.of(clusterClient));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void validate_statistics(BaseClient client) {
+        assertFalse(client.getStatistics().isEmpty());
+        // we expect 2 items in the statistics map
+        assertEquals(2, client.getStatistics().size());
     }
 
     @AfterAll

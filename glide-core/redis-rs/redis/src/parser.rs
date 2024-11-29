@@ -633,11 +633,11 @@ mod tests {
 
     #[test]
     fn decode_resp3_push() {
-        let val = parse_redis_value(b">3\r\n+message\r\n+somechannel\r\n+this is the message\r\n")
+        let val = parse_redis_value(b">3\r\n+message\r\n+some_channel\r\n+this is the message\r\n")
             .unwrap();
         if let Value::Push { ref kind, ref data } = val {
             assert_eq!(&PushKind::Message, kind);
-            assert_eq!(Value::SimpleString("somechannel".to_string()), data[0]);
+            assert_eq!(Value::SimpleString("some_channel".to_string()), data[0]);
             assert_eq!(
                 Value::SimpleString("this is the message".to_string()),
                 data[1]

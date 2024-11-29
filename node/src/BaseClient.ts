@@ -7,6 +7,7 @@ import {
     DEFAULT_TIMEOUT_IN_MILLISECONDS,
     Script,
     StartSocketConnection,
+    getStatistics,
     valueFromSplitPointer,
 } from "glide-rs";
 import * as net from "net";
@@ -498,10 +499,74 @@ export type ReadFrom =
     | "primary"
     /** Spread the requests between all replicas in a round robin manner.
         If no replica is available, route the requests to the primary.*/
-    | "preferReplica";
+    | "preferReplica"
+    /** Spread the requests between replicas in the same client's Aviliablity zone in a round robin manner.
+        If no replica is available, route the requests to the primary.*/
+    | "AZAffinity";
 
 /**
  * Configuration settings for creating a client. Shared settings for standalone and cluster clients.
+ *
+ * @remarks
+ * The `BaseClientConfiguration` interface defines the foundational configuration options used when creating a client to connect to a Valkey server or cluster. It includes connection details, authentication, communication protocols, and various settings that influence the client's behavior and interaction with the server.
+ *
+ * ### Connection Details
+ *
+ * - **Addresses**: Use the `addresses` property to specify the hostnames and ports of the server(s) to connect to.
+ *   - **Cluster Mode**: In cluster mode, the client will discover other nodes based on the provided addresses.
+ *   - **Standalone Mode**: In standalone mode, only the provided nodes will be used.
+ *
+ * ### Security Settings
+ *
+ * - **TLS**: Enable secure communication using `useTLS`.
+ * - **Authentication**: Provide `credentials` to authenticate with the server.
+ *
+ * ### Communication Settings
+ *
+ * - **Request Timeout**: Set `requestTimeout` to specify how long the client should wait for a request to complete.
+ * - **Protocol Version**: Choose the serialization protocol using `protocol`.
+ *
+ * ### Client Identification
+ *
+ * - **Client Name**: Set `clientName` to identify the client connection.
+ *
+ * ### Read Strategy
+ *
+ * - Use `readFrom` to specify the client's read strategy (e.g., primary, preferReplica, AZAffinity).
+ *
+ * ### Availability Zone
+ *
+ * - Use `clientAz` to specify the client's availability zone, which can influence read operations when using `readFrom: 'AZAffinity'`.
+ *
+ * ### Decoder Settings
+ *
+ * - **Default Decoder**: Set `defaultDecoder` to specify how responses are decoded by default.
+ *
+ * ### Concurrency Control
+ *
+ * - **Inflight Requests Limit**: Control the number of concurrent requests using `inflightRequestsLimit`.
+ *
+ * @example
+ * ```typescript
+ * const config: BaseClientConfiguration = {
+ *   addresses: [
+ *     { host: 'redis-node-1.example.com', port: 6379 },
+ *     { host: 'redis-node-2.example.com' }, // Defaults to port 6379
+ *   ],
+ *   useTLS: true,
+ *   credentials: {
+ *     username: 'myUser',
+ *     password: 'myPassword',
+ *   },
+ *   requestTimeout: 5000, // 5 seconds
+ *   protocol: ProtocolVersion.RESP3,
+ *   clientName: 'myValkeyClient',
+ *   readFrom: ReadFrom.AZAffinity,
+ *   clientAz: 'us-east-1a',
+ *   defaultDecoder: Decoder.String,
+ *   inflightRequestsLimit: 1000,
+ * };
+ * ```
  */
 export interface BaseClientConfiguration {
     /**
@@ -571,6 +636,18 @@ export interface BaseClientConfiguration {
      * used.
      */
     inflightRequestsLimit?: number;
+    /**
+     * Availability Zone of the client.
+     * If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within the specified AZ if exits.
+     *
+     * @example
+     * ```typescript
+     * // Example configuration for setting client availability zone and read strategy
+     * configuration.clientAz = 'us-east-1a'; // Sets the client's availability zone
+     * configuration.readFrom = 'AZAffinity'; // Directs read operations to nodes within the same AZ
+     * ```
+     */
+    clientAz?: string;
 }
 
 /**
@@ -716,6 +793,7 @@ export class BaseClient {
     private readonly pubsubFutures: [PromiseFunction, ErrorFunction][] = [];
     private pendingPushNotification: response.Response[] = [];
     private readonly inflightRequestsLimit: number;
+    private readonly clientAz: string | undefined;
     private config: BaseClientConfiguration | undefined;
 
     protected configurePubsub(
@@ -915,7 +993,8 @@ export class BaseClient {
             | command_request.Command
             | command_request.Command[]
             | command_request.ScriptInvocation
-            | command_request.ClusterScan,
+            | command_request.ClusterScan
+            | command_request.UpdateConnectionPassword,
         options: WritePromiseOptions = {},
     ): Promise<T> {
         const route = toProtobufRoute(options?.route);
@@ -985,7 +1064,8 @@ export class BaseClient {
             | command_request.Command
             | command_request.Command[]
             | command_request.ScriptInvocation
-            | command_request.ClusterScan,
+            | command_request.ClusterScan
+            | command_request.UpdateConnectionPassword,
         route?: command_request.Routes,
     ) {
         const message = Array.isArray(command)
@@ -1005,10 +1085,15 @@ export class BaseClient {
                       callbackIdx,
                       clusterScan: command,
                   })
-                : command_request.CommandRequest.create({
-                      callbackIdx,
-                      scriptInvocation: command,
-                  });
+                : command instanceof command_request.UpdateConnectionPassword
+                  ? command_request.CommandRequest.create({
+                        callbackIdx,
+                        updateConnectionPassword: command,
+                    })
+                  : command_request.CommandRequest.create({
+                        callbackIdx,
+                        scriptInvocation: command,
+                    });
         message.route = route;
 
         this.writeOrBufferRequest(
@@ -5986,6 +6071,7 @@ export class BaseClient {
     > = {
         primary: connection_request.ReadFrom.Primary,
         preferReplica: connection_request.ReadFrom.PreferReplica,
+        AZAffinity: connection_request.ReadFrom.AZAffinity,
     };
 
     /**
@@ -7567,6 +7653,7 @@ export class BaseClient {
             readFrom,
             authenticationInfo,
             inflightRequestsLimit: options.inflightRequestsLimit,
+            clientAz: options.clientAz ?? null,
         };
     }
 
@@ -7671,5 +7758,59 @@ export class BaseClient {
             socket.end();
             throw err;
         }
+    }
+
+    /**
+     * Update the current connection with a new password.
+     *
+     * This method is useful in scenarios where the server password has changed or when utilizing short-lived passwords for enhanced security.
+     * It allows the client to update its password to reconnect upon disconnection without the need to recreate the client instance.
+     * This ensures that the internal reconnection mechanism can handle reconnection seamlessly, preventing the loss of in-flight commands.
+     *
+     * This method updates the client's internal password configuration and does not perform password rotation on the server side.
+     *
+     * @param password - `String | null`. The new password to update the current password, or `null` to remove the current password.
+     * @param immidiateAuth - A `boolean` flag. If `true`, the client will authenticate immediately with the new password against all connections, Using `AUTH` command.
+     *                 If password supplied is an empty string, the client will not perform auth and instead a warning will be returned.
+     *                 The default is `false`.
+     *
+     * @example
+     * ```typescript
+     * await client.updateConnectionPassword("newPassword", true) // "OK"
+     * ```
+     */
+    async updateConnectionPassword(
+        password: string | null,
+        immediateAuth = false,
+    ) {
+        const updateConnectionPassword =
+            command_request.UpdateConnectionPassword.create({
+                password,
+                immediateAuth,
+            });
+
+        const response = await this.createWritePromise<GlideString>(
+            updateConnectionPassword,
+        );
+
+        if (response === "OK" && !this.config?.credentials) {
+            this.config = {
+                ...this.config!,
+                credentials: {
+                    ...this.config!.credentials,
+                    password: password ? password : "",
+                },
+            };
+        }
+
+        return response;
+    }
+    /**
+     * Return a statistics
+     *
+     * @return Return an object that contains the statistics collected internally by GLIDE core
+     */
+    public getStatistics(): object {
+        return getStatistics();
     }
 }

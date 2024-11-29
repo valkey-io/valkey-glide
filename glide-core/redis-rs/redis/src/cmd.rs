@@ -57,8 +57,8 @@ impl<'a, T: FromRedisValue> Iterator for Iter<'a, T> {
                 return None;
             }
 
-            let pcmd = self.cmd.get_packed_command_with_cursor(self.cursor)?;
-            let rv = self.con.req_packed_command(&pcmd).ok()?;
+            let packed_cmd = self.cmd.get_packed_command_with_cursor(self.cursor)?;
+            let rv = self.con.req_packed_command(&packed_cmd).ok()?;
             let (cur, batch): (u64, Vec<T>) = from_owned_redis_value(rv).ok()?;
 
             self.cursor = cur;
@@ -204,14 +204,14 @@ fn args_len<'a, I>(args: I, cursor: u64) -> usize
 where
     I: IntoIterator<Item = Arg<&'a [u8]>> + ExactSizeIterator,
 {
-    let mut totlen = 1 + countdigits(args.len()) + 2;
+    let mut total_len = countdigits(args.len()).saturating_add(3);
     for item in args {
-        totlen += bulklen(match item {
+        total_len += bulklen(match item {
             Arg::Cursor => countdigits(cursor as usize),
             Arg::Simple(val) => val.len(),
         });
     }
-    totlen
+    total_len
 }
 
 pub(crate) fn cmd_len(cmd: &Cmd) -> usize {
@@ -231,9 +231,9 @@ fn write_command_to_vec<'a, I>(cmd: &mut Vec<u8>, args: I, cursor: u64)
 where
     I: IntoIterator<Item = Arg<&'a [u8]>> + Clone + ExactSizeIterator,
 {
-    let totlen = args_len(args.clone(), cursor);
+    let total_len = args_len(args.clone(), cursor);
 
-    cmd.reserve(totlen);
+    cmd.reserve(total_len);
 
     write_command(cmd, args, cursor).unwrap()
 }
@@ -287,7 +287,7 @@ impl Default for Cmd {
 }
 
 /// A command acts as a builder interface to creating encoded redis
-/// requests.  This allows you to easiy assemble a packed command
+/// requests.  This allows you to easily assemble a packed command
 /// by chaining arguments together.
 ///
 /// Basic example:
@@ -324,7 +324,7 @@ impl Cmd {
         }
     }
 
-    /// Creates a new empty command, with at least the requested capcity.
+    /// Creates a new empty command, with at least the requested capacity.
     pub fn with_capacity(arg_count: usize, size_of_data: usize) -> Cmd {
         Cmd {
             data: Vec::with_capacity(size_of_data),
@@ -448,7 +448,7 @@ impl Cmd {
     ///
     /// This is useful for commands such as `SSCAN`, `SCAN` and others.
     ///
-    /// One speciality of this function is that it will check if the response
+    /// One specialty of this function is that it will check if the response
     /// looks like a cursor or not and always just looks at the payload.
     /// This way you can use the function the same for responses in the
     /// format of `KEYS` (just a list) as well as `SSCAN` (which returns a
@@ -481,7 +481,7 @@ impl Cmd {
     ///
     /// This is useful for commands such as `SSCAN`, `SCAN` and others in async contexts.
     ///
-    /// One speciality of this function is that it will check if the response
+    /// One specialty of this function is that it will check if the response
     /// looks like a cursor or not and always just looks at the payload.
     /// This way you can use the function the same for responses in the
     /// format of `KEYS` (just a list) as well as `SSCAN` (which returns a

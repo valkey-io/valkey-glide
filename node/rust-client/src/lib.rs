@@ -1,5 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+use glide_core::Telemetry;
 use redis::GlideConnectionOptions;
 
 #[cfg(not(target_env = "msvc"))]
@@ -482,4 +483,15 @@ impl Drop for ClusterScanCursor {
     fn drop(&mut self) {
         glide_core::cluster_scan_container::remove_scan_state_cursor(self.cursor.clone());
     }
+}
+
+#[napi]
+pub fn get_statistics(env: Env) -> Result<JsObject> {
+    let total_connections = Telemetry::total_connections().to_string();
+    let total_clients = Telemetry::total_clients().to_string();
+    let mut stats: JsObject = env.create_object()?;
+    stats.set_named_property("total_connections", total_connections)?;
+    stats.set_named_property("total_clients", total_clients)?;
+
+    Ok(stats)
 }

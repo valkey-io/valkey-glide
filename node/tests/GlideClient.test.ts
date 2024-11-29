@@ -30,7 +30,6 @@ import { ValkeyCluster } from "../../utils/TestUtils.js";
 import { command_request } from "../src/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import {
-    DumpAndRestoreTest,
     checkFunctionListResponse,
     checkFunctionStatsResponse,
     convertStringArrayToBuffer,
@@ -52,10 +51,20 @@ const TIMEOUT = 50000;
 describe("GlideClient", () => {
     let testsFailed = 0;
     let cluster: ValkeyCluster;
+    let azCluster: ValkeyCluster;
     let client: GlideClient;
+    let azClient: GlideClient;
     beforeAll(async () => {
         const standaloneAddresses = global.STAND_ALONE_ENDPOINT;
         cluster = standaloneAddresses
+            ? await ValkeyCluster.initFromExistingCluster(
+                  false,
+                  parseEndpoints(standaloneAddresses),
+                  getServerVersion,
+              )
+            : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
+
+        azCluster = standaloneAddresses
             ? await ValkeyCluster.initFromExistingCluster(
                   false,
                   parseEndpoints(standaloneAddresses),
@@ -66,13 +75,16 @@ describe("GlideClient", () => {
 
     afterEach(async () => {
         await flushAndCloseClient(false, cluster.getAddresses(), client);
+        await flushAndCloseClient(false, azCluster.getAddresses(), azClient);
     });
 
     afterAll(async () => {
         if (testsFailed === 0) {
             await cluster.close();
+            await azCluster.close();
         } else {
             await cluster.close(true);
+            await azCluster.close();
         }
     }, TIMEOUT);
 
@@ -283,32 +295,27 @@ describe("GlideClient", () => {
             client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            const bytesTransaction = new Transaction();
-            await client.set("key", "value");
-            const dumpValue: Buffer = (await client.dump("key")) as Buffer;
-            await client.del(["key"]);
-            const expectedBytesRes = await DumpAndRestoreTest(
-                bytesTransaction,
-                dumpValue,
-            );
-            bytesTransaction.select(0);
-            const result = await client.exec(bytesTransaction, {
-                decoder: Decoder.Bytes,
-            });
-            expectedBytesRes.push(["select(0)", "OK"]);
+            const key1 = uuidv4();
+            const key2 = uuidv4();
+            const value = uuidv4();
 
-            validateTransactionResponse(result, expectedBytesRes);
-
-            const stringTransaction = new Transaction();
-            await DumpAndRestoreTest(stringTransaction, dumpValue);
-            stringTransaction.select(0);
+            const transaction1 = new Transaction().set(key1, value).dump(key1);
 
             // Since DUMP gets binary results, we cannot use the string decoder here, so we expected to get an error.
             await expect(
-                client.exec(stringTransaction, { decoder: Decoder.String }),
-            ).rejects.toThrowError(
-                /invalid utf-8 sequence of 1 bytes from index/,
-            );
+                client.exec(transaction1, { decoder: Decoder.String }),
+            ).rejects.toThrow("invalid utf-8 sequence of");
+
+            const result = await client.exec(transaction1, {
+                decoder: Decoder.Bytes,
+            });
+            expect(result?.[0]).toEqual("OK");
+            const dump = result?.[1] as Buffer;
+
+            const transaction2 = new Transaction().restore(key2, 0, dump);
+            expect(await client.exec(transaction2)).toEqual(["OK"]);
+
+            expect(value).toEqual(await client.get(key2));
 
             client.close();
         },
@@ -1506,7 +1513,6 @@ describe("GlideClient", () => {
             }
         },
     );
-
     runBaseTests({
         init: async (protocol, configOverrides) => {
             const config = getClientConfigurationOption(
@@ -1514,10 +1520,18 @@ describe("GlideClient", () => {
                 protocol,
                 configOverrides,
             );
+            client = await GlideClient.createClient(config);
+
+            const configNew = getClientConfigurationOption(
+                azCluster.getAddresses(),
+                protocol,
+                configOverrides,
+            );
 
             testsFailed += 1;
+            azClient = await GlideClient.createClient(configNew);
             client = await GlideClient.createClient(config);
-            return { client, cluster };
+            return { client, cluster, azClient, azCluster };
         },
         close: (testSucceeded: boolean) => {
             if (testSucceeded) {

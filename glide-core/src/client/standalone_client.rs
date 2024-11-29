@@ -3,6 +3,7 @@
 use super::get_redis_connection_info;
 use super::reconnecting_connection::{ReconnectReason, ReconnectingConnection};
 use super::{ConnectionRequest, NodeAddress, TlsMode};
+use crate::client::types::ReadFrom as ClientReadFrom;
 use crate::retry_strategies::RetryStrategy;
 use futures::{future, stream, StreamExt};
 use logger_core::log_debug;
@@ -12,6 +13,7 @@ use redis::aio::ConnectionLike;
 use redis::cluster_routing::{self, is_readonly_cmd, ResponsePolicy, Routable, RoutingInfo};
 use redis::{PushInfo, RedisError, RedisResult, Value};
 use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use telemetrylib::Telemetry;
 use tokio::sync::mpsc;
@@ -21,7 +23,11 @@ use tokio::task;
 enum ReadFrom {
     Primary,
     PreferReplica {
-        latest_read_replica_index: Arc<std::sync::atomic::AtomicUsize>,
+        latest_read_replica_index: Arc<AtomicUsize>,
+    },
+    AZAffinity {
+        client_az: String,
+        last_read_replica_index: Arc<AtomicUsize>,
     },
 }
 
@@ -119,6 +125,11 @@ impl StandaloneClient {
         // randomize pubsub nodes, maybe a batter option is to always use the primary
         let pubsub_node_index = rand::thread_rng().gen_range(0..node_count);
         let pubsub_addr = &connection_request.addresses[pubsub_node_index];
+        let discover_az = matches!(
+            connection_request.read_from,
+            Some(ClientReadFrom::AZAffinity(_))
+        );
+
         let mut stream = stream::iter(connection_request.addresses.iter())
             .map(|address| async {
                 get_connection_and_replication_info(
@@ -131,6 +142,7 @@ impl StandaloneClient {
                     },
                     tls_mode.unwrap_or(TlsMode::NoTls),
                     &push_sender,
+                    discover_az,
                 )
                 .await
                 .map_err(|err| (format!("{}:{}", address.host, address.port), err))
@@ -220,7 +232,7 @@ impl StandaloneClient {
         &self,
         latest_read_replica_index: &Arc<AtomicUsize>,
     ) -> &ReconnectingConnection {
-        let initial_index = latest_read_replica_index.load(std::sync::atomic::Ordering::Relaxed);
+        let initial_index = latest_read_replica_index.load(Ordering::Relaxed);
         let mut check_count = 0;
         loop {
             check_count += 1;
@@ -240,15 +252,53 @@ impl StandaloneClient {
                 let _ = latest_read_replica_index.compare_exchange_weak(
                     initial_index,
                     index,
-                    std::sync::atomic::Ordering::Relaxed,
-                    std::sync::atomic::Ordering::Relaxed,
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
                 );
                 return connection;
             }
         }
     }
 
-    fn get_connection(&self, readonly: bool) -> &ReconnectingConnection {
+    async fn round_robin_read_from_replica_az_awareness(
+        &self,
+        latest_read_replica_index: &Arc<AtomicUsize>,
+        client_az: String,
+    ) -> &ReconnectingConnection {
+        let initial_index = latest_read_replica_index.load(Ordering::Relaxed);
+        let mut retries = 0usize;
+
+        loop {
+            retries = retries.saturating_add(1);
+            // Looped through all replicas; no connected replica found in the same AZ.
+            if retries > self.inner.nodes.len() {
+                // Attempt a fallback to any available replica in other AZs or primary.
+                return self.round_robin_read_from_replica(latest_read_replica_index);
+            }
+
+            // Calculate index based on initial index and check count.
+            let index = (initial_index + retries) % self.inner.nodes.len();
+            let replica = &self.inner.nodes[index];
+
+            // Attempt to get a connection and retrieve the replica's AZ.
+            if let Ok(connection) = replica.get_connection().await {
+                if let Some(replica_az) = connection.get_az().as_deref() {
+                    if replica_az == client_az {
+                        // Update `latest_used_replica` with the index of this replica.
+                        let _ = latest_read_replica_index.compare_exchange_weak(
+                            initial_index,
+                            index,
+                            Ordering::Relaxed,
+                            Ordering::Relaxed,
+                        );
+                        return replica;
+                    }
+                }
+            }
+        }
+    }
+
+    async fn get_connection(&self, readonly: bool) -> &ReconnectingConnection {
         if self.inner.nodes.len() == 1 || !readonly {
             return self.get_primary_connection();
         }
@@ -258,6 +308,16 @@ impl StandaloneClient {
             ReadFrom::PreferReplica {
                 latest_read_replica_index,
             } => self.round_robin_read_from_replica(latest_read_replica_index),
+            ReadFrom::AZAffinity {
+                client_az,
+                last_read_replica_index,
+            } => {
+                self.round_robin_read_from_replica_az_awareness(
+                    last_read_replica_index,
+                    client_az.to_string(),
+                )
+                .await
+            }
         }
     }
 
@@ -353,7 +413,7 @@ impl StandaloneClient {
         cmd: &redis::Cmd,
         readonly: bool,
     ) -> RedisResult<Value> {
-        let reconnecting_connection = self.get_connection(readonly);
+        let reconnecting_connection = self.get_connection(readonly).await;
         Self::send_request(cmd, reconnecting_connection).await
     }
 
@@ -469,6 +529,20 @@ impl StandaloneClient {
             }
         });
     }
+
+    /// Update the password used to authenticate with the servers.
+    /// If the password is `None`, the password will be removed.
+    pub async fn update_connection_password(
+        &mut self,
+        password: Option<String>,
+    ) -> RedisResult<Value> {
+        self.get_connection(false)
+            .await
+            .get_connection()
+            .await?
+            .update_connection_password(password.clone())
+            .await
+    }
 }
 
 async fn get_connection_and_replication_info(
@@ -477,6 +551,7 @@ async fn get_connection_and_replication_info(
     connection_info: &redis::RedisConnectionInfo,
     tls_mode: TlsMode,
     push_sender: &Option<mpsc::UnboundedSender<PushInfo>>,
+    discover_az: bool,
 ) -> Result<(ReconnectingConnection, Value), (ReconnectingConnection, RedisError)> {
     let result = ReconnectingConnection::new(
         address,
@@ -484,6 +559,7 @@ async fn get_connection_and_replication_info(
         connection_info.clone(),
         tls_mode,
         push_sender.clone(),
+        discover_az,
     )
     .await;
     let reconnecting_connection = match result {
@@ -517,6 +593,10 @@ fn get_read_from(read_from: Option<super::ReadFrom>) -> ReadFrom {
         Some(super::ReadFrom::Primary) => ReadFrom::Primary,
         Some(super::ReadFrom::PreferReplica) => ReadFrom::PreferReplica {
             latest_read_replica_index: Default::default(),
+        },
+        Some(super::ReadFrom::AZAffinity(az)) => ReadFrom::AZAffinity {
+            client_az: az,
+            last_read_replica_index: Default::default(),
         },
         None => ReadFrom::Primary,
     }

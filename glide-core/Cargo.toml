@@ -24,7 +24,8 @@ logger_core = { path = "../logger_core" }
 dispose = "0.5.0"
 tokio-util = { version = "^0.7", features = ["rt"], optional = true }
 num_cpus = { version = "^1.15", optional = true }
-tokio-retry = "0.3.0"
+tokio-retry2 = {version = "0.5", features = ["jitter"]}
+
 protobuf = { version = "3", features = [
     "bytes",
     "with-bytes",

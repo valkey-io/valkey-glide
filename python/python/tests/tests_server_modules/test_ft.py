@@ -8,7 +8,7 @@ from typing import List, Mapping, Union, cast
 import pytest
 from glide.async_commands.command_args import OrderBy
 from glide.async_commands.server_modules import ft
-from glide.async_commands.server_modules import json as GlideJson
+from glide.async_commands.server_modules import glide_json as GlideJson
 from glide.async_commands.server_modules.ft_options.ft_aggregate_options import (
     FtAggregateApply,
     FtAggregateGroupBy,
@@ -1063,3 +1063,30 @@ class TestFt:
                 "imdb_id": "tt0086190",
             },
         )
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_ft_aliaslist(self, glide_client: GlideClusterClient):
+        index_name: str = str(uuid.uuid4())
+        alias: str = "alias"
+        # Create an index and add an alias.
+        await TestFt._create_test_index_hash_type(self, glide_client, index_name)
+        assert await ft.aliasadd(glide_client, alias, index_name) == OK
+
+        # Create a second index and add an alias.
+        index_name_string = str(uuid.uuid4())
+        index_name_bytes = bytes(index_name_string, "utf-8")
+        alias_name_bytes = b"alias-bytes"
+        await TestFt._create_test_index_hash_type(self, glide_client, index_name_string)
+        assert await ft.aliasadd(glide_client, alias_name_bytes, index_name_bytes) == OK
+
+        # List all aliases.
+        result = await ft.aliaslist(glide_client)
+        assert result == {
+            b"alias": index_name.encode("utf-8"),
+            b"alias-bytes": index_name_bytes,
+        }
+
+        # Drop all indexes.
+        assert await ft.dropindex(glide_client, index_name) == OK
+        assert await ft.dropindex(glide_client, index_name_string) == OK

@@ -1131,8 +1131,8 @@ pub(crate) fn convert_to_expected_type(
                 let res = vec![
                     convert_to_expected_type(array.remove(0), *type_of_query)?,
                     convert_to_expected_type(array.remove(0), Some(ExpectedReturnType::Map {
-                    key_type: &None,
-                    value_type: &None,
+                    key_type: &Some(ExpectedReturnType::SimpleString),
+                    value_type: &Some(ExpectedReturnType::Double),
                 }))?];
 
                 Ok(Value::Array(res))

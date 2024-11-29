@@ -16,7 +16,7 @@ use telemetrylib::Telemetry;
 use tokio::sync::{mpsc, Notify};
 use tokio::task;
 use tokio::time::timeout;
-use tokio_retry::Retry;
+use tokio_retry2::{Retry, RetryError};
 
 use super::{run_with_timeout, DEFAULT_CONNECTION_ATTEMPT_TIMEOUT};
 
@@ -112,6 +112,7 @@ async fn create_connection(
     connection_backend: ConnectionBackend,
     retry_strategy: RetryStrategy,
     push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
+    discover_az: bool,
 ) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
     let client = &connection_backend.connection_info;
     let connection_options = GlideConnectionOptions {
@@ -119,8 +120,13 @@ async fn create_connection(
         disconnect_notifier: Some::<Box<dyn DisconnectNotifier>>(Box::new(
             TokioDisconnectNotifier::new(),
         )),
+        discover_az,
     };
-    let action = || get_multiplexed_connection(client, &connection_options);
+    let action = || async {
+        get_multiplexed_connection(client, &connection_options)
+            .await
+            .map_err(RetryError::transient)
+    };
 
     match Retry::spawn(retry_strategy.get_iterator(), action).await {
         Ok(connection) => {
@@ -199,6 +205,7 @@ impl ReconnectingConnection {
         redis_connection_info: RedisConnectionInfo,
         tls_mode: TlsMode,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
+        discover_az: bool,
     ) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
         log_debug(
             "connection creation",
@@ -211,7 +218,7 @@ impl ReconnectingConnection {
             connection_available_signal: ManualResetEvent::new(true),
             client_dropped_flagged: AtomicBool::new(false),
         };
-        create_connection(backend, connection_retry_strategy, push_sender).await
+        create_connection(backend, connection_retry_strategy, push_sender, discover_az).await
     }
 
     pub(crate) fn node_address(&self) -> String {
