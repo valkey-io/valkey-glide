@@ -1,5 +1,6 @@
-use redis::GlideConnectionOptions;
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
+use redis::GlideConnectionOptions;
 
 #[cfg(not(target_env = "msvc"))]
 use tikv_jemallocator::Jemalloc;
