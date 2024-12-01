@@ -416,7 +416,7 @@ mod test_cluster_scan_async {
             .allow_non_covered_slots(true)
             .build();
         loop {
-            let res = connection
+            let res: Result<(ScanStateRC, Vec<Value>), redis::RedisError> = connection
                 .cluster_scan(scan_state_rc.clone(), args.clone())
                 .await;
             let (next_cursor, scan_keys): (ScanStateRC, Vec<Value>) = match res {
