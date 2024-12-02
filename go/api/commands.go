@@ -132,9 +132,12 @@ type StringCommands interface {
 	// Sets multiple keys to multiple values in a single operation.
 	//
 	// Note:
-	//  When in cluster mode, the command may route to multiple nodes when keys in keyValueMap map to different hash slots.
-	//
-	// See [valkey.io] for details.
+	//  In cluster mode, if keys in `keyValueMap` map to different hash slots, the command
+	//  will be split across these slots and executed separately for each. This means the command
+	//  is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+	//  call will return the first encountered error, even though some requests may have succeeded
+	//  while others did not. If this behavior impacts your application logic, consider splitting
+	//  the request into sub-requests per slot to ensure atomicity.
 	//
 	// Parameters:
 	//  keyValueMap - A key-value map consisting of keys and their respective values to set.
@@ -153,9 +156,12 @@ type StringCommands interface {
 	// Retrieves the values of multiple keys.
 	//
 	// Note:
-	//  When in cluster mode, the command may route to multiple nodes when keys map to different hash slots.
-	//
-	// See [valkey.io] for details.
+	//  In cluster mode, if keys in `keyValueMap` map to different hash slots, the command
+	//  will be split across these slots and executed separately for each. This means the command
+	//  is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+	//  call will return the first encountered error, even though some requests may have succeeded
+	//  while others did not. If this behavior impacts your application logic, consider splitting
+	//  the request into sub-requests per slot to ensure atomicity.
 	//
 	// Parameters:
 	//  keys - A list of keys to retrieve values for.
@@ -180,9 +186,12 @@ type StringCommands interface {
 	// the entire operation fails.
 	//
 	// Note:
-	//  When in cluster mode, all keys in keyValueMap must map to the same hash slot.
-	//
-	// See [valkey.io] for details.
+	//  In cluster mode, if keys in `keyValueMap` map to different hash slots, the command
+	//  will be split across these slots and executed separately for each. This means the command
+	//  is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+	//  call will return the first encountered error, even though some requests may have succeeded
+	//  while others did not. If this behavior impacts your application logic, consider splitting
+	//  the request into sub-requests per slot to ensure atomicity.
 	//
 	// Parameters:
 	//  keyValueMap - A key-value map consisting of keys and their respective values to set.
@@ -408,9 +417,12 @@ type StringCommands interface {
 	//  Valkey 7.0 and above.
 	//
 	// Note:
-	//  When in cluster mode, key1 and key2 must map to the same hash slot.
-	//
-	// See [valkey.io] for details.
+	//  In cluster mode, if keys in `keyValueMap` map to different hash slots, the command
+	//  will be split across these slots and executed separately for each. This means the command
+	//  is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+	//  call will return the first encountered error, even though some requests may have succeeded
+	//  while others did not. If this behavior impacts your application logic, consider splitting
+	//  the request into sub-requests per slot to ensure atomicity.
 	//
 	// Parameters:
 	//  key1 - The key that stores the first string.
