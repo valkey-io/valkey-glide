@@ -33,18 +33,12 @@ func NewGlideClient(config *GlideClientConfiguration) (*GlideClient, error) {
 // For example, to return a list of all pub/sub clients:
 //
 //	client.CustomCommand([]string{"CLIENT", "LIST","TYPE", "PUBSUB"})
-//
-// TODO: Add support for complex return types.
 func (client *GlideClient) CustomCommand(args []string) (interface{}, error) {
 	res, err := client.executeCommand(C.CustomCommand, args)
 	if err != nil {
 		return nil, err
 	}
-	resString, err := handleStringOrNullResponse(res)
-	if err != nil {
-		return nil, err
-	}
-	return resString.Value(), err
+	return handleInterfaceResponse(res)
 }
 
 // Sets configuration parameters to the specified values.
