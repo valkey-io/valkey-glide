@@ -2,7 +2,8 @@
     "type": "module",
     "dependencies": {
         "@types/node": "^20.4.8",
-    "@valkey/valkey-glide": "../../node"    
+        "@valkey/valkey-glide": "../../node",
+        "uuid": "^11.0.3"
     },
     "devDependencies": {
         "@jest/globals": "^29.7.0",
@@ -11,4 +12,3 @@
         "typescript": "^5.1.6"
     }
 }
-

@@ -2,7 +2,12 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { GlideClient, GlideClusterClient, GlideJson, Logger } from "@valkey/valkey-glide";
+import {
+    GlideClient,
+    GlideClusterClient,
+    GlideJson,
+    Logger,
+} from "@valkey/valkey-glide";
 
 async function executeJsonCommands() {
     // When Valkey is in standalone mode, add address of the primary node, and any replicas you'd like to be able to read from.
