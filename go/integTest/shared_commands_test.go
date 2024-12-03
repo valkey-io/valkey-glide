@@ -1571,6 +1571,67 @@ func (suite *GlideTestSuite) TestSinter_WithNotExistingKeys() {
 	})
 }
 
+func (suite *GlideTestSuite) TestSinterStore() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1-" + uuid.NewString()
+		key2 := "{key}-2-" + uuid.NewString()
+		key3 := "{key}-3-" + uuid.NewString()
+		stringKey := "{key}-4-" + uuid.NewString()
+		nonExistingKey := "{key}-5-" + uuid.NewString()
+		memberArray1 := []string{"a", "b", "c"}
+		memberArray2 := []string{"c", "d", "e"}
+		t := suite.T()
+
+		res1, err := client.SAdd(key1, memberArray1)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(3), res1.Value())
+
+		res2, err := client.SAdd(key2, memberArray2)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(3), res2.Value())
+
+		// store in new key
+		res3, err := client.SInterStore(key3, []string{key1, key2})
+		assert.NoError(t, err)
+		assert.Equal(t, int64(1), res3.Value())
+
+		// check that members remain the same
+		res4, err := client.SMembers(key3)
+		assert.NoError(t, err)
+		assert.Equal(t, []string{"c"}, res4)
+
+		// intersection with non-existing key
+		res5, err := client.SInterStore(key1, []string{key2, nonExistingKey})
+		assert.NoError(t, err)
+		assert.Equal(t, int64(0), res5.Value())
+
+		// check that the key is now empty
+		members1, err := client.SMembers(key1)
+		assert.NoError(t, err)
+		assert.Empty(t, members1)
+
+		// set a string key for type check
+		_, err = client.Set(stringKey, "value")
+		assert.NoError(t, err)
+
+		// overwrite with a string key
+		res6, err := client.SInterStore(stringKey, []string{key2})
+		assert.NoError(t, err)
+		assert.Equal(t, int64(1), res6)
+
+		// verify members of the overwritten key
+		stringKeyMembers, err := client.SMembers(stringKey)
+		assert.NoError(t, err)
+		assert.Equal(t, []string{"c"}, stringKeyMembers)
+
+		members, err := client.SInter([]string{key1, key2})
+		assert.Nil(suite.T(), err)
+		assert.Len(suite.T(), members, 2)
+		assert.Contains(suite.T(), members, api.CreateStringResult("c"))
+		assert.Contains(suite.T(), members, api.CreateStringResult("d"))
+	})
+}
+
 func (suite *GlideTestSuite) TestSInterCard() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0")
 
