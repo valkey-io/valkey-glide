@@ -588,6 +588,15 @@ func (client *baseClient) SInter(keys []string) (map[Result[string]]struct{}, er
 	return handleStringSetResponse(result)
 }
 
+func (client *baseClient) SInterStore(destination string, keys []string) (Result[int64], error) {
+	result, err := client.executeCommand(C.SInterStore, append([]string{destination}, keys...))
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
 func (client *baseClient) SInterCard(keys []string) (Result[int64], error) {
 	result, err := client.executeCommand(C.SInterCard, append([]string{strconv.Itoa(len(keys))}, keys...))
 	if err != nil {
