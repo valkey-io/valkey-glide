@@ -2503,3 +2503,50 @@ func (suite *GlideTestSuite) TestDel_MultipleKeys() {
 		assert.True(suite.T(), result3.IsNil())
 	})
 }
+
+func (suite *GlideTestSuite) TestObjectEncoding() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		//Test 1: Check object encoding for embstr
+		key := "{keyName}" + uuid.NewString()
+		value1 := "Hello"
+		suite.verifyOK(client.Set(key, value1))
+		resultObjectEncoding, err := client.ObjectEncoding(key)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "embstr", resultObjectEncoding.Value(), "The result should be embstr")
+
+		//Test 2: Check object encoding for listpack
+		list := []string{"value1", "value2", "value3"}
+		key1 := "{keyName}" + uuid.NewString()
+		res1, err := client.LPush(key1, list)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res1.Value())
+		resultListPack, err := client.ObjectEncoding(key1)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "listpack", resultListPack.Value(), "The result should be listpack")
+
+		//Test 3: Check object encoding command for non existing key
+		key3 := "{keyName}" + uuid.NewString()
+		resultNull, err := client.ObjectEncoding(key3)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "", resultNull.Value())
+	})
+
+}
+
+func (suite *GlideTestSuite) TestDump() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		//Test 1: Check dump command for existing key
+		key := "{keyName}" + uuid.NewString()
+		value1 := "Hello"
+		suite.verifyOK(client.Set(key, value1))
+		resultDump, err := client.Dump(key)
+		assert.Nil(suite.T(), err)
+		assert.NotNil(suite.T(), resultDump)
+
+		//Test 2: Check dump command for non existing key
+		key1 := "{keyName}" + uuid.NewString()
+		resultDumpNull, err := client.Dump(key1)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "", resultDumpNull.Value())
+	})
+}
