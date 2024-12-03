@@ -964,3 +964,19 @@ func (client *baseClient) Renamenx(key string, newKey string) (Result[bool], err
 	}
 	return handleBooleanResponse(result)
 }
+
+func (client *baseClient) Dump(key string) (Result[string], error) {
+	result, err := client.executeCommand(C.Dump, []string{key})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNullResponse(result)
+}
+
+func (client *baseClient) ObjectEncoding(key string) (Result[string], error) {
+	result, err := client.executeCommand(C.ObjectEncoding, []string{key})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNullResponse(result)
+}
