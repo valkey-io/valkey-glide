@@ -1595,40 +1595,74 @@ func (suite *GlideTestSuite) TestSinterStore() {
 		assert.NoError(t, err)
 		assert.Equal(t, int64(1), res3.Value())
 
-		// check that members remain the same
 		res4, err := client.SMembers(key3)
 		assert.NoError(t, err)
-		assert.Equal(t, []string{"c"}, res4)
+		assert.Len(t, res4, 1)
+		for key := range res4 {
+			assert.Equal(t, key.Value(), "c")
+		}
+
+		// overwrite existing set, which is also a source set
+		res5, err := client.SInterStore(key2, []string{key1, key2})
+		assert.NoError(t, err)
+		assert.Equal(t, int64(1), res5.Value())
+
+		res6, err := client.SMembers(key2)
+		assert.NoError(t, err)
+		assert.Len(t, res6, 1)
+		for key := range res6 {
+			assert.Equal(t, key.Value(), "c")
+		}
+
+		// source set is the same as the existing set
+		res7, err := client.SInterStore(key1, []string{key2})
+		assert.NoError(t, err)
+		assert.Equal(t, int64(1), res7.Value())
+
+		res8, err := client.SMembers(key2)
+		assert.NoError(t, err)
+		assert.Len(t, res8, 1)
+		for key := range res8 {
+			assert.Equal(t, key.Value(), "c")
+		}
 
 		// intersection with non-existing key
-		res5, err := client.SInterStore(key1, []string{key2, nonExistingKey})
+		res9, err := client.SInterStore(key1, []string{key2, nonExistingKey})
 		assert.NoError(t, err)
-		assert.Equal(t, int64(0), res5.Value())
+		assert.Equal(t, int64(0), res9.Value())
 
 		// check that the key is now empty
 		members1, err := client.SMembers(key1)
 		assert.NoError(t, err)
 		assert.Empty(t, members1)
 
-		// set a string key for type check
+		// invalid argument - key list must not be empty
+		res10, err := client.SInterStore(key3, []string{})
+		assert.Equal(suite.T(), int64(0), res10.Value())
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		// non-set key
 		_, err = client.Set(stringKey, "value")
 		assert.NoError(t, err)
 
-		// overwrite with a string key
-		res6, err := client.SInterStore(stringKey, []string{key2})
-		assert.NoError(t, err)
-		assert.Equal(t, int64(1), res6)
+		res11, err := client.SInterStore(key3, []string{stringKey})
+		assert.Equal(suite.T(), int64(0), res11.Value())
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
 
-		// verify members of the overwritten key
-		stringKeyMembers, err := client.SMembers(stringKey)
+		// overwrite the non-set key
+		res12, err := client.SInterStore(stringKey, []string{key2})
 		assert.NoError(t, err)
-		assert.Equal(t, []string{"c"}, stringKeyMembers)
+		assert.Equal(t, int64(1), res12.Value())
 
-		members, err := client.SInter([]string{key1, key2})
-		assert.Nil(suite.T(), err)
-		assert.Len(suite.T(), members, 2)
-		assert.Contains(suite.T(), members, api.CreateStringResult("c"))
-		assert.Contains(suite.T(), members, api.CreateStringResult("d"))
+		// check that the key is now empty
+		res13, err := client.SMembers(stringKey)
+		assert.NoError(t, err)
+		assert.Len(t, res13, 1)
+		for key := range res13 {
+			assert.Equal(t, key.Value(), "c")
+		}
 	})
 }
 
