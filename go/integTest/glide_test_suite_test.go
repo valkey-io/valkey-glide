@@ -4,6 +4,7 @@ package integTest
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -19,11 +20,34 @@ import (
 
 type GlideTestSuite struct {
 	suite.Suite
-	standalonePorts []int
-	clusterPorts    []int
+	standaloneHosts []api.NodeAddress
+	clusterHosts    []api.NodeAddress
+	tls             bool
 	serverVersion   string
 	clients         []*api.GlideClient
 	clusterClients  []*api.GlideClusterClient
+}
+
+// var tls = flag.Bool("tls", false, "one")
+// var clusterHosts = flag.String("cluster-endpoints", "", "two")
+// var standaloneHosts = flag.String("standalone-endpoints", "", "three")
+
+
+// https://stackoverflow.com/a/58192326/21176342
+// var _ = func() bool {
+//     testing.Init()
+//     return true
+// }()
+
+var tls = false;
+var clusterHosts = "";
+var standaloneHosts = ""
+
+func init() {
+	flag.BoolVar(&tls, "tls", false, "one")
+	flag.StringVar(&clusterHosts, "cluster-endpoints", "", "two")
+	flag.StringVar(&standaloneHosts, "standalone-endpoints", "", "three")
+    flag.Parse()
 }
 
 func (suite *GlideTestSuite) SetupSuite() {
@@ -37,19 +61,41 @@ func (suite *GlideTestSuite) SetupSuite() {
 		log.Fatal(err)
 	}
 
-	// Start standalone instance
-	clusterManagerOutput := runClusterManager(suite, []string{"start", "-r", "0"}, false)
+	// flag.BoolVar(&suite.tls, "tls", false, "one")
+	// clusterHosts := flag.String("cluster-endpoints", "", "two")
+	// standaloneHosts := flag.String("standalone-endpoints", "", "three")
+	// flag.Parse()
 
-	suite.standalonePorts = extractPorts(suite, clusterManagerOutput)
-	suite.T().Logf("Standalone ports = %s", fmt.Sprint(suite.standalonePorts))
+	cmd := []string{};
+	suite.tls = false;
+	// if (suite.tls) {
+	if (tls) {
+		cmd = []string {"--tls"}
+		suite.tls = true;
+	}
 
-	// Start cluster
-	clusterManagerOutput = runClusterManager(suite, []string{"start", "--cluster-mode"}, false)
+	if (standaloneHosts != "") {
+		suite.standaloneHosts = parseHosts(suite, standaloneHosts)
+	} else {
+		// Start standalone instance
+		clusterManagerOutput := runClusterManager(suite, append(cmd, "start", "-r", "3"), false)
 
-	suite.clusterPorts = extractPorts(suite, clusterManagerOutput)
-	suite.T().Logf("Cluster ports = %s", fmt.Sprint(suite.clusterPorts))
+		suite.standaloneHosts = extractAddresses(suite, clusterManagerOutput)
+	}
+	suite.T().Logf("Standalone ports = %s", fmt.Sprint(suite.standaloneHosts))
+
+	if (clusterHosts != "") {
+		suite.clusterHosts = parseHosts(suite, clusterHosts)
+	} else {
+		// Start cluster
+		clusterManagerOutput := runClusterManager(suite, append(cmd, "start", "--cluster-mode", "-r", "3"), false)
+
+		suite.clusterHosts = extractAddresses(suite, clusterManagerOutput)
+	}
+	suite.T().Logf("Cluster ports = %s", fmt.Sprint(suite.clusterHosts))
 
 	// Get Redis version
+	// TODO: use INFO command
 	byteOutput, err := exec.Command("redis-server", "-v").Output()
 	if err != nil {
 		suite.T().Fatal(err.Error())
@@ -59,27 +105,34 @@ func (suite *GlideTestSuite) SetupSuite() {
 	suite.T().Logf("Detected server version = %s", suite.serverVersion)
 }
 
-func extractPorts(suite *GlideTestSuite, output string) []int {
-	var ports []int
+func parseHosts(suite *GlideTestSuite, addresses string) []api.NodeAddress {
+	var result []api.NodeAddress
+
+	addressList := strings.Split(addresses, ",")
+	for _, address := range addressList {
+		parts := strings.Split(address, ":")
+		port, err := strconv.Atoi(parts[1])
+		if err != nil {
+			suite.T().Fatalf("Failed to parse port from string %s: %s", parts[1], err.Error())
+		}
+
+		result = append(result, api.NodeAddress{Host: parts[0], Port: port})
+	}
+	return result
+}
+
+func extractAddresses(suite *GlideTestSuite, output string) []api.NodeAddress {
 	for _, line := range strings.Split(output, "\n") {
 		if !strings.HasPrefix(line, "CLUSTER_NODES=") {
 			continue
 		}
 
 		addresses := strings.Split(line, "=")[1]
-		addressList := strings.Split(addresses, ",")
-		for _, address := range addressList {
-			portString := strings.Split(address, ":")[1]
-			port, err := strconv.Atoi(portString)
-			if err != nil {
-				suite.T().Fatalf("Failed to parse port from cluster_manager.py output: %s", err.Error())
-			}
-
-			ports = append(ports, port)
-		}
+		return parseHosts(suite, addresses)
 	}
 
-	return ports
+	suite.T().Fatalf("Failed to parse port from cluster_manager.py output")
+	return []api.NodeAddress{}
 }
 
 func runClusterManager(suite *GlideTestSuite, args []string, ignoreExitCode bool) string {
@@ -146,7 +199,7 @@ func (suite *GlideTestSuite) getDefaultClients() []api.BaseClient {
 
 func (suite *GlideTestSuite) defaultClient() *api.GlideClient {
 	config := api.NewGlideClientConfiguration().
-		WithAddress(&api.NodeAddress{Port: suite.standalonePorts[0]}).
+		WithAddress(&suite.standaloneHosts[0]).
 		WithRequestTimeout(5000)
 	return suite.client(config)
 }
@@ -163,7 +216,7 @@ func (suite *GlideTestSuite) client(config *api.GlideClientConfiguration) *api.G
 
 func (suite *GlideTestSuite) defaultClusterClient() *api.GlideClusterClient {
 	config := api.NewGlideClusterClientConfiguration().
-		WithAddress(&api.NodeAddress{Port: suite.clusterPorts[0]}).
+		WithAddress(&suite.clusterHosts[0]).
 		WithRequestTimeout(5000)
 	return suite.clusterClient(config)
 }
