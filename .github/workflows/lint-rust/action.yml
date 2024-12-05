@@ -14,8 +14,6 @@ runs:
     using: "composite"
     steps:
         - uses: actions/checkout@v4
-          with:
-              submodules: recursive
 
         - name: Install Rust toolchain and protoc
           uses: ./.github/workflows/install-rust-and-protoc
@@ -39,7 +37,7 @@ runs:
 
         - run: |
               cargo update
-              cargo install --locked --version 0.15.1 cargo-deny
+              cargo install --locked cargo-deny
               cargo deny check --config ${GITHUB_WORKSPACE}/deny.toml
           working-directory: ${{ inputs.cargo-toml-folder }}
           shell: bash

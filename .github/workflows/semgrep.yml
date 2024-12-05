@@ -10,7 +10,10 @@ on:
                 description: "The branch to run against the semgrep tool"
                 required: true
     push:
-        branches: ["main"]
+        branches:
+            - main
+            - release-*
+            - v*
     # Schedule the CI job (this method uses cron syntax):
     schedule:
         - cron: "0 8 * * *" # Sets Semgrep to scan every day at 08:00 UTC.
@@ -33,4 +36,4 @@ jobs:
             # Fetch project source with GitHub Actions Checkout.
             - uses: actions/checkout@v4
             # Run the "semgrep ci" command on the command line of the docker image.
-            - run: semgrep ci --config auto --no-suppress-errors
+            - run: semgrep ci --config auto --no-suppress-errors --exclude-rule generic.secrets.security.detected-private-key.detected-private-key

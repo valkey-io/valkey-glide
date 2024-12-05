@@ -12,6 +12,7 @@ import command_request.CommandRequestOuterClass.ScriptInvocation;
 import command_request.CommandRequestOuterClass.ScriptInvocationPointers;
 import command_request.CommandRequestOuterClass.SimpleRoutes;
 import command_request.CommandRequestOuterClass.SlotTypes;
+import command_request.CommandRequestOuterClass.UpdateConnectionPassword;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
@@ -215,6 +216,26 @@ public class CommandManager {
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
         final CommandRequest.Builder command = prepareCursorRequest(cursor, options);
+        return submitCommandToChannel(command, responseHandler);
+    }
+
+    /**
+     * Submit a password update request to GLIDE core.
+     *
+     * @param password A new password to set or empty value to remove the password.
+     * @param immediateAuth immediately perform auth.
+     * @param responseHandler A response handler.
+     * @return A request promise.
+     * @param <T> Type of the response.
+     */
+    public <T> CompletableFuture<T> submitPasswordUpdate(
+            Optional<String> password,
+            boolean immediateAuth,
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
+        var builder = UpdateConnectionPassword.newBuilder().setImmediateAuth(immediateAuth);
+        password.ifPresent(builder::setPassword);
+
+        var command = CommandRequest.newBuilder().setUpdateConnectionPassword(builder.build());
         return submitCommandToChannel(command, responseHandler);
     }
 

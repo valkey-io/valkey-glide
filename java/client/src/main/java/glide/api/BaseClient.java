@@ -275,6 +275,7 @@ import glide.connectors.resources.Platform;
 import glide.connectors.resources.ThreadPoolResource;
 import glide.connectors.resources.ThreadPoolResourceAllocator;
 import glide.ffi.resolvers.GlideValueResolver;
+import glide.ffi.resolvers.StatisticsResolver;
 import glide.managers.BaseResponseResolver;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
@@ -383,6 +384,15 @@ public abstract class BaseClient
             future.completeExceptionally(e);
             return future;
         }
+    }
+
+    /**
+     * Return a statistics
+     *
+     * @return Return a {@link Map} that contains the statistics collected internally by GLIDE core
+     */
+    public Map<String, String> getStatistics() {
+        return (HashMap<String, String>) StatisticsResolver.getStatistics();
     }
 
     /**
@@ -765,6 +775,66 @@ public abstract class BaseClient
 
         response.put("matches", convertedMatchesObject);
         return response;
+    }
+
+    /**
+     * Update the current connection with a new password.
+     *
+     * <p>This method is useful in scenarios where the server password has changed or when utilizing
+     * short-lived passwords for enhanced security. It allows the client to update its password to
+     * reconnect upon disconnection without the need to recreate the client instance. This ensures
+     * that the internal reconnection mechanism can handle reconnection seamlessly, preventing the
+     * loss of in-flight commands.
+     *
+     * @param immediateAuth A <code>boolean</code> flag. If <code>true</code>, the client will
+     *     authenticate immediately with the new password against all connections, Using <code>AUTH
+     *     </code> command. <br>
+     *     If password supplied is an empty string, the client will not perform auth and a warning
+     *     will be returned. <br>
+     *     The default is `false`.
+     * @apiNote This method updates the client's internal password configuration and does not perform
+     *     password rotation on the server side.
+     * @param password A new password to set.
+     * @return <code>"OK"</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.resetConnectionPassword("new_password", RE_AUTHENTICATE).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    public CompletableFuture<String> updateConnectionPassword(
+            @NonNull String password, boolean immediateAuth) {
+        return commandManager.submitPasswordUpdate(
+                Optional.of(password), immediateAuth, this::handleStringResponse);
+    }
+
+    /**
+     * Update the current connection by removing the password.
+     *
+     * <p>This method is useful in scenarios where the server password has changed or when utilizing
+     * short-lived passwords for enhanced security. It allows the client to update its password to
+     * reconnect upon disconnection without the need to recreate the client instance. This ensures
+     * that the internal reconnection mechanism can handle reconnection seamlessly, preventing the
+     * loss of in-flight commands.
+     *
+     * @apiNote This method updates the client's internal password configuration and does not perform
+     *     password rotation on the server side.
+     * @param immediateAuth A <code>boolean</code> flag. If <code>true</code>, the client will
+     *     authenticate immediately with the new password against all connections, Using <code>AUTH
+     *     </code> command. <br>
+     *     If password supplied is an empty string, the client will not perform auth and a warning
+     *     will be returned. <br>
+     *     The default is `false`.
+     * @return <code>"OK"</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.resetConnectionPassword(true).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    public CompletableFuture<String> updateConnectionPassword(boolean immediateAuth) {
+        return commandManager.submitPasswordUpdate(
+                Optional.empty(), immediateAuth, this::handleStringResponse);
     }
 
     @Override

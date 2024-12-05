@@ -1,7 +1,6 @@
 /**
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
-
 #[cfg(feature = "socket-layer")]
 fn build_protobuf() {
     let customization_options = protobuf_codegen::Customize::default()

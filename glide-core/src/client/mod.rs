@@ -9,7 +9,10 @@ use futures::FutureExt;
 use logger_core::{log_info, log_warn};
 use redis::aio::ConnectionLike;
 use redis::cluster_async::ClusterConnection;
-use redis::cluster_routing::{Routable, RoutingInfo, SingleNodeRoutingInfo};
+use redis::cluster_routing::{
+    MultipleNodeRoutingInfo, ResponsePolicy, Routable, RoutingInfo, SingleNodeRoutingInfo,
+};
+use redis::cluster_slotmap::ReadFromReplicaStrategy;
 use redis::{Cmd, ErrorKind, ObjectType, PushInfo, RedisError, RedisResult, ScanStateRC, Value};
 pub use standalone_client::StandaloneClient;
 use std::io;
@@ -31,21 +34,22 @@ pub const DEFAULT_CONNECTION_ATTEMPT_TIMEOUT: Duration = Duration::from_millis(2
 pub const DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL: Duration = Duration::from_secs(60);
 pub const INTERNAL_CONNECTION_TIMEOUT: Duration = Duration::from_millis(250);
 pub const FINISHED_SCAN_CURSOR: &str = "finished";
-// The value of 1000 for the maximum number of inflight requests is determined based on Little's Law in queuing theory:
-//
-// Expected maximum request rate: 50,000 requests/second
-// Expected response time: 1 millisecond
-//
-// According to Little's Law, the maximum number of inflight requests required to fully utilize the maximum request rate is:
-//   (50,000 requests/second) × (1 millisecond / 1000 milliseconds) = 50 requests
-//
-// The value of 1000 provides a buffer for bursts while still allowing full utilization of the maximum request rate.
+
+/// The value of 1000 for the maximum number of inflight requests is determined based on Little's Law in queuing theory:
+///
+/// Expected maximum request rate: 50,000 requests/second
+/// Expected response time: 1 millisecond
+///
+/// According to Little's Law, the maximum number of inflight requests required to fully utilize the maximum request rate is:
+///   (50,000 requests/second) × (1 millisecond / 1000 milliseconds) = 50 requests
+///
+/// The value of 1000 provides a buffer for bursts while still allowing full utilization of the maximum request rate.
 pub const DEFAULT_MAX_INFLIGHT_REQUESTS: u32 = 1000;
 
-// The connection check interval is currently not exposed to the user via ConnectionRequest,
-// as improper configuration could negatively impact performance or pub/sub resiliency.
-// A 3-second interval provides a reasonable balance between connection validation
-// and performance overhead.
+/// The connection check interval is currently not exposed to the user via ConnectionRequest,
+/// as improper configuration could negatively impact performance or pub/sub resiliency.
+/// A 3-second interval provides a reasonable balance between connection validation
+/// and performance overhead.
 pub const CONNECTION_CHECKS_INTERVAL: Duration = Duration::from_secs(3);
 
 pub(super) fn get_port(address: &NodeAddress) -> u16 {
@@ -258,9 +262,9 @@ impl Client {
                         if let Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)) =
                             routing
                         {
-                            let cmdname = cmd.command().unwrap_or_default();
-                            let cmdname = String::from_utf8_lossy(&cmdname);
-                            if redis::cluster_routing::is_readonly_cmd(cmdname.as_bytes()) {
+                            let cmd_name = cmd.command().unwrap_or_default();
+                            let cmd_name = String::from_utf8_lossy(&cmd_name);
+                            if redis::cluster_routing::is_readonly_cmd(cmd_name.as_bytes()) {
                                 // A read-only command, go ahead and send it to a random node
                                 RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)
                             } else {
@@ -269,7 +273,7 @@ impl Client {
                                 log_warn(
                                     "send_command",
                                     format!(
-                                        "User provided 'Random' routing which is not suitable for the writeable command '{cmdname}'. Changing it to 'RandomPrimary'"
+                                        "User provided 'Random' routing which is not suitable for the writeable command '{cmd_name}'. Changing it to 'RandomPrimary'"
                                     ),
                                 );
                                 RoutingInfo::SingleNode(SingleNodeRoutingInfo::RandomPrimary)
@@ -473,6 +477,69 @@ impl Client {
         self.inflight_requests_allowed
             .fetch_add(1, Ordering::SeqCst)
     }
+
+    /// Update the password used to authenticate with the servers.
+    /// If None is passed, the password will be removed.
+    /// If `immediate_auth` is true, the password will be used to authenticate with the servers immediately using the `AUTH` command.
+    /// The default behavior is to update the password without authenticating immediately.
+    /// If the password is empty or None, and `immediate_auth` is true, the password will be updated and an error will be returned.
+    pub async fn update_connection_password(
+        &mut self,
+        password: Option<String>,
+        immediate_auth: bool,
+    ) -> RedisResult<Value> {
+        let timeout = self.request_timeout;
+        // The password update operation is wrapped in a timeout to prevent it from blocking indefinitely.
+        // If the operation times out, an error is returned.
+        // Since the password update operation is not a command that go through the regular command pipeline,
+        // it is not have the regular timeout handling, as such we need to handle it separately.
+        match tokio::time::timeout(timeout, async {
+            match self.internal_client {
+                ClientWrapper::Standalone(ref mut client) => {
+                    client.update_connection_password(password.clone()).await
+                }
+                ClientWrapper::Cluster { ref mut client } => {
+                    client.update_connection_password(password.clone()).await
+                }
+            }
+        })
+        .await
+        {
+            Ok(result) => {
+                if immediate_auth {
+                    self.send_immediate_auth(password).await
+                } else {
+                    result
+                }
+            }
+            Err(_elapsed) => Err(RedisError::from((
+                ErrorKind::IoError,
+                "Password update operation timed out, please check the connection",
+            ))),
+        }
+    }
+
+    async fn send_immediate_auth(&mut self, password: Option<String>) -> RedisResult<Value> {
+        match &password {
+            Some(pw) if pw.is_empty() => Err(RedisError::from((
+                ErrorKind::UserOperationError,
+                "Empty password provided for authentication",
+            ))),
+            None => Err(RedisError::from((
+                ErrorKind::UserOperationError,
+                "No password provided for authentication",
+            ))),
+            Some(password) => {
+                let routing = RoutingInfo::MultiNode((
+                    MultipleNodeRoutingInfo::AllNodes,
+                    Some(ResponsePolicy::AllSucceeded),
+                ));
+                let mut cmd = redis::cmd("AUTH");
+                cmd.arg(password);
+                self.send_command(&cmd, Some(routing)).await
+            }
+        }
+    }
 }
 
 fn load_cmd(code: &[u8]) -> Cmd {
@@ -511,8 +578,6 @@ async fn create_cluster_client(
         .into_iter()
         .map(|address| get_connection_info(&address, tls_mode, redis_connection_info.clone()))
         .collect();
-    let read_from = request.read_from.unwrap_or_default();
-    let read_from_replicas = !matches!(read_from, ReadFrom::Primary); // TODO - implement different read from replica strategies.
     let periodic_topology_checks = match request.periodic_checks {
         Some(PeriodicCheck::Disabled) => None,
         Some(PeriodicCheck::Enabled) => Some(DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL),
@@ -522,9 +587,12 @@ async fn create_cluster_client(
     let mut builder = redis::cluster::ClusterClientBuilder::new(initial_nodes)
         .connection_timeout(INTERNAL_CONNECTION_TIMEOUT)
         .retries(DEFAULT_RETRIES);
-    if read_from_replicas {
-        builder = builder.read_from_replicas();
-    }
+    let read_from_strategy = request.read_from.unwrap_or_default();
+    builder = builder.read_from(match read_from_strategy {
+        ReadFrom::AZAffinity(az) => ReadFromReplicaStrategy::AZAffinity(az),
+        ReadFrom::PreferReplica => ReadFromReplicaStrategy::RoundRobin,
+        ReadFrom::Primary => ReadFromReplicaStrategy::AlwaysFromPrimary,
+    });
     if let Some(interval_duration) = periodic_topology_checks {
         builder = builder.periodic_topology_checks(interval_duration);
     }
@@ -618,12 +686,14 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
     let database_id = format!("\ndatabase ID: {}", request.database_id);
     let rfr_strategy = request
         .read_from
+        .clone()
         .map(|rfr| {
             format!(
                 "\nRead from Replica mode: {}",
                 match rfr {
                     ReadFrom::Primary => "Only primary",
                     ReadFrom::PreferReplica => "Prefer replica",
+                    ReadFrom::AZAffinity(_) => "Prefer replica in user's availability zone",
                 }
             )
         })
@@ -712,8 +782,7 @@ impl Client {
             })
         })
         .await
-        .map_err(|_| ConnectionError::Timeout)
-        .and_then(|res| res)
+        .map_err(|_| ConnectionError::Timeout)?
     }
 }
 
