@@ -71,4 +71,25 @@ type GenericBaseCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/object-encoding/
 	ObjectEncoding(key string) (Result[string], error)
+
+	// Create a key associated with a value that is obtained by
+	// deserializing the provided serialized value (obtained via dump).
+	//
+	// Parameters:
+	//  key - The key to create.
+	//	ttl - The expiry time (in milliseconds). If 0, the key will persist.
+	//  value - The serialized value to deserialize and assign to key.
+	//
+	// Return value:
+	//  Return OK if successfully create a key with a value </code>.
+	//
+	// Example:
+	// result, err := client.Restore("key",ttl, value)
+	//	if err != nil {
+	//	    // handle error
+	//	}
+	//	fmt.Println(result.Value()) // Output: string
+	//
+	// [valkey.io]: https://valkey.io/commands/restore/
+	Restore(key string, ttl int64, value string) (Result[string], error)
 }

@@ -2533,20 +2533,61 @@ func (suite *GlideTestSuite) TestObjectEncoding() {
 
 }
 
-func (suite *GlideTestSuite) TestDump() {
+func (suite *GlideTestSuite) Test_Dump() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
+
 		//Test 1: Check dump command for existing key
 		key := "{keyName}" + uuid.NewString()
-		value1 := "Hello"
-		suite.verifyOK(client.Set(key, value1))
+		value := "world"
+		suite.verifyOK(client.Set(key, value))
+
 		resultDump, err := client.Dump(key)
 		assert.Nil(suite.T(), err)
 		assert.NotNil(suite.T(), resultDump)
+
+		//Delete
+		deletedCount, err := client.Del([]string{key})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), deletedCount.Value())
+
+		//restore
+		suite.verifyOK(client.Restore(key, int64(0), resultDump.Value()))
+		resultGetRestoreKey, err := client.Get(key)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), value, resultGetRestoreKey.Value())
 
 		//Test 2: Check dump command for non existing key
 		key1 := "{keyName}" + uuid.NewString()
 		resultDumpNull, err := client.Dump(key1)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "", resultDumpNull.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestRestore() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+
+		//Test 1: Check restore command for deleted key and check value
+		//set
+		key := "testKey1_" + uuid.New().String()
+		value := "hello"
+		suite.verifyOK(client.Set(key, value))
+
+		//dump
+		resultDump, err := client.Dump(key)
+		assert.Nil(suite.T(), err)
+		assert.NotNil(suite.T(), resultDump)
+
+		//Delete
+		deletedCount, err := client.Del([]string{key})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), deletedCount.Value())
+
+		//restore
+		suite.verifyOK(client.Restore(key, int64(0), resultDump.Value()))
+		resultGetRestoreKey, err := client.Get(key)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), value, resultGetRestoreKey.Value())
+
 	})
 }
