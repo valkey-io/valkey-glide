@@ -13,12 +13,22 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
+use telemetrylib::Telemetry;
 use tokio::sync::{mpsc, Notify};
 use tokio::task;
 use tokio::time::timeout;
-use tokio_retry::Retry;
+use tokio_retry2::{Retry, RetryError};
 
 use super::{run_with_timeout, DEFAULT_CONNECTION_ATTEMPT_TIMEOUT};
+
+/// The reason behind the call to `reconnect()`
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum ReconnectReason {
+    /// A connection was dropped (for any reason)
+    ConnectionDropped,
+    /// Connection creation error
+    CreateError,
+}
 
 /// The object that is used in order to recreate a connection after a disconnect.
 struct ConnectionBackend {
@@ -103,6 +113,7 @@ async fn create_connection(
     connection_backend: ConnectionBackend,
     retry_strategy: RetryStrategy,
     push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
+    discover_az: bool,
 ) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
     let client = &connection_backend.connection_info;
     let connection_options = GlideConnectionOptions {
@@ -110,8 +121,13 @@ async fn create_connection(
         disconnect_notifier: Some::<Box<dyn DisconnectNotifier>>(Box::new(
             TokioDisconnectNotifier::new(),
         )),
+        discover_az,
     };
-    let action = || get_multiplexed_connection(client, &connection_options);
+    let action = || async {
+        get_multiplexed_connection(client, &connection_options)
+            .await
+            .map_err(RetryError::transient)
+    };
 
     match Retry::spawn(retry_strategy.get_iterator(), action).await {
         Ok(connection) => {
@@ -125,6 +141,7 @@ async fn create_connection(
                         .addr
                 ),
             );
+            Telemetry::incr_total_connections(1);
             Ok(ReconnectingConnection {
                 inner: Arc::new(InnerReconnectingConnection {
                     state: Mutex::new(ConnectionState::Connected(connection)),
@@ -151,7 +168,7 @@ async fn create_connection(
                 }),
                 connection_options,
             };
-            connection.reconnect();
+            connection.reconnect(ReconnectReason::CreateError);
             Err((connection, err))
         }
     }
@@ -189,6 +206,7 @@ impl ReconnectingConnection {
         redis_connection_info: RedisConnectionInfo,
         tls_mode: TlsMode,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
+        discover_az: bool,
     ) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
         log_debug(
             "connection creation",
@@ -201,7 +219,7 @@ impl ReconnectingConnection {
             connection_available_signal: ManualResetEvent::new(true),
             client_dropped_flagged: AtomicBool::new(false),
         };
-        create_connection(backend, connection_retry_strategy, push_sender).await
+        create_connection(backend, connection_retry_strategy, push_sender, discover_az).await
     }
 
     pub(crate) fn node_address(&self) -> String {
@@ -221,6 +239,9 @@ impl ReconnectingConnection {
     }
 
     pub(super) fn mark_as_dropped(&self) {
+        // Update the telemetry for each connection that is dropped. A dropped connection
+        // will not be re-connected, so update the telemetry here
+        Telemetry::decr_total_connections(1);
         self.inner
             .backend
             .client_dropped_flagged
@@ -245,7 +266,10 @@ impl ReconnectingConnection {
         }
     }
 
-    pub(super) fn reconnect(&self) {
+    /// Attempt to re-connect the connection.
+    ///
+    /// This function spawns a task to perform the reconnection in the background
+    pub(super) fn reconnect(&self, reason: ReconnectReason) {
         {
             let mut guard = self.inner.state.lock().unwrap();
             if matches!(*guard, ConnectionState::Reconnecting) {
@@ -259,6 +283,13 @@ impl ReconnectingConnection {
         log_debug("reconnect", "starting");
 
         let connection_clone = self.clone();
+
+        if reason.eq(&ReconnectReason::ConnectionDropped) {
+            // Attempting to reconnect a connection that was dropped (for any reason) - update the telemetry by reducing
+            // the number of opened connections by 1, it will be incremented by 1 after a successful re-connect
+            Telemetry::decr_total_connections(1);
+        }
+
         // The reconnect task is spawned instead of awaited here, so that the reconnect attempt will continue in the
         // background, regardless of whether the calling task is dropped or not.
         task::spawn(async move {
@@ -293,6 +324,7 @@ impl ReconnectingConnection {
                                 .set();
                             *guard = ConnectionState::Connected(connection);
                         }
+                        Telemetry::incr_total_connections(1);
                         return;
                     }
                     Err(_) => tokio::time::sleep(sleep_duration).await,
