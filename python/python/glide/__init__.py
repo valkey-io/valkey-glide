@@ -32,7 +32,48 @@ from glide.async_commands.core import (
     InsertPosition,
     UpdateOptions,
 )
-from glide.async_commands.server_modules import json
+from glide.async_commands.server_modules import ft, glide_json
+from glide.async_commands.server_modules.ft_options.ft_aggregate_options import (
+    FtAggregateApply,
+    FtAggregateClause,
+    FtAggregateFilter,
+    FtAggregateGroupBy,
+    FtAggregateLimit,
+    FtAggregateOptions,
+    FtAggregateReducer,
+    FtAggregateSortBy,
+    FtAggregateSortProperty,
+)
+from glide.async_commands.server_modules.ft_options.ft_create_options import (
+    DataType,
+    DistanceMetricType,
+    Field,
+    FieldType,
+    FtCreateOptions,
+    NumericField,
+    TagField,
+    TextField,
+    VectorAlgorithm,
+    VectorField,
+    VectorFieldAttributes,
+    VectorFieldAttributesFlat,
+    VectorFieldAttributesHnsw,
+    VectorType,
+)
+from glide.async_commands.server_modules.ft_options.ft_profile_options import (
+    FtProfileOptions,
+    QueryType,
+)
+from glide.async_commands.server_modules.ft_options.ft_search_options import (
+    FtSearchLimit,
+    FtSearchOptions,
+    ReturnField,
+)
+from glide.async_commands.server_modules.glide_json import (
+    JsonArrIndexOptions,
+    JsonArrPopOptions,
+    JsonGetOptions,
+)
 from glide.async_commands.sorted_set import (
     AggregationType,
     GeoSearchByBox,
@@ -83,11 +124,17 @@ from glide.config import (
 from glide.constants import (
     OK,
     TOK,
+    FtAggregateResponse,
+    FtInfoResponse,
+    FtProfileResponse,
+    FtSearchResponse,
     TClusterResponse,
     TEncodable,
     TFunctionListResponse,
     TFunctionStatsFullResponse,
     TFunctionStatsSingleNodeResponse,
+    TJsonResponse,
+    TJsonUniversalResponse,
     TResult,
     TSingleNodeRoute,
     TXInfoStreamFullResponse,
@@ -145,10 +192,16 @@ __all__ = [
     "TFunctionListResponse",
     "TFunctionStatsFullResponse",
     "TFunctionStatsSingleNodeResponse",
+    "TJsonResponse",
+    "TJsonUniversalResponse",
     "TOK",
     "TResult",
     "TXInfoStreamFullResponse",
     "TXInfoStreamResponse",
+    "FtAggregateResponse",
+    "FtInfoResponse",
+    "FtProfileResponse",
+    "FtSearchResponse",
     # Commands
     "BitEncoding",
     "BitFieldGet",
@@ -184,7 +237,7 @@ __all__ = [
     "InfBound",
     "InfoSection",
     "InsertPosition",
-    "json",
+    "ft",
     "LexBoundary",
     "Limit",
     "ListDirection",
@@ -209,9 +262,14 @@ __all__ = [
     "TrimByMaxLen",
     "TrimByMinId",
     "UpdateOptions",
-    "ClusterScanCursor"
+    "ClusterScanCursor",
     # PubSub
     "PubSubMsg",
+    # Json
+    "glide_json",
+    "JsonGetOptions",
+    "JsonArrIndexOptions",
+    "JsonArrPopOptions",
     # Logger
     "Logger",
     "LogLevel",
@@ -233,4 +291,33 @@ __all__ = [
     "GlideError",
     "RequestError",
     "TimeoutError",
+    # Ft
+    "DataType",
+    "DistanceMetricType",
+    "Field",
+    "FieldType",
+    "FtCreateOptions",
+    "NumericField",
+    "TagField",
+    "TextField",
+    "VectorAlgorithm",
+    "VectorField",
+    "VectorFieldAttributes",
+    "VectorFieldAttributesFlat",
+    "VectorFieldAttributesHnsw",
+    "VectorType",
+    "FtSearchLimit",
+    "ReturnField",
+    "FtSearchOptions",
+    "FtAggregateApply",
+    "FtAggregateFilter",
+    "FtAggregateClause",
+    "FtAggregateLimit",
+    "FtAggregateOptions",
+    "FtAggregateGroupBy",
+    "FtAggregateReducer",
+    "FtAggregateSortBy",
+    "FtAggregateSortProperty",
+    "FtProfileOptions",
+    "QueryType",
 ]

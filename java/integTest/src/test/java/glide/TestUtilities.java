@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
+import static glide.TestConfiguration.AZ_CLUSTER_HOSTS;
 import static glide.TestConfiguration.CLUSTER_HOSTS;
 import static glide.TestConfiguration.STANDALONE_HOSTS;
 import static glide.TestConfiguration.TLS;
@@ -104,6 +105,17 @@ public class TestUtilities {
             commonClusterClientConfig() {
         var builder = GlideClusterClientConfiguration.builder();
         for (var host : CLUSTER_HOSTS) {
+            var parts = host.split(":");
+            builder.address(
+                    NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());
+        }
+        return builder.useTLS(TLS);
+    }
+
+    public static GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder<?, ?>
+            azClusterClientConfig() {
+        var builder = GlideClusterClientConfiguration.builder();
+        for (var host : AZ_CLUSTER_HOSTS) {
             var parts = host.split(":");
             builder.address(
                     NodeAddress.builder().host(parts[0]).port(Integer.parseInt(parts[1])).build());

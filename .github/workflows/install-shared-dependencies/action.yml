@@ -25,7 +25,6 @@ inputs:
         description: "Engine version to install"
         required: false
         type: string
-
     github-token:
         description: "GITHUB_TOKEN, GitHub App installation access token"
         required: true
@@ -39,7 +38,7 @@ runs:
           if: "${{ inputs.os == 'macos' }}"
           run: |
               brew update
-              brew install git openssl coreutils
+              brew install openssl coreutils
 
         - name: Install software dependencies for Ubuntu GNU
           shell: bash
