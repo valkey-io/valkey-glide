@@ -406,20 +406,6 @@ describe("GlideClusterClient", () => {
             const client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            const lmpopArr = [];
-
-            if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
-                lmpopArr.push(
-                    client.lmpop(["abc", "def"], ListDirection.LEFT, {
-                        count: 1,
-                    }),
-                );
-                lmpopArr.push(
-                    client.blmpop(["abc", "def"], ListDirection.RIGHT, 0.1, {
-                        count: 1,
-                    }),
-                );
-            }
 
             const promises: Promise<unknown>[] = [
                 client.blpop(["abc", "zxy", "lkn"], 0.1),

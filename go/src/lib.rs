@@ -1,7 +1,6 @@
 /*
 * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 */
-
 #![deny(unsafe_op_in_unsafe_fn)]
 use glide_core::client::Client as GlideClient;
 use glide_core::connection_request;
@@ -16,7 +15,6 @@ use std::{
     ffi::{c_void, CString},
     mem,
     os::raw::{c_char, c_double, c_long, c_ulong},
-    ptr,
 };
 use tokio::runtime::Builder;
 use tokio::runtime::Runtime;
@@ -75,23 +73,6 @@ impl Default for CommandResponse {
             map_value: std::ptr::null_mut(),
             sets_value: std::ptr::null_mut(),
             sets_value_len: 0,
-        }
-    }
-}
-
-impl Default for CommandResponse {
-    fn default() -> Self {
-        CommandResponse {
-            response_type: ResponseType::default(),
-            int_value: 0,
-            float_value: 0.0,
-            bool_value: false,
-            string_value: ptr::null_mut(),
-            string_value_len: 0,
-            array_value: ptr::null_mut(),
-            array_value_len: 0,
-            map_key: ptr::null_mut(),
-            map_value: ptr::null_mut(),
         }
     }
 }
