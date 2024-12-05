@@ -411,7 +411,7 @@ public class TestUtilities {
     /**
      * Lock test until server completes a script/function execution.
      *
-     * @param lambda Client api reference to use for terminating the script/function on the server.
+     * @param lambda Client api reference to use for checking the server.
      */
     public static void waitForNotBusy(Supplier<CompletableFuture<?>> lambda) {
         // If function wasn't killed, and it didn't time out - it blocks the server and cause rest

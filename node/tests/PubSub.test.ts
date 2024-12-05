@@ -62,20 +62,24 @@ describe("PubSub", () => {
         const standaloneAddresses = global.STAND_ALONE_ENDPOINT;
         const clusterAddresses = global.CLUSTER_ENDPOINTS;
         // Connect to cluster or create a new one based on the parsed addresses
-        cmdCluster = standaloneAddresses
-            ? await ValkeyCluster.initFromExistingCluster(
-                  false,
-                  parseEndpoints(standaloneAddresses),
-                  getServerVersion,
-              )
-            : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
-        cmeCluster = clusterAddresses
-            ? await ValkeyCluster.initFromExistingCluster(
-                  true,
-                  parseEndpoints(clusterAddresses),
-                  getServerVersion,
-              )
-            : await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
+        const [_cmdCluster, _cmeCluster] = await Promise.all([
+            standaloneAddresses
+                ? ValkeyCluster.initFromExistingCluster(
+                      false,
+                      parseEndpoints(standaloneAddresses),
+                      getServerVersion,
+                  )
+                : ValkeyCluster.createCluster(false, 1, 1, getServerVersion),
+            clusterAddresses
+                ? ValkeyCluster.initFromExistingCluster(
+                      true,
+                      parseEndpoints(clusterAddresses),
+                      getServerVersion,
+                  )
+                : ValkeyCluster.createCluster(true, 3, 1, getServerVersion),
+        ]);
+        cmdCluster = _cmdCluster;
+        cmeCluster = _cmeCluster;
     }, 40000);
     afterEach(async () => {
         if (cmdCluster) {
@@ -399,11 +403,13 @@ describe("PubSub", () => {
 
                 await checkNoMessagesLeft(method, listeningClient, context, 1);
             } finally {
-                await clientCleanup(publishingClient!);
-                await clientCleanup(
-                    listeningClient!,
-                    clusterMode ? pubSub! : undefined,
-                );
+                await Promise.all([
+                    clientCleanup(publishingClient!),
+                    clientCleanup(
+                        listeningClient!,
+                        clusterMode ? pubSub! : undefined,
+                    ),
+                ]);
             }
         },
         TIMEOUT,
@@ -485,11 +491,13 @@ describe("PubSub", () => {
 
                 await checkNoMessagesLeft(method, listeningClient, context, 1);
             } finally {
-                await clientCleanup(publishingClient!);
-                await clientCleanup(
-                    listeningClient!,
-                    clusterMode ? pubSub! : undefined,
-                );
+                await Promise.all([
+                    clientCleanup(publishingClient!),
+                    clientCleanup(
+                        listeningClient!,
+                        clusterMode ? pubSub! : undefined,
+                    ),
+                ]);
             }
         },
         TIMEOUT,
@@ -567,11 +575,13 @@ describe("PubSub", () => {
                 await checkNoMessagesLeft(MethodTesting.Async, listeningClient);
                 expect(listeningClient.tryGetPubSubMessage()).toBeNull();
             } finally {
-                await clientCleanup(publishingClient!);
-                await clientCleanup(
-                    listeningClient!,
-                    clusterMode ? pubSub! : undefined,
-                );
+                await Promise.all([
+                    clientCleanup(publishingClient!),
+                    clientCleanup(
+                        listeningClient!,
+                        clusterMode ? pubSub! : undefined,
+                    ),
+                ]);
             }
         },
         TIMEOUT,
@@ -685,16 +695,17 @@ describe("PubSub", () => {
                 );
             } finally {
                 // Cleanup clients
-                if (listeningClient) {
-                    await clientCleanup(
-                        listeningClient,
-                        clusterMode ? pubSub! : undefined,
-                    );
-                }
-
-                if (publishingClient) {
-                    await clientCleanup(publishingClient);
-                }
+                await Promise.all([
+                    listeningClient
+                        ? clientCleanup(
+                              listeningClient,
+                              clusterMode ? pubSub! : undefined,
+                          )
+                        : Promise.resolve(),
+                    publishingClient
+                        ? clientCleanup(publishingClient)
+                        : Promise.resolve(),
+                ]);
             }
         },
         TIMEOUT,
@@ -797,16 +808,17 @@ describe("PubSub", () => {
                 expect(listeningClient.tryGetPubSubMessage()).toBeNull();
             } finally {
                 // Cleanup clients
-                if (listeningClient) {
-                    await clientCleanup(
-                        listeningClient,
-                        clusterMode ? pubSub! : undefined,
-                    );
-                }
-
-                if (publishingClient) {
-                    await clientCleanup(publishingClient);
-                }
+                await Promise.all([
+                    listeningClient
+                        ? clientCleanup(
+                              listeningClient,
+                              clusterMode ? pubSub! : undefined,
+                          )
+                        : Promise.resolve(),
+                    publishingClient
+                        ? clientCleanup(publishingClient)
+                        : Promise.resolve(),
+                ]);
             }
         },
         TIMEOUT,
@@ -896,16 +908,17 @@ describe("PubSub", () => {
                 await checkNoMessagesLeft(method, listeningClient, context, 1);
             } finally {
                 // Cleanup clients
-                if (listeningClient) {
-                    await clientCleanup(
-                        listeningClient,
-                        clusterMode ? pubSub! : undefined,
-                    );
-                }
-
-                if (publishingClient) {
-                    await clientCleanup(publishingClient);
-                }
+                await Promise.all([
+                    listeningClient
+                        ? clientCleanup(
+                              listeningClient,
+                              clusterMode ? pubSub! : undefined,
+                          )
+                        : Promise.resolve(),
+                    publishingClient
+                        ? clientCleanup(publishingClient)
+                        : Promise.resolve(),
+                ]);
             }
         },
         TIMEOUT,
@@ -992,13 +1005,14 @@ describe("PubSub", () => {
                 expect(listeningClient!.tryGetPubSubMessage()).toBeNull();
             } finally {
                 // Cleanup clients
-                if (listeningClient) {
-                    await clientCleanup(listeningClient, pubSub!);
-                }
-
-                if (publishingClient) {
-                    await clientCleanup(publishingClient);
-                }
+                await Promise.all([
+                    listeningClient
+                        ? clientCleanup(listeningClient, pubSub!)
+                        : Promise.resolve(),
+                    publishingClient
+                        ? clientCleanup(publishingClient)
+                        : Promise.resolve(),
+                ]);
             }
         },
         TIMEOUT,
@@ -1113,16 +1127,17 @@ describe("PubSub", () => {
                 );
             } finally {
                 // Cleanup clients
-                if (listeningClient) {
-                    await clientCleanup(
-                        listeningClient,
-                        clusterMode ? pubSub! : undefined,
-                    );
-                }
-
-                if (publishingClient) {
-                    await clientCleanup(publishingClient);
-                }
+                await Promise.all([
+                    listeningClient
+                        ? clientCleanup(
+                              listeningClient,
+                              clusterMode ? pubSub! : undefined,
+                          )
+                        : Promise.resolve(),
+                    publishingClient
+                        ? clientCleanup(publishingClient)
+                        : Promise.resolve(),
+                ]);
             }
         },
         TIMEOUT,
@@ -1221,16 +1236,17 @@ describe("PubSub", () => {
                 await checkNoMessagesLeft(method, listeningClient, context, 2);
             } finally {
                 // Cleanup clients
-                if (listeningClient) {
-                    await clientCleanup(
-                        listeningClient,
-                        clusterMode ? pubSub! : undefined,
-                    );
-                }
-
-                if (publishingClient) {
-                    await clientCleanup(publishingClient);
-                }
+                await Promise.all([
+                    listeningClient
+                        ? clientCleanup(
+                              listeningClient,
+                              clusterMode ? pubSub! : undefined,
+                          )
+                        : Promise.resolve(),
+                    publishingClient
+                        ? clientCleanup(publishingClient)
+                        : Promise.resolve(),
+                ]);
             }
         },
         TIMEOUT,
@@ -1323,16 +1339,17 @@ describe("PubSub", () => {
                 expect(listeningClient.tryGetPubSubMessage()).toBeNull();
             } finally {
                 // Cleanup clients
-                if (listeningClient) {
-                    await clientCleanup(
-                        listeningClient,
-                        clusterMode ? pubSub! : undefined,
-                    );
-                }
-
-                if (publishingClient) {
-                    await clientCleanup(publishingClient);
-                }
+                await Promise.all([
+                    listeningClient
+                        ? clientCleanup(
+                              listeningClient,
+                              clusterMode ? pubSub! : undefined,
+                          )
+                        : Promise.resolve(),
+                    publishingClient
+                        ? clientCleanup(publishingClient)
+                        : Promise.resolve(),
+                ]);
             }
         },
         TIMEOUT,
@@ -1441,16 +1458,17 @@ describe("PubSub", () => {
                 );
             } finally {
                 // Cleanup clients
-                if (listeningClient) {
-                    await clientCleanup(
-                        listeningClient,
-                        clusterMode ? pubSub! : undefined,
-                    );
-                }
-
-                if (publishingClient) {
-                    await clientCleanup(publishingClient);
-                }
+                await Promise.all([
+                    listeningClient
+                        ? clientCleanup(
+                              listeningClient,
+                              clusterMode ? pubSub! : undefined,
+                          )
+                        : Promise.resolve(),
+                    publishingClient
+                        ? clientCleanup(publishingClient)
+                        : Promise.resolve(),
+                ]);
             }
         },
         TIMEOUT,
@@ -1592,16 +1610,17 @@ describe("PubSub", () => {
                 );
             } finally {
                 // Cleanup clients
-                if (listeningClient) {
-                    await clientCleanup(
-                        listeningClient,
-                        clusterMode ? pubSub! : undefined,
-                    );
-                }
-
-                if (publishingClient) {
-                    await clientCleanup(publishingClient);
-                }
+                await Promise.all([
+                    listeningClient
+                        ? clientCleanup(
+                              listeningClient,
+                              clusterMode ? pubSub! : undefined,
+                          )
+                        : Promise.resolve(),
+                    publishingClient
+                        ? clientCleanup(publishingClient)
+                        : Promise.resolve(),
+                ]);
             }
         },
         TIMEOUT,
@@ -1779,41 +1798,42 @@ describe("PubSub", () => {
                 }
 
                 // Assert no messages are left unread
-                await checkNoMessagesLeft(
-                    method,
-                    listeningClientExact,
-                    contextExact,
-                    NUM_CHANNELS,
-                );
-                await checkNoMessagesLeft(
-                    method,
-                    listeningClientPattern,
-                    contextPattern,
-                    NUM_CHANNELS,
-                );
+                await Promise.all([
+                    checkNoMessagesLeft(
+                        method,
+                        listeningClientExact,
+                        contextExact,
+                        NUM_CHANNELS,
+                    ),
+                    checkNoMessagesLeft(
+                        method,
+                        listeningClientPattern,
+                        contextPattern,
+                        NUM_CHANNELS,
+                    ),
+                ]);
             } finally {
                 // Cleanup clients
-                if (listeningClientExact) {
-                    await clientCleanup(
-                        listeningClientExact,
-                        clusterMode ? pubSubExact! : undefined,
-                    );
-                }
-
-                if (publishingClient) {
-                    await clientCleanup(publishingClient);
-                }
-
-                if (listeningClientPattern) {
-                    await clientCleanup(
-                        listeningClientPattern,
-                        clusterMode ? pubSubPattern! : undefined,
-                    );
-                }
-
-                if (clientDontCare) {
-                    await clientCleanup(clientDontCare);
-                }
+                await Promise.all([
+                    listeningClientExact
+                        ? clientCleanup(
+                              listeningClientExact,
+                              clusterMode ? pubSubExact! : undefined,
+                          )
+                        : Promise.resolve(),
+                    listeningClientPattern
+                        ? clientCleanup(
+                              listeningClientPattern,
+                              clusterMode ? pubSubPattern! : undefined,
+                          )
+                        : Promise.resolve(),
+                    publishingClient
+                        ? clientCleanup(publishingClient)
+                        : Promise.resolve(),
+                    clientDontCare
+                        ? clientCleanup(clientDontCare)
+                        : Promise.resolve(),
+                ]);
             }
         },
         TIMEOUT,
@@ -1967,16 +1987,17 @@ describe("PubSub", () => {
                 );
             } finally {
                 // Cleanup clients
-                if (listeningClient) {
-                    await clientCleanup(
-                        listeningClient,
-                        clusterMode ? pubSub! : undefined,
-                    );
-                }
-
-                if (publishingClient) {
-                    await clientCleanup(publishingClient);
-                }
+                await Promise.all([
+                    listeningClient
+                        ? clientCleanup(
+                              listeningClient,
+                              clusterMode ? pubSub! : undefined,
+                          )
+                        : Promise.resolve(),
+                    publishingClient
+                        ? clientCleanup(publishingClient)
+                        : Promise.resolve(),
+                ]);
             }
         },
         TIMEOUT,
@@ -2221,30 +2242,29 @@ describe("PubSub", () => {
                 );
             } finally {
                 // Cleanup clients
-                if (listeningClientExact) {
-                    await clientCleanup(
-                        listeningClientExact,
-                        clusterMode ? pubSubExact! : undefined,
-                    );
-                }
-
-                if (publishingClient) {
-                    await clientCleanup(publishingClient);
-                }
-
-                if (listeningClientPattern) {
-                    await clientCleanup(
-                        listeningClientPattern,
-                        clusterMode ? pubSubPattern! : undefined,
-                    );
-                }
-
-                if (listeningClientSharded) {
-                    await clientCleanup(
-                        listeningClientSharded,
-                        clusterMode ? pubSubSharded! : undefined,
-                    );
-                }
+                await Promise.all([
+                    listeningClientExact
+                        ? clientCleanup(
+                              listeningClientExact,
+                              clusterMode ? pubSubExact! : undefined,
+                          )
+                        : Promise.resolve(),
+                    publishingClient
+                        ? clientCleanup(publishingClient)
+                        : Promise.resolve(),
+                    listeningClientPattern
+                        ? clientCleanup(
+                              listeningClientPattern,
+                              clusterMode ? pubSubPattern! : undefined,
+                          )
+                        : Promise.resolve(),
+                    listeningClientSharded
+                        ? clientCleanup(
+                              listeningClientSharded,
+                              clusterMode ? pubSubSharded! : undefined,
+                          )
+                        : Promise.resolve(),
+                ]);
             }
         },
         TIMEOUT,
@@ -2439,50 +2459,51 @@ describe("PubSub", () => {
                 expect(pubsubMsgSharded.channel).toEqual(CHANNEL_NAME);
                 expect(pubsubMsgSharded.pattern).toBeNull();
 
-                await checkNoMessagesLeft(
-                    method,
-                    listeningClientExact,
-                    callbackMessagesExact,
-                    2,
-                );
-                await checkNoMessagesLeft(
-                    method,
-                    listeningClientPattern,
-                    callbackMessagesPattern,
-                    2,
-                );
-                await checkNoMessagesLeft(
-                    method,
-                    listeningClientSharded,
-                    callbackMessagesSharded,
-                    1,
-                );
+                await Promise.all([
+                    checkNoMessagesLeft(
+                        method,
+                        listeningClientExact,
+                        callbackMessagesExact,
+                        2,
+                    ),
+                    checkNoMessagesLeft(
+                        method,
+                        listeningClientPattern,
+                        callbackMessagesPattern,
+                        2,
+                    ),
+                    checkNoMessagesLeft(
+                        method,
+                        listeningClientSharded,
+                        callbackMessagesSharded,
+                        1,
+                    ),
+                ]);
             } finally {
                 // Cleanup clients
-                if (listeningClientExact) {
-                    await clientCleanup(
-                        listeningClientExact,
-                        clusterMode ? pubSubExact! : undefined,
-                    );
-                }
-
-                if (publishingClient) {
-                    await clientCleanup(publishingClient);
-                }
-
-                if (listeningClientPattern) {
-                    await clientCleanup(
-                        listeningClientPattern,
-                        clusterMode ? pubSubPattern! : undefined,
-                    );
-                }
-
-                if (listeningClientSharded) {
-                    await clientCleanup(
-                        listeningClientSharded,
-                        clusterMode ? pubSubSharded! : undefined,
-                    );
-                }
+                await Promise.all([
+                    listeningClientExact
+                        ? clientCleanup(
+                              listeningClientExact,
+                              clusterMode ? pubSubExact! : undefined,
+                          )
+                        : Promise.resolve(),
+                    publishingClient
+                        ? clientCleanup(publishingClient)
+                        : Promise.resolve(),
+                    listeningClientPattern
+                        ? clientCleanup(
+                              listeningClientPattern,
+                              clusterMode ? pubSubPattern! : undefined,
+                          )
+                        : Promise.resolve(),
+                    listeningClientSharded
+                        ? clientCleanup(
+                              listeningClientSharded,
+                              clusterMode ? pubSubSharded! : undefined,
+                          )
+                        : Promise.resolve(),
+                ]);
             }
         },
         TIMEOUT,
@@ -2621,33 +2642,36 @@ describe("PubSub", () => {
                     expect(pubsubMsg2.pattern).toEqual(pattern);
                 }
 
-                await checkNoMessagesLeft(
-                    method,
-                    clientPattern,
-                    callbackMessagesPattern,
-                    2,
-                );
-                await checkNoMessagesLeft(
-                    method,
-                    clientExact,
-                    callbackMessagesExact,
-                    2,
-                );
+                await Promise.all([
+                    checkNoMessagesLeft(
+                        method,
+                        clientPattern,
+                        callbackMessagesPattern,
+                        2,
+                    ),
+                    checkNoMessagesLeft(
+                        method,
+                        clientExact,
+                        callbackMessagesExact,
+                        2,
+                    ),
+                ]);
             } finally {
                 // Cleanup clients
-                if (clientExact) {
-                    await clientCleanup(
-                        clientExact,
-                        clusterMode ? pubSubExact! : undefined,
-                    );
-                }
-
-                if (clientPattern) {
-                    await clientCleanup(
-                        clientPattern,
-                        clusterMode ? pubSubPattern! : undefined,
-                    );
-                }
+                await Promise.all([
+                    clientExact
+                        ? clientCleanup(
+                              clientExact,
+                              clusterMode ? pubSubExact! : undefined,
+                          )
+                        : Promise.resolve(),
+                    clientPattern
+                        ? clientCleanup(
+                              clientPattern,
+                              clusterMode ? pubSubPattern! : undefined,
+                          )
+                        : Promise.resolve(),
+                ]);
             }
         },
         TIMEOUT,
@@ -2835,50 +2859,51 @@ describe("PubSub", () => {
                 expect(shardedMsg.channel).toEqual(CHANNEL_NAME);
                 expect(shardedMsg.pattern).toBeNull();
 
-                await checkNoMessagesLeft(
-                    method,
-                    clientPattern,
-                    callbackMessagesPattern,
-                    2,
-                );
-                await checkNoMessagesLeft(
-                    method,
-                    clientExact,
-                    callbackMessagesExact,
-                    2,
-                );
-                await checkNoMessagesLeft(
-                    method,
-                    clientSharded,
-                    callbackMessagesSharded,
-                    1,
-                );
+                await Promise.all([
+                    checkNoMessagesLeft(
+                        method,
+                        clientPattern,
+                        callbackMessagesPattern,
+                        2,
+                    ),
+                    checkNoMessagesLeft(
+                        method,
+                        clientExact,
+                        callbackMessagesExact,
+                        2,
+                    ),
+                    checkNoMessagesLeft(
+                        method,
+                        clientSharded,
+                        callbackMessagesSharded,
+                        1,
+                    ),
+                ]);
             } finally {
                 // Cleanup clients
-                if (clientExact) {
-                    await clientCleanup(
-                        clientExact,
-                        clusterMode ? pubSubExact! : undefined,
-                    );
-                }
-
-                if (clientPattern) {
-                    await clientCleanup(
-                        clientPattern,
-                        clusterMode ? pubSubPattern! : undefined,
-                    );
-                }
-
-                if (clientSharded) {
-                    await clientCleanup(
-                        clientSharded,
-                        clusterMode ? pubSubSharded! : undefined,
-                    );
-                }
-
-                if (clientDontCare) {
-                    await clientCleanup(clientDontCare, undefined);
-                }
+                await Promise.all([
+                    clientExact
+                        ? clientCleanup(
+                              clientExact,
+                              clusterMode ? pubSubExact! : undefined,
+                          )
+                        : Promise.resolve(),
+                    clientPattern
+                        ? clientCleanup(
+                              clientPattern,
+                              clusterMode ? pubSubPattern! : undefined,
+                          )
+                        : Promise.resolve(),
+                    clientSharded
+                        ? clientCleanup(
+                              clientSharded,
+                              clusterMode ? pubSubSharded! : undefined,
+                          )
+                        : Promise.resolve(),
+                    clientDontCare
+                        ? clientCleanup(clientDontCare)
+                        : Promise.resolve(),
+                ]);
             }
         },
         TIMEOUT,
@@ -2982,16 +3007,17 @@ describe("PubSub", () => {
                     );
                     expect(listeningClient.tryGetPubSubMessage()).toBeNull();
                 } finally {
-                    if (listeningClient) {
-                        await clientCleanup(
-                            listeningClient,
-                            clusterMode ? pubSub! : undefined,
-                        );
-                    }
-
-                    if (publishingClient) {
-                        await clientCleanup(publishingClient);
-                    }
+                    await Promise.all([
+                        listeningClient
+                            ? clientCleanup(
+                                  listeningClient,
+                                  clusterMode ? pubSub! : undefined,
+                              )
+                            : Promise.resolve(),
+                        publishingClient
+                            ? clientCleanup(publishingClient)
+                            : Promise.resolve(),
+                    ]);
                 }
             },
             TIMEOUT,
@@ -3085,16 +3111,17 @@ describe("PubSub", () => {
                     );
                     expect(listeningClient.tryGetPubSubMessage()).toBeNull();
                 } finally {
-                    if (listeningClient) {
-                        await clientCleanup(
-                            listeningClient,
-                            clusterMode ? pubSub! : undefined,
-                        );
-                    }
-
-                    if (publishingClient) {
-                        await clientCleanup(publishingClient);
-                    }
+                    await Promise.all([
+                        listeningClient
+                            ? clientCleanup(
+                                  listeningClient,
+                                  clusterMode ? pubSub! : undefined,
+                              )
+                            : Promise.resolve(),
+                        publishingClient
+                            ? clientCleanup(publishingClient)
+                            : Promise.resolve(),
+                    ]);
                 }
             },
             TIMEOUT,
@@ -3177,16 +3204,17 @@ describe("PubSub", () => {
                     // Assert no messages left
                     expect(callbackMessages.length).toEqual(1);
                 } finally {
-                    if (listeningClient) {
-                        await clientCleanup(
-                            listeningClient,
-                            clusterMode ? pubSub! : undefined,
-                        );
-                    }
-
-                    if (publishingClient) {
-                        await clientCleanup(publishingClient);
-                    }
+                    await Promise.all([
+                        listeningClient
+                            ? clientCleanup(
+                                  listeningClient,
+                                  clusterMode ? pubSub! : undefined,
+                              )
+                            : Promise.resolve(),
+                        publishingClient
+                            ? clientCleanup(publishingClient)
+                            : Promise.resolve(),
+                    ]);
                 }
             },
             TIMEOUT,
@@ -3267,16 +3295,17 @@ describe("PubSub", () => {
                     // Assert no messages left
                     expect(callbackMessages.length).toEqual(1);
                 } finally {
-                    if (listeningClient) {
-                        await clientCleanup(
-                            listeningClient,
-                            clusterMode ? pubSub! : undefined,
-                        );
-                    }
-
-                    if (publishingClient) {
-                        await clientCleanup(publishingClient);
-                    }
+                    await Promise.all([
+                        listeningClient
+                            ? clientCleanup(
+                                  listeningClient,
+                                  clusterMode ? pubSub! : undefined,
+                              )
+                            : Promise.resolve(),
+                        publishingClient
+                            ? clientCleanup(publishingClient)
+                            : Promise.resolve(),
+                    ]);
                 }
             },
             TIMEOUT,
@@ -3444,20 +3473,16 @@ describe("PubSub", () => {
                 });
                 expect(nonMatchingChannels.length).toBe(0);
             } finally {
-                if (client1) {
-                    await clientCleanup(
-                        client1,
-                        clusterMode ? pubSub! : undefined,
-                    );
-                }
-
-                if (client2) {
-                    await clientCleanup(client2);
-                }
-
-                if (client) {
-                    await clientCleanup(client);
-                }
+                await Promise.all([
+                    client1
+                        ? clientCleanup(
+                              client1,
+                              clusterMode ? pubSub! : undefined,
+                          )
+                        : Promise.resolve(),
+                    client2 ? clientCleanup(client2) : Promise.resolve(),
+                    client ? clientCleanup(client) : Promise.resolve(),
+                ]);
             }
         },
         TIMEOUT,
@@ -3527,20 +3552,16 @@ describe("PubSub", () => {
                 const numPatterns = await client2.pubsubNumPat();
                 expect(numPatterns).toBe(2);
             } finally {
-                if (client1) {
-                    await clientCleanup(
-                        client1,
-                        clusterMode ? pubSub! : undefined,
-                    );
-                }
-
-                if (client2) {
-                    await clientCleanup(client2);
-                }
-
-                if (client) {
-                    await clientCleanup(client);
-                }
+                await Promise.all([
+                    client1
+                        ? clientCleanup(
+                              client1,
+                              clusterMode ? pubSub! : undefined,
+                          )
+                        : Promise.resolve(),
+                    client2 ? clientCleanup(client2) : Promise.resolve(),
+                    client ? clientCleanup(client) : Promise.resolve(),
+                ]);
             }
         },
         TIMEOUT,
@@ -3676,34 +3697,28 @@ describe("PubSub", () => {
                 const emptySubscribers = await client2.pubsubNumSub([]);
                 expect(emptySubscribers).toEqual([]);
             } finally {
-                if (client1) {
-                    await clientCleanup(
-                        client1,
-                        clusterMode ? pubSub1! : undefined,
-                    );
-                }
-
-                if (client2) {
-                    await clientCleanup(
-                        client2,
-                        clusterMode ? pubSub2! : undefined,
-                    );
-                }
-
-                if (client3) {
-                    await clientCleanup(
-                        client3,
-                        clusterMode ? pubSub3! : undefined,
-                    );
-                }
-
-                if (client4) {
-                    await clientCleanup(client4);
-                }
-
-                if (client) {
-                    await clientCleanup(client);
-                }
+                await Promise.all([
+                    client1
+                        ? clientCleanup(
+                              client1,
+                              clusterMode ? pubSub1! : undefined,
+                          )
+                        : Promise.resolve(),
+                    client2
+                        ? clientCleanup(
+                              client2,
+                              clusterMode ? pubSub2! : undefined,
+                          )
+                        : Promise.resolve(),
+                    client3
+                        ? clientCleanup(
+                              client3,
+                              clusterMode ? pubSub3! : undefined,
+                          )
+                        : Promise.resolve(),
+                    client4 ? clientCleanup(client4) : Promise.resolve(),
+                    client ? clientCleanup(client) : Promise.resolve(),
+                ]);
             }
         },
         TIMEOUT,
@@ -3790,17 +3805,13 @@ describe("PubSub", () => {
                 ).pubsubShardChannels({ pattern: "non_matching_*" });
                 expect(nonMatchingChannels).toEqual([]);
             } finally {
-                if (client1) {
-                    await clientCleanup(client1, pubSub ? pubSub : undefined);
-                }
-
-                if (client2) {
-                    await clientCleanup(client2);
-                }
-
-                if (client) {
-                    await clientCleanup(client);
-                }
+                await Promise.all([
+                    client1
+                        ? clientCleanup(client1, pubSub ? pubSub : undefined)
+                        : Promise.resolve(),
+                    client2 ? clientCleanup(client2) : Promise.resolve(),
+                    client ? clientCleanup(client) : Promise.resolve(),
+                ]);
             }
         },
         TIMEOUT,
@@ -3918,25 +3929,19 @@ describe("PubSub", () => {
                 ).pubsubShardNumSub([]);
                 expect(emptySubscribers).toEqual([]);
             } finally {
-                if (client1) {
-                    await clientCleanup(client1, pubSub1 ? pubSub1 : undefined);
-                }
-
-                if (client2) {
-                    await clientCleanup(client2, pubSub2 ? pubSub2 : undefined);
-                }
-
-                if (client3) {
-                    await clientCleanup(client3, pubSub3 ? pubSub3 : undefined);
-                }
-
-                if (client4) {
-                    await clientCleanup(client4);
-                }
-
-                if (client) {
-                    await clientCleanup(client);
-                }
+                await Promise.all([
+                    client1
+                        ? clientCleanup(client1, pubSub1 ? pubSub1 : undefined)
+                        : Promise.resolve(),
+                    client2
+                        ? clientCleanup(client2, pubSub2 ? pubSub2 : undefined)
+                        : Promise.resolve(),
+                    client3
+                        ? clientCleanup(client3, pubSub3 ? pubSub3 : undefined)
+                        : Promise.resolve(),
+                    client4 ? clientCleanup(client4) : Promise.resolve(),
+                    client ? clientCleanup(client) : Promise.resolve(),
+                ]);
             }
         },
         TIMEOUT,
@@ -4001,13 +4006,12 @@ describe("PubSub", () => {
                 ).pubsubShardChannels();
                 expect(shardChannels).toEqual([shardChannel]);
             } finally {
-                if (client1) {
-                    await clientCleanup(client1, pubSub ? pubSub : undefined);
-                }
-
-                if (client2) {
-                    await clientCleanup(client2);
-                }
+                await Promise.all([
+                    client1
+                        ? clientCleanup(client1, pubSub ? pubSub : undefined)
+                        : Promise.resolve(),
+                    client2 ? clientCleanup(client2) : Promise.resolve(),
+                ]);
             }
         },
         TIMEOUT,
@@ -4086,13 +4090,14 @@ describe("PubSub", () => {
                     [shardChannel]: 2,
                 });
             } finally {
-                if (client1) {
-                    await clientCleanup(client1, pubSub!);
-                }
-
-                if (client2) {
-                    await clientCleanup(client2, pubSub!);
-                }
+                await Promise.all([
+                    client1
+                        ? clientCleanup(client1, pubSub!)
+                        : Promise.resolve(),
+                    client2
+                        ? clientCleanup(client2, pubSub!)
+                        : Promise.resolve(),
+                ]);
             }
         },
         TIMEOUT,
