@@ -13,6 +13,9 @@ use glide_core::STREAM as TYPE_STREAM;
 use glide_core::STRING as TYPE_STRING;
 use glide_core::ZSET as TYPE_ZSET;
 
+// Telemetry required for getStatistics
+use glide_core::Telemetry;
+
 use bytes::Bytes;
 use jni::errors::Error as JniError;
 use jni::objects::{JByteArray, JClass, JObject, JObjectArray, JString};
@@ -22,6 +25,7 @@ use redis::Value;
 use std::sync::mpsc;
 
 mod errors;
+mod linked_hashmap;
 
 use errors::{handle_errors, handle_panics, FFIError};
 
@@ -578,6 +582,38 @@ pub extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTypeStream
     _class: JClass<'local>,
 ) -> JString<'local> {
     safe_create_jstring(env, TYPE_STREAM, "getTypeStreamConstant")
+}
+
+/// Returns a Java's `HashMap` representing the statistics collected for this process.
+///
+/// This function is meant to be invoked by Java using JNI.
+///
+/// * `env`    - The JNI environment.
+/// * `_class`  - The class object. Not used.
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_resolvers_StatisticsResolver_getStatistics<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+) -> JObject<'local> {
+    let Some(mut map) = linked_hashmap::new_linked_hashmap(&mut env) else {
+        return JObject::null();
+    };
+
+    linked_hashmap::put_strings(
+        &mut env,
+        &mut map,
+        "total_connections",
+        &format!("{}", Telemetry::total_connections()),
+    );
+
+    linked_hashmap::put_strings(
+        &mut env,
+        &mut map,
+        "total_clients",
+        &format!("{}", Telemetry::total_clients()),
+    );
+
+    map
 }
 
 /// Convert a Rust string to a Java String and handle errors.

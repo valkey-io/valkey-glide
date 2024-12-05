@@ -105,7 +105,7 @@ Before starting this step, make sure you've installed all software requirements.
     git clone --branch ${VERSION} https://github.com/valkey-io/valkey-glide.git
     cd valkey-glide
     ```
-2. Initialize git submodule:
+2. Initialize git submodules:
     ```bash
     git submodule update --init --recursive
     ```
@@ -163,7 +163,7 @@ go test -race ./... -run TestConnectionRequestProtobufGeneration_allFieldsSet -v
 After pulling new changes, ensure that you update the submodules by running the following command:
 
 ```bash
-git submodule update
+git submodule update --init --recursive
 ```
 
 ### Generate protobuf files
