@@ -659,6 +659,10 @@ pub fn create_connection_request(
         connection_request.client_name = client_name.deref().into();
     }
 
+    if let Some(client_az) = &configuration.client_az {
+        connection_request.client_az = client_az.deref().into();
+    }
+
     connection_request
 }
 
@@ -673,6 +677,7 @@ pub struct TestConfiguration {
     pub read_from: Option<connection_request::ReadFrom>,
     pub database_id: u32,
     pub client_name: Option<String>,
+    pub client_az: Option<String>,
     pub protocol: ProtocolVersion,
 }
 

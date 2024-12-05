@@ -3,8 +3,27 @@
  */
 mod utilities;
 
+#[macro_export]
+/// Compare `$expected` with `$actual`. This macro, will exit the test process
+/// if the assertion fails. Unlike `assert_eq!` - this also works in tasks
+macro_rules! async_assert_eq {
+    ($expected:expr, $actual:expr) => {{
+        if $actual != $expected {
+            println!(
+                "{}:{}: Expected: {:?} != Actual: {:?}",
+                file!(),
+                line!(),
+                $actual,
+                $expected
+            );
+            std::process::exit(1);
+        }
+    }};
+}
+
 #[cfg(test)]
 pub(crate) mod shared_client_tests {
+    use glide_core::Telemetry;
     use std::collections::HashMap;
 
     use super::*;
@@ -44,7 +63,9 @@ pub(crate) mod shared_client_tests {
                 })
                 .await
             }
-            BackingServer::Cluster(cluster) => create_cluster_client(cluster, configuration).await,
+            BackingServer::Cluster(cluster) => {
+                create_cluster_client(cluster.as_ref(), configuration).await
+            }
         }
     }
 
@@ -537,6 +558,98 @@ pub(crate) mod shared_client_tests {
                     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 }
             }
+        });
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_client_telemetry_standalone() {
+        Telemetry::reset();
+        block_on_all(async move {
+            // create a server with 2 clients
+            let server_config = TestConfiguration {
+                use_tls: false,
+                ..Default::default()
+            };
+
+            let test_basics = utilities::setup_test_basics_internal(&server_config).await;
+            let server = BackingServer::Standalone(test_basics.server);
+
+            // setup_test_basics_internal internally, starts a single client connection
+            assert_eq!(Telemetry::total_connections(), 1);
+            assert_eq!(Telemetry::total_clients(), 1);
+
+            {
+                // Create 2 more clients, confirm that they are tracked
+                let _client1 = create_client(&server, server_config.clone()).await;
+                let _client2 = create_client(&server, server_config).await;
+
+                // Each client maintains a single connection
+                assert_eq!(Telemetry::total_connections(), 3);
+                assert_eq!(Telemetry::total_clients(), 3);
+
+                // Connections are dropped here
+            }
+
+            // Confirm 1 connection & client remain
+            assert_eq!(Telemetry::total_connections(), 1);
+            assert_eq!(Telemetry::total_clients(), 1);
+        });
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_client_telemetry_cluster() {
+        Telemetry::reset();
+        block_on_all(async {
+            let local_set = tokio::task::LocalSet::default();
+            let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+            // We use 2 tasks to let "dispose" be called. In addition, the task that checks for the cleanup
+            // does not start until the cluster is up and running. We use a channel to communicate this between
+            // the tasks
+            local_set.spawn_local(async move {
+                let cluster = cluster::setup_default_cluster().await;
+                async_assert_eq!(Telemetry::total_connections(), 0);
+                async_assert_eq!(Telemetry::total_clients(), 0);
+
+                // Each client opens 12 connections
+                println!("Creating 1st cluster client...");
+                let _c1 = cluster::setup_default_client(&cluster).await;
+                async_assert_eq!(Telemetry::total_connections(), 12);
+                async_assert_eq!(Telemetry::total_clients(), 1);
+
+                println!("Creating 2nd cluster client...");
+                let _c2 = cluster::setup_default_client(&cluster).await;
+                async_assert_eq!(Telemetry::total_connections(), 24);
+                async_assert_eq!(Telemetry::total_clients(), 2);
+
+                let _ = tx.send(1).await;
+                // client is dropped and eventually disposed here
+            });
+
+            local_set.spawn_local(async move {
+                let _ = rx.recv().await;
+                println!("Cluster terminated. Wait for the telemetry to clear");
+                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                assert_eq!(Telemetry::total_connections(), 0);
+                assert_eq!(Telemetry::total_clients(), 0);
+            });
+            local_set.await;
+        });
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_multi_key_no_args_in_cluster() {
+        block_on_all(async {
+            let cluster = cluster::setup_default_cluster().await;
+            println!("Creating 1st cluster client...");
+            let mut c1 = cluster::setup_default_client(&cluster).await;
+            let result = c1.send_command(&redis::cmd("MSET"), None).await;
+            assert!(result.is_err());
+            let e = result.unwrap_err();
+            assert!(e.kind().clone().eq(&redis::ErrorKind::ResponseError));
+            assert!(e.to_string().contains("wrong number of arguments"));
         });
     }
 

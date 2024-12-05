@@ -1,5 +1,5 @@
 import asyncio
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 from glide import (
     AllNodes,
@@ -17,7 +17,7 @@ from glide import (
 
 
 async def create_client(
-    nodes_list: List[Tuple[str, int]] = [("localhost", 6379)]
+    nodes_list: Optional[List[Tuple[str, int]]] = None
 ) -> GlideClusterClient:
     """
     Creates and returns a GlideClusterClient instance.
@@ -33,6 +33,8 @@ async def create_client(
     Returns:
         GlideClusterClient: An instance of GlideClusterClient connected to the discovered nodes.
     """
+    if nodes_list is None:
+        nodes_list = [("localhost", 6379)]
     addresses = [NodeAddress(host, port) for host, port in nodes_list]
     # Check `GlideClusterClientConfiguration` for additional options.
     config = GlideClusterClientConfiguration(

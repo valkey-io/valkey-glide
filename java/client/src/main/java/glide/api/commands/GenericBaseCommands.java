@@ -23,8 +23,12 @@ public interface GenericBaseCommands {
      * Removes the specified <code>keys</code> from the database. A key is ignored if it does not
      * exist.
      *
-     * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
-     *     map to different hash slots.
+     * @apiNote In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
+     *     will be split across these slots and executed separately for each. This means the command
+     *     is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+     *     call will return the first encountered error, even though some requests may have succeeded
+     *     while others did not. If this behavior impacts your application logic, consider splitting
+     *     the request into sub-requests per slot to ensure atomicity.
      * @see <a href="https://valkey.io/commands/del/">valkey.io</a> for details.
      * @param keys The keys we wanted to remove.
      * @return The number of keys that were removed.
@@ -40,8 +44,12 @@ public interface GenericBaseCommands {
      * Removes the specified <code>keys</code> from the database. A key is ignored if it does not
      * exist.
      *
-     * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
-     *     map to different hash slots.
+     * @apiNote In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
+     *     will be split across these slots and executed separately for each. This means the command
+     *     is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+     *     call will return the first encountered error, even though some requests may have succeeded
+     *     while others did not. If this behavior impacts your application logic, consider splitting
+     *     the request into sub-requests per slot to ensure atomicity.
      * @see <a href="https://valkey.io/commands/del/">valkey.io</a> for details.
      * @param keys The keys we wanted to remove.
      * @return The number of keys that were removed.
@@ -56,8 +64,12 @@ public interface GenericBaseCommands {
     /**
      * Returns the number of keys in <code>keys</code> that exist in the database.
      *
-     * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
-     *     map to different hash slots.
+     * @apiNote In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
+     *     will be split across these slots and executed separately for each. This means the command
+     *     is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+     *     call will return the first encountered error, even though some requests may have succeeded
+     *     while others did not. If this behavior impacts your application logic, consider splitting
+     *     the request into sub-requests per slot to ensure atomicity.
      * @see <a href="https://valkey.io/commands/exists/">valkey.io</a> for details.
      * @param keys The keys list to check.
      * @return The number of keys that exist. If the same existing key is mentioned in <code>keys
@@ -73,8 +85,12 @@ public interface GenericBaseCommands {
     /**
      * Returns the number of keys in <code>keys</code> that exist in the database.
      *
-     * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
-     *     map to different hash slots.
+     * @apiNote In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
+     *     will be split across these slots and executed separately for each. This means the command
+     *     is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+     *     call will return the first encountered error, even though some requests may have succeeded
+     *     while others did not. If this behavior impacts your application logic, consider splitting
+     *     the request into sub-requests per slot to ensure atomicity.
      * @see <a href="https://valkey.io/commands/exists/">valkey.io</a> for details.
      * @param keys The keys list to check.
      * @return The number of keys that exist. If the same existing key is mentioned in <code>keys
@@ -93,8 +109,12 @@ public interface GenericBaseCommands {
      * specified keys and ignores non-existent ones. However, this command does not block the server,
      * while <a href="https://valkey.io/commands/del/">DEL</a> does.
      *
-     * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
-     *     map to different hash slots.
+     * @apiNote In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
+     *     will be split across these slots and executed separately for each. This means the command
+     *     is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+     *     call will return the first encountered error, even though some requests may have succeeded
+     *     while others did not. If this behavior impacts your application logic, consider splitting
+     *     the request into sub-requests per slot to ensure atomicity.
      * @see <a href="https://valkey.io/commands/unlink/">valkey.io</a> for details.
      * @param keys The list of keys to unlink.
      * @return The number of <code>keys</code> that were unlinked.
@@ -112,8 +132,12 @@ public interface GenericBaseCommands {
      * specified keys and ignores non-existent ones. However, this command does not block the server,
      * while <a href="https://valkey.io/commands/del/">DEL</a> does.
      *
-     * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
-     *     map to different hash slots.
+     * @apiNote In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
+     *     will be split across these slots and executed separately for each. This means the command
+     *     is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+     *     call will return the first encountered error, even though some requests may have succeeded
+     *     while others did not. If this behavior impacts your application logic, consider splitting
+     *     the request into sub-requests per slot to ensure atomicity.
      * @see <a href="https://valkey.io/commands/unlink/">valkey.io</a> for details.
      * @param keys The list of keys to unlink.
      * @return The number of <code>keys</code> that were unlinked.
@@ -952,8 +976,12 @@ public interface GenericBaseCommands {
     /**
      * Updates the last access time of specified <code>keys</code>.
      *
-     * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
-     *     map to different hash slots.
+     * @apiNote In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
+     *     will be split across these slots and executed separately for each. This means the command
+     *     is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+     *     call will return the first encountered error, even though some requests may have succeeded
+     *     while others did not. If this behavior impacts your application logic, consider splitting
+     *     the request into sub-requests per slot to ensure atomicity.
      * @see <a href="https://valkey.io/commands/touch/">valkey.io</a> for details.
      * @param keys The keys to update last access time.
      * @return The number of keys that were updated.
@@ -968,8 +996,12 @@ public interface GenericBaseCommands {
     /**
      * Updates the last access time of specified <code>keys</code>.
      *
-     * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
-     *     map to different hash slots.
+     * @apiNote In cluster mode, if keys in <code>keys</code> map to different hash slots, the command
+     *     will be split across these slots and executed separately for each. This means the command
+     *     is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+     *     call will return the first encountered error, even though some requests may have succeeded
+     *     while others did not. If this behavior impacts your application logic, consider splitting
+     *     the request into sub-requests per slot to ensure atomicity.
      * @see <a href="https://valkey.io/commands/touch/">valkey.io</a> for details.
      * @param keys The keys to update last access time.
      * @return The number of keys that were updated.
