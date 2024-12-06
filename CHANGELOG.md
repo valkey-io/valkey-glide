@@ -1,4 +1,5 @@
 #### Changes
+* Java: bump `netty` version ([#2777](https://github.com/valkey-io/valkey-glide/pull/2777))
 
 #### Breaking Changes
 
