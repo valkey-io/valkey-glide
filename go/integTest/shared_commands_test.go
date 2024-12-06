@@ -1933,6 +1933,56 @@ func (suite *GlideTestSuite) TestSMIsMember() {
 	})
 }
 
+func (suite *GlideTestSuite) TestSUnion() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1-" + uuid.NewString()
+		key2 := "{key}-2-" + uuid.NewString()
+		key3 := "{key}-3-" + uuid.NewString()
+		nonSetKey := uuid.NewString()
+		memberList1 := []string{"a", "b", "c"}
+		memberList2 := []string{"b", "c", "d", "e"}
+
+		res1, err := client.SAdd(key1, memberList1)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res1.Value())
+		assert.False(suite.T(), res1.IsNil())
+
+		res2, err := client.SAdd(key2, memberList2)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), res2.Value())
+		assert.False(suite.T(), res2.IsNil())
+
+		res3, err := client.SUnion([]string{key1, key2})
+		assert.Nil(suite.T(), err)
+		assert.Contains(suite.T(), res3, api.CreateStringResult("a"))
+		assert.Contains(suite.T(), res3, api.CreateStringResult("b"))
+		assert.Contains(suite.T(), res3, api.CreateStringResult("c"))
+		assert.Contains(suite.T(), res3, api.CreateStringResult("d"))
+		assert.Contains(suite.T(), res3, api.CreateStringResult("e"))
+
+		res4, err := client.SUnion([]string{key3})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), map[api.Result[string]]struct{}(map[api.Result[string]]struct{}{}), res4)
+
+		res5, err := client.SUnion([]string{key1, key3})
+		assert.Nil(suite.T(), err)
+		assert.Contains(suite.T(), res5, api.CreateStringResult("a"))
+		assert.Contains(suite.T(), res5, api.CreateStringResult("b"))
+		assert.Contains(suite.T(), res5, api.CreateStringResult("c"))
+
+		// Exceptions, empty keys
+		res6, err := client.SUnion([]string{})
+		assert.Nil(suite.T(), res6)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		// Non-set key
+		suite.verifyOK(client.Set(nonSetKey, "value"))
+		res7, err := client.SUnion([]string{nonSetKey, key1})
+		assert.Nil(suite.T(), res7)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
 func (suite *GlideTestSuite) TestLRange() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		list := []string{"value4", "value3", "value2", "value1"}
