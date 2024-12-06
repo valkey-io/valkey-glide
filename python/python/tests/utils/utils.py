@@ -137,6 +137,11 @@ def compare_maps(
     )
 
 
+def round_values(map_data: dict, decimal_places: int) -> dict:
+    """Round the values in a map to the specified number of decimal places."""
+    return {key: round(value, decimal_places) for key, value in map_data.items()}
+
+
 def convert_bytes_to_string_object(
     # TODO: remove the str options
     byte_string_dict: Optional[

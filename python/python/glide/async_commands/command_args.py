@@ -36,6 +36,7 @@ class OrderBy(Enum):
     This enum is used for the following commands:
     - `SORT`: General sorting in ascending or descending order.
     - `GEOSEARCH`: Sorting items based on their proximity to a center point.
+    - `FT.AGGREGATE`: Used in the SortBy clause of the FT.AGGREGATE command.
     """
 
     ASC = "ASC"

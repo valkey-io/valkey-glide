@@ -28,7 +28,6 @@ import ValkeyCluster from "../../utils/TestUtils";
 import {
     flushAndCloseClient,
     getServerVersion,
-    parseCommandLineArgs,
     parseEndpoints,
 } from "./TestUtilities";
 
@@ -60,9 +59,8 @@ describe("PubSub", () => {
     let cmeCluster: ValkeyCluster;
     let cmdCluster: ValkeyCluster;
     beforeAll(async () => {
-        const standaloneAddresses =
-            parseCommandLineArgs()["standalone-endpoints"];
-        const clusterAddresses = parseCommandLineArgs()["cluster-endpoints"];
+        const standaloneAddresses = global.STAND_ALONE_ENDPOINT;
+        const clusterAddresses = global.CLUSTER_ENDPOINTS;
         // Connect to cluster or create a new one based on the parsed addresses
         const [_cmdCluster, _cmeCluster] = await Promise.all([
             standaloneAddresses
@@ -84,20 +82,22 @@ describe("PubSub", () => {
         cmeCluster = _cmeCluster;
     }, 40000);
     afterEach(async () => {
-        await Promise.all([
-            cmdCluster
-                ? flushAndCloseClient(false, cmdCluster.getAddresses())
-                : Promise.resolve(),
-            cmeCluster
-                ? flushAndCloseClient(true, cmeCluster.getAddresses())
-                : Promise.resolve(),
-        ]);
+        if (cmdCluster) {
+            await flushAndCloseClient(false, cmdCluster.getAddresses());
+        }
+
+        if (cmeCluster) {
+            await flushAndCloseClient(true, cmeCluster.getAddresses());
+        }
     });
     afterAll(async () => {
-        await Promise.all([
-            cmdCluster ? cmdCluster.close() : Promise.resolve(),
-            cmeCluster ? cmeCluster.close() : Promise.resolve(),
-        ]);
+        if (cmdCluster) {
+            await cmdCluster.close();
+        }
+
+        if (cmeCluster) {
+            await cmeCluster.close();
+        }
     });
 
     async function createClients(

@@ -1,0 +1,142 @@
+name: Redis-rs CI
+
+on:
+    push:
+        branches:
+            - main
+            - release-*
+            - v*
+        paths:
+            - glide-core/redis-rs/redis/**
+            - utils/cluster_manager.py
+            - deny.toml
+            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/workflows/redis-rs.yml
+    pull_request:
+        paths:
+            - glide-core/redis-rs/redis/**
+            - utils/cluster_manager.py
+            - deny.toml
+            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/workflows/redis-rs.yml
+    workflow_dispatch:
+    workflow_call:
+
+concurrency:
+    group: redis-rs-${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
+
+env:
+    CARGO_TERM_COLOR: always
+
+jobs:
+    redis-rs-CI:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Install shared software dependencies
+              uses: ./.github/workflows/install-shared-dependencies
+              with:
+                  os: "ubuntu"
+                  target: "x86_64-unknown-linux-gnu"
+                  engine-version: "7.2.5"
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Cache dependencies
+              uses: Swatinem/rust-cache@v2
+              with:
+                  cache-on-failure: true
+                  workspaces: ./glide-core/redis-rs/redis
+
+            - name: Build project
+              run: cargo build --release
+              working-directory: ./glide-core/redis-rs/redis/src
+
+            - name: Lint redis-rs
+              shell: bash
+              run: |
+                  cargo fmt --all -- --check
+                  cargo clippy -- -D warnings
+                  cargo install --locked cargo-deny
+                  cargo deny check all --config ${GITHUB_WORKSPACE}/deny.toml --exclude-dev all
+              working-directory: ./glide-core/redis-rs/redis
+
+            - name: Test
+              # TODO remove the concurrency limit after we fix test flakyness.
+              run: |
+                  cargo test --release -- --test-threads=1 | tee ../test-results.xml
+                  echo "### Tests passed :v:" >> $GITHUB_STEP_SUMMARY
+              working-directory: ./glide-core/redis-rs/redis/src
+
+            - name: Upload test reports
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: test-reports-redis-rs-${{ github.sha }}
+                  path: ./glide-core/redis-rs/redis/test-results.xml
+
+            - name: Run benchmarks
+              run: |
+                  cargo bench | tee bench-results.xml
+              working-directory: ./glide-core/redis-rs/redis
+
+            - name: Upload benchmark results
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: benchmark-results-redis-rs-${{ github.sha }}
+                  path: ./glide-core/redis-rs/redis/bench-results.xml
+
+            - name: Test docs
+              run: |
+                  cargo test --doc
+              working-directory: ./glide-core/redis-rs/redis/src
+
+            - name: Security audit
+              run: |
+                  cargo audit | tee audit-results.txt
+                  if grep -q "Crate: " audit-results.txt; then
+                    echo "## Security audit results summary: Security vulnerabilities found :exclamation: :exclamation:" >> $GITHUB_STEP_SUMMARY
+                    echo "Security audit results summary: Security vulnerabilities found"
+                    exit 1
+                  else
+                    echo "### Security audit results summary: All good, no security vulnerabilities found :closed_lock_with_key:" >> $GITHUB_STEP_SUMMARY
+                    echo "Security audit results summary: All good, no security vulnerabilities found"
+                  fi
+              working-directory: ./glide-core/redis-rs/redis
+
+            - name: Upload audit results
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: audit-results-redis-rs--${{ github.sha }}
+                  path: ./glide-core/redis-rs/redis/audit-results.txt
+
+            - name: Run cargo machete
+              run: |
+                  cargo install cargo-machete
+                  cargo machete | tee machete-results.txt
+                  if grep -A1 "cargo-machete found the following unused dependencies in this directory:" machete-results.txt | sed -n '2p' | grep -v "^if" > /dev/null; then
+                    echo "Machete results summary: Unused dependencies found" >> $GITHUB_STEP_SUMMARY
+                    echo "Machete results summary: Unused dependencies found"
+                    cat machete-results.txt | grep -A1 "cargo-machete found the following unused dependencies in this directory:" | sed -n '2p' | grep -v "^if" >> $GITHUB_STEP_SUMMARY
+                    exit 1
+                  else
+                    echo "### Machete results summary: All good, no unused dependencies found :rocket:" >> $GITHUB_STEP_SUMMARY
+                    echo "Machete results summary: All good, no unused dependencies found"
+                  fi
+              working-directory: ./glide-core/redis-rs/redis
+
+            - name: Upload machete results
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: machete-results-redis-rs-${{ github.sha }}
+                  path: ./glide-core/redis-rs/redis/machete-results.txt

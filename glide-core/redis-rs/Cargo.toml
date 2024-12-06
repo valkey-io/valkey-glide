@@ -1,0 +1,9 @@
+# Dummy package so ORT tool will not fail on virtual workspace
+[package]
+name = "dummy-for-ort"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+members = ["redis", "redis-test", "afl/parser"]
+resolver = "2"

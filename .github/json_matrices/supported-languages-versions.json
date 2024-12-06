@@ -6,13 +6,13 @@
     },
     {
         "language": "python",
-        "versions": ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"],
-        "always-run-versions": ["3.8", "3.13"]
+        "versions": ["3.9", "3.10", "3.11", "3.12", "3.13"],
+        "always-run-versions": ["3.9", "3.13"]
     },
     {
         "language": "node",
-        "versions": ["16.x", "17.x", "18.x", "19.x", "20.x"],
-        "always-run-versions": ["16.x", "20.x"]
+        "versions": ["16.x", "17.x", "18.x", "19.x", "20.x", "21.x", "22.x"],
+        "always-run-versions": ["16.x", "22.x"]
     },
     {
         "language": "dotnet",

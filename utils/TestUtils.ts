@@ -22,7 +22,7 @@ function parseOutput(input: string): {
         .map((address) => address.split(":"))
         .map((address) => [address[0], Number(address[1])]) as [
         string,
-        number
+        number,
     ][];
 
     if (clusterFolder === undefined || ports === undefined) {
@@ -43,7 +43,7 @@ export class ValkeyCluster {
     private constructor(
         version: string,
         addresses: [string, number][],
-        clusterFolder?: string
+        clusterFolder?: string,
     ) {
         this.addresses = addresses;
         this.clusterFolder = clusterFolder;
@@ -56,9 +56,9 @@ export class ValkeyCluster {
         replicaCount: number,
         getVersionCallback: (
             addresses: [string, number][],
-            clusterMode: boolean
+            clusterMode: boolean,
         ) => Promise<string>,
-        loadModule?: string[]
+        loadModule?: string[],
     ): Promise<ValkeyCluster> {
         return new Promise<ValkeyCluster>((resolve, reject) => {
             let command = `start -r ${replicaCount} -n ${shardCount}`;
@@ -70,7 +70,7 @@ export class ValkeyCluster {
             if (loadModule) {
                 if (loadModule.length === 0) {
                     throw new Error(
-                        "Please provide the path(s) to the module(s) you want to load."
+                        "Please provide the path(s) to the module(s) you want to load.",
                     );
                 }
 
@@ -94,12 +94,12 @@ export class ValkeyCluster {
                                     new ValkeyCluster(
                                         ver,
                                         addresses,
-                                        clusterFolder
-                                    )
-                            )
+                                        clusterFolder,
+                                    ),
+                            ),
                         );
                     }
-                }
+                },
             );
         });
     }
@@ -109,11 +109,11 @@ export class ValkeyCluster {
         addresses: [string, number][],
         getVersionCallback: (
             addresses: [string, number][],
-            clusterMode: boolean
-        ) => Promise<string>
+            clusterMode: boolean,
+        ) => Promise<string>,
     ): Promise<ValkeyCluster> {
         return getVersionCallback(addresses, cluster_mode).then(
-            (ver) => new ValkeyCluster(ver, addresses, "")
+            (ver) => new ValkeyCluster(ver, addresses, ""),
         );
     }
 

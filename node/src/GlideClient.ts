@@ -99,6 +99,43 @@ export namespace GlideClientConfiguration {
     }
 }
 
+/**
+ * Configuration options for creating a {@link GlideClient | GlideClient}.
+ *
+ * Extends `BaseClientConfiguration` with properties specific to `GlideClient`, such as database selection,
+ * reconnection strategies, and Pub/Sub subscription settings.
+ *
+ * @remarks
+ * This configuration allows you to tailor the client's behavior when connecting to a standalone Valkey Glide server.
+ *
+ * - **Database Selection**: Use `databaseId` to specify which logical database to connect to.
+ * - **Reconnection Strategy**: Customize how the client should attempt reconnections using `connectionBackoff`.
+ *   - `numberOfRetries`: The maximum number of retry attempts with increasing delays.
+ *     - After this limit is reached, the retry interval becomes constant.
+ *   - `factor`: A multiplier applied to the base delay between retries (e.g., `500` means a 500ms base delay).
+ *   - `exponentBase`: The exponential growth factor for delays (e.g., `2` means the delay doubles with each retry).
+ * - **Pub/Sub Subscriptions**: Predefine Pub/Sub channels and patterns to subscribe to upon connection establishment.
+ *
+ * @example
+ * ```typescript
+ * const config: GlideClientConfiguration = {
+ *   databaseId: 1,
+ *   connectionBackoff: {
+ *     numberOfRetries: 10, // Maximum retries before delay becomes constant
+ *     factor: 500,        // Base delay in milliseconds
+ *     exponentBase: 2,    // Delay doubles with each retry (2^N)
+ *   },
+ *   pubsubSubscriptions: {
+ *     channelsAndPatterns: {
+ *       [GlideClientConfiguration.PubSubChannelModes.Pattern]: new Set(['news.*']),
+ *     },
+ *     callback: (msg) => {
+ *       console.log(`Received message on ${msg.channel}:`, msg.payload);
+ *     },
+ *   },
+ * };
+ * ```
+ */
 export type GlideClientConfiguration = BaseClientConfiguration & {
     /**
      * index of the logical database to connect to.
@@ -154,7 +191,53 @@ export class GlideClient extends BaseClient {
         this.configurePubsub(options, configuration);
         return configuration;
     }
-
+    /**
+     * Creates a new `GlideClient` instance and establishes a connection to a standalone Valkey Glide server.
+     *
+     * @param options - The configuration options for the client, including server addresses, authentication credentials, TLS settings, database selection, reconnection strategy, and Pub/Sub subscriptions.
+     * @returns A promise that resolves to a connected `GlideClient` instance.
+     *
+     * @remarks
+     * Use this static method to create and connect a `GlideClient` to a standalone Valkey Glide server. The client will automatically handle connection establishment, including any authentication and TLS configurations.
+     *
+     * @example
+     * ```typescript
+     * // Connecting to a Standalone Server
+     * import { GlideClient, GlideClientConfiguration } from '@valkey/valkey-glide';
+     *
+     * const client = await GlideClient.createClient({
+     *   addresses: [
+     *     { host: 'primary.example.com', port: 6379 },
+     *     { host: 'replica1.example.com', port: 6379 },
+     *   ],
+     *   databaseId: 1,
+     *   credentials: {
+     *     username: 'user1',
+     *     password: 'passwordA',
+     *   },
+     *   useTLS: true,
+     *   connectionBackoff: {
+     *     numberOfRetries: 5,
+     *     factor: 1000,
+     *     exponentBase: 2,
+     *   },
+     *   pubsubSubscriptions: {
+     *     channelsAndPatterns: {
+     *       [GlideClientConfiguration.PubSubChannelModes.Exact]: new Set(['updates']),
+     *     },
+     *     callback: (msg) => {
+     *       console.log(`Received message: ${msg.payload}`);
+     *     },
+     *   },
+     * });
+     * ```
+     *
+     * @remarks
+     * - **Authentication**: If `credentials` are provided, the client will attempt to authenticate using the specified username and password.
+     * - **TLS**: If `useTLS` is set to `true`, the client will establish a secure connection using TLS.
+     * - **Reconnection Strategy**: The `connectionBackoff` settings define how the client will attempt to reconnect in case of disconnections.
+     * - **Pub/Sub Subscriptions**: Any channels or patterns specified in `pubsubSubscriptions` will be subscribed to upon connection.
+     */
     public static async createClient(
         options: GlideClientConfiguration,
     ): Promise<GlideClient> {
@@ -164,7 +247,9 @@ export class GlideClient extends BaseClient {
                 new GlideClient(socket, options),
         );
     }
-
+    /**
+     * @internal
+     */
     static async __createClient(
         options: BaseClientConfiguration,
         connectedSocket: net.Socket,

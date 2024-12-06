@@ -5,9 +5,9 @@ use super::{create_connection_request, ClusterMode, TestConfiguration};
 use futures::future::{join_all, BoxFuture};
 use futures::FutureExt;
 use glide_core::client::Client;
-use glide_core::connection_request::NodeAddress;
 use once_cell::sync::Lazy;
 use redis::{ConnectionAddr, RedisConnectionInfo};
+use serde::Deserialize;
 use std::process::Command;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -21,6 +21,14 @@ pub(crate) const LONG_CLUSTER_TEST_TIMEOUT: Duration = Duration::from_millis(60_
 enum ClusterType {
     Tcp,
     TcpTls,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+struct ValkeyServerInfo {
+    host: String,
+    port: u32,
+    pid: u32,
+    is_primary: bool,
 }
 
 impl ClusterType {
@@ -40,15 +48,27 @@ impl ClusterType {
 
 pub struct RedisCluster {
     cluster_folder: String,
-    addresses: Vec<NodeAddress>,
     use_tls: bool,
     password: Option<String>,
+    servers: Vec<ValkeyServerInfo>,
 }
 
 impl Drop for RedisCluster {
     fn drop(&mut self) {
+        let pids: Vec<String> = self
+            .servers
+            .iter()
+            .map(|server| format!("{}", server.pid))
+            .collect();
+        let pids = pids.join(",");
         Self::execute_cluster_script(
-            vec!["stop", "--cluster-folder", &self.cluster_folder],
+            vec![
+                "stop",
+                "--cluster-folder",
+                &self.cluster_folder,
+                "--pids",
+                &pids,
+            ],
             self.use_tls,
             self.password.clone(),
         );
@@ -119,44 +139,46 @@ impl RedisCluster {
             script_args.push(&replicas_num);
         }
         let (stdout, stderr) = Self::execute_cluster_script(script_args, use_tls, None);
-        let (cluster_folder, addresses) = Self::parse_start_script_output(&stdout, &stderr);
+        let (cluster_folder, servers) = Self::parse_start_script_output(&stdout, &stderr);
         let mut password: Option<String> = None;
         if let Some(info) = conn_info {
             password.clone_from(&info.password);
         };
         RedisCluster {
             cluster_folder,
-            addresses,
             use_tls,
             password,
+            servers,
         }
     }
 
-    fn parse_start_script_output(output: &str, errors: &str) -> (String, Vec<NodeAddress>) {
-        let cluster_folder = output.split("CLUSTER_FOLDER=").collect::<Vec<&str>>();
-        assert!(
-            !cluster_folder.is_empty() && cluster_folder.len() >= 2,
-            "Received output: {output}, stderr: {errors}"
-        );
-        let cluster_folder = cluster_folder.get(1).unwrap().lines();
-        let cluster_folder = cluster_folder.collect::<Vec<&str>>();
-        let cluster_folder = cluster_folder.first().unwrap().to_string();
-
-        let output_parts = output.split("CLUSTER_NODES=").collect::<Vec<&str>>();
-        assert!(
-            !output_parts.is_empty() && output_parts.len() >= 2,
-            "Received output: {output}, stderr: {errors}"
-        );
-        let nodes = output_parts.get(1).unwrap().split(',');
-        let mut address_vec: Vec<NodeAddress> = Vec::new();
-        for node in nodes {
-            let node_parts = node.split(':').collect::<Vec<&str>>();
-            let mut address_info = NodeAddress::new();
-            address_info.host = node_parts.first().unwrap().to_string().into();
-            address_info.port = node_parts.get(1).unwrap().parse::<u32>().unwrap();
-            address_vec.push(address_info);
+    fn value_after_prefix(prefix: &str, line: &str) -> Option<String> {
+        if !line.starts_with(prefix) {
+            return None;
         }
-        (cluster_folder, address_vec)
+        Some(line[prefix.len()..].to_string())
+    }
+
+    fn parse_start_script_output(output: &str, _errors: &str) -> (String, Vec<ValkeyServerInfo>) {
+        let prefixes = vec!["CLUSTER_FOLDER", "SERVERS_JSON"];
+        let mut values = std::collections::HashMap::<String, String>::new();
+        let lines: Vec<&str> = output.split('\n').map(|line| line.trim()).collect();
+        for line in lines {
+            for prefix in &prefixes {
+                let prefix_with_shave = format!("{prefix}=");
+                if line.starts_with(&prefix_with_shave) {
+                    values.insert(
+                        prefix.to_string(),
+                        Self::value_after_prefix(&prefix_with_shave, line).unwrap_or_default(),
+                    );
+                }
+            }
+        }
+
+        let cluster_folder = values.get("CLUSTER_FOLDER").unwrap();
+        let cluster_nodes_json = values.get("SERVERS_JSON").unwrap();
+        let servers: Vec<ValkeyServerInfo> = serde_json::from_str(cluster_nodes_json).unwrap();
+        (cluster_folder.clone(), servers)
     }
 
     fn execute_cluster_script(
@@ -180,6 +202,7 @@ impl RedisCluster {
             },
             args.join(" ")
         );
+
         let output = if cfg!(target_os = "windows") {
             Command::new("cmd")
                 .args(["/C", &cmd])
@@ -204,11 +227,9 @@ impl RedisCluster {
     }
 
     pub fn get_server_addresses(&self) -> Vec<ConnectionAddr> {
-        self.addresses
+        self.servers
             .iter()
-            .map(|address| {
-                ClusterType::build_addr(self.use_tls, &address.host, address.port as u16)
-            })
+            .map(|server| ClusterType::build_addr(self.use_tls, &server.host, server.port as u16))
             .collect()
     }
 }
@@ -230,11 +251,11 @@ async fn setup_acl_for_cluster(
 }
 
 pub async fn create_cluster_client(
-    cluster: &Option<RedisCluster>,
+    cluster: Option<&RedisCluster>,
     mut configuration: TestConfiguration,
 ) -> Client {
     let addresses = if !configuration.shared_server {
-        cluster.as_ref().unwrap().get_server_addresses()
+        cluster.unwrap().get_server_addresses()
     } else {
         get_shared_cluster_addresses(configuration.use_tls)
     };
@@ -263,7 +284,36 @@ pub async fn setup_test_basics_internal(configuration: TestConfiguration) -> Clu
     } else {
         None
     };
-    let client = create_cluster_client(&cluster, configuration).await;
+    let client = create_cluster_client(cluster.as_ref(), configuration).await;
+    ClusterTestBasics { cluster, client }
+}
+
+pub async fn setup_default_cluster() -> RedisCluster {
+    let test_config = TestConfiguration::default();
+    RedisCluster::new(false, &test_config.connection_info, None, None)
+}
+
+pub async fn setup_default_client(cluster: &RedisCluster) -> Client {
+    let test_config = TestConfiguration::default();
+    create_cluster_client(Some(cluster), test_config).await
+}
+
+pub async fn setup_cluster_with_replicas(
+    configuration: TestConfiguration,
+    replicas_num: u16,
+    primaries_num: u16,
+) -> ClusterTestBasics {
+    let cluster = if !configuration.shared_server {
+        Some(RedisCluster::new(
+            configuration.use_tls,
+            &configuration.connection_info,
+            Some(primaries_num),
+            Some(replicas_num),
+        ))
+    } else {
+        None
+    };
+    let client = create_cluster_client(cluster.as_ref(), configuration).await;
     ClusterTestBasics { cluster, client }
 }
 
@@ -273,4 +323,35 @@ pub async fn setup_test_basics(use_tls: bool) -> ClusterTestBasics {
         ..Default::default()
     })
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_start_script_output() {
+        let script_output = r#"
+INFO:root:## Executing cluster_manager.py with the following args:
+  Namespace(host='127.0.0.1', tls=False, auth=None, log='info', logfile=None, action='start', cluster_mode=True, folder_path='/Users/user/glide-for-redis/utils/clusters', ports=None, shard_count=3, replica_count=2, prefix='redis-cluster', load_module=None)
+INFO:root:2024-11-05 16:05:44.024796+00:00 Starting script for cluster /Users/user/glide-for-redis/utils/clusters/redis-cluster-2024-11-05T16-05-44Z-2bz4YS
+LOG_FILE=/Users/user/glide-for-redis/utils/clusters/redis-cluster-2024-11-05T16-05-44Z-2bz4YS/cluster_manager.log
+SERVERS_JSON=[{"host": "127.0.0.1", "port": 39163, "pid": 59428, "is_primary": true}, {"host": "127.0.0.1", "port": 23178, "pid": 59436, "is_primary": true}, {"host": "127.0.0.1", "port": 25186, "pid": 59453, "is_primary": true}, {"host": "127.0.0.1", "port": 52500, "pid": 59432, "is_primary": false}, {"host": "127.0.0.1", "port": 48252, "pid": 59461, "is_primary": false}, {"host": "127.0.0.1", "port": 19544, "pid": 59444, "is_primary": false}, {"host": "127.0.0.1", "port": 37455, "pid": 59440, "is_primary": false}, {"host": "127.0.0.1", "port": 9282, "pid": 59449, "is_primary": false}, {"host": "127.0.0.1", "port": 19843, "pid": 59457, "is_primary": false}]
+INFO:root:Created Cluster Redis in 24.8926 seconds
+CLUSTER_FOLDER=/Users/user/glide-for-redis/utils/clusters/redis-cluster-2024-11-05T16-05-44Z-2bz4YS
+CLUSTER_NODES=127.0.0.1:39163,127.0.0.1:23178,127.0.0.1:25186,127.0.0.1:52500,127.0.0.1:48252,127.0.0.1:19544,127.0.0.1:37455,127.0.0.1:9282,127.0.0.1:19843
+        "#;
+        let (folder, servers) = RedisCluster::parse_start_script_output(script_output, "");
+        assert_eq!(servers.len(), 9);
+        assert_eq!(
+            folder,
+            "/Users/user/glide-for-redis/utils/clusters/redis-cluster-2024-11-05T16-05-44Z-2bz4YS"
+        );
+
+        let server_0 = servers.first().unwrap();
+        assert_eq!(server_0.pid, 59428);
+        assert_eq!(server_0.port, 39163);
+        assert_eq!(server_0.host, "127.0.0.1");
+        assert!(server_0.is_primary);
+    }
 }

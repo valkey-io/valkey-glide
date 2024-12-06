@@ -41,6 +41,11 @@ class ReadFrom(Enum):
     Spread the requests between all replicas in a round robin manner.
     If no replica is available, route the requests to the primary.
     """
+    AZ_AFFINITY = ProtobufReadFrom.AZAffinity
+    """
+    Spread the read requests between replicas in the same client's AZ (Aviliablity zone) in a round robin manner,
+    falling back to other replicas or the primary if needed
+    """
 
 
 class ProtocolVersion(Enum):
@@ -135,6 +140,7 @@ class BaseClientConfiguration:
         client_name: Optional[str] = None,
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
         inflight_requests_limit: Optional[int] = None,
+        client_az: Optional[str] = None,
     ):
         """
         Represents the configuration settings for a Glide client.
@@ -172,6 +178,12 @@ class BaseClientConfiguration:
         self.client_name = client_name
         self.protocol = protocol
         self.inflight_requests_limit = inflight_requests_limit
+        self.client_az = client_az
+
+        if read_from == ReadFrom.AZ_AFFINITY and not client_az:
+            raise ValueError(
+                "client_az mus t be set when read_from is set to AZ_AFFINITY"
+            )
 
     def _create_a_protobuf_conn_request(
         self, cluster_mode: bool = False
@@ -204,6 +216,8 @@ class BaseClientConfiguration:
         request.protocol = self.protocol.value
         if self.inflight_requests_limit:
             request.inflight_requests_limit = self.inflight_requests_limit
+        if self.client_az:
+            request.client_az = self.client_az
 
         return request
 
@@ -293,6 +307,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
         pubsub_subscriptions: Optional[PubSubSubscriptions] = None,
         inflight_requests_limit: Optional[int] = None,
+        client_az: Optional[str] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -303,6 +318,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
             client_name=client_name,
             protocol=protocol,
             inflight_requests_limit=inflight_requests_limit,
+            client_az=client_az,
         )
         self.reconnect_strategy = reconnect_strategy
         self.database_id = database_id
@@ -442,6 +458,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         ] = PeriodicChecksStatus.ENABLED_DEFAULT_CONFIGS,
         pubsub_subscriptions: Optional[PubSubSubscriptions] = None,
         inflight_requests_limit: Optional[int] = None,
+        client_az: Optional[str] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -452,6 +469,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             client_name=client_name,
             protocol=protocol,
             inflight_requests_limit=inflight_requests_limit,
+            client_az=client_az,
         )
         self.periodic_checks = periodic_checks
         self.pubsub_subscriptions = pubsub_subscriptions

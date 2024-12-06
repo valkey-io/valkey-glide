@@ -19,7 +19,7 @@ Linux:
 
 macOS:
 
--   macOS (12.7 and latest) (Apple silicon/aarch_64 and Intel/x86_64)
+-   macOS 14.7 (Apple silicon/aarch_64)
 
 Alpine:
 
@@ -96,9 +96,9 @@ client.close();
 
 ### Supported platforms
 
-Currentlly the package is supported on:
+Currently, the package is tested on:
 
 | Operation systems | C lib                | Architecture      |
 | ----------------- | -------------------- | ----------------- |
 | `Linux`           | `glibc`, `musl libc` | `x86_64`, `arm64` |
-| `macOS`           | `Darwin`             | `x86_64`, `arm64` |
+| `macOS`           | `Darwin`             | `arm64`           |

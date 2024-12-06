@@ -4,7 +4,6 @@
 
 import { expect } from "@jest/globals";
 import { exec } from "child_process";
-import parseArgs from "minimist";
 import { gte } from "semver";
 import { v4 as uuidv4 } from "uuid";
 import {
@@ -177,7 +176,6 @@ export function flushallOnPort(port: number): Promise<void> {
  */
 export const parseEndpoints = (endpointsStr: string): [string, number][] => {
     try {
-        console.log(endpointsStr);
         const endpoints: string[][] = endpointsStr
             .split(",")
             .map((endpoint) => endpoint.split(":"));
@@ -330,40 +328,6 @@ export function createLongRunningLuaScript(
     return script.replaceAll("$timeout", timeout.toString());
 }
 
-export async function waitForScriptNotBusy(
-    client: GlideClusterClient | GlideClient,
-) {
-    // If function wasn't killed, and it didn't time out - it blocks the server and cause rest test to fail.
-    let isBusy = true;
-
-    do {
-        try {
-            await client.scriptKill();
-        } catch (err) {
-            // should throw `notbusy` error, because the function should be killed before
-            if ((err as Error).message.toLowerCase().includes("notbusy")) {
-                isBusy = false;
-            }
-        }
-    } while (isBusy);
-}
-
-/**
- * Parses the command-line arguments passed to the Node.js process.
- *
- * @returns Parsed command-line arguments.
- *
- * @example
- * ```typescript
- * // Command: node script.js --name="John Doe" --age=30
- * const args = parseCommandLineArgs();
- * // args = { name: 'John Doe', age: 30 }
- * ```
- */
-export function parseCommandLineArgs() {
-    return parseArgs(process.argv.slice(2));
-}
-
 export async function testTeardown(
     cluster_mode: boolean,
     option: BaseClientConfiguration,
@@ -387,6 +351,8 @@ export const getClientConfigurationOption = (
             port,
         })),
         protocol,
+        useTLS: global.TLS ?? false,
+        requestTimeout: 1000,
         ...configOverrides,
     };
 };
@@ -598,46 +564,6 @@ export async function encodableTransactionTest(
     return responseData;
 }
 
-/** Populates a transaction with dump and restore commands
- *
- * @param baseTransaction - A transaction
- * @param valueResponse - Represents the encoded response of "value" to compare
- * @returns Array of tuples, where first element is a test name/description, second - expected return value.
- */
-export async function DumpAndRestoreTest(
-    baseTransaction: Transaction,
-    dumpValue: Buffer | null,
-): Promise<[string, GlideReturnType][]> {
-    if (dumpValue == null) {
-        throw new Error("dumpValue is null");
-    }
-
-    const key = "{key}-" + uuidv4(); // string
-    const buffValue = Buffer.from("value");
-    // array of tuples - first element is test name/description, second - expected return value
-    const responseData: [string, GlideReturnType][] = [];
-
-    baseTransaction.set(key, "value");
-    responseData.push(["set(key, stringValue)", "OK"]);
-    baseTransaction.customCommand(["DUMP", key]);
-    responseData.push(['customCommand(["DUMP", key])', dumpValue]);
-    baseTransaction.get(key);
-    responseData.push(["get(key)", buffValue]);
-    baseTransaction.del([key]);
-    responseData.push(["del(key)", 1]);
-    baseTransaction.get(key);
-    responseData.push(["get(key)", null]);
-    baseTransaction.customCommand(["RESTORE", key, "0", dumpValue]);
-    responseData.push([
-        'customCommand(["RESTORE", buffKey, "0", stringValue])',
-        "OK",
-    ]);
-    baseTransaction.get(key);
-    responseData.push(["get(key)", buffValue]);
-
-    return responseData;
-}
-
 /**
  * Populates a transaction with commands to test.
  * @param baseTransaction - A transaction.
@@ -834,14 +760,14 @@ export async function transactionTest(
         baseTransaction.lmpop([key24], ListDirection.LEFT);
         responseData.push([
             "lmpop([key22], ListDirection.LEFT)",
-            [{ key: key24, value: [field + "2"] }],
+            convertRecordToGlideRecord({ [key24]: [field + "2"] }),
         ]);
         baseTransaction.lpush(key24, [field + "2"]);
         responseData.push(["lpush(key22, [2])", 2]);
         baseTransaction.blmpop([key24], ListDirection.LEFT, 0.1, 1);
         responseData.push([
             "blmpop([key22], ListDirection.LEFT, 0.1, 1)",
-            [{ key: key24, value: [field + "2"] }],
+            convertRecordToGlideRecord({ [key24]: [field + "2"] }),
         ]);
     }
 
@@ -1270,15 +1196,6 @@ export async function transactionTest(
         "xpending(key9, groupName1)",
         [1, "0-2", "0-2", [[consumer, "1"]]],
     ]);
-    baseTransaction.xpendingWithOptions(key9, groupName1, {
-        start: InfBoundary.NegativeInfinity,
-        end: InfBoundary.PositiveInfinity,
-        count: 10,
-    });
-    responseData.push([
-        "xpendingWithOptions(key9, groupName1, -, +, 10)",
-        [["0-2", consumer, 0, 1]],
-    ]);
     baseTransaction.xclaim(key9, groupName1, consumer, 0, ["0-2"]);
     responseData.push([
         'xclaim(key9, groupName1, consumer, 0, ["0-2"])',
@@ -1346,7 +1263,6 @@ export async function transactionTest(
     responseData.push(["xgroupDestroy(key9, groupName1)", true]);
     baseTransaction.xgroupDestroy(key9, groupName2);
     responseData.push(["xgroupDestroy(key9, groupName2)", true]);
-
     baseTransaction.rename(key9, key10);
     responseData.push(["rename(key9, key10)", "OK"]);
     baseTransaction.exists([key10]);
@@ -1711,9 +1627,6 @@ export async function transactionTest(
         responseData.push(["sortReadOnly(key21)", ["1", "2", "3"]]);
     }
 
-    baseTransaction.wait(1, 200);
-    if (gte(version, "7.0.0")) responseData.push(["wait(1, 200)", 1]);
-    else responseData.push(["wait(1, 200)", 0]);
     return responseData;
 }
 

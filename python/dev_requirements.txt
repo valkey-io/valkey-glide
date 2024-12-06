@@ -4,3 +4,4 @@ isort == 5.10
 mypy == 1.2
 mypy-protobuf == 3.5
 packaging >= 22.0
+pyrsistent

@@ -24,6 +24,9 @@ use tracing_subscriber::{
     prelude::*,
     reload::{self, Handle},
 };
+
+use std::str::FromStr;
+
 // Layer-Filter pair determines whether a log will be collected
 type InnerFiltered = Filtered<Layer<Registry>, LevelFilter, Registry>;
 // A Reloadable pair of layer-filter
@@ -52,6 +55,7 @@ pub static INITIATE_ONCE: InitiateOnce = InitiateOnce {
 };
 
 const FILE_DIRECTORY: &str = "glide-logs";
+const ENV_GLIDE_LOG_DIR: &str = "GLIDE_LOG_DIR";
 
 /// Wraps [RollingFileAppender] to defer initialization until logging is required,
 /// allowing [init] to disable file logging on read-only filesystems.
@@ -114,6 +118,21 @@ impl Level {
     }
 }
 
+/// Attempt to read a directory path from an environment variable. If the environment variable `envname` exists
+/// and contains a valid path - this function will create and return that path. In any case of failure,
+/// this method returns `None` (e.g. the environment variable exists but contains an empty path etc)
+pub fn create_directory_from_env(envname: &str) -> Option<String> {
+    let Ok(dirpath) = std::env::var(envname) else {
+        return None;
+    };
+
+    if dirpath.trim().is_empty() || std::fs::create_dir_all(&dirpath).is_err() {
+        return None;
+    }
+
+    Some(dirpath)
+}
+
 // Initialize the global logger to error level on the first call only
 // In any of the calls to the function, including the first - resetting the existence loggers to the new setting
 // provided by using the global reloadable handle
@@ -128,22 +147,34 @@ pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
 
         let (stdout_layer, stdout_reload) = reload::Layer::new(stdout_fmt);
 
+        // Check if the environment variable GLIDE_LOG is set
+        let logs_dir =
+            create_directory_from_env(ENV_GLIDE_LOG_DIR).unwrap_or(FILE_DIRECTORY.to_string());
         let file_appender = LazyRollingFileAppender::new(
             Rotation::HOURLY,
-            FILE_DIRECTORY,
+            logs_dir,
             file_name.unwrap_or("output.log"),
         );
+
         let file_fmt = tracing_subscriber::fmt::layer()
             .with_writer(file_appender)
             .with_filter(LevelFilter::OFF);
         let (file_layer, file_reload) = reload::Layer::new(file_fmt);
 
+        // If user has set the environment variable "RUST_LOG" with a valid log verbosity, use it
+        let log_level = if let Ok(level) = std::env::var("RUST_LOG") {
+            let trace_level = tracing::Level::from_str(&level).unwrap_or(tracing::Level::TRACE);
+            LevelFilter::from(trace_level)
+        } else {
+            LevelFilter::TRACE
+        };
+
         // Enable logging only from allowed crates
         let targets_filter = filter::Targets::new()
-            .with_target("glide", LevelFilter::TRACE)
-            .with_target("redis", LevelFilter::TRACE)
-            .with_target("logger_core", LevelFilter::TRACE)
-            .with_target(std::env!("CARGO_PKG_NAME"), LevelFilter::TRACE);
+            .with_target("glide", log_level)
+            .with_target("redis", log_level)
+            .with_target("logger_core", log_level)
+            .with_target(std::env!("CARGO_PKG_NAME"), log_level);
 
         tracing_subscriber::registry()
             .with(stdout_layer)
@@ -174,8 +205,10 @@ pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
                 });
         }
         Some(file) => {
-            let file_appender =
-                LazyRollingFileAppender::new(Rotation::HOURLY, FILE_DIRECTORY, file);
+            // Check if the environment variable GLIDE_LOG is set
+            let logs_dir =
+                create_directory_from_env(ENV_GLIDE_LOG_DIR).unwrap_or(FILE_DIRECTORY.to_string());
+            let file_appender = LazyRollingFileAppender::new(Rotation::HOURLY, logs_dir, file);
             let _ = reloads
                 .file_reload
                 .write()
@@ -235,5 +268,41 @@ pub fn log<Message: AsRef<str>, Identifier: AsRef<str>>(
         Level::Warn => log_warn(log_identifier, message),
         Level::Error => log_error(log_identifier, message),
         Level::Off => (),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_directory_from_env() {
+        let dir_path = format!("{}/glide-logs", std::env::temp_dir().display());
+        // Case 1: try to create an already existing folder
+        // make sure we are starting fresh
+        let _ = std::fs::remove_dir_all(&dir_path);
+        // Create the directory
+        assert!(std::fs::create_dir_all(&dir_path).is_ok());
+
+        std::env::set_var(ENV_GLIDE_LOG_DIR, &dir_path);
+        assert!(create_directory_from_env(ENV_GLIDE_LOG_DIR).is_some());
+        assert!(std::fs::metadata(&dir_path).is_ok());
+
+        // Case 2: try to create a new folder (i.e. the folder does not already exist)
+        let _ = std::fs::remove_dir_all(&dir_path);
+
+        // Create the directory
+        assert!(std::fs::create_dir_all(&dir_path).is_ok());
+        assert!(std::fs::metadata(&dir_path).is_ok());
+
+        std::env::set_var(ENV_GLIDE_LOG_DIR, &dir_path);
+        assert!(create_directory_from_env(ENV_GLIDE_LOG_DIR).is_some());
+
+        // make sure we are starting fresh
+        let _ = std::fs::remove_dir_all(&dir_path);
+
+        // Case 3: empty variable is not acceptable
+        std::env::set_var(ENV_GLIDE_LOG_DIR, "");
+        assert!(create_directory_from_env(ENV_GLIDE_LOG_DIR).is_none());
     }
 }
