@@ -35,7 +35,7 @@
         "test": "npm run build-test-utils && jest --verbose --testPathIgnorePatterns='ServerModules'",
         "test-dbg": "npm run build-test-utils && jest --runInBand",
         "test-minimum": "npm run build-test-utils && jest --verbose --testNamePattern='^(.(?!(GlideJson|GlideFt|pubsub|kill)))*$'",
-        "test-modules": "npm run build-test-utils && jest --verbose --testNamePattern='(GlideJson|GlideFt)'",
+        "test-modules": "npm run build-test-utils && jest --runInBand --verbose --testNamePattern='(GlideJson|GlideFt)'",
         "build-test-utils": "cd ../utils && npm i && npm run build",
         "lint:fix": "npm run install-linting && npx eslint -c ../eslint.config.mjs --fix && npm run prettier:format",
         "lint": "npm run install-linting && npx eslint -c ../eslint.config.mjs && npm run prettier:check:ci",
