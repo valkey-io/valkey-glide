@@ -627,12 +627,12 @@ func (client *baseClient) SPop(key string) (Result[string], error) {
 }
 
 func (client *baseClient) SUnion(keys []string) (map[Result[string]]struct{}, error) {
-    result, err := client.executeCommand(C.SUnion, keys)
-    if err != nil {
-        return nil, err
-    }
+	result, err := client.executeCommand(C.SUnion, keys)
+	if err != nil {
+		return nil, err
+	}
 
-    return handleStringSetResponse(result)
+	return handleStringSetResponse(result)
 }
 
 func (client *baseClient) LRange(key string, start int64, end int64) ([]Result[string], error) {

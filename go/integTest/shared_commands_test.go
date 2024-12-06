@@ -1696,44 +1696,44 @@ func (suite *GlideTestSuite) TestSUnion() {
 		memberList1 := []string{"a", "b", "c"}
 		memberList2 := []string{"b", "c", "d", "e"}
 
-        res1, err := client.SAdd(key1, memberList1)
-        assert.Nil(suite.T(), err)
-        assert.Equal(suite.T(), int64(3), res1.Value())
-        assert.False(suite.T(), res1.IsNil())
+		res1, err := client.SAdd(key1, memberList1)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res1.Value())
+		assert.False(suite.T(), res1.IsNil())
 
-        res2, err := client.SAdd(key2, memberList2)
-        assert.Nil(suite.T(), err)
-        assert.Equal(suite.T(), int64(4), res2.Value())
-        assert.False(suite.T(), res2.IsNil())
+		res2, err := client.SAdd(key2, memberList2)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), res2.Value())
+		assert.False(suite.T(), res2.IsNil())
 
-        res3, err := client.SUnion([]string {key1, key2})
-        assert.Nil(suite.T(), err)
-        assert.Contains(suite.T(), res3, api.CreateStringResult("a"))
-        assert.Contains(suite.T(), res3, api.CreateStringResult("b"))
-        assert.Contains(suite.T(), res3, api.CreateStringResult("c"))
-        assert.Contains(suite.T(), res3, api.CreateStringResult("d"))
-        assert.Contains(suite.T(), res3, api.CreateStringResult("e"))
+		res3, err := client.SUnion([]string{key1, key2})
+		assert.Nil(suite.T(), err)
+		assert.Contains(suite.T(), res3, api.CreateStringResult("a"))
+		assert.Contains(suite.T(), res3, api.CreateStringResult("b"))
+		assert.Contains(suite.T(), res3, api.CreateStringResult("c"))
+		assert.Contains(suite.T(), res3, api.CreateStringResult("d"))
+		assert.Contains(suite.T(), res3, api.CreateStringResult("e"))
 
-        res4, err := client.SUnion([]string{key3})
-        assert.Nil(suite.T(), err)
-        assert.Equal(suite.T(), map[api.Result[string]]struct {}(map[api.Result[string]]struct {}{}), res4)
+		res4, err := client.SUnion([]string{key3})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), map[api.Result[string]]struct{}(map[api.Result[string]]struct{}{}), res4)
 
-        res5, err := client.SUnion([]string {key1, key3})
-        assert.Nil(suite.T(), err)
-        assert.Contains(suite.T(), res5, api.CreateStringResult("a"))
+		res5, err := client.SUnion([]string{key1, key3})
+		assert.Nil(suite.T(), err)
+		assert.Contains(suite.T(), res5, api.CreateStringResult("a"))
 		assert.Contains(suite.T(), res5, api.CreateStringResult("b"))
 		assert.Contains(suite.T(), res5, api.CreateStringResult("c"))
 
-	    // Exceptions with empty keys
-	    res6, err := client.SUnion([]string {})
-	    assert.Nil(suite.T(), res6)
-	    assert.IsType(suite.T(), &api.RequestError{}, err)
+		// Exceptions with empty keys
+		res6, err := client.SUnion([]string{})
+		assert.Nil(suite.T(), res6)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
 
-	    // Exception with a non-set key
-	    suite.verifyOK(client.Set(nonSetKey, "value"))
-        res7, err := client.SUnion([]string{nonSetKey, key1})
-        assert.Nil(suite.T(), res7)
-        assert.IsType(suite.T(), &api.RequestError{}, err)
+		// Exception with a non-set key
+		suite.verifyOK(client.Set(nonSetKey, "value"))
+		res7, err := client.SUnion([]string{nonSetKey, key1})
+		assert.Nil(suite.T(), res7)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
 }
 
