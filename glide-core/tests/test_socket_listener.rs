@@ -1,6 +1,4 @@
-/*
- * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
- */
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 #![cfg(feature = "socket-layer")]
 use glide_core::*;

@@ -1,6 +1,4 @@
-/*
-* Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-*/
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 #![deny(unsafe_op_in_unsafe_fn)]
 use glide_core::client::Client as GlideClient;
