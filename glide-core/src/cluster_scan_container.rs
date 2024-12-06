@@ -1,6 +1,5 @@
-/**
- * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
- */
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
 use logger_core::log_debug;
 use nanoid::nanoid;
 use once_cell::sync::Lazy;
