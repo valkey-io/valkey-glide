@@ -1,6 +1,5 @@
-/**
- * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
- */
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
 use crate::errors::{handle_errors, handle_panics, throw_java_exception, ExceptionType, FFIError};
 use jni::{
     objects::{JByteArray, JClass, JLongArray, JString},
