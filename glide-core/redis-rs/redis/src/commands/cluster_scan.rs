@@ -24,7 +24,6 @@ use strum_macros::Display;
 /// The [[`ScanState`]] struct represents the state of a scan operation in a Redis cluster.
 /// It holds information about the current scan state, including the cursor position, scanned slots map,
 /// address being scanned, and address's epoch.
-
 const BITS_PER_U64: usize = u64::BITS as usize;
 const NUM_OF_SLOTS: usize = SLOT_SIZE as usize;
 const BITS_ARRAY_SIZE: usize = NUM_OF_SLOTS / BITS_PER_U64;

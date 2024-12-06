@@ -1378,7 +1378,7 @@ impl ShardAddrs {
     }
 }
 
-impl<'a> IntoIterator for &'a ShardAddrs {
+impl IntoIterator for &ShardAddrs {
     type Item = Arc<String>;
     type IntoIter = std::iter::Chain<Once<Arc<String>>, std::vec::IntoIter<Arc<String>>>;
 

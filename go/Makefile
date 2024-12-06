@@ -2,13 +2,13 @@ install-build-tools:
 	go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0
 	cargo install cbindgen
 
-install-dev-tools-go1.18:
+install-dev-tools-go1.20:
 	go install github.com/vakenbolt/go-test-report@v0.9.3
 	go install mvdan.cc/gofumpt@v0.4.0
 	go install github.com/segmentio/golines@v0.11.0
 	go install honnef.co/go/tools/cmd/staticcheck@v0.3.3
 
-install-dev-tools-go1.18.10: install-dev-tools-go1.18
+install-dev-tools-go1.20.0: install-dev-tools-go1.20
 
 install-dev-tools-go1.22:
 	go install github.com/vakenbolt/go-test-report@v0.9.3
@@ -20,7 +20,7 @@ install-dev-tools-go1.22.0: install-dev-tools-go1.22
 
 install-dev-tools: install-dev-tools-go1.22.0
 
-install-tools-go1.18.10: install-build-tools install-dev-tools-go1.18.10
+install-tools-go1.20.0: install-build-tools install-dev-tools-go1.20.0
 
 install-tools-go1.22.0: install-build-tools install-dev-tools-go1.22.0
 

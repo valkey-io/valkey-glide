@@ -33,7 +33,7 @@
         "ARCH": "arm64",
         "TARGET": "aarch64-unknown-linux-musl",
         "RUNNER": ["self-hosted", "Linux", "ARM64"],
-        "IMAGE": "node:lts-alpine3.19",
+        "IMAGE": "node:lts-alpine",
         "CONTAINER_OPTIONS": "--user root --privileged --rm",
         "PACKAGE_MANAGERS": ["npm"],
         "languages": ["node"]
@@ -44,7 +44,7 @@
         "ARCH": "x64",
         "TARGET": "x86_64-unknown-linux-musl",
         "RUNNER": "ubuntu-latest",
-        "IMAGE": "node:lts-alpine3.19",
+        "IMAGE": "node:lts-alpine",
         "CONTAINER_OPTIONS": "--user root --privileged",
         "PACKAGE_MANAGERS": ["npm"],
         "languages": ["node"]

@@ -362,19 +362,17 @@ export async function flushAndCloseClient(
     addresses: [string, number][],
     client?: BaseClient,
 ) {
-    await testTeardown(
-        cluster_mode,
-        getClientConfigurationOption(addresses, ProtocolVersion.RESP3, {
-            requestTimeout: 2000,
-        }),
-    );
-
-    // some tests don't initialize a client
-    if (client == undefined) {
-        return;
+    try {
+        await testTeardown(
+            cluster_mode,
+            getClientConfigurationOption(addresses, ProtocolVersion.RESP3, {
+                requestTimeout: 2000,
+            }),
+        );
+    } finally {
+        // some tests don't initialize a client
+        client?.close();
     }
-
-    client.close();
 }
 
 /**
