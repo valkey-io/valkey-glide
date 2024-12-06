@@ -1970,12 +1970,12 @@ func (suite *GlideTestSuite) TestSUnion() {
 		assert.Contains(suite.T(), res5, api.CreateStringResult("b"))
 		assert.Contains(suite.T(), res5, api.CreateStringResult("c"))
 
-		// Exceptions, empty keys
+		// Exceptions with empty keys
 		res6, err := client.SUnion([]string{})
 		assert.Nil(suite.T(), res6)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 
-		// Non-set key
+		// Exception with a non-set key
 		suite.verifyOK(client.Set(nonSetKey, "value"))
 		res7, err := client.SUnion([]string{nonSetKey, key1})
 		assert.Nil(suite.T(), res7)
