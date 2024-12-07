@@ -381,4 +381,59 @@ type SetCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/sunion/
 	SUnion(keys []string) (map[Result[string]]struct{}, error)
+
+	// Iterates incrementally over a set.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   key - The key of the set.
+	//   cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of the search.
+	//
+	// Return value:
+	//  An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and
+	//  for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the set.
+	//  The second element is always an array of the subset of the set held in `key`.
+	//
+	// Example:
+	//
+	// [valkey.io]: https://valkey.io/commands/sscan/
+	SScan(key string, cursor string) (Result[string], []Result[string], error)
+
+	// Iterates incrementally over a set.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   key - The key of the set.
+	//   cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of the search.
+	//   options - [BaseScanOptions]
+	//
+	// Return value:
+	//  An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and
+	//  for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the set.
+	//  The second element is always an array of the subset of the set held in `key`.
+	//
+	// Example:
+	//
+	// [valkey.io]: https://valkey.io/commands/sscan/
+	SScanWithOption(key string, cursor string, options BaseScanOptions) (Result[string], []Result[string], error)
+
+	// Moves `member` from the set at `source` to the set at `destination`, removing it from the source set.
+	// Creates a new destination set if needed. The operation is atomic.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   source - The key of the set to remove the element from.
+	//   destination - The key of the set to add the element to.
+	//   member - The set element to move.
+	//
+	// Return value:
+	//   `true` on success, or `false` if the `source` set does not exist or the element is not a member of the source set.
+	//
+	// Example:
+	//
+	// [valkey.io]: https://valkey.io/commands/smove/
+	SMove(source string, destination string, member string) (Result[bool], error)
 }

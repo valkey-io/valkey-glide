@@ -372,3 +372,25 @@ func handleStringSetResponse(response *C.struct_CommandResponse) (map[Result[str
 
 	return slice, nil
 }
+
+type ScanResult struct {
+	cursor  Result[string]
+	results []Result[string]
+}
+
+func handleScanResponse(
+	response *C.struct_CommandResponse,
+) (Result[string], []Result[string], error) {
+	defer C.free_command_response(response)
+
+	slice, err := parseArray(response)
+	if err != nil {
+		return CreateNilStringResult(), nil, err
+	}
+
+	if arr, ok := slice.([]interface{}); ok {
+		return arr[0].(Result[string]), arr[1].([]Result[string]), nil
+	}
+
+	return CreateNilStringResult(), nil, err
+}

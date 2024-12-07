@@ -1989,6 +1989,62 @@ func (suite *GlideTestSuite) TestSUnion() {
 	})
 }
 
+func (suite *GlideTestSuite) TestSMove() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1-" + uuid.NewString()
+		key2 := "{key}-2-" + uuid.NewString()
+		// key3 := "{key}-3-" + uuid.NewString()
+		// stringKey := "{key}-4-" + uuid.NewString()
+		// nonExistingKey := "{key}-5-" + uuid.NewString()
+		memberArray1 := []string{"1", "2", "3"}
+		memberArray2 := []string{"2", "3"}
+		t := suite.T()
+
+		res1, err := client.SAdd(key1, memberArray1)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(3), res1.Value())
+
+		res2, err := client.SAdd(key2, memberArray2)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(2), res2.Value())
+
+		// move an element
+		res3, err := client.SMove(key1, key2, "1")
+		assert.NoError(t, err)
+		assert.True(t, res3.Value())
+
+		res4, err := client.SMembers(key1)
+		assert.NoError(t, err)
+		assert.Len(t, res4, 2)
+		assert.Contains(t, res4, api.CreateStringResult("2"))
+		assert.Contains(t, res4, api.CreateStringResult("3"))
+
+		res5, err := client.SMembers(key2)
+		assert.NoError(t, err)
+		assert.Len(t, res5, 3)
+		assert.Contains(t, res5, api.CreateStringResult("1"))
+		assert.Contains(t, res5, api.CreateStringResult("2"))
+		assert.Contains(t, res5, api.CreateStringResult("3"))
+
+		// moved element already exists in the destination set
+		res6, err := client.SMove(key2, key1, "2")
+		assert.NoError(t, err)
+		assert.True(t, res6.Value())
+
+		res7, err := client.SMembers(key1)
+		assert.NoError(t, err)
+		assert.Len(t, res4, 2)
+		assert.Contains(t, res7, api.CreateStringResult("2"))
+		assert.Contains(t, res7, api.CreateStringResult("3"))
+
+		res8, err := client.SMembers(key2)
+		assert.NoError(t, err)
+		assert.Len(t, res4, 2)
+		assert.Contains(t, res8, api.CreateStringResult("1"))
+		assert.Contains(t, res8, api.CreateStringResult("3"))
+	})
+}
+
 func (suite *GlideTestSuite) TestLRange() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		list := []string{"value4", "value3", "value2", "value1"}
