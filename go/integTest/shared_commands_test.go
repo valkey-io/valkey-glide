@@ -1571,6 +1571,101 @@ func (suite *GlideTestSuite) TestSinter_WithNotExistingKeys() {
 	})
 }
 
+func (suite *GlideTestSuite) TestSinterStore() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1-" + uuid.NewString()
+		key2 := "{key}-2-" + uuid.NewString()
+		key3 := "{key}-3-" + uuid.NewString()
+		stringKey := "{key}-4-" + uuid.NewString()
+		nonExistingKey := "{key}-5-" + uuid.NewString()
+		memberArray1 := []string{"a", "b", "c"}
+		memberArray2 := []string{"c", "d", "e"}
+		t := suite.T()
+
+		res1, err := client.SAdd(key1, memberArray1)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(3), res1.Value())
+
+		res2, err := client.SAdd(key2, memberArray2)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(3), res2.Value())
+
+		// store in new key
+		res3, err := client.SInterStore(key3, []string{key1, key2})
+		assert.NoError(t, err)
+		assert.Equal(t, int64(1), res3.Value())
+
+		res4, err := client.SMembers(key3)
+		assert.NoError(t, err)
+		assert.Len(t, res4, 1)
+		for key := range res4 {
+			assert.Equal(t, key.Value(), "c")
+		}
+
+		// overwrite existing set, which is also a source set
+		res5, err := client.SInterStore(key2, []string{key1, key2})
+		assert.NoError(t, err)
+		assert.Equal(t, int64(1), res5.Value())
+
+		res6, err := client.SMembers(key2)
+		assert.NoError(t, err)
+		assert.Len(t, res6, 1)
+		for key := range res6 {
+			assert.Equal(t, key.Value(), "c")
+		}
+
+		// source set is the same as the existing set
+		res7, err := client.SInterStore(key1, []string{key2})
+		assert.NoError(t, err)
+		assert.Equal(t, int64(1), res7.Value())
+
+		res8, err := client.SMembers(key2)
+		assert.NoError(t, err)
+		assert.Len(t, res8, 1)
+		for key := range res8 {
+			assert.Equal(t, key.Value(), "c")
+		}
+
+		// intersection with non-existing key
+		res9, err := client.SInterStore(key1, []string{key2, nonExistingKey})
+		assert.NoError(t, err)
+		assert.Equal(t, int64(0), res9.Value())
+
+		// check that the key is now empty
+		members1, err := client.SMembers(key1)
+		assert.NoError(t, err)
+		assert.Empty(t, members1)
+
+		// invalid argument - key list must not be empty
+		res10, err := client.SInterStore(key3, []string{})
+		assert.Equal(suite.T(), int64(0), res10.Value())
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		// non-set key
+		_, err = client.Set(stringKey, "value")
+		assert.NoError(t, err)
+
+		res11, err := client.SInterStore(key3, []string{stringKey})
+		assert.Equal(suite.T(), int64(0), res11.Value())
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		// overwrite the non-set key
+		res12, err := client.SInterStore(stringKey, []string{key2})
+		assert.NoError(t, err)
+		assert.Equal(t, int64(1), res12.Value())
+
+		// check that the key is now empty
+		res13, err := client.SMembers(stringKey)
+		assert.NoError(t, err)
+		assert.Len(t, res13, 1)
+		for key := range res13 {
+			assert.Equal(t, key.Value(), "c")
+		}
+	})
+}
+
 func (suite *GlideTestSuite) TestSInterCard() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0")
 
