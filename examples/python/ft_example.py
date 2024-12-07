@@ -3,6 +3,9 @@ from typing import List, Tuple, Optional
 
 from glide.async_commands.server_modules import glide_json as json
 from glide.async_commands.server_modules import ft
+from glide.constants import OK, FtSearchResponse, TEncodable
+
+import uuid
 
 from glide import (
     AllNodes,
@@ -18,6 +21,24 @@ from glide import (
     TimeoutError,
 )
 
+from glide.async_commands.server_modules.ft_options.ft_create_options import (
+    DataType,
+    DistanceMetricType,
+    Field,
+    FtCreateOptions,
+    NumericField,
+    TagField,
+    TextField,
+    VectorAlgorithm,
+    VectorField,
+    VectorFieldAttributesHnsw,
+    VectorType,
+)
+
+from glide.async_commands.server_modules.ft_options.ft_search_options import (
+    FtSearchOptions,
+    ReturnField,
+)
 
 async def create_client(
     nodes_list: Optional[List[Tuple[str, int]]] = None
@@ -57,6 +78,7 @@ async def app_logic(client: GlideClusterClient):
         client (GlideClusterClient): An instance of GlideClient.
     """
     # Create a vector
+    prefix = "{json}:"
     index = prefix + str(uuid.uuid4())
     json_key1 = prefix + "1"
     json_key2 = prefix + "2"
@@ -73,18 +95,16 @@ async def app_logic(client: GlideClusterClient):
 
     # Create a json key.
     assert (
-        await GlideJson.set(glide_client, json_key1, "$", json.dumps(json_value1))
+        await json.set(client, json_key1, "$", json.dumps(json_value1))
         == OK
     )
     assert (
-        await GlideJson.set(glide_client, json_key2, "$", json.dumps(json_value2))
+        await json.set(client, json_key2, "$", json.dumps(json_value2))
         == OK
     )
-    
-    time.sleep(self.sleep_wait_time)
-    
+
     # Search for the vector
-    search_response = await ft.search(glide_client, index, "*", options=ft_search_options)
+    search_response = await ft.search(client, index, "*", options=ft_search_options)
     ft_search_options = FtSearchOptions(
         return_fields=[
             ReturnField(field_identifier="a", alias="a_new"),

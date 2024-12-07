@@ -57,14 +57,13 @@ async def app_logic(client: GlideClusterClient):
     """
 
     json_value = {"a": 1.0, "b": 2}
-    json_str = json.dumps(value) 
+    json_str = json.dumps(json_value)
     # Send SET and GET
     set_response = await json.set(client, "key", "$", json_str)
     Logger.log(LogLevel.INFO, "app", f"Set response is = {set_response!r}")  # 'OK'
 
     get_response = await json.get(client, "key", "$")
-    Logger.log(LogLevel.INFO, "app", f"Get response is = {get_response.decode()!r}") # "[{\"a\":1.0,\"b\":2}]" 
-
+    Logger.log(LogLevel.INFO, "app", f"Get response is = {get_response.decode()!r}") # "[{\"a\":1.0,\"b\":2}]"
 
 async def exec_app_logic():
     """

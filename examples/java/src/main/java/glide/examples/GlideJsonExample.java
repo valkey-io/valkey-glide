@@ -47,8 +47,7 @@ public class GlideJsonExample {
                         // .useTLS(true);
                         .build();
 
-        GlideClusterClient client = GlideClusterClient.createClient(config).get();
-        return client;
+        return GlideClusterClient.createClient(config).get();
     }
 
     /**
