@@ -10,6 +10,11 @@ pub(crate) enum ExpectedReturnType<'a> {
         key_type: &'a Option<ExpectedReturnType<'a>>,
         value_type: &'a Option<ExpectedReturnType<'a>>,
     },
+    // Second parameter is a function which returns true if value needs to be converted
+    SingleOrMultiNode(
+        &'a Option<ExpectedReturnType<'a>>,
+        Option<fn(Value) -> bool>,
+    ),
     MapOfStringToDouble,
     Double,
     Boolean,
@@ -278,12 +283,6 @@ pub(crate) fn convert_to_expected_type(
         },
         ExpectedReturnType::Lolwut => {
             match value {
-                // cluster (multi-node) response - go recursive
-                Value::Map(map) => convert_map_entries(
-                    map,
-                    Some(ExpectedReturnType::BulkString),
-                    Some(ExpectedReturnType::Lolwut),
-                ),
                 // RESP 2 response
                 Value::BulkString(bytes) => {
                     let text = std::str::from_utf8(&bytes).unwrap();
@@ -558,19 +557,7 @@ pub(crate) fn convert_to_expected_type(
         // Second part is converted as `Map[str, Map[str, int]]`
         ExpectedReturnType::FunctionStatsReturnType => match value {
             // TODO reuse https://github.com/Bit-Quill/glide-for-redis/pull/331 and https://github.com/valkey-io/valkey-glide/pull/1489
-            Value::Map(map) => {
-                if map[0].0 == Value::BulkString(b"running_script".into()) {
-                    // already a RESP3 response - do nothing
-                    Ok(Value::Map(map))
-                } else {
-                    // cluster (multi-node) response - go recursive
-                    convert_map_entries(
-                        map,
-                        Some(ExpectedReturnType::BulkString),
-                        Some(ExpectedReturnType::FunctionStatsReturnType),
-                    )
-                }
-            }
+            Value::Map(map) => Ok(Value::Map(map)),
             Value::Array(mut array) if array.len() == 4 => {
                 let mut result: Vec<(Value, Value)> = Vec::with_capacity(2);
                 let running_script_info = array.remove(1);
@@ -1144,6 +1131,19 @@ pub(crate) fn convert_to_expected_type(
             )
                 .into())
         }
+        ExpectedReturnType::SingleOrMultiNode(value_type, value_checker) =>  match value {
+            Value::Map(ref map) => match value_checker {
+                    Some(func) => {
+                        if !map.is_empty() && func(map[0].clone().1) {
+                            convert_to_expected_type(value, Some(ExpectedReturnType::Map { key_type: &None, value_type }))
+                        } else {
+                            Ok(value)
+                        }
+                    }
+                    None => convert_to_expected_type(value, Some(ExpectedReturnType::Map { key_type: &None, value_type })),
+                }
+            _ => convert_to_expected_type(value, *value_type),
+        }
     }
 }
 
@@ -1392,12 +1392,19 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
 
     // TODO use enum to avoid mistakes
     match command.as_slice() {
-        b"HGETALL" | b"CONFIG GET" | b"FT.CONFIG GET" | b"FT._ALIASLIST" | b"HELLO" => {
+        b"HGETALL" | b"FT.CONFIG GET" | b"FT._ALIASLIST" | b"HELLO" => {
             Some(ExpectedReturnType::Map {
                 key_type: &None,
                 value_type: &None,
             })
         }
+        b"CONFIG GET" => Some(ExpectedReturnType::SingleOrMultiNode(
+            &Some(ExpectedReturnType::Map {
+                key_type: &None,
+                value_type: &None,
+            }),
+            Some(|val| matches!(val, Value::Array(_))),
+        )),
         b"XCLAIM" => {
             if cmd.position(b"JUSTID").is_some() {
                 Some(ExpectedReturnType::ArrayOfStrings)
@@ -1481,11 +1488,17 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
                 None
             }
         }
-        b"LOLWUT" => Some(ExpectedReturnType::Lolwut),
+        b"LOLWUT" => Some(ExpectedReturnType::SingleOrMultiNode(
+            &Some(ExpectedReturnType::Lolwut),
+            None,
+        )),
         b"FUNCTION LIST" => Some(ExpectedReturnType::ArrayOfMaps(&Some(
             ExpectedReturnType::ArrayOfMaps(&Some(ExpectedReturnType::StringOrSet)),
         ))),
-        b"FUNCTION STATS" => Some(ExpectedReturnType::FunctionStatsReturnType),
+        b"FUNCTION STATS" => Some(ExpectedReturnType::SingleOrMultiNode(
+            &Some(ExpectedReturnType::FunctionStatsReturnType),
+            Some(|val| matches!(val, Value::Array(_))),
+        )),
         b"GEOSEARCH" => {
             if cmd.position(b"WITHDIST").is_some()
                 || cmd.position(b"WITHHASH").is_some()
@@ -1953,17 +1966,14 @@ mod tests {
 
     #[test]
     fn convert_lolwut() {
-        assert!(matches!(
-            expected_type_for_cmd(redis::cmd("LOLWUT").arg("version").arg("42")),
-            Some(ExpectedReturnType::Lolwut)
-        ));
-
         let unconverted_string : String = "\x1b[0;97;107m \x1b[0m--\x1b[0;37;47m \x1b[0m--\x1b[0;90;100m \x1b[0m--\x1b[0;30;40m \x1b[0m".into();
         let expected: String = "\u{2591}--\u{2592}--\u{2593}-- ".into();
+        let mut cmd = redis::cmd("LOLWUT");
+        let conversion_type = expected_type_for_cmd(cmd.arg("version").arg("42"));
 
         let converted_1 = convert_to_expected_type(
             Value::BulkString(unconverted_string.clone().into_bytes()),
-            Some(ExpectedReturnType::Lolwut),
+            conversion_type,
         );
         assert_eq!(
             Value::BulkString(expected.clone().into_bytes()),
@@ -1975,7 +1985,7 @@ mod tests {
                 format: redis::VerbatimFormat::Text,
                 text: unconverted_string.clone(),
             },
-            Some(ExpectedReturnType::Lolwut),
+            conversion_type,
         );
         assert_eq!(
             Value::BulkString(expected.clone().into_bytes()),
@@ -1993,16 +2003,16 @@ mod tests {
                     Value::BulkString(unconverted_string.clone().into_bytes()),
                 ),
             ]),
-            Some(ExpectedReturnType::Lolwut),
+            conversion_type,
         );
         assert_eq!(
             Value::Map(vec![
                 (
-                    Value::BulkString("node 1".into()),
+                    Value::SimpleString("node 1".into()),
                     Value::BulkString(expected.clone().into_bytes())
                 ),
                 (
-                    Value::BulkString("node 2".into()),
+                    Value::SimpleString("node 2".into()),
                     Value::BulkString(expected.clone().into_bytes())
                 ),
             ]),
@@ -2011,7 +2021,7 @@ mod tests {
 
         let converted_4 = convert_to_expected_type(
             Value::SimpleString(unconverted_string.clone()),
-            Some(ExpectedReturnType::Lolwut),
+            conversion_type,
         );
         assert!(converted_4.is_err());
     }
@@ -2521,11 +2531,6 @@ mod tests {
 
     #[test]
     fn convert_function_stats() {
-        assert!(matches!(
-            expected_type_for_cmd(redis::cmd("FUNCTION").arg("STATS")),
-            Some(ExpectedReturnType::FunctionStatsReturnType)
-        ));
-
         let resp2_response_non_empty_first_part_data = vec![
             Value::BulkString(b"running_script".into()),
             Value::Array(vec![
@@ -2652,7 +2657,8 @@ mod tests {
             ),
         ]);
 
-        let conversion_type = Some(ExpectedReturnType::FunctionStatsReturnType);
+        let cmd = redis::cmd("FUNCTION STATS");
+        let conversion_type = expected_type_for_cmd(&cmd);
         // resp2 -> resp3 conversion with non-empty `running_script` block
         assert_eq!(
             convert_to_expected_type(

@@ -770,6 +770,18 @@ class TestCommands:
             == OK
         )
 
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_config_get_with_wildcard_and_multi_node_route(
+        self, glide_client: GlideClusterClient
+    ):
+        result = await glide_client.config_get(["*file"], AllPrimaries())
+        assert isinstance(result, Dict)
+        for resp in result.values():
+            assert len(resp) > 5
+            assert b"pidfile" in resp
+            assert b"logfile" in resp
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_decr_decrby_existing_key(self, glide_client: TGlideClient):
