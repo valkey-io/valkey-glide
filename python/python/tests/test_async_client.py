@@ -7253,7 +7253,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_bitpos_and_bitpos_interval(self, glide_client: TGlideClient):
+    async def test_bitpos(self, glide_client: TGlideClient):
         key = get_random_string(10)
         non_existing_key = get_random_string(10)
         set_key = get_random_string(10)
@@ -7264,58 +7264,66 @@ class TestCommands:
         assert await glide_client.set(key, value) == OK
         assert await glide_client.bitpos(key, 0) == 0
         assert await glide_client.bitpos(key, 1) == 2
-        assert await glide_client.bitpos(key, 1, 1) == 9
-        assert await glide_client.bitpos_interval(key, 0, 3, 5) == 24
+        assert await glide_client.bitpos(key, 1, OffsetOptions(1)) == 9
+        assert await glide_client.bitpos(key, 0, OffsetOptions(3, 5)) == 24
 
         # `BITPOS` returns -1 for non-existing strings
         assert await glide_client.bitpos(non_existing_key, 1) == -1
-        assert await glide_client.bitpos_interval(non_existing_key, 1, 3, 5) == -1
+        assert await glide_client.bitpos(non_existing_key, 1, OffsetOptions(3, 5)) == -1
 
         # invalid argument - bit value must be 0 or 1
         with pytest.raises(RequestError):
             await glide_client.bitpos(key, 2)
         with pytest.raises(RequestError):
-            await glide_client.bitpos_interval(key, 2, 3, 5)
+            await glide_client.bitpos(key, 2, OffsetOptions(3, 5))
 
         # key exists, but it is not a string
         assert await glide_client.sadd(set_key, [value]) == 1
         with pytest.raises(RequestError):
             await glide_client.bitpos(set_key, 1)
         with pytest.raises(RequestError):
-            await glide_client.bitpos_interval(set_key, 1, 1, -1)
+            await glide_client.bitpos(set_key, 1, OffsetOptions(1, -1))
 
         if await check_if_server_version_lt(glide_client, "7.0.0"):
             # error thrown because BIT and BYTE options were implemented after 7.0.0
             with pytest.raises(RequestError):
-                await glide_client.bitpos_interval(key, 1, 1, -1, BitmapIndexType.BYTE)
+                await glide_client.bitpos(
+                    key, 1, OffsetOptions(1, -1, BitmapIndexType.BYTE)
+                )
             with pytest.raises(RequestError):
-                await glide_client.bitpos_interval(key, 1, 1, -1, BitmapIndexType.BIT)
+                await glide_client.bitpos(
+                    key, 1, OffsetOptions(1, -1, BitmapIndexType.BIT)
+                )
         else:
             assert (
-                await glide_client.bitpos_interval(key, 0, 3, 5, BitmapIndexType.BYTE)
+                await glide_client.bitpos(
+                    key, 0, OffsetOptions(3, 5, BitmapIndexType.BYTE)
+                )
                 == 24
             )
             assert (
-                await glide_client.bitpos_interval(key, 1, 43, -2, BitmapIndexType.BIT)
+                await glide_client.bitpos(
+                    key, 1, OffsetOptions(43, -2, BitmapIndexType.BIT)
+                )
                 == 47
             )
             assert (
-                await glide_client.bitpos_interval(
-                    non_existing_key, 1, 3, 5, BitmapIndexType.BYTE
+                await glide_client.bitpos(
+                    non_existing_key, 1, OffsetOptions(3, 5, BitmapIndexType.BYTE)
                 )
                 == -1
             )
             assert (
-                await glide_client.bitpos_interval(
-                    non_existing_key, 1, 3, 5, BitmapIndexType.BIT
+                await glide_client.bitpos(
+                    non_existing_key, 1, OffsetOptions(3, 5, BitmapIndexType.BIT)
                 )
                 == -1
             )
 
             # key exists, but it is not a string
             with pytest.raises(RequestError):
-                await glide_client.bitpos_interval(
-                    set_key, 1, 1, -1, BitmapIndexType.BIT
+                await glide_client.bitpos(
+                    set_key, 1, OffsetOptions(1, -1, BitmapIndexType.BIT)
                 )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
