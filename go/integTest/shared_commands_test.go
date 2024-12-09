@@ -3258,7 +3258,6 @@ func (suite *GlideTestSuite) Test_Rename() {
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
-
 }
 
 func (suite *GlideTestSuite) TestRenamenx() {
@@ -3280,6 +3279,5 @@ func (suite *GlideTestSuite) TestRenamenx() {
 		res2, err := client.Renamenx(key3, key4)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), false, res2.Value())
-
 	})
 }
