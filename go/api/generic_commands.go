@@ -47,7 +47,7 @@ type GenericBaseCommands interface {
 	//  the request into sub-requests per slot to ensure atomicity.
 	//
 	// Parameters:
-	// keys - One or more keys to delete.
+	// keys - One or more keys to check if they exist.
 	//
 	// Return value:
 	// Returns the number of existing keys.
