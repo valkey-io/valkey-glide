@@ -371,7 +371,7 @@ type GenericBaseCommands interface {
 	// The different types that can be returned are: string, list, set, zset, hash and stream.
 	//
 	// Parameters:
-	//  keys - string
+	//  key - string
 	//
 	// Return value:
 	//  If the key exists, the type of the stored value is returned. Otherwise, a none" string is returned.
