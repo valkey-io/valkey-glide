@@ -2520,7 +2520,6 @@ func (suite *GlideTestSuite) Test_Rename() {
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
-
 }
 
 func (suite *GlideTestSuite) TestRenamenx() {
@@ -2537,14 +2536,10 @@ func (suite *GlideTestSuite) TestRenamenx() {
 		//Test 2 Check if the renamenx command return false if newKey already exists.
 		key3 := "{keyName}" + uuid.NewString()
 		key4 := "{keyName}" + uuid.NewString()
-
 		suite.verifyOK(client.Set(key3, initialValue))
 		suite.verifyOK(client.Set(key4, initialValue))
-
 		res2, err := client.Renamenx(key3, key4)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), false, res2.Value())
-
 	})
-
 }
