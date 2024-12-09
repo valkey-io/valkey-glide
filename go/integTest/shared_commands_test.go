@@ -1340,6 +1340,121 @@ func (suite *GlideTestSuite) TestSRem_WithExistingKeyAndDifferentMembers() {
 	})
 }
 
+func (suite *GlideTestSuite) TestSUnionStore() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1-" + uuid.NewString()
+		key2 := "{key}-2-" + uuid.NewString()
+		key3 := "{key}-3-" + uuid.NewString()
+		key3 := "{key}-4-" + uuid.NewString()
+		stringKey := "{key}-5-" + uuid.NewString()
+		nonExistingKey := "{key}-6-" + uuid.NewString()
+
+		memberArray1 := []string{"a", "b", "c"}
+		memberArray2 := []string{"c", "d", "e"}
+		memberArray3 := []string{ "e", "f", "g"}
+		t := suite.T()
+
+		res1, err := client.SAdd(key1, memberArray1)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(3), res1.Value())
+
+		res2, err := client.SAdd(key2, memberArray2)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(3), res2.Value())
+
+        res3, err := client.SAdd(key3, memberArray3)
+        assert.NoError(t, err)
+        assert.Equal(t, int64(3), res3.Value())
+
+		// store union in new key
+		res4, err := client.SUnionStore(key4, []string{key1, key2})
+		assert.NoError(t, err)
+		assert.Equal(t, int64(5), res4.Value())
+
+        res5, err := client.SMembers(key4)
+        assert.NoError(t, err)
+        assert.Len(t, res5, 5)
+        expected := []api.StringResult{
+            api.CreateStringResult("a"),
+            api.CreateStringResult("b"),
+            api.CreateStringResult("c"),
+            api.CreateStringResult("d"),
+            api.CreateStringResult("e"),
+        }
+        for _, value := range expected {
+            assert.Contains(suite.T(), res5, value)
+        }
+
+		// overwrite existing set
+		res6, err := client.SUnionStore(key1, []string{key4, key2})
+		assert.NoError(t, err)
+		assert.Equal(t, int64(5), res6.Value())
+
+		res7, err := client.SMembers(key1)
+		assert.NoError(t, err)
+		assert.Len(t, res7, 1)
+        for _, value := range expected {
+            assert.Contains(suite.T(), res7, value)
+        }
+
+        // overwrite one of the source keys
+		res8, err := client.SUnionStore(key2, []string{key4, key2})
+		assert.NoError(t, err)
+		assert.Equal(t, int64(5), res8.Value())
+
+		res9, err := client.SMembers(key2)
+		assert.NoError(t, err)
+		assert.Len(t, res9, 1)
+        for _, value := range expected {
+            assert.Contains(suite.T(), res9, value)
+        }
+
+		// union with non-existing key
+		res10, err := client.SUnionStore(key2, []string{nonExistingKey})
+		assert.NoError(t, err)
+		assert.Equal(t, int64(0), res10.Value())
+
+		// check that the key is now empty
+		members1, err := client.SMembers(key2)
+		assert.NoError(t, err)
+		assert.Empty(t, members1)
+
+		// invalid argument - key list must not be empty
+		res11, err := client.SUnionStore(key4, []string{})
+		assert.Equal(suite.T(), int64(0), res11.Value())
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		// non-set key
+		_, err = client.Set(stringKey, "value")
+		assert.NoError(t, err)
+
+		res12, err := client.SUnionStore(key4, []string{stringKey, key1})
+		assert.Equal(suite.T(), int64(0), res12.Value())
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		// overwrite destination when destination is not a set
+		res13, err := client.SUnionStore(stringKey, []string{key1, key3})
+		assert.NoError(t, err)
+		assert.Equal(t, int64(7), res13.Value())
+
+		// check that the key is now empty
+		res14, err := client.SMembers(stringKey)
+		assert.NoError(t, err)
+		assert.Len(t, res14, 1)
+        expected2 := []api.StringResult{
+            api.CreateStringResult("a"),
+            api.CreateStringResult("b"),
+            api.CreateStringResult("c"),
+            api.CreateStringResult("d"),
+            api.CreateStringResult("e"),
+            api.CreateStringResult("f"),
+            api.CreateStringResult("g"),
+        }
+	})
+}
+
 func (suite *GlideTestSuite) TestSMembers() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.NewString()
