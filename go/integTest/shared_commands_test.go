@@ -3259,9 +3259,7 @@ func (suite *GlideTestSuite) TestType() {
 		resultType, err := client.Type(key1)
 		assert.Nil(suite.T(), err)
 		assert.IsType(suite.T(), resultType, api.CreateStringResult("list"), "Value is list")
-
 	})
-
 }
 
 func (suite *GlideTestSuite) TestTouch() {
@@ -3279,14 +3277,11 @@ func (suite *GlideTestSuite) TestTouch() {
 		resultInvalidKey, err := client.Touch([]string{"invalidKey", "invalidKey1"})
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(0), resultInvalidKey.Value(), "The touch should be 0")
-
 	})
-
 }
 
 func (suite *GlideTestSuite) TestUnlink() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-
 		// Test 1: Check if an unlink valid key
 		keyName := "{keyName}" + uuid.NewString()
 		keyName1 := "{keyName1}" + uuid.NewString()
@@ -3301,5 +3296,4 @@ func (suite *GlideTestSuite) TestUnlink() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(0), resultInvalidKey.Value(), "The unlink should be 0")
 	})
-
 }
