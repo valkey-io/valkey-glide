@@ -434,6 +434,7 @@ type StringCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/lcs/
 	LCS(key1 string, key2 string) (Result[string], error)
+
 	// GetDel gets the value associated with the given key and deletes the key.
 	//
 	// Parameters:

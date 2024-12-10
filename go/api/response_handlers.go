@@ -59,6 +59,102 @@ func convertCharArrayToString(response *C.struct_CommandResponse, isNilable bool
 	return CreateStringResult(string(byteSlice)), nil
 }
 
+func handleInterfaceResponse(response *C.struct_CommandResponse) (interface{}, error) {
+	defer C.free_command_response(response)
+
+	return parseInterface(response)
+}
+
+func parseInterface(response *C.struct_CommandResponse) (interface{}, error) {
+	if response == nil {
+		return nil, nil
+	}
+
+	switch response.response_type {
+	case C.Null:
+		return nil, nil
+	case C.String:
+		return parseString(response)
+	case C.Int:
+		return int64(response.int_value), nil
+	case C.Float:
+		return float64(response.float_value), nil
+	case C.Bool:
+		return bool(response.bool_value), nil
+	case C.Array:
+		return parseArray(response)
+	case C.Map:
+		return parseMap(response)
+	case C.Sets:
+		return parseSet(response)
+	}
+
+	return nil, &RequestError{"Unexpected return type from Valkey"}
+}
+
+func parseString(response *C.struct_CommandResponse) (interface{}, error) {
+	if response.string_value == nil {
+		return nil, nil
+	}
+	byteSlice := C.GoBytes(unsafe.Pointer(response.string_value), C.int(int64(response.string_value_len)))
+
+	// Create Go string from byte slice (preserving null characters)
+	return string(byteSlice), nil
+}
+
+func parseArray(response *C.struct_CommandResponse) (interface{}, error) {
+	if response.array_value == nil {
+		return nil, nil
+	}
+
+	var slice []interface{}
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		res, err := parseInterface(&v)
+		if err != nil {
+			return nil, err
+		}
+		slice = append(slice, res)
+	}
+	return slice, nil
+}
+
+func parseMap(response *C.struct_CommandResponse) (interface{}, error) {
+	if response.array_value == nil {
+		return nil, nil
+	}
+
+	value_map := make(map[interface{}]interface{}, response.array_value_len)
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		res_key, err := parseInterface(v.map_key)
+		if err != nil {
+			return nil, err
+		}
+		res_val, err := parseInterface(v.map_value)
+		if err != nil {
+			return nil, err
+		}
+		value_map[res_key] = res_val
+	}
+	return value_map, nil
+}
+
+func parseSet(response *C.struct_CommandResponse) (interface{}, error) {
+	if response.sets_value == nil {
+		return nil, nil
+	}
+
+	slice := make(map[interface{}]struct{}, response.sets_value_len)
+	for _, v := range unsafe.Slice(response.sets_value, response.sets_value_len) {
+		res, err := parseInterface(&v)
+		if err != nil {
+			return nil, err
+		}
+		slice[res] = struct{}{}
+	}
+
+	return slice, nil
+}
+
 func handleStringResponse(response *C.struct_CommandResponse) (Result[string], error) {
 	defer C.free_command_response(response)
 
@@ -71,9 +167,7 @@ func handleStringOrNullResponse(response *C.struct_CommandResponse) (Result[stri
 	return convertCharArrayToString(response, true)
 }
 
-func handleStringArrayResponse(response *C.struct_CommandResponse) ([]Result[string], error) {
-	defer C.free_command_response(response)
-
+func convertStringArray(response *C.struct_CommandResponse) ([]Result[string], error) {
 	typeErr := checkResponseType(response, C.Array, false)
 	if typeErr != nil {
 		return nil, typeErr
@@ -88,6 +182,12 @@ func handleStringArrayResponse(response *C.struct_CommandResponse) ([]Result[str
 		slice = append(slice, res)
 	}
 	return slice, nil
+}
+
+func handleStringArrayResponse(response *C.struct_CommandResponse) ([]Result[string], error) {
+	defer C.free_command_response(response)
+
+	return convertStringArray(response)
 }
 
 func handleStringArrayOrNullResponse(response *C.struct_CommandResponse) ([]Result[string], error) {
@@ -202,4 +302,54 @@ func handleStringToStringMapResponse(response *C.struct_CommandResponse) (map[Re
 	}
 
 	return m, nil
+}
+
+func handleStringToStringArrayMapOrNullResponse(
+	response *C.struct_CommandResponse,
+) (map[Result[string]][]Result[string], error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Map, true)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	if response.response_type == C.Null {
+		return nil, nil
+	}
+
+	m := make(map[Result[string]][]Result[string], response.array_value_len)
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		key, err := convertCharArrayToString(v.map_key, true)
+		if err != nil {
+			return nil, err
+		}
+		value, err := convertStringArray(v.map_value)
+		if err != nil {
+			return nil, err
+		}
+		m[key] = value
+	}
+
+	return m, nil
+}
+
+func handleStringSetResponse(response *C.struct_CommandResponse) (map[Result[string]]struct{}, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Sets, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	slice := make(map[Result[string]]struct{}, response.sets_value_len)
+	for _, v := range unsafe.Slice(response.sets_value, response.sets_value_len) {
+		res, err := convertCharArrayToString(&v, true)
+		if err != nil {
+			return nil, err
+		}
+		slice[res] = struct{}{}
+	}
+
+	return slice, nil
 }

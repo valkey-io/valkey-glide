@@ -2,19 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Mapping, Optional, Set, Union, cast
+from typing import Dict, List, Mapping, Optional, Union, cast
 
-from glide.async_commands.command_args import Limit, ObjectType, OrderBy
+from glide.async_commands.command_args import ObjectType
 from glide.async_commands.core import (
     CoreCommands,
     FlushMode,
     FunctionRestorePolicy,
     InfoSection,
-    _build_sort_args,
 )
 from glide.async_commands.transaction import Transaction
 from glide.constants import (
-    OK,
     TOK,
     TEncodable,
     TFunctionListResponse,
@@ -23,7 +21,7 @@ from glide.constants import (
 )
 from glide.protobuf.command_request_pb2 import RequestType
 
-from ..glide import ClusterScanCursor, Script
+from ..glide import Script
 
 
 class StandaloneCommands(CoreCommands):

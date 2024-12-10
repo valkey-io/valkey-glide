@@ -11,6 +11,7 @@ import "C"
 
 import (
 	"errors"
+	"math"
 	"strconv"
 	"unsafe"
 
@@ -24,7 +25,9 @@ type BaseClient interface {
 	StringCommands
 	HashCommands
 	ListCommands
+	SetCommands
 	ConnectionManagementCommands
+	GenericBaseCommands
 	// Close terminates the client by closing all associated resources.
 	Close()
 }
@@ -513,6 +516,402 @@ func (client *baseClient) RPush(key string, elements []string) (Result[int64], e
 	return handleLongResponse(result)
 }
 
+func (client *baseClient) SAdd(key string, members []string) (Result[int64], error) {
+	result, err := client.executeCommand(C.SAdd, append([]string{key}, members...))
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) SRem(key string, members []string) (Result[int64], error) {
+	result, err := client.executeCommand(C.SRem, append([]string{key}, members...))
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) SMembers(key string) (map[Result[string]]struct{}, error) {
+	result, err := client.executeCommand(C.SMembers, []string{key})
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringSetResponse(result)
+}
+
+func (client *baseClient) SCard(key string) (Result[int64], error) {
+	result, err := client.executeCommand(C.SCard, []string{key})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) SIsMember(key string, member string) (Result[bool], error) {
+	result, err := client.executeCommand(C.SIsMember, []string{key, member})
+	if err != nil {
+		return CreateNilBoolResult(), err
+	}
+
+	return handleBooleanResponse(result)
+}
+
+func (client *baseClient) SDiff(keys []string) (map[Result[string]]struct{}, error) {
+	result, err := client.executeCommand(C.SDiff, keys)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringSetResponse(result)
+}
+
+func (client *baseClient) SDiffStore(destination string, keys []string) (Result[int64], error) {
+	result, err := client.executeCommand(C.SDiffStore, append([]string{destination}, keys...))
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) SInter(keys []string) (map[Result[string]]struct{}, error) {
+	result, err := client.executeCommand(C.SInter, keys)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringSetResponse(result)
+}
+
+func (client *baseClient) SInterCard(keys []string) (Result[int64], error) {
+	result, err := client.executeCommand(C.SInterCard, append([]string{strconv.Itoa(len(keys))}, keys...))
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) SInterCardLimit(keys []string, limit int64) (Result[int64], error) {
+	args := utils.Concat([]string{utils.IntToString(int64(len(keys)))}, keys, []string{"LIMIT", utils.IntToString(limit)})
+
+	result, err := client.executeCommand(C.SInterCard, args)
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) SRandMember(key string) (Result[string], error) {
+	result, err := client.executeCommand(C.SRandMember, []string{key})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+
+	return handleStringResponse(result)
+}
+
+func (client *baseClient) SPop(key string) (Result[string], error) {
+	result, err := client.executeCommand(C.SPop, []string{key})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+
+	return handleStringResponse(result)
+}
+
+func (client *baseClient) LRange(key string, start int64, end int64) ([]Result[string], error) {
+	result, err := client.executeCommand(C.LRange, []string{key, utils.IntToString(start), utils.IntToString(end)})
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayResponse(result)
+}
+
+func (client *baseClient) LIndex(key string, index int64) (Result[string], error) {
+	result, err := client.executeCommand(C.LIndex, []string{key, utils.IntToString(index)})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+
+	return handleStringOrNullResponse(result)
+}
+
+func (client *baseClient) LTrim(key string, start int64, end int64) (Result[string], error) {
+	result, err := client.executeCommand(C.LTrim, []string{key, utils.IntToString(start), utils.IntToString(end)})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+
+	return handleStringResponse(result)
+}
+
+func (client *baseClient) LLen(key string) (Result[int64], error) {
+	result, err := client.executeCommand(C.LLen, []string{key})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) LRem(key string, count int64, element string) (Result[int64], error) {
+	result, err := client.executeCommand(C.LRem, []string{key, utils.IntToString(count), element})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) RPop(key string) (Result[string], error) {
+	result, err := client.executeCommand(C.RPop, []string{key})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+
+	return handleStringOrNullResponse(result)
+}
+
+func (client *baseClient) RPopCount(key string, count int64) ([]Result[string], error) {
+	result, err := client.executeCommand(C.RPop, []string{key, utils.IntToString(count)})
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayOrNullResponse(result)
+}
+
+func (client *baseClient) LInsert(
+	key string,
+	insertPosition InsertPosition,
+	pivot string,
+	element string,
+) (Result[int64], error) {
+	insertPositionStr, err := insertPosition.toString()
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	result, err := client.executeCommand(C.LInsert, []string{key, insertPositionStr, pivot, element})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) BLPop(keys []string, timeoutSecs float64) ([]Result[string], error) {
+	result, err := client.executeCommand(C.BLPop, append(keys, utils.FloatToString(timeoutSecs)))
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayOrNullResponse(result)
+}
+
+func (client *baseClient) BRPop(keys []string, timeoutSecs float64) ([]Result[string], error) {
+	result, err := client.executeCommand(C.BRPop, append(keys, utils.FloatToString(timeoutSecs)))
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayOrNullResponse(result)
+}
+
+func (client *baseClient) RPushX(key string, elements []string) (Result[int64], error) {
+	result, err := client.executeCommand(C.RPushX, append([]string{key}, elements...))
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) LPushX(key string, elements []string) (Result[int64], error) {
+	result, err := client.executeCommand(C.LPushX, append([]string{key}, elements...))
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) LMPop(keys []string, listDirection ListDirection) (map[Result[string]][]Result[string], error) {
+	listDirectionStr, err := listDirection.toString()
+	if err != nil {
+		return nil, err
+	}
+
+	// Check for potential length overflow.
+	if len(keys) > math.MaxInt-2 {
+		return nil, &RequestError{"Length overflow for the provided keys"}
+	}
+
+	// args slice will have 2 more arguments with the keys provided.
+	args := make([]string, 0, len(keys)+2)
+	args = append(args, strconv.Itoa(len(keys)))
+	args = append(args, keys...)
+	args = append(args, listDirectionStr)
+	result, err := client.executeCommand(C.LMPop, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringToStringArrayMapOrNullResponse(result)
+}
+
+func (client *baseClient) LMPopCount(
+	keys []string,
+	listDirection ListDirection,
+	count int64,
+) (map[Result[string]][]Result[string], error) {
+	listDirectionStr, err := listDirection.toString()
+	if err != nil {
+		return nil, err
+	}
+
+	// Check for potential length overflow.
+	if len(keys) > math.MaxInt-4 {
+		return nil, &RequestError{"Length overflow for the provided keys"}
+	}
+
+	// args slice will have 4 more arguments with the keys provided.
+	args := make([]string, 0, len(keys)+4)
+	args = append(args, strconv.Itoa(len(keys)))
+	args = append(args, keys...)
+	args = append(args, listDirectionStr, CountKeyword, utils.IntToString(count))
+	result, err := client.executeCommand(C.LMPop, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringToStringArrayMapOrNullResponse(result)
+}
+
+func (client *baseClient) BLMPop(
+	keys []string,
+	listDirection ListDirection,
+	timeoutSecs float64,
+) (map[Result[string]][]Result[string], error) {
+	listDirectionStr, err := listDirection.toString()
+	if err != nil {
+		return nil, err
+	}
+
+	// Check for potential length overflow.
+	if len(keys) > math.MaxInt-3 {
+		return nil, &RequestError{"Length overflow for the provided keys"}
+	}
+
+	// args slice will have 3 more arguments with the keys provided.
+	args := make([]string, 0, len(keys)+3)
+	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
+	args = append(args, keys...)
+	args = append(args, listDirectionStr)
+	result, err := client.executeCommand(C.BLMPop, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringToStringArrayMapOrNullResponse(result)
+}
+
+func (client *baseClient) BLMPopCount(
+	keys []string,
+	listDirection ListDirection,
+	count int64,
+	timeoutSecs float64,
+) (map[Result[string]][]Result[string], error) {
+	listDirectionStr, err := listDirection.toString()
+	if err != nil {
+		return nil, err
+	}
+
+	// Check for potential length overflow.
+	if len(keys) > math.MaxInt-5 {
+		return nil, &RequestError{"Length overflow for the provided keys"}
+	}
+
+	// args slice will have 5 more arguments with the keys provided.
+	args := make([]string, 0, len(keys)+5)
+	args = append(args, utils.FloatToString(timeoutSecs), strconv.Itoa(len(keys)))
+	args = append(args, keys...)
+	args = append(args, listDirectionStr, CountKeyword, utils.IntToString(count))
+	result, err := client.executeCommand(C.BLMPop, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringToStringArrayMapOrNullResponse(result)
+}
+
+func (client *baseClient) LSet(key string, index int64, element string) (Result[string], error) {
+	result, err := client.executeCommand(C.LSet, []string{key, utils.IntToString(index), element})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+
+	return handleStringResponse(result)
+}
+
+func (client *baseClient) LMove(
+	source string,
+	destination string,
+	whereFrom ListDirection,
+	whereTo ListDirection,
+) (Result[string], error) {
+	whereFromStr, err := whereFrom.toString()
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	whereToStr, err := whereTo.toString()
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+
+	result, err := client.executeCommand(C.LMove, []string{source, destination, whereFromStr, whereToStr})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+
+	return handleStringOrNullResponse(result)
+}
+
+func (client *baseClient) BLMove(
+	source string,
+	destination string,
+	whereFrom ListDirection,
+	whereTo ListDirection,
+	timeoutSecs float64,
+) (Result[string], error) {
+	whereFromStr, err := whereFrom.toString()
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	whereToStr, err := whereTo.toString()
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+
+	result, err := client.executeCommand(
+		C.BLMove,
+		[]string{source, destination, whereFromStr, whereToStr, utils.FloatToString(timeoutSecs)},
+	)
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+
+	return handleStringOrNullResponse(result)
+}
+
 func (client *baseClient) Ping() (string, error) {
 	result, err := client.executeCommand(C.Ping, []string{})
 	if err != nil {
@@ -539,4 +938,13 @@ func (client *baseClient) PingWithMessage(message string) (string, error) {
 		return "", err
 	}
 	return response.Value(), nil
+}
+
+func (client *baseClient) Del(keys []string) (Result[int64], error) {
+	result, err := client.executeCommand(C.Del, keys)
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
 }

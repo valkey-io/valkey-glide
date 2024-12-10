@@ -116,7 +116,7 @@ jobs:
               if: ${{ !contains(matrix.build.RUNNER, 'self-hosted') }}
               uses: actions/setup-python@v5
               with:
-                  python-version: "3.12"
+                  python-version: "3.13"
 
             - name: Update package version in config.toml
               uses: ./.github/workflows/update-glide-version
@@ -146,7 +146,7 @@ jobs:
               with:
                   working-directory: ./python
                   target: ${{ matrix.build.TARGET }}
-                  args: --release --strip --out wheels -i ${{ github.event_name != 'pull_request' && 'python3.8 python3.9 python3.10 python3.11 python3.12 python3.13' || 'python3.12' }}
+                  args: --release --strip --out wheels -i ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13' || 'python3.12' }}
                   manylinux: auto
                   container: ${{ matrix.build.CONTAINER != '' && matrix.build.CONTAINER || '2014' }}
                   before-script-linux: |
@@ -154,7 +154,8 @@ jobs:
                       if [[ $(`which apt`) != '' ]]
                       then
                         echo "installing unzip and curl"
-                        apt install unzip curl -y
+                        apt-get update
+                        apt install unzip curl python3.13 -y
                       fi
                       PB_REL="https://github.com/protocolbuffers/protobuf/releases"
                       ARCH=`uname -p`
@@ -162,6 +163,8 @@ jobs:
                         PROTOC_ARCH="x86_64"
                       elif [[ $ARCH == 'aarch64' ]]; then 
                         PROTOC_ARCH="aarch_64"
+                        export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+                        export CFLAGS_aarch64_unknown_linux_gnu="-march=armv8-a"
                       else 
                         echo "Running on unsupported architecture: $ARCH. Expected one of: ['x86_64', 'aarch64']"
                         exit 1 
@@ -174,10 +177,10 @@ jobs:
               if: startsWith(matrix.build.NAMED_OS, 'darwin')
               uses: PyO3/maturin-action@v1
               with:
-                  maturin-version: latest
+                  maturin-version: 0.14.17
                   working-directory: ./python
                   target: ${{ matrix.build.TARGET }}
-                  args: --release --strip --out wheels -i  ${{ github.event_name != 'pull_request' && 'python3.8 python3.9 python3.10 python3.11 python3.12 python3.13' || 'python3.12' }}
+                  args: --release --strip --out wheels -i  ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13' || 'python3.12' }}
 
             - name: Upload Python wheels
               if: github.event_name != 'pull_request'
@@ -217,6 +220,10 @@ jobs:
             matrix:
                 build: ${{ fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX) }}
         steps:
+            - name: Setup self-hosted runner access
+              if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-gnu' }}
+              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
+            
             - name: checkout
               uses: actions/checkout@v4
 
@@ -225,10 +232,31 @@ jobs:
               with:
                   python-version: 3.12
 
-            - name: Install engine
-              uses: ./.github/workflows/install-engine
-              with:
-                  version: "8.0"
+            - name: Install engine Ubuntu ARM
+              if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-gnu' }}
+              shell: bash
+              # in self hosted runner we first want to check that engine is not already installed
+              run: |
+                  if [[ $(`which redis-server`) == '' ]]
+                  then
+                    sudo apt-get update
+                    sudo apt-get install -y redis-server
+                  else
+                    echo "Redis is already installed"
+                  fi
+
+            - name: Install engine Ubuntu x86
+              if: ${{ matrix.build.TARGET == 'x86_64-unknown-linux-gnu' }}
+              shell: bash
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y redis-server
+
+            - name: Install engine MacOS
+              if: ${{ matrix.build.OS == 'macos' }}
+              shell: bash
+              run: |
+                  brew install redis
 
             - name: Check if RC and set a distribution tag for the package
               shell: bash
@@ -236,12 +264,11 @@ jobs:
                   if [[ "${GITHUB_REF:11}" == *"rc"* ]]
                   then
                     echo "This is a release candidate"
-                    export pip_pre="--pre"
+                    echo "PIP_PRE=true" >> $GITHUB_ENV
                   else
                     echo "This is a stable release"
-                    export pip_pre=""
+                    echo "PIP_PRE=false" >> $GITHUB_ENV
                   fi
-                  echo "PIP_PRE=${pip_pre}" >> $GITHUB_ENV
 
             - name: Run the tests
               shell: bash
@@ -250,7 +277,11 @@ jobs:
                   python -m venv venv
                   source venv/bin/activate
                   pip install -U pip
-                  pip install ${PIP_PRE} valkey-glide
+                  if [[ "${{ env.PIP_PRE }}" == "true" ]]; then
+                    pip install --pre valkey-glide
+                  else
+                    pip install valkey-glide
+                  fi
                   python rc_test.py
 
             # Reset the repository to make sure we get the clean checkout of the action later in other actions.

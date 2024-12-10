@@ -23,7 +23,6 @@ import {
     BitOffset, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitOffsetMultiplier, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitOffsetOptions,
-    BitmapIndexType,
     BitwiseOperation,
     Boundary,
     CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -686,47 +685,17 @@ class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key - The key of the string.
      * @param bit - The bit value to match. Must be `0` or `1`.
-     * @param start - (Optional) The starting offset. If not supplied, the search will start at the beginning of the string.
+     * @param options - (Optional) The {@link BitOffsetOptions}.
      *
      * Command Response - The position of the first occurrence of `bit` in the binary value of the string held at `key`.
      *      If `start` was provided, the search begins at the offset indicated by `start`.
      */
-    public bitpos(key: GlideString, bit: number, start?: number): T {
-        return this.addAndReturn(createBitPos(key, bit, start));
-    }
-
-    /**
-     * Returns the position of the first bit matching the given `bit` value. The offsets are zero-based indexes, with
-     * `0` being the first element of the list, `1` being the next, and so on. These offsets can also be negative
-     * numbers indicating offsets starting at the end of the list, with `-1` being the last element of the list, `-2`
-     * being the penultimate, and so on.
-     *
-     * If you are using Valkey 7.0.0 or above, the optional `indexType` can also be provided to specify whether the
-     * `start` and `end` offsets specify BIT or BYTE offsets. If `indexType` is not provided, BYTE offsets
-     * are assumed. If BIT is specified, `start=0` and `end=2` means to look at the first three bits. If BYTE is
-     * specified, `start=0` and `end=2` means to look at the first three bytes.
-     *
-     * @see {@link https://valkey.io/commands/bitpos/|valkey.io} for details.
-     *
-     * @param key - The key of the string.
-     * @param bit - The bit value to match. Must be `0` or `1`.
-     * @param start - The starting offset.
-     * @param end - The ending offset.
-     * @param indexType - (Optional) The index offset type. This option can only be specified if you are using Valkey
-     *      version 7.0.0 or above. Could be either {@link BitmapIndexType.BYTE} or {@link BitmapIndexType.BIT}. If no
-     *      index type is provided, the indexes will be assumed to be byte indexes.
-     *
-     * Command Response - The position of the first occurrence from the `start` to the `end` offsets of the `bit` in the
-     *      binary value of the string held at `key`.
-     */
-    public bitposInterval(
+    public bitpos(
         key: GlideString,
         bit: number,
-        start: number,
-        end: number,
-        indexType?: BitmapIndexType,
+        options?: BitOffsetOptions,
     ): T {
-        return this.addAndReturn(createBitPos(key, bit, start, end, indexType));
+        return this.addAndReturn(createBitPos(key, bit, options));
     }
 
     /**
@@ -3516,7 +3485,7 @@ class BaseTransaction<T extends BaseTransaction<T>> {
      * @see {@link https://valkey.io/commands/bitcount/|valkey.io} for more details.
      *
      * @param key - The key for the string to count the set bits of.
-     * @param options - The offset options.
+     * @param options - The offset options - see {@link BitOffsetOptions}.
      *
      * Command Response - If `options` is provided, returns the number of set bits in the string interval specified by `options`.
      *     If `options` is not provided, returns the number of set bits in the string stored at `key`.

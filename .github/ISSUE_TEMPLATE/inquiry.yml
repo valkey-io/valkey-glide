@@ -1,0 +1,73 @@
+name: Inquiry
+description: Use this template for asking questions
+title: "[Inquiry] "
+labels: ["Inquiry"]
+assignees: []
+
+body:
+- type: markdown
+  attributes:
+    value: |
+      ## Question
+
+- type: textarea
+  id: question-description
+  attributes:
+    label: Inquiry
+    description: Describe your inquiry in detail
+    placeholder: Describe your inquiry...
+
+- type: markdown
+  attributes:
+    value: |
+      ## Language and Version
+
+- type: input
+  id: language
+  attributes:
+    label: Language
+    description: Optional - Specify the programming language
+    placeholder: e.g., Python, Java
+
+- type: input
+  id: language-version
+  attributes:
+    label: Language Version
+    description: Optional - Specify the version of the language
+    placeholder: e.g., 3.8, 11
+
+- type: markdown
+  attributes:
+    value: |
+      ## Engine Version
+
+- type: input
+  id: engine-version
+  attributes:
+    label: Engine Version
+    description: Optional - Specify the engine version
+    placeholder: e.g., ValKey 8.0.1, Redis-OSS 6.2.14
+
+- type: markdown
+  attributes:
+    value: |
+      ## Operating System
+
+- type: input
+  id: os
+  attributes:
+    label: Operating System
+    description: Optional - Specify the operating system
+    placeholder: e.g., MacOs 14, Ubuntu 20.04
+
+- type: markdown
+  attributes:
+    value: |
+      ## Additional Technical Information
+
+- type: textarea
+  id: additional-info
+  attributes:
+    label: Additional Technical Information
+    description: Optional - Provide any additional technical information
+    placeholder: Additional context or details...

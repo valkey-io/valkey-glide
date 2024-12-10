@@ -1,0 +1,32 @@
+name: Task
+description: Create a task to manage work
+title: "[Task]"
+labels: ["task"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Task Description
+
+  - type: textarea
+    attributes:
+      label: Description
+      description: Describe the task in detail
+      placeholder: Describe the task...
+
+  - type: checkboxes
+    attributes:
+      label: Checklist
+      description: Add items to be completed
+      options:
+        - label: Task item 1
+        - label: Task item 2
+        - label: Task item 3
+
+  - type: textarea
+    attributes:
+      label: Additional Notes
+      description: Add any additional notes or comments
+      placeholder: Any additional notes...
