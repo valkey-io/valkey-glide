@@ -74,8 +74,8 @@ func (suite *GlideTestSuite) SetupSuite() {
 		suite.clusterHosts = extractAddresses(suite, clusterManagerOutput)
 	}
 
-	suite.T().Logf("Standalone ports = %s", fmt.Sprint(suite.standaloneHosts))
-	suite.T().Logf("Cluster ports = %s", fmt.Sprint(suite.clusterHosts))
+	suite.T().Logf("Standalone hosts = %s", fmt.Sprint(suite.standaloneHosts))
+	suite.T().Logf("Cluster hosts = %s", fmt.Sprint(suite.clusterHosts))
 
 	// Get server version
 	suite.serverVersion = getServerVersion(suite)
@@ -139,6 +139,7 @@ func runClusterManager(suite *GlideTestSuite, args []string, ignoreExitCode bool
 }
 
 func getServerVersion(suite *GlideTestSuite) string {
+	var err error = nil
 	if len(suite.standaloneHosts) > 0 {
 		config := api.NewGlideClientConfiguration().
 			WithAddress(&suite.standaloneHosts[0]).
@@ -154,6 +155,9 @@ func getServerVersion(suite *GlideTestSuite) string {
 		}
 	}
 	if len(suite.clusterHosts) == 0 {
+		if err != nil {
+			suite.T().Fatalf("No cluster hosts configured, standalone failed with %w", err)
+		}
 		suite.T().Fatal("No server hosts configured")
 	}
 
@@ -171,7 +175,7 @@ func getServerVersion(suite *GlideTestSuite) string {
 			return extractServerVersion(suite, value.(string))
 		}
 	}
-	suite.T().Fatal("Can't connect to any server to get version")
+	suite.T().Fatalf("Can't connect to any server to get version: %w", err)
 	return ""
 }
 
