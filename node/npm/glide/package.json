@@ -1,7 +1,7 @@
 {
-    "name": "${scope}${pkg_name}",
+    "name": "@valkey/valkey-glide",
     "types": "build-ts/index.d.ts",
-    "version": "${package_version}",
+    "version": "99.99.0",
     "description": "General Language Independent Driver for the Enterprise (GLIDE) for Valkey",
     "main": "build-ts/index.js",
     "module": "build-ts/index.js",
@@ -11,7 +11,9 @@
         "lint:fix": "eslint . --fix",
         "clean": "rm -rf build-ts/",
         "copy-declaration-files": "cp ../../build-ts/*.d.ts build-ts/ && cp ../../build-ts/src/*.d.ts build-ts/src/ && cp ../../build-ts/src/server-modules/*.d.ts build-ts/src/server-modules/",
-        "build": "tsc && mkdir -p build-ts/src && mkdir -p build-ts/src/server-modules && npm run copy-declaration-files"
+        "build": "tsc && mkdir -p build-ts/src && mkdir -p build-ts/src/server-modules && npm run copy-declaration-files",
+        "build:test": "npm i && npm run build",
+        "test": "jest --verbose"
     },
     "files": [
         "/build-ts"
@@ -33,11 +35,17 @@
     },
     "homepage": "https://github.com/valkey-io/valkey-glide#readme",
     "devDependencies": {
+        "@jest/globals": "^29.7.0",
+        "@types/jest": "^29.5.14",
+        "ts-jest": "^29.2.5",
+        "jest": "^29.7.0",
+        "jest-html-reporter": "^3.10.2",
         "@types/node": "^18.11.18",
         "@typescript-eslint/eslint-plugin": "^5.48.0",
         "@typescript-eslint/parser": "^5.48.0",
         "eslint": "^8.31.0",
-        "typescript": "^4.9.4"
+        "typescript": "^4.9.4",
+        "@valkey/valkey-glide-darwin-x64": "../.."
     },
     "optionalDependencies": {
         "${scope}valkey-glide-darwin-arm64": "${package_version}",

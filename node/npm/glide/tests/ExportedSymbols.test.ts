@@ -45,12 +45,9 @@ describe("Exported Symbols test", () => {
 // }
 
 async function getFiles(folderName: string): Promise<string[]> {
-    // console.log(folderName);
-
     const files = await f.readdir(folderName, { withFileTypes: true });
 
     const skipFolders = [
-        // 'build-ts', 
         'commonjs-test',
         'glide-logs',
         'hybrid-node-tests',
@@ -71,31 +68,9 @@ async function getFiles(folderName: string): Promise<string[]> {
 
             filesWithNodeCode.push(...(await getFiles(folderName + file.name + '/')));
         } else {
-            // console.log("not a dir: " + file.name);
-
-            // if (file.name.endsWith('.js') ||
-            //     file.name.endsWith('.d.ts') ||
-            //     file.name.endsWith('.json') ||
-            //     file.name.endsWith('.rs') ||
-            //     file.name.endsWith('.html') ||
-            //     file.name.endsWith('.node') ||
-            //     file.name.endsWith('.lock') ||
-            //     file.name.endsWith('.toml') ||
-            //     file.name.endsWith('.yml') ||
-            //     file.name.endsWith('.rdb') ||
-            //     file.name.endsWith('.md') ||
-            //     file.name.localeCompare('.gitignore') == 0 ||
-            //     file.name.localeCompare('.prettierignore') == 0 ||
-            //     file.name.localeCompare('THIRD_PARTY_LICENSES_NODE') == 0 ||
-            //     file.name.localeCompare('index.ts') == 0) {
-            //     continue;
-            // }
-
             if (!file.name.endsWith('.d.ts')) {
                 continue;
             }
-
-            // i++;
             filesWithNodeCode.push(folderName + file.name);
         }
     }
@@ -104,18 +79,17 @@ async function getFiles(folderName: string): Promise<string[]> {
 }
 
 function visitRoot(root: ts.Node) {
+    // (Root Level)->(Level 1)
     const children: ts.Node[] = root.getChildren();
 
     const resultList: string[] = [];
-
+    // (Root Level) -> (Level 1) -> Level 2. This is the level in the AST where all the exported symbols in a file are present.
     for (const node of children) {
         const nodeList: string[] = node.getChildren().map(c => visit(c)).filter(c => c !== undefined);
 
         if (nodeList.length > 0) {
             resultList.push(...nodeList);
         }
-
-        console.log(resultList);
     }
 
     return resultList;
@@ -124,6 +98,7 @@ function visitRoot(root: ts.Node) {
 function visit(node: ts.Node) {
     let name: string | undefined = "";
 
+    // List of exported symbols we want to ignore.
     switch (node.kind) {
         case ts.SyntaxKind.FirstStatement:
         case ts.SyntaxKind.ExportDeclaration:
@@ -132,10 +107,7 @@ function visit(node: ts.Node) {
             return;
     }
 
-    // list of kind we like:
-    // InterfaceDeclaration
-    // FunctionDeclaration
-
+    // list exported symbols we want to check for, like, InterfaceDeclaration, FunctionDeclaration, etc.
     if (ts.isFunctionDeclaration(node)) {
         name = node.name?.text;
     } else if (ts.isVariableStatement(node)) {
@@ -152,25 +124,17 @@ function visit(node: ts.Node) {
         name = node.name?.text;
     }
 
-    const debug: string[] = [];
     const children = node.getChildren();
     const isInternal = children.find(c => (ts.SyntaxKind[c.kind] == "JSDocComment"))?.getText().includes('@internal');
     const isExported = children.find(c => (ts.SyntaxKind[c.kind] == "SyntaxList"))?.getChildren().find(c => (ts.SyntaxKind[c.kind] == "ExportKeyword"));
 
     if (isExported && !isInternal) {
-        // debug.push('depth=' + depth + ", ts.SyntaxKind===" + ts.SyntaxKind[node.kind] + ", name=" + name);
-        // if (name) {
-        //     debug.push(`name=${name} kind=${ts.SyntaxKind[node.kind]}`);
-        // } else {
-        //     debug.push(`name=unnamed kind=${ts.SyntaxKind[node.kind]}`);
-        // }
-
-        // console.log(debug);
+        // Not internal symbol exported for external use.
         return name;
     }
 
-    if (isExported && isInternal) {
-        // marked correctly... no-op
+    if ((isExported && isInternal)) {
+        // marked correctly... no-op. Exported for internal use in the code.
     }
 
     if (!isExported && isInternal) {
@@ -178,11 +142,6 @@ function visit(node: ts.Node) {
     }
 
     if (!isExported && !isInternal) {
-        // these are okay for now... 
-        // debug.push(`PRIVATE??? name=unnamed kind=${ts.SyntaxKind[node.kind]} text=${node.getText()}`);
+        // no-op
     }
-
-    // if (debug.length > 0) {
-    //     console.log(debug);
-    // }
 }
