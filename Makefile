@@ -58,7 +58,6 @@ python-test: .build/python_deps check-redis-server
 	@cd python && python3 -m venv .env
 	@echo "$(GREEN)Installing requirements...$(RESET)"
 	@cd python && .env/bin/pip install -r requirements.txt
-	@cd python && .env/bin/pip install -r dev_requirements.txt
 	@mkdir -p .build/ && touch .build/python_deps
 
 ##
