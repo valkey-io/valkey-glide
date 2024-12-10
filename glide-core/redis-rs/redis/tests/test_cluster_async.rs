@@ -23,7 +23,7 @@ async fn engine_version_less_than(min_version: &str) -> bool {
         );
         return true;
     }
-    return false;
+    false
 }
 
 /// Static function to get the engine version. When version looks like 8.0.0 -> 80000 and 12.0.1 -> 120001.
@@ -49,10 +49,10 @@ async fn get_cluster_version() -> usize {
 
         cluster_version.set(
             parse_version_from_info(info_result.clone())
-                .expect(format!("Invalid version string in INFO : {info_result}").as_str()),
+                .unwrap_or_else(|| panic!("Invalid version string in INFO : {info_result}")),
         );
     }
-    return cluster_version.get();
+    cluster_version.get()
 }
 
 fn parse_version_from_info(info: String) -> Option<usize> {
@@ -273,7 +273,7 @@ mod cluster_async {
             .unwrap();
 
         let info_result = redis::from_owned_redis_value::<HashMap<String, String>>(info).unwrap();
-        let get_cmdstat = format!("cmdstat_get:calls=");
+        let get_cmdstat = "cmdstat_get:calls=".to_string();
         let n_get_cmdstat = format!("cmdstat_get:calls={}", n);
         let client_az = format!("availability_zone:{}", az);
 
@@ -363,7 +363,7 @@ mod cluster_async {
             .unwrap();
 
         let info_result = redis::from_owned_redis_value::<HashMap<String, String>>(info).unwrap();
-        let get_cmdstat = format!("cmdstat_get:calls=");
+        let get_cmdstat = "cmdstat_get:calls=".to_string();
         let n_get_cmdstat = format!("cmdstat_get:calls={}", n);
         let client_az = format!("availability_zone:{}", az);
 
@@ -385,7 +385,7 @@ mod cluster_async {
             (matching_entries_count.try_into() as Result<u16, _>).unwrap(),
             replica_num,
             "Test failed: expected exactly '{}' entries with '{}' and '{}', found {}",
-            replica_num.to_string(),
+            replica_num,
             get_cmdstat,
             client_az,
             matching_entries_count
