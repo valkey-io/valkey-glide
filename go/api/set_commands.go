@@ -278,4 +278,88 @@ type SetCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/spop/
 	SPop(key string) (Result[string], error)
+
+	// Iterates incrementally over a set.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   key - The key of the set.
+	//   cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of the search.
+	//
+	// Return value:
+	//  An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and
+	//  for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the set.
+	//  The second element is always an array of the subset of the set held in `key`.
+	//
+	// Example:
+	//	 // assume "key" contains a set with 130 members
+	//   resultCursor := "0"
+	//   for true {
+	// 	 	resCursor, resCol, err := client.sscan("key", "0", opts)
+	//   	fmt.Println("Cursor: ", resCursor)
+	//   	fmt.Println("Members: ", resCol)
+	//   	if resCursor == "0" {
+	// 			break
+	//   	}
+	//   }
+	//
+	// [valkey.io]: https://valkey.io/commands/sscan/
+	SScan(key string, cursor string) (string, []string, error)
+
+	// Iterates incrementally over a set.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   key - The key of the set.
+	//   cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of the search.
+	//   options - [BaseScanOptions]
+	//
+	// Return value:
+	//  An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and
+	//  for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the set.
+	//  The second element is always an array of the subset of the set held in `key`.
+	//
+	// Example:
+	//	 // assume "key" contains a set with 130 members
+	//   resultCursor := "0"
+	//   for true {
+	//   	opts := api.NewBaseScanOptionsBuilder().SetMatch("*")
+	// 	 	resCursor, resCol, err := client.sscan("key", "0", opts)
+	//   	fmt.Println("Cursor: ", resCursor)
+	//   	fmt.Println("Members: ", resCol)
+	//   	if resCursor == "0" {
+	// 			break
+	//   	}
+	//   }
+	// 	 Cursor:  48
+	//   Members:  ['3', '118', '120', '86', '76', '13', '61', '111', '55', '45']
+	//   Cursor:  24
+	//   Members:  ['38', '109', '11', '119', '34', '24', '40', '57', '20', '17']
+	//   Cursor:  0
+	//   Members:  ['47', '122', '1', '53', '10', '14', '80']
+	//
+	// [valkey.io]: https://valkey.io/commands/sscan/
+	SScanWithOption(key string, cursor string, options *BaseScanOptions) (string, []string, error)
+
+	// Moves `member` from the set at `source` to the set at `destination`, removing it from the source set.
+	// Creates a new destination set if needed. The operation is atomic.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   source - The key of the set to remove the element from.
+	//   destination - The key of the set to add the element to.
+	//   member - The set element to move.
+	//
+	// Return value:
+	//   `true` on success, or `false` if the `source` set does not exist or the element is not a member of the source set.
+	//
+	// Example:
+	//	 moved := SMove("set1", "set2", "element")
+	//   fmt.Println(moved) // output: true
+	//
+	// [valkey.io]: https://valkey.io/commands/smove/
+	SMove(source string, destination string, member string) (Result[bool], error)
 }
