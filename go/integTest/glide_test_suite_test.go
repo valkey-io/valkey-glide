@@ -80,7 +80,6 @@ func (suite *GlideTestSuite) SetupSuite() {
 	// Get server version
 	suite.serverVersion = getServerVersion(suite)
 	suite.T().Logf("Detected server version = %s", suite.serverVersion)
-	// suite.T().SkipNow()
 }
 
 func parseHosts(suite *GlideTestSuite, addresses string) []api.NodeAddress {
