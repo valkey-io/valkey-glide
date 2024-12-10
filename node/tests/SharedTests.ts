@@ -805,7 +805,7 @@ export function runBaseTests(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `bitpos and bitposInterval test_%p`,
+        `bitpos test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {
                 const key = `{key}-${uuidv4()}`;
@@ -816,19 +816,30 @@ export function runBaseTests(config: {
                 expect(await client.set(key, value)).toEqual("OK");
                 expect(await client.bitpos(key, 0)).toEqual(0);
                 expect(await client.bitpos(Buffer.from(key), 1)).toEqual(2);
-                expect(await client.bitpos(key, 1, 1)).toEqual(9);
-                expect(await client.bitposInterval(key, 0, 3, 5)).toEqual(24);
+                expect(await client.bitpos(key, 1, { start: 1 })).toEqual(9);
                 expect(
-                    await client.bitposInterval(Buffer.from(key), 0, 3, 5),
+                    await client.bitpos(key, 0, { start: 3, end: 5 }),
+                ).toEqual(24);
+
+                expect(
+                    await client.bitpos(Buffer.from(key), 0, {
+                        start: 3,
+                        end: 5,
+                    }),
                 ).toEqual(24);
 
                 // -1 is returned if start > end
-                expect(await client.bitposInterval(key, 0, 1, 0)).toEqual(-1);
+                expect(
+                    await client.bitpos(key, 0, { start: 1, end: 0 }),
+                ).toEqual(-1);
 
                 // `BITPOS` returns -1 for non-existing strings
                 expect(await client.bitpos(nonExistingKey, 1)).toEqual(-1);
                 expect(
-                    await client.bitposInterval(nonExistingKey, 1, 3, 5),
+                    await client.bitpos(nonExistingKey, 1, {
+                        start: 3,
+                        end: 5,
+                    }),
                 ).toEqual(-1);
 
                 // invalid argument - bit value must be 0 or 1
@@ -836,7 +847,7 @@ export function runBaseTests(config: {
                     RequestError,
                 );
                 await expect(
-                    client.bitposInterval(key, 2, 3, 5),
+                    client.bitpos(key, 2, { start: 3, end: 5 }),
                 ).rejects.toThrow(RequestError);
 
                 // key exists, but it is not a string
@@ -845,86 +856,70 @@ export function runBaseTests(config: {
                     RequestError,
                 );
                 await expect(
-                    client.bitposInterval(setKey, 1, 1, -1),
+                    client.bitpos(setKey, 1, { start: 1, end: -1 }),
                 ).rejects.toThrow(RequestError);
 
                 if (cluster.checkIfServerVersionLessThan("7.0.0")) {
                     await expect(
-                        client.bitposInterval(
-                            key,
-                            1,
-                            1,
-                            -1,
-                            BitmapIndexType.BYTE,
-                        ),
+                        client.bitpos(key, 1, {
+                            start: 1,
+                            end: -1,
+                            indexType: BitmapIndexType.BYTE,
+                        }),
                     ).rejects.toThrow(RequestError);
                     await expect(
-                        client.bitposInterval(
-                            key,
-                            1,
-                            1,
-                            -1,
-                            BitmapIndexType.BIT,
-                        ),
+                        client.bitpos(key, 1, {
+                            start: 1,
+                            end: -1,
+                            indexType: BitmapIndexType.BIT,
+                        }),
                     ).rejects.toThrow(RequestError);
                 } else {
                     expect(
-                        await client.bitposInterval(
-                            key,
-                            0,
-                            3,
-                            5,
-                            BitmapIndexType.BYTE,
-                        ),
+                        await client.bitpos(key, 0, {
+                            start: 3,
+                            end: 5,
+                            indexType: BitmapIndexType.BYTE,
+                        }),
                     ).toEqual(24);
                     expect(
-                        await client.bitposInterval(
-                            key,
-                            1,
-                            43,
-                            -2,
-                            BitmapIndexType.BIT,
-                        ),
+                        await client.bitpos(key, 1, {
+                            start: 43,
+                            end: -2,
+                            indexType: BitmapIndexType.BIT,
+                        }),
                     ).toEqual(47);
                     expect(
-                        await client.bitposInterval(
-                            nonExistingKey,
-                            1,
-                            3,
-                            5,
-                            BitmapIndexType.BYTE,
-                        ),
+                        await client.bitpos(nonExistingKey, 1, {
+                            start: 3,
+                            end: 5,
+                            indexType: BitmapIndexType.BYTE,
+                        }),
                     ).toEqual(-1);
                     expect(
-                        await client.bitposInterval(
-                            nonExistingKey,
-                            1,
-                            3,
-                            5,
-                            BitmapIndexType.BIT,
-                        ),
+                        await client.bitpos(nonExistingKey, 1, {
+                            start: 3,
+                            end: 5,
+                            indexType: BitmapIndexType.BIT,
+                        }),
                     ).toEqual(-1);
 
                     // -1 is returned if the bit value wasn't found
                     expect(
-                        await client.bitposInterval(
-                            key,
-                            1,
-                            -1,
-                            -1,
-                            BitmapIndexType.BIT,
-                        ),
+                        await client.bitpos(key, 1, {
+                            start: -1,
+                            end: -1,
+                            indexType: BitmapIndexType.BIT,
+                        }),
                     ).toEqual(-1);
 
                     // key exists, but it is not a string
                     await expect(
-                        client.bitposInterval(
-                            setKey,
-                            1,
-                            1,
-                            -1,
-                            BitmapIndexType.BIT,
-                        ),
+                        client.bitpos(setKey, 1, {
+                            start: 1,
+                            end: -1,
+                            indexType: BitmapIndexType.BIT,
+                        }),
                     ).rejects.toThrow(RequestError);
                 }
             }, protocol);
