@@ -17,7 +17,7 @@ The Valkey GLIDE Java wrapper consists of both Java and Rust code. Rust bindings
 -   git
 -   GCC
 -   pkg-config
--   protoc (protobuf compiler) >= 28.2
+-   protoc (protobuf compiler) >= 29.1
 -   openssl
 -   openssl-dev
 -   rustup
@@ -64,17 +64,17 @@ Continue with **Install protobuf compiler** below.
 To install protobuf for MacOS, run:
 ```bash
 brew install protobuf
-# Check that the protobuf compiler version 28.2 or higher is installed
+# Check that the protobuf compiler version 29.1 or higher is installed
 protoc --version
 ```
 
 For the remaining systems, do the following:
 ```bash
 PB_REL="https://github.com/protocolbuffers/protobuf/releases"
-curl -LO $PB_REL/download/v28.2/protoc-28.2-linux-x86_64.zip
-unzip protoc-28.2-linux-x86_64.zip -d $HOME/.local
+curl -LO $PB_REL/download/v29.1/protoc-29.1-linux-x86_64.zip
+unzip protoc-29.1-linux-x86_64.zip -d $HOME/.local
 export PATH="$PATH:$HOME/.local/bin"
-# Check that the protobuf compiler version 28.2 or higher is installed
+# Check that the protobuf compiler version 29.1 or higher is installed
 protoc --version
 ```
 
@@ -87,11 +87,7 @@ Before starting this step, make sure you've installed all software dependencies.
     git clone https://github.com/valkey-io/valkey-glide.git
     cd valkey-glide/java
     ```
-2. Initialize git submodule:
-    ```bash
-    git submodule update --init --recursive
-    ```
-3. Build the Java wrapper (Choose a build option from the following and run it from the `java` folder):
+2. Build the Java wrapper (Choose a build option from the following and run it from the `java` folder):
 
     1. Enter the java directory:
 
@@ -164,8 +160,7 @@ Some troubleshooting issues:
   you may need to restart your machine. In particular, this may solve the following problems:
     - Failed to find `cargo` after `rustup`.
     - No Protobuf compiler (protoc) found.
-- If build fails because of rust compiler fails, make sure submodules are updated using `git submodule update`.
-- If protobuf 28.0 or earlier is detected, upgrade to the latest protobuf release.
+- If protobuf 29.0 or earlier is detected, upgrade to the latest protobuf release.
 
 ## Running Examples App
 
@@ -273,14 +268,6 @@ To (re)generate protobuf code, use the following command:
 
 ```bash
 ./gradlew protobuf
-```
-
-### Submodules
-
-After pulling new changes, ensure that you update the submodules by running the following command:
-
-```bash
-git submodule update
 ```
 
 ### Contributing new ValKey commands
