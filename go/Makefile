@@ -72,12 +72,13 @@ format:
 	gofumpt -w .
 	golines -w --shorten-comments -m 127 .
 
+# unit tests - skip complete IT suite (including MT)
 unit-test:
 	LD_LIBRARY_PATH=$(shell find . -name libglide_rs.so|grep -w release|tail -1|xargs dirname|xargs readlink -f):${LD_LIBRARY_PATH} \
 	go test -v -race ./... -skip TestGlideTestSuite $(if $(test-filter), -run $(test-filter))
 
-# integration tests - run subtask with no test filter
-integ-test: export TEST_FILTER = $(if $(test-filter), -run $(test-filter) -skip TestGlideTestSuite/TestModule)
+# integration tests - run subtask with skipping modules tests
+integ-test: export TEST_FILTER = -skip TestGlideTestSuite/TestModule $(if $(test-filter), -run $(test-filter))
 integ-test: __it
 
 # modules tests - run substask with default filter
