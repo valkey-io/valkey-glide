@@ -293,6 +293,16 @@ type SetCommands interface {
 	//  The second element is always an array of the subset of the set held in `key`.
 	//
 	// Example:
+	//	 // assume "key" contains a set with 130 members
+	//   resultCursor := "0"
+	//   for true {
+	// 	 	resCursor, resCol, err := client.sscan("key", "0", opts)
+	//   	fmt.Println("Cursor: ", resCursor)
+	//   	fmt.Println("Members: ", resCol)
+	//   	if resCursor == "0" {
+	// 			break
+	//   	}
+	//   }
 	//
 	// [valkey.io]: https://valkey.io/commands/sscan/
 	SScan(key string, cursor string) (string, []string, error)
@@ -312,6 +322,23 @@ type SetCommands interface {
 	//  The second element is always an array of the subset of the set held in `key`.
 	//
 	// Example:
+	//	 // assume "key" contains a set with 130 members
+	//   resultCursor := "0"
+	//   for true {
+	//   	opts := api.NewBaseScanOptionsBuilder().SetMatch("*")
+	// 	 	resCursor, resCol, err := client.sscan("key", "0", opts)
+	//   	fmt.Println("Cursor: ", resCursor)
+	//   	fmt.Println("Members: ", resCol)
+	//   	if resCursor == "0" {
+	// 			break
+	//   	}
+	//   }
+	// 	 Cursor:  48
+	//   Members:  ['3', '118', '120', '86', '76', '13', '61', '111', '55', '45']
+	//   Cursor:  24
+	//   Members:  ['38', '109', '11', '119', '34', '24', '40', '57', '20', '17']
+	//   Cursor:  0
+	//   Members:  ['47', '122', '1', '53', '10', '14', '80']
 	//
 	// [valkey.io]: https://valkey.io/commands/sscan/
 	SScanWithOption(key string, cursor string, options *BaseScanOptions) (string, []string, error)
@@ -330,6 +357,8 @@ type SetCommands interface {
 	//   `true` on success, or `false` if the `source` set does not exist or the element is not a member of the source set.
 	//
 	// Example:
+	//	 moved := SMove("set1", "set2", "element")
+	//   fmt.Println(moved) // output: true
 	//
 	// [valkey.io]: https://valkey.io/commands/smove/
 	SMove(source string, destination string, member string) (Result[bool], error)
