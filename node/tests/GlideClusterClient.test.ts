@@ -329,6 +329,27 @@ describe("GlideClusterClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `config get with wildcard and multi node route %p`,
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const result = await client.configGet(["*file"], {
+                route: "allPrimaries",
+            });
+            Object.values(
+                result as Record<string, Record<string, GlideString>>,
+            ).forEach((resp) => {
+                const keys = Object.keys(resp);
+                expect(keys.length).toBeGreaterThan(5);
+                expect(keys).toContain("pidfile");
+                expect(keys).toContain("logfile");
+            });
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `can send transactions_%p`,
         async (protocol) => {
             client = await GlideClusterClient.createClient(
