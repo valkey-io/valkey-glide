@@ -105,7 +105,7 @@ Before starting this step, make sure you've installed all software requirements.
     git clone --branch ${VERSION} https://github.com/valkey-io/valkey-glide.git
     cd valkey-glide
     ```
-2. Initialize git submodule:
+2. Initialize git submodules:
     ```bash
     git submodule update --init --recursive
     ```
@@ -169,7 +169,7 @@ By default, those test suite start standalone and cluster servers without TLS an
 
 ```bash
 make integ-test standalone-endpoints=localhost:6379 cluster-endpoints=localhost:7000 tls=true
-``` 
+```
 
 ### Generate protobuf files
 

@@ -10,17 +10,26 @@ Refer to the [Supported Engine Versions table](https://github.com/valkey-io/valk
 
 ## System Requirements
 
-The beta release of Valkey GLIDE was tested on Intel x86_64 using Ubuntu 22.04.1, Amazon Linux 2023 (AL2023), and macOS 12.7.
+The release of Valkey GLIDE was tested on the following platforms:
+
+Linux:
+
+-   Ubuntu 22.04.1 (x86_64 and aarch64)
+-   Amazon Linux 2023 (AL2023) (x86_64)
+
+macOS:
+
+-   macOS 14.7 (Apple silicon/aarch_64)
 
 ## Python Supported Versions
 
 | Python Version |
 |----------------|
-| 3.8            |
 | 3.9            |
 | 3.10           |
 | 3.11           |
 | 3.12           |
+| 3.13           |
 
 ## Installation and Setup
 

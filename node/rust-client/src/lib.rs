@@ -1,7 +1,7 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
+use glide_core::Telemetry;
 use redis::GlideConnectionOptions;
-/**
- * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
- */
 
 #[cfg(not(target_env = "msvc"))]
 use tikv_jemallocator::Jemalloc;
@@ -42,6 +42,9 @@ pub const MAX_REQUEST_ARGS_LEN: u32 = MAX_REQUEST_ARGS_LENGTH as u32;
 #[napi]
 pub const DEFAULT_TIMEOUT_IN_MILLISECONDS: u32 =
     glide_core::client::DEFAULT_RESPONSE_TIMEOUT.as_millis() as u32;
+
+#[napi]
+pub const DEFAULT_INFLIGHT_REQUESTS_LIMIT: u32 = glide_core::client::DEFAULT_MAX_INFLIGHT_REQUESTS;
 
 #[napi]
 struct AsyncClient {
@@ -480,4 +483,15 @@ impl Drop for ClusterScanCursor {
     fn drop(&mut self) {
         glide_core::cluster_scan_container::remove_scan_state_cursor(self.cursor.clone());
     }
+}
+
+#[napi]
+pub fn get_statistics(env: Env) -> Result<JsObject> {
+    let total_connections = Telemetry::total_connections().to_string();
+    let total_clients = Telemetry::total_clients().to_string();
+    let mut stats: JsObject = env.create_object()?;
+    stats.set_named_property("total_connections", total_connections)?;
+    stats.set_named_property("total_clients", total_clients)?;
+
+    Ok(stats)
 }

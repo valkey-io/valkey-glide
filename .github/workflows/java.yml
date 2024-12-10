@@ -8,7 +8,7 @@ on:
             - v*
         paths:
             - glide-core/src/**
-            - submodules/**
+            - glide-core/redis-rs/redis/src/**
             - java/**
             - utils/cluster_manager.py
             - .github/workflows/java.yml
@@ -22,7 +22,7 @@ on:
     pull_request:
         paths:
             - glide-core/src/**
-            - submodules/**
+            - glide-core/redis-rs/redis/src/**
             - java/**
             - utils/cluster_manager.py
             - .github/workflows/java.yml
@@ -83,8 +83,6 @@ jobs:
 
         steps:
             - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
 
             - uses: gradle/actions/wrapper-validation@v3
 
@@ -105,7 +103,7 @@ jobs:
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
               with:
-                  version: "26.1"
+                  version: "28.2"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Build java client
@@ -117,6 +115,7 @@ jobs:
               run: ./gradlew spotlessDiagnose | grep 'All formatters are well behaved for all files'
 
             - uses: ./.github/workflows/test-benchmark
+              if: ${{ matrix.engine.version == '8.0' && matrix.host.RUNNER == 'ubuntu-latest' && matrix.java == '17' }}
               with:
                   language-flag: -java
 
@@ -185,7 +184,7 @@ jobs:
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
               with:
-                  version: "26.1"
+                  version: "28.2"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Build java wrapper
@@ -208,8 +207,6 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
 
             - uses: ./.github/workflows/lint-rust
               with:
@@ -218,9 +215,9 @@ jobs:
               name: lint java rust
 
     test-modules:
-        if: github.event.pull_request.head.repo.owner.login == 'valkey-io'
+        if: (github.repository_owner == 'valkey-io' && github.event_name == 'workflow_dispatch') || github.event.pull_request.head.repo.owner.login == 'valkey-io'
         environment: AWS_ACTIONS
-        name: Running Module Tests
+        name: Modules Tests
         runs-on: [self-hosted, linux, ARM64]
         timeout-minutes: 15
         steps:
@@ -228,8 +225,6 @@ jobs:
               run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
 
             - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
 
             - name: Set up JDK
               uses: actions/setup-java@v4

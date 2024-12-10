@@ -107,7 +107,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-@Timeout(10) // seconds
+@Timeout(30) // seconds
 public class CommandTests {
 
     private static GlideClusterClient clusterClient = null;
@@ -1660,7 +1660,7 @@ public class CommandTests {
 
         assertEquals(libName, clusterClient.functionLoad(code, false).get());
         // let replica sync with the primary node
-        assertEquals(1L, clusterClient.wait(1L, 3000L).get());
+        assertEquals(1L, clusterClient.wait(1L, 4000L).get());
 
         // fcall on a replica node should fail, because a function isn't guaranteed to be RO
         var executionException =

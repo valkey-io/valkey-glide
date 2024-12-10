@@ -121,7 +121,9 @@ export namespace GlideClusterClientConfiguration {
          */
         Sharded = 2,
     }
-
+    /**
+     * Configuration for Pub/Sub subscriptions that the client will establish upon connection.
+     */
     export interface PubSubSubscriptions {
         /**
          * Channels and patterns by modes.
@@ -141,6 +143,39 @@ export namespace GlideClusterClientConfiguration {
         context?: any;
     }
 }
+/**
+ * Configuration options for creating a {@link GlideClusterClient | GlideClusterClient}.
+ *
+ * Extends `BaseClientConfiguration` with properties specific to `GlideClusterClient`, such as periodic topology checks
+ * and Pub/Sub subscription settings.
+ *
+ * @remarks
+ * This configuration allows you to tailor the client's behavior when connecting to a Valkey GLIDE Cluster.
+ *
+ * - **Periodic Topology Checks**: Use `periodicChecks` to configure how the client performs periodic checks to detect changes in the cluster's topology.
+ *   - `"enabledDefaultConfigs"`: Enables periodic checks with default configurations.
+ *   - `"disabled"`: Disables periodic topology checks.
+ *   - `{ duration_in_sec: number }`: Manually configure the interval for periodic checks.
+ * - **Pub/Sub Subscriptions**: Predefine Pub/Sub channels and patterns to subscribe to upon connection establishment.
+ *   - Supports exact channels, patterns, and sharded channels (available since Valkey version 7.0).
+ *
+ * @example
+ * ```typescript
+ * const config: GlideClusterClientConfiguration = {
+ *   periodicChecks: {
+ *     duration_in_sec: 30, // Perform periodic checks every 30 seconds
+ *   },
+ *   pubsubSubscriptions: {
+ *     channelsAndPatterns: {
+ *       [GlideClusterClientConfiguration.PubSubChannelModes.Pattern]: new Set(['cluster.*']),
+ *     },
+ *     callback: (msg) => {
+ *       console.log(`Received message on ${msg.channel}:`, msg.payload);
+ *     },
+ *   },
+ * };
+ * ```
+ */
 export type GlideClusterClientConfiguration = BaseClientConfiguration & {
     /**
      * Configure the periodic topology checks.
@@ -194,6 +229,37 @@ function convertClusterGlideRecord<T>(
         ? (res as T)
         : convertGlideRecordToRecord(res as GlideRecord<T>);
 }
+/**
+ * Routing configuration for commands based on a specific slot ID in a Valkey cluster.
+ *
+ * @remarks
+ * This interface allows you to specify routing of a command to a node responsible for a particular slot ID in the cluster.
+ * Valkey clusters use hash slots to distribute data across multiple shards. There are 16,384 slots in total, and each shard
+ * manages a range of slots.
+ *
+ * - **Slot ID**: A number between 0 and 16383 representing a hash slot.
+ * - **Routing Type**:
+ *   - `"primarySlotId"`: Routes the command to the primary node responsible for the specified slot ID.
+ *   - `"replicaSlotId"`: Routes the command to a replica node responsible for the specified slot ID, overriding the `readFrom` configuration.
+ *
+ * @example
+ * ```typescript
+ * // Route command to the primary node responsible for slot ID 12345
+ * const routeBySlotId: SlotIdTypes = {
+ *   type: "primarySlotId",
+ *   id: 12345,
+ * };
+ *
+ * // Route command to a replica node responsible for slot ID 12345
+ * const routeToReplicaBySlotId: SlotIdTypes = {
+ *   type: "replicaSlotId",
+ *   id: 12345,
+ * };
+ *
+ * // Use the routing configuration when executing a command
+ * const result = await client.get("mykey", { route: routeBySlotId });
+ * ```
+ */
 
 export interface SlotIdTypes {
     /**
@@ -207,7 +273,36 @@ export interface SlotIdTypes {
      */
     id: number;
 }
-
+/**
+ * Routing configuration for commands based on a key in a Valkey cluster.
+ *
+ * @remarks
+ * This interface allows you to specify routing of a command to a node responsible for the slot that a specific key hashes to.
+ * Valkey clusters use consistent hashing to map keys to hash slots, which are then managed by different shards in the cluster.
+ *
+ * - **Key**: The key whose hash slot will determine the routing of the command.
+ * - **Routing Type**:
+ *   - `"primarySlotKey"`: Routes the command to the primary node responsible for the key's slot.
+ *   - `"replicaSlotKey"`: Routes the command to a replica node responsible for the key's slot, overriding the `readFrom` configuration.
+ *
+ * @example
+ * ```typescript
+ * // Route command to the primary node responsible for the key's slot
+ * const routeByKey: SlotKeyTypes = {
+ *   type: "primarySlotKey",
+ *   key: "user:1001",
+ * };
+ *
+ * // Route command to a replica node responsible for the key's slot
+ * const routeToReplicaByKey: SlotKeyTypes = {
+ *   type: "replicaSlotKey",
+ *   key: "user:1001",
+ * };
+ *
+ * // Use the routing configuration when executing a command
+ * const result = await client.get("user:1001", { route: routeByKey });
+ * ```
+ */
 export interface SlotKeyTypes {
     /**
      * `replicaSlotKey` overrides the `readFrom` configuration. If it's used the request
@@ -220,7 +315,39 @@ export interface SlotKeyTypes {
     key: string;
 }
 
-/// Route command to specific node.
+/**
+ * Routing configuration to send a command to a specific node by its address and port.
+ *
+ * @remarks
+ * This interface allows you to specify routing of a command to a node in the Valkey cluster by providing its network address and port.
+ * It's useful when you need to direct a command to a particular node.
+ *
+ * - **Type**: Must be set to `"routeByAddress"` to indicate that the routing should be based on the provided address.
+ * - **Host**: The endpoint of the node.
+ *   - If `port` is not provided, `host` should be in the format `${address}:${port}`, where `address` is the preferred endpoint as shown in the output of the `CLUSTER SLOTS` command.
+ *   - If `port` is provided, `host` should be the address or hostname of the node without the port.
+ * - **Port**: (Optional) The port to access on the node.
+ *   - If `port` is not provided, `host` is assumed to include the port number.
+ *
+ * @example
+ * ```typescript
+ * // Route command to a node at '192.168.1.10:6379'
+ * const routeByAddress: RouteByAddress = {
+ *   type: "routeByAddress",
+ *   host: "192.168.1.10",
+ *   port: 6379,
+ * };
+ *
+ * // Alternatively, include the port in the host string
+ * const routeByAddressWithPortInHost: RouteByAddress = {
+ *   type: "routeByAddress",
+ *   host: "192.168.1.10:6379",
+ * };
+ *
+ * // Use the routing configuration when executing a command
+ * const result = await client.ping({ route: routeByAddress });
+ * ```
+ */
 export interface RouteByAddress {
     type: "routeByAddress";
     /**
@@ -232,7 +359,52 @@ export interface RouteByAddress {
      */
     port?: number;
 }
-
+/**
+ * Defines the routing configuration for a command in a Valkey cluster.
+ *
+ * @remarks
+ * The `Routes` type allows you to specify how a command should be routed in a Valkey cluster.
+ * Commands can be routed to a single node or broadcast to multiple nodes depending on the routing strategy.
+ *
+ * **Routing Options**:
+ *
+ * - **Single Node Routing** (`SingleNodeRoute`):
+ *   - **"randomNode"**: Route the command to a random node in the cluster.
+ *   - **`SlotIdTypes`**: Route based on a specific slot ID.
+ *   - **`SlotKeyTypes`**: Route based on the slot of a specific key.
+ *   - **`RouteByAddress`**: Route to a specific node by its address and port.
+ * - **Broadcast Routing**:
+ *   - **"allPrimaries"**: Route the command to all primary nodes in the cluster.
+ *   - **"allNodes"**: Route the command to all nodes (both primaries and replicas) in the cluster.
+ *
+ * @example
+ * ```typescript
+ * // Route command to a random node
+ * const routeRandom: Routes = "randomNode";
+ *
+ * // Route command to all primary nodes
+ * const routeAllPrimaries: Routes = "allPrimaries";
+ *
+ * // Route command to all nodes
+ * const routeAllNodes: Routes = "allNodes";
+ *
+ * // Route command to a node by slot key
+ * const routeByKey: Routes = {
+ *   type: "primarySlotKey",
+ *   key: "myKey",
+ * };
+ *
+ * // Route command to a specific node by address
+ * const routeByAddress: Routes = {
+ *   type: "routeByAddress",
+ *   host: "192.168.1.10",
+ *   port: 6379,
+ * };
+ *
+ * // Use the routing configuration when executing a command
+ * const result = await client.ping({ route: routeByAddress });
+ * ```
+ */
 export type Routes =
     | SingleNodeRoute
     /**
@@ -243,7 +415,48 @@ export type Routes =
      * Route request to all nodes.
      */
     | "allNodes";
-
+/**
+ * Defines the routing configuration to a single node in the Valkey cluster.
+ *
+ * @remarks
+ * The `SingleNodeRoute` type allows you to specify routing of a command to a single node in the cluster.
+ * This can be based on various criteria such as a random node, a node responsible for a specific slot, or a node identified by its address.
+ *
+ * **Options**:
+ *
+ * - **"randomNode"**: Route the command to a random node in the cluster.
+ * - **`SlotIdTypes`**: Route to the node responsible for a specific slot ID.
+ * - **`SlotKeyTypes`**: Route to the node responsible for the slot of a specific key.
+ * - **`RouteByAddress`**: Route to a specific node by its address and port.
+ *
+ * @example
+ * ```typescript
+ * // Route to a random node
+ * const routeRandomNode: SingleNodeRoute = "randomNode";
+ *
+ * // Route based on slot ID
+ * const routeBySlotId: SingleNodeRoute = {
+ *   type: "primarySlotId",
+ *   id: 12345,
+ * };
+ *
+ * // Route based on key
+ * const routeByKey: SingleNodeRoute = {
+ *   type: "primarySlotKey",
+ *   key: "myKey",
+ * };
+ *
+ * // Route to a specific node by address
+ * const routeByAddress: SingleNodeRoute = {
+ *   type: "routeByAddress",
+ *   host: "192.168.1.10",
+ *   port: 6379,
+ * };
+ *
+ * // Use the routing configuration when executing a command
+ * const result = await client.get("myKey", { route: routeByKey });
+ * ```
+ */
 export type SingleNodeRoute =
     /**
      * Route request to a random node.
@@ -293,7 +506,51 @@ export class GlideClusterClient extends BaseClient {
         this.configurePubsub(options, configuration);
         return configuration;
     }
-
+    /**
+     * Creates a new `GlideClusterClient` instance and establishes connections to a Valkey GLIDE Cluster.
+     *
+     * @param options - The configuration options for the client, including cluster addresses, authentication credentials, TLS settings, periodic checks, and Pub/Sub subscriptions.
+     * @returns A promise that resolves to a connected `GlideClusterClient` instance.
+     *
+     * @remarks
+     * Use this static method to create and connect a `GlideClusterClient` to a Valkey GLIDE Cluster. The client will automatically handle connection establishment, including cluster topology discovery and handling of authentication and TLS configurations.
+     *
+     * ### Example - Connecting to a Cluster
+     * ```typescript
+     * import { GlideClusterClient, GlideClusterClientConfiguration } from '@valkey/valkey-glide';
+     *
+     * const client = await GlideClusterClient.createClient({
+     *   addresses: [
+     *     { host: 'address1.example.com', port: 6379 },
+     *     { host: 'address2.example.com', port: 6379 },
+     *   ],
+     *   credentials: {
+     *     username: 'user1',
+     *     password: 'passwordA',
+     *   },
+     *   useTLS: true,
+     *   periodicChecks: {
+     *     duration_in_sec: 30, // Perform periodic checks every 30 seconds
+     *   },
+     *   pubsubSubscriptions: {
+     *     channelsAndPatterns: {
+     *       [GlideClusterClientConfiguration.PubSubChannelModes.Exact]: new Set(['updates']),
+     *       [GlideClusterClientConfiguration.PubSubChannelModes.Sharded]: new Set(['sharded_channel']),
+     *     },
+     *     callback: (msg) => {
+     *       console.log(`Received message: ${msg.payload}`);
+     *     },
+     *   },
+     * });
+     * ```
+     *
+     * @remarks
+     * - **Cluster Topology Discovery**: The client will automatically discover the cluster topology based on the seed addresses provided.
+     * - **Authentication**: If `credentials` are provided, the client will attempt to authenticate using the specified username and password.
+     * - **TLS**: If `useTLS` is set to `true`, the client will establish secure connections using TLS.
+     * - **Periodic Checks**: The `periodicChecks` setting allows you to configure how often the client checks for cluster topology changes.
+     * - **Pub/Sub Subscriptions**: Any channels or patterns specified in `pubsubSubscriptions` will be subscribed to upon connection.
+     */
     public static async createClient(
         options: GlideClusterClientConfiguration,
     ): Promise<GlideClusterClient> {
@@ -303,7 +560,9 @@ export class GlideClusterClient extends BaseClient {
                 new GlideClusterClient(socket, options),
         );
     }
-
+    /**
+     * @internal
+     */
     static async __createClient(
         options: BaseClientConfiguration,
         connectedSocket: net.Socket,
@@ -706,7 +965,7 @@ export class GlideClusterClient extends BaseClient {
      * @example
      * ```typescript
      * // Example usage of configSet method to set multiple configuration parameters
-     * const result = await client.configSet({ timeout: "1000", maxmemory, "1GB" });
+     * const result = await client.configSet({ timeout: "1000", maxmemory: "1GB" });
      * console.log(result); // Output: 'OK'
      * ```
      */
@@ -1462,7 +1721,7 @@ export class GlideClusterClient extends BaseClient {
      * @example
      * ```typescript
      * const luaScript = new Script("return { ARGV[1] }");
-     * const result = await invokeScript(luaScript, { args: ["bar"] });
+     * const result = await client.invokeScript(luaScript, { args: ["bar"] });
      * console.log(result); // Output: ['bar']
      * ```
      */

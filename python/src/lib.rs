@@ -1,15 +1,17 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
 use bytes::Bytes;
 use glide_core::client::FINISHED_SCAN_CURSOR;
-/**
- * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
- */
 use glide_core::start_socket_listener;
+use glide_core::Telemetry;
 use glide_core::MAX_REQUEST_ARGS_LENGTH;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
-use pyo3::types::{PyAny, PyBool, PyBytes, PyDict, PyFloat, PyList, PySet};
+use pyo3::types::{PyAny, PyBool, PyBytes, PyDict, PyFloat, PyList, PySet, PyString};
 use pyo3::Python;
 use redis::Value;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 pub const DEFAULT_TIMEOUT_IN_MILLISECONDS: u32 =
     glide_core::client::DEFAULT_RESPONSE_TIMEOUT.as_millis() as u32;
@@ -113,31 +115,68 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
         DEFAULT_TIMEOUT_IN_MILLISECONDS,
     )?;
     m.add("MAX_REQUEST_ARGS_LEN", MAX_REQUEST_ARGS_LEN)?;
+    m.add_function(wrap_pyfunction!(py_log, m)?)?;
+    m.add_function(wrap_pyfunction!(py_init, m)?)?;
+    m.add_function(wrap_pyfunction!(start_socket_listener_external, m)?)?;
+    m.add_function(wrap_pyfunction!(value_from_pointer, m)?)?;
+    m.add_function(wrap_pyfunction!(create_leaked_value, m)?)?;
+    m.add_function(wrap_pyfunction!(create_leaked_bytes_vec, m)?)?;
+    m.add_function(wrap_pyfunction!(get_statistics, m)?)?;
 
-    #[pyfn(m)]
+    #[pyfunction]
     fn py_log(log_level: Level, log_identifier: String, message: String) {
         log(log_level, log_identifier, message);
     }
 
-    #[pyfn(m)]
+    #[pyfunction]
+    fn get_statistics(_py: Python) -> PyResult<PyObject> {
+        let mut stats_map = HashMap::<String, String>::new();
+        stats_map.insert(
+            "total_connections".to_string(),
+            Telemetry::total_connections().to_string(),
+        );
+        stats_map.insert(
+            "total_clients".to_string(),
+            Telemetry::total_clients().to_string(),
+        );
+
+        Python::with_gil(|py| {
+            let py_dict = PyDict::new_bound(py);
+
+            for (key, value) in stats_map {
+                py_dict.set_item(
+                    PyString::new_bound(py, &key),
+                    PyString::new_bound(py, &value),
+                )?;
+            }
+
+            Ok(py_dict.into_py(py))
+        })
+    }
+
+    #[pyfunction]
     #[pyo3(signature = (level=None, file_name=None))]
     fn py_init(level: Option<Level>, file_name: Option<&str>) -> Level {
         init(level, file_name)
     }
-
-    #[pyfn(m)]
+    #[pyfunction]
     fn start_socket_listener_external(init_callback: PyObject) -> PyResult<PyObject> {
-        start_socket_listener(move |socket_path| {
-            Python::with_gil(|py| {
-                match socket_path {
-                    Ok(path) => {
-                        let _ = init_callback.call_bound(py, (path, py.None()), None);
-                    }
-                    Err(error_message) => {
-                        let _ = init_callback.call_bound(py, (py.None(), error_message), None);
-                    }
-                };
-            });
+        let init_callback = Arc::new(init_callback);
+        start_socket_listener({
+            let init_callback = Arc::clone(&init_callback);
+            move |socket_path| {
+                let init_callback = Arc::clone(&init_callback);
+                Python::with_gil(|py| {
+                    match socket_path {
+                        Ok(path) => {
+                            let _ = init_callback.call_bound(py, (path, py.None()), None);
+                        }
+                        Err(error_message) => {
+                            let _ = init_callback.call_bound(py, (py.None(), error_message), None);
+                        }
+                    };
+                });
+            }
         });
         Ok(Python::with_gil(|py| "OK".into_py(py)))
     }
@@ -213,13 +252,13 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
         }
     }
 
-    #[pyfn(m)]
+    #[pyfunction]
     pub fn value_from_pointer(py: Python, pointer: u64) -> PyResult<PyObject> {
         let value = unsafe { Box::from_raw(pointer as *mut Value) };
         resp_value_to_py(py, *value)
     }
 
-    #[pyfn(m)]
+    #[pyfunction]
     /// This function is for tests that require a value allocated on the heap.
     /// Should NOT be used in production.
     pub fn create_leaked_value(message: String) -> usize {
@@ -227,7 +266,7 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
         Box::leak(Box::new(value)) as *mut Value as usize
     }
 
-    #[pyfn(m)]
+    #[pyfunction]
     pub fn create_leaked_bytes_vec(args_vec: Vec<&PyBytes>) -> usize {
         // Convert the bytes vec -> Bytes vector
         let bytes_vec: Vec<Bytes> = args_vec
@@ -241,7 +280,6 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     }
     Ok(())
 }
-
 impl From<logger_core::Level> for Level {
     fn from(level: logger_core::Level) -> Self {
         match level {
