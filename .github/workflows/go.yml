@@ -239,7 +239,7 @@ jobs:
             - name: Build and test
               working-directory: ./go
               run: |
-                  make install-tools-go-1.20.0
+                  make install-tools-go1.20.0
                   LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$GITHUB_WORKSPACE/go/target/release/deps/
                   make build
                   make modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true

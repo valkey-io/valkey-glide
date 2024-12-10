@@ -77,7 +77,7 @@ unit-test:
 	go test -v -race ./... -skip TestGlideTestSuite $(if $(test-filter), -run $(test-filter))
 
 # integration tests - run subtask with no test filter
-integ-test: export TEST_FILTER = $(if $(test-filter), -run $(test-filter))
+integ-test: export TEST_FILTER = $(if $(test-filter), -run $(test-filter) -skip TestGlideTestSuite/TestModule)
 integ-test: __it
 
 # modules tests - run substask with default filter
