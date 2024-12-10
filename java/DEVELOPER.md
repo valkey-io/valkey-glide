@@ -87,11 +87,7 @@ Before starting this step, make sure you've installed all software dependencies.
     git clone https://github.com/valkey-io/valkey-glide.git
     cd valkey-glide/java
     ```
-2. Initialize git submodule:
-    ```bash
-    git submodule update --init --recursive
-    ```
-3. Build the Java wrapper (Choose a build option from the following and run it from the `java` folder):
+2. Build the Java wrapper (Choose a build option from the following and run it from the `java` folder):
 
     1. Enter the java directory:
 
@@ -164,7 +160,6 @@ Some troubleshooting issues:
   you may need to restart your machine. In particular, this may solve the following problems:
     - Failed to find `cargo` after `rustup`.
     - No Protobuf compiler (protoc) found.
-- If build fails because of rust compiler fails, make sure submodules are updated using `git submodule update`.
 - If protobuf 29.0 or earlier is detected, upgrade to the latest protobuf release.
 
 ## Running Examples App
@@ -273,14 +268,6 @@ To (re)generate protobuf code, use the following command:
 
 ```bash
 ./gradlew protobuf
-```
-
-### Submodules
-
-After pulling new changes, ensure that you update the submodules by running the following command:
-
-```bash
-git submodule update
 ```
 
 ### Contributing new ValKey commands
