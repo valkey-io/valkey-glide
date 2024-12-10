@@ -13,7 +13,8 @@ use redis::cluster_routing::{
 };
 use redis::cluster_slotmap::ReadFromReplicaStrategy;
 use redis::{
-    ClusterScanArgs, Cmd, ErrorKind, PushInfo, RedisError, RedisResult, ScanStateRC, Value,
+    ClusterScanArgs, Cmd, ErrorKind, FromRedisValue, PushInfo, RedisError, RedisResult,
+    ScanStateRC, Value,
 };
 pub use standalone_client::StandaloneClient;
 use std::io;
@@ -26,6 +27,7 @@ use self::value_conversion::{convert_to_expected_type, expected_type_for_cmd, ge
 mod reconnecting_connection;
 mod standalone_client;
 mod value_conversion;
+use redis::InfoDict;
 use tokio::sync::mpsc;
 use versions::Versioning;
 
