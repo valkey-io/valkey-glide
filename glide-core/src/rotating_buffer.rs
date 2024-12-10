@@ -1,6 +1,4 @@
-/**
- * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
- */
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 #[allow(unused_imports)]
 use bytes::{Bytes, BytesMut};
 use integer_encoding::VarInt;

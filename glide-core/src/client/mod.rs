@@ -1,6 +1,5 @@
-/**
- * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
- */
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
 mod types;
 
 use crate::cluster_scan_container::insert_cluster_scan_cursor;

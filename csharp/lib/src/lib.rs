@@ -1,6 +1,5 @@
-/**
- * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
- */
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
 use glide_core::client;
 use glide_core::client::Client as GlideClient;
 use glide_core::request_type::RequestType;

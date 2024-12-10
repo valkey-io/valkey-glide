@@ -1,6 +1,5 @@
-/*
- * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
- */
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
 #![allow(dead_code)]
 use futures::Future;
 use glide_core::{
