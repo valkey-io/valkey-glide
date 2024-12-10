@@ -558,7 +558,7 @@ async def transaction_test(
         args.append(OK)
         transaction.bitcount(key20, OffsetOptions(5, 30, BitmapIndexType.BIT))
         args.append(17)
-        transaction.bitpos_interval(key20, 1, 44, 50, BitmapIndexType.BIT)
+        transaction.bitpos(key20, 1, OffsetOptions(44, 50, BitmapIndexType.BIT))
         args.append(46)
 
     if not await check_if_server_version_lt(glide_client, "8.0.0"):
