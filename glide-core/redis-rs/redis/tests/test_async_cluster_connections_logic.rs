@@ -236,6 +236,7 @@ mod test_connect_and_check {
             ConnectionDetails {
                 conn: user_conn,
                 ip: Some(ip),
+                az: None,
             }
             .into_future(),
             None,
@@ -283,6 +284,7 @@ mod test_connect_and_check {
             ConnectionDetails {
                 conn: user_conn,
                 ip: prev_ip,
+                az: None,
             }
             .into_future(),
             None,
@@ -339,12 +341,14 @@ mod test_connect_and_check {
             ConnectionDetails {
                 conn: old_user_conn,
                 ip: Some(prev_ip),
+                az: None,
             }
             .into_future(),
             Some(
                 ConnectionDetails {
                     conn: management_conn,
                     ip: Some(prev_ip),
+                    az: None,
                 }
                 .into_future(),
             ),
@@ -380,12 +384,14 @@ mod test_check_node_connections {
             ConnectionDetails {
                 conn: get_mock_connection_with_port(name, 1, 6380),
                 ip,
+                az: None,
             }
             .into_future(),
             Some(
                 ConnectionDetails {
                     conn: get_mock_connection_with_port(name, 2, 6381),
                     ip,
+                    az: None,
                 }
                 .into_future(),
             ),
@@ -463,6 +469,7 @@ mod test_check_node_connections {
             ConnectionDetails {
                 conn: get_mock_connection(name, 1),
                 ip,
+                az: None,
             }
             .into_future(),
             None,
@@ -547,6 +554,7 @@ mod test_check_node_connections {
             ConnectionDetails {
                 conn: get_mock_connection(name, 1),
                 ip: None,
+                az: None,
             }
             .into_future(),
             None,

@@ -1,3 +1,18 @@
+//! This module contains the implementation of scanning operations in a Redis cluster.
+//!
+//! The [`ClusterScanArgs`] struct represents the arguments for a cluster scan operation,
+//! including the scan state reference, match pattern, count, and object type.
+//!
+//! The [[`ScanStateRC`]] struct is a wrapper for managing the state of a scan operation in a cluster.
+//! It holds a reference to the scan state and provides methods for accessing the state.
+//!
+//! The [[`ClusterInScan`]] trait defines the methods for interacting with a Redis cluster during scanning,
+//! including retrieving address information, refreshing slot mapping, and routing commands to specific address.
+//!
+//! The [[`ScanState`]] struct represents the state of a scan operation in a Redis cluster.
+//! It holds information about the current scan state, including the cursor position, scanned slots map,
+//! address being scanned, and address's epoch.
+
 use crate::aio::ConnectionLike;
 use crate::cluster_async::{
     ClusterConnInner, Connect, Core, InternalRoutingInfo, InternalSingleNodeRouting, RefreshPolicy,
@@ -10,20 +25,6 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use strum_macros::Display;
 
-/// This module contains the implementation of scanning operations in a Redis cluster.
-///
-/// The [`ClusterScanArgs`] struct represents the arguments for a cluster scan operation,
-/// including the scan state reference, match pattern, count, and object type.
-///
-/// The [[`ScanStateRC`]] struct is a wrapper for managing the state of a scan operation in a cluster.
-/// It holds a reference to the scan state and provides methods for accessing the state.
-///
-/// The [[`ClusterInScan`]] trait defines the methods for interacting with a Redis cluster during scanning,
-/// including retrieving address information, refreshing slot mapping, and routing commands to specific address.
-///
-/// The [[`ScanState`]] struct represents the state of a scan operation in a Redis cluster.
-/// It holds information about the current scan state, including the cursor position, scanned slots map,
-/// address being scanned, and address's epoch.
 const BITS_PER_U64: usize = u64::BITS as usize;
 const NUM_OF_SLOTS: usize = SLOT_SIZE as usize;
 const BITS_ARRAY_SIZE: usize = NUM_OF_SLOTS / BITS_PER_U64;
