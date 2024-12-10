@@ -140,6 +140,7 @@
 * Node: Add SCAN command ([#2257](https://github.com/valkey-io/valkey-glide/pull/2257))
 * Java: Add Script commands ([#2261](https://github.com/valkey-io/valkey-glide/pull/2261))
 * Python: Replace google-api-python-client with protobuf ([#2304](https://github.com/valkey-io/valkey-glide/pull/2304))
+* Go: Add `SInterStore` ([#2779](https://github.com/valkey-io/valkey-glide/issues/2779))
 
 #### Breaking Changes
 
