@@ -156,7 +156,7 @@ func getServerVersion(suite *GlideTestSuite) string {
 	}
 	if len(suite.clusterHosts) == 0 {
 		if err != nil {
-			suite.T().Fatalf("No cluster hosts configured, standalone failed with %w", err)
+			suite.T().Fatalf("No cluster hosts configured, standalone failed with %s", err.Error())
 		}
 		suite.T().Fatal("No server hosts configured")
 	}
@@ -175,7 +175,7 @@ func getServerVersion(suite *GlideTestSuite) string {
 			return extractServerVersion(suite, value.(string))
 		}
 	}
-	suite.T().Fatalf("Can't connect to any server to get version: %w", err)
+	suite.T().Fatalf("Can't connect to any server to get version: %s", err.Error())
 	return ""
 }
 
