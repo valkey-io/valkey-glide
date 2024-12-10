@@ -398,7 +398,7 @@ type SetCommands interface {
 	// Example:
 	//
 	// [valkey.io]: https://valkey.io/commands/sscan/
-	SScan(key string, cursor string) (Result[string], []Result[string], error)
+	SScan(key string, cursor string) (string, []string, error)
 
 	// Iterates incrementally over a set.
 	//
@@ -417,7 +417,7 @@ type SetCommands interface {
 	// Example:
 	//
 	// [valkey.io]: https://valkey.io/commands/sscan/
-	SScanWithOption(key string, cursor string, options BaseScanOptions) (Result[string], []Result[string], error)
+	SScanWithOption(key string, cursor string, options *BaseScanOptions) (string, []string, error)
 
 	// Moves `member` from the set at `source` to the set at `destination`, removing it from the source set.
 	// Creates a new destination set if needed. The operation is atomic.

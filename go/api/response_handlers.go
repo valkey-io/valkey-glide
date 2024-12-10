@@ -380,17 +380,33 @@ type ScanResult struct {
 
 func handleScanResponse(
 	response *C.struct_CommandResponse,
-) (Result[string], []Result[string], error) {
+) (string, []string, error) {
 	defer C.free_command_response(response)
 
 	slice, err := parseArray(response)
 	if err != nil {
-		return CreateNilStringResult(), nil, err
+		return "", nil, err
 	}
 
 	if arr, ok := slice.([]interface{}); ok {
-		return arr[0].(Result[string]), arr[1].([]Result[string]), nil
+		resCollection, err := convertToStrings(arr[1].([]interface{}))
+		if err != nil {
+			return "", nil, err
+		}
+		return arr[0].(string), resCollection, nil
 	}
 
-	return CreateNilStringResult(), nil, err
+	return "", nil, err
+}
+
+func convertToStrings(input []interface{}) ([]string, error) {
+	result := make([]string, len(input))
+	for i, v := range input {
+		str, ok := v.(string)
+		if !ok {
+			return nil, fmt.Errorf("element at index %d is not a string: %v", i, v)
+		}
+		result[i] = str
+	}
+	return result, nil
 }

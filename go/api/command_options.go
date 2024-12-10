@@ -298,6 +298,20 @@ type BaseScanOptions struct {
 	count int64
 }
 
+func NewBaseScanOptionsBuilder() *BaseScanOptions {
+	return &BaseScanOptions{}
+}
+
+func (scanOptions *BaseScanOptions) SetMatch(m string) *BaseScanOptions {
+	scanOptions.match = m
+	return scanOptions
+}
+
+func (scanOptions *BaseScanOptions) SetCount(c int64) *BaseScanOptions {
+	scanOptions.count = c
+	return scanOptions
+}
+
 func (opts *BaseScanOptions) toArgs() ([]string, error) {
 	args := []string{}
 	var err error

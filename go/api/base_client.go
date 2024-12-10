@@ -662,10 +662,10 @@ func (client *baseClient) SUnion(keys []string) (map[Result[string]]struct{}, er
 	return handleStringSetResponse(result)
 }
 
-func (client *baseClient) SScan(key string, cursor string) (Result[string], []Result[string], error) {
+func (client *baseClient) SScan(key string, cursor string) (string, []string, error) {
 	result, err := client.executeCommand(C.SScan, []string{key, cursor})
 	if err != nil {
-		return CreateNilStringResult(), nil, err
+		return "", nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -673,16 +673,16 @@ func (client *baseClient) SScan(key string, cursor string) (Result[string], []Re
 func (client *baseClient) SScanWithOption(
 	key string,
 	cursor string,
-	options BaseScanOptions,
-) (Result[string], []Result[string], error) {
+	options *BaseScanOptions,
+) (string, []string, error) {
 	optionArgs, err := options.toArgs()
 	if err != nil {
-		return CreateNilStringResult(), nil, err
+		return "", nil, err
 	}
 
 	result, err := client.executeCommand(C.SScan, append([]string{key, cursor}, optionArgs...))
 	if err != nil {
-		return CreateNilStringResult(), nil, err
+		return "", nil, err
 	}
 	return handleScanResponse(result)
 }
