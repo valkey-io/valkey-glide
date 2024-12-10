@@ -110,7 +110,7 @@ export class GlideJson {
      * ```typescript
      * const value = {a: 1.0, b:2};
      * const jsonStr = JSON.stringify(value);
-     * const result = await GlideJson.set("doc", "$", jsonStr);
+     * const result = await GlideJson.set(client, "doc", "$", jsonStr);
      * console.log(result); // 'OK' - Indicates successful setting of the value at path '$' in the key stored at `doc`.
      *
      * const jsonGetStr = await GlideJson.get(client, "doc", {path: "$"}); // Returns the value at path '$' in the JSON document stored at `doc` as JSON string.
@@ -514,7 +514,7 @@ export class GlideJson {
      * ```typescript
      * const value = {bool: true, nested: {bool: false, nested: {bool: 10}}};
      * const jsonStr = JSON.stringify(value);
-     * const resultSet = await GlideJson.set("doc", "$", jsonStr);
+     * const resultSet = await GlideJson.set(client, "doc", "$", jsonStr);
      * // Output: 'OK'
      *
      * const resultToggle = await.GlideJson.toggle(client, "doc", {path: "$.bool"});
