@@ -2016,16 +2016,20 @@ func (suite *GlideTestSuite) TestSMove() {
 
 		res4, err := client.SMembers(key1)
 		assert.NoError(t, err)
-		assert.Len(t, res4, 2)
-		assert.Contains(t, res4, api.CreateStringResult("2"))
-		assert.Contains(t, res4, api.CreateStringResult("3"))
+		expectedSet := map[api.Result[string]]struct{}{
+			api.CreateStringResult("2"): {},
+			api.CreateStringResult("3"): {},
+		}
+		assert.True(t, reflect.DeepEqual(expectedSet, res4))
 
 		res5, err := client.SMembers(key2)
 		assert.NoError(t, err)
-		assert.Len(t, res5, 3)
-		assert.Contains(t, res5, api.CreateStringResult("1"))
-		assert.Contains(t, res5, api.CreateStringResult("2"))
-		assert.Contains(t, res5, api.CreateStringResult("3"))
+		expectedSet = map[api.Result[string]]struct{}{
+			api.CreateStringResult("1"): {},
+			api.CreateStringResult("2"): {},
+			api.CreateStringResult("3"): {},
+		}
+		assert.True(t, reflect.DeepEqual(expectedSet, res5))
 
 		// moved element already exists in the destination set
 		res6, err := client.SMove(key2, key1, "2")
@@ -2034,15 +2038,19 @@ func (suite *GlideTestSuite) TestSMove() {
 
 		res7, err := client.SMembers(key1)
 		assert.NoError(t, err)
-		assert.Len(t, res7, 2)
-		assert.Contains(t, res7, api.CreateStringResult("2"))
-		assert.Contains(t, res7, api.CreateStringResult("3"))
+		expectedSet = map[api.Result[string]]struct{}{
+			api.CreateStringResult("2"): {},
+			api.CreateStringResult("3"): {},
+		}
+		assert.True(t, reflect.DeepEqual(expectedSet, res7))
 
 		res8, err := client.SMembers(key2)
 		assert.NoError(t, err)
-		assert.Len(t, res8, 2)
-		assert.Contains(t, res8, api.CreateStringResult("1"))
-		assert.Contains(t, res8, api.CreateStringResult("3"))
+		expectedSet = map[api.Result[string]]struct{}{
+			api.CreateStringResult("1"): {},
+			api.CreateStringResult("3"): {},
+		}
+		assert.True(t, reflect.DeepEqual(expectedSet, res8))
 
 		// attempt to move from a non-existing key
 		res9, err := client.SMove(nonExistingKey, key1, "4")
@@ -2051,9 +2059,11 @@ func (suite *GlideTestSuite) TestSMove() {
 
 		res10, err := client.SMembers(key1)
 		assert.NoError(t, err)
-		assert.Len(t, res10, 2)
-		assert.Contains(t, res10, api.CreateStringResult("2"))
-		assert.Contains(t, res10, api.CreateStringResult("3"))
+		expectedSet = map[api.Result[string]]struct{}{
+			api.CreateStringResult("2"): {},
+			api.CreateStringResult("3"): {},
+		}
+		assert.True(t, reflect.DeepEqual(expectedSet, res10))
 
 		// move to a new set
 		res11, err := client.SMove(key1, key3, "2")
@@ -2150,7 +2160,7 @@ func (suite *GlideTestSuite) TestSScan() {
 		assert.True(t, isSubset(resCollection, charMembers))
 
 		opts := api.NewBaseScanOptionsBuilder().SetMatch("a")
-		resCursor, resCollection, err = client.SScanWithOption(key1, initialCursor, opts)
+		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
 		assert.Equal(t, initialCursor, resCursor)
 		assert.True(t, isSubset(resCollection, []string{"a"}))
@@ -2177,21 +2187,21 @@ func (suite *GlideTestSuite) TestSScan() {
 
 		// test match pattern
 		opts = api.NewBaseScanOptionsBuilder().SetMatch("*")
-		resCursor, resCollection, err = client.SScanWithOption(key1, initialCursor, opts)
+		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
 		assert.NotEqual(t, initialCursor, resCursor)
 		assert.GreaterOrEqual(t, len(resCollection), defaultCount)
 
 		// test count
 		opts = api.NewBaseScanOptionsBuilder().SetCount(20)
-		resCursor, resCollection, err = client.SScanWithOption(key1, initialCursor, opts)
+		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
 		assert.NotEqual(t, initialCursor, resCursor)
 		assert.GreaterOrEqual(t, len(resCollection), 20)
 
 		// test count with match, returns a non-empty array
 		opts = api.NewBaseScanOptionsBuilder().SetMatch("1*").SetCount(20)
-		resCursor, resCollection, err = client.SScanWithOption(key1, initialCursor, opts)
+		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
 		assert.NotEqual(t, initialCursor, resCursor)
 		assert.GreaterOrEqual(t, len(resCollection), 0)

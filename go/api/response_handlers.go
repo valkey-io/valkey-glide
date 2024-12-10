@@ -373,11 +373,6 @@ func handleStringSetResponse(response *C.struct_CommandResponse) (map[Result[str
 	return slice, nil
 }
 
-type ScanResult struct {
-	cursor  Result[string]
-	results []Result[string]
-}
-
 func handleScanResponse(
 	response *C.struct_CommandResponse,
 ) (string, []string, error) {

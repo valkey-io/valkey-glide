@@ -384,11 +384,14 @@ type SetCommands interface {
 
 	// Iterates incrementally over a set.
 	//
+	// Note: When in cluster mode, all keys must map to the same hash slot.
+	//
 	// See [valkey.io] for details.
 	//
 	// Parameters:
-	//   key - The key of the set.
-	//   cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of the search.
+	//   key - The key of the set.	//   cursor - The cursor that points to the next iteration of results.
+	//            A value of `"0"` indicates the start of the search.
+	//            For Valkey 8.0 and above, negative cursors are treated like the initial cursor("0").
 	//
 	// Return value:
 	//  An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and
@@ -396,17 +399,35 @@ type SetCommands interface {
 	//  The second element is always an array of the subset of the set held in `key`.
 	//
 	// Example:
+	//	 // assume "key" contains a set
+	// 	 resCursor, resCol, err := client.sscan("key", "0")
+	//   for resCursor != "0" {
+	// 	 	resCursor, resCol, err = client.sscan("key", "0")
+	//   	fmt.Println("Cursor: ", resCursor)
+	//   	fmt.Println("Members: ", resCol)
+	//   }
+	//   // Output:
+	// 	 // Cursor:  48
+	//   // Members:  ['3', '118', '120', '86', '76', '13', '61', '111', '55', '45']
+	//   // Cursor:  24
+	//   // Members:  ['38', '109', '11', '119', '34', '24', '40', '57', '20', '17']
+	//   // Cursor:  0
+	//   // Members:  ['47', '122', '1', '53', '10', '14', '80']
 	//
 	// [valkey.io]: https://valkey.io/commands/sscan/
 	SScan(key string, cursor string) (string, []string, error)
 
 	// Iterates incrementally over a set.
 	//
+	// Note: When in cluster mode, all keys must map to the same hash slot.
+	//
 	// See [valkey.io] for details.
 	//
 	// Parameters:
 	//   key - The key of the set.
-	//   cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of the search.
+	//   cursor - The cursor that points to the next iteration of results.
+	//            A value of `"0"` indicates the start of the search.
+	//            For Valkey 8.0 and above, negative cursors are treated like the initial cursor("0").
 	//   options - [BaseScanOptions]
 	//
 	// Return value:
@@ -415,12 +436,29 @@ type SetCommands interface {
 	//  The second element is always an array of the subset of the set held in `key`.
 	//
 	// Example:
+	//	 // assume "key" contains a set
+	//   resCursor resCol, err := client.sscan("key", "0", opts)
+	//   for resCursor != "0" {
+	//   	opts := api.NewBaseScanOptionsBuilder().SetMatch("*")
+	// 	 	resCursor, resCol, err = client.sscan("key", "0", opts)
+	//   	fmt.Println("Cursor: ", resCursor)
+	//   	fmt.Println("Members: ", resCol)
+	//   }
+	//   // Output:
+	// 	 // Cursor:  48
+	//   // Members:  ['3', '118', '120', '86', '76', '13', '61', '111', '55', '45']
+	//   // Cursor:  24
+	//   // Members:  ['38', '109', '11', '119', '34', '24', '40', '57', '20', '17']
+	//   // Cursor:  0
+	//   // Members:  ['47', '122', '1', '53', '10', '14', '80']
 	//
 	// [valkey.io]: https://valkey.io/commands/sscan/
-	SScanWithOption(key string, cursor string, options *BaseScanOptions) (string, []string, error)
+	SScanWithOptions(key string, cursor string, options *BaseScanOptions) (string, []string, error)
 
 	// Moves `member` from the set at `source` to the set at `destination`, removing it from the source set.
 	// Creates a new destination set if needed. The operation is atomic.
+	//
+	// Note: When in cluster mode, `source` and `destination` must map to the same hash slot.
 	//
 	// See [valkey.io] for details.
 	//
@@ -433,6 +471,8 @@ type SetCommands interface {
 	//   `true` on success, or `false` if the `source` set does not exist or the element is not a member of the source set.
 	//
 	// Example:
+	//	 moved := SMove("set1", "set2", "element")
+	//   fmt.Println(moved) // Output: true
 	//
 	// [valkey.io]: https://valkey.io/commands/smove/
 	SMove(source string, destination string, member string) (Result[bool], error)

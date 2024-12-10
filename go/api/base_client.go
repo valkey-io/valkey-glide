@@ -670,7 +670,7 @@ func (client *baseClient) SScan(key string, cursor string) (string, []string, er
 	return handleScanResponse(result)
 }
 
-func (client *baseClient) SScanWithOption(
+func (client *baseClient) SScanWithOptions(
 	key string,
 	cursor string,
 	options *BaseScanOptions,
