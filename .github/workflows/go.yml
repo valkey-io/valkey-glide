@@ -101,21 +101,11 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
-            - name: Install tools for Go ${{ matrix.go }}
-              working-directory: ./go
-              run: make install-tools-go${{ matrix.go }}
-
-            - name: Set LD_LIBRARY_PATH
-              if: ${{ matrix.os == 'ubuntu-latest' }}
-              run: echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$GITHUB_WORKSPACE/go/target/release/deps/" >> $GITHUB_ENV
-
-            - name: Build client
-              working-directory: ./go
-              run: make build
-
-            - name: Run tests
-              working-directory: ./go
-              run: make test
+            - name: Install & build & test
+              working-directory: go
+              run: |
+                  LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$GITHUB_WORKSPACE/go/target/release/deps/
+                  make install-tools-go${{ matrix.go }} build unit-test integ-test
 
             - uses: ./.github/workflows/test-benchmark
               with:
@@ -220,7 +210,7 @@ jobs:
               working-directory: go
               run: |
                   LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$GITHUB_WORKSPACE/go/target/release/deps/
-                  make install-tools-go${{ matrix.go }} build test
+                  make install-tools-go${{ matrix.go }} build unit-test integ-test
 
             - name: Upload test reports
               if: always()
@@ -244,27 +234,19 @@ jobs:
 
             - uses: actions/checkout@v4
 
-            - name: Set up JDK
-              uses: actions/setup-java@v4
+            - name: Set up Go
+              uses: actions/setup-go@v5
               with:
-                  distribution: "temurin"
-                  java-version: 17
+                  go-version: "1.20.0"
+                  cache-dependency-path: go/go.sum
 
-            - name: Install protoc (protobuf)
-              uses: arduino/setup-protoc@v3
-              with:
-                  version: "26.1"
-                  repo-token: ${{ secrets.GITHUB_TOKEN }}
+            - name: Build and test
+              working-directory: ./go
+              run: |
+                  make install-tools-go-1.20.0
+                  LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$GITHUB_WORKSPACE/go/target/release/deps/
+                  make build
+                  make modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
 
-            - name: Test java wrapper
-              working-directory: java
-              run: ./gradlew :integTest:modulesTest -Dcluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -Dtls=true
-
-            - name: Upload test reports
-              if: always()
-              continue-on-error: true
-              uses: actions/upload-artifact@v4
-              with:
-                  name: test-reports-modules
-                  path: |
-                      java/integTest/build/reports/**
+            # TODO:
+            # Upload test reports

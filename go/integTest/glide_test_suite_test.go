@@ -28,27 +28,11 @@ type GlideTestSuite struct {
 	clusterClients  []*api.GlideClusterClient
 }
 
-// var tls = flag.Bool("tls", false, "one")
-// var clusterHosts = flag.String("cluster-endpoints", "", "two")
-// var standaloneHosts = flag.String("standalone-endpoints", "", "three")
-
-
-// https://stackoverflow.com/a/58192326/21176342
-// var _ = func() bool {
-//     testing.Init()
-//     return true
-// }()
-
-var tls = false;
-var clusterHosts = "";
-var standaloneHosts = ""
-
-func init() {
-	flag.BoolVar(&tls, "tls", false, "one")
-	flag.StringVar(&clusterHosts, "cluster-endpoints", "", "two")
-	flag.StringVar(&standaloneHosts, "standalone-endpoints", "", "three")
-    flag.Parse()
-}
+var (
+	tls             = flag.Bool("tls", false, "one")
+	clusterHosts    = flag.String("cluster-endpoints", "", "two")
+	standaloneHosts = flag.String("standalone-endpoints", "", "three")
+)
 
 func (suite *GlideTestSuite) SetupSuite() {
 	// Stop cluster in case previous test run was interrupted or crashed and didn't stop.
@@ -61,48 +45,42 @@ func (suite *GlideTestSuite) SetupSuite() {
 		log.Fatal(err)
 	}
 
-	// flag.BoolVar(&suite.tls, "tls", false, "one")
-	// clusterHosts := flag.String("cluster-endpoints", "", "two")
-	// standaloneHosts := flag.String("standalone-endpoints", "", "three")
-	// flag.Parse()
-
-	cmd := []string{};
-	suite.tls = false;
-	// if (suite.tls) {
-	if (tls) {
-		cmd = []string {"--tls"}
-		suite.tls = true;
+	cmd := []string{}
+	suite.tls = false
+	if *tls {
+		cmd = []string{"--tls"}
+		suite.tls = true
 	}
+	suite.T().Logf("TLS = %t", suite.tls)
 
-	if (standaloneHosts != "") {
-		suite.standaloneHosts = parseHosts(suite, standaloneHosts)
-	} else {
+	// Note: code does not start standalone if cluster hosts are given and vice versa
+	startServer := true
+
+	if *standaloneHosts != "" {
+		suite.standaloneHosts = parseHosts(suite, *standaloneHosts)
+		startServer = false
+	}
+	if *clusterHosts != "" {
+		suite.clusterHosts = parseHosts(suite, *clusterHosts)
+		startServer = false
+	}
+	if startServer {
 		// Start standalone instance
 		clusterManagerOutput := runClusterManager(suite, append(cmd, "start", "-r", "3"), false)
-
 		suite.standaloneHosts = extractAddresses(suite, clusterManagerOutput)
-	}
-	suite.T().Logf("Standalone ports = %s", fmt.Sprint(suite.standaloneHosts))
 
-	if (clusterHosts != "") {
-		suite.clusterHosts = parseHosts(suite, clusterHosts)
-	} else {
 		// Start cluster
-		clusterManagerOutput := runClusterManager(suite, append(cmd, "start", "--cluster-mode", "-r", "3"), false)
-
+		clusterManagerOutput = runClusterManager(suite, append(cmd, "start", "--cluster-mode", "-r", "3"), false)
 		suite.clusterHosts = extractAddresses(suite, clusterManagerOutput)
 	}
+
+	suite.T().Logf("Standalone ports = %s", fmt.Sprint(suite.standaloneHosts))
 	suite.T().Logf("Cluster ports = %s", fmt.Sprint(suite.clusterHosts))
 
-	// Get Redis version
-	// TODO: use INFO command
-	byteOutput, err := exec.Command("redis-server", "-v").Output()
-	if err != nil {
-		suite.T().Fatal(err.Error())
-	}
-
-	suite.serverVersion = extractServerVersion(string(byteOutput))
+	// Get server version
+	suite.serverVersion = getServerVersion(suite)
 	suite.T().Logf("Detected server version = %s", suite.serverVersion)
+	// suite.T().SkipNow()
 }
 
 func parseHosts(suite *GlideTestSuite, addresses string) []api.NodeAddress {
@@ -161,13 +139,62 @@ func runClusterManager(suite *GlideTestSuite, args []string, ignoreExitCode bool
 	return string(output)
 }
 
-func extractServerVersion(output string) string {
-	// Redis response:
-	// Redis server v=7.2.3 sha=00000000:0 malloc=jemalloc-5.3.0 bits=64 build=7504b1fedf883f2
-	// Valkey response:
-	// Server v=7.2.5 sha=26388270:0 malloc=jemalloc-5.3.0 bits=64 build=ea40bb1576e402d6
-	versionSection := strings.Split(output, "v=")[1]
-	return strings.Split(versionSection, " ")[0]
+func getServerVersion(suite *GlideTestSuite) string {
+	if len(suite.standaloneHosts) > 0 {
+		config := api.NewGlideClientConfiguration().
+			WithAddress(&suite.standaloneHosts[0]).
+			WithUseTLS(suite.tls).
+			WithRequestTimeout(5000)
+
+		client, err := api.NewGlideClient(config)
+		if err == nil && client != nil {
+			defer client.Close()
+			// TODO use info command
+			info, _ := client.CustomCommand([]string{"info", "server"})
+			return extractServerVersion(suite, info.(string))
+		}
+	}
+	if len(suite.clusterHosts) == 0 {
+		suite.T().Fatal("No server hosts configured")
+	}
+
+	config := api.NewGlideClusterClientConfiguration().
+		WithAddress(&suite.clusterHosts[0]).
+		WithUseTLS(suite.tls).
+		WithRequestTimeout(5000)
+
+	client, err := api.NewGlideClusterClient(config)
+	if err == nil && client != nil {
+		defer client.Close()
+		// TODO use info command with route
+		info, _ := client.CustomCommand([]string{"info", "server"})
+		for _, value := range info.(map[interface{}]interface{}) {
+			return extractServerVersion(suite, value.(string))
+		}
+	}
+	suite.T().Fatal("Can't connect to any server to get version")
+	return ""
+}
+
+func extractServerVersion(suite *GlideTestSuite, output string) string {
+	// output format:
+	//   # Server
+	//   redis_version:7.2.3
+	//	 ...
+	// It can contain `redis_version` or `valkey_version` key or both. If both, `valkey_version` should be taken
+	for _, line := range strings.Split(output, "\r\n") {
+		if strings.Contains(line, "valkey_version") {
+			return strings.Split(line, ":")[1]
+		}
+	}
+
+	for _, line := range strings.Split(output, "\r\n") {
+		if strings.Contains(line, "redis_version") {
+			return strings.Split(line, ":")[1]
+		}
+	}
+	suite.T().Fatalf("Can't read server version from INFO command output: %s", output)
+	return ""
 }
 
 func TestGlideTestSuite(t *testing.T) {
@@ -200,6 +227,7 @@ func (suite *GlideTestSuite) getDefaultClients() []api.BaseClient {
 func (suite *GlideTestSuite) defaultClient() *api.GlideClient {
 	config := api.NewGlideClientConfiguration().
 		WithAddress(&suite.standaloneHosts[0]).
+		WithUseTLS(suite.tls).
 		WithRequestTimeout(5000)
 	return suite.client(config)
 }
@@ -217,6 +245,7 @@ func (suite *GlideTestSuite) client(config *api.GlideClientConfiguration) *api.G
 func (suite *GlideTestSuite) defaultClusterClient() *api.GlideClusterClient {
 	config := api.NewGlideClusterClientConfiguration().
 		WithAddress(&suite.clusterHosts[0]).
+		WithUseTLS(suite.tls).
 		WithRequestTimeout(5000)
 	return suite.clusterClient(config)
 }
