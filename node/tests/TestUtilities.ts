@@ -925,14 +925,14 @@ export async function transactionTest(
         baseTransaction.lmpop([key24], ListDirection.LEFT);
         responseData.push([
             "lmpop([key22], ListDirection.LEFT)",
-            convertRecordToGlideRecord({ [key24]: [field] }),
+            [{ key: key24, elements: [field2] }],
         ]);
         baseTransaction.lpush(key24, [field2]);
         responseData.push(["lpush(key22, [2])", 2]);
         baseTransaction.blmpop([key24], ListDirection.LEFT, 0.1, 1);
         responseData.push([
             "blmpop([key22], ListDirection.LEFT, 0.1, 1)",
-            convertRecordToGlideRecord({ [key24]: [field] }),
+            [{ key: key24, elements: [field2] }],
         ]);
     }
 
