@@ -276,13 +276,13 @@ describe("GlideClusterClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
-            const key = "key";
+            const key = uuidv4();
             const value = "value";
             const valueEncoded = Buffer.from(value);
             expect(await client.set(key, value)).toEqual("OK");
             // Since DUMP gets binary results, we cannot use the default decoder (string) here, so we expected to get an error.
             await expect(client.customCommand(["DUMP", key])).rejects.toThrow(
-                "invalid utf-8 sequence",
+                /invalid utf-8 sequence|incomplete utf-8 byte sequence/,
             );
 
             const dumpResult = await client.customCommand(["DUMP", key], {
