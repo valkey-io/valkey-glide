@@ -1,5 +1,5 @@
 #### Changes
-* Java: Bump protobuf (protoc) version ([#2561](https://github.com/valkey-io/valkey-glide/pull/2561))
+* Java: Bump protobuf (protoc) version ([#2561](https://github.com/valkey-io/valkey-glide/pull/2561), [#2801](https://github.com/valkey-io/valkey-glide/pull/2801))
 * Java: bump `netty` version ([#2777](https://github.com/valkey-io/valkey-glide/pull/2777))
 
 #### Breaking Changes

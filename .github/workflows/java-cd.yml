@@ -102,7 +102,7 @@ jobs:
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
               with:
-                  version: "28.2"
+                  version: "29.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Create secret key ring file
@@ -245,7 +245,7 @@ jobs:
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
               with:
-                  version: "28.2"
+                  version: "29.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Start standalone Valkey server
