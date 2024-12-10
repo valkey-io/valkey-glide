@@ -200,7 +200,7 @@ public class CommandTests {
     public void select_test_gives_error() {
         ExecutionException e =
                 assertThrows(ExecutionException.class, () -> regularClient.select(-1).get());
-        assertTrue(e.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, e.getCause());
     }
 
     @Test
@@ -230,7 +230,7 @@ public class CommandTests {
         // Incorrect argument - DB index must be non-negative
         ExecutionException e =
                 assertThrows(ExecutionException.class, () -> regularClient.move(key1, -1L).get());
-        assertTrue(e.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, e.getCause());
     }
 
     @Test
@@ -260,7 +260,7 @@ public class CommandTests {
         // Incorrect argument - DB index must be non-negative
         ExecutionException e =
                 assertThrows(ExecutionException.class, () -> regularClient.move(key1, -1L).get());
-        assertTrue(e.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, e.getCause());
     }
 
     @Test
@@ -304,7 +304,7 @@ public class CommandTests {
         if (configFile.isEmpty()) {
             ExecutionException executionException =
                     assertThrows(ExecutionException.class, () -> regularClient.configRewrite().get());
-            assertTrue(executionException.getCause() instanceof RequestException);
+            assertInstanceOf(RequestException.class, executionException.getCause());
         } else {
             assertEquals(OK, regularClient.configRewrite().get());
         }
@@ -316,7 +316,7 @@ public class CommandTests {
         var exception =
                 assertThrows(
                         ExecutionException.class, () -> regularClient.configGet(new String[] {}).get());
-        assertTrue(exception.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getCause().getMessage().contains("wrong number of arguments"));
     }
 
@@ -347,7 +347,7 @@ public class CommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> regularClient.configSet(Map.of("Unknown Option", "Unknown Value")).get());
-        assertTrue(exception.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, exception.getCause());
     }
 
     @Test
@@ -1590,6 +1590,8 @@ public class CommandTests {
         Boolean[] result =
                 regularClient.scriptExists(new String[] {sha1_1, sha1_2, nonExistentSha1}).get();
         assertArrayEquals(expected, result);
+        script1.close();
+        script2.close();
     }
 
     @Test
@@ -1611,6 +1613,8 @@ public class CommandTests {
         Boolean[] result =
                 regularClient.scriptExists(new GlideString[] {sha1_1, sha1_2, nonExistentSha1}).get();
         assertArrayEquals(expected, result);
+        script1.close();
+        script2.close();
     }
 
     @Test
@@ -1637,6 +1641,7 @@ public class CommandTests {
         assertEquals(OK, regularClient.scriptFlush(FlushMode.ASYNC).get());
         result = regularClient.scriptExists(new String[] {script.getHash()}).get();
         assertArrayEquals(new Boolean[] {false}, result);
+        script.close();
     }
 
     @Test
@@ -1682,6 +1687,7 @@ public class CommandTests {
                 assertTrue(scriptKilled);
             } finally {
                 waitForNotBusy(regularClient::scriptKill);
+                script.close();
             }
         }
 
@@ -1742,6 +1748,7 @@ public class CommandTests {
                     promise.get();
                 } catch (Exception ignored) {
                 }
+                script.close();
             }
         }
     }

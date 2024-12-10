@@ -473,7 +473,7 @@ public class CommandTests {
         if (configFile.isEmpty()) {
             ExecutionException executionException =
                     assertThrows(ExecutionException.class, () -> clusterClient.configRewrite().get());
-            assertTrue(executionException.getCause() instanceof RequestException);
+            assertInstanceOf(RequestException.class, executionException.getCause());
         } else {
             assertEquals(OK, clusterClient.configRewrite().get());
         }
@@ -495,7 +495,7 @@ public class CommandTests {
         var exception =
                 assertThrows(
                         ExecutionException.class, () -> clusterClient.configGet(new String[] {}).get());
-        assertTrue(exception.getCause() instanceof GlideException);
+        assertInstanceOf(GlideException.class, exception.getCause());
     }
 
     @Test
@@ -3169,6 +3169,9 @@ public class CommandTests {
                         .get();
         assertArrayEquals(expected, result);
         assertArrayEquals(expected, result2);
+        script1.close();
+        script2.close();
+        script3.close();
     }
 
     @Test
@@ -3202,6 +3205,9 @@ public class CommandTests {
                         .get();
         assertArrayEquals(expected, result);
         assertArrayEquals(expected, result2);
+        script1.close();
+        script2.close();
+        script3.close();
     }
 
     @Test
@@ -3229,6 +3235,7 @@ public class CommandTests {
         assertEquals(OK, clusterClient.scriptFlush(FlushMode.ASYNC, ALL_PRIMARIES).get());
         result = clusterClient.scriptExists(new String[] {script.getHash()}, ALL_PRIMARIES).get();
         assertArrayEquals(new Boolean[] {false}, result);
+        script.close();
     }
 
     @Test
@@ -3277,6 +3284,7 @@ public class CommandTests {
                 assertTrue(scriptKilled);
             } finally {
                 waitForNotBusy(clusterClient::scriptKill);
+                script.close();
             }
         }
 
@@ -3340,6 +3348,7 @@ public class CommandTests {
                     promise.get();
                 } catch (Exception ignored) {
                 }
+                script.close();
             }
         }
     }
