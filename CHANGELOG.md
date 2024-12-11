@@ -1,10 +1,11 @@
 #### Changes
-* Java: Bump protobuf (protoc) version ([#2561](https://github.com/valkey-io/valkey-glide/pull/2561))
+* Java: Bump protobuf (protoc) version ([#2561](https://github.com/valkey-io/valkey-glide/pull/2561), [#2802](https://github.com/valkey-io/valkey-glide/pull/2802)
 * Java: bump `netty` version ([#2777](https://github.com/valkey-io/valkey-glide/pull/2777))
 
 #### Breaking Changes
 
 #### Fixes
+* Core: Fix RESP2 multi-node response from cluster ([#2381](https://github.com/valkey-io/valkey-glide/pull/2381))
 
 #### Operational Enhancements
 
@@ -107,8 +108,6 @@
 
 #### Fixes
 * Core: UDS Socket Handling Rework ([#2482](https://github.com/valkey-io/valkey-glide/pull/2482))
-
-* Core: Fix RESP2 multi-node response from cluster ([#2381](https://github.com/valkey-io/valkey-glide/pull/2381))
 
 #### Operational Enhancements
 
