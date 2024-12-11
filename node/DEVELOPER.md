@@ -107,6 +107,24 @@ Before starting this step, make sure you've installed all software requirments.
 5. Integrating the built GLIDE package into your project:
    Add the package to your project using the folder path with the command `npm install <path to GLIDE>/node`.
 
+6. Testing the GLIDE npm package:
+   The `node/npm/glide` folder contains a package wrapper that re-exports all the native bindings. To build and test this package, follow these steps:
+        ```bash
+        cd node;
+        npm run build; # build the @valkey/valkey-glide-impl package
+        cd npm/glide; # navigate to the npm package directory
+
+        export scope=@valkey/
+        export pkg_name=valkey-glide
+        export package_version=99.99.0 # set the version as desired
+        export native_binding=impl # to run against the local build at ../..
+        envsubst < package.json.tmpl > "package.json" # only needs to be run when the env variables change
+
+        npm i
+        npm run build:test
+        npm test
+        ```
+
 -   For a fast build, execute `npm run build`. This will perform a full, unoptimized build, which is suitable for developing tests. Keep in mind that performance is significantly affected in an unoptimized build, so it's required to build with the `build:release` or `build:benchmark` option when measuring performance.
 -   If your modifications are limited to the TypeScript code, run `npm run build-external` to build the external package without rebuilding the internal package.
 -   If your modifications are limited to the Rust code, execute `npm run build-internal` to build the internal package and generate TypeScript code.

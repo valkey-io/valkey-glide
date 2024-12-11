@@ -1,5 +1,5 @@
 {
-    "name": "@valkey/valkey-glide",
+    "name": "@valkey/valkey-glide-impl",
     "description": "General Language Independent Driver for the Enterprise (GLIDE) for Valkey",
     "main": "build-ts/index.js",
     "module": "build-ts/index.js",
