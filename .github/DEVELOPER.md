@@ -133,7 +133,7 @@ We use dynamic matrices for our CI/CD workflows, which are created using the `cr
 4. It generates three matrices:
     - Engine matrix: Defines the types and versions of the engine to test against, for example Valkey 7.2.5.
     - Host matrix: Defines the host platforms to run the tests on, for example Ubuntu on ARM64.
-    - Language-version matrix: Defines the supported versions of languages, for example python 3.8.
+    - Language-version matrix: Defines the supported versions of languages, for example python 3.9.
 
 #### Outputs
 

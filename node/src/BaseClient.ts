@@ -3,9 +3,11 @@
  */
 import {
     ClusterScanCursor,
+    DEFAULT_INFLIGHT_REQUESTS_LIMIT,
     DEFAULT_TIMEOUT_IN_MILLISECONDS,
     Script,
     StartSocketConnection,
+    getStatistics,
     valueFromSplitPointer,
 } from "glide-rs";
 import * as net from "net";
@@ -21,7 +23,6 @@ import {
     BitOffset, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitOffsetMultiplier, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitOffsetOptions,
-    BitmapIndexType,
     BitwiseOperation,
     Boundary,
     CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -497,10 +498,74 @@ export type ReadFrom =
     | "primary"
     /** Spread the requests between all replicas in a round robin manner.
         If no replica is available, route the requests to the primary.*/
-    | "preferReplica";
+    | "preferReplica"
+    /** Spread the requests between replicas in the same client's Aviliablity zone in a round robin manner.
+        If no replica is available, route the requests to the primary.*/
+    | "AZAffinity";
 
 /**
  * Configuration settings for creating a client. Shared settings for standalone and cluster clients.
+ *
+ * @remarks
+ * The `BaseClientConfiguration` interface defines the foundational configuration options used when creating a client to connect to a Valkey server or cluster. It includes connection details, authentication, communication protocols, and various settings that influence the client's behavior and interaction with the server.
+ *
+ * ### Connection Details
+ *
+ * - **Addresses**: Use the `addresses` property to specify the hostnames and ports of the server(s) to connect to.
+ *   - **Cluster Mode**: In cluster mode, the client will discover other nodes based on the provided addresses.
+ *   - **Standalone Mode**: In standalone mode, only the provided nodes will be used.
+ *
+ * ### Security Settings
+ *
+ * - **TLS**: Enable secure communication using `useTLS`.
+ * - **Authentication**: Provide `credentials` to authenticate with the server.
+ *
+ * ### Communication Settings
+ *
+ * - **Request Timeout**: Set `requestTimeout` to specify how long the client should wait for a request to complete.
+ * - **Protocol Version**: Choose the serialization protocol using `protocol`.
+ *
+ * ### Client Identification
+ *
+ * - **Client Name**: Set `clientName` to identify the client connection.
+ *
+ * ### Read Strategy
+ *
+ * - Use `readFrom` to specify the client's read strategy (e.g., primary, preferReplica, AZAffinity).
+ *
+ * ### Availability Zone
+ *
+ * - Use `clientAz` to specify the client's availability zone, which can influence read operations when using `readFrom: 'AZAffinity'`.
+ *
+ * ### Decoder Settings
+ *
+ * - **Default Decoder**: Set `defaultDecoder` to specify how responses are decoded by default.
+ *
+ * ### Concurrency Control
+ *
+ * - **Inflight Requests Limit**: Control the number of concurrent requests using `inflightRequestsLimit`.
+ *
+ * @example
+ * ```typescript
+ * const config: BaseClientConfiguration = {
+ *   addresses: [
+ *     { host: 'redis-node-1.example.com', port: 6379 },
+ *     { host: 'redis-node-2.example.com' }, // Defaults to port 6379
+ *   ],
+ *   useTLS: true,
+ *   credentials: {
+ *     username: 'myUser',
+ *     password: 'myPassword',
+ *   },
+ *   requestTimeout: 5000, // 5 seconds
+ *   protocol: ProtocolVersion.RESP3,
+ *   clientName: 'myValkeyClient',
+ *   readFrom: ReadFrom.AZAffinity,
+ *   clientAz: 'us-east-1a',
+ *   defaultDecoder: Decoder.String,
+ *   inflightRequestsLimit: 1000,
+ * };
+ * ```
  */
 export interface BaseClientConfiguration {
     /**
@@ -563,6 +628,25 @@ export interface BaseClientConfiguration {
      * If not set, 'Decoder.String' will be used.
      */
     defaultDecoder?: Decoder;
+    /**
+     * The maximum number of concurrent requests allowed to be in-flight (sent but not yet completed).
+     * This limit is used to control the memory usage and prevent the client from overwhelming the
+     * server or getting stuck in case of a queue backlog. If not set, a default value of 1000 will be
+     * used.
+     */
+    inflightRequestsLimit?: number;
+    /**
+     * Availability Zone of the client.
+     * If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within the specified AZ if exits.
+     *
+     * @example
+     * ```typescript
+     * // Example configuration for setting client availability zone and read strategy
+     * configuration.clientAz = 'us-east-1a'; // Sets the client's availability zone
+     * configuration.readFrom = 'AZAffinity'; // Directs read operations to nodes within the same AZ
+     * ```
+     */
+    clientAz?: string;
 }
 
 /**
@@ -707,6 +791,8 @@ export class BaseClient {
     protected defaultDecoder = Decoder.String;
     private readonly pubsubFutures: [PromiseFunction, ErrorFunction][] = [];
     private pendingPushNotification: response.Response[] = [];
+    private readonly inflightRequestsLimit: number;
+    private readonly clientAz: string | undefined;
     private config: BaseClientConfiguration | undefined;
 
     protected configurePubsub(
@@ -873,6 +959,8 @@ export class BaseClient {
                 this.close();
             });
         this.defaultDecoder = options?.defaultDecoder ?? Decoder.String;
+        this.inflightRequestsLimit =
+            options?.inflightRequestsLimit ?? DEFAULT_INFLIGHT_REQUESTS_LIMIT;
     }
 
     protected getCallbackIndex(): number {
@@ -904,7 +992,8 @@ export class BaseClient {
             | command_request.Command
             | command_request.Command[]
             | command_request.ScriptInvocation
-            | command_request.ClusterScan,
+            | command_request.ClusterScan
+            | command_request.UpdateConnectionPassword,
         options: WritePromiseOptions = {},
     ): Promise<T> {
         const route = toProtobufRoute(options?.route);
@@ -974,7 +1063,8 @@ export class BaseClient {
             | command_request.Command
             | command_request.Command[]
             | command_request.ScriptInvocation
-            | command_request.ClusterScan,
+            | command_request.ClusterScan
+            | command_request.UpdateConnectionPassword,
         route?: command_request.Routes,
     ) {
         const message = Array.isArray(command)
@@ -994,10 +1084,15 @@ export class BaseClient {
                       callbackIdx,
                       clusterScan: command,
                   })
-                : command_request.CommandRequest.create({
-                      callbackIdx,
-                      scriptInvocation: command,
-                  });
+                : command instanceof command_request.UpdateConnectionPassword
+                  ? command_request.CommandRequest.create({
+                        callbackIdx,
+                        updateConnectionPassword: command,
+                    })
+                  : command_request.CommandRequest.create({
+                        callbackIdx,
+                        scriptInvocation: command,
+                    });
         message.route = route;
 
         this.writeOrBufferRequest(
@@ -1385,6 +1480,14 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/del/|valkey.io} for details.
      *
+     * @remarks In cluster mode, if keys in `keys` map to different hash slots,
+     * the command will be split across these slots and executed separately for each.
+     * This means the command is atomic only at the slot level. If one or more slot-specific
+     * requests fail, the entire call will return the first encountered error, even
+     * though some requests may have succeeded while others did not.
+     * If this behavior impacts your application logic, consider splitting the
+     * request into sub-requests per slot to ensure atomicity.
+     *
      * @param keys - The keys we wanted to remove.
      * @returns The number of keys that were removed.
      *
@@ -1485,7 +1588,14 @@ export class BaseClient {
     /** Retrieve the values of multiple keys.
      *
      * @see {@link https://valkey.io/commands/mget/|valkey.io} for details.
-     * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+     *
+     * @remarks In cluster mode, if keys in `keys` map to different hash slots,
+     * the command will be split across these slots and executed separately for each.
+     * This means the command is atomic only at the slot level. If one or more slot-specific
+     * requests fail, the entire call will return the first encountered error, even
+     * though some requests may have succeeded while others did not.
+     * If this behavior impacts your application logic, consider splitting the
+     * request into sub-requests per slot to ensure atomicity.
      *
      * @param keys - A list of keys to retrieve values for.
      * @param options - (Optional) See {@link DecoderOption}.
@@ -1511,10 +1621,18 @@ export class BaseClient {
     /** Set multiple keys to multiple values in a single operation.
      *
      * @see {@link https://valkey.io/commands/mset/|valkey.io} for details.
-     * @remarks When in cluster mode, the command may route to multiple nodes when keys in `keyValueMap` map to different hash slots.
+     *
+     * @remarks In cluster mode, if keys in `keyValueMap` map to different hash slots,
+     * the command will be split across these slots and executed separately for each.
+     * This means the command is atomic only at the slot level. If one or more slot-specific
+     * requests fail, the entire call will return the first encountered error, even
+     * though some requests may have succeeded while others did not.
+     * If this behavior impacts your application logic, consider splitting the
+     * request into sub-requests per slot to ensure atomicity.
      *
      * @param keysAndValues - A list of key-value pairs to set.
-     * @returns always "OK".
+     *
+     * @returns A simple "OK" response.
      *
      * @example
      * ```typescript
@@ -1755,11 +1873,12 @@ export class BaseClient {
      * The offset can also be a negative number indicating an offset starting at the end of the list, with `-1` being
      * the last byte of the list, `-2` being the penultimate, and so on.
      *
-     * @see {@link https://valkey.io/commands/bitpos/|valkey.io} for more details.
+     * @see {@link https://valkey.io/commands/bitpos/|valkey.io} for details.
      *
      * @param key - The key of the string.
      * @param bit - The bit value to match. Must be `0` or `1`.
-     * @param start - (Optional) The starting offset. If not supplied, the search will start at the beginning of the string.
+     * @param options - (Optional) The {@link BitOffsetOptions}.
+     *
      * @returns The position of the first occurrence of `bit` in the binary value of the string held at `key`.
      *      If `start` was provided, the search begins at the offset indicated by `start`.
      *
@@ -1769,61 +1888,23 @@ export class BaseClient {
      * const result1 = await client.bitpos("key1", 1);
      * console.log(result1); // Output: 1 - The first occurrence of bit value 1 in the string stored at "key1" is at the second position.
      *
-     * const result2 = await client.bitpos("key1", 1, -1);
+     * const result2 = await client.bitpos("key1", 1, { start: -1 });
      * console.log(result2); // Output: 10 - The first occurrence of bit value 1, starting at the last byte in the string stored at "key1", is at the eleventh position.
+     *
+     * await client.set("key1", "A12");  // "A12" has binary value 01000001 00110001 00110010
+     * const result3 = await client.bitpos("key1", 1, { start: 1, end: -1 });
+     * console.log(result3); // Output: 10 - The first occurrence of bit value 1 in the second byte to the last byte of the string stored at "key1" is at the eleventh position.
+     *
+     * const result4 = await client.bitpos("key1", 1, { start: 2, end: 9, indexType: BitmapIndexType.BIT });
+     * console.log(result4); // Output: 7 - The first occurrence of bit value 1 in the third to tenth bits of the string stored at "key1" is at the eighth position.
      * ```
      */
     public async bitpos(
         key: GlideString,
         bit: number,
-        start?: number,
+        options?: BitOffsetOptions,
     ): Promise<number> {
-        return this.createWritePromise(createBitPos(key, bit, start));
-    }
-
-    /**
-     * Returns the position of the first bit matching the given `bit` value. The offsets are zero-based indexes, with
-     * `0` being the first element of the list, `1` being the next, and so on. These offsets can also be negative
-     * numbers indicating offsets starting at the end of the list, with `-1` being the last element of the list, `-2`
-     * being the penultimate, and so on.
-     *
-     * If you are using Valkey 7.0.0 or above, the optional `indexType` can also be provided to specify whether the
-     * `start` and `end` offsets specify BIT or BYTE offsets. If `indexType` is not provided, BYTE offsets
-     * are assumed. If BIT is specified, `start=0` and `end=2` means to look at the first three bits. If BYTE is
-     * specified, `start=0` and `end=2` means to look at the first three bytes.
-     *
-     * @see {@link https://valkey.io/commands/bitpos/|valkey.io} for more details.
-     *
-     * @param key - The key of the string.
-     * @param bit - The bit value to match. Must be `0` or `1`.
-     * @param start - The starting offset.
-     * @param end - The ending offset.
-     * @param indexType - (Optional) The index offset type. This option can only be specified if you are using Valkey
-     *      version 7.0.0 or above. Could be either {@link BitmapIndexType.BYTE} or {@link BitmapIndexType.BIT}. If no
-     *      index type is provided, the indexes will be assumed to be byte indexes.
-     * @returns The position of the first occurrence from the `start` to the `end` offsets of the `bit` in the binary
-     *      value of the string held at `key`.
-     *
-     * @example
-     * ```typescript
-     * await client.set("key1", "A12");  // "A12" has binary value 01000001 00110001 00110010
-     * const result1 = await client.bitposInterval("key1", 1, 1, -1);
-     * console.log(result1); // Output: 10 - The first occurrence of bit value 1 in the second byte to the last byte of the string stored at "key1" is at the eleventh position.
-     *
-     * const result2 = await client.bitposInterval("key1", 1, 2, 9, BitmapIndexType.BIT);
-     * console.log(result2); // Output: 7 - The first occurrence of bit value 1 in the third to tenth bits of the string stored at "key1" is at the eighth position.
-     * ```
-     */
-    public async bitposInterval(
-        key: GlideString,
-        bit: number,
-        start: number,
-        end: number,
-        indexType?: BitmapIndexType,
-    ): Promise<number> {
-        return this.createWritePromise(
-            createBitPos(key, bit, start, end, indexType),
-        );
+        return this.createWritePromise(createBitPos(key, bit, options));
     }
 
     /**
@@ -2275,7 +2356,7 @@ export class BaseClient {
      *
      * @param key - The key of the set.
      * @param cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of the search.
-     * @param options - (Optional) The {@link HScanOptions}.
+     * @param options - (Optional) See {@link HScanOptions} and {@link DecoderOption}.
      * @returns An array of the `cursor` and the subset of the hash held by `key`.
      * The first element is always the `cursor` for the next iteration of results. `"0"` will be the `cursor`
      * returned on the last iteration of the hash. The second element is always an array of the subset of the
@@ -3423,6 +3504,14 @@ export class BaseClient {
     /**
      * Returns the number of keys in `keys` that exist in the database.
      *
+     * @remarks In cluster mode, if keys in `keys` map to different hash slots,
+     * the command will be split across these slots and executed separately for each.
+     * This means the command is atomic only at the slot level. If one or more slot-specific
+     * requests fail, the entire call will return the first encountered error, even
+     * though some requests may have succeeded while others did not.
+     * If this behavior impacts your application logic, consider splitting the
+     * request into sub-requests per slot to ensure atomicity.
+     *
      * @see {@link https://valkey.io/commands/exists/|valkey.io} for details.
      *
      * @param keys - The keys list to check.
@@ -3444,6 +3533,14 @@ export class BaseClient {
      * Removes the specified keys. A key is ignored if it does not exist.
      * This command, similar to {@link del}, removes specified keys and ignores non-existent ones.
      * However, this command does not block the server, while {@link https://valkey.io/commands/del|`DEL`} does.
+     *
+     * @remarks In cluster mode, if keys in `keys` map to different hash slots,
+     * the command will be split across these slots and executed separately for each.
+     * This means the command is atomic only at the slot level. If one or more slot-specific
+     * requests fail, the entire call will return the first encountered error, even
+     * though some requests may have succeeded while others did not.
+     * If this behavior impacts your application logic, consider splitting the
+     * request into sub-requests per slot to ensure atomicity.
      *
      * @see {@link https://valkey.io/commands/unlink/|valkey.io} for details.
      *
@@ -5499,7 +5596,6 @@ export class BaseClient {
      *     attributes of a consumer group for the stream at `key`.
      * @example
      * ```typescript
-     *     <pre>{@code
      * const result = await client.xinfoGroups("my_stream");
      * console.log(result); // Output:
      * // [
@@ -5937,6 +6033,7 @@ export class BaseClient {
     > = {
         primary: connection_request.ReadFrom.Primary,
         preferReplica: connection_request.ReadFrom.PreferReplica,
+        AZAffinity: connection_request.ReadFrom.AZAffinity,
     };
 
     /**
@@ -5952,13 +6049,11 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     *  <pre>{@code
      * const entryId = await client.xadd("mystream", ["myfield", "mydata"]);
      * // read messages from streamId
      * const readResult = await client.xreadgroup(["myfield", "mydata"], "mygroup", "my0consumer");
      * // acknowledge messages on stream
      * console.log(await client.xack("mystream", "mygroup", [entryId])); // Output: 1
-     * </pre>
      * ```
      */
     public async xack(
@@ -6444,7 +6539,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/bitcount/|valkey.io} for more details.
      *
      * @param key - The key for the string to count the set bits of.
-     * @param options - The offset options.
+     * @param options - The offset options - see {@link BitOffsetOptions}.
      * @returns If `options` is provided, returns the number of set bits in the string interval specified by `options`.
      *     If `options` is not provided, returns the number of set bits in the string stored at `key`.
      *     Otherwise, if `key` is missing, returns `0` as it is treated as an empty string.
@@ -7073,7 +7168,14 @@ export class BaseClient {
      * Updates the last access time of the specified keys.
      *
      * @see {@link https://valkey.io/commands/touch/|valkey.io} for more details.
-     * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+     *
+     * @remarks In cluster mode, if keys in `keys` map to different hash slots,
+     * the command will be split across these slots and executed separately for each.
+     * This means the command is atomic only at the slot level. If one or more slot-specific
+     * requests fail, the entire call will return the first encountered error, even
+     * though some requests may have succeeded while others did not.
+     * If this behavior impacts your application logic, consider splitting the
+     * request into sub-requests per slot to ensure atomicity.
      *
      * @param keys - The keys to update the last access time of.
      * @returns The number of keys that were updated. A key is ignored if it doesn't exist.
@@ -7096,7 +7198,14 @@ export class BaseClient {
      * transaction. Executing a transaction will automatically flush all previously watched keys.
      *
      * @see {@link https://valkey.io/commands/watch/|valkey.io} and {@link https://valkey.io/topics/transactions/#cas|Valkey Glide Wiki} for more details.
-     * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+     *
+     * @remarks In cluster mode, if keys in `keys` map to different hash slots,
+     * the command will be split across these slots and executed separately for each.
+     * This means the command is atomic only at the slot level. If one or more slot-specific
+     * requests fail, the entire call will return the first encountered error, even
+     * though some requests may have succeeded while others did not.
+     * If this behavior impacts your application logic, consider splitting the
+     * request into sub-requests per slot to ensure atomicity.
      *
      * @param keys - The keys to watch.
      * @returns A simple `"OK"` response.
@@ -7505,6 +7614,8 @@ export class BaseClient {
             clusterModeEnabled: false,
             readFrom,
             authenticationInfo,
+            inflightRequestsLimit: options.inflightRequestsLimit,
+            clientAz: options.clientAz ?? null,
         };
     }
 
@@ -7609,5 +7720,59 @@ export class BaseClient {
             socket.end();
             throw err;
         }
+    }
+
+    /**
+     * Update the current connection with a new password.
+     *
+     * This method is useful in scenarios where the server password has changed or when utilizing short-lived passwords for enhanced security.
+     * It allows the client to update its password to reconnect upon disconnection without the need to recreate the client instance.
+     * This ensures that the internal reconnection mechanism can handle reconnection seamlessly, preventing the loss of in-flight commands.
+     *
+     * This method updates the client's internal password configuration and does not perform password rotation on the server side.
+     *
+     * @param password - `String | null`. The new password to update the current password, or `null` to remove the current password.
+     * @param immidiateAuth - A `boolean` flag. If `true`, the client will authenticate immediately with the new password against all connections, Using `AUTH` command.
+     *                 If password supplied is an empty string, the client will not perform auth and instead a warning will be returned.
+     *                 The default is `false`.
+     *
+     * @example
+     * ```typescript
+     * await client.updateConnectionPassword("newPassword", true) // "OK"
+     * ```
+     */
+    async updateConnectionPassword(
+        password: string | null,
+        immediateAuth = false,
+    ) {
+        const updateConnectionPassword =
+            command_request.UpdateConnectionPassword.create({
+                password,
+                immediateAuth,
+            });
+
+        const response = await this.createWritePromise<GlideString>(
+            updateConnectionPassword,
+        );
+
+        if (response === "OK" && !this.config?.credentials) {
+            this.config = {
+                ...this.config!,
+                credentials: {
+                    ...this.config!.credentials,
+                    password: password ? password : "",
+                },
+            };
+        }
+
+        return response;
+    }
+    /**
+     * Return a statistics
+     *
+     * @return Return an object that contains the statistics collected internally by GLIDE core
+     */
+    public getStatistics(): object {
+        return getStatistics();
     }
 }
