@@ -26,13 +26,17 @@ func NewGlideClient(config *GlideClientConfiguration) (*GlideClient, error) {
 // the command name and subcommands, should be added as a separate value in args. The returning value depends on the executed
 // command.
 //
+// See [Valkey GLIDE Wiki] for details on the restrictions and limitations of the custom command API.
+//
 // This function should only be used for single-response commands. Commands that don't return complete response and awaits
 // (such as SUBSCRIBE), or that return potentially more than a single response (such as XREAD), or that change the client's
 // behavior (such as entering pub/sub mode on RESP2 connections) shouldn't be called using this function.
 //
 // For example, to return a list of all pub/sub clients:
 //
-//	client.CustomCommand([]string{"CLIENT", "LIST","TYPE", "PUBSUB"})
+//	result, err := client.CustomCommand([]string{"CLIENT", "LIST", "TYPE", "PUBSUB"})
+//
+// [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
 func (client *GlideClient) CustomCommand(args []string) (interface{}, error) {
 	res, err := client.executeCommand(C.CustomCommand, args)
 	if err != nil {
