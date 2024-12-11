@@ -1687,6 +1687,46 @@ func (suite *GlideTestSuite) TestSPop_LastMember() {
 	})
 }
 
+func (suite *GlideTestSuite) TestSMIsMember() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.NewString()
+		stringKey := uuid.NewString()
+		nonExistingKey := uuid.NewString()
+
+		res1, err1 := client.SAdd(key1, []string{"one", "two"})
+		assert.Nil(suite.T(), err1)
+		assert.Equal(suite.T(), int64(2), res1.Value())
+		assert.False(suite.T(), res1.IsNil())
+
+		res2, err2 := client.SMIsMember(key1, []string{"two", "three"})
+		assert.Nil(suite.T(), err2)
+		assert.Equal(
+			suite.T(),
+			[]api.Result[bool]{
+				api.CreateBoolResult(true),
+				api.CreateBoolResult(false),
+			},
+			res2)
+
+		res3, err3 := client.SMIsMember(nonExistingKey, []string{"two"})
+		assert.Nil(suite.T(), err3)
+		assert.Equal(suite.T(), []api.Result[bool]{api.CreateBoolResult(false)}, res3)
+
+		// invalid argument - member list must not be empty
+		_, err4 := client.SMIsMember(key1, []string{})
+		assert.NotNil(suite.T(), err4)
+		assert.IsType(suite.T(), &api.RequestError{}, err4)
+
+		// source key exists, but it is not a set
+		setRes, setErr := client.Set(stringKey, "value")
+		assert.Nil(suite.T(), setErr)
+		assert.Equal(suite.T(), "OK", setRes.Value())
+		_, err5 := client.SMIsMember(stringKey, []string{"two"})
+		assert.NotNil(suite.T(), err5)
+		assert.IsType(suite.T(), &api.RequestError{}, err5)
+	})
+}
+
 func (suite *GlideTestSuite) TestLRange() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		list := []string{"value4", "value3", "value2", "value1"}

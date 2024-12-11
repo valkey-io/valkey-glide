@@ -278,4 +278,27 @@ type SetCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/spop/
 	SPop(key string) (Result[string], error)
+
+	// SMIsMember returns whether each member is a member of the set stored at key.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   key - The key of the set.
+	//
+	// Return value:
+	//   A []Result[bool] containing whether each member is a member of the set stored at key.
+	//
+	// Example:
+	//	 client.SAdd("myKey", []string{"one", "two"})
+	//   value1, err := client.SMIsMember("myKey", []string{"two", "three"})
+	//   // value1[0].Value() == true
+	//   // value1[1].Value() == false
+	//   // err == nil
+	//   value2, err := client.SPop("nonExistingKey", []string{"one"})
+	//   // value2[0].Value() == false
+	//   // err == nil
+	//
+	// [valkey.io]: https://valkey.io/commands/smismember/
+	SMIsMember(key string, members []string) ([]Result[bool], error)
 }
