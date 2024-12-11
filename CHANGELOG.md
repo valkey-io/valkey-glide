@@ -1,6 +1,7 @@
 #### Changes
 * Java: bump `netty` version ([#2795](https://github.com/valkey-io/valkey-glide/pull/2795))
 * Java: Bump protobuf (protoc) version ([#2796](https://github.com/valkey-io/valkey-glide/pull/2796), [#2800](https://github.com/valkey-io/valkey-glide/pull/2800))
+* Go: Add `SInterStore` ([#2779](https://github.com/valkey-io/valkey-glide/issues/2779))
 
 #### Breaking Changes
 
@@ -250,7 +251,6 @@
 * Node: Add SCAN command ([#2257](https://github.com/valkey-io/valkey-glide/pull/2257))
 * Java: Add Script commands ([#2261](https://github.com/valkey-io/valkey-glide/pull/2261))
 * Python: Replace google-api-python-client with protobuf ([#2304](https://github.com/valkey-io/valkey-glide/pull/2304))
-* Go: Add `SInterStore` ([#2779](https://github.com/valkey-io/valkey-glide/issues/2779))
 
 #### Breaking Changes
 
