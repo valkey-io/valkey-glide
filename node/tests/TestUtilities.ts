@@ -40,6 +40,7 @@ import {
     UnsignedEncoding,
     convertRecordToGlideRecord,
 } from "..";
+import ValkeyCluster from "../../utils/TestUtils";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function intoArrayInternal(obj: any, builder: string[]) {
@@ -667,7 +668,7 @@ function decodeString(str: string, decoder: Decoder): GlideString {
  */
 export async function transactionTest(
     baseTransaction: Transaction | ClusterTransaction,
-    version: string,
+    cluster: ValkeyCluster,
     decoder: Decoder,
 ): Promise<[string, GlideReturnType][]> {
     // initialize key values to work within the same hashslot
@@ -793,7 +794,7 @@ export async function transactionTest(
     baseTransaction.set(key1, bar, { returnOldValue: true });
     responseData.push(['set(key1, "bar", {returnOldValue: true})', "foo"]);
 
-    if (gte(version, "6.2.0")) {
+    if (!cluster.checkIfServerVersionLessThan("6.2.0")) {
         baseTransaction.getex(key1);
         responseData.push(["getex(key1)", "bar"]);
         baseTransaction.getex(key1, { type: TimeUnit.Seconds, duration: 1 });
@@ -820,7 +821,7 @@ export async function transactionTest(
     baseTransaction.persist(key1);
     responseData.push(["persist(key1)", false]);
 
-    if (gte(version, "7.0.0")) {
+    if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
         baseTransaction.expireTime(key1);
         responseData.push(["expiretime(key1)", -1]);
 
@@ -856,7 +857,7 @@ export async function transactionTest(
         ["0", [field.toString(), value.toString()]],
     ]);
 
-    if (gte(version, "8.0.0")) {
+    if (!cluster.checkIfServerVersionLessThan("8.0.0")) {
         baseTransaction.hscan(key4, "0", { noValues: false });
         responseData.push([
             'hscan(key4, "0", {noValues: false})',
@@ -919,20 +920,20 @@ export async function transactionTest(
     baseTransaction.lpush(key5, [field1, field2, field3, field4]);
     responseData.push(["lpush(key5, [1, 2, 3, 4])", 4]);
 
-    if (gte("7.0.0", version)) {
-        baseTransaction.lpush(key24, [field1, field2]);
+    if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+        baseTransaction.lpush(key24, [field1.toString(), field2.toString()]);
         responseData.push(["lpush(key22, [1, 2])", 2]);
         baseTransaction.lmpop([key24], ListDirection.LEFT);
         responseData.push([
-            "lmpop([key22], ListDirection.LEFT)",
-            [{ key: key24, elements: [field2] }],
+            "lmpop([key24], ListDirection.LEFT)",
+            [{ key: key24.toString(), value: [field2.toString()] }],
         ]);
         baseTransaction.lpush(key24, [field2]);
-        responseData.push(["lpush(key22, [2])", 2]);
+        responseData.push(["lpush(key24, [2])", 2]);
         baseTransaction.blmpop([key24], ListDirection.LEFT, 0.1, 1);
         responseData.push([
-            "blmpop([key22], ListDirection.LEFT, 0.1, 1)",
-            [{ key: key24, elements: [field2] }],
+            "blmpop([key24], ListDirection.LEFT, 0.1, 1)",
+            [{ key: key24.toString(), value: [field2.toString()] }],
         ]);
     }
 
@@ -952,7 +953,7 @@ export async function transactionTest(
         [field3.toString(), field2.toString()],
     ]);
 
-    if (gte(version, "6.2.0")) {
+    if (!cluster.checkIfServerVersionLessThan("6.2.0")) {
         baseTransaction.lmove(
             key5,
             key20,
@@ -1023,7 +1024,7 @@ export async function transactionTest(
     baseTransaction.sinter([key7, key7]);
     responseData.push(["sinter([key7, key7])", new Set(["bar", "foo"])]);
 
-    if (gte(version, "7.0.0")) {
+    if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
         baseTransaction.sintercard([key7, key7]);
         responseData.push(["sintercard([key7, key7])", 2]);
         baseTransaction.sintercard([key7, key7], { limit: 1 });
@@ -1050,7 +1051,7 @@ export async function transactionTest(
     baseTransaction.sismember(key7, bar);
     responseData.push(['sismember(key7, "bar")', true]);
 
-    if (gte(version, "6.2.0")) {
+    if (!cluster.checkIfServerVersionLessThan("6.2.0")) {
         baseTransaction.smismember(key7, [bar, foo, baz]);
         responseData.push([
             'smismember(key7, ["bar", "foo", "baz"])',
@@ -1085,7 +1086,7 @@ export async function transactionTest(
     baseTransaction.zrank(key8, member1);
     responseData.push(['zrank(key8, "member1")', 0]);
 
-    if (gte(version, "7.2.0")) {
+    if (!cluster.checkIfServerVersionLessThan("7.2.0")) {
         baseTransaction.zrankWithScore(key8, member1);
         responseData.push(['zrankWithScore(key8, "member1")', [0, 1]]);
     }
@@ -1093,7 +1094,7 @@ export async function transactionTest(
     baseTransaction.zrevrank(key8, "member5");
     responseData.push(['zrevrank(key8, "member5")', 0]);
 
-    if (gte(version, "7.2.0")) {
+    if (!cluster.checkIfServerVersionLessThan("7.2.0")) {
         baseTransaction.zrevrankWithScore(key8, "member5");
         responseData.push(['zrevrankWithScore(key8, "member5")', [0, 5]]);
     }
@@ -1137,7 +1138,7 @@ export async function transactionTest(
     baseTransaction.zscan(key12, "0");
     responseData.push(['zscan(key12, "0")', ["0", ["one", "1", "two", "2"]]]);
 
-    if (gte(version, "8.0.0")) {
+    if (!cluster.checkIfServerVersionLessThan("8.0.0")) {
         baseTransaction.zscan(key12, "0", { noScores: false });
         responseData.push([
             'zscan(key12, "0", {noScores: false})',
@@ -1163,7 +1164,7 @@ export async function transactionTest(
     baseTransaction.zadd(key13, { one: 1, two: 2, three: 3.5 });
     responseData.push(["zadd(key13, { one: 1, two: 2, three: 3.5 })", 3]);
 
-    if (gte(version, "6.2.0")) {
+    if (!cluster.checkIfServerVersionLessThan("6.2.0")) {
         baseTransaction.zrangeStore(key8, key8, { start: 0, end: -1 });
         responseData.push([
             "zrangeStore(key8, key8, { start: 0, end: -1 })",
@@ -1185,7 +1186,7 @@ export async function transactionTest(
         baseTransaction.zinterstore(key12, [key12, key13]);
         responseData.push(["zinterstore(key12, [key12, key13])", 0]);
 
-        if (gte(version, "6.2.0")) {
+        if (!cluster.checkIfServerVersionLessThan("6.2.0")) {
             baseTransaction.zadd(key26, [
                 { element: one, score: 1 },
                 { element: two, score: 2 },
@@ -1273,7 +1274,7 @@ export async function transactionTest(
     );
     responseData.push(["zremRangeByLex(key8, -Inf, +Inf)", 0]); // key8 is already empty
 
-    if (gte(version, "7.0.0")) {
+    if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
         baseTransaction.zadd(key14, [
             { element: one, score: 1.0 },
             { element: two, score: 2.0 },
@@ -1454,13 +1455,13 @@ export async function transactionTest(
         ["0-2"],
     ]);
 
-    if (gte(version, "6.2.0")) {
+    if (!cluster.checkIfServerVersionLessThan("6.2.0")) {
         baseTransaction.xautoclaim(key9, groupName1, consumer, 0, "0-0", {
             count: 1,
         });
         responseData.push([
             'xautoclaim(key9, groupName1, consumer, 0, "0-0", { count: 1 })',
-            gte(version, "7.0.0")
+            !cluster.checkIfServerVersionLessThan("7.0.0")
                 ? [
                       "0-0",
                       convertRecordToGlideRecord({
@@ -1478,7 +1479,9 @@ export async function transactionTest(
         baseTransaction.xautoclaimJustId(key9, groupName1, consumer, 0, "0-0");
         responseData.push([
             'xautoclaimJustId(key9, groupName1, consumer, 0, "0-0")',
-            gte(version, "7.0.0") ? ["0-0", ["0-2"], []] : ["0-0", ["0-2"]],
+            !cluster.checkIfServerVersionLessThan("7.0.0")
+                ? ["0-0", ["0-2"], []]
+                : ["0-0", ["0-2"]],
         ]);
     }
 
@@ -1531,7 +1534,7 @@ export async function transactionTest(
     baseTransaction.bitpos(key17, 1);
     responseData.push(["bitpos(key17, 1)", 1]);
 
-    if (gte(version, "6.0.0")) {
+    if (!cluster.checkIfServerVersionLessThan("6.0.0")) {
         baseTransaction.bitfieldReadOnly(key17, [
             new BitFieldGet(new SignedEncoding(5), new BitOffset(3)),
         ]);
@@ -1551,7 +1554,7 @@ export async function transactionTest(
     baseTransaction.get(key19);
     responseData.push(["get(key19)", "`bc`ab"]);
 
-    if (gte(version, "7.0.0")) {
+    if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
         baseTransaction.bitcount(key17, {
             start: 5,
             end: 30,
@@ -1572,7 +1575,7 @@ export async function transactionTest(
         ]);
     }
 
-    if (gte(version, "8.0.0")) {
+    if (!cluster.checkIfServerVersionLessThan("8.0.0")) {
         baseTransaction.set(key17, "foobar");
         responseData.push(['set(key17, "foobar")', "OK"]);
         baseTransaction.bitcount(key17, {
@@ -1638,7 +1641,7 @@ export async function transactionTest(
         [["one", 1.0]],
     ]);
 
-    if (gte(version, "6.2.0")) {
+    if (!cluster.checkIfServerVersionLessThan("6.2.0")) {
         baseTransaction
             .geosearch(
                 key18,
@@ -1746,7 +1749,7 @@ export async function transactionTest(
         true,
     );
 
-    if (gte(version, "7.0.0")) {
+    if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
         baseTransaction.functionFlush();
         responseData.push(["functionFlush()", "OK"]);
         baseTransaction.functionLoad(code);
@@ -1865,7 +1868,7 @@ export async function transactionTest(
         ["lrange(key22, 0, -1)", ["1", "2", "3"]],
     );
 
-    if (gte(version, "7.0.0")) {
+    if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
         baseTransaction.sortReadOnly(key21);
         responseData.push(["sortReadOnly(key21)", ["1", "2", "3"]]);
     }

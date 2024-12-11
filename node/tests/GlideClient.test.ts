@@ -288,7 +288,7 @@ describe("GlideClient", () => {
                             const transaction = new Transaction();
                             const expectedRes = await transactionTest(
                                 transaction,
-                                cluster.getVersion(),
+                                cluster,
                                 decoder,
                             );
                             transaction.select(0);

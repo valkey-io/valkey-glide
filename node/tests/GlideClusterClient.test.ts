@@ -348,7 +348,7 @@ describe("GlideClusterClient", () => {
 
                             const expectedRes = await transactionTest(
                                 transaction,
-                                cluster.getVersion(),
+                                cluster,
                                 decoder,
                             );
 
