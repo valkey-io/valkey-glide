@@ -35,7 +35,6 @@ import {
     convertStringArrayToBuffer,
     createLongRunningLuaScript,
     createLuaLibWithLongRunningFunction,
-    DumpAndRestoreTest,
     encodableTransactionTest,
     flushAndCloseClient,
     generateLuaLibCode,
@@ -313,29 +312,29 @@ describe("GlideClient", () => {
             client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            const bytesTransaction = new Transaction();
-            const expectedBytesRes = await DumpAndRestoreTest(
-                bytesTransaction,
-                Buffer.from("value"),
-            );
-            bytesTransaction.select(0);
-            const result = await client.exec(bytesTransaction, {
-                decoder: Decoder.Bytes,
-            });
-            expectedBytesRes.push(["select(0)", "OK"]);
+            const key1 = uuidv4();
+            const key2 = uuidv4();
+            const value = "value";
 
-            validateTransactionResponse(result, expectedBytesRes);
-
-            const stringTransaction = new Transaction();
-            await DumpAndRestoreTest(stringTransaction, "value");
-            stringTransaction.select(0);
+            const transaction1 = new Transaction().set(key1, value).dump(key1);
 
             // Since DUMP gets binary results, we cannot use the string decoder here, so we expected to get an error.
             await expect(
-                client.exec(stringTransaction, { decoder: Decoder.String }),
-            ).rejects.toThrowError(
-                "invalid utf-8 sequence of 1 bytes from index 9",
+                client.exec(transaction1, { decoder: Decoder.String }),
+            ).rejects.toThrow(
+                /invalid utf-8 sequence|incomplete utf-8 byte sequence/,
             );
+
+            const result = await client.exec(transaction1, {
+                decoder: Decoder.Bytes,
+            });
+            expect(result?.[0]).toEqual("OK");
+            const dump = result?.[1] as Buffer;
+
+            const transaction2 = new Transaction().restore(key2, 0, dump);
+            expect(await client.exec(transaction2)).toEqual(["OK"]);
+
+            expect(value).toEqual(await client.get(key2));
 
             client.close();
         },
