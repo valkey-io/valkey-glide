@@ -6,6 +6,7 @@ import (
 	"math"
 	"reflect"
 	"time"
+	"reflect"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -1941,6 +1942,18 @@ func (suite *GlideTestSuite) TestSUnion() {
 		nonSetKey := uuid.NewString()
 		memberList1 := []string{"a", "b", "c"}
 		memberList2 := []string{"b", "c", "d", "e"}
+        expected1 := map[api.Result[string]]struct{}{
+            api.CreateStringResult("a"): {},
+            api.CreateStringResult("b"): {},
+            api.CreateStringResult("c"): {},
+            api.CreateStringResult("d"): {},
+            api.CreateStringResult("e"): {},
+        }
+        expected2 := map[api.Result[string]]struct{}{
+            api.CreateStringResult("a"): {},
+            api.CreateStringResult("b"): {},
+            api.CreateStringResult("c"): {},
+        }
 
 		res1, err := client.SAdd(key1, memberList1)
 		assert.Nil(suite.T(), err)
@@ -1954,11 +1967,7 @@ func (suite *GlideTestSuite) TestSUnion() {
 
 		res3, err := client.SUnion([]string{key1, key2})
 		assert.Nil(suite.T(), err)
-		assert.Contains(suite.T(), res3, api.CreateStringResult("a"))
-		assert.Contains(suite.T(), res3, api.CreateStringResult("b"))
-		assert.Contains(suite.T(), res3, api.CreateStringResult("c"))
-		assert.Contains(suite.T(), res3, api.CreateStringResult("d"))
-		assert.Contains(suite.T(), res3, api.CreateStringResult("e"))
+        assert.True(suite.T(), reflect.DeepEqual(res3, expected1))
 
 		res4, err := client.SUnion([]string{key3})
 		assert.Nil(suite.T(), err)
@@ -1966,9 +1975,7 @@ func (suite *GlideTestSuite) TestSUnion() {
 
 		res5, err := client.SUnion([]string{key1, key3})
 		assert.Nil(suite.T(), err)
-		assert.Contains(suite.T(), res5, api.CreateStringResult("a"))
-		assert.Contains(suite.T(), res5, api.CreateStringResult("b"))
-		assert.Contains(suite.T(), res5, api.CreateStringResult("c"))
+        assert.True(suite.T(), reflect.DeepEqual(res5, expected2))
 
 		// Exceptions with empty keys
 		res6, err := client.SUnion([]string{})
