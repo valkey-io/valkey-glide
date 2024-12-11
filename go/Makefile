@@ -38,7 +38,8 @@ clean:
 	go clean
 	rm -f lib.h
 	rm -f benchmarks/benchmarks
-
+	rm -rf protobuf
+	rm -rf target
 
 build-glide-client:
 	cargo build --release
