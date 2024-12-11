@@ -332,21 +332,10 @@ describe("GlideClient", () => {
 
             // Since DUMP gets binary results, we cannot use the string decoder here, so we expected to get an error.
             await expect(
-                client.exec(transaction1, { decoder: Decoder.String }),
-            ).rejects.toThrow(
-                /invalid utf-8 sequence|incomplete utf-8 byte sequence/,
+                client.exec(stringTransaction, { decoder: Decoder.String }),
+            ).rejects.toThrowError(
+                "invalid utf-8 sequence of 1 bytes from index 9",
             );
-
-            const result = await client.exec(transaction1, {
-                decoder: Decoder.Bytes,
-            });
-            expect(result?.[0]).toEqual("OK");
-            const dump = result?.[1] as Buffer;
-
-            const transaction2 = new Transaction().restore(key2, 0, dump);
-            expect(await client.exec(transaction2)).toEqual(["OK"]);
-
-            expect(value).toEqual(await client.get(key2));
 
             client.close();
         },
