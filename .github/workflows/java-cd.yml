@@ -86,9 +86,6 @@ jobs:
                     echo "No cleaning needed"
                   fi
             - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
-
             - name: Set up JDK
               uses: actions/setup-java@v4
               with:
@@ -105,7 +102,7 @@ jobs:
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
               with:
-                  version: "26.1"
+                  version: "29.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Create secret key ring file
@@ -230,8 +227,6 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@v4
-              with:
-                  submodules: recursive
 
             - name: Set up JDK
               uses: actions/setup-java@v4
@@ -250,7 +245,7 @@ jobs:
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
               with:
-                  version: "26.1"
+                  version: "29.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Start standalone Valkey server

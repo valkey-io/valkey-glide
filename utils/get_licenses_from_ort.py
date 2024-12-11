@@ -124,6 +124,10 @@ skipped_list_file_path = f"{SCRIPT_PATH}/skipped_package_list.txt"
 with open(skipped_list_file_path, mode="wt", encoding="utf-8") as f:
     f.writelines(f"{package}\n" for package in skipped_packages)
 
+unapproved_list_file_path = f"{SCRIPT_PATH}/unapproved_package_list.txt"
+with open(unapproved_list_file_path, mode="wt", encoding="utf-8") as f:
+    f.writelines(f"{package}\n" for package in unknown_licenses)
+
 print("\n\n#### Found Licenses #####\n")
 all_licenses_set = set(sorted(all_licenses_set))
 for license in all_licenses_set:

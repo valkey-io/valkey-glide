@@ -9,8 +9,11 @@ module glide.api {
     exports glide.api.models.commands.function;
     exports glide.api.models.commands.scan;
     exports glide.api.models.commands.stream;
+    exports glide.api.models.commands.FT;
+    exports glide.api.models.commands.json;
     exports glide.api.models.configuration;
     exports glide.api.models.exceptions;
+    exports glide.api.commands.servermodules;
 
     requires com.google.protobuf;
     requires io.netty.codec;

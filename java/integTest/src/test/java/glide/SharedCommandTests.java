@@ -245,7 +245,7 @@ public class SharedCommandTests {
         assertEquals(1, client.sadd(key2, new String[] {"a"}).get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.append(key2, "z").get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -734,15 +734,15 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key1, "foo").get());
 
         Exception incrException = assertThrows(ExecutionException.class, () -> client.incr(key1).get());
-        assertTrue(incrException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, incrException.getCause());
 
         Exception incrByException =
                 assertThrows(ExecutionException.class, () -> client.incrBy(key1, 3).get());
-        assertTrue(incrByException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, incrByException.getCause());
 
         Exception incrByFloatException =
                 assertThrows(ExecutionException.class, () -> client.incrByFloat(key1, 3.5).get());
-        assertTrue(incrByFloatException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, incrByFloatException.getCause());
     }
 
     @SneakyThrows
@@ -807,7 +807,7 @@ public class SharedCommandTests {
         assertEquals(1, client.lpush(nonStringKey, new String[] {"_"}).get());
         Exception exception =
                 assertThrows(ExecutionException.class, () -> client.strlen(nonStringKey).get());
-        assertTrue(exception.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, exception.getCause());
     }
 
     @SneakyThrows
@@ -846,12 +846,12 @@ public class SharedCommandTests {
         assertEquals(1, client.lpush(nonStringKey, new String[] {"_"}).get());
         Exception exception =
                 assertThrows(ExecutionException.class, () -> client.setrange(nonStringKey, 0, "_").get());
-        assertTrue(exception.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, exception.getCause());
         exception =
                 assertThrows(
                         ExecutionException.class,
                         () -> client.setrange(stringKey, Integer.MAX_VALUE, "_").get());
-        assertTrue(exception.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, exception.getCause());
     }
 
     @SneakyThrows
@@ -875,12 +875,12 @@ public class SharedCommandTests {
         Exception exception =
                 assertThrows(
                         ExecutionException.class, () -> client.setrange(nonStringKey, 0, gs("_")).get());
-        assertTrue(exception.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, exception.getCause());
         exception =
                 assertThrows(
                         ExecutionException.class,
                         () -> client.setrange(stringKey, Integer.MAX_VALUE, gs("_")).get());
-        assertTrue(exception.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, exception.getCause());
     }
 
     @SneakyThrows
@@ -913,7 +913,7 @@ public class SharedCommandTests {
         assertEquals(1, client.lpush(nonStringKey, new String[] {"_"}).get());
         Exception exception =
                 assertThrows(ExecutionException.class, () -> client.getrange(nonStringKey, 0, -1).get());
-        assertTrue(exception.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, exception.getCause());
     }
 
     @SneakyThrows
@@ -946,7 +946,7 @@ public class SharedCommandTests {
         assertEquals(1, client.lpush(nonStringKey, new GlideString[] {gs("_")}).get());
         Exception exception =
                 assertThrows(ExecutionException.class, () -> client.getrange(nonStringKey, 0, -1).get());
-        assertTrue(exception.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, exception.getCause());
     }
 
     @SneakyThrows
@@ -1176,7 +1176,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key2, "value").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.hsetnx(key2, field, "value").get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -1195,7 +1195,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key2, gs("value")).get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.hsetnx(key2, field, gs("value")).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -1255,7 +1255,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key2, "value").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.hlen(key2).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -1279,7 +1279,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key2, gs("value")).get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.hlen(key2).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -1305,7 +1305,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key2, "value2").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.hvals(key2).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -1332,7 +1332,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key2, gs("value2")).get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.hvals(key2).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -1483,11 +1483,11 @@ public class SharedCommandTests {
 
         Exception hincrByException =
                 assertThrows(ExecutionException.class, () -> client.hincrBy(key, field, 2).get());
-        assertTrue(hincrByException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, hincrByException.getCause());
 
         Exception hincrByFloatException =
                 assertThrows(ExecutionException.class, () -> client.hincrByFloat(key, field, 2.5).get());
-        assertTrue(hincrByFloatException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, hincrByFloatException.getCause());
     }
 
     @SneakyThrows
@@ -1509,7 +1509,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key2, "value").get());
         Exception executionException =
                 assertThrows(ExecutionException.class, () -> client.hkeys(key2).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -1531,7 +1531,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key2, gs("value")).get());
         Exception executionException =
                 assertThrows(ExecutionException.class, () -> client.hkeys(key2).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -1716,18 +1716,18 @@ public class SharedCommandTests {
 
         Exception lpushException =
                 assertThrows(ExecutionException.class, () -> client.lpush(key, new String[] {"foo"}).get());
-        assertTrue(lpushException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, lpushException.getCause());
 
         Exception lpopException = assertThrows(ExecutionException.class, () -> client.lpop(key).get());
-        assertTrue(lpopException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, lpopException.getCause());
 
         Exception lpopCountException =
                 assertThrows(ExecutionException.class, () -> client.lpopCount(key, 2).get());
-        assertTrue(lpopCountException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, lpopCountException.getCause());
 
         Exception lrangeException =
                 assertThrows(ExecutionException.class, () -> client.lrange(key, 0, -1).get());
-        assertTrue(lrangeException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, lrangeException.getCause());
     }
 
     @SneakyThrows
@@ -1741,18 +1741,18 @@ public class SharedCommandTests {
         Exception lpushException =
                 assertThrows(
                         ExecutionException.class, () -> client.lpush(key, new GlideString[] {gs("foo")}).get());
-        assertTrue(lpushException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, lpushException.getCause());
 
         Exception lpopException = assertThrows(ExecutionException.class, () -> client.lpop(key).get());
-        assertTrue(lpopException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, lpopException.getCause());
 
         Exception lpopCountException =
                 assertThrows(ExecutionException.class, () -> client.lpopCount(key, 2).get());
-        assertTrue(lpopCountException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, lpopCountException.getCause());
 
         Exception lrangeException =
                 assertThrows(ExecutionException.class, () -> client.lrange(key, 0, -1).get());
-        assertTrue(lrangeException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, lrangeException.getCause());
     }
 
     @SneakyThrows
@@ -1773,7 +1773,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key2, "value").get());
         Exception executionException =
                 assertThrows(ExecutionException.class, () -> client.lindex(key2, 0).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -1794,7 +1794,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key2, gs("value")).get());
         Exception executionException =
                 assertThrows(ExecutionException.class, () -> client.lindex(key2, 0).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -1816,7 +1816,7 @@ public class SharedCommandTests {
 
         Exception ltrimException =
                 assertThrows(ExecutionException.class, () -> client.ltrim(key, 0, 1).get());
-        assertTrue(ltrimException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, ltrimException.getCause());
     }
 
     @SneakyThrows
@@ -1840,7 +1840,7 @@ public class SharedCommandTests {
 
         Exception ltrimException =
                 assertThrows(ExecutionException.class, () -> client.ltrim(key, 0, 1).get());
-        assertTrue(ltrimException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, ltrimException.getCause());
     }
 
     @SneakyThrows
@@ -1859,7 +1859,7 @@ public class SharedCommandTests {
 
         Exception lrangeException =
                 assertThrows(ExecutionException.class, () -> client.llen(key2).get());
-        assertTrue(lrangeException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, lrangeException.getCause());
     }
 
     @SneakyThrows
@@ -1916,14 +1916,14 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.lpos(key, "a", LPosOptions.builder().rank(0L).build()).get());
-        assertTrue(lposException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, lposException.getCause());
 
         // invalid maxlen value
         ExecutionException lposMaxlenException =
                 assertThrows(
                         ExecutionException.class,
                         () -> client.lpos(key, "a", LPosOptions.builder().maxLength(-1L).build()).get());
-        assertTrue(lposMaxlenException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, lposMaxlenException.getCause());
 
         // non-existent key
         assertNull(client.lpos("non-existent_key", "a").get());
@@ -1933,7 +1933,7 @@ public class SharedCommandTests {
         assertEquals(2L, client.sadd(wrong_data_type, new String[] {"a", "b"}).get());
         ExecutionException lposWrongKeyDataTypeException =
                 assertThrows(ExecutionException.class, () -> client.lpos(wrong_data_type, "a").get());
-        assertTrue(lposWrongKeyDataTypeException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, lposWrongKeyDataTypeException.getCause());
     }
 
     @SneakyThrows
@@ -1968,14 +1968,14 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.lpos(key, gs("a"), LPosOptions.builder().rank(0L).build()).get());
-        assertTrue(lposException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, lposException.getCause());
 
         // invalid maxlen value
         ExecutionException lposMaxlenException =
                 assertThrows(
                         ExecutionException.class,
                         () -> client.lpos(key, gs("a"), LPosOptions.builder().maxLength(-1L).build()).get());
-        assertTrue(lposMaxlenException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, lposMaxlenException.getCause());
 
         // non-existent key
         assertNull(client.lpos(gs("non-existent_key"), gs("a")).get());
@@ -1985,7 +1985,7 @@ public class SharedCommandTests {
         assertEquals(2L, client.sadd(wrong_data_type, new GlideString[] {gs("a"), gs("b")}).get());
         ExecutionException lposWrongKeyDataTypeException =
                 assertThrows(ExecutionException.class, () -> client.lpos(wrong_data_type, gs("a")).get());
-        assertTrue(lposWrongKeyDataTypeException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, lposWrongKeyDataTypeException.getCause());
     }
 
     @SneakyThrows
@@ -2002,7 +2002,7 @@ public class SharedCommandTests {
         // invalid count value
         ExecutionException lposCountException =
                 assertThrows(ExecutionException.class, () -> client.lposCount(key, "a", -1L).get());
-        assertTrue(lposCountException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, lposCountException.getCause());
 
         // with option
         assertArrayEquals(
@@ -2029,7 +2029,7 @@ public class SharedCommandTests {
         ExecutionException lposWrongKeyDataTypeException =
                 assertThrows(
                         ExecutionException.class, () -> client.lposCount(wrong_data_type, "a", 1L).get());
-        assertTrue(lposWrongKeyDataTypeException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, lposWrongKeyDataTypeException.getCause());
     }
 
     @SneakyThrows
@@ -2047,7 +2047,7 @@ public class SharedCommandTests {
         // invalid count value
         ExecutionException lposCountException =
                 assertThrows(ExecutionException.class, () -> client.lposCount(key, gs("a"), -1L).get());
-        assertTrue(lposCountException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, lposCountException.getCause());
 
         // with option
         assertArrayEquals(
@@ -2074,7 +2074,7 @@ public class SharedCommandTests {
         ExecutionException lposWrongKeyDataTypeException =
                 assertThrows(
                         ExecutionException.class, () -> client.lposCount(wrong_data_type, gs("a"), 1L).get());
-        assertTrue(lposWrongKeyDataTypeException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, lposWrongKeyDataTypeException.getCause());
     }
 
     @SneakyThrows
@@ -2117,10 +2117,10 @@ public class SharedCommandTests {
 
         Exception rpushException =
                 assertThrows(ExecutionException.class, () -> client.rpush(key, new String[] {"foo"}).get());
-        assertTrue(rpushException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, rpushException.getCause());
 
         Exception rpopException = assertThrows(ExecutionException.class, () -> client.rpop(key).get());
-        assertTrue(rpopException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, rpopException.getCause());
     }
 
     @SneakyThrows
@@ -2134,10 +2134,10 @@ public class SharedCommandTests {
         Exception rpushException =
                 assertThrows(
                         ExecutionException.class, () -> client.rpush(key, new GlideString[] {gs("foo")}).get());
-        assertTrue(rpushException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, rpushException.getCause());
 
         Exception rpopException = assertThrows(ExecutionException.class, () -> client.rpop(key).get());
-        assertTrue(rpopException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, rpopException.getCause());
     }
 
     @SneakyThrows
@@ -2201,16 +2201,16 @@ public class SharedCommandTests {
 
         Exception e =
                 assertThrows(ExecutionException.class, () -> client.sadd(key, new String[] {"baz"}).get());
-        assertTrue(e.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, e.getCause());
 
         e = assertThrows(ExecutionException.class, () -> client.srem(key, new String[] {"baz"}).get());
-        assertTrue(e.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, e.getCause());
 
         e = assertThrows(ExecutionException.class, () -> client.scard(key).get());
-        assertTrue(e.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, e.getCause());
 
         e = assertThrows(ExecutionException.class, () -> client.smembers(key).get());
-        assertTrue(e.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, e.getCause());
     }
 
     @SneakyThrows
@@ -2344,8 +2344,8 @@ public class SharedCommandTests {
         GlideString key1 = gs("{key}" + UUID.randomUUID());
 
         assertEquals(OK, client.set(key1, gs("foo")).get());
-        assertEquals(OK, client.rename(key1, gs((key1.toString() + "_rename"))).get());
-        assertEquals(1L, client.exists(new GlideString[] {gs(key1.toString() + "_rename")}).get());
+        assertEquals(OK, client.rename(key1, gs((key1 + "_rename"))).get());
+        assertEquals(1L, client.exists(new GlideString[] {gs(key1 + "_rename")}).get());
 
         // key doesn't exist
         ExecutionException executionException =
@@ -2427,7 +2427,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key2, "value").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.sismember(key2, member).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -2446,7 +2446,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key2, gs("value")).get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.sismember(key2, member).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -2484,7 +2484,7 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(
                         ExecutionException.class, () -> client.sinterstore(key1, new String[] {key5}).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         // overwrite destination - not a set
         assertEquals(0, client.sinterstore(key5, new String[] {key1, key2}).get());
@@ -2493,7 +2493,7 @@ public class SharedCommandTests {
         // wrong arguments
         executionException =
                 assertThrows(ExecutionException.class, () -> client.sinterstore(key5, new String[0]).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -2532,7 +2532,7 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.sinterstore(key1, new GlideString[] {key5}).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         // overwrite destination - not a set
         assertEquals(0, client.sinterstore(key5, new GlideString[] {key1, key2}).get());
@@ -2542,7 +2542,7 @@ public class SharedCommandTests {
         executionException =
                 assertThrows(
                         ExecutionException.class, () -> client.sinterstore(key5, new GlideString[0]).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -3313,11 +3313,11 @@ public class SharedCommandTests {
 
         ExecutionException executionExceptionZadd =
                 assertThrows(ExecutionException.class, () -> client.zadd("foo", membersScores).get());
-        assertTrue(executionExceptionZadd.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionExceptionZadd.getCause());
 
         ExecutionException executionExceptionZaddIncr =
                 assertThrows(ExecutionException.class, () -> client.zaddIncr("foo", "one", 2.0).get());
-        assertTrue(executionExceptionZaddIncr.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionExceptionZaddIncr.getCause());
     }
 
     @SneakyThrows
@@ -3330,12 +3330,12 @@ public class SharedCommandTests {
 
         ExecutionException executionExceptionZadd =
                 assertThrows(ExecutionException.class, () -> client.zadd(gs("foo"), membersScores).get());
-        assertTrue(executionExceptionZadd.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionExceptionZadd.getCause());
 
         ExecutionException executionExceptionZaddIncr =
                 assertThrows(
                         ExecutionException.class, () -> client.zaddIncr(gs("foo"), gs("one"), 2.0).get());
-        assertTrue(executionExceptionZaddIncr.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionExceptionZaddIncr.getCause());
     }
 
     @SneakyThrows
@@ -3523,7 +3523,7 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(
                         ExecutionException.class, () -> client.zrem("foo", new String[] {"bar"}).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -3543,7 +3543,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set("foo", "bar").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.zcard("foo").get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -3562,7 +3562,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key, "value").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.zpopmin(key).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -3586,7 +3586,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key, gs("value")).get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.zpopmin(key).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -3723,7 +3723,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key, "value").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.zpopmax(key).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -3747,7 +3747,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key, gs("value")).get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.zpopmax(key).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -3885,7 +3885,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key2, "bar").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.zscore(key2, "one").get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -3910,7 +3910,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key, gs("value")).get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.zrevrank(key, gs("one")).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -3934,7 +3934,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key, "value").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.zrank(key, "one").get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -3978,13 +3978,13 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.zdiff(new GlideString[] {nonExistentKey, key2}).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         executionException =
                 assertThrows(
                         ExecutionException.class,
                         () -> client.zdiffWithScores(new GlideString[] {nonExistentKey, key2}).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -4008,7 +4008,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key, "value").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.zrevrank(key, "one").get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -4047,13 +4047,13 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.zdiff(new String[] {nonExistentKey, key2}).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         executionException =
                 assertThrows(
                         ExecutionException.class,
                         () -> client.zdiffWithScores(new String[] {nonExistentKey, key2}).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -4085,7 +4085,7 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(
                         ExecutionException.class, () -> client.zmscore(key2, new String[] {"one"}).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -4130,7 +4130,7 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.zdiffstore(key4, new String[] {key5, key1}).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -4185,7 +4185,7 @@ public class SharedCommandTests {
                                 client
                                         .zcount(key2, InfScoreBound.NEGATIVE_INFINITY, InfScoreBound.POSITIVE_INFINITY)
                                         .get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -4223,7 +4223,7 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.zcount(key2, NEGATIVE_INFINITY, POSITIVE_INFINITY).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -4263,7 +4263,7 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.zremrangebylex(key2, new LexBoundary("a"), new LexBoundary("c")).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -4294,7 +4294,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key2, "value").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.zremrangebyrank(key2, 2, 1).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -4333,7 +4333,7 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.zremrangebylex(key2, new LexBoundary("a"), new LexBoundary("c")).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -4379,7 +4379,7 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.zremrangebyscore(key2, new ScoreBoundary(1), new ScoreBoundary(2)).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -4423,7 +4423,7 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.zremrangebyscore(key2, new ScoreBoundary(1), new ScoreBoundary(2)).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -4471,7 +4471,7 @@ public class SharedCommandTests {
                                 client
                                         .zlexcount(key2, InfLexBound.NEGATIVE_INFINITY, InfLexBound.POSITIVE_INFINITY)
                                         .get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -4517,7 +4517,7 @@ public class SharedCommandTests {
                                 client
                                         .zlexcount(key2, InfLexBound.NEGATIVE_INFINITY, InfLexBound.POSITIVE_INFINITY)
                                         .get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -4557,7 +4557,7 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.zrangestore(destination, key, new RangeByIndex(3, 1)).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -4596,7 +4596,7 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.zrangestore(destination, key, new RangeByIndex(3, 1)).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -4669,7 +4669,7 @@ public class SharedCommandTests {
                                                 key,
                                                 new RangeByScore(new ScoreBoundary(0), new ScoreBoundary(3)))
                                         .get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -4741,7 +4741,7 @@ public class SharedCommandTests {
                                                 key,
                                                 new RangeByScore(new ScoreBoundary(0), new ScoreBoundary(3)))
                                         .get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -4807,7 +4807,7 @@ public class SharedCommandTests {
                                                 key,
                                                 new RangeByLex(new LexBoundary("a"), new LexBoundary("c")))
                                         .get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -4873,7 +4873,7 @@ public class SharedCommandTests {
                                                 key,
                                                 new RangeByLex(new LexBoundary("a"), new LexBoundary("c")))
                                         .get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -5126,7 +5126,7 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.zunion(new KeyArray(new String[] {key1, key3})).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -5216,7 +5216,7 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.zunion(new KeyArrayBinary(new GlideString[] {key1, key3})).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -5297,7 +5297,7 @@ public class SharedCommandTests {
                         ExecutionException.class,
                         () ->
                                 client.zinterstore(key3, new KeyArrayBinary(new GlideString[] {key4, key2})).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -5559,7 +5559,7 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.zinterstore(key3, new KeyArray(new String[] {key4, key2})).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -6026,9 +6026,9 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key2, "xtrimtest").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.xtrim(key2, new MinId("0-1")).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
         executionException = assertThrows(ExecutionException.class, () -> client.xlen(key2).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -6094,9 +6094,9 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key2, gs("xtrimtest")).get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.xtrim(key2, new MinId("0-1")).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
         executionException = assertThrows(ExecutionException.class, () -> client.xlen(key2).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -6183,8 +6183,8 @@ public class SharedCommandTests {
 
         // setup first entries in streams key1 and key2
         Map<GlideString, GlideString> timestamp_1_1_map = new LinkedHashMap<>();
-        timestamp_1_1_map.put(field1, gs(field1.toString() + "1"));
-        timestamp_1_1_map.put(field3, gs(field3.toString() + "1"));
+        timestamp_1_1_map.put(field1, gs(field1 + "1"));
+        timestamp_1_1_map.put(field3, gs(field3 + "1"));
         GlideString timestamp_1_1 =
                 client
                         .xadd(key1, timestamp_1_1_map, StreamAddOptionsBinary.builder().id(gs("1-1")).build())
@@ -6195,7 +6195,7 @@ public class SharedCommandTests {
                 client
                         .xadd(
                                 key2,
-                                Map.of(field2, gs(field2.toString() + "1")),
+                                Map.of(field2, gs(field2 + "1")),
                                 StreamAddOptionsBinary.builder().id(gs("2-1")).build())
                         .get();
         assertNotNull(timestamp_2_1);
@@ -6205,7 +6205,7 @@ public class SharedCommandTests {
                 client
                         .xadd(
                                 key1,
-                                Map.of(field1, gs(field1.toString() + "2")),
+                                Map.of(field1, gs(field1 + "2")),
                                 StreamAddOptionsBinary.builder().id(gs("1-2")).build())
                         .get();
         assertNotNull(timestamp_1_2);
@@ -6214,15 +6214,15 @@ public class SharedCommandTests {
                 client
                         .xadd(
                                 key2,
-                                Map.of(field2, gs(field2.toString() + "2")),
+                                Map.of(field2, gs(field2 + "2")),
                                 StreamAddOptionsBinary.builder().id(gs("2-2")).build())
                         .get();
         assertNotNull(timestamp_2_2);
 
         // setup third entries in streams key1 and key2
         Map<GlideString, GlideString> timestamp_1_3_map = new LinkedHashMap<>();
-        timestamp_1_3_map.put(field1, gs(field1.toString() + "3"));
-        timestamp_1_3_map.put(field3, gs(field3.toString() + "3"));
+        timestamp_1_3_map.put(field1, gs(field1 + "3"));
+        timestamp_1_3_map.put(field3, gs(field3 + "3"));
         GlideString timestamp_1_3 =
                 client
                         .xadd(key1, timestamp_1_3_map, StreamAddOptionsBinary.builder().id(gs("1-3")).build())
@@ -6233,7 +6233,7 @@ public class SharedCommandTests {
                 client
                         .xadd(
                                 key2,
-                                Map.of(field2, gs(field2.toString() + "3")),
+                                Map.of(field2, gs(field2 + "3")),
                                 StreamAddOptionsBinary.builder().id(gs("2-3")).build())
                         .get();
         assertNotNull(timestamp_2_3);
@@ -6243,19 +6243,19 @@ public class SharedCommandTests {
 
         // check key1
         Map<GlideString, GlideString[][]> expected_key1 = new LinkedHashMap<>();
-        expected_key1.put(timestamp_1_2, new GlideString[][] {{field1, gs(field1.toString() + "2")}});
+        expected_key1.put(timestamp_1_2, new GlideString[][] {{field1, gs(field1 + "2")}});
         expected_key1.put(
                 timestamp_1_3,
                 new GlideString[][] {
-                    {field1, gs(field1.toString() + "3")},
-                    {field3, gs(field3.toString() + "3")}
+                    {field1, gs(field1 + "3")},
+                    {field3, gs(field3 + "3")}
                 });
         assertDeepEquals(expected_key1, result.get(key1));
 
         // check key2
         Map<GlideString, GlideString[][]> expected_key2 = new LinkedHashMap<>();
-        expected_key2.put(timestamp_2_2, new GlideString[][] {{field2, gs(field2.toString() + "2")}});
-        expected_key2.put(timestamp_2_3, new GlideString[][] {{field2, gs(field2.toString() + "3")}});
+        expected_key2.put(timestamp_2_2, new GlideString[][] {{field2, gs(field2 + "2")}});
+        expected_key2.put(timestamp_2_3, new GlideString[][] {{field2, gs(field2 + "3")}});
         assertDeepEquals(expected_key2, result.get(key2));
     }
 
@@ -6323,7 +6323,7 @@ public class SharedCommandTests {
 
         // setup first entries in streams key1 and key2
         Map<GlideString, GlideString> timestamp_1_1_map = new LinkedHashMap<>();
-        timestamp_1_1_map.put(field1, gs(field1.toString() + "1"));
+        timestamp_1_1_map.put(field1, gs(field1 + "1"));
         GlideString timestamp_1_1 =
                 client
                         .xadd(key1, timestamp_1_1_map, StreamAddOptionsBinary.builder().id(gs("1-1")).build())
@@ -6411,7 +6411,7 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(
                         ExecutionException.class, () -> client.xdel(key2, new String[] {streamId3}).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -8071,7 +8071,7 @@ public class SharedCommandTests {
 
         System.out.println("xpending result:");
         for (int i = 0; i < pending_results_extended.length; i++) {
-            System.out.println((GlideString) pending_results_extended[i][0]);
+            System.out.println(pending_results_extended[i][0]);
         }
 
         // because of idle time return, we have to remove it from the expected results
@@ -9094,7 +9094,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key2, "linsert").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.linsert(key2, AFTER, "p", "e").get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -9116,11 +9116,11 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key, gs("value")).get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.zrange(key, query).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         executionException =
                 assertThrows(ExecutionException.class, () -> client.zrangeWithScores(key, query).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -9146,7 +9146,7 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(
                         ExecutionException.class, () -> client.linsert(key2, AFTER, gs("p"), gs("e")).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -9173,7 +9173,7 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(
                         ExecutionException.class, () -> client.brpop(new String[] {"foo"}, .0001).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -9201,7 +9201,7 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.brpop(new GlideString[] {gs("foo")}, .0001).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -9223,11 +9223,11 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key3, "bar").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.rpushx(key3, new String[] {"_"}).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
         // empty element list
         executionException =
                 assertThrows(ExecutionException.class, () -> client.rpushx(key2, new String[0]).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -9254,7 +9254,7 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(
                         ExecutionException.class, () -> client.blpop(new String[] {"foo"}, .0001).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -9282,7 +9282,7 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.blpop(new GlideString[] {gs("foo")}, .0001).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -9307,7 +9307,7 @@ public class SharedCommandTests {
         // empty element list
         executionException =
                 assertThrows(ExecutionException.class, () -> client.lpushx(key2, new String[0]).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -9538,11 +9538,11 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key, "value").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.zrange(key, query).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         executionException =
                 assertThrows(ExecutionException.class, () -> client.zrangeWithScores(key, query).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -9559,7 +9559,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set("foo", "bar").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.pfadd("foo", new String[0]).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -9577,7 +9577,7 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(
                         ExecutionException.class, () -> client.pfadd(gs("foo"), new GlideString[0]).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -9601,7 +9601,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set("foo", "bar").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.pfcount(new String[] {"foo"}).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -9626,7 +9626,7 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(
                         ExecutionException.class, () -> client.pfcount(new GlideString[] {gs("foo")}).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -9652,11 +9652,11 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(
                         ExecutionException.class, () -> client.pfmerge("foo", new String[] {key1}).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
         executionException =
                 assertThrows(
                         ExecutionException.class, () -> client.pfmerge(key1, new String[] {"foo"}).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -9685,12 +9685,12 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.pfmerge(gs("foo"), new GlideString[] {key1}).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
         executionException =
                 assertThrows(
                         ExecutionException.class,
                         () -> client.pfmerge(key1, new GlideString[] {gs("foo")}).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -10037,7 +10037,7 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(
                         ExecutionException.class, () -> client.geoadd(key2, membersToCoordinates).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -10075,7 +10075,7 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(
                         ExecutionException.class, () -> client.geoadd(key2, membersToCoordinates).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -10086,31 +10086,31 @@ public class SharedCommandTests {
 
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.geoadd(key, Map.of()).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         executionException =
                 assertThrows(
                         ExecutionException.class,
                         () -> client.geoadd(key, Map.of("Place", new GeospatialData(-181, 0))).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         executionException =
                 assertThrows(
                         ExecutionException.class,
                         () -> client.geoadd(key, Map.of("Place", new GeospatialData(181, 0))).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         executionException =
                 assertThrows(
                         ExecutionException.class,
                         () -> client.geoadd(key, Map.of("Place", new GeospatialData(0, 86))).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         executionException =
                 assertThrows(
                         ExecutionException.class,
                         () -> client.geoadd(key, Map.of("Place", new GeospatialData(0, -86))).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -10121,31 +10121,31 @@ public class SharedCommandTests {
 
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.geoadd(key, Map.of()).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         executionException =
                 assertThrows(
                         ExecutionException.class,
                         () -> client.geoadd(key, Map.of(gs("Place"), new GeospatialData(-181, 0))).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         executionException =
                 assertThrows(
                         ExecutionException.class,
                         () -> client.geoadd(key, Map.of(gs("Place"), new GeospatialData(181, 0))).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         executionException =
                 assertThrows(
                         ExecutionException.class,
                         () -> client.geoadd(key, Map.of(gs("Place"), new GeospatialData(0, 86))).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         executionException =
                 assertThrows(
                         ExecutionException.class,
                         () -> client.geoadd(key, Map.of(gs("Place"), new GeospatialData(0, -86))).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -10177,7 +10177,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key2, "geopos").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.geopos(key2, members).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -10209,7 +10209,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key2, gs("geopos")).get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.geopos(key2, members).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -10248,7 +10248,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key2, "geodist").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.geodist(key2, member1, member2).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -10287,7 +10287,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key2, gs("geodist")).get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.geodist(key2, member1, member2).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -10316,7 +10316,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key2, "geohash").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.geohash(key2, members).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -10345,7 +10345,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key2, gs("geohash")).get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.geohash(key2, members).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -10368,12 +10368,12 @@ public class SharedCommandTests {
         // Exception thrown due to the key holding a value with the wrong type
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.bitcount(key2).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Exception thrown due to the key holding a value with the wrong type
         executionException =
                 assertThrows(ExecutionException.class, () -> client.bitcount(key2, 1, 1).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertEquals(16L, client.bitcount(key1, 2, 5, BitmapIndexType.BYTE).get());
@@ -10386,21 +10386,21 @@ public class SharedCommandTests {
                     assertThrows(
                             ExecutionException.class,
                             () -> client.bitcount(key2, 1, 1, BitmapIndexType.BIT).get());
-            assertTrue(executionException.getCause() instanceof RequestException);
+            assertInstanceOf(RequestException.class, executionException.getCause());
         } else {
             // Exception thrown because BIT and BYTE options were implemented after 7.0.0
             executionException =
                     assertThrows(
                             ExecutionException.class,
                             () -> client.bitcount(key1, 2, 5, BitmapIndexType.BYTE).get());
-            assertTrue(executionException.getCause() instanceof RequestException);
+            assertInstanceOf(RequestException.class, executionException.getCause());
 
             // Exception thrown because BIT and BYTE options were implemented after 7.0.0
             executionException =
                     assertThrows(
                             ExecutionException.class,
                             () -> client.bitcount(key1, 5, 30, BitmapIndexType.BIT).get());
-            assertTrue(executionException.getCause() instanceof RequestException);
+            assertInstanceOf(RequestException.class, executionException.getCause());
         }
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             assertEquals(26L, client.bitcount(key1, 0).get());
@@ -10412,13 +10412,13 @@ public class SharedCommandTests {
             // Exception thrown due to the key holding a value with the wrong type
             executionException =
                     assertThrows(ExecutionException.class, () -> client.bitcount(key2, 1).get());
-            assertTrue(executionException.getCause() instanceof RequestException);
+            assertInstanceOf(RequestException.class, executionException.getCause());
 
         } else {
             // Exception thrown because optional end was implemented after 8.0.0
             executionException =
                     assertThrows(ExecutionException.class, () -> client.bitcount(key1, 5).get());
-            assertTrue(executionException.getCause() instanceof RequestException);
+            assertInstanceOf(RequestException.class, executionException.getCause());
         }
     }
 
@@ -10437,18 +10437,18 @@ public class SharedCommandTests {
         // Exception thrown due to the negative offset
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.setbit(key1, -1, 1).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Exception thrown due to the value set not being 0 or 1
         executionException =
                 assertThrows(ExecutionException.class, () -> client.setbit(key1, 1, 2).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Exception thrown: key is not a string
         assertEquals(1, client.sadd(key2, new String[] {"value"}).get());
         executionException =
                 assertThrows(ExecutionException.class, () -> client.setbit(key2, 1, 1).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -10475,12 +10475,12 @@ public class SharedCommandTests {
         // Exception thrown due to the negative offset
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.getbit(key1, -1).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Exception thrown due to the key holding a value with the wrong type
         assertEquals(1, client.sadd(key2, new String[] {value}).get());
         executionException = assertThrows(ExecutionException.class, () -> client.getbit(key2, 1).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -10507,13 +10507,13 @@ public class SharedCommandTests {
         assertEquals(1, client.sadd(key3, new String[] {value}).get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.bitpos(key3, 0).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
         executionException =
                 assertThrows(ExecutionException.class, () -> client.bitpos(key3, 1, 2).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
         executionException =
                 assertThrows(ExecutionException.class, () -> client.bitpos(key3, 0, 1, 4).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertEquals(24, client.bitpos(key1, 0, 3, 5, BitmapIndexType.BYTE).get());
@@ -10526,21 +10526,21 @@ public class SharedCommandTests {
                     assertThrows(
                             ExecutionException.class,
                             () -> client.bitpos(key3, 1, 4, 5, BitmapIndexType.BIT).get());
-            assertTrue(executionException.getCause() instanceof RequestException);
+            assertInstanceOf(RequestException.class, executionException.getCause());
         } else {
             // Exception thrown because BIT and BYTE options were implemented after 7.0.0
             executionException =
                     assertThrows(
                             ExecutionException.class,
                             () -> client.bitpos(key1, 0, 3, 5, BitmapIndexType.BYTE).get());
-            assertTrue(executionException.getCause() instanceof RequestException);
+            assertInstanceOf(RequestException.class, executionException.getCause());
 
             // Exception thrown because BIT and BYTE options were implemented after 7.0.0
             executionException =
                     assertThrows(
                             ExecutionException.class,
                             () -> client.bitpos(key1, 1, 43, -2, BitmapIndexType.BIT).get());
-            assertTrue(executionException.getCause() instanceof RequestException);
+            assertInstanceOf(RequestException.class, executionException.getCause());
         }
     }
 
@@ -10585,7 +10585,7 @@ public class SharedCommandTests {
         // https://github.com/valkey-io/valkey-glide/issues/1447
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.get(destination).get());
-        assertTrue(executionException.getCause() instanceof RuntimeException);
+        assertInstanceOf(RuntimeException.class, executionException.getCause());
         assertEquals(0, client.setbit(key1, 0, 1).get());
         assertEquals(1L, client.bitop(BitwiseOperation.NOT, destination, new String[] {key1}).get());
         assertEquals("\u001e", client.get(destination).get());
@@ -10613,14 +10613,14 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.bitop(BitwiseOperation.OR, destination, new String[] {}).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         // NOT with more than one source key
         executionException =
                 assertThrows(
                         ExecutionException.class,
                         () -> client.bitop(BitwiseOperation.NOT, destination, new String[] {key1, key2}).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -11439,7 +11439,7 @@ public class SharedCommandTests {
                                 client
                                         .bitfieldReadOnly(key2, new BitFieldReadOnlySubCommands[] {unsignedOffsetGet})
                                         .get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Offset must be >= 0
         executionException =
@@ -11453,7 +11453,7 @@ public class SharedCommandTests {
                                                     new BitFieldGet(new UnsignedEncoding(5), new Offset(-1))
                                                 })
                                         .get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Encoding must be > 0
         executionException =
@@ -11467,7 +11467,7 @@ public class SharedCommandTests {
                                                     new BitFieldGet(new UnsignedEncoding(-1), new Offset(1))
                                                 })
                                         .get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Encoding must be < 64 for unsigned bit encoding
         executionException =
@@ -11481,7 +11481,7 @@ public class SharedCommandTests {
                                                     new BitFieldGet(new UnsignedEncoding(64), new Offset(1))
                                                 })
                                         .get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Encoding must be < 65 for signed bit encoding
         executionException =
@@ -11495,7 +11495,7 @@ public class SharedCommandTests {
                                                     new BitFieldGet(new SignedEncoding(65), new Offset(1))
                                                 })
                                         .get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -11544,7 +11544,7 @@ public class SharedCommandTests {
                                 client
                                         .bitfieldReadOnly(key2, new BitFieldReadOnlySubCommands[] {unsignedOffsetGet})
                                         .get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Offset must be >= 0
         executionException =
@@ -11558,7 +11558,7 @@ public class SharedCommandTests {
                                                     new BitFieldGet(new UnsignedEncoding(5), new Offset(-1))
                                                 })
                                         .get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Encoding must be > 0
         executionException =
@@ -11572,7 +11572,7 @@ public class SharedCommandTests {
                                                     new BitFieldGet(new UnsignedEncoding(-1), new Offset(1))
                                                 })
                                         .get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Encoding must be < 64 for unsigned bit encoding
         executionException =
@@ -11586,7 +11586,7 @@ public class SharedCommandTests {
                                                     new BitFieldGet(new UnsignedEncoding(64), new Offset(1))
                                                 })
                                         .get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Encoding must be < 65 for signed bit encoding
         executionException =
@@ -11600,7 +11600,7 @@ public class SharedCommandTests {
                                                     new BitFieldGet(new SignedEncoding(65), new Offset(1))
                                                 })
                                         .get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -11715,7 +11715,7 @@ public class SharedCommandTests {
                                                     new BitFieldSet(new UnsignedEncoding(-1), new Offset(1), 1)
                                                 })
                                         .get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Offset must be > 0
         executionException =
@@ -11729,7 +11729,7 @@ public class SharedCommandTests {
                                                     new BitFieldIncrby(new UnsignedEncoding(5), new Offset(-1), 1)
                                                 })
                                         .get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Unsigned bit encoding must be < 64
         executionException =
@@ -11743,7 +11743,7 @@ public class SharedCommandTests {
                                                     new BitFieldIncrby(new UnsignedEncoding(64), new Offset(1), 1)
                                                 })
                                         .get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Signed bit encoding must be < 65
         executionException =
@@ -11757,7 +11757,7 @@ public class SharedCommandTests {
                                                     new BitFieldSet(new SignedEncoding(65), new Offset(1), 1)
                                                 })
                                         .get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Exception thrown due to the key holding a value with the wrong type
         assertEquals(1, client.sadd(setKey, new String[] {foobar}).get());
@@ -11772,7 +11772,7 @@ public class SharedCommandTests {
                                                     new BitFieldSet(new SignedEncoding(3), new Offset(1), 2)
                                                 })
                                         .get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -11887,7 +11887,7 @@ public class SharedCommandTests {
                                                     new BitFieldSet(new UnsignedEncoding(-1), new Offset(1), 1)
                                                 })
                                         .get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Offset must be > 0
         executionException =
@@ -11901,7 +11901,7 @@ public class SharedCommandTests {
                                                     new BitFieldIncrby(new UnsignedEncoding(5), new Offset(-1), 1)
                                                 })
                                         .get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Unsigned bit encoding must be < 64
         executionException =
@@ -11915,7 +11915,7 @@ public class SharedCommandTests {
                                                     new BitFieldIncrby(new UnsignedEncoding(64), new Offset(1), 1)
                                                 })
                                         .get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Signed bit encoding must be < 65
         executionException =
@@ -11929,7 +11929,7 @@ public class SharedCommandTests {
                                                     new BitFieldSet(new SignedEncoding(65), new Offset(1), 1)
                                                 })
                                         .get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Exception thrown due to the key holding a value with the wrong type
         assertEquals(1, client.sadd(setKey, new GlideString[] {foobar}).get());
@@ -11944,7 +11944,7 @@ public class SharedCommandTests {
                                                     new BitFieldSet(new SignedEncoding(3), new Offset(1), 2)
                                                 })
                                         .get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -14551,7 +14551,7 @@ public class SharedCommandTests {
         // Setup test data - use a large number of entries to force an iterative cursor.
         Map<String, Double> numberMap = new HashMap<>();
         for (Double i = 0.0; i < 50000; i++) {
-            numberMap.put("member" + String.valueOf(i), i);
+            numberMap.put("member" + i, i);
         }
         String[] charMembers = new String[] {"a", "b", "c", "d", "e"};
         Map<String, Double> charMap = new HashMap<>();
@@ -14744,11 +14744,11 @@ public class SharedCommandTests {
         // Setup test data - use a large number of entries to force an iterative cursor.
         Map<GlideString, Double> numberMap = new HashMap<>();
         for (Double i = 0.0; i < 50000; i++) {
-            numberMap.put(gs("member" + String.valueOf(i)), i);
+            numberMap.put(gs("member" + i), i);
         }
         Map<String, Double> numberMap_strings = new HashMap<>();
         for (Double i = 0.0; i < 50000; i++) {
-            numberMap_strings.put("member" + String.valueOf(i), i);
+            numberMap_strings.put("member" + i, i);
         }
 
         GlideString[] charMembers = new GlideString[] {gs("a"), gs("b"), gs("c"), gs("d"), gs("e")};
@@ -14908,7 +14908,7 @@ public class SharedCommandTests {
             Stream<Object> stream = Arrays.stream(fieldsArray);
 
             // Check if all fields start with "member"
-            assertTrue(stream.allMatch(field -> ((GlideString) field).toString().startsWith("member")));
+            assertTrue(stream.allMatch(field -> field.toString().startsWith("member")));
         }
 
         // Exceptions
@@ -15284,7 +15284,7 @@ public class SharedCommandTests {
             Stream<Object> stream = Arrays.stream(fieldsArray);
 
             // Check if all fields dont start with "num"
-            assertTrue(stream.allMatch(field -> !((GlideString) field).toString().startsWith("num")));
+            assertTrue(stream.allMatch(field -> !field.toString().startsWith("num")));
         }
 
         // Exceptions
@@ -15421,7 +15421,7 @@ public class SharedCommandTests {
         assertEquals(groupName, groupInfo.get("name"));
         Object[] pending = (Object[]) groupInfo.get("pending");
         assertEquals(1, pending.length);
-        assertEquals(true, Arrays.toString((Object[]) pending[0]).contains(streamId1_0));
+        assertTrue(Arrays.toString((Object[]) pending[0]).contains(streamId1_0));
 
         Object[] consumers = (Object[]) groupInfo.get("consumers");
         assertEquals(1, consumers.length);
