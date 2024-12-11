@@ -269,7 +269,7 @@ class Server:
         self.is_primary = is_primary
 
 
-def print_servers_json(servers: List[RedisServer]):
+def print_servers_json(servers: List[Server]):
     """
     Print the list of servers to the stdout as JSON array
     """
@@ -341,6 +341,7 @@ def start_server(
     Path(node_folder).mkdir(exist_ok=True)
 
     # Define command arguments
+    logfile = f"{node_folder}/server.log"
     cmd_args = [
         SERVER_COMMAND,
         f"{'--tls-port' if tls else '--port'}",
@@ -352,7 +353,7 @@ def start_server(
         "--daemonize",
         "yes",
         "--logfile",
-        f"{node_folder}/server.log",
+        logfile,
         "--protected-mode",
         "no"
     ]
@@ -381,7 +382,7 @@ def start_server(
     # Read the process ID from the log file
     # Note that `p.pid` is not good here since we daemonize the process
     process_id = wait_for_regex_in_log(
-        logfile, "version=(.*?)pid=([\d]+), just started", 2
+        logfile, r"version=(.*?)pid=([\d]+), just started", 2
     )
     if process_id:
         server.set_process_id(int(process_id))
