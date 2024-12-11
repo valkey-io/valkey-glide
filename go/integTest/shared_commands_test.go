@@ -5,6 +5,7 @@ package integTest
 import (
 	"math"
 	"time"
+	"reflect"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -1345,14 +1346,30 @@ func (suite *GlideTestSuite) TestSUnionStore() {
 		key1 := "{key}-1-" + uuid.NewString()
 		key2 := "{key}-2-" + uuid.NewString()
 		key3 := "{key}-3-" + uuid.NewString()
-		key3 := "{key}-4-" + uuid.NewString()
+		key4 := "{key}-4-" + uuid.NewString()
 		stringKey := "{key}-5-" + uuid.NewString()
 		nonExistingKey := "{key}-6-" + uuid.NewString()
 
 		memberArray1 := []string{"a", "b", "c"}
 		memberArray2 := []string{"c", "d", "e"}
 		memberArray3 := []string{ "e", "f", "g"}
-		t := suite.T()
+        expected1 := map[api.Result[string]]struct{}{
+            api.CreateStringResult("a"): {},
+            api.CreateStringResult("b"): {},
+            api.CreateStringResult("c"): {},
+            api.CreateStringResult("d"): {},
+            api.CreateStringResult("e"): {},
+        }
+        expected2 := map[api.Result[string]]struct{}{
+            api.CreateStringResult("a"): {},
+            api.CreateStringResult("b"): {},
+            api.CreateStringResult("c"): {},
+            api.CreateStringResult("d"): {},
+            api.CreateStringResult("e"): {},
+            api.CreateStringResult("f"): {},
+            api.CreateStringResult("g"): {},
+        }
+        t := suite.T()
 
 		res1, err := client.SAdd(key1, memberArray1)
 		assert.NoError(t, err)
@@ -1374,16 +1391,7 @@ func (suite *GlideTestSuite) TestSUnionStore() {
         res5, err := client.SMembers(key4)
         assert.NoError(t, err)
         assert.Len(t, res5, 5)
-        expected := []api.StringResult{
-            api.CreateStringResult("a"),
-            api.CreateStringResult("b"),
-            api.CreateStringResult("c"),
-            api.CreateStringResult("d"),
-            api.CreateStringResult("e"),
-        }
-        for _, value := range expected {
-            assert.Contains(suite.T(), res5, value)
-        }
+        assert.True(t, reflect.DeepEqual(res5, expected1))
 
 		// overwrite existing set
 		res6, err := client.SUnionStore(key1, []string{key4, key2})
@@ -1392,10 +1400,8 @@ func (suite *GlideTestSuite) TestSUnionStore() {
 
 		res7, err := client.SMembers(key1)
 		assert.NoError(t, err)
-		assert.Len(t, res7, 1)
-        for _, value := range expected {
-            assert.Contains(suite.T(), res7, value)
-        }
+		assert.Len(t, res7, 5)
+        assert.True(t, reflect.DeepEqual(res7, expected1))
 
         // overwrite one of the source keys
 		res8, err := client.SUnionStore(key2, []string{key4, key2})
@@ -1404,10 +1410,8 @@ func (suite *GlideTestSuite) TestSUnionStore() {
 
 		res9, err := client.SMembers(key2)
 		assert.NoError(t, err)
-		assert.Len(t, res9, 1)
-        for _, value := range expected {
-            assert.Contains(suite.T(), res9, value)
-        }
+		assert.Len(t, res9, 5)
+        assert.True(t, reflect.DeepEqual(res9, expected1))
 
 		// union with non-existing key
 		res10, err := client.SUnionStore(key2, []string{nonExistingKey})
@@ -1442,16 +1446,8 @@ func (suite *GlideTestSuite) TestSUnionStore() {
 		// check that the key is now empty
 		res14, err := client.SMembers(stringKey)
 		assert.NoError(t, err)
-		assert.Len(t, res14, 1)
-        expected2 := []api.StringResult{
-            api.CreateStringResult("a"),
-            api.CreateStringResult("b"),
-            api.CreateStringResult("c"),
-            api.CreateStringResult("d"),
-            api.CreateStringResult("e"),
-            api.CreateStringResult("f"),
-            api.CreateStringResult("g"),
-        }
+		assert.Len(t, res14, 7)
+        assert.True(t, reflect.DeepEqual(res14, expected2))
 	})
 }
 
