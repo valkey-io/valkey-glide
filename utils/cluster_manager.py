@@ -3,16 +3,16 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import argparse
+import json
 import logging
-import os, signal
+import os
 import random
+import re
+import signal
 import socket
 import string
 import subprocess
 import time
-import json
-import re
-
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -35,6 +35,7 @@ CA_CRT = f"{TLS_FOLDER}/ca.crt"
 SERVER_CRT = f"{TLS_FOLDER}/server.crt"
 SERVER_KEY = f"{TLS_FOLDER}/server.key"
 
+
 def get_command(commands: List[str]) -> str:
     for command in commands:
         try:
@@ -50,9 +51,11 @@ def get_command(commands: List[str]) -> str:
             logging.error(f"Error checking {command}: {e}")
     raise Exception(f"Neither ${'nor'.join(command)} found in the system.")
 
+
 # Determine which server to use by checking `valkey-server` and `redis-server`
 SERVER_COMMAND = get_command(["valkey-server", "redis-server"])
 CLI_COMMAND = get_command(["valkey-cli", "redis-cli"])
+
 
 def init_logger(logfile: str):
     print(f"LOG_FILE={logfile}")
@@ -87,9 +90,7 @@ def should_generate_new_tls_certs() -> bool:
     except FileExistsError:
         files_list = [CA_CRT, SERVER_KEY, SERVER_CRT]
         for file in files_list:
-            if check_if_tls_cert_exist(file) and check_if_tls_cert_is_valid(
-                file
-            ):
+            if check_if_tls_cert_exist(file) and check_if_tls_cert_is_valid(file):
                 return False
     return True
 
@@ -208,7 +209,9 @@ def generate_tls_certs():
     )
     output, err = p.communicate(timeout=10)
     if p.returncode != 0:
-        raise Exception(f"Failed to create server cert. Executed: {str(p.args)}:\n{err}")
+        raise Exception(
+            f"Failed to create server cert. Executed: {str(p.args)}:\n{err}"
+        )
     toc = time.perf_counter()
     logging.debug(f"generate_tls_certs() Elapsed time: {toc - tic:0.4f}")
     logging.debug(f"TLS files= {SERVER_CRT}, {SERVER_KEY}, {CA_CRT}")
@@ -293,9 +296,7 @@ def next_free_port(
             sock.bind(("127.0.0.1", port))
             sock.close()
             toc = time.perf_counter()
-            logging.debug(
-                f"next_free_port() is {port} Elapsed time: {toc - tic:0.4f}"
-            )
+            logging.debug(f"next_free_port() is {port} Elapsed time: {toc - tic:0.4f}")
             return port
         except OSError as e:
             logging.warning(f"next_free_port error for port {port}: {e}")
@@ -355,7 +356,7 @@ def start_server(
         "--logfile",
         logfile,
         "--protected-mode",
-        "no"
+        "no",
     ]
     if load_module:
         if len(load_module) == 0:
@@ -508,9 +509,7 @@ def create_cluster(
 
     logging.debug("The cluster was successfully created!")
     toc = time.perf_counter()
-    logging.debug(
-        f"create_cluster {cluster_folder} Elapsed time: {toc - tic:0.4f}"
-    )
+    logging.debug(f"create_cluster {cluster_folder} Elapsed time: {toc - tic:0.4f}")
 
 
 def create_standalone_replication(
@@ -573,10 +572,7 @@ def wait_for_a_message_in_logs(
             continue
         log_file = f"{dir}/server.log"
 
-        if (
-            server_ports
-            and os.path.basename(os.path.normpath(dir)) not in server_ports
-        ):
+        if server_ports and os.path.basename(os.path.normpath(dir)) not in server_ports:
             continue
         if not wait_for_message(log_file, message, 10):
             raise Exception(
@@ -659,9 +655,7 @@ def wait_for_all_topology_views(
         retries = 60
         while retries >= 0:
             output = redis_cli_run_command(cmd_args)
-            if output is not None and output.count(f"{server.host}") == len(
-                servers
-            ):
+            if output is not None and output.count(f"{server.host}") == len(servers):
                 # Server is ready, get the node's role
                 cmd_args = [
                     "redis-cli",
@@ -669,7 +663,7 @@ def wait_for_all_topology_views(
                     server.host,
                     "-p",
                     str(server.port),
-                    *get_redis_cli_option_args(cluster_folder, use_tls),
+                    *get_cli_option_args(cluster_folder, use_tls),
                     "cluster",
                     "nodes",
                 ]
@@ -745,9 +739,7 @@ def wait_for_message(
             else:
                 time.sleep(0.1)
                 continue
-    logging.warn(
-        f"Timeout exceeded trying to check if {log_file} contains {message}"
-    )
+    logging.warn(f"Timeout exceeded trying to check if {log_file} contains {message}")
     return False
 
 
@@ -840,26 +832,22 @@ def stop_server(server: Server, cluster_folder: str, use_tls: bool, auth: str):
             )
             output, err = p.communicate(timeout=5)
             if err and "Warning: Using a password with '-a'" not in err:
-                err_msg = f"Failed to shutdown host {server.host}:{server.port}:\n {err}"
+                err_msg = (
+                    f"Failed to shutdown host {server.host}:{server.port}:\n {err}"
+                )
                 logging.error(err_msg)
                 raise Exception(
                     f"Failed to execute command: {str(p.args)}\n Return code: {p.returncode}\n Error: {err}"
                 )
-            if not wait_for_server_shutdown(
-                server, cluster_folder, use_tls, auth
-            ):
-                err_msg = (
-                    "Timeout elapsed while waiting for the node to shutdown"
-                )
+            if not wait_for_server_shutdown(server, cluster_folder, use_tls, auth):
+                err_msg = "Timeout elapsed while waiting for the node to shutdown"
                 logging.error(err_msg)
                 raise Exception(err_msg)
             return
         except subprocess.TimeoutExpired as e:
             raise_err = e
             retries -= 1
-    err_msg = (
-        f"Failed to shutdown host {server.host}:{server.port}: {raise_err}"
-    )
+    err_msg = f"Failed to shutdown host {server.host}:{server.port}: {raise_err}"
     logging.error(err_msg)
     raise Exception(err_msg)
 
@@ -936,16 +924,6 @@ def stop_clusters(
     keep_folder: bool,
     pids: Optional[str],
 ):
-    if pids:
-        pid_arr = pids.split(",")
-        for pid in pid_arr:
-            try:
-                # Kill the process group
-                os.killpg(int(pid), signal.SIGKILL)
-            except ProcessLookupError as e:
-                logging.debug(f"Could not kill server with PID: {pid}. {e}")
-                pass
-
     if cluster_folder:
         cluster_folders = [cluster_folder]
     else:
@@ -957,12 +935,19 @@ def stop_clusters(
             and dirname.startswith(prefix)
         ]
 
-    # request for graceful shutdown only if PID list was not provided
-    graceful_shutdown = pids is None
+    # request for graceful shutdown
     for folder in cluster_folders:
-        stop_cluster(
-            host, folder, use_tls, auth, logfile, keep_folder, graceful_shutdown
-        )
+        stop_cluster(host, folder, use_tls, auth, logfile, keep_folder)
+
+    if pids:
+        pid_arr = pids.split(",")
+        for pid in pid_arr:
+            try:
+                # Kill the process
+                os.kill(int(pid), signal.SIGKILL)
+            except ProcessLookupError as e:
+                logging.debug(f"Could not kill server with PID: {pid}. {e}")
+                pass
 
 
 def stop_cluster(
@@ -972,23 +957,20 @@ def stop_cluster(
     auth: str,
     logfile: Optional[str],
     keep_folder: bool,
-    graceful_shutdown: bool,
 ):
-    if graceful_shutdown:
-        logfile = (
-            f"{cluster_folder}/cluster_manager.log" if not logfile else logfile
-        )
-        init_logger(logfile)
-        logging.debug(f"## Stopping cluster in path {cluster_folder}")
-        for it in os.scandir(cluster_folder):
-            if it.is_dir() and it.name.isdigit():
-                port = it.name
-                stop_server(
-                    Server(host, int(port)), cluster_folder, use_tls, auth
-                )
-        logging.debug("All hosts were stopped")
-    else:
-        logging.debug("Servers terminated using kill")
+    logfile = f"{cluster_folder}/cluster_manager.log" if not logfile else logfile
+    init_logger(logfile)
+    logging.debug(f"## Stopping cluster in path {cluster_folder}")
+    all_stopped = True
+    for it in os.scandir(cluster_folder):
+        if it.is_dir() and it.name.isdigit():
+            port = it.name
+            try:
+                stop_server(Server(host, int(port)), cluster_folder, use_tls, auth)
+            except Exception:
+                all_stopped = False
+    if all_stopped:
+        logging.debug("All hosts were stopped gracefully")
 
     if not keep_folder:
         remove_folder(cluster_folder)
@@ -1100,9 +1082,7 @@ def main():
     )
 
     # Stop parser
-    parser_stop = subparsers.add_parser(
-        "stop", help="Shutdown a running cluster"
-    )
+    parser_stop = subparsers.add_parser("stop", help="Shutdown a running cluster")
     parser_stop.add_argument(
         "--folder-path",
         type=dir_path,
@@ -1150,9 +1130,7 @@ def main():
             f" -- must be one of: {' | '.join(LOG_LEVELS.keys())}"
         )
     logging.root.setLevel(level=level)
-    logging.info(
-        f"## Executing cluster_manager.py with the following args:\n  {args}"
-    )
+    logging.info(f"## Executing cluster_manager.py with the following args:\n  {args}")
 
     if args.action == "start":
         if not args.cluster_mode:
