@@ -626,6 +626,39 @@ func (client *baseClient) SPop(key string) (Result[string], error) {
 	return handleStringResponse(result)
 }
 
+func (client *baseClient) SScan(key string, cursor string) (string, []string, error) {
+	result, err := client.executeCommand(C.SScan, []string{key, cursor})
+	if err != nil {
+		return "", nil, err
+	}
+	return handleScanResponse(result)
+}
+
+func (client *baseClient) SScanWithOption(
+	key string,
+	cursor string,
+	options *BaseScanOptions,
+) (string, []string, error) {
+	optionArgs, err := options.toArgs()
+	if err != nil {
+		return "", nil, err
+	}
+
+	result, err := client.executeCommand(C.SScan, append([]string{key, cursor}, optionArgs...))
+	if err != nil {
+		return "", nil, err
+	}
+	return handleScanResponse(result)
+}
+
+func (client *baseClient) SMove(source string, destination string, member string) (Result[bool], error) {
+	result, err := client.executeCommand(C.SMove, []string{source, destination, member})
+	if err != nil {
+		return CreateNilBoolResult(), err
+	}
+	return handleBooleanResponse(result)
+}
+
 func (client *baseClient) LRange(key string, start int64, end int64) ([]Result[string], error) {
 	result, err := client.executeCommand(C.LRange, []string{key, utils.IntToString(start), utils.IntToString(end)})
 	if err != nil {
