@@ -1,6 +1,6 @@
 #### Changes
 * Java: bump `netty` version ([#2795](https://github.com/valkey-io/valkey-glide/pull/2795))
-* Java: Bump protobuf (protoc) version ([#2796](https://github.com/valkey-io/valkey-glide/pull/2796))
+* Java: Bump protobuf (protoc) version ([#2796](https://github.com/valkey-io/valkey-glide/pull/2796), [#2800](https://github.com/valkey-io/valkey-glide/pull/2800))
 
 #### Breaking Changes
 
@@ -129,8 +129,10 @@
 * Node: Replace instances of Redis with Valkey ([#2260](https://github.com/valkey-io/valkey-glide/pull/2260))
 * Node: Added binary variant for commands which have `Record` as input or output ([#2207](https://github.com/valkey-io/valkey-glide/pull/2207))
 * Node: Renamed `ReturnType` to `GlideReturnType` ([#2241](https://github.com/valkey-io/valkey-glide/pull/2241))
+* Node: Fix BITPOS for Valkey8 ([#2227](https://github.com/valkey-io/valkey-glide/pull/2227))
 * Node, Python: Rename `stop` to `end` in sorted set queries ([#2214](https://github.com/valkey-io/valkey-glide/pull/2214))
 * Node: Added binary variant to sorted set commands - part 1 ([#2190](https://github.com/valkey-io/valkey-glide/pull/2190))
+* Python: Fix BITPOS for Valkey8 ([#2256](https://github.com/valkey-io/valkey-glide/pull/2256))
 * Node: Added binary variant to HSCAN command ([#2240](https://github.com/valkey-io/valkey-glide/pull/2240))
 * Node: replace decoder by DecoderOption and route by RouteOption in API([#2234](https://github.com/valkey-io/valkey-glide/pull/2234/))
 * Node: Added binary variant to sorted set commands ([#2190](https://github.com/valkey-io/valkey-glide/pull/2190), [#2210](https://github.com/valkey-io/valkey-glide/pull/2210))

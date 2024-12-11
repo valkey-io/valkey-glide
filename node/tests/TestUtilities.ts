@@ -1326,9 +1326,13 @@ export async function transactionTest(
             "bitcount(key17, new BitOffsetOptions(5, 30, BitmapIndexType.BIT))",
             17,
         ]);
-        baseTransaction.bitposInterval(key17, 1, 44, 50, BitmapIndexType.BIT);
+        baseTransaction.bitpos(key17, 1, {
+            start: 44,
+            end: 50,
+            indexType: BitmapIndexType.BIT,
+        });
         responseData.push([
-            "bitposInterval(key17, 1, 44, 50, BitmapIndexType.BIT)",
+            "bitpos(key17, 1, {start: 44, end: 50, indexType: BitmapIndexType.BIT})",
             46,
         ]);
     }
