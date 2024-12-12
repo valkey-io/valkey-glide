@@ -269,23 +269,40 @@ describe("GlideClient", () => {
         },
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `can send transactions_%p`,
-        async (protocol) => {
-            client = await GlideClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
-            );
-            const transaction = new Transaction();
-            const expectedRes = await transactionTest(
-                transaction,
-                cluster.getVersion(),
-            );
-            transaction.select(0);
-            const result = await client.exec(transaction);
-            expectedRes.push(["select(0)", "OK"]);
+    describe.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "Protocol is RESP2 = %s",
+        (protocol) => {
+            describe.each([Decoder.String, Decoder.Bytes])(
+                "Decoder String = %s",
+                (decoder) => {
+                    it(
+                        "can send transactions",
+                        async () => {
+                            client = await GlideClient.createClient(
+                                getClientConfigurationOption(
+                                    cluster.getAddresses(),
+                                    protocol,
+                                ),
+                            );
+                            const transaction = new Transaction();
+                            const expectedRes = await transactionTest(
+                                transaction,
+                                cluster,
+                                decoder,
+                            );
+                            transaction.select(0);
+                            const result = await client.exec(transaction, {
+                                decoder: Decoder.String,
+                            });
+                            expectedRes.push(["select(0)", "OK"]);
 
-            validateTransactionResponse(result, expectedRes);
-            client.close();
+                            validateTransactionResponse(result, expectedRes);
+                            client.close();
+                        },
+                        TIMEOUT,
+                    );
+                },
+            );
         },
     );
 
@@ -297,14 +314,16 @@ describe("GlideClient", () => {
             );
             const key1 = uuidv4();
             const key2 = uuidv4();
-            const value = uuidv4();
+            const value = "value";
 
             const transaction1 = new Transaction().set(key1, value).dump(key1);
 
             // Since DUMP gets binary results, we cannot use the string decoder here, so we expected to get an error.
             await expect(
                 client.exec(transaction1, { decoder: Decoder.String }),
-            ).rejects.toThrow("invalid utf-8 sequence of");
+            ).rejects.toThrow(
+                /invalid utf-8 sequence|incomplete utf-8 byte sequence/,
+            );
 
             const result = await client.exec(transaction1, {
                 decoder: Decoder.Bytes,

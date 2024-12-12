@@ -59,7 +59,7 @@ public class StandaloneClientTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> GlideClient.createClient(commonClientConfig().build()).get());
-        assertTrue(exception.getCause() instanceof ClosingException);
+        assertInstanceOf(ClosingException.class, exception.getCause());
 
         // Creation of a new client with credentials
         GlideClient auth_client =
@@ -125,7 +125,7 @@ public class StandaloneClientTests {
         assertEquals(value, testUserClient.get(key).get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> testUserClient.set("foo", "bar").get());
-        assertTrue(executionException.getCause() instanceof RequestException);
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         client.customCommand(new String[] {"ACL", "DELUSER", username}).get();
 
@@ -164,7 +164,7 @@ public class StandaloneClientTests {
         client.close();
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.set("key", "value").get());
-        assertTrue(executionException.getCause() instanceof ClosingException);
+        assertInstanceOf(ClosingException.class, executionException.getCause());
     }
 
     @SneakyThrows

@@ -1,6 +1,5 @@
-/**
- * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
- */
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
 use super::{NodeAddress, TlsMode};
 use crate::retry_strategies::RetryStrategy;
 use async_trait::async_trait;

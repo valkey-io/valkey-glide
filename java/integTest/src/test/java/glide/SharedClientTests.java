@@ -7,6 +7,7 @@ import static glide.TestUtilities.getRandomString;
 import static glide.api.BaseClient.OK;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -173,7 +174,7 @@ public class SharedClientTests {
             responses.get(inflightRequestsLimit).get(100, TimeUnit.MILLISECONDS);
             fail("Expected the last request to throw an exception");
         } catch (ExecutionException e) {
-            assertTrue(e.getCause() instanceof RequestException);
+            assertInstanceOf(RequestException.class, e.getCause());
             assertTrue(e.getCause().getMessage().contains("maximum inflight requests"));
         }
 
