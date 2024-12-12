@@ -957,3 +957,27 @@ func (client *baseClient) Del(keys []string) (Result[int64], error) {
 
 	return handleLongResponse(result)
 }
+
+func (client *baseClient) Dump(key string) (Result[string], error) {
+	result, err := client.executeCommand(C.Dump, []string{key})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNullResponse(result)
+}
+
+func (client *baseClient) ObjectEncoding(key string) (Result[string], error) {
+	result, err := client.executeCommand(C.ObjectEncoding, []string{key})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNullResponse(result)
+}
+
+func (client *baseClient) Restore(key string, ttl int64, value string) (Result[string], error) {
+	result, err := client.executeCommand(C.Restore, []string{key, utils.IntToString(ttl), value})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNullResponse(result)
+}
