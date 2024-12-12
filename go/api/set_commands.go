@@ -184,6 +184,29 @@ type SetCommands interface {
 	// [valkey.io]: https://valkey.io/commands/sinter/
 	SInter(keys []string) (map[Result[string]]struct{}, error)
 
+	// Stores the members of the intersection of all given sets specified by `keys` into a new set at `destination`
+	//
+	// Note: When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//	 destination - The key of the destination set.
+	//   keys - The keys from which to retrieve the set members.
+	//
+	// Return value:
+	//   The number of elements in the resulting set.
+	//
+	// Example:
+	//   result, err := client.SInterStore("my_set", []string{"set1", "set2"})
+	//   if err != nil {
+	//       fmt.Println(result)
+	//   }
+	//   // Output: 2 - Two elements were stored at "my_set", and those elements are the intersection of "set1" and "set2".
+	//
+	// [valkey.io]: https://valkey.io/commands/sinterstore/
+	SInterStore(destination string, keys []string) (Result[int64], error)
+
 	// SInterCard gets the cardinality of the intersection of all the given sets.
 	//
 	// Since:
