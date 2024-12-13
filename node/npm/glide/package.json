@@ -41,7 +41,6 @@
     },
     "optionalDependencies": {
         "${scope}valkey-glide-darwin-arm64": "${package_version}",
-        "${scope}valkey-glide-darwin-x64": "${package_version}",
         "${scope}valkey-glide-linux-arm64": "${package_version}",
         "${scope}valkey-glide-linux-x64": "${package_version}",
         "${scope}valkey-glide-linux-musl-arm64": "${package_version}",

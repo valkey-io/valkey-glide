@@ -53,9 +53,6 @@ function loadNativeBinding() {
             break;
         case "darwin":
             switch (arch) {
-                case "x64":
-                    nativeBinding = require("@scope/valkey-glide-darwin-x64");
-                    break;
                 case "arm64":
                     nativeBinding = require("@scope/valkey-glide-darwin-arm64");
                     break;
