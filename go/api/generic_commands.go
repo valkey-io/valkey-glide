@@ -103,8 +103,9 @@ type GenericBaseCommands interface {
 	// [valkey.io]: https://valkey.io/commands/expire/
 	ExpireWithOptions(key string, seconds int64, expireCondition ExpireCondition) (Result[bool], error)
 
-	// ExpireAt sets a timeout on key. It takes an absolute Unix timestamp (seconds since January 1, 1970) instead of specifying the number of seconds.
-	// A timestamp in the past will delete the key immediately. After the timeout has expired, the key will automatically be deleted.
+	// ExpireAt sets a timeout on key. It takes an absolute Unix timestamp (seconds since January 1, 1970) instead of
+	// specifying the number of seconds. A timestamp in the past will delete the key immediately. After the timeout has
+	// expired, the key will automatically be deleted.
 	// If key already has an existing expire set, the time to live is updated to the new value.
 	// The timeout will only be cleared by commands that delete or overwrite the contents of key
 	// If key already has an existing expire set, the time to live is updated to the new value.
@@ -126,8 +127,9 @@ type GenericBaseCommands interface {
 	// [valkey.io]: https://valkey.io/commands/expireat/
 	ExpireAt(key string, unixTimestampInSeconds int64) (Result[bool], error)
 
-	// ExpireAt sets a timeout on key. It takes an absolute Unix timestamp (seconds since January 1, 1970) instead of specifying the number of seconds.
-	// A timestamp in the past will delete the key immediately. After the timeout has expired, the key will automatically be deleted.
+	// ExpireAt sets a timeout on key. It takes an absolute Unix timestamp (seconds since January 1, 1970) instead of
+	// specifying the number of seconds. A timestamp in the past will delete the key immediately. After the timeout has
+	// expired, the key will automatically be deleted.
 	// If key already has an existing expire set, the time to live is updated to the new value.
 	// The timeout will only be cleared by commands that delete or overwrite the contents of key
 	// If key already has an existing expire set, the time to live is updated to the new value.

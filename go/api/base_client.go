@@ -997,12 +997,19 @@ func (client *baseClient) ExpireAt(key string, unixTimestampInSeconds int64) (Re
 	return handleBooleanResponse(result)
 }
 
-func (client *baseClient) ExpireAtWithOptions(key string, unixTimestampInSeconds int64, expireCondition ExpireCondition) (Result[bool], error) {
+func (client *baseClient) ExpireAtWithOptions(
+	key string,
+	unixTimestampInSeconds int64,
+	expireCondition ExpireCondition,
+) (Result[bool], error) {
 	expireConditionStr, err := expireCondition.toString()
 	if err != nil {
 		return CreateNilBoolResult(), err
 	}
-	result, err := client.executeCommand(C.ExpireAt, []string{key, utils.IntToString(unixTimestampInSeconds), expireConditionStr})
+	result, err := client.executeCommand(
+		C.ExpireAt,
+		[]string{key, utils.IntToString(unixTimestampInSeconds), expireConditionStr},
+	)
 	if err != nil {
 		return CreateNilBoolResult(), err
 	}
@@ -1017,7 +1024,11 @@ func (client *baseClient) PExpire(key string, milliseconds int64) (Result[bool],
 	return handleBooleanResponse(result)
 }
 
-func (client *baseClient) PExpireWithOptions(key string, milliseconds int64, expireCondition ExpireCondition) (Result[bool], error) {
+func (client *baseClient) PExpireWithOptions(
+	key string,
+	milliseconds int64,
+	expireCondition ExpireCondition,
+) (Result[bool], error) {
 	expireConditionStr, err := expireCondition.toString()
 	if err != nil {
 		return CreateNilBoolResult(), err
@@ -1037,12 +1048,19 @@ func (client *baseClient) PExpireAt(key string, unixTimestampInMilliSeconds int6
 	return handleBooleanResponse(result)
 }
 
-func (client *baseClient) PExpireAtWithOptions(key string, unixTimestampInMilliSeconds int64, expireCondition ExpireCondition) (Result[bool], error) {
+func (client *baseClient) PExpireAtWithOptions(
+	key string,
+	unixTimestampInMilliSeconds int64,
+	expireCondition ExpireCondition,
+) (Result[bool], error) {
 	expireConditionStr, err := expireCondition.toString()
 	if err != nil {
 		return CreateNilBoolResult(), err
 	}
-	result, err := client.executeCommand(C.PExpireAt, []string{key, utils.IntToString(unixTimestampInMilliSeconds), expireConditionStr})
+	result, err := client.executeCommand(
+		C.PExpireAt,
+		[]string{key, utils.IntToString(unixTimestampInMilliSeconds), expireConditionStr},
+	)
 	if err != nil {
 		return CreateNilBoolResult(), err
 	}

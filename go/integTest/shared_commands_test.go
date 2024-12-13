@@ -2795,6 +2795,7 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_HasExistingExpiry() {
 		assert.True(suite.T(), resultExpireWithOptions.Value())
 	})
 }
+
 func (suite *GlideTestSuite) TestExpireAtWithOptions_NewExpiryGreaterThanCurrent() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0")
 	suite.runWithDefaultClients(func(client api.BaseClient) {
@@ -3124,7 +3125,6 @@ func (suite *GlideTestSuite) TestExpireTime() {
 func (suite *GlideTestSuite) TestExpireTime_KeyDoesNotExist() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0")
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-
 		key := uuid.New().String()
 
 		// Call ExpireTime on a key that doesn't exist
