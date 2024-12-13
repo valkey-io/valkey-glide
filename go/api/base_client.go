@@ -534,6 +534,15 @@ func (client *baseClient) SRem(key string, members []string) (Result[int64], err
 	return handleLongResponse(result)
 }
 
+func (client *baseClient) SUnionStore(destination string, keys []string) (Result[int64], error) {
+	result, err := client.executeCommand(C.SUnionStore, append([]string{destination}, keys...))
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
 func (client *baseClient) SMembers(key string) (map[Result[string]]struct{}, error) {
 	result, err := client.executeCommand(C.SMembers, []string{key})
 	if err != nil {
