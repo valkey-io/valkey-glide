@@ -251,8 +251,8 @@ type SetCommands interface {
 	// Example:
 	//   client.SAdd("test", []string{"one"})
 	//   response, err := client.SRandMember("test")
-	//   // response.Value() == "one"
-	//   // err == nil
+	//   // response.Value(): "one"
+	//   // err: nil
 	//
 	// [valkey.io]: https://valkey.io/commands/srandmember/
 	SRandMember(key string) (Result[string], error)
@@ -271,10 +271,10 @@ type SetCommands interface {
 	// Example:
 	//   value1, err := client.SPop("mySet")
 	//   // value1.Value() might be "value1"
-	//   // err == nil
+	//   // err: nil
 	//   value2, err := client.SPop("nonExistingSet")
-	//   // value2.IsNil() == true
-	//   // err == nil
+	//   // value2.IsNil(): true
+	//   // err: nil
 	//
 	// [valkey.io]: https://valkey.io/commands/spop/
 	SPop(key string) (Result[string], error)
@@ -292,12 +292,12 @@ type SetCommands interface {
 	// Example:
 	//	 client.SAdd("myKey", []string{"one", "two"})
 	//   value1, err := client.SMIsMember("myKey", []string{"two", "three"})
-	//   // value1[0].Value() == true
-	//   // value1[1].Value() == false
-	//   // err == nil
+	//   // value1[0].Value(): true
+	//   // value1[1].Value(): false
+	//   // err: nil
 	//   value2, err := client.SPop("nonExistingKey", []string{"one"})
-	//   // value2[0].Value() == false
-	//   // err == nil
+	//   // value2[0].Value(): false
+	//   // err: nil
 	//
 	// [valkey.io]: https://valkey.io/commands/smismember/
 	SMIsMember(key string, members []string) ([]Result[bool], error)
