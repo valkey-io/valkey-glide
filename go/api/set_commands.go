@@ -341,7 +341,7 @@ type SetCommands interface {
 	// Example:
 	//   result, err := client.SUnionStore("my_set", []string{"set1", "set2"})
 	//   if err != nil {
-	//       fmt.Println(result)
+	//       fmt.Println(result.Value())
 	//   }
 	//   // Output: 2 - Two elements were stored at "my_set", and those elements are the union of "set1" and "set2".
 	//
