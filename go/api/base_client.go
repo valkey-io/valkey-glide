@@ -653,6 +653,15 @@ func (client *baseClient) SMIsMember(key string, members []string) ([]Result[boo
 	return handleBooleanArrayResponse(result)
 }
 
+func (client *baseClient) SUnion(keys []string) (map[Result[string]]struct{}, error) {
+	result, err := client.executeCommand(C.SUnion, keys)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringSetResponse(result)
+}
+
 func (client *baseClient) LRange(key string, start int64, end int64) ([]Result[string], error) {
 	result, err := client.executeCommand(C.LRange, []string{key, utils.IntToString(start), utils.IntToString(end)})
 	if err != nil {
