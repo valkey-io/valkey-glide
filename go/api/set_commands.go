@@ -347,4 +347,38 @@ type SetCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/sunionstore/
 	SUnionStore(destination string, keys []string) (Result[int64], error)
+
+	// SUnion gets the union of all the given sets.
+	//
+	// Note: When in cluster mode, all keys must map to the same hash slot.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   keys - The keys of the sets.
+	//
+	// Return value:
+	//   A map[Result[string]]struct{} of members which are present in at least one of the given sets.
+	//   If none of the sets exist, an empty map will be returned.
+	//
+	//
+	// Example:
+	//  result1, err := client.SAdd("my_set1", []string {"member1", "member2"})
+	//  // result.Value(): 2
+	//  // result.IsNil(): false
+	//
+	//  result2, err := client.SAdd("my_set2", []string {"member2", "member3"})
+	//  // result.Value(): 2
+	//  // result.IsNil(): false
+	//
+	//  result3, err := client.SUnion([]string {"my_set1", "my_set2"})
+	//  // result3.Value(): "{'member1', 'member2', 'member3'}"
+	//  // err: nil
+	//
+	//  result4, err := client.SUnion([]string {"my_set1", "non_existing_set"})
+	//  // result4.Value(): "{'member1', 'member2'}"
+	//  // err: nil
+	//
+	// [valkey.io]: https://valkey.io/commands/sunion/
+	SUnion(keys []string) (map[Result[string]]struct{}, error)
 }
