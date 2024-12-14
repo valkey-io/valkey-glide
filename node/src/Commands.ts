@@ -3855,6 +3855,18 @@ export interface BaseScanOptions {
  */
 export interface ScanOptions extends BaseScanOptions {
     type?: ObjectType;
+}
+
+/**
+ * Options for the SCAN command.
+ * `match`: The match filter is applied to the result of the command and will only include keys that match the pattern specified.
+ * `count`: `COUNT` is a just a hint for the command for how many elements to fetch from the server, the default is 10.
+ * `type`: The type of the object to scan.
+ * Types are the data types of Valkey: `string`, `list`, `set`, `zset`, `hash`, `stream`.
+ * `allowNonCoveredSlots`: If true, the scan will keep scanning even if slots are not covered by the cluster.
+ * By default, the scan will stop if slots are not covered by the cluster.
+ */
+export interface ClusterScanOptions extends ScanOptions {
     allowNonCoveredSlots?: boolean;
 }
 
