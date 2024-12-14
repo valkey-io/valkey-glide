@@ -372,12 +372,12 @@ type SetCommands interface {
 	//  // result.IsNil(): false
 	//
 	//  result3, err := client.SUnion([]string {"my_set1", "my_set2"})
-	//  // result3.Value() == "{'member1', 'member2', 'member3'}"
-	//  // err == nil
+	//  // result3.Value(): "{'member1', 'member2', 'member3'}"
+	//  // err: nil
 	//
 	//  result4, err := client.SUnion([]string {"my_set1", "non_existing_set"})
-	//  // result4.Value() == "{'member1', 'member2'}"
-	//  // err == nil
+	//  // result4.Value(): "{'member1', 'member2'}"
+	//  // err: nil
 	//
 	// [valkey.io]: https://valkey.io/commands/sunion/
 	SUnion(keys []string) (map[Result[string]]struct{}, error)

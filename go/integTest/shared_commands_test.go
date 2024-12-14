@@ -1970,7 +1970,7 @@ func (suite *GlideTestSuite) TestSUnion() {
 
 		res4, err := client.SUnion([]string{key3})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), map[api.Result[string]]struct{}(map[api.Result[string]]struct{}{}), res4)
+		assert.Equal(suite.T(), map[api.Result[string]]struct{}{}, res4)
 
 		res5, err := client.SUnion([]string{key1, key3})
 		assert.Nil(suite.T(), err)
