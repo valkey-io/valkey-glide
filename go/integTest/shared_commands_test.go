@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/glide/api"
+	"github.com/valkey-io/valkey-glide/go/glide/api/options"
 )
 
 const (
@@ -3779,5 +3780,96 @@ func (suite *GlideTestSuite) TestRenamenx() {
 		res2, err := client.Renamenx(key3, key4)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), false, res2.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestZaddAndZaddIncr() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		key2 := uuid.New().String()
+		key3 := uuid.New().String()
+		key4 := uuid.New().String()
+		membersScoreMap := map[string]float64{
+			"one":   1.0,
+			"two":   2.0,
+			"three": 3.0,
+		}
+		t := suite.T()
+
+		res, err := client.Zadd(key, membersScoreMap)
+		assert.Nil(t, err)
+		assert.Equal(t, int64(3), res.Value())
+
+		resIncr, err := client.ZaddIncr(key, "one", float64(2))
+		assert.Nil(t, err)
+		assert.Equal(t, float64(3), resIncr.Value())
+
+		// exceptions
+		// non-sortedset key
+		_, err = client.Set(key2, "test")
+		assert.NoError(t, err)
+
+		_, err = client.Zadd(key2, membersScoreMap)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		// wrong key type for zaddincr
+		_, err = client.ZaddIncr(key2, "one", float64(2))
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		// with NX & XX
+		onlyIfExistsOpts := options.NewZaddOptionsBuilder().SetConditionalChange(options.OnlyIfExists)
+		onlyIfDoesNotExistOpts := options.NewZaddOptionsBuilder().SetConditionalChange(options.OnlyIfDoesNotExist)
+
+		res, err = client.ZaddWithOptions(key3, membersScoreMap, onlyIfExistsOpts)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res.Value())
+
+		res, err = client.ZaddWithOptions(key3, membersScoreMap, onlyIfDoesNotExistOpts)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res.Value())
+
+		resIncr, err = client.ZaddIncrWithOptions(key3, "one", 5, onlyIfDoesNotExistOpts)
+		assert.NotNil(suite.T(), err)
+		assert.True(suite.T(), resIncr.IsNil())
+
+		resIncr, err = client.ZaddIncrWithOptions(key3, "one", 5, onlyIfExistsOpts)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), float64(6), resIncr.Value())
+
+		// with GT or LT
+		membersScoreMap2 := map[string]float64{
+			"one":   -3.0,
+			"two":   2.0,
+			"three": 3.0,
+		}
+
+		res, err = client.Zadd(key4, membersScoreMap2)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res.Value())
+
+		membersScoreMap2["one"] = 10.0
+
+		gtOpts := options.NewZaddOptionsBuilder().SetUpdateOptions(options.ScoreGreaterThanCurrent)
+		ltOpts := options.NewZaddOptionsBuilder().SetUpdateOptions(options.ScoreLessThanCurrent)
+		gtOptsChanged, _ := options.NewZaddOptionsBuilder().SetUpdateOptions(options.ScoreGreaterThanCurrent).SetChanged(true)
+		ltOptsChanged, _ := options.NewZaddOptionsBuilder().SetUpdateOptions(options.ScoreLessThanCurrent).SetChanged(true)
+
+		res, err = client.ZaddWithOptions(key4, membersScoreMap2, gtOptsChanged)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res.Value())
+
+		res, err = client.ZaddWithOptions(key4, membersScoreMap2, ltOptsChanged)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res.Value())
+
+		resIncr, err = client.ZaddIncrWithOptions(key4, "one", -3, ltOpts)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), float64(7), resIncr.Value())
+
+		resIncr, err = client.ZaddIncrWithOptions(key4, "one", -3, gtOpts)
+		assert.NotNil(suite.T(), err)
+		assert.True(suite.T(), resIncr.IsNil())
 	})
 }
