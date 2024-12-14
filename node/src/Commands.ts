@@ -3855,6 +3855,7 @@ export interface BaseScanOptions {
  */
 export interface ScanOptions extends BaseScanOptions {
     type?: ObjectType;
+    allowNonCoveredSlots?: boolean;
 }
 
 /**
