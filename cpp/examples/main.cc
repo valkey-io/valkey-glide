@@ -1,5 +1,4 @@
 #include <glide/client.h>
-#include <glide/config.h>
 
 #include <cstring>
 #include <iostream>

@@ -45,9 +45,10 @@ void Client::exec_command(glide::RequestType type,
                           std::vector<std::string>& args,
                           CommandResponseData& channel) {
   // Prepare arguments.
-  // TODO: set default size based on args. (reserve space).
   std::vector<uintptr_t> cmd_args;
+  cmd_args.reserve(args.size());
   std::vector<unsigned long> cmd_args_len;
+  cmd_args_len.reserve(args.size());
   for (auto& arg : args) {
     cmd_args.push_back(reinterpret_cast<uintptr_t>(arg.data()));
     cmd_args_len.push_back(static_cast<unsigned long>(arg.size()));

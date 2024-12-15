@@ -48,13 +48,7 @@ CommandResponseData::CommandResponseData() = default;
  */
 CommandResponseData::CommandResponseData(
     const CommandResponseData& other) noexcept {
-*this = other;
-// TODO: update other parts.
-  // value = other.value;
-  // error_message = other.error_message;
-  // error_type = other.error_type;
-  // is_error = other.is_error;
-  // is_ready = other.is_ready;
+  *this = other;
 }
 
 /**
@@ -78,11 +72,7 @@ CommandResponseData& CommandResponseData::operator=(
  * Move constructor.
  */
 CommandResponseData::CommandResponseData(CommandResponseData&& other) noexcept {
-  value = other.value;
-  error_message = other.error_message;
-  error_type = other.error_type;
-  is_error = other.is_error;
-  is_ready = other.is_ready;
+  *this = other;
 }
 
 /**
@@ -90,14 +80,7 @@ CommandResponseData::CommandResponseData(CommandResponseData&& other) noexcept {
  */
 CommandResponseData& CommandResponseData::operator=(
     CommandResponseData&& other) noexcept {
-  if (this == &other) {
-    return *this;
-  }
-  value = other.value;
-  error_message = other.error_message;
-  error_type = other.error_type;
-  is_error = other.is_error;
-  is_ready = other.is_ready;
+  *this = other;
   return *this;
 }
 

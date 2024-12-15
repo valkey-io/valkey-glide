@@ -60,16 +60,16 @@ ClusterNode& ClusterNode::operator=(ClusterNode&& other) noexcept {
  * Copy constructor for Credential.
  * Creates a new Credential object as a copy of an existing one.
  */
-Credential::Credential(const Credential& other) noexcept {
-  username = other.username;
-  password = other.password;
-}
+Credential::Credential(const Credential& other) noexcept { *this = other; }
 
 /**
  * Copy assignment operator for Credential.
  * Assigns the value of another Credential object to this object.
  */
 Credential& Credential::operator=(const Credential& other) noexcept {
+  if (this == &other) {
+    return *this;
+  }
   username = other.username;
   password = other.password;
   return *this;
@@ -81,8 +81,7 @@ Credential& Credential::operator=(const Credential& other) noexcept {
  * Credential object.
  */
 Credential::Credential(Credential&& other) noexcept {
-  username = std::move(other.username);
-  password = std::move(other.password);
+  *this = std::move(other);
 }
 
 /**
@@ -91,6 +90,9 @@ Credential::Credential(Credential&& other) noexcept {
  * transferring the resources.
  */
 Credential& Credential::operator=(Credential&& other) noexcept {
+  if (this == &other) {
+    return *this;
+  }
   username = std::move(other.username);
   password = std::move(other.password);
   return *this;
