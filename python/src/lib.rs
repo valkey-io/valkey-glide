@@ -267,7 +267,7 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     }
 
     #[pyfunction]
-    pub fn create_leaked_bytes_vec(args_vec: Vec<&PyBytes>) -> usize {
+    pub fn create_leaked_bytes_vec(args_vec: Vec<Bound<PyBytes>>) -> usize {
         // Convert the bytes vec -> Bytes vector
         let bytes_vec: Vec<Bytes> = args_vec
             .iter()
