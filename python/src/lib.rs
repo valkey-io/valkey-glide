@@ -84,7 +84,7 @@ impl Script {
     fn new(code: &Bound<PyAny>) -> PyResult<Self> {
         let hash = if let Ok(code_str) = code.extract::<String>() {
             glide_core::scripts_container::add_script(code_str.as_bytes())
-        } else if let Ok(code_bytes) = code.extract::<&PyBytes>() {
+        } else if let Ok(code_bytes) = code.extract::<Bound<PyBytes>>() {
             glide_core::scripts_container::add_script(code_bytes.as_bytes())
         } else {
             return Err(PyTypeError::new_err(
@@ -267,7 +267,7 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     }
 
     #[pyfunction]
-    pub fn create_leaked_bytes_vec(args_vec: Vec<&PyBytes>) -> usize {
+    pub fn create_leaked_bytes_vec(args_vec: Vec<Bound<PyBytes>>) -> usize {
         // Convert the bytes vec -> Bytes vector
         let bytes_vec: Vec<Bytes> = args_vec
             .iter()
