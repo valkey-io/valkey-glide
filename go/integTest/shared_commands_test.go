@@ -3458,7 +3458,7 @@ func (suite *GlideTestSuite) TestType() {
 		assert.Nil(suite.T(), err)
 		assert.IsType(suite.T(), result, api.CreateStringResult("string"), "Value is string")
 
-		//Test 2: Check if the value is list
+		// Test 2: Check if the value is list
 		key1 := "{keylist}-1" + uuid.NewString()
 		resultLPush, err := client.LPush(key1, []string{"one", "two", "three"})
 		assert.Equal(suite.T(), int64(3), resultLPush.Value())
