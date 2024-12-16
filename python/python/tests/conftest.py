@@ -243,6 +243,7 @@ async def create_client(
     client_name: Optional[str] = None,
     protocol: ProtocolVersion = ProtocolVersion.RESP3,
     timeout: Optional[int] = 1000,
+    connection_timeout: Optional[int] = 1000,
     cluster_mode_pubsub: Optional[
         GlideClusterClientConfiguration.PubSubSubscriptions
     ] = None,
@@ -267,6 +268,7 @@ async def create_client(
             client_name=client_name,
             protocol=protocol,
             request_timeout=timeout,
+            connection_timeout=connection_timeout,
             pubsub_subscriptions=cluster_mode_pubsub,
             inflight_requests_limit=inflight_requests_limit,
             read_from=read_from,
@@ -285,6 +287,7 @@ async def create_client(
             client_name=client_name,
             protocol=protocol,
             request_timeout=timeout,
+            connection_timeout=connection_timeout,
             pubsub_subscriptions=standalone_mode_pubsub,
             inflight_requests_limit=inflight_requests_limit,
             read_from=read_from,
