@@ -3450,14 +3450,14 @@ func (suite *GlideTestSuite) TestPTTL_WithExpiredKey() {
 
 func (suite *GlideTestSuite) Test_Rename() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		//Test 1 Check if the command successfully renamed
+		// Test 1 Check if the command successfully renamed
 		key := "{keyName}" + uuid.NewString()
 		initialValueRename := "TestRename_RenameValue"
 		newRenameKey := "{newkeyName}" + uuid.NewString()
 		suite.verifyOK(client.Set(key, initialValueRename))
 		client.Rename(key, newRenameKey)
 
-		//Test 2 Check if the rename command return false if the key/newkey is invalid.
+		// Test 2 Check if the rename command return false if the key/newkey is invalid.
 		key1 := "{keyName}" + uuid.NewString()
 		res1, err := client.Rename(key1, "invalidKey")
 		assert.Equal(suite.T(), "", res1.Value())
@@ -3469,7 +3469,7 @@ func (suite *GlideTestSuite) Test_Rename() {
 func (suite *GlideTestSuite) TestRenamenx() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 
-		//Test 1 Check if the renamenx command return true if key was renamed to newKey
+		// Test 1 Check if the renamenx command return true if key was renamed to newKey
 		key := "{keyName}" + uuid.NewString()
 		key2 := "{keyName}" + uuid.NewString()
 		suite.verifyOK(client.Set(key, initialValue))
@@ -3477,7 +3477,7 @@ func (suite *GlideTestSuite) TestRenamenx() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), true, res1.Value())
 
-		//Test 2 Check if the renamenx command return false if newKey already exists.
+		// Test 2 Check if the renamenx command return false if newKey already exists.
 		key3 := "{keyName}" + uuid.NewString()
 		key4 := "{keyName}" + uuid.NewString()
 		suite.verifyOK(client.Set(key3, initialValue))
