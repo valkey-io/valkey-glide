@@ -98,32 +98,7 @@ def test_connection_timeout_in_protobuf_request():
         [NodeAddress("127.0.0.1")],
         connection_timeout=connection_timeout,
     )
-    request = config._create_a_protobuf_conn_request()
+    request = config._create_a_protobuf_conn_request(cluster_mode=True)
 
     assert isinstance(request, ConnectionRequest)
     assert request.connection_timeout == connection_timeout
-
-
-@pytest.mark.parametrize("cluster_mode", [True])
-@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-async def test_connection_timeout(
-    self,
-    request,
-    cluster_mode: bool,
-    protocol: ProtocolVersion,
-):
-
-    client = await create_client(
-        request,
-        cluster_mode,
-        # addresses=multiple_replicas_cluster.nodes_addr,
-        protocol=protocol,
-        timeout=2000,
-        connection_timeout=2000,
-    )
-
-    assert isinstance(client, (GlideClient, GlideClusterClient))
-
-    assert await client.set("key", "value") == "OK"
-
-    await client.close()

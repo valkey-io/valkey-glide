@@ -302,6 +302,30 @@ class TestGlideClients:
         assert "total_clients" in stats
         assert len(stats) == 2
 
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_connection_timeout(
+        self,
+        request,
+        cluster_mode: bool,
+        protocol: ProtocolVersion,
+    ):
+
+        client = await create_client(
+            request,
+            cluster_mode,
+            # addresses=multiple_replicas_cluster.nodes_addr,
+            protocol=protocol,
+            timeout=2000,
+            connection_timeout=2000,
+        )
+
+        assert isinstance(client, (GlideClient, GlideClusterClient))
+
+        assert await client.set("key", "value") == "OK"
+
+        await client.close()
+
 
 @pytest.mark.asyncio
 class TestCommands:
