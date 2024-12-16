@@ -55,8 +55,7 @@ func (suite *GlideTestSuite) TestConnectWithInvalidAddress() {
 }
 
 func (suite *GlideTestSuite) TestConnectionTimeout() {
-	config := api.NewGlideClientConfiguration().
-		WithAddress(&api.NodeAddress{Port: suite.standalonePorts[0]}).WithConnectionTimeout(2000)
+	config := api.NewGlideClientConfiguration().WithAddress(&api.NodeAddress{Port: suite.standalonePorts[0]}).WithConnectionTimeout(2000)
 	client, err := api.NewGlideClient(config)
 
 	assert.Nil(suite.T(), err)
