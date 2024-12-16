@@ -63,7 +63,6 @@ func (suite *GlideTestSuite) TestConnectionTimeout() {
 
 	client.Close()
 
-
 	clusterConfig := api.NewGlideClusterClientConfiguration().WithAddress(&api.NodeAddress{Port: suite.clusterPorts[0]}).WithConnectionTimeout(2000)
 
 	clusterClient, clusterErr := api.NewGlideClusterClient(clusterConfig)
