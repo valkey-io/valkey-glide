@@ -75,7 +75,7 @@ type baseClientConfiguration struct {
 	useTLS            bool
 	credentials       *ServerCredentials
 	readFrom          ReadFrom
-	requestTimeout 	  int
+	requestTimeout    int
 	connectionTimeout int
 	clientName        string
 }

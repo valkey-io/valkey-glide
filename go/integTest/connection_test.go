@@ -55,12 +55,18 @@ func (suite *GlideTestSuite) TestConnectWithInvalidAddress() {
 }
 
 func (suite *GlideTestSuite) TestConnectionTimeout() {
-	clusterConfig := api.NewGlideClusterClientConfiguration()
-	for _, port := range suite.clusterPorts {
-        clusterConfig.WithAddress(&api.NodeAddress{Port: port})
-	}
+	config := api.NewGlideClientConfiguration().
+		WithAddress(&api.NodeAddress{Port: suite.standalonePorts[0]}).WithConnectionTimeout(2000)
+	client, err := api.NewGlideClient(config)
 
-	clusterConfig.WithConnectionTimeout(2000)
+	assert.Nil(suite.T(), err)
+	assert.NotNil(suite.T(), client)
+
+	client.Close()
+
+
+	clusterConfig := api.NewGlideClusterClientConfiguration().
+		WithAddress(&api.NodeAddress{Port: suite.clusterPorts[0]}).WithConnectionTimeout(2000)
 
 	clusterClient, clusterErr := api.NewGlideClusterClient(clusterConfig)
 
@@ -68,15 +74,4 @@ func (suite *GlideTestSuite) TestConnectionTimeout() {
 	assert.NotNil(suite.T(), clusterClient)
 
 	clusterClient.Close()
-
-
-	config := api.NewGlideClusterClientConfiguration().
-		WithAddress(&api.NodeAddress{Port: suite.clusterPorts[0]}).WithConnectionTimeout(2000)
-
-	client, err := api.NewGlideClusterClient(config)
-
-	assert.Nil(suite.T(), err)
-	assert.NotNil(suite.T(), client)
-
-	client.Close()
 }
