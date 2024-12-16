@@ -3480,7 +3480,7 @@ func (suite *GlideTestSuite) TestTouch() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(2), result.Value(), "The touch should be 2")
 
-		// Test 1: Check if an touch invalid key
+		// Test 2: Check if an touch invalid key
 		resultInvalidKey, err := client.Touch([]string{"invalidKey", "invalidKey1"})
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(0), resultInvalidKey.Value(), "The touch should be 0")
