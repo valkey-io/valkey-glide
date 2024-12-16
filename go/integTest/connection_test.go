@@ -57,7 +57,7 @@ func (suite *GlideTestSuite) TestConnectWithInvalidAddress() {
 func (suite *GlideTestSuite) TestConnectionTimeout() {
 	clusterConfig := api.NewGlideClusterClientConfiguration()
 	for _, port := range suite.clusterPorts {
-        clusterConfig := api.NewGlideClusterClientConfiguration().WithAddress(&api.NodeAddress{Port: port})
+        clusterConfig.WithAddress(&api.NodeAddress{Port: port})
 	}
 
 	clusterConfig.WithConnectionTimeout(2000)
