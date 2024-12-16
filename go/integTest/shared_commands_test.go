@@ -3458,7 +3458,7 @@ func (suite *GlideTestSuite) TestType() {
 		assert.Nil(suite.T(), err)
 		assert.IsType(suite.T(), result, api.CreateStringResult("string"), "Value is string")
 
-		// Test 2: Check if the value is list
+		//Test 2: Check if the value is list
 		key1 := "{keylist}-1" + uuid.NewString()
 		resultLPush, err := client.LPush(key1, []string{"one", "two", "three"})
 		assert.Equal(suite.T(), int64(3), resultLPush.Value())
@@ -3480,7 +3480,7 @@ func (suite *GlideTestSuite) TestTouch() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(2), result.Value(), "The touch should be 2")
 
-		// Test 2: Check if an touch invalid key
+		// Test 1: Check if an touch invalid key
 		resultInvalidKey, err := client.Touch([]string{"invalidKey", "invalidKey1"})
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(0), resultInvalidKey.Value(), "The touch should be 0")
