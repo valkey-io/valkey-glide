@@ -137,6 +137,7 @@ class BaseClientConfiguration:
         credentials: Optional[ServerCredentials] = None,
         read_from: ReadFrom = ReadFrom.PRIMARY,
         request_timeout: Optional[int] = None,
+        connection_timeout: Optional[int] = None,
         client_name: Optional[str] = None,
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
         inflight_requests_limit: Optional[int] = None,
@@ -164,6 +165,9 @@ class BaseClientConfiguration:
             request_timeout (Optional[int]): The duration in milliseconds that the client should wait for a request to complete.
                 This duration encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries.
                 If the specified timeout is exceeded for a pending request, it will result in a timeout error. If not set, a default value will be used.
+            connection_timeout (Optional[int]): The duration in milliseconds that the client should wait while establishing a connection to the server.
+                If the client is unable to establish a connection within this time, it will result in a connection timeout error.
+                If not set, a default value will be used.
             client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during connection establishment.
             inflight_requests_limit (Optional[int]): The maximum number of concurrent requests allowed to be in-flight (sent but not yet completed).
                 This limit is used to control the memory usage and prevent the client from overwhelming the server or getting stuck in case of a queue backlog.
@@ -175,6 +179,7 @@ class BaseClientConfiguration:
         self.credentials = credentials
         self.read_from = read_from
         self.request_timeout = request_timeout
+        self.connection_timeout = connection_timeout
         self.client_name = client_name
         self.protocol = protocol
         self.inflight_requests_limit = inflight_requests_limit
@@ -206,6 +211,8 @@ class BaseClientConfiguration:
         request.read_from = self.read_from.value
         if self.request_timeout:
             request.request_timeout = self.request_timeout
+        if self.connection_timeout:
+            request.connection_timeout = self.connection_timeout
         request.cluster_mode_enabled = True if cluster_mode else False
         if self.credentials:
             if self.credentials.username:
@@ -249,6 +256,9 @@ class GlideClientConfiguration(BaseClientConfiguration):
         request_timeout (Optional[int]):  The duration in milliseconds that the client should wait for a request to complete.
                 This duration encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries.
                 If the specified timeout is exceeded for a pending request, it will result in a timeout error.
+                If not set, a default value will be used.
+        connection_timeout (Optional[int]): The duration in milliseconds that the client should wait while establishing a connection to the server.
+                If the client is unable to establish a connection within this time, it will result in a connection timeout error.
                 If not set, a default value will be used.
         reconnect_strategy (Optional[BackoffStrategy]): Strategy used to determine how and when to reconnect, in case of
             connection failures.
@@ -301,6 +311,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
         credentials: Optional[ServerCredentials] = None,
         read_from: ReadFrom = ReadFrom.PRIMARY,
         request_timeout: Optional[int] = None,
+        connection_timeout: Optional[int] = None,
         reconnect_strategy: Optional[BackoffStrategy] = None,
         database_id: Optional[int] = None,
         client_name: Optional[str] = None,
@@ -315,6 +326,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
             credentials=credentials,
             read_from=read_from,
             request_timeout=request_timeout,
+            connection_timeout=connection_timeout,
             client_name=client_name,
             protocol=protocol,
             inflight_requests_limit=inflight_requests_limit,
@@ -393,6 +405,9 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         request_timeout (Optional[int]):  The duration in milliseconds that the client should wait for a request to complete.
             This duration encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries.
             If the specified timeout is exceeded for a pending request, it will result in a timeout error. If not set, a default value will be used.
+        connection_timeout (Optional[int]): The duration in milliseconds that the client should wait while establishing a connection to the server.
+                If the client is unable to establish a connection within this time, it will result in a connection timeout error.
+                If not set, a default value will be used.
         client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during connection establishment.
         protocol (ProtocolVersion): The version of the RESP protocol to communicate with the server.
         periodic_checks (Union[PeriodicChecksStatus, PeriodicChecksManualInterval]): Configure the periodic topology checks.
@@ -451,6 +466,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         credentials: Optional[ServerCredentials] = None,
         read_from: ReadFrom = ReadFrom.PRIMARY,
         request_timeout: Optional[int] = None,
+        connection_timeout: Optional[int] = None,
         client_name: Optional[str] = None,
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
         periodic_checks: Union[
@@ -466,6 +482,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             credentials=credentials,
             read_from=read_from,
             request_timeout=request_timeout,
+            connection_timeout=connection_timeout,
             client_name=client_name,
             protocol=protocol,
             inflight_requests_limit=inflight_requests_limit,

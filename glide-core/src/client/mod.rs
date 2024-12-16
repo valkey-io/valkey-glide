@@ -31,7 +31,7 @@ pub const DEFAULT_RETRIES: u32 = 3;
 pub const DEFAULT_RESPONSE_TIMEOUT: Duration = Duration::from_millis(250);
 pub const DEFAULT_CONNECTION_ATTEMPT_TIMEOUT: Duration = Duration::from_millis(250);
 pub const DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL: Duration = Duration::from_secs(60);
-pub const INTERNAL_CONNECTION_TIMEOUT: Duration = Duration::from_millis(250);
+pub const DEFAULT_CONNECTION_TIMEOUT: Duration = Duration::from_millis(250);
 pub const FINISHED_SCAN_CURSOR: &str = "finished";
 
 /// The value of 1000 for the maximum number of inflight requests is determined based on Little's Law in queuing theory:
@@ -117,6 +117,7 @@ pub enum ClientWrapper {
 pub struct Client {
     internal_client: ClientWrapper,
     request_timeout: Duration,
+    connection_timeout: Duration,
     // Setting this counter to limit the inflight requests, in case of any queue is blocked, so we return error to the customer.
     inflight_requests_allowed: Arc<AtomicIsize>,
 }
@@ -539,6 +540,10 @@ impl Client {
             }
         }
     }
+
+    pub fn get_connection_timeout(&self) -> Duration {
+        self.connection_timeout
+    }
 }
 
 fn load_cmd(code: &[u8]) -> Cmd {
@@ -583,8 +588,9 @@ async fn create_cluster_client(
         Some(PeriodicCheck::ManualInterval(interval)) => Some(interval),
         None => Some(DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL),
     };
+    let connection_timeout = to_duration(request.connection_timeout, DEFAULT_CONNECTION_TIMEOUT);
     let mut builder = redis::cluster::ClusterClientBuilder::new(initial_nodes)
-        .connection_timeout(INTERNAL_CONNECTION_TIMEOUT)
+        .connection_timeout(connection_timeout)
         .retries(DEFAULT_RETRIES);
     let read_from_strategy = request.read_from.unwrap_or_default();
     builder = builder.read_from(match read_from_strategy {
@@ -682,6 +688,8 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
         "\nStandalone mode"
     };
     let request_timeout = format_optional_value("Request timeout", request.request_timeout);
+    let connection_timeout =
+        format_optional_value("Connection timeout", request.connection_timeout);
     let database_id = format!("\ndatabase ID: {}", request.database_id);
     let rfr_strategy = request
         .read_from
@@ -738,7 +746,7 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
     );
 
     format!(
-        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}{periodic_checks}{pubsub_subscriptions}{inflight_requests_limit}",
+        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{connection_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}{periodic_checks}{pubsub_subscriptions}{inflight_requests_limit}",
     )
 }
 
@@ -754,6 +762,8 @@ impl Client {
             sanitized_request_string(&request),
         );
         let request_timeout = to_duration(request.request_timeout, DEFAULT_RESPONSE_TIMEOUT);
+        let connection_timeout =
+            to_duration(request.connection_timeout, DEFAULT_CONNECTION_TIMEOUT);
         let inflight_requests_limit = request
             .inflight_requests_limit
             .unwrap_or(DEFAULT_MAX_INFLIGHT_REQUESTS);
@@ -777,6 +787,7 @@ impl Client {
             Ok(Self {
                 internal_client,
                 request_timeout,
+                connection_timeout,
                 inflight_requests_allowed,
             })
         })

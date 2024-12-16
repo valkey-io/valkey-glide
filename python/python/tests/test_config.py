@@ -1,16 +1,21 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+import pytest
 from glide.config import (
     BaseClientConfiguration,
+    GlideClientConfiguration,
     GlideClusterClientConfiguration,
     NodeAddress,
     PeriodicChecksManualInterval,
     PeriodicChecksStatus,
+    ProtocolVersion,
     ReadFrom,
 )
+from glide.glide_client import GlideClient, GlideClusterClient
 from glide.protobuf.connection_request_pb2 import ConnectionRequest
 from glide.protobuf.connection_request_pb2 import ReadFrom as ProtobufReadFrom
 from glide.protobuf.connection_request_pb2 import TlsMode
+from tests.conftest import create_client
 
 
 def test_default_client_config():
@@ -67,3 +72,58 @@ def test_convert_config_with_azaffinity_to_protobuf():
     assert request.tls_mode is TlsMode.SecureTls
     assert request.read_from == ProtobufReadFrom.AZAffinity
     assert request.client_az == az
+
+
+def test_connection_timeout_in_protobuf_request():
+    connection_timeout = 5000  # in milliseconds
+    config = BaseClientConfiguration(
+        [NodeAddress("127.0.0.1")],
+        connection_timeout=connection_timeout,
+    )
+    request = config._create_a_protobuf_conn_request()
+
+    assert isinstance(request, ConnectionRequest)
+    assert request.connection_timeout == connection_timeout
+
+    config = GlideClientConfiguration(
+        [NodeAddress("127.0.0.1")],
+        connection_timeout=connection_timeout,
+    )
+    request = config._create_a_protobuf_conn_request()
+
+    assert isinstance(request, ConnectionRequest)
+    assert request.connection_timeout == connection_timeout
+
+    config = GlideClusterClientConfiguration(
+        [NodeAddress("127.0.0.1")],
+        connection_timeout=connection_timeout,
+    )
+    request = config._create_a_protobuf_conn_request()
+
+    assert isinstance(request, ConnectionRequest)
+    assert request.connection_timeout == connection_timeout
+
+
+@pytest.mark.parametrize("cluster_mode", [True])
+@pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+async def test_connection_timeout(
+    self,
+    request,
+    cluster_mode: bool,
+    protocol: ProtocolVersion,
+):
+
+    client = await create_client(
+        request,
+        cluster_mode,
+        # addresses=multiple_replicas_cluster.nodes_addr,
+        protocol=protocol,
+        timeout=2000,
+        connection_timeout=2000,
+    )
+
+    assert isinstance(client, (GlideClient, GlideClusterClient))
+
+    assert await client.set("key", "value") == "OK"
+
+    await client.close()
