@@ -1,7 +1,11 @@
 #### Changes
+
+* Go: Add SUNIONSTORE command ([#2805](https://github.com/valkey-io/valkey-glide/pull/2805)
+* Go: Add SUNION ([#2787](https://github.com/valkey-io/valkey-glide/pull/2787)
 * Java: bump `netty` version ([#2795](https://github.com/valkey-io/valkey-glide/pull/2795))
 * Java: Bump protobuf (protoc) version ([#2796](https://github.com/valkey-io/valkey-glide/pull/2796), [#2800](https://github.com/valkey-io/valkey-glide/pull/2800))
 * Go: Add `SInterStore` ([#2779](https://github.com/valkey-io/valkey-glide/issues/2779))
+* Node: Remove native package references for MacOs x64 architecture ([#2799](https://github.com/valkey-io/valkey-glide/issues/2799))
 
 #### Breaking Changes
 
@@ -12,6 +16,7 @@
 ## 1.2.0 (2024-11-27)
 
 #### Changes
+
 * Node: Client API for retrieving internal statistics ([#2727](https://github.com/valkey-io/valkey-glide/pull/2727))
 * Python: Client API for retrieving internal statistics ([#2707](https://github.com/valkey-io/valkey-glide/pull/2707))
 * Node, Python, Java: Adding support for replacing connection configured password ([#2651](https://github.com/valkey-io/valkey-glide/pull/2651), [#2659](https://github.com/valkey-io/valkey-glide/pull/2659), [#2677](https://github.com/valkey-io/valkey-glide/pull/2677))
@@ -105,9 +110,11 @@
 * Core: SlotMap refactor - Added NodesMap, Update the slot map upon MOVED errors ([#2682](https://github.com/valkey-io/valkey-glide/issues/2682))
 
 #### Breaking Changes
+
 **None**
 
 #### Fixes
+
 * Core: UDS Socket Handling Rework ([#2482](https://github.com/valkey-io/valkey-glide/pull/2482))
 
 #### Operational Enhancements

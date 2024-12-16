@@ -274,8 +274,8 @@ type SetCommands interface {
 	// Example:
 	//   client.SAdd("test", []string{"one"})
 	//   response, err := client.SRandMember("test")
-	//   // response.Value() == "one"
-	//   // err == nil
+	//   // response.Value(): "one"
+	//   // err: nil
 	//
 	// [valkey.io]: https://valkey.io/commands/srandmember/
 	SRandMember(key string) (Result[string], error)
@@ -294,11 +294,91 @@ type SetCommands interface {
 	// Example:
 	//   value1, err := client.SPop("mySet")
 	//   // value1.Value() might be "value1"
-	//   // err == nil
+	//   // err: nil
 	//   value2, err := client.SPop("nonExistingSet")
-	//   // value2.IsNil() == true
-	//   // err == nil
+	//   // value2.IsNil(): true
+	//   // err: nil
 	//
 	// [valkey.io]: https://valkey.io/commands/spop/
 	SPop(key string) (Result[string], error)
+
+	// SMIsMember returns whether each member is a member of the set stored at key.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   key - The key of the set.
+	//
+	// Return value:
+	//   A []Result[bool] containing whether each member is a member of the set stored at key.
+	//
+	// Example:
+	//	 client.SAdd("myKey", []string{"one", "two"})
+	//   value1, err := client.SMIsMember("myKey", []string{"two", "three"})
+	//   // value1[0].Value(): true
+	//   // value1[1].Value(): false
+	//   // err: nil
+	//   value2, err := client.SPop("nonExistingKey", []string{"one"})
+	//   // value2[0].Value(): false
+	//   // err: nil
+	//
+	// [valkey.io]: https://valkey.io/commands/smismember/
+	SMIsMember(key string, members []string) ([]Result[bool], error)
+
+	// SUnionStore stores the members of the union of all given sets specified by `keys` into a new set at `destination`.
+	//
+	// Note: When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//	 destination - The key of the destination set.
+	//   keys - The keys from which to retrieve the set members.
+	//
+	// Return value:
+	//   The number of elements in the resulting set.
+	//
+	// Example:
+	//   result, err := client.SUnionStore("my_set", []string{"set1", "set2"})
+	//   if err != nil {
+	//       fmt.Println(result.Value())
+	//   }
+	//   // Output: 2 - Two elements were stored at "my_set", and those elements are the union of "set1" and "set2".
+	//
+	// [valkey.io]: https://valkey.io/commands/sunionstore/
+	SUnionStore(destination string, keys []string) (Result[int64], error)
+
+	// SUnion gets the union of all the given sets.
+	//
+	// Note: When in cluster mode, all keys must map to the same hash slot.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   keys - The keys of the sets.
+	//
+	// Return value:
+	//   A map[Result[string]]struct{} of members which are present in at least one of the given sets.
+	//   If none of the sets exist, an empty map will be returned.
+	//
+	//
+	// Example:
+	//  result1, err := client.SAdd("my_set1", []string {"member1", "member2"})
+	//  // result.Value(): 2
+	//  // result.IsNil(): false
+	//
+	//  result2, err := client.SAdd("my_set2", []string {"member2", "member3"})
+	//  // result.Value(): 2
+	//  // result.IsNil(): false
+	//
+	//  result3, err := client.SUnion([]string {"my_set1", "my_set2"})
+	//  // result3.Value(): "{'member1', 'member2', 'member3'}"
+	//  // err: nil
+	//
+	//  result4, err := client.SUnion([]string {"my_set1", "non_existing_set"})
+	//  // result4.Value(): "{'member1', 'member2'}"
+	//  // err: nil
+	//
+	// [valkey.io]: https://valkey.io/commands/sunion/
+	SUnion(keys []string) (map[Result[string]]struct{}, error)
 }
