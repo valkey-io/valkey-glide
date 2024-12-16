@@ -71,13 +71,13 @@ func mapReadFrom(readFrom ReadFrom) protobuf.ReadFrom {
 }
 
 type baseClientConfiguration struct {
-	addresses      []NodeAddress
-	useTLS         bool
-	credentials    *ServerCredentials
-	readFrom       ReadFrom
-	requestTimeout int
+	addresses         []NodeAddress
+	useTLS            bool
+	credentials       *ServerCredentials
+	readFrom          ReadFrom
+	requestTimeout 	  int
 	connectionTimeout int
-	clientName     string
+	clientName        string
 }
 
 func (config *baseClientConfiguration) toProtobuf() *protobuf.ConnectionRequest {
@@ -227,7 +227,6 @@ func (config *GlideClientConfiguration) WithConnectionTimeout(connectionTimeout 
 	return config
 }
 
-
 // WithClientName sets the client name to be used for the client. Will be used with CLIENT SETNAME command during connection
 // establishment.
 func (config *GlideClientConfiguration) WithClientName(clientName string) *GlideClientConfiguration {
@@ -325,7 +324,6 @@ func (config *GlideClusterClientConfiguration) WithConnectionTimeout(connectionT
 	config.connectionTimeout = connectionTimeout
 	return config
 }
-
 
 // WithClientName sets the client name to be used for the client. Will be used with CLIENT SETNAME command during connection
 // establishment.
