@@ -52,5 +52,23 @@ func main() {
 	}
 	fmt.Println("GET(app\x00les):", result.Value())
 
+	res2, err := client.PfAdd("key1", []string{"value2", "value3", "value4"})
+	if err != nil {
+		log.Fatal("Glide example failed with an error: ", err)
+	}
+	fmt.Println("PfAdd res: ", res2.Value())
+
+	res2, err = client.PfAdd("key2", []string{"value2", "value3", "value4"})
+	if err != nil {
+		log.Fatal("Glide example failed with an error: ", err)
+	}
+	fmt.Println("PfAdd res: ", res2.Value())
+
+	res2, err = client.PfCount([]string{"key1", "key2"})
+	if err != nil {
+		log.Fatal("Glide example failed with an error: ", err)
+	}
+	fmt.Println("PfCount res: ", res2.Value())
+
 	client.Close()
 }
