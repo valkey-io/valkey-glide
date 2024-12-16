@@ -202,4 +202,27 @@ public class ConnectionTests {
         assertEquals(4, matchingEntries);
         azTestClient.close();
     }
+
+    /**
+     * Test that the client with AZ affinity strategy routes in a round-robin manner to all replicas
+     * within the specified AZ.
+     */
+    @SneakyThrows
+    @Test
+    public void test_connection_timeout() {
+        var client =
+                GlideClient.createClient(commonClientConfig().connectionTimeout(2000).build()).get();
+
+        assertEquals(client.set("key", "value").get(), "OK");
+
+        client.close();
+
+        var clusterClient =
+                GlideClusterClient.createClient(commonClusterClientConfig().connectionTimeout(2000).build())
+                        .get();
+
+        assertEquals(clusterClient.set("key", "value").get(), "OK");
+
+        clusterClient.close();
+    }
 }
