@@ -50,6 +50,7 @@ build-glide-client-debug:
 	cbindgen --config cbindgen.toml --crate glide-rs --output lib.h
 
 generate-protobuf:
+	rm -rf protobuf
 	mkdir -p protobuf
 	protoc --proto_path=../glide-core/src/protobuf \
 		--go_opt=Mconnection_request.proto=github.com/valkey-io/valkey-glide/go/protobuf \
