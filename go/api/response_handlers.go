@@ -280,6 +280,25 @@ func handleBooleanResponse(response *C.struct_CommandResponse) (Result[bool], er
 	return CreateBoolResult(bool(response.bool_value)), nil
 }
 
+func handleBooleanArrayResponse(response *C.struct_CommandResponse) ([]Result[bool], error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Array, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	slice := make([]Result[bool], 0, response.array_value_len)
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		err := checkResponseType(&v, C.Bool, false)
+		if err != nil {
+			return nil, err
+		}
+		slice = append(slice, CreateBoolResult(bool(v.bool_value)))
+	}
+	return slice, nil
+}
+
 func handleStringToStringMapResponse(response *C.struct_CommandResponse) (map[Result[string]]Result[string], error) {
 	defer C.free_command_response(response)
 
