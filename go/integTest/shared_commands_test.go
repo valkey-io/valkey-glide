@@ -2806,7 +2806,6 @@ func (suite *GlideTestSuite) TestDel_MultipleKeys() {
 	})
 }
 
-<<<<<<< HEAD
 func (suite *GlideTestSuite) TestExists() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
@@ -3458,7 +3457,7 @@ func (suite *GlideTestSuite) Test_Rename() {
 		suite.verifyOK(client.Set(key, initialValueRename))
 		client.Rename(key, newRenameKey)
 
-		//Test 2 Check if the renamenx command return flase if the key/newkey is invalid.
+		//Test 2 Check if the rename command return false if the key/newkey is invalid.
 		key1 := "{keyName}" + uuid.NewString()
 		res1, err := client.Rename(key1, "invalidKey")
 		assert.Equal(suite.T(), "", res1.Value())
