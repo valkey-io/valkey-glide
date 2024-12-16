@@ -3248,7 +3248,6 @@ func (suite *GlideTestSuite) TestPfAdd_SuccessfulAddition() {
 		res, err := client.PfAdd(key, []string{"a", "b", "c", "d", "e"})
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(1), res.Value())
-
 	})
 }
 
@@ -3256,7 +3255,7 @@ func (suite *GlideTestSuite) TestPfAdd_DuplicateElements() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 
-		//case : Add elements and add same elements again
+		// case : Add elements and add same elements again
 		res, err := client.PfAdd(key, []string{"a", "b", "c", "d", "e"})
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(1), res.Value())
@@ -3265,7 +3264,7 @@ func (suite *GlideTestSuite) TestPfAdd_DuplicateElements() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(0), res2.Value())
 
-		//case : (mixed elements) add new elements with 1 duplicate elements
+		// case : (mixed elements) add new elements with 1 duplicate elements
 		res1, err := client.PfAdd(key, []string{"f", "g", "h"})
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(1), res1.Value())
@@ -3274,7 +3273,7 @@ func (suite *GlideTestSuite) TestPfAdd_DuplicateElements() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(1), res2.Value())
 
-		//case : add empty array(no elements to the HyperLogLog)
+		// case : add empty array(no elements to the HyperLogLog)
 		res, err = client.PfAdd(key, []string{})
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(0), res.Value())
