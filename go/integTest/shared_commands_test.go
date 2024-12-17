@@ -2134,15 +2134,15 @@ func (suite *GlideTestSuite) TestSScan() {
 		// empty set
 		resCursor, resCollection, err := client.SScan(key1, initialCursor)
 		assert.NoError(t, err)
-		assert.Equal(t, initialCursor, resCursor)
-		assert.Empty(t, resCollection)
+		assert.Equal(t, initialCursor, resCursor.Value())
+		assert.Empty(t, resCollection.Value())
 
 		// negative cursor
 		if suite.serverVersion < "8.0.0" {
 			resCursor, resCollection, err = client.SScan(key1, "-1")
 			assert.NoError(t, err)
-			assert.Equal(t, initialCursor, resCursor)
-			assert.Empty(t, resCollection)
+			assert.Equal(t, initialCursor, resCursor.Value())
+			assert.Empty(t, resCollection.Value())
 		} else {
 			_, _, err = client.SScan(key1, "-1")
 			assert.NotNil(suite.T(), err)
@@ -2155,15 +2155,15 @@ func (suite *GlideTestSuite) TestSScan() {
 		assert.Equal(t, int64(len(charMembers)), res.Value())
 		resCursor, resCollection, err = client.SScan(key1, initialCursor)
 		assert.NoError(t, err)
-		assert.Equal(t, initialCursor, resCursor)
-		assert.Equal(t, len(charMembers), len(resCollection))
-		assert.True(t, isSubset(resCollection, charMembers))
+		assert.Equal(t, initialCursor, resCursor.Value())
+		assert.Equal(t, len(charMembers), len(resCollection.Value()))
+		assert.True(t, isSubset(resCollection.Value(), charMembers))
 
 		opts := api.NewBaseScanOptionsBuilder().SetMatch("a")
 		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
-		assert.Equal(t, initialCursor, resCursor)
-		assert.True(t, isSubset(resCollection, []string{"a"}))
+		assert.Equal(t, initialCursor, resCursor.Value())
+		assert.True(t, isSubset(resCollection.Value(), []string{"a"}))
 
 		// result contains a subset of the key
 		res, err = client.SAdd(key1, numMembers)
@@ -2171,40 +2171,41 @@ func (suite *GlideTestSuite) TestSScan() {
 		assert.Equal(t, int64(50000), res.Value())
 		resCursor, resCollection, err = client.SScan(key1, "0")
 		assert.NoError(t, err)
+		resultCollection := resCollection.Value()
 
 		// 0 is returned for the cursor of the last iteration
-		for resCursor != "0" {
-			nextCursor, nextCol, err := client.SScan(key1, resCursor)
+		for resCursor.Value() != "0" {
+			nextCursor, nextCol, err := client.SScan(key1, resCursor.Value())
 			assert.NoError(t, err)
 			assert.NotEqual(t, nextCursor, resCursor)
-			assert.False(t, isSubset(resCollection, nextCol))
-			resCollection = append(resCollection, nextCol...)
+			assert.False(t, isSubset(resultCollection, nextCol.Value()))
+			resultCollection = append(resultCollection, nextCol.Value()...)
 			resCursor = nextCursor
 		}
-		assert.NotEmpty(t, resCollection)
-		assert.True(t, isSubset(numMembers, resCollection))
-		assert.True(t, isSubset(charMembers, resCollection))
+		assert.NotEmpty(t, resultCollection)
+		assert.True(t, isSubset(numMembers, resultCollection))
+		assert.True(t, isSubset(charMembers, resultCollection))
 
 		// test match pattern
 		opts = api.NewBaseScanOptionsBuilder().SetMatch("*")
 		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
-		assert.NotEqual(t, initialCursor, resCursor)
-		assert.GreaterOrEqual(t, len(resCollection), defaultCount)
+		assert.NotEqual(t, initialCursor, resCursor.Value())
+		assert.GreaterOrEqual(t, len(resCollection.Value()), defaultCount)
 
 		// test count
 		opts = api.NewBaseScanOptionsBuilder().SetCount(20)
 		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
-		assert.NotEqual(t, initialCursor, resCursor)
-		assert.GreaterOrEqual(t, len(resCollection), 20)
+		assert.NotEqual(t, initialCursor, resCursor.Value())
+		assert.GreaterOrEqual(t, len(resCollection.Value()), 20)
 
 		// test count with match, returns a non-empty array
 		opts = api.NewBaseScanOptionsBuilder().SetMatch("1*").SetCount(20)
 		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
-		assert.NotEqual(t, initialCursor, resCursor)
-		assert.GreaterOrEqual(t, len(resCollection), 0)
+		assert.NotEqual(t, initialCursor, resCursor.Value())
+		assert.GreaterOrEqual(t, len(resCollection.Value()), 0)
 
 		// exceptions
 		// non-set key

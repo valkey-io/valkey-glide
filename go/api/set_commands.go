@@ -403,8 +403,8 @@ type SetCommands interface {
 	// 	 resCursor, resCol, err := client.sscan("key", "0")
 	//   for resCursor != "0" {
 	// 	 	resCursor, resCol, err = client.sscan("key", "0")
-	//   	fmt.Println("Cursor: ", resCursor)
-	//   	fmt.Println("Members: ", resCol)
+	//   	fmt.Println("Cursor: ", resCursor.Value())
+	//   	fmt.Println("Members: ", resCol.Value())
 	//   }
 	//   // Output:
 	// 	 // Cursor:  48
@@ -415,7 +415,7 @@ type SetCommands interface {
 	//   // Members:  ['47', '122', '1', '53', '10', '14', '80']
 	//
 	// [valkey.io]: https://valkey.io/commands/sscan/
-	SScan(key string, cursor string) (string, []string, error)
+	SScan(key string, cursor string) (Result[string], Result[[]string], error)
 
 	// Iterates incrementally over a set.
 	//
@@ -441,8 +441,8 @@ type SetCommands interface {
 	//   for resCursor != "0" {
 	//   	opts := api.NewBaseScanOptionsBuilder().SetMatch("*")
 	// 	 	resCursor, resCol, err = client.sscan("key", "0", opts)
-	//   	fmt.Println("Cursor: ", resCursor)
-	//   	fmt.Println("Members: ", resCol)
+	//   	fmt.Println("Cursor: ", resCursor.Value())
+	//   	fmt.Println("Members: ", resCol.Value())
 	//   }
 	//   // Output:
 	// 	 // Cursor:  48
@@ -453,7 +453,7 @@ type SetCommands interface {
 	//   // Members:  ['47', '122', '1', '53', '10', '14', '80']
 	//
 	// [valkey.io]: https://valkey.io/commands/sscan/
-	SScanWithOptions(key string, cursor string, options *BaseScanOptions) (string, []string, error)
+	SScanWithOptions(key string, cursor string, options *BaseScanOptions) (Result[string], Result[[]string], error)
 
 	// Moves `member` from the set at `source` to the set at `destination`, removing it from the source set.
 	// Creates a new destination set if needed. The operation is atomic.
@@ -472,7 +472,7 @@ type SetCommands interface {
 	//
 	// Example:
 	//	 moved := SMove("set1", "set2", "element")
-	//   fmt.Println(moved) // Output: true
+	//   fmt.Println(moved.Value()) // Output: true
 	//
 	// [valkey.io]: https://valkey.io/commands/smove/
 	SMove(source string, destination string, member string) (Result[bool], error)
