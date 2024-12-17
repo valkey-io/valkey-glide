@@ -12,7 +12,10 @@ use redis::cluster_routing::{
     MultipleNodeRoutingInfo, ResponsePolicy, Routable, RoutingInfo, SingleNodeRoutingInfo,
 };
 use redis::cluster_slotmap::ReadFromReplicaStrategy;
-use redis::{Cmd, ErrorKind, ObjectType, PushInfo, RedisError, RedisResult, ScanStateRC, Value};
+use redis::{
+    Cmd, ErrorKind, FromRedisValue, InfoDict, ObjectType, PushInfo, RedisError, RedisResult,
+    ScanStateRC, Value,
+};
 pub use standalone_client::StandaloneClient;
 use std::io;
 use std::sync::atomic::{AtomicIsize, Ordering};
@@ -25,6 +28,7 @@ mod reconnecting_connection;
 mod standalone_client;
 mod value_conversion;
 use tokio::sync::mpsc;
+use versions::Versioning;
 
 pub const HEARTBEAT_SLEEP_DURATION: Duration = Duration::from_secs(1);
 pub const DEFAULT_RETRIES: u32 = 3;
@@ -607,7 +611,7 @@ async fn create_cluster_client(
         };
         builder = builder.tls(tls);
     }
-    if let Some(pubsub_subscriptions) = redis_connection_info.pubsub_subscriptions {
+    if let Some(pubsub_subscriptions) = redis_connection_info.pubsub_subscriptions.clone() {
         builder = builder.pubsub_subscriptions(pubsub_subscriptions);
     }
 
@@ -615,7 +619,55 @@ async fn create_cluster_client(
     builder = builder.periodic_connections_checks(CONNECTION_CHECKS_INTERVAL);
 
     let client = builder.build()?;
-    client.get_async_connection(push_sender).await
+    let mut con = client.get_async_connection(push_sender).await?;
+
+    // This validation ensures that sharded subscriptions are not applied to Redis engines older than version 7.0,
+    // preventing scenarios where the client becomes inoperable or, worse, unaware that sharded pubsub messages are not being received.
+    // The issue arises because `client.get_async_connection()` might succeed even if the engine does not support sharded pubsub.
+    // For example, initial connections may exclude the target node for sharded subscriptions, allowing the creation to succeed,
+    // but subsequent resubscription tasks will fail when `setup_connection()` cannot establish a connection to the node.
+    //
+    // One approach to handle this would be to check the engine version inside `setup_connection()` and skip applying sharded subscriptions.
+    // However, this approach would leave the application unaware that the subscriptions were not applied, requiring the user to analyze logs to identify the issue.
+    // Instead, we explicitly check the engine version here and fail the connection creation if it is incompatible with sharded subscriptions.
+
+    if let Some(pubsub_subscriptions) = redis_connection_info.pubsub_subscriptions {
+        if pubsub_subscriptions.contains_key(&redis::PubSubSubscriptionKind::Sharded) {
+            let info_res = con
+                .route_command(
+                    redis::cmd("INFO").arg("SERVER"),
+                    RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random),
+                )
+                .await?;
+            let info_dict: InfoDict = FromRedisValue::from_redis_value(&info_res)?;
+            match info_dict.get::<String>("redis_version") {
+                Some(version) => match (Versioning::new(version), Versioning::new("7.0")) {
+                    (Some(server_ver), Some(min_ver)) => {
+                        if server_ver < min_ver {
+                            return Err(RedisError::from((
+                                ErrorKind::InvalidClientConfig,
+                                "Sharded subscriptions provided, but the engine version is < 7.0",
+                            )));
+                        }
+                    }
+                    _ => {
+                        return Err(RedisError::from((
+                            ErrorKind::ResponseError,
+                            "Failed to parse engine version",
+                        )))
+                    }
+                },
+                _ => {
+                    return Err(RedisError::from((
+                        ErrorKind::ResponseError,
+                        "Could not determine engine version from INFO result",
+                    )))
+                }
+            }
+        }
+    }
+
+    Ok(con)
 }
 
 #[derive(thiserror::Error)]
