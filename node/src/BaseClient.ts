@@ -12,7 +12,7 @@ import {
     valueFromSplitPointer,
 } from "glide-rs";
 import * as net from "net";
-import {Buffer,BufferWriter,Long,Reader,Writer} from "protobufjs";
+import { Buffer, BufferWriter, Long, Reader, Writer } from "protobufjs";
 import {
     AggregationType,
     BaseScanOptions,
@@ -242,13 +242,13 @@ import {
     TimeoutError,
     ValkeyError,
 } from "./Errors";
-import {GlideClientConfiguration} from "./GlideClient";
+import { GlideClientConfiguration } from "./GlideClient";
 import {
     GlideClusterClientConfiguration,
     RouteOption,
     Routes,
 } from "./GlideClusterClient";
-import {Logger} from "./Logger";
+import { Logger } from "./Logger";
 import {
     command_request,
     connection_request,
@@ -963,7 +963,8 @@ export class BaseClient {
         this.requestTimeout =
             options?.requestTimeout ?? DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS;
         this.connectionTimeout =
-            options?.connectionTimeout ?? DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS;
+            options?.connectionTimeout ??
+            DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS;
         this.socket = socket;
         this.socket
             .on("data", (data) => this.handleReadData(data))
