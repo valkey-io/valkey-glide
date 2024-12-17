@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/glide/api"
+	"github.com/valkey-io/valkey-glide/go/glide/utils"
 )
 
 const (
@@ -2157,13 +2158,13 @@ func (suite *GlideTestSuite) TestSScan() {
 		assert.NoError(t, err)
 		assert.Equal(t, initialCursor, resCursor.Value())
 		assert.Equal(t, len(charMembers), len(resCollection.Value()))
-		assert.True(t, isSubset(resCollection.Value(), charMembers))
+		assert.True(t, utils.IsSubset(resCollection.Value(), charMembers))
 
 		opts := api.NewBaseScanOptionsBuilder().SetMatch("a")
 		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
 		assert.Equal(t, initialCursor, resCursor.Value())
-		assert.True(t, isSubset(resCollection.Value(), []string{"a"}))
+		assert.True(t, utils.IsSubset(resCollection.Value(), []string{"a"}))
 
 		// result contains a subset of the key
 		res, err = client.SAdd(key1, numMembers)
@@ -2178,13 +2179,13 @@ func (suite *GlideTestSuite) TestSScan() {
 			nextCursor, nextCol, err := client.SScan(key1, resCursor.Value())
 			assert.NoError(t, err)
 			assert.NotEqual(t, nextCursor, resCursor)
-			assert.False(t, isSubset(resultCollection, nextCol.Value()))
+			assert.False(t, utils.IsSubset(resultCollection, nextCol.Value()))
 			resultCollection = append(resultCollection, nextCol.Value()...)
 			resCursor = nextCursor
 		}
 		assert.NotEmpty(t, resultCollection)
-		assert.True(t, isSubset(numMembers, resultCollection))
-		assert.True(t, isSubset(charMembers, resultCollection))
+		assert.True(t, utils.IsSubset(numMembers, resultCollection))
+		assert.True(t, utils.IsSubset(charMembers, resultCollection))
 
 		// test match pattern
 		opts = api.NewBaseScanOptionsBuilder().SetMatch("*")
@@ -2216,20 +2217,6 @@ func (suite *GlideTestSuite) TestSScan() {
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
-}
-
-// check if sliceA is a subset of sliceB
-func isSubset(sliceA, sliceB []string) bool {
-	setB := make(map[string]struct{})
-	for _, v := range sliceB {
-		setB[v] = struct{}{}
-	}
-	for _, v := range sliceA {
-		if _, found := setB[v]; !found {
-			return false
-		}
-	}
-	return true
 }
 
 func (suite *GlideTestSuite) TestLRange() {

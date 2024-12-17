@@ -389,7 +389,8 @@ type SetCommands interface {
 	// See [valkey.io] for details.
 	//
 	// Parameters:
-	//   key - The key of the set.	//   cursor - The cursor that points to the next iteration of results.
+	//   key - The key of the set.
+	//   cursor - The cursor that points to the next iteration of results.
 	//            A value of `"0"` indicates the start of the search.
 	//            For Valkey 8.0 and above, negative cursors are treated like the initial cursor("0").
 	//
