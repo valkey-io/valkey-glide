@@ -2033,7 +2033,7 @@ describe("GlideClusterClient", () => {
                 protocol,
                 { requestTimeout: 10000 },
             );
-            config.connectionTimeout=2000;
+            config.connectionTimeout = 2000;
             const client = await GlideClusterClient.createClient(config);
 
             // Verify that script kill raises an error when no script is running
