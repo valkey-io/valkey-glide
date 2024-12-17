@@ -1130,6 +1130,32 @@ func (client *baseClient) PTTL(key string) (Result[int64], error) {
 	return handleLongResponse(result)
 }
 
+func (client *baseClient) Unlink(keys []string) (Result[int64], error) {
+	result, err := client.executeCommand(C.Unlink, keys)
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) Type(key string) (Result[string], error) {
+	result, err := client.executeCommand(C.Type, []string{key})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNullResponse(result)
+}
+
+func (client *baseClient) Touch(keys []string) (Result[int64], error) {
+	result, err := client.executeCommand(C.Touch, keys)
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
 func (client *baseClient) Rename(key string, newKey string) (Result[string], error) {
 	result, err := client.executeCommand(C.Rename, []string{key, newKey})
 	if err != nil {
