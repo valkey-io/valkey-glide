@@ -44,13 +44,17 @@ func NewGlideClusterClient(config *GlideClusterClientConfiguration) (*GlideClust
 // For example:
 //
 //	result, err := client.CustomCommand([]string{"ping"})
-//	result.(string): "PONG"
+//	result.Value().(string): "PONG"
 //
 // [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
-func (client *GlideClusterClient) CustomCommand(args []string) (interface{}, error) {
+func (client *GlideClusterClient) CustomCommand(args []string) (ClusterValue, error) {
 	res, err := client.executeCommand(C.CustomCommand, args)
 	if err != nil {
-		return nil, err
+		return CreateEmptyClusterValue(), err
 	}
-	return handleInterfaceResponse(res)
+	data, err := handleInterfaceResponse(res)
+	if err != nil {
+		return CreateEmptyClusterValue(), err
+	}
+	return CreateClusterValue(data), nil
 }
