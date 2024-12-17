@@ -3447,6 +3447,7 @@ func (suite *GlideTestSuite) TestPTTL_WithExpiredKey() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(-2), resPTTL.Value())
 	})
+}
 
 func (suite *GlideTestSuite) Test_Rename() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
