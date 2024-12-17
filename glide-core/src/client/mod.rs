@@ -117,7 +117,6 @@ pub enum ClientWrapper {
 pub struct Client {
     internal_client: ClientWrapper,
     request_timeout: Duration,
-    connection_timeout: Duration,
     // Setting this counter to limit the inflight requests, in case of any queue is blocked, so we return error to the customer.
     inflight_requests_allowed: Arc<AtomicIsize>,
 }
@@ -540,10 +539,6 @@ impl Client {
             }
         }
     }
-
-    pub fn get_connection_timeout(&self) -> Duration {
-        self.connection_timeout
-    }
 }
 
 fn load_cmd(code: &[u8]) -> Cmd {
@@ -762,8 +757,6 @@ impl Client {
             sanitized_request_string(&request),
         );
         let request_timeout = to_duration(request.request_timeout, DEFAULT_RESPONSE_TIMEOUT);
-        let connection_timeout =
-            to_duration(request.connection_timeout, DEFAULT_CONNECTION_TIMEOUT);
         let inflight_requests_limit = request
             .inflight_requests_limit
             .unwrap_or(DEFAULT_MAX_INFLIGHT_REQUESTS);
@@ -787,7 +780,6 @@ impl Client {
             Ok(Self {
                 internal_client,
                 request_timeout,
-                connection_timeout,
                 inflight_requests_allowed,
             })
         })
