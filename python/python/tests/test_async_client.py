@@ -326,6 +326,50 @@ class TestGlideClients:
 
         await client.close()
 
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_connection_timeout_when_running_long_script(
+        self,
+        request,
+        cluster_mode: bool,
+        protocol: ProtocolVersion,
+    ):
+        # Create the first client to run a long-running Lua script
+        long_script_client = await create_client(
+            request,
+            cluster_mode,
+            protocol=protocol,
+            timeout=10000,  # 10 seconds timeout for the script execution
+        )
+
+        # Define a long-running Lua script (e.g., sleeps for 10 seconds)
+        long_script_code = create_long_running_lua_script(5)
+
+        # Function to run the long-running script
+        async def run_long_script():
+            await long_script_client.invoke_script(Script(long_script_code))
+
+        async def connect_to_client():
+            # Create a second client with a connection timeout of 5 seconds
+            timeout_client = await create_client(
+                request,
+                cluster_mode,
+                protocol=protocol,
+                timeout=5000,  # General timeout for operations
+                connection_timeout=7000,  # 5-second connection timeout
+            )
+
+            # Ensure the second client can connect and perform a simple operation
+            assert await timeout_client.set("key", "value") == "OK"
+
+            await timeout_client.close()
+
+        # Run the long script and attempt to connect concurrently
+        await asyncio.gather(run_long_script(), connect_to_client())
+
+        # Clean up both clients
+        await long_script_client.close()
+
 
 @pytest.mark.asyncio
 class TestCommands:
