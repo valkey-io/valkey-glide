@@ -3504,3 +3504,30 @@ func (suite *GlideTestSuite) TestUnlink() {
 		assert.Equal(suite.T(), int64(0), resultInvalidKey.Value(), "The unlink should be 0")
 	})
 }
+
+func (suite *GlideTestSuite) TestPersist() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		//Test 1: Check if persist command removes the expiration time of a key.
+		keyName := "{keyName}" + uuid.NewString()
+		suite.verifyOK(client.Set(keyName, initialValue))
+		resultExpire, err := client.Expire(keyName, 300)
+		assert.Nil(suite.T(), err)
+		assert.True(suite.T(), resultExpire.Value())
+		resultPersist, err := client.Persist(keyName)
+		assert.Nil(suite.T(), err)
+		assert.True(suite.T(), resultPersist.Value())
+
+		//Test 2: Check if persist command return false if key that doesnt have associated timeout.
+		keyNoExp := "{keyName}" + uuid.NewString()
+		suite.verifyOK(client.Set(keyNoExp, initialValue))
+		resultPersistNoExp, err := client.Persist(keyNoExp)
+		assert.Nil(suite.T(), err)
+		assert.False(suite.T(), resultPersistNoExp.Value())
+
+		//Test 3: Check if persist command return false if key not exist.
+		keyInvalid := "{invalidkey_forPersistTest}" + uuid.NewString()
+		resultInvalidKey, err := client.Persist(keyInvalid)
+		assert.Nil(suite.T(), err)
+		assert.False(suite.T(), resultInvalidKey.Value())
+	})
+}
