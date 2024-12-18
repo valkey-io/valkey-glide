@@ -1,4 +1,3 @@
-
 /* eslint no-undef: off */
 module.exports = {
     preset: "ts-jest",
@@ -29,5 +28,5 @@ module.exports = {
                 sort: "status",
             },
         ],
-    ]
+    ],
 };
