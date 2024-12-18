@@ -3,22 +3,14 @@
 package utils
 
 import (
-	"reflect"
 	"strconv"
 	"unsafe"
 )
 
 // Convert `s` of type `string` into `[]byte`
 func StringToBytes(s string) []byte {
-	if len(s) == 0 {
-		return nil
-	}
-	var b []byte
-	hdr := (*reflect.StringHeader)(unsafe.Pointer(&s))
-	sliceHeader := (*reflect.SliceHeader)(unsafe.Pointer(&b))
-	sliceHeader.Data = hdr.Data
-	sliceHeader.Len = hdr.Len
-	sliceHeader.Cap = hdr.Len
+	p := unsafe.StringData(s)
+	b := unsafe.Slice(p, len(s))
 	return b
 }
 

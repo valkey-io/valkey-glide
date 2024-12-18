@@ -28,7 +28,9 @@ func NewGlideClusterClient(config *GlideClusterClientConfiguration) (*GlideClust
 //
 // Paramters:
 //
-//	route - Specifies the routing configuration for the command. The client will route the command to the nodes defined by route.
+//	route - Specifies the routing configuration for the command. The client will route the command to the nodes defined by
+//
+// route.
 //
 // Return value:
 //
@@ -52,7 +54,9 @@ func (client *GlideClusterClient) PingWithRoute(route route) (Result[string], er
 //
 // Paramters:
 //
-//	route - Specifies the routing configuration for the command. The client will route the command to the nodes defined by route.
+//	route - Specifies the routing configuration for the command. The client will route the command to the nodes defined by
+//
+// route.
 //
 // Return value:
 //
