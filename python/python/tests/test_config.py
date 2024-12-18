@@ -77,15 +77,6 @@ def test_convert_config_with_azaffinity_to_protobuf():
 
 def test_connection_timeout_in_protobuf_request():
     connection_timeout = 5000  # in milliseconds
-    config = BaseClientConfiguration(
-        [NodeAddress("127.0.0.1")],
-        connection_timeout=connection_timeout,
-    )
-    request = config._create_a_protobuf_conn_request()
-
-    assert isinstance(request, ConnectionRequest)
-    assert request.connection_timeout == connection_timeout
-
     config = AdvancedGlideClientConfiguration(
         [NodeAddress("127.0.0.1")],
         connection_timeout=connection_timeout,
