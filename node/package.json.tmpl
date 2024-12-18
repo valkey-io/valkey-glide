@@ -1,0 +1,97 @@
+{
+    "name": "@valkey/valkey-glide-impl",
+    "description": "General Language Independent Driver for the Enterprise (GLIDE) for Valkey",
+    "main": "build-ts/index.js",
+    "module": "build-ts/index.js",
+    "types": "./build-ts/index.d.ts",
+    "type": "commonjs",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/valkey-io/valkey-glide.git"
+    },
+    "homepage": "https://github.com/valkey-io/valkey-glide#readme",
+    "dependencies": {
+        "glide-rs": "file:rust-client",
+        "long": "^5.2.3",
+        "npmignore": "^0.3.1",
+        "protobufjs": "^7.4.0"
+    },
+    "bundleDependencies": [
+        "glide-rs"
+    ],
+    "scripts": {
+        "build": "npm run prereq && npm run build-internal && npm run build-protobuf && npm run build-external",
+        "build:release": "npm run build-internal:release && npm run build-protobuf && npm run build-external:release",
+        "build:benchmark": "npm run build-internal:benchmark && npm run build-protobuf && npm run build-external",
+        "build-internal": "cd rust-client && npm run build",
+        "build-internal:release": "cd rust-client && npm run build:release",
+        "build-internal:benchmark": "cd rust-client && npm run build:benchmark",
+        "build-external": "rm -rf build-ts && tsc",
+        "build-external:release": "rm -rf build-ts && tsc --stripInternal",
+        "build-protobuf": "npm run compile-protobuf-files && npm run fix-protobuf-file",
+        "compile-protobuf-files": "cd src && pbjs -t static-module -o ProtobufMessage.js ../../glide-core/src/protobuf/*.proto && pbts -o ProtobufMessage.d.ts ProtobufMessage.js",
+        "clean": "rm -rf build-ts rust-client/target docs glide-logs rust-client/glide-rs.*.node rust-client/index.* src/ProtobufMessage.*",
+        "fix-protobuf-file": "replace 'this\\.encode\\(message, writer\\)\\.ldelim' 'this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim' src/ProtobufMessage.js",
+        "test": "npm run build-test-utils && jest --verbose --testPathIgnorePatterns='ServerModules'",
+        "test-dbg": "npm run build-test-utils && jest --runInBand",
+        "test-minimum": "npm run build-test-utils && jest --verbose --testNamePattern='^(.(?!(GlideJson|GlideFt|pubsub|kill)))*$'",
+        "test-modules": "npm run build-test-utils && jest --verbose --testNamePattern='(GlideJson|GlideFt)'",
+        "build-test-utils": "cd ../utils && npm i && npm run build",
+        "lint:fix": "npm run install-linting && npx eslint -c ../eslint.config.mjs --fix && npm run prettier:format",
+        "lint": "npm run install-linting && npx eslint -c ../eslint.config.mjs && npm run prettier:check:ci",
+        "install-linting": "cd ../ & npm install",
+        "prepack": "npmignore --auto",
+        "prereq": "npm install",
+        "prettier:check:ci": "npx prettier --check . --ignore-unknown '!**/*.{js,d.ts}'",
+        "prettier:format": "npx prettier --write . --ignore-unknown '!**/*.{js,d.ts}'"
+    },
+    "devDependencies": {
+        "@jest/globals": "^29.7.0",
+        "@types/jest": "^29.5.14",
+        "@types/minimist": "^1.2.5",
+        "@types/redis-server": "^1.2.2",
+        "@types/semver": "^7.5.8",
+        "@types/uuid": "^10.0.0",
+        "find-free-port": "^2.0.0",
+        "jest": "^29.7.0",
+        "jest-html-reporter": "^3.10.2",
+        "protobufjs-cli": "^1.1.3",
+        "redis-server": "^1.2.2",
+        "replace": "^1.2.2",
+        "semver": "^7.6.3",
+        "ts-jest": "^29.2.5",
+        "ts-node": "^10.9.2",
+        "typescript": "^5.6.3",
+        "uuid": "^11.0.3"
+    },
+    "author": "Valkey GLIDE Maintainers",
+    "license": "Apache-2.0",
+    "publishConfig": {
+        "${registry_scope}registry": "https://registry.npmjs.org/",
+        "ignore": [
+            "src/**",
+            "tests/",
+            "rust-client/**",
+            "!build-ts/**",
+            ".prettierignore",
+            "jest.config.js",
+            "hybrid-node-tests/**",
+            "docs/",
+            "DEVELOPER.md",
+            ".ort.yml",
+            "tsconfig.json",
+            "THIRD_PARTY_LICENSES_NODE"
+        ]
+    },
+    "//": [
+        "The fields below have been commented out and are only necessary for publishing the package."
+    ],
+    "///cpu": [
+        "${node_arch}"
+    ],
+    "///os": [
+        "${node_os}"
+    ],
+    "///name": "${scope}valkey-glide-${nativeStr}",
+    "///version": "${package_version}"
+}
