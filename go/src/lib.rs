@@ -11,7 +11,7 @@ use redis::cluster_routing::{
     MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
 };
 use glide_core::command_request::{
-    command, command_request, ClusterScan, Command, CommandRequest, Routes, SlotTypes, Transaction,
+     Routes, SlotTypes,
 };
 use glide_core::command_request::SimpleRoutes;
 use redis::cluster_routing::{ResponsePolicy, Routable};
@@ -551,8 +551,6 @@ pub unsafe extern "C" fn command(
 
     let route = Routes::parse_from_bytes(r_bytes).unwrap();
 
-            // println!("{}!", route); 
-
     client_adapter.runtime.spawn(async move {
         let result = client_clone.send_command(&cmd, get_route(route, Some(&cmd))).await;
         let client_adapter = unsafe { Box::leak(Box::from_raw(ptr_address as *mut ClientAdapter)) };
@@ -642,8 +640,8 @@ fn get_route(
                     port,
                 },
             )),
-            Err(err) => {
-                // log_warn("get route", format!("Failed to parse port: {err:?}"));
+            Err(_) => {
+                // TODO: Handle error propagation.
                 None
             }
         },
@@ -657,5 +655,5 @@ fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> SlotAddr {
         .map(|slot_type| match slot_type {
             SlotTypes::Primary => SlotAddr::Master,
             SlotTypes::Replica => SlotAddr::ReplicaRequired,
-        }).expect("reason")
+        }).expect("Received unexpected slot id type")
 }
