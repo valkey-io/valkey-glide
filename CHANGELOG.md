@@ -6,6 +6,7 @@
 * Java: Bump protobuf (protoc) version ([#2796](https://github.com/valkey-io/valkey-glide/pull/2796), [#2800](https://github.com/valkey-io/valkey-glide/pull/2800))
 * Go: Add `SInterStore` ([#2779](https://github.com/valkey-io/valkey-glide/issues/2779))
 * Node: Remove native package references for MacOs x64 architecture ([#2799](https://github.com/valkey-io/valkey-glide/issues/2799))
+* Go: Add `ZIncrBy` command ([#2830](https://github.com/valkey-io/valkey-glide/pull/2830))
 
 #### Breaking Changes
 
