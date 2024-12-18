@@ -2,21 +2,19 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 use glide_core::client::Client as GlideClient;
+use glide_core::command_request::SimpleRoutes;
+use glide_core::command_request::{Routes, SlotTypes};
 use glide_core::connection_request;
 use glide_core::errors;
 use glide_core::errors::RequestErrorType;
 use glide_core::request_type::RequestType;
 use glide_core::ConnectionRequest;
+use protobuf::Message;
 use redis::cluster_routing::{
     MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
 };
-use glide_core::command_request::{
-     Routes, SlotTypes,
-};
-use glide_core::command_request::SimpleRoutes;
 use redis::cluster_routing::{ResponsePolicy, Routable};
-use protobuf::Message;
-use redis::{RedisResult, Value, Cmd};
+use redis::{Cmd, RedisResult, Value};
 use std::slice::from_raw_parts;
 use std::{
     ffi::{c_void, CString},
@@ -524,7 +522,7 @@ pub unsafe extern "C" fn command(
     args: *const usize,
     args_len: *const c_ulong,
     route_bytes: *const u8,
-    route_bytes_len: usize,       
+    route_bytes_len: usize,
 ) {
     let client_adapter =
         unsafe { Box::leak(Box::from_raw(client_adapter_ptr as *mut ClientAdapter)) };
@@ -546,13 +544,14 @@ pub unsafe extern "C" fn command(
         cmd.arg(command_arg);
     }
 
-    let r_bytes =
-    unsafe { std::slice::from_raw_parts(route_bytes, route_bytes_len) };
+    let r_bytes = unsafe { std::slice::from_raw_parts(route_bytes, route_bytes_len) };
 
     let route = Routes::parse_from_bytes(r_bytes).unwrap();
 
     client_adapter.runtime.spawn(async move {
-        let result = client_clone.send_command(&cmd, get_route(route, Some(&cmd))).await;
+        let result = client_clone
+            .send_command(&cmd, get_route(route, Some(&cmd)))
+            .await;
         let client_adapter = unsafe { Box::leak(Box::from_raw(ptr_address as *mut ClientAdapter)) };
         let value = match result {
             Ok(value) => value,
@@ -589,10 +588,7 @@ pub unsafe extern "C" fn command(
     });
 }
 
-fn get_route(
-    route: Routes,
-    cmd: Option<&Cmd>,
-) -> Option<RoutingInfo> {
+fn get_route(route: Routes, cmd: Option<&Cmd>) -> Option<RoutingInfo> {
     use glide_core::command_request::routes::Value;
     let Some(route) = route.value.and_then(|route| Some(route)) else {
         return None;
@@ -603,19 +599,18 @@ fn get_route(
                 .and_then(|cmd| ResponsePolicy::for_command(&cmd))
         })
     };
-    match route{
+    match route {
         Value::SimpleRoutes(simple_route) => {
             let simple_route = simple_route.enum_value().unwrap();
             match simple_route {
-                SimpleRoutes::AllNodes => Some(RoutingInfo::MultiNode(
-                    (MultipleNodeRoutingInfo::AllNodes, get_response_policy(cmd)),
-                )),
-               SimpleRoutes::AllPrimaries => {
-                    Some(RoutingInfo::MultiNode((
-                        MultipleNodeRoutingInfo::AllMasters,
-                        get_response_policy(cmd),
-                    )))
-                }
+                SimpleRoutes::AllNodes => Some(RoutingInfo::MultiNode((
+                    MultipleNodeRoutingInfo::AllNodes,
+                    get_response_policy(cmd),
+                ))),
+                SimpleRoutes::AllPrimaries => Some(RoutingInfo::MultiNode((
+                    MultipleNodeRoutingInfo::AllMasters,
+                    get_response_policy(cmd),
+                ))),
                 SimpleRoutes::Random => {
                     Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random))
                 }
@@ -634,12 +629,10 @@ fn get_route(
             )),
         )),
         Value::ByAddressRoute(by_address_route) => match u16::try_from(by_address_route.port) {
-            Ok(port) => Some(RoutingInfo::SingleNode(
-                SingleNodeRoutingInfo::ByAddress {
-                    host: by_address_route.host.to_string(),
-                    port,
-                },
-            )),
+            Ok(port) => Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+                host: by_address_route.host.to_string(),
+                port,
+            })),
             Err(_) => {
                 // TODO: Handle error propagation.
                 None
@@ -655,5 +648,6 @@ fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> SlotAddr {
         .map(|slot_type| match slot_type {
             SlotTypes::Primary => SlotAddr::Master,
             SlotTypes::Replica => SlotAddr::ReplicaRequired,
-        }).expect("Received unexpected slot id type")
+        })
+        .expect("Received unexpected slot id type")
 }
