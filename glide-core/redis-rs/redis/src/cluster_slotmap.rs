@@ -202,7 +202,7 @@ impl SlotMap {
             .collect()
     }
 
-    pub(crate) fn get_node_address_for_slot(
+    pub(crate) fn node_address_for_slot(
         &self,
         slot: u16,
         slot_addr: SlotAddr,

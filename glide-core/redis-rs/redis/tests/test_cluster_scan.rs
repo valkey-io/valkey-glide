@@ -5,8 +5,12 @@ mod support;
 mod test_cluster_scan_async {
     use crate::support::*;
     use rand::Rng;
-    use redis::cluster_routing::{RoutingInfo, SingleNodeRoutingInfo};
-    use redis::{cmd, from_redis_value, ObjectType, RedisResult, ScanStateRC, Value};
+    use redis::cluster_routing::{
+        MultipleNodeRoutingInfo, ResponsePolicy, RoutingInfo, SingleNodeRoutingInfo,
+    };
+    use redis::{
+        cmd, from_redis_value, ClusterScanArgs, ObjectType, RedisResult, ScanStateRC, Value,
+    };
     use std::time::Duration;
 
     async fn kill_one_node(
@@ -49,7 +53,12 @@ mod test_cluster_scan_async {
     #[tokio::test]
     #[serial_test::serial]
     async fn test_async_cluster_scan() {
-        let cluster = TestClusterContext::new(3, 0);
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            3,
+            0,
+            |builder| builder.retries(1),
+            false,
+        );
         let mut connection = cluster.async_connection(None).await;
 
         // Set some keys
@@ -67,14 +76,14 @@ mod test_cluster_scan_async {
         let mut keys: Vec<String> = vec![];
         loop {
             let (next_cursor, scan_keys): (ScanStateRC, Vec<Value>) = connection
-                .cluster_scan(scan_state_rc, None, None)
+                .cluster_scan(scan_state_rc, ClusterScanArgs::default())
                 .await
                 .unwrap();
             scan_state_rc = next_cursor;
             let mut scan_keys = scan_keys
                 .into_iter()
                 .map(|v| from_redis_value(&v).unwrap())
-                .collect::<Vec<String>>(); // Change the type of `keys` to `Vec<String>`
+                .collect::<Vec<String>>();
             keys.append(&mut scan_keys);
             if scan_state_rc.is_finished() {
                 break;
@@ -91,7 +100,12 @@ mod test_cluster_scan_async {
     #[tokio::test]
     #[serial_test::serial] // test cluster scan with slot migration in the middle
     async fn test_async_cluster_scan_with_migration() {
-        let cluster = TestClusterContext::new(3, 0);
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            3,
+            0,
+            |builder| builder.retries(1),
+            false,
+        );
 
         let mut connection = cluster.async_connection(None).await;
         // Set some keys
@@ -114,7 +128,7 @@ mod test_cluster_scan_async {
         loop {
             count += 1;
             let (next_cursor, scan_keys): (ScanStateRC, Vec<Value>) = connection
-                .cluster_scan(scan_state_rc, None, None)
+                .cluster_scan(scan_state_rc, ClusterScanArgs::default())
                 .await
                 .unwrap();
             scan_state_rc = next_cursor;
@@ -189,18 +203,21 @@ mod test_cluster_scan_async {
         let mut keys: Vec<String> = Vec::new();
         let mut count = 0;
         let mut result: RedisResult<Value> = Ok(Value::Nil);
+        let mut next_cursor = ScanStateRC::new();
+        let mut scan_keys;
         loop {
             count += 1;
-            let scan_response: RedisResult<(ScanStateRC, Vec<Value>)> =
-                connection.cluster_scan(scan_state_rc, None, None).await;
-            let (next_cursor, scan_keys) = match scan_response {
-                Ok((cursor, keys)) => (cursor, keys),
+            let scan_response: RedisResult<(ScanStateRC, Vec<Value>)> = connection
+                .cluster_scan(scan_state_rc, ClusterScanArgs::default())
+                .await;
+            (next_cursor, scan_keys) = match scan_response {
+                Ok((cursor, keys)) => (cursor.clone(), keys),
                 Err(e) => {
                     result = Err(e);
                     break;
                 }
             };
-            scan_state_rc = next_cursor;
+            scan_state_rc = next_cursor.clone();
             keys.extend(scan_keys.into_iter().map(|v| from_redis_value(&v).unwrap()));
             if scan_state_rc.is_finished() {
                 break;
@@ -225,6 +242,47 @@ mod test_cluster_scan_async {
         }
         // We expect an error of finding address
         assert!(result.is_err());
+
+        // Test we can continue scanning after the fail using allow_non_covered_slots=true
+        scan_state_rc = next_cursor;
+        // config cluster to allow missing slots
+        let mut config_cmd = cmd("CONFIG");
+        config_cmd
+            .arg("SET")
+            .arg("cluster-require-full-coverage")
+            .arg("no");
+        let res: RedisResult<Value> = connection
+            .route_command(
+                &config_cmd,
+                RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None)),
+            )
+            .await;
+        print!("config result: {:?}", res);
+        let args = ClusterScanArgs::builder()
+            .allow_non_covered_slots(true)
+            .build();
+        loop {
+            let res = connection
+                .cluster_scan(scan_state_rc.clone(), args.clone())
+                .await;
+            let (next_cursor, scan_keys): (ScanStateRC, Vec<Value>) = match res {
+                Ok((cursor, keys)) => (cursor.clone(), keys),
+                Err(e) => {
+                    println!("error: {:?}", e);
+                    break;
+                }
+            };
+            scan_state_rc = next_cursor;
+            let mut scan_keys = scan_keys
+                .into_iter()
+                .map(|v| from_redis_value(&v).unwrap())
+                .collect::<Vec<String>>();
+            keys.append(&mut scan_keys);
+            if scan_state_rc.is_finished() {
+                break;
+            }
+        }
+        assert!(scan_state_rc.is_finished());
     }
 
     #[tokio::test]
@@ -268,8 +326,9 @@ mod test_cluster_scan_async {
         let mut count = 0;
         loop {
             count += 1;
-            let scan_response: RedisResult<(ScanStateRC, Vec<Value>)> =
-                connection.cluster_scan(scan_state_rc, None, None).await;
+            let scan_response: RedisResult<(ScanStateRC, Vec<Value>)> = connection
+                .cluster_scan(scan_state_rc, ClusterScanArgs::default())
+                .await;
             if scan_response.is_err() {
                 println!("error: {:?}", scan_response);
             }
@@ -439,12 +498,13 @@ mod test_cluster_scan_async {
         }
         // Scan the keys
         let mut scan_state_rc = ScanStateRC::new();
-        let mut keys: Vec<String> = Vec::new();
+        let mut keys: Vec<String> = vec![];
         let mut count = 0;
         loop {
             count += 1;
-            let scan_response: RedisResult<(ScanStateRC, Vec<Value>)> =
-                connection.cluster_scan(scan_state_rc, None, None).await;
+            let scan_response: RedisResult<(ScanStateRC, Vec<Value>)> = connection
+                .cluster_scan(scan_state_rc, ClusterScanArgs::default())
+                .await;
             if scan_response.is_err() {
                 println!("error: {:?}", scan_response);
             }
@@ -513,7 +573,7 @@ mod test_cluster_scan_async {
         let mut keys: Vec<String> = vec![];
         loop {
             let (next_cursor, scan_keys): (ScanStateRC, Vec<Value>) = connection
-                .cluster_scan(scan_state_rc, None, None)
+                .cluster_scan(scan_state_rc, ClusterScanArgs::default())
                 .await
                 .unwrap();
             scan_state_rc = next_cursor;
@@ -574,7 +634,7 @@ mod test_cluster_scan_async {
         let mut keys: Vec<String> = vec![];
         loop {
             let (next_cursor, scan_keys): (ScanStateRC, Vec<Value>) = connection
-                .cluster_scan(scan_state_rc, None, None)
+                .cluster_scan(scan_state_rc, ClusterScanArgs::default())
                 .await
                 .unwrap();
             scan_state_rc = next_cursor;
@@ -642,15 +702,20 @@ mod test_cluster_scan_async {
         let mut scan_state_rc = ScanStateRC::new();
         let mut keys: Vec<String> = vec![];
         loop {
+            let cluster_scan_args = ClusterScanArgs::builder()
+                .with_match_pattern("key:pattern:*")
+                .allow_non_covered_slots(false)
+                .build();
+
             let (next_cursor, scan_keys): (ScanStateRC, Vec<Value>) = connection
-                .cluster_scan_with_pattern(scan_state_rc, "key:pattern:*", None, None)
+                .cluster_scan(scan_state_rc, cluster_scan_args)
                 .await
                 .unwrap();
             scan_state_rc = next_cursor;
             let mut scan_keys = scan_keys
                 .into_iter()
                 .map(|v| from_redis_value(&v).unwrap())
-                .collect::<Vec<String>>(); // Change the type of `keys` to `Vec<String>`
+                .collect::<Vec<String>>();
             keys.append(&mut scan_keys);
             if scan_state_rc.is_finished() {
                 break;
@@ -665,7 +730,7 @@ mod test_cluster_scan_async {
         for key in expected_keys.iter() {
             assert!(keys.contains(key));
         }
-        assert!(keys.len() == expected_keys.len());
+        assert_eq!(keys.len(), expected_keys.len());
     }
 
     #[tokio::test]
@@ -701,15 +766,20 @@ mod test_cluster_scan_async {
         let mut scan_state_rc = ScanStateRC::new();
         let mut keys: Vec<String> = vec![];
         loop {
+            let cluster_scan_args = ClusterScanArgs::builder()
+                .with_object_type(ObjectType::Set)
+                .allow_non_covered_slots(false)
+                .build();
+
             let (next_cursor, scan_keys): (ScanStateRC, Vec<Value>) = connection
-                .cluster_scan(scan_state_rc, None, Some(ObjectType::Set))
+                .cluster_scan(scan_state_rc, cluster_scan_args)
                 .await
                 .unwrap();
             scan_state_rc = next_cursor;
             let mut scan_keys = scan_keys
                 .into_iter()
                 .map(|v| from_redis_value(&v).unwrap())
-                .collect::<Vec<String>>(); // Change the type of `keys` to `Vec<String>`
+                .collect::<Vec<String>>();
             keys.append(&mut scan_keys);
             if scan_state_rc.is_finished() {
                 break;
@@ -724,7 +794,7 @@ mod test_cluster_scan_async {
         for key in expected_keys.iter() {
             assert!(keys.contains(key));
         }
-        assert!(keys.len() == expected_keys.len());
+        assert_eq!(keys.len(), expected_keys.len());
     }
 
     #[tokio::test]
@@ -755,24 +825,35 @@ mod test_cluster_scan_async {
         let mut keys: Vec<String> = vec![];
         let mut comparing_times = 0;
         loop {
+            let cluster_scan_args = ClusterScanArgs::builder()
+                .with_count(100)
+                .allow_non_covered_slots(false)
+                .build();
+
+            let cluster_scan_args_no_count = ClusterScanArgs::builder()
+                .allow_non_covered_slots(false)
+                .build();
+
             let (next_cursor, scan_keys): (ScanStateRC, Vec<Value>) = connection
-                .cluster_scan(scan_state_rc.clone(), Some(100), None)
+                .cluster_scan(scan_state_rc.clone(), cluster_scan_args)
                 .await
                 .unwrap();
+
             let (_, scan_without_count_keys): (ScanStateRC, Vec<Value>) = connection
-                .cluster_scan(scan_state_rc, Some(100), None)
+                .cluster_scan(scan_state_rc, cluster_scan_args_no_count)
                 .await
                 .unwrap();
+
             if !scan_keys.is_empty() && !scan_without_count_keys.is_empty() {
                 assert!(scan_keys.len() >= scan_without_count_keys.len());
-
                 comparing_times += 1;
             }
+
             scan_state_rc = next_cursor;
             let mut scan_keys = scan_keys
                 .into_iter()
                 .map(|v| from_redis_value(&v).unwrap())
-                .collect::<Vec<String>>(); // Change the type of `keys` to `Vec<String>`
+                .collect::<Vec<String>>();
             keys.append(&mut scan_keys);
             if scan_state_rc.is_finished() {
                 break;
@@ -788,7 +869,7 @@ mod test_cluster_scan_async {
         for key in expected_keys.iter() {
             assert!(keys.contains(key));
         }
-        assert!(keys.len() == expected_keys.len());
+        assert_eq!(keys.len(), expected_keys.len());
     }
 
     #[tokio::test]
@@ -821,8 +902,9 @@ mod test_cluster_scan_async {
         let mut count = 0;
         loop {
             count += 1;
-            let scan_response: RedisResult<(ScanStateRC, Vec<Value>)> =
-                connection.cluster_scan(scan_state_rc, None, None).await;
+            let scan_response: RedisResult<(ScanStateRC, Vec<Value>)> = connection
+                .cluster_scan(scan_state_rc, ClusterScanArgs::default())
+                .await;
             if scan_response.is_err() {
                 println!("error: {:?}", scan_response);
             }
@@ -835,7 +917,7 @@ mod test_cluster_scan_async {
             if count == 5 {
                 drop(cluster);
                 let scan_response: RedisResult<(ScanStateRC, Vec<Value>)> = connection
-                    .cluster_scan(scan_state_rc.clone(), None, None)
+                    .cluster_scan(scan_state_rc.clone(), ClusterScanArgs::default())
                     .await;
                 assert!(scan_response.is_err());
                 break;
@@ -844,8 +926,9 @@ mod test_cluster_scan_async {
         cluster = TestClusterContext::new(3, 0);
         connection = cluster.async_connection(None).await;
         loop {
-            let scan_response: RedisResult<(ScanStateRC, Vec<Value>)> =
-                connection.cluster_scan(scan_state_rc, None, None).await;
+            let scan_response: RedisResult<(ScanStateRC, Vec<Value>)> = connection
+                .cluster_scan(scan_state_rc, ClusterScanArgs::default())
+                .await;
             if scan_response.is_err() {
                 println!("error: {:?}", scan_response);
             }
@@ -856,5 +939,247 @@ mod test_cluster_scan_async {
                 break;
             }
         }
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    /// Test a case where a node is killed, key set into the cluster, and the client is still able to scan all keys
+    async fn test_async_cluster_scan_uncovered_slots_of_missing_node() {
+        // Create a cluster with 3 nodes
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            3,
+            0,
+            |builder| builder.retries(0),
+            false,
+        );
+        let mut connection = cluster.async_connection(None).await;
+
+        let mut config_cmd = cmd("CONFIG");
+        config_cmd
+            .arg("SET")
+            .arg("cluster-require-full-coverage")
+            .arg("no");
+        let _: RedisResult<Value> = connection
+            .route_command(
+                &config_cmd,
+                RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None)),
+            )
+            .await;
+        // Kill one node
+        let mut cluster_nodes = cluster.get_cluster_nodes().await;
+        let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
+        let killed_node_routing = kill_one_node(&cluster, slot_distribution.clone()).await;
+        let ready = cluster.wait_for_fail_to_finish(&killed_node_routing).await;
+        match ready {
+            Ok(_) => {}
+            Err(e) => {
+                println!("error: {:?}", e);
+            }
+        }
+
+        // Compare slot distribution before and after killing a node
+        cluster_nodes = cluster.get_cluster_nodes().await;
+        let new_slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
+        assert_ne!(slot_distribution, new_slot_distribution);
+        let mut excepted_keys: Vec<String> = vec![];
+        // Set some keys
+        for i in 0..100 {
+            let key = format!("key{}", i);
+            let res: Result<(), redis::RedisError> = redis::cmd("SET")
+                .arg(&key)
+                .arg("value")
+                .query_async(&mut connection)
+                .await;
+            if res.is_ok() {
+                excepted_keys.push(key);
+            }
+        }
+
+        // Scan the keys
+        let mut scan_state_rc = ScanStateRC::new();
+        let mut keys: Vec<String> = vec![];
+        let args = ClusterScanArgs::builder()
+            .allow_non_covered_slots(true)
+            .build();
+        loop {
+            let (next_cursor, scan_keys): (ScanStateRC, Vec<Value>) = connection
+                .cluster_scan(scan_state_rc, args.clone())
+                .await
+                .unwrap();
+            scan_state_rc = next_cursor;
+            let mut scan_keys = scan_keys
+                .into_iter()
+                .map(|v| from_redis_value(&v).unwrap())
+                .collect::<Vec<String>>(); // Change the type of `keys` to `Vec<String>`
+            keys.append(&mut scan_keys);
+            if scan_state_rc.is_finished() {
+                break;
+            }
+        }
+        // Check if all keys available scanned
+        keys.sort();
+        keys.dedup();
+        excepted_keys.sort();
+        excepted_keys.dedup();
+        for key in excepted_keys.iter() {
+            assert!(keys.contains(key));
+        }
+        assert!(keys.len() > 0);
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    /// Test scanning after killing a node and compare with "KEYS *" from remaining nodes
+    async fn test_async_cluster_scan_after_node_killed() {
+        // Create a cluster with 3 nodes
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            3,
+            0,
+            |builder| builder.retries(0),
+            false,
+        );
+        let mut connection = cluster.async_connection(None).await;
+
+        // Set cluster-require-full-coverage to no
+        let mut config_cmd = cmd("CONFIG");
+        config_cmd
+            .arg("SET")
+            .arg("cluster-require-full-coverage")
+            .arg("no");
+        let _: RedisResult<Value> = connection
+            .route_command(
+                &config_cmd,
+                RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None)),
+            )
+            .await;
+
+        for i in 0..100 {
+            let key = format!("key{}", i);
+            let _res: RedisResult<()> = redis::cmd("SET")
+                .arg(&key)
+                .arg("value")
+                .query_async(&mut connection)
+                .await;
+        }
+
+        // Kill one node
+        let cluster_nodes = cluster.get_cluster_nodes().await;
+        let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
+        let killed_node_routing = kill_one_node(&cluster, slot_distribution.clone()).await;
+        let ready = cluster.wait_for_fail_to_finish(&killed_node_routing).await;
+        match ready {
+            Ok(_) => {}
+            Err(e) => {
+                println!("error: {:?}", e);
+            }
+        }
+
+        // Scan the keys
+        let mut scan_state_rc = ScanStateRC::new();
+        let mut keys: Vec<String> = vec![];
+        let args = ClusterScanArgs::builder()
+            .allow_non_covered_slots(true)
+            .build();
+        loop {
+            let (next_cursor, scan_keys): (ScanStateRC, Vec<Value>) = connection
+                .cluster_scan(scan_state_rc, args.clone())
+                .await
+                .unwrap();
+            scan_state_rc = next_cursor;
+            let mut scan_keys = scan_keys
+                .into_iter()
+                .map(|v| from_redis_value(&v).unwrap())
+                .collect::<Vec<String>>(); // Change the type of `keys` to `Vec<String>`
+            keys.append(&mut scan_keys);
+            if scan_state_rc.is_finished() {
+                break;
+            }
+        }
+
+        // Get keys from remaining nodes using "KEYS *"
+        let mut keys_from_keys_command: Vec<String> = Vec::new();
+        let key_res: RedisResult<Value> = connection
+            .route_command(
+                cmd("KEYS").arg("*"),
+                RoutingInfo::MultiNode((
+                    MultipleNodeRoutingInfo::AllNodes,
+                    Some(ResponsePolicy::CombineArrays),
+                )),
+            )
+            .await;
+        if let Ok(value) = key_res {
+            let values: Vec<Value> = from_redis_value(&value).unwrap();
+            keys_from_keys_command
+                .extend(values.into_iter().map(|v| from_redis_value(&v).unwrap()));
+        }
+
+        // Sort and dedup keys
+        keys.sort();
+        keys.dedup();
+        keys_from_keys_command.sort();
+        keys_from_keys_command.dedup();
+
+        // Check if scanned keys match keys from "KEYS *"
+        assert_eq!(keys, keys_from_keys_command);
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    /// Test scanning with allow_non_covered_slots as false after killing a node
+    async fn test_async_cluster_scan_uncovered_slots_fail() {
+        // Create a cluster with 3 nodes
+        let cluster = TestClusterContext::new_with_cluster_client_builder(
+            3,
+            0,
+            |builder| builder.retries(0),
+            false,
+        );
+        let mut connection = cluster.async_connection(None).await;
+
+        // Kill one node
+        let cluster_nodes = cluster.get_cluster_nodes().await;
+        let slot_distribution = cluster.get_slots_ranges_distribution(&cluster_nodes);
+        let killed_node_routing = kill_one_node(&cluster, slot_distribution.clone()).await;
+        let ready = cluster.wait_for_fail_to_finish(&killed_node_routing).await;
+        match ready {
+            Ok(_) => {}
+            Err(e) => {
+                println!("error: {:?}", e);
+            }
+        }
+
+        for i in 0..100 {
+            let key = format!("key{}", i);
+            let _res: RedisResult<()> = redis::cmd("SET")
+                .arg(&key)
+                .arg("value")
+                .query_async(&mut connection)
+                .await;
+        }
+
+        // Try scanning with allow_non_covered_slots as false
+        let mut scan_state_rc = ScanStateRC::new();
+        let mut had_error = false;
+        loop {
+            let result = connection
+                .cluster_scan(scan_state_rc.clone(), ClusterScanArgs::default())
+                .await;
+
+            match result {
+                Ok((next_cursor, _)) => {
+                    scan_state_rc = next_cursor;
+                    if scan_state_rc.is_finished() {
+                        break;
+                    }
+                }
+                Err(e) => {
+                    had_error = true;
+                    assert_eq!(e.kind(), redis::ErrorKind::NotAllSlotsCovered);
+                    break;
+                }
+            }
+        }
+
+        assert!(had_error);
     }
 }
