@@ -1,6 +1,6 @@
 module github.com/valkey-io/valkey-glide/go/glide/benchmarks
 
-go 1.18
+go 1.20
 
 replace github.com/valkey-io/valkey-glide/go/glide => ../
 

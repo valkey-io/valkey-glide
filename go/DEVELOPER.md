@@ -105,7 +105,7 @@ Before starting this step, make sure you've installed all software requirements.
     git clone --branch ${VERSION} https://github.com/valkey-io/valkey-glide.git
     cd valkey-glide
     ```
-2. Initialize git submodule:
+2. Initialize git submodules:
     ```bash
     git submodule update --init --recursive
     ```
@@ -134,8 +134,8 @@ Before starting this step, make sure you've installed all software requirements.
     ```bash
     # For go1.22:
     make install-dev-tools
-    # For go1.18:
-    make install-dev-tools-go1.18
+    # For go1.20:
+    make install-dev-tools-go1.20
     ```
 
 ### Test
@@ -163,7 +163,7 @@ go test -race ./... -run TestConnectionRequestProtobufGeneration_allFieldsSet -v
 After pulling new changes, ensure that you update the submodules by running the following command:
 
 ```bash
-git submodule update
+git submodule update --init --recursive
 ```
 
 ### Generate protobuf files
@@ -201,8 +201,8 @@ Run from the main `/go` folder
     ```bash
     # For go1.22:
     make install-dev-tools
-    # For go1.18:
-    make install-dev-tools-go1.18
+    # For go1.22:
+    make install-dev-tools-go1.22
 
     make lint
     ```

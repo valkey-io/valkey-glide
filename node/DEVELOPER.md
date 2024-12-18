@@ -65,11 +65,8 @@ Before starting this step, make sure you've installed all software requirments.
     git clone https://github.com/valkey-io/valkey-glide.git
     cd valkey-glide
     ```
-2. Initialize git submodule:
-    ```bash
-    git submodule update --init --recursive
-    ```
-3. Install all node dependencies:
+2. Install all node dependencies:
+
     ```bash
     cd node
     npm i
@@ -77,7 +74,8 @@ Before starting this step, make sure you've installed all software requirments.
     npm i
     cd ..
     ```
-4. Build the Node wrapper (Choose a build option from the following and run it from the `node` folder):
+
+3. Build the Node wrapper (Choose a build option from the following and run it from the `node` folder):
 
     1. Build in release mode, stripped from all debug symbols (optimized and minimized binary size):
 
@@ -99,14 +97,14 @@ Before starting this step, make sure you've installed all software requirments.
 
     Once building completed, you'll find the compiled JavaScript code in the`./build-ts` folder.
 
-5. Run tests:
+4. Run tests:
     1. Ensure that you have installed server and valkey-cli on your host. You can download Valkey at the following link: [Valkey Download page](https://valkey.io/download/).
     2. Execute the following command from the node folder:
         ```bash
         npm run build # make sure we have a debug build compiled first
         npm test
         ```
-6. Integrating the built GLIDE package into your project:
+5. Integrating the built GLIDE package into your project:
    Add the package to your project using the folder path with the command `npm install <path to GLIDE>/node`.
 
 -   For a fast build, execute `npm run build`. This will perform a full, unoptimized build, which is suitable for developing tests. Keep in mind that performance is significantly affected in an unoptimized build, so it's required to build with the `build:release` or `build:benchmark` option when measuring performance.
@@ -128,18 +126,64 @@ To run tests, use the following command:
 npm test
 ```
 
-To execute a specific test, include the [`testNamePattern`](https://jestjs.io/docs/cli#--testnamepatternregex) option. For example:
+Simplified test suite skips few time consuming tests and runs faster:
 
 ```bash
-npm run test -- --testNamePattern="transaction"
+npm test-minimum
+```
+
+To execute a specific test, use the [`testNamePattern`](https://jestjs.io/docs/cli#--testnamepatternregex) option with `test-dbg` script. For example:
+
+```bash
+npm run test-dbg -- --testNamePattern="transaction"
 ```
 
 IT suite starts the server for testing - standalone and cluster installation using `cluster_manager` script.
 To run the integration tests with existing servers, run the following command:
 
 ```bash
-npm run test -- --cluster-endpoints=localhost:7000 --standalone-endpoints=localhost:6379
+npm run test-dbg -- --cluster-endpoints=localhost:7000 --standalone-endpoints=localhost:6379
+
+# If those endpoints use TLS, add `--tls=true` (applies to both endpoints)
+npm run test-dbg -- --cluster-endpoints=localhost:7000 --standalone-endpoints=localhost:6379 --tls=true
 ```
+
+Parameters `cluster-endpoints`, `standalone-endpoints` and `tls` could be used with all test suites.
+
+By default, the server modules tests do not run using `npm run test`. This test suite also does not start the server.
+In order to run these tests, use:
+
+```bash
+npm run test-modules -- --cluster-endpoints=<address>:<port>
+```
+Note: these tests don't run with standalone server as of now.
+
+### REPL (interactive shell)
+
+It is possible to run an interactive shell synced with the currect client code to test and debug it:
+
+```bash
+npx ts-node --project tsconfig.json
+```
+
+This shell allows executing typescript and javascript code line by line:
+
+```typescript
+import { GlideClient, GlideClusterClient } from ".";
+let client = await GlideClient.createClient({
+    addresses: [{ host: "localhost", port: 6379 }],
+});
+let clusterClient = await GlideClusterClient.createClient({
+    addresses: [{ host: "localhost", port: 7000 }],
+});
+await client.ping();
+```
+
+After applying changes in client code you need to restart the shell.
+
+It has command history and bash-like search (`Ctrl+R`).
+
+Shell hangs on exit (`Ctrl+D`) if you don't close the clients. Use `Ctrl+C` to kill it and/or close clients before exit.
 
 ### Submodules
 
@@ -173,7 +217,7 @@ Development on the Node wrapper may involve changes in either the TypeScript or 
     # Run from the node folder
     npm run lint
     # To automatically apply ESLint and/or prettier recommendations
-    npx run lint:fix
+    npm run lint:fix
     ```
 
 2. Rust

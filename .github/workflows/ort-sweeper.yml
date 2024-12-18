@@ -1,0 +1,57 @@
+name: ORT - Trigger periodic checks for relevant branches
+
+on:
+    schedule:
+        - cron: "0 0 * * *" # Runs daily at 00:00 UTC
+
+jobs:
+    trigger-ort-check:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Fetch relevant branches
+              id: get-branches
+              run: |
+                  # Get all branches matching 'release-*' and include 'main'
+                  branches=$(git ls-remote --heads origin | awk -F'/' '/refs\/heads\/release-/ {printf $NF" "}')
+                  branches="main $branches"
+                  echo "::set-output name=branches::$branches"
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Trigger ORT Check workflows
+              uses: actions/github-script@v6
+              with:
+                  script: |
+                      const branches = "${{ steps.get-branches.outputs.branches }}".split(" ");
+                      const workflowFile = "ort.yml";
+
+                      const triggerWorkflow = async (branch) => {
+                        try {
+                          console.log(`Triggering workflow for branch: ${branch}`);
+                          await github.rest.actions.createWorkflowDispatch({
+                            owner: context.repo.owner,
+                            repo: context.repo.repo,
+                            workflow_id: workflowFile,
+                            ref: branch, // The branch where workflow_dispatch is triggered
+                            inputs: {
+                              branch_name: branch
+                            }
+                          });
+                          console.log(`Successfully triggered workflow for branch: ${branch}`);
+                        } catch (error) {
+                          core.setFailed(error.message);
+                        }
+                      };
+
+                      // Fire all workflow dispatch requests concurrently
+                      const promises = branches
+                        .filter(branch => branch) // Skip empty branches
+                        .map(branch => triggerWorkflow(branch));
+
+                      await Promise.allSettled(promises);
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -10,8 +10,8 @@
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
         "clean": "rm -rf build-ts/",
-        "copy-declaration-files": "cp ../../build-ts/*.d.ts build-ts/ && cp ../../build-ts/src/*.d.ts build-ts/src/",
-        "build": "tsc && mkdir -p build-ts/src && npm run copy-declaration-files"
+        "copy-declaration-files": "cp ../../build-ts/*.d.ts build-ts/ && cp ../../build-ts/src/*.d.ts build-ts/src/ && cp ../../build-ts/src/server-modules/*.d.ts build-ts/src/server-modules/",
+        "build": "tsc && mkdir -p build-ts/src && mkdir -p build-ts/src/server-modules && npm run copy-declaration-files"
     },
     "files": [
         "/build-ts"
@@ -41,7 +41,6 @@
     },
     "optionalDependencies": {
         "${scope}valkey-glide-darwin-arm64": "${package_version}",
-        "${scope}valkey-glide-darwin-x64": "${package_version}",
         "${scope}valkey-glide-linux-arm64": "${package_version}",
         "${scope}valkey-glide-linux-x64": "${package_version}",
         "${scope}valkey-glide-linux-musl-arm64": "${package_version}",
