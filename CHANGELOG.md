@@ -1,6 +1,8 @@
 #### Changes
+
 * Java: Bump protobuf (protoc) version ([#2561](https://github.com/valkey-io/valkey-glide/pull/2561), [#2802](https://github.com/valkey-io/valkey-glide/pull/2802)
 * Java: bump `netty` version ([#2777](https://github.com/valkey-io/valkey-glide/pull/2777))
+* Node: Remove native package references for MacOs x64 architecture ([#2799](https://github.com/valkey-io/valkey-glide/issues/2799))
 
 #### Breaking Changes
 
@@ -13,6 +15,7 @@
 ## 1.2.0 (2024-11-27)
 
 #### Changes
+
 * Node: Client API for retrieving internal statistics ([#2727](https://github.com/valkey-io/valkey-glide/pull/2727))
 * Python: Client API for retrieving internal statistics ([#2707](https://github.com/valkey-io/valkey-glide/pull/2707))
 * Node, Python, Java: Adding support for replacing connection configured password ([#2651](https://github.com/valkey-io/valkey-glide/pull/2651), [#2659](https://github.com/valkey-io/valkey-glide/pull/2659), [#2677](https://github.com/valkey-io/valkey-glide/pull/2677))
@@ -107,7 +110,9 @@
 
 #### Breaking Changes
 
+
 #### Fixes
+
 * Core: UDS Socket Handling Rework ([#2482](https://github.com/valkey-io/valkey-glide/pull/2482))
 
 #### Operational Enhancements
