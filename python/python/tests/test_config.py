@@ -1,6 +1,8 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 from glide.config import (
+    AdvancedGlideClientConfiguration,
+    AdvancedGlideClusterClientConfiguration,
     BaseClientConfiguration,
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
@@ -84,7 +86,7 @@ def test_connection_timeout_in_protobuf_request():
     assert isinstance(request, ConnectionRequest)
     assert request.connection_timeout == connection_timeout
 
-    config = GlideClientConfiguration(
+    config = AdvancedGlideClientConfiguration(
         [NodeAddress("127.0.0.1")],
         connection_timeout=connection_timeout,
     )
@@ -93,7 +95,7 @@ def test_connection_timeout_in_protobuf_request():
     assert isinstance(request, ConnectionRequest)
     assert request.connection_timeout == connection_timeout
 
-    config = GlideClusterClientConfiguration(
+    config = AdvancedGlideClusterClientConfiguration(
         [NodeAddress("127.0.0.1")],
         connection_timeout=connection_timeout,
     )
