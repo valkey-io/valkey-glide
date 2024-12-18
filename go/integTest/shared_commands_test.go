@@ -3504,3 +3504,42 @@ func (suite *GlideTestSuite) TestUnlink() {
 		assert.Equal(suite.T(), int64(0), resultInvalidKey.Value(), "The unlink should be 0")
 	})
 }
+
+func (suite *GlideTestSuite) Test_Rename() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		// Test 1 Check if the command successfully renamed
+		key := "{keyName}" + uuid.NewString()
+		initialValueRename := "TestRename_RenameValue"
+		newRenameKey := "{newkeyName}" + uuid.NewString()
+		suite.verifyOK(client.Set(key, initialValueRename))
+		client.Rename(key, newRenameKey)
+
+		// Test 2 Check if the rename command return false if the key/newkey is invalid.
+		key1 := "{keyName}" + uuid.NewString()
+		res1, err := client.Rename(key1, "invalidKey")
+		assert.Equal(suite.T(), "", res1.Value())
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestRenamenx() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		// Test 1 Check if the renamenx command return true if key was renamed to newKey
+		key := "{keyName}" + uuid.NewString()
+		key2 := "{keyName}" + uuid.NewString()
+		suite.verifyOK(client.Set(key, initialValue))
+		res1, err := client.Renamenx(key, key2)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), true, res1.Value())
+
+		// Test 2 Check if the renamenx command return false if newKey already exists.
+		key3 := "{keyName}" + uuid.NewString()
+		key4 := "{keyName}" + uuid.NewString()
+		suite.verifyOK(client.Set(key3, initialValue))
+		suite.verifyOK(client.Set(key4, initialValue))
+		res2, err := client.Renamenx(key3, key4)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), false, res2.Value())
+	})
+}
