@@ -107,17 +107,18 @@ Before starting this step, make sure you've installed all software requirments.
 5. Integrating the built GLIDE package into your project:
    Add the package to your project using the folder path with the command `npm install <path to GLIDE>/node`.
 
-6. Testing the GLIDE npm package:
+6. Testing the GLIDE npm package locally:
    The `node/npm/glide` folder contains a package wrapper that re-exports all the native bindings. To build and test this package, follow these steps:
 
     ```bash
 
      Build node package:
-     co node
+     cd node
      export nativeStr=darwin-x64; export scope=@valkey/;
      envsubst < package.json.tmpl > "package.json"
      npm run build
      npm run build:release
+
      In npm/glide package run the following commands:
      cd ../npm/glide
      export pkg_name=valkey-glide; export package_version=99.99.0; export scope=@valkey/;
