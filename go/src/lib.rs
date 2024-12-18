@@ -13,6 +13,9 @@ use redis::cluster_routing::{
 use glide_core::command_request::{
      Routes, SlotTypes,
 };
+// use glide_core::command_request::{
+//     command, command_request, ClusterScan, Command, CommandRequest, Routes, SlotTypes, Transaction,
+// };
 use glide_core::command_request::SimpleRoutes;
 use redis::cluster_routing::{ResponsePolicy, Routable};
 use protobuf::Message;
