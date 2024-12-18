@@ -14,7 +14,7 @@ func (suite *GlideTestSuite) TestClusterCustomCommandInfo() {
 
 	assert.Nil(suite.T(), err)
 	// INFO is routed to all primary nodes by default
-	for _, value := range result.(map[interface{}]interface{}) {
+	for _, value := range result.Value().(map[string]interface{}) {
 		assert.True(suite.T(), strings.Contains(value.(string), "# Stats"))
 	}
 }
@@ -25,5 +25,5 @@ func (suite *GlideTestSuite) TestClusterCustomCommandEcho() {
 
 	assert.Nil(suite.T(), err)
 	// ECHO is routed to a single random node
-	assert.Equal(suite.T(), "GO GLIDE GO", result.(string))
+	assert.Equal(suite.T(), "GO GLIDE GO", result.Value().(string))
 }

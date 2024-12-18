@@ -47,50 +47,86 @@ func CreateNilBoolResult() Result[bool] {
 	return Result[bool]{val: false, isNil: true}
 }
 
+// Enum to distinguish value types stored in `ClusterValue`
+type ValueType int
+
+const (
+	SingleValue ValueType = 1
+	MultiValue  ValueType = 2
+)
+
 // Enum-like structure which stores either a single-node response or multi-node response.
 // Multi-node response stored in a map, where keys are hostnames or "<ip>:<port>" strings.
-type ClusterValue struct {
-	singleValue Result[interface{}]
-	multiValue  Result[map[string]interface{}]
+//
+// For example:
+//
+//	// Command failed:
+//	value, err := clusterClient.CustomCommand(args)
+//	value.IsEmpty(): true
+//	err != nil: true
+//
+//	// Command returns response from multiple nodes:
+//	value, _ := clusterClient.info()
+//	node, nodeResponse := range value.Value().(map[string]interface{}) {
+//	    response := nodeResponse.(string)
+//	    // `node` stores cluster node IP/hostname, `response` stores the command output from that node
+//	}
+//
+//	// Command returns a response from single node:
+//	value, _ := clusterClient.infoWithRoute(Random{})
+//	response := value.Value().(string)
+//	// `response` stores the command output from a cluster node
+type ClusterValue[T any] struct {
+	valueType ValueType
+	value     Result[T]
 }
 
-func (value ClusterValue) Value() interface{} {
-	if !value.singleValue.isNil {
-		return value.singleValue.Value()
-	}
-	return value.multiValue.Value()
+func (value ClusterValue[T]) Value() T {
+	return value.value.Value()
 }
 
-// Create a `ClusterValue` with auto-detecting the value type.
-// Could confuse a user if data is a map received as a response from a single node.
-func CreateClusterValue(data interface{}) ClusterValue {
-	switch data.(type) {
-	case map[interface{}]interface{}:
+func (value ClusterValue[T]) ValueType() ValueType {
+	return value.valueType
+}
+
+func (value ClusterValue[T]) IsSingleValue() bool {
+	return value.valueType == SingleValue
+}
+
+func (value ClusterValue[T]) IsMultiValue() bool {
+	return value.valueType == MultiValue
+}
+
+func (value ClusterValue[T]) IsEmpty() bool {
+	return value.value.IsNil()
+}
+
+func CreateClusterValue[T any](data T) ClusterValue[T] {
+	switch any(data).(type) {
+	case map[string]interface{}:
 		return CreateClusterMultiValue(data)
 	default:
 		return CreateClusterSingleValue(data)
 	}
 }
 
-func CreateClusterSingleValue(data interface{}) ClusterValue {
-	return ClusterValue{
-		singleValue: Result[interface{}]{data, false},
-		multiValue:  Result[map[string]interface{}]{make(map[string]interface{}, 0), true},
+func CreateClusterSingleValue[T any](data T) ClusterValue[T] {
+	return ClusterValue[T]{
+		valueType: SingleValue,
+		value:     Result[T]{val: data, isNil: false},
 	}
 }
 
-func CreateClusterMultiValue(data interface{}) ClusterValue {
-	var empty interface{}
-	return ClusterValue{
-		multiValue:  Result[map[string]interface{}]{data.(map[string]interface{}), false},
-		singleValue: Result[interface{}]{empty, true},
+func CreateClusterMultiValue[T any](data T) ClusterValue[T] {
+	return ClusterValue[T]{
+		valueType: MultiValue,
+		value:     Result[T]{val: data, isNil: false},
 	}
 }
 
-func CreateEmptyClusterValue() ClusterValue {
+func CreateEmptyClusterValue() ClusterValue[interface{}] {
 	var empty interface{}
-	return ClusterValue{
-		multiValue:  Result[map[string]interface{}]{make(map[string]interface{}, 0), true},
-		singleValue: Result[interface{}]{empty, true},
+	return ClusterValue[interface{}]{
+		value: Result[interface{}]{val: empty, isNil: true},
 	}
 }
