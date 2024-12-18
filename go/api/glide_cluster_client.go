@@ -33,15 +33,28 @@ func NewGlideClusterClient(config *GlideClusterClientConfiguration) (*GlideClust
 // (such as SUBSCRIBE), or that return potentially more than a single response (such as XREAD), or that change the client's
 // behavior (such as entering pub/sub mode on RESP2 connections) shouldn't be called using this function.
 //
-// For example, to return a list of all pub/sub clients:
+// Parameters:
 //
-//	result, err := client.CustomCommand([]string{"CLIENT", "LIST", "TYPE", "PUBSUB"})
+//	args - Arguments for the custom command including the command name.
+//
+// Return value:
+//
+//	The returned value for the custom command.
+//
+// For example:
+//
+//	result, err := client.CustomCommand([]string{"ping"})
+//	result.Value().(string): "PONG"
 //
 // [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
-func (client *GlideClusterClient) CustomCommand(args []string) (interface{}, error) {
+func (client *GlideClusterClient) CustomCommand(args []string) (ClusterValue[interface{}], error) {
 	res, err := client.executeCommand(C.CustomCommand, args)
 	if err != nil {
-		return nil, err
+		return CreateEmptyClusterValue(), err
 	}
-	return handleInterfaceResponse(res)
+	data, err := handleInterfaceResponse(res)
+	if err != nil {
+		return CreateEmptyClusterValue(), err
+	}
+	return CreateClusterValue(data), nil
 }

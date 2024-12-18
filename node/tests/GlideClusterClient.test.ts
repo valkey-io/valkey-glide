@@ -36,7 +36,7 @@ import {
     SortOrder,
     convertRecordToGlideRecord,
 } from "..";
-import { ValkeyCluster } from "../../utils/TestUtils.js";
+import { ValkeyCluster } from "../../utils/TestUtils";
 import { runBaseTests } from "./SharedTests";
 import {
     checkClusterResponse,
@@ -328,33 +328,55 @@ describe("GlideClusterClient", () => {
         TIMEOUT,
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `can send transactions_%p`,
-        async (protocol) => {
-            client = await GlideClusterClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
+    describe.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "Protocol is RESP2 = %s",
+        (protocol) => {
+            describe.each([Decoder.String, Decoder.Bytes])(
+                "Decoder String = %s",
+                (decoder) => {
+                    it(
+                        "can send transactions",
+                        async () => {
+                            client = await GlideClusterClient.createClient(
+                                getClientConfigurationOption(
+                                    cluster.getAddresses(),
+                                    protocol,
+                                ),
+                            );
+
+                            const transaction = new ClusterTransaction();
+
+                            const expectedRes = await transactionTest(
+                                transaction,
+                                cluster,
+                                decoder,
+                            );
+
+                            if (
+                                !cluster.checkIfServerVersionLessThan("7.0.0")
+                            ) {
+                                transaction.publish("message", "key", true);
+                                expectedRes.push([
+                                    'publish("message", "key", true)',
+                                    0,
+                                ]);
+
+                                transaction.pubsubShardChannels();
+                                expectedRes.push(["pubsubShardChannels()", []]);
+                                transaction.pubsubShardNumSub([]);
+                                expectedRes.push(["pubsubShardNumSub()", []]);
+                            }
+
+                            const result = await client.exec(transaction, {
+                                decoder: Decoder.String,
+                            });
+                            validateTransactionResponse(result, expectedRes);
+                        },
+                        TIMEOUT,
+                    );
+                },
             );
-            const transaction = new ClusterTransaction();
-
-            const expectedRes = await transactionTest(
-                transaction,
-                cluster.getVersion(),
-            );
-
-            if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
-                transaction.publish("message", "key", true);
-                expectedRes.push(['publish("message", "key", true)', 0]);
-
-                transaction.pubsubShardChannels();
-                expectedRes.push(["pubsubShardChannels()", []]);
-                transaction.pubsubShardNumSub([]);
-                expectedRes.push(["pubsubShardNumSub()", []]);
-            }
-
-            const result = await client.exec(transaction);
-            validateTransactionResponse(result, expectedRes);
         },
-        TIMEOUT,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(

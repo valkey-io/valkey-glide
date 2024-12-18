@@ -171,7 +171,7 @@ func getServerVersion(suite *GlideTestSuite) string {
 		defer client.Close()
 		// TODO use info command with route
 		info, _ := client.CustomCommand([]string{"info", "server"})
-		for _, value := range info.(map[interface{}]interface{}) {
+		for _, value := range info.Value().(map[string]interface{}) {
 			return extractServerVersion(suite, value.(string))
 		}
 	}
