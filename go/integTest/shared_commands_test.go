@@ -5,6 +5,7 @@ package integTest
 import (
 	"math"
 	"reflect"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -1985,6 +1986,243 @@ func (suite *GlideTestSuite) TestSUnion() {
 		suite.verifyOK(client.Set(nonSetKey, "value"))
 		res7, err := client.SUnion([]string{nonSetKey, key1})
 		assert.Nil(suite.T(), res7)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestSMove() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1-" + uuid.NewString()
+		key2 := "{key}-2-" + uuid.NewString()
+		key3 := "{key}-3-" + uuid.NewString()
+		stringKey := "{key}-4-" + uuid.NewString()
+		nonExistingKey := "{key}-5-" + uuid.NewString()
+		memberArray1 := []string{"1", "2", "3"}
+		memberArray2 := []string{"2", "3"}
+		t := suite.T()
+
+		res1, err := client.SAdd(key1, memberArray1)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(3), res1.Value())
+
+		res2, err := client.SAdd(key2, memberArray2)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(2), res2.Value())
+
+		// move an element
+		res3, err := client.SMove(key1, key2, "1")
+		assert.NoError(t, err)
+		assert.True(t, res3.Value())
+
+		res4, err := client.SMembers(key1)
+		assert.NoError(t, err)
+		expectedSet := map[api.Result[string]]struct{}{
+			api.CreateStringResult("2"): {},
+			api.CreateStringResult("3"): {},
+		}
+		assert.True(t, reflect.DeepEqual(expectedSet, res4))
+
+		res5, err := client.SMembers(key2)
+		assert.NoError(t, err)
+		expectedSet = map[api.Result[string]]struct{}{
+			api.CreateStringResult("1"): {},
+			api.CreateStringResult("2"): {},
+			api.CreateStringResult("3"): {},
+		}
+		assert.True(t, reflect.DeepEqual(expectedSet, res5))
+
+		// moved element already exists in the destination set
+		res6, err := client.SMove(key2, key1, "2")
+		assert.NoError(t, err)
+		assert.True(t, res6.Value())
+
+		res7, err := client.SMembers(key1)
+		assert.NoError(t, err)
+		expectedSet = map[api.Result[string]]struct{}{
+			api.CreateStringResult("2"): {},
+			api.CreateStringResult("3"): {},
+		}
+		assert.True(t, reflect.DeepEqual(expectedSet, res7))
+
+		res8, err := client.SMembers(key2)
+		assert.NoError(t, err)
+		expectedSet = map[api.Result[string]]struct{}{
+			api.CreateStringResult("1"): {},
+			api.CreateStringResult("3"): {},
+		}
+		assert.True(t, reflect.DeepEqual(expectedSet, res8))
+
+		// attempt to move from a non-existing key
+		res9, err := client.SMove(nonExistingKey, key1, "4")
+		assert.NoError(t, err)
+		assert.False(t, res9.Value())
+
+		res10, err := client.SMembers(key1)
+		assert.NoError(t, err)
+		expectedSet = map[api.Result[string]]struct{}{
+			api.CreateStringResult("2"): {},
+			api.CreateStringResult("3"): {},
+		}
+		assert.True(t, reflect.DeepEqual(expectedSet, res10))
+
+		// move to a new set
+		res11, err := client.SMove(key1, key3, "2")
+		assert.NoError(t, err)
+		assert.True(t, res11.Value())
+
+		res12, err := client.SMembers(key1)
+		assert.NoError(t, err)
+		assert.Len(t, res12, 1)
+		assert.Contains(t, res12, api.CreateStringResult("3"))
+
+		res13, err := client.SMembers(key3)
+		assert.NoError(t, err)
+		assert.Len(t, res13, 1)
+		assert.Contains(t, res13, api.CreateStringResult("2"))
+
+		// attempt to move a missing element
+		res14, err := client.SMove(key1, key3, "42")
+		assert.NoError(t, err)
+		assert.False(t, res14.Value())
+
+		res12, err = client.SMembers(key1)
+		assert.NoError(t, err)
+		assert.Len(t, res12, 1)
+		assert.Contains(t, res12, api.CreateStringResult("3"))
+
+		res13, err = client.SMembers(key3)
+		assert.NoError(t, err)
+		assert.Len(t, res13, 1)
+		assert.Contains(t, res13, api.CreateStringResult("2"))
+
+		// moving missing element to missing key
+		res15, err := client.SMove(key1, nonExistingKey, "42")
+		assert.NoError(t, err)
+		assert.False(t, res15.Value())
+
+		res12, err = client.SMembers(key1)
+		assert.NoError(t, err)
+		assert.Len(t, res12, 1)
+		assert.Contains(t, res12, api.CreateStringResult("3"))
+
+		// key exists but is not contain a set
+		_, err = client.Set(stringKey, "value")
+		assert.NoError(t, err)
+
+		_, err = client.SMove(stringKey, key1, "_")
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestSScan() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1-" + uuid.NewString()
+		key2 := "{key}-2-" + uuid.NewString()
+		initialCursor := "0"
+		defaultCount := 10
+		// use large dataset to force an iterative cursor.
+		numMembers := make([]string, 50000)
+		numMembersResult := make([]api.Result[string], 50000)
+		charMembers := []string{"a", "b", "c", "d", "e"}
+		charMembersResult := []api.Result[string]{
+			api.CreateStringResult("a"),
+			api.CreateStringResult("b"),
+			api.CreateStringResult("c"),
+			api.CreateStringResult("d"),
+			api.CreateStringResult("e"),
+		}
+		t := suite.T()
+
+		// populate the dataset slice
+		for i := 0; i < 50000; i++ {
+			numMembers[i] = strconv.Itoa(i)
+			numMembersResult[i] = api.CreateStringResult(strconv.Itoa(i))
+		}
+
+		// empty set
+		resCursor, resCollection, err := client.SScan(key1, initialCursor)
+		assert.NoError(t, err)
+		assert.Equal(t, initialCursor, resCursor.Value())
+		assert.Empty(t, resCollection)
+
+		// negative cursor
+		if suite.serverVersion < "8.0.0" {
+			resCursor, resCollection, err = client.SScan(key1, "-1")
+			assert.NoError(t, err)
+			assert.Equal(t, initialCursor, resCursor.Value())
+			assert.Empty(t, resCollection)
+		} else {
+			_, _, err = client.SScan(key1, "-1")
+			assert.NotNil(suite.T(), err)
+			assert.IsType(suite.T(), &api.RequestError{}, err)
+		}
+
+		// result contains the whole set
+		res, err := client.SAdd(key1, charMembers)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(len(charMembers)), res.Value())
+		resCursor, resCollection, err = client.SScan(key1, initialCursor)
+		assert.NoError(t, err)
+		assert.Equal(t, initialCursor, resCursor.Value())
+		assert.Equal(t, len(charMembers), len(resCollection))
+		assert.True(t, isSubset(resCollection, charMembersResult))
+
+		opts := api.NewBaseScanOptionsBuilder().SetMatch("a")
+		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
+		assert.NoError(t, err)
+		assert.Equal(t, initialCursor, resCursor.Value())
+		assert.True(t, isSubset(resCollection, []api.Result[string]{api.CreateStringResult("a")}))
+
+		// result contains a subset of the key
+		res, err = client.SAdd(key1, numMembers)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(50000), res.Value())
+		resCursor, resCollection, err = client.SScan(key1, "0")
+		assert.NoError(t, err)
+		resultCollection := resCollection
+
+		// 0 is returned for the cursor of the last iteration
+		for resCursor.Value() != "0" {
+			nextCursor, nextCol, err := client.SScan(key1, resCursor.Value())
+			assert.NoError(t, err)
+			assert.NotEqual(t, nextCursor, resCursor)
+			assert.False(t, isSubset(resultCollection, nextCol))
+			resultCollection = append(resultCollection, nextCol...)
+			resCursor = nextCursor
+		}
+		assert.NotEmpty(t, resultCollection)
+		assert.True(t, isSubset(numMembersResult, resultCollection))
+		assert.True(t, isSubset(charMembersResult, resultCollection))
+
+		// test match pattern
+		opts = api.NewBaseScanOptionsBuilder().SetMatch("*")
+		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
+		assert.NoError(t, err)
+		assert.NotEqual(t, initialCursor, resCursor.Value())
+		assert.GreaterOrEqual(t, len(resCollection), defaultCount)
+
+		// test count
+		opts = api.NewBaseScanOptionsBuilder().SetCount(20)
+		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
+		assert.NoError(t, err)
+		assert.NotEqual(t, initialCursor, resCursor.Value())
+		assert.GreaterOrEqual(t, len(resCollection), 20)
+
+		// test count with match, returns a non-empty array
+		opts = api.NewBaseScanOptionsBuilder().SetMatch("1*").SetCount(20)
+		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
+		assert.NoError(t, err)
+		assert.NotEqual(t, initialCursor, resCursor.Value())
+		assert.GreaterOrEqual(t, len(resCollection), 0)
+
+		// exceptions
+		// non-set key
+		_, err = client.Set(key2, "test")
+		assert.NoError(t, err)
+
+		_, _, err = client.SScan(key2, initialCursor)
+		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
 }

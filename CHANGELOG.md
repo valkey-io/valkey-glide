@@ -7,6 +7,7 @@
 * Go: Add `SInterStore` ([#2779](https://github.com/valkey-io/valkey-glide/issues/2779))
 * Node: Remove native package references for MacOs x64 architecture ([#2799](https://github.com/valkey-io/valkey-glide/issues/2799))
 * Go: Add `ZIncrBy` command ([#2830](https://github.com/valkey-io/valkey-glide/pull/2830))
+* Go: Add `SScan` and `SMove` ([#2789](https://github.com/valkey-io/valkey-glide/issues/2789))
 
 #### Breaking Changes
 
