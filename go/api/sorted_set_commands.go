@@ -9,7 +9,6 @@ package api
  * [valkey.io]: https://valkey.io/commands/?group=sorted-set#sorted-set
  */
 type SortedSetCommands interface {
-
 	// Increments the score of member in the sorted set stored at key by increment.
 	// If member does not exist in the sorted set, it is added with increment as its score.
 	// If key does not exist, a new sorted set with the specified member as its sole member
