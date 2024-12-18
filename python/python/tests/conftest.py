@@ -5,6 +5,8 @@ from typing import AsyncGenerator, List, Optional, Union
 
 import pytest
 from glide.config import (
+    AdvancedGlideClientConfiguration,
+    AdvancedGlideClusterClientConfiguration,
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
     NodeAddress,
@@ -261,7 +263,7 @@ async def create_client(
         assert database_id == 0
         k = min(3, len(pytest.valkey_cluster.nodes_addr))
         seed_nodes = random.sample(pytest.valkey_cluster.nodes_addr, k=k)
-        cluster_config = GlideClusterClientConfiguration(
+        cluster_config = AdvancedGlideClusterClientConfiguration(
             addresses=seed_nodes if addresses is None else addresses,
             use_tls=use_tls,
             credentials=credentials,
@@ -277,7 +279,7 @@ async def create_client(
         return await GlideClusterClient.create(cluster_config)
     else:
         assert type(pytest.standalone_cluster) is ValkeyCluster
-        config = GlideClientConfiguration(
+        config = AdvancedGlideClientConfiguration(
             addresses=(
                 pytest.standalone_cluster.nodes_addr if addresses is None else addresses
             ),
