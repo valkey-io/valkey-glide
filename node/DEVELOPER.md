@@ -109,22 +109,23 @@ Before starting this step, make sure you've installed all software requirments.
 
 6. Testing the GLIDE npm package:
    The `node/npm/glide` folder contains a package wrapper that re-exports all the native bindings. To build and test this package, follow these steps:
-   ```bash
 
-    Build node package:
-    co node
-    export nativeStr=darwin-x64; export scope=@valkey/;
-    envsubst < package.json.tmpl > "package.json"
-    npm run build
-    npm run build:release
-    In npm/glide package run the following commands:
-    cd ../npm/glide
-    export pkg_name=valkey-glide; export package_version=99.99.0; export scope=@valkey/;
-    envsubst < package.json.tmpl > "package.json"
-    npm run build
-    npm run build:test
-    npm run test
-    npm run test -- --testNamePattern="Exported symbols test"
+    ```bash
+
+     Build node package:
+     co node
+     export nativeStr=darwin-x64; export scope=@valkey/;
+     envsubst < package.json.tmpl > "package.json"
+     npm run build
+     npm run build:release
+     In npm/glide package run the following commands:
+     cd ../npm/glide
+     export pkg_name=valkey-glide; export package_version=99.99.0; export scope=@valkey/;
+     envsubst < package.json.tmpl > "package.json"
+     npm run build
+     npm run build:test
+     npm run test
+     npm run test -- --testNamePattern="Exported symbols test"
     ```
 
 - For a fast build, execute `npm run build`. This will perform a full, unoptimized build, which is suitable for developing tests. Keep in mind that performance is significantly affected in an unoptimized build, so it's required to build with the `build:release` or `build:benchmark` option when measuring performance.
