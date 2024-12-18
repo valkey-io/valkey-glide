@@ -15,7 +15,7 @@ describe("Exported Symbols test", () => {
         const filesWithNodeCode = await getFiles(implBuildFolder);
         console.log(filesWithNodeCode);
 
-        const internallyExported: any = [];
+        const internallyExported: any[] = [];
 
         for (const file of filesWithNodeCode) {
             const sourceCode = await f.readFile(file, "utf8");
@@ -33,8 +33,8 @@ describe("Exported Symbols test", () => {
         let missingSymbols = internallyExported.filter(
             (e: string) => !exportedSymbolsList.includes(e),
         );
-        let doesNotExistExports = exportedSymbolsList.filter(
-            (e: string | any) => !internallyExported.includes(e),
+        const doesNotExistExports = exportedSymbolsList.filter(
+            (e: string) => !internallyExported.includes(e),
         );
         console.log(missingSymbols);
         console.log(doesNotExistExports);
