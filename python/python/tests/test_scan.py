@@ -375,6 +375,7 @@ class TestScan:
                     in str(e_info)
                 )
                 break
+        cursor = ClusterScanCursor()
         # Scan with allow_non_covered_slots=True
         while not cursor.is_finished():
             result = await glide_client_scoped.scan(
