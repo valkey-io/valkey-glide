@@ -38,7 +38,8 @@ clean:
 	go clean
 	rm -f lib.h
 	rm -f benchmarks/benchmarks
-
+	rm -rf protobuf
+	rm -rf target
 
 build-glide-client:
 	cargo build --release
@@ -49,6 +50,7 @@ build-glide-client-debug:
 	cbindgen --config cbindgen.toml --crate glide-rs --output lib.h
 
 generate-protobuf:
+	rm -rf protobuf
 	mkdir -p protobuf
 	protoc --proto_path=../glide-core/src/protobuf \
 		--go_opt=Mconnection_request.proto=github.com/valkey-io/valkey-glide/go/protobuf \

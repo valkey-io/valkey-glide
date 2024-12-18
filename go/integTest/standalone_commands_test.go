@@ -128,7 +128,7 @@ func (suite *GlideTestSuite) TestCustomCommandConfigGet_MapResponse() {
 
 	result2, err := client.CustomCommand([]string{"CONFIG", "GET", "timeout", "maxmemory"})
 	assert.Nil(suite.T(), err)
-	assert.Equal(suite.T(), map[interface{}]interface{}{"timeout": "1000", "maxmemory": "1073741824"}, result2)
+	assert.Equal(suite.T(), map[string]interface{}{"timeout": "1000", "maxmemory": "1073741824"}, result2)
 }
 
 func (suite *GlideTestSuite) TestCustomCommandConfigSMembers_SetResponse() {
@@ -142,7 +142,7 @@ func (suite *GlideTestSuite) TestCustomCommandConfigSMembers_SetResponse() {
 
 	result2, err := client.CustomCommand([]string{"SMEMBERS", key})
 	assert.Nil(suite.T(), err)
-	assert.Equal(suite.T(), map[interface{}]struct{}{"member1": {}, "member2": {}, "member3": {}}, result2)
+	assert.Equal(suite.T(), map[string]struct{}{"member1": {}, "member2": {}, "member3": {}}, result2)
 }
 
 func (suite *GlideTestSuite) TestCustomCommand_invalidCommand() {

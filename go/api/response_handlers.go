@@ -123,9 +123,9 @@ func parseMap(response *C.struct_CommandResponse) (interface{}, error) {
 		return nil, nil
 	}
 
-	value_map := make(map[interface{}]interface{}, response.array_value_len)
+	value_map := make(map[string]interface{}, response.array_value_len)
 	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
-		res_key, err := parseInterface(v.map_key)
+		res_key, err := parseString(v.map_key)
 		if err != nil {
 			return nil, err
 		}
@@ -133,7 +133,7 @@ func parseMap(response *C.struct_CommandResponse) (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-		value_map[res_key] = res_val
+		value_map[res_key.(string)] = res_val
 	}
 	return value_map, nil
 }
@@ -143,13 +143,13 @@ func parseSet(response *C.struct_CommandResponse) (interface{}, error) {
 		return nil, nil
 	}
 
-	slice := make(map[interface{}]struct{}, response.sets_value_len)
+	slice := make(map[string]struct{}, response.sets_value_len)
 	for _, v := range unsafe.Slice(response.sets_value, response.sets_value_len) {
-		res, err := parseInterface(&v)
+		res, err := parseString(&v)
 		if err != nil {
 			return nil, err
 		}
-		slice[res] = struct{}{}
+		slice[res.(string)] = struct{}{}
 	}
 
 	return slice, nil
