@@ -15,7 +15,7 @@ describe("Exported Symbols test", () => {
         const filesWithNodeCode = await getFiles(implBuildFolder);
         console.log(filesWithNodeCode);
 
-        const internallyExported: any[] = [];
+        const internallyExported: string[] = [];
 
         for (const file of filesWithNodeCode) {
             const sourceCode = await f.readFile(file, "utf8");
@@ -30,7 +30,7 @@ describe("Exported Symbols test", () => {
 
         internallyExported.sort();
 
-        let missingSymbols = internallyExported.filter(
+        const missingSymbols = internallyExported.filter(
             (e: string) => !exportedSymbolsList.includes(e),
         );
         const doesNotExistExports = exportedSymbolsList.filter(
@@ -71,6 +71,7 @@ async function getFiles(folderName: string): Promise<string[]> {
             if (!file.name.endsWith(".d.ts")) {
                 continue;
             }
+
             filesWithNodeCode.push(folderName + file.name);
         }
     }
@@ -81,8 +82,8 @@ async function getFiles(folderName: string): Promise<string[]> {
 function visitRoot(root: ts.Node) {
     // (Root Level)->(Level 1)
     const children: ts.Node[] = root.getChildren();
-
     const resultList: string[] = [];
+
     // (Root Level) -> (Level 1) -> Level 2. This is the level in the AST where all the exported symbols in a file are present.
     for (const node of children) {
         const nodeList: string[] = node
