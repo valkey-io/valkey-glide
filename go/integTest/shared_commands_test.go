@@ -11,7 +11,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/glide/api"
-	"github.com/valkey-io/valkey-glide/go/glide/utils"
 )
 
 const (
@@ -2124,26 +2123,35 @@ func (suite *GlideTestSuite) TestSScan() {
 		defaultCount := 10
 		// use large dataset to force an iterative cursor.
 		numMembers := make([]string, 50000)
+		numMembersResult := make([]api.Result[string], 50000)
 		charMembers := []string{"a", "b", "c", "d", "e"}
+		charMembersResult := []api.Result[string]{
+			api.CreateStringResult("a"),
+			api.CreateStringResult("b"),
+			api.CreateStringResult("c"),
+			api.CreateStringResult("d"),
+			api.CreateStringResult("e"),
+		}
 		t := suite.T()
 
 		// populate the dataset slice
 		for i := 0; i < 50000; i++ {
 			numMembers[i] = strconv.Itoa(i)
+			numMembersResult[i] = api.CreateStringResult(strconv.Itoa(i))
 		}
 
 		// empty set
 		resCursor, resCollection, err := client.SScan(key1, initialCursor)
 		assert.NoError(t, err)
 		assert.Equal(t, initialCursor, resCursor.Value())
-		assert.Empty(t, resCollection.Value())
+		assert.Empty(t, resCollection)
 
 		// negative cursor
 		if suite.serverVersion < "8.0.0" {
 			resCursor, resCollection, err = client.SScan(key1, "-1")
 			assert.NoError(t, err)
 			assert.Equal(t, initialCursor, resCursor.Value())
-			assert.Empty(t, resCollection.Value())
+			assert.Empty(t, resCollection)
 		} else {
 			_, _, err = client.SScan(key1, "-1")
 			assert.NotNil(suite.T(), err)
@@ -2157,14 +2165,14 @@ func (suite *GlideTestSuite) TestSScan() {
 		resCursor, resCollection, err = client.SScan(key1, initialCursor)
 		assert.NoError(t, err)
 		assert.Equal(t, initialCursor, resCursor.Value())
-		assert.Equal(t, len(charMembers), len(resCollection.Value()))
-		assert.True(t, utils.IsSubset(resCollection.Value(), charMembers))
+		assert.Equal(t, len(charMembers), len(resCollection))
+		assert.True(t, isSubset(resCollection, charMembersResult))
 
 		opts := api.NewBaseScanOptionsBuilder().SetMatch("a")
 		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
 		assert.Equal(t, initialCursor, resCursor.Value())
-		assert.True(t, utils.IsSubset(resCollection.Value(), []string{"a"}))
+		assert.True(t, isSubset(resCollection, []api.Result[string]{api.CreateStringResult("a")}))
 
 		// result contains a subset of the key
 		res, err = client.SAdd(key1, numMembers)
@@ -2172,41 +2180,41 @@ func (suite *GlideTestSuite) TestSScan() {
 		assert.Equal(t, int64(50000), res.Value())
 		resCursor, resCollection, err = client.SScan(key1, "0")
 		assert.NoError(t, err)
-		resultCollection := resCollection.Value()
+		resultCollection := resCollection
 
 		// 0 is returned for the cursor of the last iteration
 		for resCursor.Value() != "0" {
 			nextCursor, nextCol, err := client.SScan(key1, resCursor.Value())
 			assert.NoError(t, err)
 			assert.NotEqual(t, nextCursor, resCursor)
-			assert.False(t, utils.IsSubset(resultCollection, nextCol.Value()))
-			resultCollection = append(resultCollection, nextCol.Value()...)
+			assert.False(t, isSubset(resultCollection, nextCol))
+			resultCollection = append(resultCollection, nextCol...)
 			resCursor = nextCursor
 		}
 		assert.NotEmpty(t, resultCollection)
-		assert.True(t, utils.IsSubset(numMembers, resultCollection))
-		assert.True(t, utils.IsSubset(charMembers, resultCollection))
+		assert.True(t, isSubset(numMembersResult, resultCollection))
+		assert.True(t, isSubset(charMembersResult, resultCollection))
 
 		// test match pattern
 		opts = api.NewBaseScanOptionsBuilder().SetMatch("*")
 		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
 		assert.NotEqual(t, initialCursor, resCursor.Value())
-		assert.GreaterOrEqual(t, len(resCollection.Value()), defaultCount)
+		assert.GreaterOrEqual(t, len(resCollection), defaultCount)
 
 		// test count
 		opts = api.NewBaseScanOptionsBuilder().SetCount(20)
 		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
 		assert.NotEqual(t, initialCursor, resCursor.Value())
-		assert.GreaterOrEqual(t, len(resCollection.Value()), 20)
+		assert.GreaterOrEqual(t, len(resCollection), 20)
 
 		// test count with match, returns a non-empty array
 		opts = api.NewBaseScanOptionsBuilder().SetMatch("1*").SetCount(20)
 		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
 		assert.NotEqual(t, initialCursor, resCursor.Value())
-		assert.GreaterOrEqual(t, len(resCollection.Value()), 0)
+		assert.GreaterOrEqual(t, len(resCollection), 0)
 
 		// exceptions
 		// non-set key

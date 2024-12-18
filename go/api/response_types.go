@@ -23,14 +23,6 @@ func CreateNilStringResult() Result[string] {
 	return Result[string]{val: "", isNil: true}
 }
 
-func CreateArrayResult[T any](arr []T) Result[[]T] {
-	return Result[[]T]{val: arr, isNil: false}
-}
-
-func CreateNilArrayResult[T any]() Result[[]T] {
-	return Result[[]T]{val: nil, isNil: true}
-}
-
 func CreateInt64Result(intVal int64) Result[int64] {
 	return Result[int64]{val: intVal, isNil: false}
 }

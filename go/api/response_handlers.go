@@ -375,38 +375,38 @@ func handleStringSetResponse(response *C.struct_CommandResponse) (map[Result[str
 
 func handleScanResponse(
 	response *C.struct_CommandResponse,
-) (Result[string], Result[[]string], error) {
+) (Result[string], []Result[string], error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Array, false)
 	if typeErr != nil {
-		return CreateNilStringResult(), CreateNilArrayResult[string](), typeErr
+		return CreateNilStringResult(), nil, typeErr
 	}
 
 	slice, err := parseArray(response)
 	if err != nil {
-		return CreateNilStringResult(), CreateNilArrayResult[string](), err
+		return CreateNilStringResult(), nil, err
 	}
 
 	if arr, ok := slice.([]interface{}); ok {
-		resCollection, err := convertToStringArrayResult(arr[1].([]interface{}))
+		resCollection, err := convertToResultStringArray(arr[1].([]interface{}))
 		if err != nil {
-			return CreateNilStringResult(), CreateNilArrayResult[string](), err
+			return CreateNilStringResult(), nil, err
 		}
 		return CreateStringResult(arr[0].(string)), resCollection, nil
 	}
 
-	return CreateNilStringResult(), CreateNilArrayResult[string](), err
+	return CreateNilStringResult(), nil, err
 }
 
-func convertToStringArrayResult(input []interface{}) (Result[[]string], error) {
-	result := make([]string, len(input))
+func convertToResultStringArray(input []interface{}) ([]Result[string], error) {
+	result := make([]Result[string], len(input))
 	for i, v := range input {
 		str, ok := v.(string)
 		if !ok {
-			return CreateNilArrayResult[string](), fmt.Errorf("element at index %d is not a string: %v", i, v)
+			return nil, fmt.Errorf("element at index %d is not a string: %v", i, v)
 		}
-		result[i] = str
+		result[i] = CreateStringResult(str)
 	}
-	return CreateArrayResult[string](result), nil
+	return result, nil
 }
