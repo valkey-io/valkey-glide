@@ -232,6 +232,27 @@ class BaseClientConfiguration:
         return None, None
 
 
+class AdvancedBaseClientConfiguration:
+    """
+    Represents the advanced configuration settings for a base Glide client.
+
+    Args:
+        connection_timeout (Optional[int]):The duration in milliseconds to wait for a TCP/TLS connection to complete.
+            This applies both during initial client creation and any reconnections that may occur during request processing.
+            **Note**: A high connection timeout may lead to prolonged blocking of the entire command pipeline.
+            If the client cannot establish a connection within the specified duration, a timeout error will occur.
+            If not set, a default value will be used.
+    """
+
+    def __init__(self, connection_timeout: Optional[int] = None):
+        self.connection_timeout = connection_timeout
+
+    def _create_a_protobuf_conn_request(self, request) -> ConnectionRequest:
+        if self.connection_timeout:
+            request.connection_timeout = self.connection_timeout
+        return request
+
+
 class GlideClientConfiguration(BaseClientConfiguration):
     """
     Represents the configuration settings for a Standalone Glide client.
@@ -379,7 +400,9 @@ class GlideClientConfiguration(BaseClientConfiguration):
         return None, None
 
 
-class AdvancedGlideClientConfiguration(GlideClientConfiguration):
+class AdvancedGlideClientConfiguration(
+    GlideClientConfiguration, AdvancedBaseClientConfiguration
+):
     """
     Represents the advanced configuration settings for a Standalone Glide client.
 
@@ -438,7 +461,8 @@ class AdvancedGlideClientConfiguration(GlideClientConfiguration):
         client_az: Optional[str] = None,
         connection_timeout: Optional[int] = None,
     ):
-        super().__init__(
+        GlideClientConfiguration.__init__(
+            self,
             addresses=addresses,
             use_tls=use_tls,
             credentials=credentials,
@@ -452,14 +476,17 @@ class AdvancedGlideClientConfiguration(GlideClientConfiguration):
             inflight_requests_limit=inflight_requests_limit,
             client_az=client_az,
         )
-        self.connection_timeout = connection_timeout
+        AdvancedBaseClientConfiguration.__init__(self, connection_timeout)
 
     def _create_a_protobuf_conn_request(
         self, cluster_mode: bool = False
     ) -> ConnectionRequest:
-        request = super()._create_a_protobuf_conn_request(cluster_mode)
-        if self.connection_timeout:
-            request.connection_timeout = self.connection_timeout
+        request = GlideClientConfiguration._create_a_protobuf_conn_request(
+            self, cluster_mode
+        )
+        request = AdvancedBaseClientConfiguration._create_a_protobuf_conn_request(
+            self, request
+        )
         return request
 
 
@@ -611,7 +638,9 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         return None, None
 
 
-class AdvancedGlideClusterClientConfiguration(GlideClusterClientConfiguration):
+class AdvancedGlideClusterClientConfiguration(
+    GlideClusterClientConfiguration, AdvancedBaseClientConfiguration
+):
     """
     Represents the advanced configuration settings for a Cluster Glide client.
 
@@ -649,7 +678,6 @@ class AdvancedGlideClusterClientConfiguration(GlideClusterClientConfiguration):
             If not set, a default value will be used.
 
 
-
     Notes:
         Currently, the reconnection strategy in cluster mode is not configurable, and exponential backoff
         with fixed values is used.
@@ -674,7 +702,8 @@ class AdvancedGlideClusterClientConfiguration(GlideClusterClientConfiguration):
         client_az: Optional[str] = None,
         connection_timeout: Optional[int] = None,
     ):
-        super().__init__(
+        GlideClusterClientConfiguration.__init__(
+            self,
             addresses=addresses,
             use_tls=use_tls,
             credentials=credentials,
@@ -687,12 +716,15 @@ class AdvancedGlideClusterClientConfiguration(GlideClusterClientConfiguration):
             periodic_checks=periodic_checks,
             pubsub_subscriptions=pubsub_subscriptions,
         )
-        self.connection_timeout = connection_timeout
+        AdvancedBaseClientConfiguration.__init__(self, connection_timeout)
 
     def _create_a_protobuf_conn_request(
         self, cluster_mode: bool = False
     ) -> ConnectionRequest:
-        request = super()._create_a_protobuf_conn_request(cluster_mode)
-        if self.connection_timeout:
-            request.connection_timeout = self.connection_timeout
+        request = GlideClusterClientConfiguration._create_a_protobuf_conn_request(
+            self, cluster_mode
+        )
+        request = AdvancedBaseClientConfiguration._create_a_protobuf_conn_request(
+            self, request
+        )
         return request
