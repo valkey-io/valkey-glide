@@ -2023,6 +2023,7 @@ describe("GlideClusterClient", () => {
                 await client.close();
             }
         },
+        TIMEOUT,
     );
     describe("GlideClusterClient - AZAffinity Read Strategy Test", () => {
         async function getNumberOfReplicas(
@@ -2113,6 +2114,8 @@ describe("GlideClusterClient", () => {
                         { route: "allNodes" },
                     );
 
+                    await new Promise((resolve) => setTimeout(resolve, 2000));
+
                     // Retrieve the number of replicas dynamically
                     const n_replicas = await getNumberOfReplicas(
                         client_for_config_set,
@@ -2144,6 +2147,8 @@ describe("GlideClusterClient", () => {
                         ["CONFIG", "GET", "availability-zone"],
                         { route: "allNodes" },
                     );
+
+                    await new Promise((resolve) => setTimeout(resolve, 2000));
 
                     if (Array.isArray(azs)) {
                         const allAZsMatch = azs.every((node) => {
@@ -2181,6 +2186,8 @@ describe("GlideClusterClient", () => {
                     for (let i = 0; i < GET_CALLS; i++) {
                         await client_for_testing_az.get("foo");
                     }
+
+                    await new Promise((resolve) => setTimeout(resolve, 2000));
 
                     // Stage 4: Verify GET commands were routed correctly
                     const info_result =
@@ -2223,6 +2230,7 @@ describe("GlideClusterClient", () => {
                     await client_for_testing_az?.close();
                 }
             },
+            TIMEOUT,
         );
     });
     describe("GlideClusterClient - AZAffinity Routing to 1 replica", () => {
@@ -2263,10 +2271,14 @@ describe("GlideClusterClient", () => {
                         "RESETSTAT",
                     ]);
 
+                    await new Promise((resolve) => setTimeout(resolve, 2000));
+
                     await client_for_config_set.customCommand(
                         ["CONFIG", "SET", "availability-zone", az],
                         { route: { type: "replicaSlotId", id: 12182 } },
                     );
+
+                    await new Promise((resolve) => setTimeout(resolve, 2000));
 
                     // Stage 2: Create AZ affinity client and verify configuration
                     client_for_testing_az =
@@ -2285,6 +2297,8 @@ describe("GlideClusterClient", () => {
                     for (let i = 0; i < GET_CALLS; i++) {
                         await client_for_testing_az.get("foo");
                     }
+
+                    await new Promise((resolve) => setTimeout(resolve, 2000));
 
                     // Stage 4: Verify GET commands were routed correctly
                     const info_result =
@@ -2334,6 +2348,7 @@ describe("GlideClusterClient", () => {
                     await client_for_testing_az?.close();
                 }
             },
+            TIMEOUT,
         );
     });
     describe("GlideClusterClient - AZAffinity with Non-existing AZ", () => {
@@ -2374,10 +2389,14 @@ describe("GlideClusterClient", () => {
                         { route: "allNodes" },
                     );
 
+                    await new Promise((resolve) => setTimeout(resolve, 2000));
+
                     // Issue GET commands
                     for (let i = 0; i < GET_CALLS; i++) {
                         await client_for_testing_az.get("foo");
                     }
+
+                    await new Promise((resolve) => setTimeout(resolve, 2000));
 
                     // Fetch command stats from all nodes
                     const info_result =
@@ -2418,6 +2437,7 @@ describe("GlideClusterClient", () => {
                     await client_for_testing_az?.close();
                 }
             },
+            TIMEOUT,
         );
     });
     describe("GlideClusterClient - Get Statistics", () => {
