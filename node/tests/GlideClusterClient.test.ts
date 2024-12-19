@@ -2023,6 +2023,7 @@ describe("GlideClusterClient", () => {
                 await client.close();
             }
         },
+        TIMEOUT,
     );
     describe("GlideClusterClient - AZAffinity Read Strategy Test", () => {
         async function getNumberOfReplicas(
@@ -2223,6 +2224,7 @@ describe("GlideClusterClient", () => {
                     await client_for_testing_az?.close();
                 }
             },
+            TIMEOUT,
         );
     });
     describe("GlideClusterClient - AZAffinity Routing to 1 replica", () => {
@@ -2334,6 +2336,7 @@ describe("GlideClusterClient", () => {
                     await client_for_testing_az?.close();
                 }
             },
+            TIMEOUT,
         );
     });
     describe("GlideClusterClient - AZAffinity with Non-existing AZ", () => {
@@ -2418,6 +2421,7 @@ describe("GlideClusterClient", () => {
                     await client_for_testing_az?.close();
                 }
             },
+            TIMEOUT,
         );
     });
     describe("GlideClusterClient - Get Statistics", () => {
