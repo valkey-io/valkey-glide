@@ -74,13 +74,31 @@ format:
 	gofumpt -w .
 	golines -w --shorten-comments -m 127 .
 
-test:
+# unit tests - skip complete IT suite (including MT)
+unit-test:
 	LD_LIBRARY_PATH=$(shell find . -name libglide_rs.so|grep -w release|tail -1|xargs dirname|xargs readlink -f):${LD_LIBRARY_PATH} \
-	go test -v -race ./...
+	go test -v -race ./... -skip TestGlideTestSuite $(if $(test-filter), -run $(test-filter))
+
+# integration tests - run subtask with skipping modules tests
+integ-test: export TEST_FILTER = -skip TestGlideTestSuite/TestModule $(if $(test-filter), -run $(test-filter))
+integ-test: __it
+
+# modules tests - run substask with default filter
+modules-test: export TEST_FILTER = $(if $(test-filter), -run $(test-filter), -run TestGlideTestSuite/TestModule)
+modules-test: __it
+
+__it:
+	LD_LIBRARY_PATH=$(shell find . -name libglide_rs.so|grep -w release|tail -1|xargs dirname|xargs readlink -f):${LD_LIBRARY_PATH} \
+	go test -v -race ./integTest/... \
+		$(TEST_FILTER) \
+		$(if $(filter true, $(tls)), --tls,) \
+		$(if $(standalone-endpoints), --standalone-endpoints=$(standalone-endpoints)) \
+		$(if $(cluster-endpoints), --cluster-endpoints=$(cluster-endpoints))
 
 # Note: this task is no longer run by CI because:
 # - build failures that occur while running the task can be hidden by the task; CI still reports success in these scenarios.
 # - there is not a good way to both generate a test report and log the test outcomes to GH actions.
+# TODO: fix this and include -run/-skip flags
 test-and-report:
 	mkdir -p reports
 	go test -v -race ./... -json | go-test-report -o reports/test-report.html
