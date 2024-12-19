@@ -26,6 +26,7 @@ type BaseClient interface {
 	HashCommands
 	ListCommands
 	SetCommands
+	SortedSetCommands
 	ConnectionManagementCommands
 	GenericBaseCommands
 	// Close terminates the client by closing all associated resources.
@@ -1203,4 +1204,13 @@ func (client *baseClient) Renamenx(key string, newKey string) (Result[bool], err
 		return CreateNilBoolResult(), err
 	}
 	return handleBooleanResponse(result)
+}
+
+func (client *baseClient) ZIncrBy(key string, increment float64, member string) (Result[float64], error) {
+	result, err := client.executeCommand(C.ZIncrBy, []string{key, utils.FloatToString(increment), member})
+	if err != nil {
+		return CreateNilFloat64Result(), err
+	}
+
+	return handleDoubleResponse(result)
 }
