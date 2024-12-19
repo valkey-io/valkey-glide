@@ -252,14 +252,16 @@ async def create_client(
     inflight_requests_limit: Optional[int] = None,
     read_from: ReadFrom = ReadFrom.PRIMARY,
     client_az: Optional[str] = None,
+    valkey_cluster: Optional[ValkeyCluster] = None,
 ) -> Union[GlideClient, GlideClusterClient]:
     # Create async socket client
     use_tls = request.config.getoption("--tls")
     if cluster_mode:
-        assert type(pytest.valkey_cluster) is ValkeyCluster
+        valkey_cluster = valkey_cluster or pytest.valkey_cluster
+        assert type(valkey_cluster) is ValkeyCluster
         assert database_id == 0
-        k = min(3, len(pytest.valkey_cluster.nodes_addr))
-        seed_nodes = random.sample(pytest.valkey_cluster.nodes_addr, k=k)
+        k = min(3, len(valkey_cluster.nodes_addr))
+        seed_nodes = random.sample(valkey_cluster.nodes_addr, k=k)
         cluster_config = GlideClusterClientConfiguration(
             addresses=seed_nodes if addresses is None else addresses,
             use_tls=use_tls,
