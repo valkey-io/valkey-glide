@@ -3809,5 +3809,6 @@ func (suite *GlideTestSuite) TestZincrBy() {
 
 		_, err = client.ZIncrBy(key2, 0.5, "_")
 		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
 }
