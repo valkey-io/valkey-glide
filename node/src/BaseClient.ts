@@ -3,8 +3,9 @@
  */
 import {
     ClusterScanCursor,
+    DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS,
     DEFAULT_INFLIGHT_REQUESTS_LIMIT,
-    DEFAULT_TIMEOUT_IN_MILLISECONDS,
+    DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
     Script,
     StartSocketConnection,
     getStatistics,
@@ -523,6 +524,7 @@ export type ReadFrom =
  * ### Communication Settings
  *
  * - **Request Timeout**: Set `requestTimeout` to specify how long the client should wait for a request to complete.
+ * - **Connection Timeout**: Set `connectionTimeout` to define the maximum duration (in milliseconds) the client will wait for a connection to be established.
  * - **Protocol Version**: Choose the serialization protocol using `protocol`.
  *
  * ### Client Identification
@@ -558,6 +560,7 @@ export type ReadFrom =
  *     password: 'myPassword',
  *   },
  *   requestTimeout: 5000, // 5 seconds
+ *   connectionTimeout: 250, // 250 milliseconds
  *   protocol: ProtocolVersion.RESP3,
  *   clientName: 'myValkeyClient',
  *   readFrom: ReadFrom.AZAffinity,
@@ -609,6 +612,13 @@ export interface BaseClientConfiguration {
      * Value must be an integer.
      */
     requestTimeout?: number;
+    /**
+     * The duration in milliseconds that the client should wait for a connection to be established.
+     * If the specified timeout is exceeded during the connection attempt, it will result in a connection timeout error.
+     * If not set, a default value will be used.
+     * Value must be an integer.
+     */
+    connectionTimeout?: number;
     /**
      * Represents the client's read from strategy.
      * If not set, `Primary` will be used.
@@ -787,6 +797,7 @@ export class BaseClient {
     private writeInProgress = false;
     private remainingReadData: Uint8Array | undefined;
     private readonly requestTimeout: number; // Timeout in milliseconds
+    private readonly connectionTimeout: number; // Timeout in milliseconds
     protected isClosed = false;
     protected defaultDecoder = Decoder.String;
     private readonly pubsubFutures: [PromiseFunction, ErrorFunction][] = [];
@@ -950,7 +961,10 @@ export class BaseClient {
         Logger.log("info", "Client lifetime", `construct client`);
         this.config = options;
         this.requestTimeout =
-            options?.requestTimeout ?? DEFAULT_TIMEOUT_IN_MILLISECONDS;
+            options?.requestTimeout ?? DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS;
+        this.connectionTimeout =
+            options?.connectionTimeout ??
+            DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS;
         this.socket = socket;
         this.socket
             .on("data", (data) => this.handleReadData(data))
@@ -7611,6 +7625,7 @@ export class BaseClient {
                 ? connection_request.TlsMode.SecureTls
                 : connection_request.TlsMode.NoTls,
             requestTimeout: options.requestTimeout,
+            connectionTimeout: options.connectionTimeout,
             clusterModeEnabled: false,
             readFrom,
             authenticationInfo,

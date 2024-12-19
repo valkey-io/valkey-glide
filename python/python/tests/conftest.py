@@ -5,6 +5,8 @@ from typing import AsyncGenerator, List, Optional, Union
 
 import pytest
 from glide.config import (
+    AdvancedGlideClientConfiguration,
+    AdvancedGlideClusterClientConfiguration,
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
     NodeAddress,
@@ -243,6 +245,7 @@ async def create_client(
     client_name: Optional[str] = None,
     protocol: ProtocolVersion = ProtocolVersion.RESP3,
     timeout: Optional[int] = 1000,
+    connection_timeout: Optional[int] = 1000,
     cluster_mode_pubsub: Optional[
         GlideClusterClientConfiguration.PubSubSubscriptions
     ] = None,
@@ -271,6 +274,7 @@ async def create_client(
             inflight_requests_limit=inflight_requests_limit,
             read_from=read_from,
             client_az=client_az,
+            advanced_config=AdvancedGlideClusterClientConfiguration(connection_timeout),
         )
         return await GlideClusterClient.create(cluster_config)
     else:
@@ -285,10 +289,12 @@ async def create_client(
             client_name=client_name,
             protocol=protocol,
             request_timeout=timeout,
+            connection_timeout=connection_timeout,
             pubsub_subscriptions=standalone_mode_pubsub,
             inflight_requests_limit=inflight_requests_limit,
             read_from=read_from,
             client_az=client_az,
+            advanced_config=AdvancedGlideClientConfiguration(connection_timeout),
         )
         return await GlideClient.create(config)
 

@@ -1485,6 +1485,25 @@ describe("GlideClient", () => {
         TIMEOUT,
     );
 
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "connection timeout test_%p",
+        async (protocol) => {
+            const config = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+                { requestTimeout: 10000 },
+            );
+            config.connectionTimeout = 2000;
+            const client = await GlideClient.createClient(config);
+
+            // Verify that script kill raises an error when no script is running
+            expect(await client.set("key", "value")).toEqual("OK");
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
     it.each([
         [ProtocolVersion.RESP2, 5],
         [ProtocolVersion.RESP2, 100],

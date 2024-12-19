@@ -2024,6 +2024,26 @@ describe("GlideClusterClient", () => {
             }
         },
     );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "connection timeout test_%p",
+        async (protocol) => {
+            const config = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+                { requestTimeout: 10000 },
+            );
+            config.connectionTimeout = 2000;
+            const client = await GlideClusterClient.createClient(config);
+
+            // Verify that script kill raises an error when no script is running
+            expect(await client.set("key", "value")).toEqual("OK");
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
     describe("GlideClusterClient - AZAffinity Read Strategy Test", () => {
         async function getNumberOfReplicas(
             azClient: GlideClusterClient,

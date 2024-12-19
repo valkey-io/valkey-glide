@@ -71,12 +71,13 @@ func mapReadFrom(readFrom ReadFrom) protobuf.ReadFrom {
 }
 
 type baseClientConfiguration struct {
-	addresses      []NodeAddress
-	useTLS         bool
-	credentials    *ServerCredentials
-	readFrom       ReadFrom
-	requestTimeout int
-	clientName     string
+	addresses         []NodeAddress
+	useTLS            bool
+	credentials       *ServerCredentials
+	readFrom          ReadFrom
+	requestTimeout    int
+	connectionTimeout int
+	clientName        string
 }
 
 func (config *baseClientConfiguration) toProtobuf() *protobuf.ConnectionRequest {
@@ -98,6 +99,10 @@ func (config *baseClientConfiguration) toProtobuf() *protobuf.ConnectionRequest 
 	request.ReadFrom = mapReadFrom(config.readFrom)
 	if config.requestTimeout != 0 {
 		request.RequestTimeout = uint32(config.requestTimeout)
+	}
+
+	if config.connectionTimeout != 0 {
+		request.ConnectionTimeout = uint32(config.connectionTimeout)
 	}
 
 	if config.clientName != "" {
@@ -214,6 +219,14 @@ func (config *GlideClientConfiguration) WithRequestTimeout(requestTimeout int) *
 	return config
 }
 
+// WithConnectionTimeout sets the duration in milliseconds that the client should wait for a connection to be established.
+// If the specified timeout is exceeded during the connection attempt, it will result in a connection timeout error.
+// If not set, a default value will be used.
+func (config *GlideClientConfiguration) WithConnectionTimeout(connectionTimeout int) *GlideClientConfiguration {
+	config.connectionTimeout = connectionTimeout
+	return config
+}
+
 // WithClientName sets the client name to be used for the client. Will be used with CLIENT SETNAME command during connection
 // establishment.
 func (config *GlideClientConfiguration) WithClientName(clientName string) *GlideClientConfiguration {
@@ -301,6 +314,14 @@ func (config *GlideClusterClientConfiguration) WithReadFrom(readFrom ReadFrom) *
 // used.
 func (config *GlideClusterClientConfiguration) WithRequestTimeout(requestTimeout int) *GlideClusterClientConfiguration {
 	config.requestTimeout = requestTimeout
+	return config
+}
+
+// WithConnectionTimeout sets the duration in milliseconds that the client should wait for a connection to be established.
+// If the specified timeout is exceeded during the connection attempt, it will result in a connection timeout error.
+// If not set, a default value will be used.
+func (config *GlideClusterClientConfiguration) WithConnectionTimeout(connectionTimeout int) *GlideClusterClientConfiguration {
+	config.connectionTimeout = connectionTimeout
 	return config
 }
 

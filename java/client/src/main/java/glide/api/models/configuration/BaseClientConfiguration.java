@@ -54,6 +54,13 @@ public abstract class BaseClientConfiguration {
     private final Integer requestTimeout;
 
     /**
+     * The duration in milliseconds that the client will wait for a connection to be established. If
+     * the connection attempt does not complete within this time frame, a connection timeout error
+     * will occur. If not set, a default value will be used.
+     */
+    private final Integer connectionTimeout;
+
+    /**
      * Client name to be used for the client. Will be used with CLIENT SETNAME command during
      * connection establishment.
      */
