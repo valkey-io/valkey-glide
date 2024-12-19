@@ -77,18 +77,18 @@ def test_convert_config_with_azaffinity_to_protobuf():
 
 def test_connection_timeout_in_protobuf_request():
     connection_timeout = 5000  # in milliseconds
-    config = AdvancedGlideClientConfiguration(
+    config = GlideClientConfiguration(
         [NodeAddress("127.0.0.1")],
-        connection_timeout=connection_timeout,
+        advanced_config=AdvancedGlideClientConfiguration(connection_timeout),
     )
     request = config._create_a_protobuf_conn_request()
 
     assert isinstance(request, ConnectionRequest)
     assert request.connection_timeout == connection_timeout
 
-    config = AdvancedGlideClusterClientConfiguration(
+    config = GlideClusterClientConfiguration(
         [NodeAddress("127.0.0.1")],
-        connection_timeout=connection_timeout,
+        advanced_config=AdvancedGlideClusterClientConfiguration(connection_timeout),
     )
     request = config._create_a_protobuf_conn_request(cluster_mode=True)
 

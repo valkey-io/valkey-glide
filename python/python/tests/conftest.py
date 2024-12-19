@@ -263,23 +263,23 @@ async def create_client(
         assert database_id == 0
         k = min(3, len(pytest.valkey_cluster.nodes_addr))
         seed_nodes = random.sample(pytest.valkey_cluster.nodes_addr, k=k)
-        cluster_config = AdvancedGlideClusterClientConfiguration(
+        cluster_config = GlideClusterClientConfiguration(
             addresses=seed_nodes if addresses is None else addresses,
             use_tls=use_tls,
             credentials=credentials,
             client_name=client_name,
             protocol=protocol,
             request_timeout=timeout,
-            connection_timeout=connection_timeout,
             pubsub_subscriptions=cluster_mode_pubsub,
             inflight_requests_limit=inflight_requests_limit,
             read_from=read_from,
             client_az=client_az,
+            advanced_config=AdvancedGlideClusterClientConfiguration(connection_timeout),
         )
         return await GlideClusterClient.create(cluster_config)
     else:
         assert type(pytest.standalone_cluster) is ValkeyCluster
-        config = AdvancedGlideClientConfiguration(
+        config = GlideClientConfiguration(
             addresses=(
                 pytest.standalone_cluster.nodes_addr if addresses is None else addresses
             ),
@@ -294,6 +294,7 @@ async def create_client(
             inflight_requests_limit=inflight_requests_limit,
             read_from=read_from,
             client_az=client_az,
+            advanced_config=AdvancedGlideClientConfiguration(connection_timeout),
         )
         return await GlideClient.create(config)
 
