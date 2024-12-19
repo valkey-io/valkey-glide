@@ -325,3 +325,20 @@ func (opts *BaseScanOptions) toArgs() ([]string, error) {
 
 	return args, err
 }
+
+type InfBoundary string
+
+const (
+	// PositiveInfinity represents the positive infinity bound
+	PositiveInfinity InfBoundary = "+"
+	// NegativeInfinity represents the negative infinity bound
+	NegativeInfinity InfBoundary = "-"
+)
+
+// Boundary represents a range boundary
+type Boundary struct {
+	// Comparison value for the boundary
+	Value int64
+	// Whether the value is inclusive. Defaults to true.
+	IsInclusive bool
+}
