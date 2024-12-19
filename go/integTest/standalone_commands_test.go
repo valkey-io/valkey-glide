@@ -33,7 +33,7 @@ func (suite *GlideTestSuite) TestCustomCommandPing_StringResponse() {
 func (suite *GlideTestSuite) TestCustomCommandClientInfo() {
 	clientName := "TEST_CLIENT_NAME"
 	config := api.NewGlideClientConfiguration().
-		WithAddress(&api.NodeAddress{Port: suite.standalonePorts[0]}).
+		WithAddress(&suite.standaloneHosts[0]).
 		WithClientName(clientName)
 	client := suite.client(config)
 
@@ -92,7 +92,7 @@ func (suite *GlideTestSuite) TestCustomCommandIncrByFloat_FloatResponse() {
 func (suite *GlideTestSuite) TestCustomCommandMGet_ArrayResponse() {
 	clientName := "TEST_CLIENT_NAME"
 	config := api.NewGlideClientConfiguration().
-		WithAddress(&api.NodeAddress{Port: suite.standalonePorts[0]}).
+		WithAddress(&suite.standaloneHosts[0]).
 		WithClientName(clientName)
 	client := suite.client(config)
 
