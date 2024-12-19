@@ -663,6 +663,39 @@ func (client *baseClient) SUnion(keys []string) (map[Result[string]]struct{}, er
 	return handleStringSetResponse(result)
 }
 
+func (client *baseClient) SScan(key string, cursor string) (Result[string], []Result[string], error) {
+	result, err := client.executeCommand(C.SScan, []string{key, cursor})
+	if err != nil {
+		return CreateNilStringResult(), nil, err
+	}
+	return handleScanResponse(result)
+}
+
+func (client *baseClient) SScanWithOptions(
+	key string,
+	cursor string,
+	options *BaseScanOptions,
+) (Result[string], []Result[string], error) {
+	optionArgs, err := options.toArgs()
+	if err != nil {
+		return CreateNilStringResult(), nil, err
+	}
+
+	result, err := client.executeCommand(C.SScan, append([]string{key, cursor}, optionArgs...))
+	if err != nil {
+		return CreateNilStringResult(), nil, err
+	}
+	return handleScanResponse(result)
+}
+
+func (client *baseClient) SMove(source string, destination string, member string) (Result[bool], error) {
+	result, err := client.executeCommand(C.SMove, []string{source, destination, member})
+	if err != nil {
+		return CreateNilBoolResult(), err
+	}
+	return handleBooleanResponse(result)
+}
+
 func (client *baseClient) LRange(key string, start int64, end int64) ([]Result[string], error) {
 	result, err := client.executeCommand(C.LRange, []string{key, utils.IntToString(start), utils.IntToString(end)})
 	if err != nil {
@@ -1156,4 +1189,46 @@ func (client *baseClient) Select(index int64) (Result[string], error) {
 	}
 
 	return handleStringResponse(result)
+}
+
+func (client *baseClient) Unlink(keys []string) (Result[int64], error) {
+	result, err := client.executeCommand(C.Unlink, keys)
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) Type(key string) (Result[string], error) {
+	result, err := client.executeCommand(C.Type, []string{key})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNullResponse(result)
+}
+
+func (client *baseClient) Touch(keys []string) (Result[int64], error) {
+	result, err := client.executeCommand(C.Touch, keys)
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) Rename(key string, newKey string) (Result[string], error) {
+	result, err := client.executeCommand(C.Rename, []string{key, newKey})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNullResponse(result)
+}
+
+func (client *baseClient) Renamenx(key string, newKey string) (Result[bool], error) {
+	result, err := client.executeCommand(C.RenameNX, []string{key, newKey})
+	if err != nil {
+		return CreateNilBoolResult(), err
+	}
+	return handleBooleanResponse(result)
 }

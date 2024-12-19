@@ -5,6 +5,7 @@ package integTest
 import (
 	"math"
 	"reflect"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -1989,6 +1990,243 @@ func (suite *GlideTestSuite) TestSUnion() {
 	})
 }
 
+func (suite *GlideTestSuite) TestSMove() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1-" + uuid.NewString()
+		key2 := "{key}-2-" + uuid.NewString()
+		key3 := "{key}-3-" + uuid.NewString()
+		stringKey := "{key}-4-" + uuid.NewString()
+		nonExistingKey := "{key}-5-" + uuid.NewString()
+		memberArray1 := []string{"1", "2", "3"}
+		memberArray2 := []string{"2", "3"}
+		t := suite.T()
+
+		res1, err := client.SAdd(key1, memberArray1)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(3), res1.Value())
+
+		res2, err := client.SAdd(key2, memberArray2)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(2), res2.Value())
+
+		// move an element
+		res3, err := client.SMove(key1, key2, "1")
+		assert.NoError(t, err)
+		assert.True(t, res3.Value())
+
+		res4, err := client.SMembers(key1)
+		assert.NoError(t, err)
+		expectedSet := map[api.Result[string]]struct{}{
+			api.CreateStringResult("2"): {},
+			api.CreateStringResult("3"): {},
+		}
+		assert.True(t, reflect.DeepEqual(expectedSet, res4))
+
+		res5, err := client.SMembers(key2)
+		assert.NoError(t, err)
+		expectedSet = map[api.Result[string]]struct{}{
+			api.CreateStringResult("1"): {},
+			api.CreateStringResult("2"): {},
+			api.CreateStringResult("3"): {},
+		}
+		assert.True(t, reflect.DeepEqual(expectedSet, res5))
+
+		// moved element already exists in the destination set
+		res6, err := client.SMove(key2, key1, "2")
+		assert.NoError(t, err)
+		assert.True(t, res6.Value())
+
+		res7, err := client.SMembers(key1)
+		assert.NoError(t, err)
+		expectedSet = map[api.Result[string]]struct{}{
+			api.CreateStringResult("2"): {},
+			api.CreateStringResult("3"): {},
+		}
+		assert.True(t, reflect.DeepEqual(expectedSet, res7))
+
+		res8, err := client.SMembers(key2)
+		assert.NoError(t, err)
+		expectedSet = map[api.Result[string]]struct{}{
+			api.CreateStringResult("1"): {},
+			api.CreateStringResult("3"): {},
+		}
+		assert.True(t, reflect.DeepEqual(expectedSet, res8))
+
+		// attempt to move from a non-existing key
+		res9, err := client.SMove(nonExistingKey, key1, "4")
+		assert.NoError(t, err)
+		assert.False(t, res9.Value())
+
+		res10, err := client.SMembers(key1)
+		assert.NoError(t, err)
+		expectedSet = map[api.Result[string]]struct{}{
+			api.CreateStringResult("2"): {},
+			api.CreateStringResult("3"): {},
+		}
+		assert.True(t, reflect.DeepEqual(expectedSet, res10))
+
+		// move to a new set
+		res11, err := client.SMove(key1, key3, "2")
+		assert.NoError(t, err)
+		assert.True(t, res11.Value())
+
+		res12, err := client.SMembers(key1)
+		assert.NoError(t, err)
+		assert.Len(t, res12, 1)
+		assert.Contains(t, res12, api.CreateStringResult("3"))
+
+		res13, err := client.SMembers(key3)
+		assert.NoError(t, err)
+		assert.Len(t, res13, 1)
+		assert.Contains(t, res13, api.CreateStringResult("2"))
+
+		// attempt to move a missing element
+		res14, err := client.SMove(key1, key3, "42")
+		assert.NoError(t, err)
+		assert.False(t, res14.Value())
+
+		res12, err = client.SMembers(key1)
+		assert.NoError(t, err)
+		assert.Len(t, res12, 1)
+		assert.Contains(t, res12, api.CreateStringResult("3"))
+
+		res13, err = client.SMembers(key3)
+		assert.NoError(t, err)
+		assert.Len(t, res13, 1)
+		assert.Contains(t, res13, api.CreateStringResult("2"))
+
+		// moving missing element to missing key
+		res15, err := client.SMove(key1, nonExistingKey, "42")
+		assert.NoError(t, err)
+		assert.False(t, res15.Value())
+
+		res12, err = client.SMembers(key1)
+		assert.NoError(t, err)
+		assert.Len(t, res12, 1)
+		assert.Contains(t, res12, api.CreateStringResult("3"))
+
+		// key exists but is not contain a set
+		_, err = client.Set(stringKey, "value")
+		assert.NoError(t, err)
+
+		_, err = client.SMove(stringKey, key1, "_")
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestSScan() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1-" + uuid.NewString()
+		key2 := "{key}-2-" + uuid.NewString()
+		initialCursor := "0"
+		defaultCount := 10
+		// use large dataset to force an iterative cursor.
+		numMembers := make([]string, 50000)
+		numMembersResult := make([]api.Result[string], 50000)
+		charMembers := []string{"a", "b", "c", "d", "e"}
+		charMembersResult := []api.Result[string]{
+			api.CreateStringResult("a"),
+			api.CreateStringResult("b"),
+			api.CreateStringResult("c"),
+			api.CreateStringResult("d"),
+			api.CreateStringResult("e"),
+		}
+		t := suite.T()
+
+		// populate the dataset slice
+		for i := 0; i < 50000; i++ {
+			numMembers[i] = strconv.Itoa(i)
+			numMembersResult[i] = api.CreateStringResult(strconv.Itoa(i))
+		}
+
+		// empty set
+		resCursor, resCollection, err := client.SScan(key1, initialCursor)
+		assert.NoError(t, err)
+		assert.Equal(t, initialCursor, resCursor.Value())
+		assert.Empty(t, resCollection)
+
+		// negative cursor
+		if suite.serverVersion < "8.0.0" {
+			resCursor, resCollection, err = client.SScan(key1, "-1")
+			assert.NoError(t, err)
+			assert.Equal(t, initialCursor, resCursor.Value())
+			assert.Empty(t, resCollection)
+		} else {
+			_, _, err = client.SScan(key1, "-1")
+			assert.NotNil(suite.T(), err)
+			assert.IsType(suite.T(), &api.RequestError{}, err)
+		}
+
+		// result contains the whole set
+		res, err := client.SAdd(key1, charMembers)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(len(charMembers)), res.Value())
+		resCursor, resCollection, err = client.SScan(key1, initialCursor)
+		assert.NoError(t, err)
+		assert.Equal(t, initialCursor, resCursor.Value())
+		assert.Equal(t, len(charMembers), len(resCollection))
+		assert.True(t, isSubset(resCollection, charMembersResult))
+
+		opts := api.NewBaseScanOptionsBuilder().SetMatch("a")
+		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
+		assert.NoError(t, err)
+		assert.Equal(t, initialCursor, resCursor.Value())
+		assert.True(t, isSubset(resCollection, []api.Result[string]{api.CreateStringResult("a")}))
+
+		// result contains a subset of the key
+		res, err = client.SAdd(key1, numMembers)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(50000), res.Value())
+		resCursor, resCollection, err = client.SScan(key1, "0")
+		assert.NoError(t, err)
+		resultCollection := resCollection
+
+		// 0 is returned for the cursor of the last iteration
+		for resCursor.Value() != "0" {
+			nextCursor, nextCol, err := client.SScan(key1, resCursor.Value())
+			assert.NoError(t, err)
+			assert.NotEqual(t, nextCursor, resCursor)
+			assert.False(t, isSubset(resultCollection, nextCol))
+			resultCollection = append(resultCollection, nextCol...)
+			resCursor = nextCursor
+		}
+		assert.NotEmpty(t, resultCollection)
+		assert.True(t, isSubset(numMembersResult, resultCollection))
+		assert.True(t, isSubset(charMembersResult, resultCollection))
+
+		// test match pattern
+		opts = api.NewBaseScanOptionsBuilder().SetMatch("*")
+		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
+		assert.NoError(t, err)
+		assert.NotEqual(t, initialCursor, resCursor.Value())
+		assert.GreaterOrEqual(t, len(resCollection), defaultCount)
+
+		// test count
+		opts = api.NewBaseScanOptionsBuilder().SetCount(20)
+		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
+		assert.NoError(t, err)
+		assert.NotEqual(t, initialCursor, resCursor.Value())
+		assert.GreaterOrEqual(t, len(resCollection), 20)
+
+		// test count with match, returns a non-empty array
+		opts = api.NewBaseScanOptionsBuilder().SetMatch("1*").SetCount(20)
+		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
+		assert.NoError(t, err)
+		assert.NotEqual(t, initialCursor, resCursor.Value())
+		assert.GreaterOrEqual(t, len(resCollection), 0)
+
+		// exceptions
+		// non-set key
+		_, err = client.Set(key2, "test")
+		assert.NoError(t, err)
+
+		_, _, err = client.SScan(key2, initialCursor)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
 func (suite *GlideTestSuite) TestLRange() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		list := []string{"value4", "value3", "value2", "value1"}
@@ -2672,137 +2910,6 @@ func (suite *GlideTestSuite) TestLMove() {
 		assert.Equal(suite.T(), api.CreateNilStringResult(), res12)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
-	})
-}
-
-func (suite *GlideTestSuite) TestBLMove() {
-	if suite.serverVersion < "6.2.0" {
-		suite.T().Skip("This feature is added in version 6.2.0")
-	}
-	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key1 := "{key}-1" + uuid.NewString()
-		key2 := "{key}-2" + uuid.NewString()
-		nonExistentKey := "{key}-3" + uuid.NewString()
-		nonListKey := "{key}-4" + uuid.NewString()
-
-		res1, err := client.BLMove(key1, key2, api.Left, api.Right, float64(0.1))
-		assert.Equal(suite.T(), api.CreateNilStringResult(), res1)
-		assert.Nil(suite.T(), err)
-
-		res2, err := client.LPush(key1, []string{"four", "three", "two", "one"})
-		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(4), res2.Value())
-
-		// only source exists, only source elements gets popped, creates a list at nonExistingKey
-		res3, err := client.BLMove(key1, nonExistentKey, api.Right, api.Left, float64(0.1))
-		assert.Equal(suite.T(), "four", res3.Value())
-		assert.Nil(suite.T(), err)
-
-		res4, err := client.LRange(key1, int64(0), int64(-1))
-		assert.Nil(suite.T(), err)
-		assert.Equal(
-			suite.T(),
-			[]api.Result[string]{
-				api.CreateStringResult("one"),
-				api.CreateStringResult("two"),
-				api.CreateStringResult("three"),
-			},
-			res4,
-		)
-
-		// source and destination are the same, performing list rotation, "one" gets popped and added back
-		res5, err := client.BLMove(key1, key1, api.Left, api.Left, float64(0.1))
-		assert.Equal(suite.T(), "one", res5.Value())
-		assert.Nil(suite.T(), err)
-
-		res6, err := client.LRange(key1, int64(0), int64(-1))
-		assert.Nil(suite.T(), err)
-		assert.Equal(
-			suite.T(),
-			[]api.Result[string]{
-				api.CreateStringResult("one"),
-				api.CreateStringResult("two"),
-				api.CreateStringResult("three"),
-			},
-			res6,
-		)
-		// normal use case, "three" gets popped and added to the left of destination
-		res7, err := client.LPush(key2, []string{"six", "five", "four"})
-		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(3), res7.Value())
-
-		res8, err := client.BLMove(key1, key2, api.Right, api.Left, float64(0.1))
-		assert.Equal(suite.T(), "three", res8.Value())
-		assert.Nil(suite.T(), err)
-
-		res9, err := client.LRange(key1, int64(0), int64(-1))
-		assert.Nil(suite.T(), err)
-		assert.Equal(
-			suite.T(),
-			[]api.Result[string]{
-				api.CreateStringResult("one"),
-				api.CreateStringResult("two"),
-			},
-			res9,
-		)
-		res10, err := client.LRange(key2, int64(0), int64(-1))
-		assert.Nil(suite.T(), err)
-		assert.Equal(
-			suite.T(),
-			[]api.Result[string]{
-				api.CreateStringResult("three"),
-				api.CreateStringResult("four"),
-				api.CreateStringResult("five"),
-				api.CreateStringResult("six"),
-			},
-			res10,
-		)
-
-		// source exists but is not a list type key
-		suite.verifyOK(client.Set(nonListKey, "value"))
-
-		res11, err := client.BLMove(nonListKey, key1, api.Left, api.Left, float64(0.1))
-		assert.Equal(suite.T(), api.CreateNilStringResult(), res11)
-		assert.NotNil(suite.T(), err)
-		assert.IsType(suite.T(), &api.RequestError{}, err)
-
-		// destination exists but is not a list type key
-		suite.verifyOK(client.Set(nonListKey, "value"))
-
-		res12, err := client.BLMove(key1, nonListKey, api.Left, api.Left, float64(0.1))
-		assert.Equal(suite.T(), api.CreateNilStringResult(), res12)
-		assert.NotNil(suite.T(), err)
-		assert.IsType(suite.T(), &api.RequestError{}, err)
-	})
-}
-
-func (suite *GlideTestSuite) TestDel_MultipleKeys() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key1 := "testKey1_" + uuid.New().String()
-		key2 := "testKey2_" + uuid.New().String()
-		key3 := "testKey3_" + uuid.New().String()
-
-		suite.verifyOK(client.Set(key1, initialValue))
-		suite.verifyOK(client.Set(key2, initialValue))
-		suite.verifyOK(client.Set(key3, initialValue))
-
-		deletedCount, err := client.Del([]string{key1, key2, key3})
-
-		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(3), deletedCount.Value())
-
-		result1, err1 := client.Get(key1)
-		result2, err2 := client.Get(key2)
-		result3, err3 := client.Get(key3)
-
-		assert.Nil(suite.T(), err1)
-		assert.True(suite.T(), result1.IsNil())
-
-		assert.Nil(suite.T(), err2)
-		assert.True(suite.T(), result2.IsNil())
-
-		assert.Nil(suite.T(), err3)
-		assert.True(suite.T(), result3.IsNil())
 	})
 }
 
@@ -3527,5 +3634,231 @@ func (suite *GlideTestSuite) TestPfCount_NoExistingKeys() {
 		resCount, err := client.PfCount([]string{key1, key2})
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(0), resCount.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestBLMove() {
+	if suite.serverVersion < "6.2.0" {
+		suite.T().Skip("This feature is added in version 6.2.0")
+	}
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1" + uuid.NewString()
+		key2 := "{key}-2" + uuid.NewString()
+		nonExistentKey := "{key}-3" + uuid.NewString()
+		nonListKey := "{key}-4" + uuid.NewString()
+
+		res1, err := client.BLMove(key1, key2, api.Left, api.Right, float64(0.1))
+		assert.Equal(suite.T(), api.CreateNilStringResult(), res1)
+		assert.Nil(suite.T(), err)
+
+		res2, err := client.LPush(key1, []string{"four", "three", "two", "one"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), res2.Value())
+
+		// only source exists, only source elements gets popped, creates a list at nonExistingKey
+		res3, err := client.BLMove(key1, nonExistentKey, api.Right, api.Left, float64(0.1))
+		assert.Equal(suite.T(), "four", res3.Value())
+		assert.Nil(suite.T(), err)
+
+		res4, err := client.LRange(key1, int64(0), int64(-1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			[]api.Result[string]{
+				api.CreateStringResult("one"),
+				api.CreateStringResult("two"),
+				api.CreateStringResult("three"),
+			},
+			res4,
+		)
+
+		// source and destination are the same, performing list rotation, "one" gets popped and added back
+		res5, err := client.BLMove(key1, key1, api.Left, api.Left, float64(0.1))
+		assert.Equal(suite.T(), "one", res5.Value())
+		assert.Nil(suite.T(), err)
+
+		res6, err := client.LRange(key1, int64(0), int64(-1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			[]api.Result[string]{
+				api.CreateStringResult("one"),
+				api.CreateStringResult("two"),
+				api.CreateStringResult("three"),
+			},
+			res6,
+		)
+		// normal use case, "three" gets popped and added to the left of destination
+		res7, err := client.LPush(key2, []string{"six", "five", "four"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res7.Value())
+
+		res8, err := client.BLMove(key1, key2, api.Right, api.Left, float64(0.1))
+		assert.Equal(suite.T(), "three", res8.Value())
+		assert.Nil(suite.T(), err)
+
+		res9, err := client.LRange(key1, int64(0), int64(-1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			[]api.Result[string]{
+				api.CreateStringResult("one"),
+				api.CreateStringResult("two"),
+			},
+			res9,
+		)
+		res10, err := client.LRange(key2, int64(0), int64(-1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			[]api.Result[string]{
+				api.CreateStringResult("three"),
+				api.CreateStringResult("four"),
+				api.CreateStringResult("five"),
+				api.CreateStringResult("six"),
+			},
+			res10,
+		)
+
+		// source exists but is not a list type key
+		suite.verifyOK(client.Set(nonListKey, "value"))
+
+		res11, err := client.BLMove(nonListKey, key1, api.Left, api.Left, float64(0.1))
+		assert.Equal(suite.T(), api.CreateNilStringResult(), res11)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		// destination exists but is not a list type key
+		suite.verifyOK(client.Set(nonListKey, "value"))
+
+		res12, err := client.BLMove(key1, nonListKey, api.Left, api.Left, float64(0.1))
+		assert.Equal(suite.T(), api.CreateNilStringResult(), res12)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestDel_MultipleKeys() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "testKey1_" + uuid.New().String()
+		key2 := "testKey2_" + uuid.New().String()
+		key3 := "testKey3_" + uuid.New().String()
+
+		suite.verifyOK(client.Set(key1, initialValue))
+		suite.verifyOK(client.Set(key2, initialValue))
+		suite.verifyOK(client.Set(key3, initialValue))
+
+		deletedCount, err := client.Del([]string{key1, key2, key3})
+
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), deletedCount.Value())
+
+		result1, err1 := client.Get(key1)
+		result2, err2 := client.Get(key2)
+		result3, err3 := client.Get(key3)
+
+		assert.Nil(suite.T(), err1)
+		assert.True(suite.T(), result1.IsNil())
+
+		assert.Nil(suite.T(), err2)
+		assert.True(suite.T(), result2.IsNil())
+
+		assert.Nil(suite.T(), err3)
+		assert.True(suite.T(), result3.IsNil())
+	})
+}
+
+func (suite *GlideTestSuite) TestType() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		// Test 1: Check if the value is string
+		keyName := "{keyName}" + uuid.NewString()
+		suite.verifyOK(client.Set(keyName, initialValue))
+		result, err := client.Type(keyName)
+		assert.Nil(suite.T(), err)
+		assert.IsType(suite.T(), result, api.CreateStringResult("string"), "Value is string")
+
+		// Test 2: Check if the value is list
+		key1 := "{keylist}-1" + uuid.NewString()
+		resultLPush, err := client.LPush(key1, []string{"one", "two", "three"})
+		assert.Equal(suite.T(), int64(3), resultLPush.Value())
+		assert.Nil(suite.T(), err)
+		resultType, err := client.Type(key1)
+		assert.Nil(suite.T(), err)
+		assert.IsType(suite.T(), resultType, api.CreateStringResult("list"), "Value is list")
+	})
+}
+
+func (suite *GlideTestSuite) TestTouch() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		// Test 1: Check if an touch valid key
+		keyName := "{keyName}" + uuid.NewString()
+		keyName1 := "{keyName1}" + uuid.NewString()
+		suite.verifyOK(client.Set(keyName, initialValue))
+		suite.verifyOK(client.Set(keyName1, "anotherValue"))
+		result, err := client.Touch([]string{keyName, keyName1})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), result.Value(), "The touch should be 2")
+
+		// Test 2: Check if an touch invalid key
+		resultInvalidKey, err := client.Touch([]string{"invalidKey", "invalidKey1"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), resultInvalidKey.Value(), "The touch should be 0")
+	})
+}
+
+func (suite *GlideTestSuite) TestUnlink() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		// Test 1: Check if an unlink valid key
+		keyName := "{keyName}" + uuid.NewString()
+		keyName1 := "{keyName1}" + uuid.NewString()
+		suite.verifyOK(client.Set(keyName, initialValue))
+		suite.verifyOK(client.Set(keyName1, "anotherValue"))
+		resultValidKey, err := client.Unlink([]string{keyName, keyName1})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), resultValidKey.Value(), "The unlink should be 2")
+
+		// Test 2: Check if an unlink for invalid key
+		resultInvalidKey, err := client.Unlink([]string{"invalidKey2", "invalidKey3"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), resultInvalidKey.Value(), "The unlink should be 0")
+	})
+}
+
+func (suite *GlideTestSuite) Test_Rename() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		// Test 1 Check if the command successfully renamed
+		key := "{keyName}" + uuid.NewString()
+		initialValueRename := "TestRename_RenameValue"
+		newRenameKey := "{newkeyName}" + uuid.NewString()
+		suite.verifyOK(client.Set(key, initialValueRename))
+		client.Rename(key, newRenameKey)
+
+		// Test 2 Check if the rename command return false if the key/newkey is invalid.
+		key1 := "{keyName}" + uuid.NewString()
+		res1, err := client.Rename(key1, "invalidKey")
+		assert.Equal(suite.T(), "", res1.Value())
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestRenamenx() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		// Test 1 Check if the renamenx command return true if key was renamed to newKey
+		key := "{keyName}" + uuid.NewString()
+		key2 := "{keyName}" + uuid.NewString()
+		suite.verifyOK(client.Set(key, initialValue))
+		res1, err := client.Renamenx(key, key2)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), true, res1.Value())
+
+		// Test 2 Check if the renamenx command return false if newKey already exists.
+		key3 := "{keyName}" + uuid.NewString()
+		key4 := "{keyName}" + uuid.NewString()
+		suite.verifyOK(client.Set(key3, initialValue))
+		suite.verifyOK(client.Set(key4, initialValue))
+		res2, err := client.Renamenx(key3, key4)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), false, res2.Value())
 	})
 }

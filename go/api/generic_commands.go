@@ -313,4 +313,121 @@ type GenericBaseCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/pttl/
 	PTTL(key string) (Result[int64], error)
+
+	// Unlink (delete) multiple keys from the database. A key is ignored if it does not exist.
+	// This command, similar to Del However, this command does not block the server
+	//
+	// Note:
+	//	 In cluster mode, if keys in keys map to different hash slots, the command
+	//   will be split across these slots and executed separately for each. This means the command
+	//   is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+	//   call will return the first encountered error, even though some requests may have succeeded
+	//   while others did not. If this behavior impacts your application logic, consider splitting
+	//   the request into sub-requests per slot to ensure atomicity.
+	//
+	// Parameters:
+	//  keys - One or more keys to unlink.
+	//
+	// Return value:
+	//  Return the number of keys that were unlinked.
+	//
+	// Example:
+	//	result, err := client.Unlink([]string{"key1", "key2", "key3"})
+	//	if err != nil {
+	//	    // handle error
+	//	}
+	//	fmt.Println(result.Value()) // Output: 3
+	//
+	// [valkey.io]: Https://valkey.io/commands/unlink/
+	Unlink(keys []string) (Result[int64], error)
+
+	// Alters the last access time of a key(s). A key is ignored if it does not exist.
+	//
+	// Note:
+	//	 In cluster mode, if keys in keys map to different hash slots, the command
+	//   will be split across these slots and executed separately for each. This means the command
+	//   is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+	//   call will return the first encountered error, even though some requests may have succeeded
+	//   while others did not. If this behavior impacts your application logic, consider splitting
+	//   the request into sub-requests per slot to ensure atomicity.
+	//
+	// Parameters:
+	//  The keys to update last access time.
+	//
+	// Return value:
+	//  The number of keys that were updated.
+	//
+	// Example:
+	//	result, err := client.Touch([]string{"key1", "key2", "key3"})
+	//	if err != nil {
+	//	    // handle error
+	//	}
+	//	fmt.Println(result.Value()) // Output: 3
+	//
+	// [valkey.io]: Https://valkey.io/commands/touch/
+	Touch(keys []string) (Result[int64], error)
+
+	// Type returns the string representation of the type of the value stored at key.
+	// The different types that can be returned are: string, list, set, zset, hash and stream.
+	//
+	// Parameters:
+	//  key - string
+	//
+	// Return value:
+	//  If the key exists, the type of the stored value is returned. Otherwise, a none" string is returned.
+	//
+	// Example:
+	//	result, err := client.Type([]string{"key"})
+	//	if err != nil {
+	//	    // handle error
+	//	}
+	//	fmt.Println(result.Value()) // Output: string
+	//
+	// [valkey.io]: Https://valkey.io/commands/type/
+	Type(key string) (Result[string], error)
+
+	// Renames key to new key.
+	//  If new Key already exists it is overwritten.
+	//
+	// Note:
+	//  When in cluster mode, both key and newKey must map to the same hash slot.
+	//
+	// Parameters:
+	//  key to rename.
+	//  newKey The new name of the key.
+	//
+	// Return value:
+	// If the key was successfully renamed, return "OK". If key does not exist, an error is thrown.
+	//
+	// Example:
+	//  result, err := client.Rename([]string{"key","newkey"})
+	//	if err != nil {
+	//	    // handle error
+	//	}
+	//	fmt.Println(result.Value()) // Output: OK
+	//
+	// [valkey.io]: https://valkey.io/commands/rename/
+	Rename(key string, newKey string) (Result[string], error)
+
+	// Renames key to newkey if newKey does not yet exist.
+	//
+	// Note:
+	//  When in cluster mode, both key and newkey must map to the same hash slot.
+	//
+	// Parameters:
+	//  key to rename.
+	//  newKey The new name of the key.
+	//
+	// Return value:
+	// true if key was renamed to newKey, false if newKey already exists.
+	//
+	// Example:
+	//  result, err := client.Renamenx([]string{"key","newkey"})
+	//	if err != nil {
+	//	    // handle error
+	//	}
+	//	fmt.Println(result.Value()) // Output: OK
+	//
+	// [valkey.io]: https://valkey.io/commands/renamenx/
+	Renamenx(key string, newKey string) (Result[bool], error)
 }
