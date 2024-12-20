@@ -2,11 +2,11 @@
 
 package api
 
-// Supports commands and transactions for the "List Commands" group for standalone and cluster clients.
+// Supports commands and transactions for the "List" group of commands for standalone and cluster clients.
 //
 // See [valkey.io] for details.
 //
-// [valkey.io]: https://valkey.io/commands/?group=list
+// [valkey.io]: https://valkey.io/commands/#list
 type ListCommands interface {
 	// Inserts all the specified values at the head of the list stored at key. elements are inserted one after the other to the
 	// head of the list, from the leftmost element to the rightmost element. If key does not exist, it is created as an empty
