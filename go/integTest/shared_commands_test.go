@@ -3547,33 +3547,33 @@ func (suite *GlideTestSuite) TestPExpireTime() {
 func (suite *GlideTestSuite) Test_ZCard() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key1 := "{key}-1" + uuid.NewString()
-        membersScores := map[string]int{
-            "one":   1,
-            "two":   2,
-            "three": 3,
-        }
+		membersScores := map[string]float64{
+			"one":   1.0,
+			"two":   2.0,
+			"three": 3.0,
+		}
 
-		res1, err := client.ZAdd(key, membersScores)
+		res1, err := client.Zadd(key, membersScores)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(3), res1.Value())
 
-        res2, err := client.ZCard(key)
-        assert.Nil(suite.T(), err)
-        assert.Equal(suite.T(), int64(3), res2.Value())
+		res2, err := client.ZCard(key)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res2.Value())
 
-        /**
-        TODO:
-        expect(await client.zrem(key, ["one"])).toEqual(1);
-        expect(await client.zcard(key)).toEqual(2);
-        */
+		/**
+		  TODO:
+		  expect(await client.zrem(key, ["one"])).toEqual(1);
+		  expect(await client.zcard(key)).toEqual(2);
+		*/
 
-//         res3, err := client.ZRem(key, ["one"])
-//         assert.Nil(suite.T(), err)
-//         assert.Equal(suite.T(), int64(1), res3.Value())
+		//         res3, err := client.ZRem(key, ["one"])
+		//         assert.Nil(suite.T(), err)
+		//         assert.Equal(suite.T(), int64(1), res3.Value())
 
-        res4, err := client.ZCard(key)
-        assert.Nil(suite.T(), err)
-        assert.Equal(suite.T(), int64(2), res4.Value())
+		res4, err := client.ZCard(key)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res4.Value())
 	})
 }
 
