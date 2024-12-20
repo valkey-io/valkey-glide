@@ -3872,6 +3872,7 @@ func (suite *GlideTestSuite) TestZAddAndZAddIncr() {
 		assert.NotNil(suite.T(), err)
 		assert.True(suite.T(), resIncr.IsNil())
 	})
+}
 
 func (suite *GlideTestSuite) TestZincrBy() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
