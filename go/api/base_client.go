@@ -48,7 +48,6 @@ func successCallback(channelPtr unsafe.Pointer, cResponse *C.struct_CommandRespo
 	resultChannel <- payload{value: response, error: nil}
 }
 
-//
 //export failureCallback
 func failureCallback(channelPtr unsafe.Pointer, cErrorMessage *C.char, cErrorType C.RequestErrorType) {
 	resultChannel := *(*chan payload)(channelPtr)
@@ -1289,4 +1288,13 @@ func (client *baseClient) ZAddIncrWithOptions(
 	}
 
 	return client.zAddIncrBase(key, incrOpts)
+}
+
+func (client *baseClient) ZCard(key string) (Result[int64], error) {
+	result, err := client.executeCommand(C.ZCard, []string{key})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
 }
