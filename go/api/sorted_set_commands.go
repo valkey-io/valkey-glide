@@ -88,4 +88,7 @@ type SortedSetCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/zadd/
 	ZAddIncrWithOptions(key string, member string, increment float64, opts *options.ZAddOptions) (Result[float64], error)
+
+	// [valkey bzpopmin]: https://valkey.io/commands/bzpopmin/
+	BZPopMin(keys []string, timeoutSecs float64) ([]Result[string], error)
 }
