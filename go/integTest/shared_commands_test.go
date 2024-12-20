@@ -3571,6 +3571,11 @@ func (suite *GlideTestSuite) Test_ZCard() {
 		//         assert.Nil(suite.T(), err)
 		//         assert.Equal(suite.T(), int64(1), res3.Value())
 
+        ZremArgs := append([]string{key}, []string{"one"}...)
+        res3, err := client.CustomCommand(append([]string{"zrem"}, ZremArgs...))
+        assert.Nil(suite.T(), err)
+        assert.Equal(suite.T(), int64(1), res3.Value())
+
 		res4, err := client.ZCard(key)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(2), res4.Value())
