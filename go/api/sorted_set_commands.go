@@ -88,4 +88,23 @@ type SortedSetCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/zadd/
 	ZAddIncrWithOptions(key string, member string, increment float64, opts *options.ZAddOptions) (Result[float64], error)
+
+    // Returns the number of members in the sorted set stored at `key` with scores between `minScore` and `maxScore`.
+    //
+    // See [valkey.io] for details.
+    //
+    // Parameters:
+    //  key - The key of the set.
+    //  minScore - The minimum score to count from. Can be positive/negative infinity, or specific score and inclusivity.
+    //  maxScore - The maximum score to count up to. Can be positive/negative infinity, or specific score and inclusivity.
+    //
+    // Return value:
+    // Result[int64] - The number of members in the specified score range.
+    //
+    // Example:
+    // result1, err := client.ZCount("mySet", ScoreLimit(5.0, true), ScoreLimit(10.0, false))
+    // result1.value() : 1 // Indicates that there is one member with ScoreLimit 5.0 <= score < 10.0 in the sorted set "mySet".
+    //
+    // [valkey.io]: https://valkey.io/commands/zcount/
+    ZCount(key string, ScoreLimit minScore, ScoreLimit maxScore (Result[int64], error)
 }
