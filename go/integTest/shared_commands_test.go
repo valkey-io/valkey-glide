@@ -3478,7 +3478,7 @@ func (suite *GlideTestSuite) TestPExpireTime() {
 	})
 }
 
-func (suite *GlideTestSuite) Test_ZCard() {
+func (suite *GlideTestSuite) Test_ZCount() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key1 := "{key}-1" + uuid.NewString()
         membersScores := map[string]int{

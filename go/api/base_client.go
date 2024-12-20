@@ -1290,3 +1290,12 @@ func (client *baseClient) ZAddIncrWithOptions(
 
 	return client.zAddIncrBase(key, incrOpts)
 }
+
+func (client *baseClient) ZCount(key string, ScoreLimit minScore, ScoreLimit maxScore) (Result[int64], error) {
+	result, err := client.executeCommand(C.ZCount, []string{key, minScore, maxScore})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
