@@ -719,7 +719,7 @@ type HashCommands interface {
 	// Return value:
 	// 	The Result[int64] value of `field` in the hash stored at `key` after the increment.
 	//
-	// For example:
+	// Example:
 	//  hsetResult, err := client.HSet("key", map[string]string{"field": "10"})
 	//  hincrByResult, err := client.HIncrBy("key", "field", 1)
 	//	// hincrByResult.Value(): 11
