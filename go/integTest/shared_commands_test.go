@@ -3546,14 +3546,14 @@ func (suite *GlideTestSuite) TestPExpireTime() {
 
 func (suite *GlideTestSuite) Test_ZCard() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key1 := "{key}-1" + uuid.NewString()
+		key := "{key}" + uuid.NewString()
 		membersScores := map[string]float64{
 			"one":   1.0,
 			"two":   2.0,
 			"three": 3.0,
 		}
 
-		res1, err := client.Zadd(key, membersScores)
+		res1, err := client.ZAdd(key, membersScores)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(3), res1.Value())
 

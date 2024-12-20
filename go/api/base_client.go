@@ -1432,3 +1432,12 @@ func (client *baseClient) ZRem(key string, members []string) (Result[int64], err
 	}
 	return handleLongResponse(result)
 }
+
+func (client *baseClient) ZCard(key string) (Result[int64], error) {
+	result, err := client.executeCommand(C.ZCard, []string{key})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
