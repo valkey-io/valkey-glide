@@ -3970,3 +3970,77 @@ func (suite *GlideTestSuite) TestZincrBy() {
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
 }
+
+func (suite *GlideTestSuite) TestZPopMin() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.New().String()
+		key2 := uuid.New().String()
+		memberScoreMap := map[string]float64{
+			"one":   1.0,
+			"two":   2.0,
+			"three": 3.0,
+		}
+		resultMap1 := map[api.Result[string]]api.Result[string]{
+			api.CreateStringResult("one"): api.CreateStringResult("1.0"),
+		}
+		resultMap2 := map[api.Result[string]]api.Result[string]{
+			api.CreateStringResult("two"):   api.CreateStringResult("2.0"),
+			api.CreateStringResult("three"): api.CreateStringResult("3.0"),
+		}
+		_, err := client.ZAdd(key1, memberScoreMap)
+		assert.Nil(suite.T(), err)
+
+		res2, err := client.ZPopMin(key1)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), resultMap1, res2)
+
+		res3, err := client.ZPopMinWithCount(key1, 2)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), resultMap2, res3)
+
+		// non sorted set key
+		_, err = client.Set(key2, "test")
+		assert.Nil(suite.T(), err)
+
+		_, err = client.ZPopMin(key2)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestZPopMax() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.New().String()
+		key2 := uuid.New().String()
+		memberScoreMap := map[string]float64{
+			"one":   1.0,
+			"two":   2.0,
+			"three": 3.0,
+		}
+		resultMap1 := map[api.Result[string]]api.Result[string]{
+			api.CreateStringResult("one"): api.CreateStringResult("3.0"),
+		}
+		resultMap2 := map[api.Result[string]]api.Result[string]{
+			api.CreateStringResult("two"):   api.CreateStringResult("1.0"),
+			api.CreateStringResult("three"): api.CreateStringResult("2.0"),
+		}
+		_, err := client.ZAdd(key1, memberScoreMap)
+		assert.Nil(suite.T(), err)
+
+		res2, err := client.ZPopMax(key1)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), resultMap1, res2)
+
+		res3, err := client.ZPopMaxWithCount(key1, 2)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), resultMap2, res3)
+
+		// non sorted set key
+		_, err = client.Set(key2, "test")
+		assert.Nil(suite.T(), err)
+
+		_, err = client.ZPopMax(key2)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}

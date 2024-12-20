@@ -110,4 +110,86 @@ type SortedSetCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/zincrby/
 	ZIncrBy(key string, increment float64, member string) (Result[float64], error)
+
+	// Removes and returns the member with the lowest score from the sorted set
+	// stored at the specified `key`.
+	//
+	// see [valkey.io] for details.
+	//
+	// Parameters:
+	//   key - The key of the sorted set.
+	//
+	// Return value:
+	//   A map containing the removed member and its corresponding score.
+	//   If `key` doesn't exist, it will be treated as an empty sorted set and the
+	//   command returns an empty map.
+	//
+	// Example:
+	//   res, err := client.zpopmin("mySortedSet")
+	//   fmt.Println(res.Value()) // Output: map["member1":5.0]
+	//
+	// [valkey.io]: https://valkey.io/commands/zpopmin/
+	ZPopMin(key string) (map[Result[string]]Result[string], error)
+
+	// Removes and returns up to `count` members with the lowest scores from the sorted set
+	// stored at the specified `key`.
+	//
+	// see [valkey.io] for details.
+	//
+	// Parameters:
+	//   key - The key of the sorted set.
+	//   count - The number of members to remove.
+	//
+	// Return value:
+	//   A map containing the removed members and their corresponding scores.
+	//   If `key` doesn't exist, it will be treated as an empty sorted set and the
+	//   command returns an empty map.
+	//
+	// Example:
+	//   res, err := client.ZPopMinWithCount("mySortedSet", 2)
+	//   fmt.Println(res.Value()) // Output: map["member1":5.0, "member2":6.0]
+	//
+	// [valkey.io]: https://valkey.io/commands/zpopmin/
+	ZPopMinWithCount(key string, count int64) (map[Result[string]]Result[string], error)
+
+	// Removes and returns the member with the highest score from the sorted set stored at the
+	// specified `key`.
+	//
+	// see [valkey.io] for details.
+	//
+	// Parameters:
+	//   key - The key of the sorted set.
+	//
+	// Return value:
+	//   A map containing the removed member and its corresponding score.
+	//   If `key` doesn't exist, it will be treated as an empty sorted set and the
+	//   command returns an empty map.
+	//
+	// Example:
+	//   res, err := client.zpopmax("mySortedSet")
+	//   fmt.Println(res.Value()) // Output: map["member2":8.0]
+	//
+	// [valkey.io]: https://valkey.io/commands/zpopmin/
+	ZPopMax(key string) (map[Result[string]]Result[string], error)
+
+	// Removes and returns up to `count` members with the highest scores from the sorted set
+	// stored at the specified `key`.
+	//
+	// see [valkey.io] for details.
+	//
+	// Parameters:
+	//   key - The key of the sorted set.
+	//   count - The number of members to remove.
+	//
+	// Return value:
+	//   A map containing the removed members and their corresponding scores.
+	//   If `key` doesn't exist, it will be treated as an empty sorted set and the
+	//   command returns an empty map.
+	//
+	// Example:
+	//   res, err := client.ZPopMaxWithCount("mySortedSet", 2)
+	//   fmt.Println(res.Value()) // Output: map["member1":5.0, "member2":6.0]
+	//
+	// [valkey.io]: https://valkey.io/commands/zpopmin/
+	ZPopMaxWithCount(key string, count int64) (map[Result[string]]Result[string], error)
 }
