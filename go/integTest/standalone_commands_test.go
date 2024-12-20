@@ -33,7 +33,7 @@ func (suite *GlideTestSuite) TestCustomCommandPing_StringResponse() {
 func (suite *GlideTestSuite) TestCustomCommandClientInfo() {
 	clientName := "TEST_CLIENT_NAME"
 	config := api.NewGlideClientConfiguration().
-		WithAddress(&api.NodeAddress{Port: suite.standalonePorts[0]}).
+		WithAddress(&suite.standaloneHosts[0]).
 		WithClientName(clientName)
 	client := suite.client(config)
 
@@ -92,7 +92,7 @@ func (suite *GlideTestSuite) TestCustomCommandIncrByFloat_FloatResponse() {
 func (suite *GlideTestSuite) TestCustomCommandMGet_ArrayResponse() {
 	clientName := "TEST_CLIENT_NAME"
 	config := api.NewGlideClientConfiguration().
-		WithAddress(&api.NodeAddress{Port: suite.standalonePorts[0]}).
+		WithAddress(&suite.standaloneHosts[0]).
 		WithClientName(clientName)
 	client := suite.client(config)
 
@@ -128,7 +128,7 @@ func (suite *GlideTestSuite) TestCustomCommandConfigGet_MapResponse() {
 
 	result2, err := client.CustomCommand([]string{"CONFIG", "GET", "timeout", "maxmemory"})
 	assert.Nil(suite.T(), err)
-	assert.Equal(suite.T(), map[interface{}]interface{}{"timeout": "1000", "maxmemory": "1073741824"}, result2)
+	assert.Equal(suite.T(), map[string]interface{}{"timeout": "1000", "maxmemory": "1073741824"}, result2)
 }
 
 func (suite *GlideTestSuite) TestCustomCommandConfigSMembers_SetResponse() {
@@ -142,7 +142,7 @@ func (suite *GlideTestSuite) TestCustomCommandConfigSMembers_SetResponse() {
 
 	result2, err := client.CustomCommand([]string{"SMEMBERS", key})
 	assert.Nil(suite.T(), err)
-	assert.Equal(suite.T(), map[interface{}]struct{}{"member1": {}, "member2": {}, "member3": {}}, result2)
+	assert.Equal(suite.T(), map[string]struct{}{"member1": {}, "member2": {}, "member3": {}}, result2)
 }
 
 func (suite *GlideTestSuite) TestCustomCommand_invalidCommand() {

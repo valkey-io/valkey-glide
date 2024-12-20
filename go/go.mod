@@ -3,6 +3,7 @@ module github.com/valkey-io/valkey-glide/go/glide
 go 1.20
 
 require (
+	github.com/google/uuid v1.6.0
 	github.com/stretchr/testify v1.8.4
 	google.golang.org/protobuf v1.33.0
 )

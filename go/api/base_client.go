@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"unsafe"
 
+	"github.com/valkey-io/valkey-glide/go/glide/api/options"
 	"github.com/valkey-io/valkey-glide/go/glide/protobuf"
 	"github.com/valkey-io/valkey-glide/go/glide/utils"
 	"google.golang.org/protobuf/proto"
@@ -103,7 +104,10 @@ func (client *baseClient) Close() {
 	client.coreClient = nil
 }
 
-func (client *baseClient) executeCommand(requestType C.RequestType, args []string) (*C.struct_CommandResponse, error) {
+func (client *baseClient) executeCommand(
+	requestType C.RequestType,
+	args []string,
+) (*C.struct_CommandResponse, error) {
 	if client.coreClient == nil {
 		return nil, &ClosingError{"ExecuteCommand failed. The client is closed."}
 	}
@@ -770,7 +774,10 @@ func (client *baseClient) LInsert(
 		return CreateNilInt64Result(), err
 	}
 
-	result, err := client.executeCommand(C.LInsert, []string{key, insertPositionStr, pivot, element})
+	result, err := client.executeCommand(
+		C.LInsert,
+		[]string{key, insertPositionStr, pivot, element},
+	)
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}
@@ -1204,6 +1211,83 @@ func (client *baseClient) Renamenx(key string, newKey string) (Result[bool], err
 		return CreateNilBoolResult(), err
 	}
 	return handleBooleanResponse(result)
+}
+
+func (client *baseClient) ZAdd(
+	key string,
+	membersScoreMap map[string]float64,
+) (Result[int64], error) {
+	result, err := client.executeCommand(
+		C.ZAdd,
+		append([]string{key}, utils.ConvertMapToValueKeyStringArray(membersScoreMap)...),
+	)
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) ZAddWithOptions(
+	key string,
+	membersScoreMap map[string]float64,
+	opts *options.ZAddOptions,
+) (Result[int64], error) {
+	optionArgs, err := opts.ToArgs()
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+	commandArgs := append([]string{key}, optionArgs...)
+	result, err := client.executeCommand(
+		C.ZAdd,
+		append(commandArgs, utils.ConvertMapToValueKeyStringArray(membersScoreMap)...),
+	)
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) zAddIncrBase(key string, opts *options.ZAddOptions) (Result[float64], error) {
+	optionArgs, err := opts.ToArgs()
+	if err != nil {
+		return CreateNilFloat64Result(), err
+	}
+
+	result, err := client.executeCommand(C.ZAdd, append([]string{key}, optionArgs...))
+	if err != nil {
+		return CreateNilFloat64Result(), err
+	}
+
+	return handleDoubleResponse(result)
+}
+
+func (client *baseClient) ZAddIncr(
+	key string,
+	member string,
+	increment float64,
+) (Result[float64], error) {
+	options, err := options.NewZAddOptionsBuilder().SetIncr(true, increment, member)
+	if err != nil {
+		return CreateNilFloat64Result(), err
+	}
+
+	return client.zAddIncrBase(key, options)
+}
+
+func (client *baseClient) ZAddIncrWithOptions(
+	key string,
+	member string,
+	increment float64,
+	opts *options.ZAddOptions,
+) (Result[float64], error) {
+	incrOpts, err := opts.SetIncr(true, increment, member)
+	if err != nil {
+		return CreateNilFloat64Result(), err
+	}
+
+	return client.zAddIncrBase(key, incrOpts)
 }
 
 func (client *baseClient) ZIncrBy(key string, increment float64, member string) (Result[float64], error) {
