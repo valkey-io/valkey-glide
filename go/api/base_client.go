@@ -1290,3 +1290,12 @@ func (client *baseClient) ZAddIncrWithOptions(
 
 	return client.zAddIncrBase(key, incrOpts)
 }
+
+func (client *baseClient) BZPopMin(keys []string, timeoutSecs float64) ([]Result[string], error) {
+	result, err := client.executeCommand(C.BZPopMin, append(keys, utils.FloatToString(timeoutSecs)))
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayOrNullResponse(result)
+}
