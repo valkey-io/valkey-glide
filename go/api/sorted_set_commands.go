@@ -14,7 +14,7 @@ type SortedSetCommands interface {
 	// If key does not exist, a new sorted set with the specified member as its sole member
 	// is created.
 	//
-	// see [valkey zincrby] for details.
+	// see [valkey.io] for details.
 	//
 	// Parameters:
 	//   key - The key of the sorted set.
@@ -25,7 +25,9 @@ type SortedSetCommands interface {
 	//   The new score of member.
 	//
 	// Example:
+	//   res, err := client.ZIncrBy("myzset", 2.0, "one")
+	//   fmt.Println(res.Value()) // Output: 2.0
 	//
-	// [valkey zincrby]: https://valkey.io/commands/zincrby/
+	// [valkey.io]: https://valkey.io/commands/zincrby/
 	ZIncrBy(key string, increment float64, member string) (Result[float64], error)
 }
