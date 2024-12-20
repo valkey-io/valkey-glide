@@ -6,7 +6,7 @@ package api
 //
 // See [valkey.io] for details.
 //
-// [valkey.io]: https://valkey.io/commands/?group=set
+// [valkey.io]: https://valkey.io/commands/#set
 type SetCommands interface {
 	// SAdd adds specified members to the set stored at key.
 	//
