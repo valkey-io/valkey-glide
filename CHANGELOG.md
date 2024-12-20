@@ -1,4 +1,5 @@
 #### Changes
+* Go: Add HINCRBY command ([#2847](https://github.com/valkey-io/valkey-glide/pull/2847))
 * Go: Add HINCRBYFLOAT command ([#2846](https://github.com/valkey-io/valkey-glide/pull/2846))
 * Go: Add SUNIONSTORE command ([#2805](https://github.com/valkey-io/valkey-glide/pull/2805))
 * Go: Add SUNION ([#2787](https://github.com/valkey-io/valkey-glide/pull/2787))

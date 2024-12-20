@@ -441,6 +441,15 @@ func (client *baseClient) HStrLen(key string, field string) (Result[int64], erro
 	return handleLongResponse(result)
 }
 
+func (client *baseClient) HIncrBy(key string, field string, increment int64) (Result[int64], error) {
+	result, err := client.executeCommand(C.HIncrBy, []string{key, field, utils.IntToString(increment)})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
 func (client *baseClient) HIncrByFloat(key string, field string, increment float64) (Result[float64], error) {
 	result, err := client.executeCommand(C.HIncrByFloat, []string{key, field, utils.FloatToString(increment)})
 	if err != nil {
