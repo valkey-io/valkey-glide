@@ -12,7 +12,9 @@ use redis::cluster_routing::{
     MultipleNodeRoutingInfo, ResponsePolicy, Routable, RoutingInfo, SingleNodeRoutingInfo,
 };
 use redis::cluster_slotmap::ReadFromReplicaStrategy;
-use redis::{Cmd, ErrorKind, ObjectType, PushInfo, RedisError, RedisResult, ScanStateRC, Value};
+use redis::{
+    ClusterScanArgs, Cmd, ErrorKind, PushInfo, RedisError, RedisResult, ScanStateRC, Value,
+};
 pub use standalone_client::StandaloneClient;
 use std::io;
 use std::sync::atomic::{AtomicIsize, Ordering};
@@ -306,33 +308,16 @@ impl Client {
     pub async fn cluster_scan<'a>(
         &'a mut self,
         scan_state_cursor: &'a ScanStateRC,
-        match_pattern: &'a Option<Vec<u8>>,
-        count: Option<usize>,
-        object_type: Option<ObjectType>,
+        cluster_scan_args: ClusterScanArgs,
     ) -> RedisResult<Value> {
         match self.internal_client {
             ClientWrapper::Standalone(_) => {
                 unreachable!("Cluster scan is not supported in standalone mode")
             }
             ClientWrapper::Cluster { ref mut client } => {
-                let (cursor, keys) = match match_pattern {
-                    Some(pattern) => {
-                        client
-                            .cluster_scan_with_pattern(
-                                scan_state_cursor.clone(),
-                                pattern,
-                                count,
-                                object_type,
-                            )
-                            .await?
-                    }
-                    None => {
-                        client
-                            .cluster_scan(scan_state_cursor.clone(), count, object_type)
-                            .await?
-                    }
-                };
-
+                let (cursor, keys) = client
+                    .cluster_scan(scan_state_cursor.clone(), cluster_scan_args)
+                    .await?;
                 let cluster_cursor_id = if cursor.is_finished() {
                     Value::BulkString(FINISHED_SCAN_CURSOR.into())
                 } else {
