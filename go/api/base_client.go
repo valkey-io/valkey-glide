@@ -11,6 +11,7 @@ import "C"
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"strconv"
 	"unsafe"
@@ -26,6 +27,7 @@ type BaseClient interface {
 	HashCommands
 	ListCommands
 	SetCommands
+	StreamCommands
 	ConnectionManagementCommands
 	GenericBaseCommands
 	// Close terminates the client by closing all associated resources.
@@ -1203,4 +1205,24 @@ func (client *baseClient) Renamenx(key string, newKey string) (Result[bool], err
 		return CreateNilBoolResult(), err
 	}
 	return handleBooleanResponse(result)
+}
+
+func (client *baseClient) XAdd(key string, values [][]string) (Result[string], error) {
+	args := make([]string, 0, 2+2*len(values))
+	args = append(args, key, "*")
+	for _, pair := range values {
+		if len(pair) != 2 {
+			return CreateNilStringResult(), fmt.Errorf(
+				"Array entry had the wrong length. Expected length 2 but got length %d",
+				len(pair),
+			)
+		}
+		args = append(args, pair...)
+	}
+
+	result, err := client.executeCommand(C.XAdd, args)
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringResponse(result)
 }
