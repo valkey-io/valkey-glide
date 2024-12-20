@@ -705,7 +705,7 @@ type HashCommands interface {
 	// [valkey.io]: https://valkey.io/commands/hstrlen/
 	HStrLen(key string, field string) (Result[int64], error)
 
-	// Increments the string representing a floating point number stored at `field`` in the hash stored at `key` by increment.
+	// Increments the string representing a floating point number stored at `field` in the hash stored at `key` by increment.
 	// By using a negative increment value, the value stored at field in the hash stored at `key` is decremented.
 	// If `field` or `key` does not exist, it is set to 0 before performing the operation.
 	//
@@ -719,7 +719,7 @@ type HashCommands interface {
 	// Return value:
 	// 	The Result[float64] value of `field` in the hash stored at `key` after the increment.
 	//
-	// For example:
+	// Example:
 	//  hsetResult, err := client.HSet("key", map[string]string{"field": "10"})
 	//  hincrByFloatResult, err := client.HIncrByFloat("key", "field", 1.5)
 	//	// hincrByFloatResult.Value(): 11.5
