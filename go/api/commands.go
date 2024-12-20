@@ -720,7 +720,7 @@ type HashCommands interface {
 	// 	The Result[int64] value of `field` in the hash stored at `key` after the increment.
 	//
 	// Example:
-	//  hsetResult, err := client.HSet("key", map[string]string{"field": "10"})
+	//  _, err := client.HSet("key", map[string]string{"field": "10"})
 	//  hincrByResult, err := client.HIncrBy("key", "field", 1)
 	//	// hincrByResult.Value(): 11
 	//
@@ -742,7 +742,7 @@ type HashCommands interface {
 	// 	The Result[float64] value of `field` in the hash stored at `key` after the increment.
 	//
 	// Example:
-	//  hsetResult, err := client.HSet("key", map[string]string{"field": "10"})
+	//  _, err := client.HSet("key", map[string]string{"field": "10"})
 	//  hincrByFloatResult, err := client.HIncrByFloat("key", "field", 1.5)
 	//	// hincrByFloatResult.Value(): 11.5
 	//
