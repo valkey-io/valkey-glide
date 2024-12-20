@@ -1073,6 +1073,39 @@ func (suite *GlideTestSuite) TestHIncrBy_WithNonExistingField() {
 	})
 }
 
+func (suite *GlideTestSuite) TestHIncrByFloat_WithExistingField() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		field := uuid.NewString()
+		fieldValueMap := map[string]string{field: "10"}
+
+		hsetResult, err := client.HSet(key, fieldValueMap)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), hsetResult.Value())
+
+		hincrByFloatResult, hincrByFloatErr := client.HIncrByFloat(key, field, 1.5)
+		assert.Nil(suite.T(), hincrByFloatErr)
+		assert.Equal(suite.T(), float64(11.5), hincrByFloatResult.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestHIncrByFloat_WithNonExistingField() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		field := uuid.NewString()
+		field2 := uuid.NewString()
+		fieldValueMap := map[string]string{field2: "1"}
+
+		hsetResult, err := client.HSet(key, fieldValueMap)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), hsetResult.Value())
+
+		hincrByFloatResult, hincrByFloatErr := client.HIncrByFloat(key, field, 1.5)
+		assert.Nil(suite.T(), hincrByFloatErr)
+		assert.Equal(suite.T(), float64(1.5), hincrByFloatResult.Value())
+	})
+}
+
 func (suite *GlideTestSuite) TestLPushLPop_WithExistingKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		list := []string{"value4", "value3", "value2", "value1"}
@@ -3904,5 +3937,36 @@ func (suite *GlideTestSuite) TestZAddAndZAddIncr() {
 		resIncr, err = client.ZAddIncrWithOptions(key4, "one", -3, gtOpts)
 		assert.NotNil(suite.T(), err)
 		assert.True(suite.T(), resIncr.IsNil())
+	})
+}
+
+func (suite *GlideTestSuite) TestZincrBy() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.New().String()
+		key2 := uuid.New().String()
+
+		// key does not exist
+		res1, err := client.ZIncrBy(key1, 2.5, "value1")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), 2.5, res1.Value())
+
+		// key exists, but value doesn't
+		res2, err := client.ZIncrBy(key1, -3.3, "value2")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), -3.3, res2.Value())
+
+		// updating existing value in existing key
+		res3, err := client.ZIncrBy(key1, 1.0, "value1")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), 3.5, res3.Value())
+
+		// Key exists, but it is not a sorted set
+		res4, err := client.SAdd(key2, []string{"one", "two"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res4.Value())
+
+		_, err = client.ZIncrBy(key2, 0.5, "_")
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
 }
