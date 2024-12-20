@@ -1050,8 +1050,8 @@ func (suite *GlideTestSuite) TestHIncrByFloat_WithExistingField() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(1), hsetResult.Value())
 
-		hincrByFloatResult, hincrByFloarErr := client.HIncrByFloat(key, field, 1.5)
-		assert.Nil(suite.T(), hincrByFloarErr)
+		hincrByFloatResult, hincrByFloatErr := client.HIncrByFloat(key, field, 1.5)
+		assert.Nil(suite.T(), hincrByFloatErr)
 		assert.Equal(suite.T(), float64(11.5), hincrByFloatResult.Value())
 	})
 }
@@ -1067,8 +1067,8 @@ func (suite *GlideTestSuite) TestHIncrByFloat_WithNonExistingField() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(1), hsetResult.Value())
 
-		hincrByFloatResult, hincrByFloarErr := client.HIncrByFloat(key, field, 1.5)
-		assert.Nil(suite.T(), hincrByFloarErr)
+		hincrByFloatResult, hincrByFloatErr := client.HIncrByFloat(key, field, 1.5)
+		assert.Nil(suite.T(), hincrByFloatErr)
 		assert.Equal(suite.T(), float64(1.5), hincrByFloatResult.Value())
 	})
 }
