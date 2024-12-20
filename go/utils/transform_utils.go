@@ -50,6 +50,25 @@ func MapToString(parameter map[string]string) []string {
 	return flat
 }
 
+// Flattens a map[string, V] to a value-key string array
+func ConvertMapToValueKeyStringArray[V any](args map[string]V) []string {
+	result := make([]string, 0, len(args)*2)
+	for key, value := range args {
+		// Convert the value to a string after type checking
+		switch v := any(value).(type) {
+		case string:
+			result = append(result, v)
+		case int64:
+			result = append(result, strconv.FormatInt(v, 10))
+		case float64:
+			result = append(result, strconv.FormatFloat(v, 'f', -1, 64))
+		}
+		// Append the key
+		result = append(result, key)
+	}
+	return result
+}
+
 // Concat concatenates multiple slices of strings into a single slice.
 func Concat(slices ...[]string) []string {
 	size := 0
