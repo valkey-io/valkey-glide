@@ -3873,3 +3873,34 @@ func (suite *GlideTestSuite) TestZAddAndZAddIncr() {
 		assert.True(suite.T(), resIncr.IsNil())
 	})
 }
+
+func (suite *GlideTestSuite) TestZincrBy() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.New().String()
+		key2 := uuid.New().String()
+
+		// key does not exist
+		res1, err := client.ZIncrBy(key1, 2.5, "value1")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), 2.5, res1.Value())
+
+		// key exists, but value doesn't
+		res2, err := client.ZIncrBy(key1, -3.3, "value2")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), -3.3, res2.Value())
+
+		// updating existing value in existing key
+		res3, err := client.ZIncrBy(key1, 1.0, "value1")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), 3.5, res3.Value())
+
+		// Key exists, but it is not a sorted set
+		res4, err := client.SAdd(key2, []string{"one", "two"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res4.Value())
+
+		_, err = client.ZIncrBy(key2, 0.5, "_")
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
