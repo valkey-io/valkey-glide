@@ -1040,6 +1040,39 @@ func (suite *GlideTestSuite) TestHStrLen_WithNotExistingField() {
 	})
 }
 
+func (suite *GlideTestSuite) TestHIncrBy_WithExistingField() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		field := uuid.NewString()
+		fieldValueMap := map[string]string{field: "10"}
+
+		hsetResult, err := client.HSet(key, fieldValueMap)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), hsetResult.Value())
+
+		hincrByResult, hincrByErr := client.HIncrBy(key, field, 1)
+		assert.Nil(suite.T(), hincrByErr)
+		assert.Equal(suite.T(), int64(11), hincrByResult.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestHIncrBy_WithNonExistingField() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		field := uuid.NewString()
+		field2 := uuid.NewString()
+		fieldValueMap := map[string]string{field2: "1"}
+
+		hsetResult, err := client.HSet(key, fieldValueMap)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), hsetResult.Value())
+
+		hincrByResult, hincrByErr := client.HIncrBy(key, field, 2)
+		assert.Nil(suite.T(), hincrByErr)
+		assert.Equal(suite.T(), int64(2), hincrByResult.Value())
+	})
+}
+
 func (suite *GlideTestSuite) TestHIncrByFloat_WithExistingField() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.NewString()
