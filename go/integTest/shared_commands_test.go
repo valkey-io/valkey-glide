@@ -3481,6 +3481,7 @@ func (suite *GlideTestSuite) TestPExpireTime() {
 func (suite *GlideTestSuite) Test_ZCount() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key1 := "{key}-1" + uuid.NewString()
+		key2 := "{key}-2" + uuid.NewString()
         membersScores := map[string]int{
             "one":   1,
             "two":   2,
@@ -3491,23 +3492,52 @@ func (suite *GlideTestSuite) Test_ZCount() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(3), res1.Value())
 
-        res2, err := client.ZCard(key)
-        assert.Nil(suite.T(), err)
-        assert.Equal(suite.T(), int64(3), res2.Value())
+		/**
+		expect(
+            await client.zcount(
+                key1,
+                "negativeInfinity",
+                "positiveInfinity"
+            )
+        ).toEqual(3);
+        expect(
+            await client.zcount(
+                key1,
+                { bound: 1, isInclusive: false },
+                { bound: 3, isInclusive: false }
+            )
+        ).toEqual(1);
+        expect(
+            await client.zcount(
+                key1,
+                { bound: 1, isInclusive: false },
+                { bound: 3 }
+            )
+        ).toEqual(2);
+        expect(
+            await client.zcount(key1, "negativeInfinity", {
+                bound: 3,
+            })
+        ).toEqual(3);
+        expect(
+            await client.zcount(key1, "positiveInfinity", {
+                bound: 3,
+            })
+        ).toEqual(0);
+        expect(
+            await client.zcount(
+                "nonExistingKey",
+                "negativeInfinity",
+                "positiveInfinity"
+            )
+        ).toEqual(0);
 
-        /**
-        TODO:
-        expect(await client.zrem(key, ["one"])).toEqual(1);
-        expect(await client.zcard(key)).toEqual(2);
-        */
+        expect(await client.set(key2, "foo")).toEqual("OK");
+        await expect(
+            client.zcount(key2, "negativeInfinity", "positiveInfinity")
+        ).rejects.toThrow();
+		*/
 
-//         res3, err := client.ZRem(key, ["one"])
-//         assert.Nil(suite.T(), err)
-//         assert.Equal(suite.T(), int64(1), res3.Value())
-
-        res4, err := client.ZCard(key)
-        assert.Nil(suite.T(), err)
-        assert.Equal(suite.T(), int64(2), res4.Value())
 	})
 }
 
