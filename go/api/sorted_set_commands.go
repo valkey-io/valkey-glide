@@ -232,4 +232,7 @@ type SortedSetCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/zcard/
 	ZCard(key string) (Result[int64], error)
+
+	// [valkey bzpopmin]: https://valkey.io/commands/bzpopmin/
+	BZPopMin(keys []string, timeoutSecs float64) ([]Result[string], error)
 }

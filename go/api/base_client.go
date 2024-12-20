@@ -1441,3 +1441,12 @@ func (client *baseClient) ZCard(key string) (Result[int64], error) {
 
 	return handleLongResponse(result)
 }
+
+func (client *baseClient) BZPopMin(keys []string, timeoutSecs float64) ([]Result[string], error) {
+	result, err := client.executeCommand(C.BZPopMin, append(keys, utils.FloatToString(timeoutSecs)))
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayOrNullResponse(result)
+}
