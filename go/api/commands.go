@@ -727,18 +727,18 @@ type HashCommands interface {
 	// [valkey.io]: https://valkey.io/commands/hincrby/
 	HIncrBy(key string, field string, increment int64) (Result[int64], error)
 
-  // Increments the string representing a floating point number stored at `field` in the hash stored at `key` by increment.
+	// Increments the string representing a floating point number stored at `field` in the hash stored at `key` by increment.
 	// By using a negative increment value, the value stored at `field` in the hash stored at `key` is decremented.
-  // If `field` or `key` does not exist, it is set to 0 before performing the operation.
-  //
-  // See [valkey.io] for details.
+	// If `field` or `key` does not exist, it is set to 0 before performing the operation.
+	//
+	// See [valkey.io] for details.
 	//
 	// Parameters:
 	// 	key - The key of the hash.
 	// 	field - The field in the hash stored at `key` to increment its value.
 	// 	increment - The amount to increment.
 	//
-  // Return value:
+	// Return value:
 	// 	The Result[float64] value of `field` in the hash stored at `key` after the increment.
 	//
 	// Example:
