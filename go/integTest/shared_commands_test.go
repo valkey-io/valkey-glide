@@ -3562,19 +3562,14 @@ func (suite *GlideTestSuite) Test_ZCard() {
 		assert.Equal(suite.T(), int64(3), res2.Value())
 
 		/**
-		  TODO:
-		  expect(await client.zrem(key, ["one"])).toEqual(1);
-		  expect(await client.zcard(key)).toEqual(2);
+		  TODO: update from custom command to proper implementation
+		  change client from base to glide to use custom command
 		*/
 
-		//         res3, err := client.ZRem(key, ["one"])
-		//         assert.Nil(suite.T(), err)
-		//         assert.Equal(suite.T(), int64(1), res3.Value())
-
-        ZremArgs := append([]string{key}, []string{"one"}...)
-        res3, err := client.CustomCommand(append([]string{"zrem"}, ZremArgs...))
-        assert.Nil(suite.T(), err)
-        assert.Equal(suite.T(), int64(1), res3.Value())
+		ZremArgs := append([]string{key}, []string{"one"}...)
+		res3, err := client.CustomCommand(append([]string{"zrem"}, ZremArgs...))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res3.Value())
 
 		res4, err := client.ZCard(key)
 		assert.Nil(suite.T(), err)
