@@ -2,7 +2,7 @@
 
 package api
 
-// SetCommands supports commands and transactions for the "Set Commands" group for standalone and cluster clients.
+// Supports commands and transactions for the "Set" group of commands for standalone and cluster clients.
 //
 // See [valkey.io] for details.
 //
