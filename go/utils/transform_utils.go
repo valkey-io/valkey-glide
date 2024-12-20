@@ -62,8 +62,6 @@ func ConvertMapToValueKeyStringArray[V any](args map[string]V) []string {
 			result = append(result, strconv.FormatInt(v, 10))
 		case float64:
 			result = append(result, strconv.FormatFloat(v, 'f', -1, 64))
-		case bool:
-			result = append(result, strconv.FormatBool(v))
 		}
 		// Append the key
 		result = append(result, key)
