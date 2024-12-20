@@ -3743,7 +3743,7 @@ func (suite *GlideTestSuite) TestUnlink() {
 	})
 }
 
-func (suite *GlideTestSuite) Test_Rename() {
+func (suite *GlideTestSuite) TestRename() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		// Test 1 Check if the command successfully renamed
 		key := "{keyName}" + uuid.NewString()
@@ -3779,5 +3779,33 @@ func (suite *GlideTestSuite) TestRenamenx() {
 		res2, err := client.Renamenx(key3, key4)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), false, res2.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestXAdd() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		// stream does not exist
+		res, err := client.XAdd(key, [][]string{{"field1", "value1"}, {"field1", "value2"}})
+		assert.Nil(suite.T(), err)
+		assert.False(suite.T(), res.IsNil())
+		// don't check the value, because it contains server's timestamp
+
+		// adding data to existing stream
+		res, err = client.XAdd(key, [][]string{{"field3", "value3"}})
+		assert.Nil(suite.T(), err)
+		assert.False(suite.T(), res.IsNil())
+
+		// incorrect input
+		_, err = client.XAdd(key, [][]string{})
+		assert.NotNil(suite.T(), err)
+		_, err = client.XAdd(key, [][]string{{"1", "2", "3"}})
+		assert.NotNil(suite.T(), err)
+
+		// key is not a string
+		key = uuid.NewString()
+		client.Set(key, "abc")
+		_, err = client.XAdd(key, [][]string{{"f", "v"}})
+		assert.NotNil(suite.T(), err)
 	})
 }
