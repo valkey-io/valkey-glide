@@ -442,6 +442,15 @@ func (client *baseClient) HStrLen(key string, field string) (Result[int64], erro
 	return handleLongResponse(result)
 }
 
+func (client *baseClient) HIncrBy(key string, field string, increment int64) (Result[int64], error) {
+	result, err := client.executeCommand(C.HIncrBy, []string{key, field, utils.IntToString(increment)})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
 func (client *baseClient) LPush(key string, elements []string) (Result[int64], error) {
 	result, err := client.executeCommand(C.LPush, append([]string{key}, elements...))
 	if err != nil {
