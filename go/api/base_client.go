@@ -1289,3 +1289,12 @@ func (client *baseClient) ZAddIncrWithOptions(
 
 	return client.zAddIncrBase(key, incrOpts)
 }
+
+func (client *baseClient) ZCard(key string) (Result[int64], error) {
+	result, err := client.executeCommand(C.ZCard, []string{key})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
