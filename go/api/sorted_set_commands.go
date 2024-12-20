@@ -192,4 +192,7 @@ type SortedSetCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/zpopmin/
 	ZPopMaxWithCount(key string, count int64) (map[Result[string]]Result[float64], error)
+
+	// [valkey bzpopmin]: https://valkey.io/commands/bzpopmin/
+	BZPopMin(keys []string, timeoutSecs float64) ([]Result[string], error)
 }
