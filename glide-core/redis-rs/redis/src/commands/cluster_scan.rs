@@ -418,25 +418,6 @@ impl ScanState {
         }
     }
 
-    /// Get the next slot to be scanned based on the scanned slots map.
-    /// If all slots have been scanned, the method returns [`END_OF_SCAN`].
-    fn next_slot(&self, scanned_slots_map: &SlotsBitsArray) -> Option<u16> {
-        let all_slots_scanned = scanned_slots_map.iter().all(|&word| word == u64::MAX);
-        if all_slots_scanned {
-            return Some(END_OF_SCAN);
-        }
-        for (i, slot) in scanned_slots_map.iter().enumerate() {
-            let mut mask = 1;
-            for j in 0..BITS_PER_U64 {
-                if (slot & mask) == 0 {
-                    return Some(i as u16 * BITS_PER_U64 + j);
-                }
-                mask <<= 1;
-            }
-        }
-        None
-    }
-
     /// Update the scan state without updating the scanned slots map.
     /// This method is used when the address epoch has changed, and we can't determine which slots are new.
     /// In this case, we skip updating the scanned slots map and only update the address and cursor.
@@ -454,7 +435,7 @@ impl ScanState {
         // meaning that we could safely update the scanned slots map with the slots owned by the node.
         // Epoch change means that some slots are new, and we can't determine which slots been there from the beginning and which are new.
         let mut scanned_slots_map = new_scanned_slots_map.unwrap_or(self.scanned_slots_map);
-        let next_slot = self.next_slot(&scanned_slots_map).unwrap_or(0);
+        let next_slot = next_slot(&scanned_slots_map).unwrap_or(0);
         match next_address_to_scan(
             &core,
             next_slot,
@@ -583,8 +564,7 @@ where
         } else if allow_non_covered_slots {
             // Mark the current slot as scanned
             mark_slot_as_scanned(scanned_slots_map, slot);
-            // Move to the next slot
-            slot = slot.saturating_add(1);
+            slot = next_slot(scanned_slots_map).unwrap();
         } else {
             // Error if slots are not covered and scanning is not allowed
             return Err(RedisError::from((
@@ -595,6 +575,25 @@ where
                 )));
         }
     }
+}
+
+/// Get the next slot to be scanned based on the scanned slots map.
+/// If all slots have been scanned, the method returns [`END_OF_SCAN`].
+fn next_slot(scanned_slots_map: &SlotsBitsArray) -> Option<u16> {
+    let all_slots_scanned = scanned_slots_map.iter().all(|&word| word == u64::MAX);
+    if all_slots_scanned {
+        return Some(END_OF_SCAN);
+    }
+    for (i, slot) in scanned_slots_map.iter().enumerate() {
+        let mut mask = 1;
+        for j in 0..BITS_PER_U64 {
+            if (slot & mask) == 0 {
+                return Some(i as u16 * BITS_PER_U64 + j);
+            }
+            mask <<= 1;
+        }
+    }
+    None
 }
 
 /// Performs a cluster-wide `SCAN` operation.
@@ -747,9 +746,7 @@ async fn next_scan_state<C>(
 where
     C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
 {
-    let next_slot = scan_state
-        .next_slot(&scan_state.scanned_slots_map)
-        .unwrap_or(0);
+    let next_slot = next_slot(&scan_state.scanned_slots_map).unwrap_or(0);
     let mut scanned_slots_map = scan_state.scanned_slots_map;
     match next_address_to_scan(
         core,
@@ -877,7 +874,7 @@ mod tests {
             1,
             ScanStateStage::InProgress,
         );
-        let next_slot = scan_state.next_slot(&[0; BITS_ARRAY_SIZE as usize]);
+        let next_slot = next_slot(&scan_state.scanned_slots_map);
 
         assert_eq!(next_slot, Some(0));
     }
