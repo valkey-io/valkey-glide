@@ -129,7 +129,7 @@ type SortedSetCommands interface {
 	//   fmt.Println(res.Value()) // Output: map["member1":5.0]
 	//
 	// [valkey.io]: https://valkey.io/commands/zpopmin/
-	ZPopMin(key string) (map[Result[string]]Result[string], error)
+	ZPopMin(key string) (map[Result[string]]Result[float64], error)
 
 	// Removes and returns up to `count` members with the lowest scores from the sorted set
 	// stored at the specified `key`.
@@ -150,7 +150,7 @@ type SortedSetCommands interface {
 	//   fmt.Println(res.Value()) // Output: map["member1":5.0, "member2":6.0]
 	//
 	// [valkey.io]: https://valkey.io/commands/zpopmin/
-	ZPopMinWithCount(key string, count int64) (map[Result[string]]Result[string], error)
+	ZPopMinWithCount(key string, count int64) (map[Result[string]]Result[float64], error)
 
 	// Removes and returns the member with the highest score from the sorted set stored at the
 	// specified `key`.
@@ -170,7 +170,7 @@ type SortedSetCommands interface {
 	//   fmt.Println(res.Value()) // Output: map["member2":8.0]
 	//
 	// [valkey.io]: https://valkey.io/commands/zpopmin/
-	ZPopMax(key string) (map[Result[string]]Result[string], error)
+	ZPopMax(key string) (map[Result[string]]Result[float64], error)
 
 	// Removes and returns up to `count` members with the highest scores from the sorted set
 	// stored at the specified `key`.
@@ -191,5 +191,5 @@ type SortedSetCommands interface {
 	//   fmt.Println(res.Value()) // Output: map["member1":5.0, "member2":6.0]
 	//
 	// [valkey.io]: https://valkey.io/commands/zpopmin/
-	ZPopMaxWithCount(key string, count int64) (map[Result[string]]Result[string], error)
+	ZPopMaxWithCount(key string, count int64) (map[Result[string]]Result[float64], error)
 }

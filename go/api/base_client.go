@@ -1317,34 +1317,34 @@ func (client *baseClient) ZIncrBy(key string, increment float64, member string) 
 	return handleDoubleResponse(result)
 }
 
-func (client *baseClient) ZPopMin(key string) (map[Result[string]]Result[string], error) {
+func (client *baseClient) ZPopMin(key string) (map[Result[string]]Result[float64], error) {
 	result, err := client.executeCommand(C.ZPopMin, []string{key})
 	if err != nil {
 		return nil, err
 	}
-	return handleStringToStringMapResponse(result)
+	return handleStringDoubleMapResponse(result)
 }
 
-func (client *baseClient) ZPopMinWithCount(key string, count int64) (map[Result[string]]Result[string], error) {
+func (client *baseClient) ZPopMinWithCount(key string, count int64) (map[Result[string]]Result[float64], error) {
 	result, err := client.executeCommand(C.ZPopMin, []string{key, utils.IntToString(count)})
 	if err != nil {
 		return nil, err
 	}
-	return handleStringToStringMapResponse(result)
+	return handleStringDoubleMapResponse(result)
 }
 
-func (client *baseClient) ZPopMax(key string) (map[Result[string]]Result[string], error) {
+func (client *baseClient) ZPopMax(key string) (map[Result[string]]Result[float64], error) {
 	result, err := client.executeCommand(C.ZPopMax, []string{key})
 	if err != nil {
 		return nil, err
 	}
-	return handleStringToStringMapResponse(result)
+	return handleStringDoubleMapResponse(result)
 }
 
-func (client *baseClient) ZPopMaxWithCount(key string, count int64) (map[Result[string]]Result[string], error) {
+func (client *baseClient) ZPopMaxWithCount(key string, count int64) (map[Result[string]]Result[float64], error) {
 	result, err := client.executeCommand(C.ZPopMax, []string{key, utils.IntToString(count)})
 	if err != nil {
 		return nil, err
 	}
-	return handleStringToStringMapResponse(result)
+	return handleStringDoubleMapResponse(result)
 }
