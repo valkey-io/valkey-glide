@@ -3980,23 +3980,19 @@ func (suite *GlideTestSuite) TestZPopMin() {
 			"two":   2.0,
 			"three": 3.0,
 		}
-		resultMap1 := map[api.Result[string]]api.Result[string]{
-			api.CreateStringResult("one"): api.CreateStringResult("1.0"),
-		}
-		resultMap2 := map[api.Result[string]]api.Result[string]{
-			api.CreateStringResult("two"):   api.CreateStringResult("2.0"),
-			api.CreateStringResult("three"): api.CreateStringResult("3.0"),
-		}
 		_, err := client.ZAdd(key1, memberScoreMap)
 		assert.Nil(suite.T(), err)
 
 		res2, err := client.ZPopMin(key1)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), resultMap1, res2)
+		assert.Len(suite.T(), res2, 1)
+		assert.Equal(suite.T(), "1.0", res2[api.CreateStringResult("one")].Value())
 
 		res3, err := client.ZPopMinWithCount(key1, 2)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), resultMap2, res3)
+		assert.Len(suite.T(), res3, 2)
+		assert.Equal(suite.T(), "2.0", res3[api.CreateStringResult("two")].Value())
+		assert.Equal(suite.T(), "3.0", res3[api.CreateStringResult("three")].Value())
 
 		// non sorted set key
 		_, err = client.Set(key2, "test")
