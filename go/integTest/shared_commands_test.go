@@ -3980,9 +3980,9 @@ func (suite *GlideTestSuite) TestZPopMin() {
 			"two":   2.0,
 			"three": 3.0,
 		}
-		_, err := client.ZAdd(key1, memberScoreMap)
+		res, err := client.ZAdd(key1, memberScoreMap)
 		assert.Nil(suite.T(), err)
-
+		assert.Equal(suite.T(), int64(3), res.Value())
 		res2, err := client.ZPopMin(key1)
 		assert.Nil(suite.T(), err)
 		assert.Len(suite.T(), res2, 1)
