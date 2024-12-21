@@ -704,6 +704,50 @@ type HashCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/hstrlen/
 	HStrLen(key string, field string) (Result[int64], error)
+
+	// Increments the number stored at `field` in the hash stored at `key` by increment.
+	// By using a negative increment value, the value stored at `field` in the hash stored at `key` is decremented.
+	// If `field` or `key` does not exist, it is set to 0 before performing the operation.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	// 	key - The key of the hash.
+	// 	field - The field in the hash stored at `key` to increment its value.
+	// 	increment - The amount to increment.
+	//
+	// Return value:
+	// 	The Result[int64] value of `field` in the hash stored at `key` after the increment.
+	//
+	// Example:
+	//  _, err := client.HSet("key", map[string]string{"field": "10"})
+	//  hincrByResult, err := client.HIncrBy("key", "field", 1)
+	//	// hincrByResult.Value(): 11
+	//
+	// [valkey.io]: https://valkey.io/commands/hincrby/
+	HIncrBy(key string, field string, increment int64) (Result[int64], error)
+
+	// Increments the string representing a floating point number stored at `field` in the hash stored at `key` by increment.
+	// By using a negative increment value, the value stored at `field` in the hash stored at `key` is decremented.
+	// If `field` or `key` does not exist, it is set to 0 before performing the operation.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	// 	key - The key of the hash.
+	// 	field - The field in the hash stored at `key` to increment its value.
+	// 	increment - The amount to increment.
+	//
+	// Return value:
+	// 	The Result[float64] value of `field` in the hash stored at `key` after the increment.
+	//
+	// Example:
+	//  _, err := client.HSet("key", map[string]string{"field": "10"})
+	//  hincrByFloatResult, err := client.HIncrByFloat("key", "field", 1.5)
+	//	// hincrByFloatResult.Value(): 11.5
+	//
+	// [valkey.io]: https://valkey.io/commands/hincrbyfloat/
+	HIncrByFloat(key string, field string, increment float64) (Result[float64], error)
 }
 
 // ConnectionManagementCommands defines an interface for connection management-related commands.
