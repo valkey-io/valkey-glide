@@ -4018,11 +4018,11 @@ func (suite *GlideTestSuite) TestZPopMax() {
 			"three": 3.0,
 		}
 		resultMap1 := map[api.Result[string]]api.Result[string]{
-			api.CreateStringResult("one"): api.CreateStringResult("3.0"),
+			api.CreateStringResult("three"): api.CreateStringResult("3.0"),
 		}
 		resultMap2 := map[api.Result[string]]api.Result[string]{
-			api.CreateStringResult("two"):   api.CreateStringResult("1.0"),
-			api.CreateStringResult("three"): api.CreateStringResult("2.0"),
+			api.CreateStringResult("one"): api.CreateStringResult("1.0"),
+			api.CreateStringResult("two"): api.CreateStringResult("2.0"),
 		}
 		_, err := client.ZAdd(key1, memberScoreMap)
 		assert.Nil(suite.T(), err)
