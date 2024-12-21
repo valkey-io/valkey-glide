@@ -17,6 +17,9 @@ mod json;
 pub use cluster_scan::ScanStateRC;
 
 #[cfg(feature = "cluster-async")]
+pub use cluster_scan::ClusterScanArgs;
+
+#[cfg(feature = "cluster-async")]
 pub(crate) mod cluster_scan;
 
 #[cfg(feature = "cluster-async")]
