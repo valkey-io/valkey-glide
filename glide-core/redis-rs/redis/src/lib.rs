@@ -457,6 +457,9 @@ pub use crate::commands::ScanStateRC;
 #[cfg(feature = "cluster-async")]
 pub use crate::commands::ObjectType;
 
+#[cfg(feature = "cluster-async")]
+pub use crate::commands::ClusterScanArgs;
+
 #[cfg(feature = "cluster")]
 mod cluster_client;
 

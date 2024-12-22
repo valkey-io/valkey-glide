@@ -566,6 +566,7 @@ class GlideClusterClient(BaseClient, ClusterCommands):
         match: Optional[TEncodable] = None,
         count: Optional[int] = None,
         type: Optional[ObjectType] = None,
+        allow_non_covered_slots: bool = False,
     ) -> List[Union[ClusterScanCursor, List[bytes]]]:
         if self._is_closed:
             raise ClosingError(
@@ -576,6 +577,7 @@ class GlideClusterClient(BaseClient, ClusterCommands):
         # Take out the id string from the wrapping object
         cursor_string = cursor.get_cursor()
         request.cluster_scan.cursor = cursor_string
+        request.cluster_scan.allow_non_covered_slots = allow_non_covered_slots
         if match is not None:
             request.cluster_scan.match_pattern = (
                 self._encode_arg(match) if isinstance(match, str) else match
