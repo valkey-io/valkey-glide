@@ -2078,6 +2078,43 @@ describe("GlideClusterClient", () => {
             );
         }
 
+        async function retryUntilInfoIsCorrect(
+            client: GlideClusterClient,
+            expectedCmdStat: string,
+            nReplicas: number,
+            maxRetries: number = 10,
+            delayMs: number = 2000
+        ): Promise<number> {
+            for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                const infoResult = await client.customCommand(["INFO", "ALL"], { route: "allNodes" });
+                
+                if (Array.isArray(infoResult)) {
+                    const matchingEntriesCount = infoResult.filter((node) => {
+                        const nodeInfo = node as { key: string; value: string | string[] | null };
+                        const infoStr = nodeInfo.value?.toString() || "";
+                        const isReplicaNode =
+                            infoStr.includes("role:slave") || infoStr.includes("role:replica");
+                        return isReplicaNode && infoStr.includes(expectedCmdStat);
+                    }).length;
+        
+                    console.log(
+                        `Attempt ${attempt}: Matching entries count = ${matchingEntriesCount}, Expected = ${nReplicas}`
+                    );
+        
+                    if (matchingEntriesCount === nReplicas) {
+                        return matchingEntriesCount; // Success
+                    }
+                }
+        
+                // Wait and retry
+                await new Promise((resolve) => setTimeout(resolve, delayMs));
+            }
+        
+            throw new Error(
+                `INFO command did not return correct results after ${maxRetries} attempts`
+            );
+        }
+
         it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
             "should route GET commands to all replicas with the same AZ using protocol %p",
             async (protocol) => {
@@ -2114,7 +2151,7 @@ describe("GlideClusterClient", () => {
                         { route: "allNodes" },
                     );
 
-                    await new Promise((resolve) => setTimeout(resolve, 2000));
+                    // await new Promise((resolve) => setTimeout(resolve, 2000));
 
                     // Retrieve the number of replicas dynamically
                     const n_replicas = await getNumberOfReplicas(
@@ -2148,7 +2185,7 @@ describe("GlideClusterClient", () => {
                         { route: "allNodes" },
                     );
 
-                    await new Promise((resolve) => setTimeout(resolve, 2000));
+                    // await new Promise((resolve) => setTimeout(resolve, 2000));
 
                     if (Array.isArray(azs)) {
                         const allAZsMatch = azs.every((node) => {
@@ -2187,43 +2224,18 @@ describe("GlideClusterClient", () => {
                         await client_for_testing_az.get("foo");
                     }
 
-                    await new Promise((resolve) => setTimeout(resolve, 2000));
+                    // await new Promise((resolve) => setTimeout(resolve, 2000));
 
                     // Stage 4: Verify GET commands were routed correctly
-                    const info_result =
-                        await client_for_testing_az.customCommand(
-                            ["INFO", "ALL"], // Get both replication and commandstats info
-                            { route: "allNodes" },
-                        );
-
-                    if (Array.isArray(info_result)) {
-                        const matching_entries_count = info_result.filter(
-                            (node) => {
-                                const nodeInfo = node as {
-                                    key: string;
-                                    value: string | string[] | null;
-                                };
-                                const infoStr =
-                                    nodeInfo.value?.toString() || "";
-
-                                // Check if this is a replica node AND it has the expected number of GET calls
-                                const isReplicaNode =
-                                    infoStr.includes("role:slave") ||
-                                    infoStr.includes("role:replica");
-
-                                return (
-                                    isReplicaNode &&
-                                    infoStr.includes(get_cmdstat)
-                                );
-                            },
-                        ).length;
-
-                        expect(matching_entries_count).toBe(n_replicas); // Should expect 12 as the cluster was created with 3 primary and 4 replicas, totalling 12 replica nodes
-                    } else {
-                        throw new Error(
-                            "Unexpected response format from INFO command",
-                        );
-                    }
+                    const matchingEntriesCount = await retryUntilInfoIsCorrect(
+                        client_for_testing_az,
+                        get_cmdstat,
+                        n_replicas,
+                        10,    // Maximum retries
+                        2000   // Delay between retries in milliseconds
+                    );
+                    expect(matchingEntriesCount).toBe(n_replicas);
+                    
                 } finally {
                     // Cleanup
                     await client_for_config_set?.close();
