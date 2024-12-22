@@ -2253,6 +2253,58 @@ describe("GlideClusterClient", () => {
         );
     });
     describe("GlideClusterClient - AZAffinity Routing to 1 replica", () => {
+        async function retryUntilCorrectInfoForAz(
+            client: GlideClusterClient,
+            expectedCmdStat: string,
+            az: string,
+            maxRetries = 10,
+            delayMs = 2000,
+        ): Promise<{ matchingEntriesCount: number; changedAzCount: number }> {
+            for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                const infoResult = await client.customCommand(["INFO", "ALL"], {
+                    route: "allNodes",
+                });
+
+                if (Array.isArray(infoResult)) {
+                    const matchingEntriesCount = infoResult.filter((node) => {
+                        const nodeInfo = node as {
+                            key: string;
+                            value: string | string[] | null;
+                        };
+                        const infoStr = nodeInfo.value?.toString() || "";
+                        return (
+                            infoStr.includes(expectedCmdStat) &&
+                            infoStr.includes(`availability_zone:${az}`)
+                        );
+                    }).length;
+
+                    const changedAzCount = infoResult.filter((node) => {
+                        const nodeInfo = node as {
+                            key: string;
+                            value: string | string[] | null;
+                        };
+                        const infoStr = nodeInfo.value?.toString() || "";
+                        return infoStr.includes(`availability_zone:${az}`);
+                    }).length;
+
+                    console.log(
+                        `Attempt ${attempt}: matchingEntriesCount = ${matchingEntriesCount}, changedAzCount = ${changedAzCount}`,
+                    );
+
+                    if (matchingEntriesCount === 1 && changedAzCount === 1) {
+                        return { matchingEntriesCount, changedAzCount }; // Success
+                    }
+                }
+
+                // Wait and retry
+                await new Promise((resolve) => setTimeout(resolve, delayMs));
+            }
+
+            throw new Error(
+                `INFO command did not return correct results for availability_zone:${az} after ${maxRetries} attempts`,
+            );
+        }
+
         it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
             "should route commands to single replica with AZ using protocol %p",
             async (protocol) => {
@@ -2320,48 +2372,20 @@ describe("GlideClusterClient", () => {
                     await new Promise((resolve) => setTimeout(resolve, 2000));
 
                     // Stage 4: Verify GET commands were routed correctly
-                    const info_result =
-                        await client_for_testing_az.customCommand(
-                            ["INFO", "ALL"],
-                            { route: "allNodes" },
+                    const { matchingEntriesCount, changedAzCount } =
+                        await retryUntilCorrectInfoForAz(
+                            client_for_testing_az,
+                            get_cmdstat,
+                            az,
+                            10, // Maximum retries
+                            2000, // Delay between retries
                         );
 
-                    // Process the info_result to check that only one replica has the GET calls
-                    if (Array.isArray(info_result)) {
-                        // Count the number of nodes where both get_cmdstat and az are present
-                        const matching_entries_count = info_result.filter(
-                            (node) => {
-                                const nodeInfo = node as {
-                                    key: string;
-                                    value: string | string[] | null;
-                                };
-                                const infoStr =
-                                    nodeInfo.value?.toString() || "";
-                                return (
-                                    infoStr.includes(get_cmdstat) &&
-                                    infoStr.includes(`availability_zone:${az}`)
-                                );
-                            },
-                        ).length;
+                    // Validate that only one replica has the GET calls
+                    expect(matchingEntriesCount).toBe(1);
 
-                        expect(matching_entries_count).toBe(1);
-
-                        // Check that only one node has the availability zone set to az
-                        const changed_az_count = info_result.filter((node) => {
-                            const nodeInfo = node as {
-                                key: string;
-                                value: string | string[] | null;
-                            };
-                            const infoStr = nodeInfo.value?.toString() || "";
-                            return infoStr.includes(`availability_zone:${az}`);
-                        }).length;
-
-                        expect(changed_az_count).toBe(1);
-                    } else {
-                        throw new Error(
-                            "Unexpected response format from INFO command",
-                        );
-                    }
+                    // Validate that only one node has the AZ set to `az`
+                    expect(changedAzCount).toBe(1);
                 } finally {
                     await client_for_config_set?.close();
                     await client_for_testing_az?.close();
