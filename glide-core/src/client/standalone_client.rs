@@ -2,7 +2,7 @@
 
 use super::get_redis_connection_info;
 use super::reconnecting_connection::{ReconnectReason, ReconnectingConnection};
-use super::{get_redis_connection_info, to_duration, DEFAULT_CONNECTION_ATTEMPT_TIMEOUT};
+use super::{to_duration, DEFAULT_CONNECTION_ATTEMPT_TIMEOUT};
 use super::{ConnectionRequest, NodeAddress, TlsMode};
 use crate::client::types::ReadFrom as ClientReadFrom;
 use crate::retry_strategies::RetryStrategy;
