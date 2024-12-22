@@ -32,4 +32,7 @@ public class GlideClusterClientConfiguration extends BaseClientConfiguration {
 
     /** Subscription configuration for the current client. */
     private final ClusterSubscriptionConfiguration subscriptionConfiguration;
+
+    /** */
+    private final AdvancedGlideClusterClientConfiguration advancedConfiguration;
 }

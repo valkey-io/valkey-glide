@@ -1094,6 +1094,7 @@ where
             push_sender,
             disconnect_notifier,
             discover_az,
+            connection_timeout: None,
         };
 
         let connections = Self::create_initial_connections(

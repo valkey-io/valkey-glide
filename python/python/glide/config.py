@@ -129,6 +129,29 @@ class PeriodicChecksStatus(Enum):
     """
 
 
+class AdvancedBaseClientConfiguration:
+    """
+    Represents the advanced configuration settings for a base Glide client.
+
+    Args:
+        connection_timeout (Optional[int]):The duration in milliseconds to wait for a TCP/TLS connection to complete.
+            This applies both during initial client creation and any reconnections that may occur during request processing.
+            **Note**: A high connection timeout may lead to prolonged blocking of the entire command pipeline.
+            If the client cannot establish a connection within the specified duration, a timeout error will occur.
+            If not set, a default value will be used.
+    """
+
+    def __init__(self, connection_timeout: Optional[int] = None):
+        self.connection_timeout = connection_timeout
+
+    def _create_a_protobuf_conn_request(
+        self, request: ConnectionRequest
+    ) -> ConnectionRequest:
+        if self.connection_timeout:
+            request.connection_timeout = self.connection_timeout
+        return request
+
+
 class BaseClientConfiguration:
     def __init__(
         self,
@@ -141,6 +164,7 @@ class BaseClientConfiguration:
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
         inflight_requests_limit: Optional[int] = None,
         client_az: Optional[str] = None,
+        advanced_config: Optional[AdvancedBaseClientConfiguration] = None,
     ):
         """
         Represents the configuration settings for a Glide client.
@@ -168,7 +192,8 @@ class BaseClientConfiguration:
             inflight_requests_limit (Optional[int]): The maximum number of concurrent requests allowed to be in-flight (sent but not yet completed).
                 This limit is used to control the memory usage and prevent the client from overwhelming the server or getting stuck in case of a queue backlog.
                 If not set, a default value will be used.
-
+            client_az (Optional[str]): Availability Zone of the client.
+                If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within the specified AZ if exits.
         """
         self.addresses = addresses
         self.use_tls = use_tls
@@ -179,6 +204,7 @@ class BaseClientConfiguration:
         self.protocol = protocol
         self.inflight_requests_limit = inflight_requests_limit
         self.client_az = client_az
+        self.advanced_config = advanced_config
 
         if read_from == ReadFrom.AZ_AFFINITY and not client_az:
             raise ValueError(
@@ -218,6 +244,8 @@ class BaseClientConfiguration:
             request.inflight_requests_limit = self.inflight_requests_limit
         if self.client_az:
             request.client_az = self.client_az
+        if self.advanced_config:
+            self.advanced_config._create_a_protobuf_conn_request(request)
 
         return request
 
@@ -228,6 +256,15 @@ class BaseClientConfiguration:
         self,
     ) -> Tuple[Optional[Callable[[CoreCommands.PubSubMsg, Any], None]], Any]:
         return None, None
+
+
+class AdvancedGlideClientConfiguration(AdvancedBaseClientConfiguration):
+    """
+    Represents the advanced configuration settings for a Standalone Glide client.
+    """
+
+    def __init__(self, connection_timeout: Optional[int] = None):
+        super().__init__(connection_timeout)
 
 
 class GlideClientConfiguration(BaseClientConfiguration):
@@ -261,7 +298,9 @@ class GlideClientConfiguration(BaseClientConfiguration):
         inflight_requests_limit (Optional[int]): The maximum number of concurrent requests allowed to be in-flight (sent but not yet completed).
             This limit is used to control the memory usage and prevent the client from overwhelming the server or getting stuck in case of a queue backlog.
             If not set, a default value will be used.
-
+        client_az (Optional[str]): Availability Zone of the client.
+            If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within the specified AZ if exits.
+        advanced_config (Optional[AdvancedGlideClientConfiguration]) : Advanced configuration, see `AdvancedGlideClientConfiguration`.
     """
 
     class PubSubChannelModes(IntEnum):
@@ -308,6 +347,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
         pubsub_subscriptions: Optional[PubSubSubscriptions] = None,
         inflight_requests_limit: Optional[int] = None,
         client_az: Optional[str] = None,
+        advanced_config: Optional[AdvancedGlideClientConfiguration] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -319,6 +359,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
             protocol=protocol,
             inflight_requests_limit=inflight_requests_limit,
             client_az=client_az,
+            advanced_config=advanced_config,
         )
         self.reconnect_strategy = reconnect_strategy
         self.database_id = database_id
@@ -375,6 +416,15 @@ class GlideClientConfiguration(BaseClientConfiguration):
         return None, None
 
 
+class AdvancedGlideClusterClientConfiguration(AdvancedBaseClientConfiguration):
+    """
+    Represents the advanced configuration settings for a Glide Cluster client.
+    """
+
+    def __init__(self, connection_timeout: Optional[int] = None):
+        super().__init__(connection_timeout)
+
+
 class GlideClusterClientConfiguration(BaseClientConfiguration):
     """
     Represents the configuration settings for a Cluster Glide client.
@@ -404,7 +454,9 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         inflight_requests_limit (Optional[int]): The maximum number of concurrent requests allowed to be in-flight (sent but not yet completed).
             This limit is used to control the memory usage and prevent the client from overwhelming the server or getting stuck in case of a queue backlog.
             If not set, a default value will be used.
-
+        client_az (Optional[str]): Availability Zone of the client.
+            If ReadFrom strategy is AZAffinity, this setting ensures that readonly commands are directed to replicas within the specified AZ if exits.
+        advanced_config (Optional[AdvancedGlideClusterClientConfiguration]) : Advanced configuration, see `AdvancedGlideClusterClientConfiguration`.
 
 
     Notes:
@@ -459,6 +511,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         pubsub_subscriptions: Optional[PubSubSubscriptions] = None,
         inflight_requests_limit: Optional[int] = None,
         client_az: Optional[str] = None,
+        advanced_config: Optional[AdvancedGlideClusterClientConfiguration] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -470,6 +523,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             protocol=protocol,
             inflight_requests_limit=inflight_requests_limit,
             client_az=client_az,
+            advanced_config=advanced_config,
         )
         self.periodic_checks = periodic_checks
         self.pubsub_subscriptions = pubsub_subscriptions

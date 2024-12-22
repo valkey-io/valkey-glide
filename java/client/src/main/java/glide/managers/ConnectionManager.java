@@ -8,6 +8,7 @@ import connection_request.ConnectionRequestOuterClass.ConnectionRequest;
 import connection_request.ConnectionRequestOuterClass.PubSubChannelsOrPatterns;
 import connection_request.ConnectionRequestOuterClass.PubSubSubscriptions;
 import connection_request.ConnectionRequestOuterClass.TlsMode;
+import glide.api.models.configuration.AdvancedBaseClientConfiguration;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
@@ -69,7 +70,8 @@ public class ConnectionManager {
      * @param configuration Connection Request Configuration
      * @return ConnectionRequest protobuf message
      */
-    private ConnectionRequest createConnectionRequest(BaseClientConfiguration configuration) {
+    private ConnectionRequest createConnectionRequest(
+            BaseClientConfiguration configuration) { // shoham
         if (configuration instanceof GlideClusterClientConfiguration) {
             return setupConnectionRequestBuilderGlideClusterClient(
                             (GlideClusterClientConfiguration) configuration)
@@ -171,6 +173,22 @@ public class ConnectionManager {
             connectionRequestBuilder.setPubsubSubscriptions(subscriptionsBuilder.build());
         }
 
+        if (configuration.getAdvancedConfiguration() != null) {
+            connectionRequestBuilder =
+                    setupConnectionRequestBuilderAdvancedBaseConfiguration(
+                            connectionRequestBuilder, configuration.getAdvancedConfiguration());
+        }
+
+        return connectionRequestBuilder;
+    }
+
+    private ConnectionRequest.Builder setupConnectionRequestBuilderAdvancedBaseConfiguration(
+            ConnectionRequest.Builder connectionRequestBuilder,
+            AdvancedBaseClientConfiguration configuration) {
+        if (configuration.getConnectionTimeout() != null) {
+            connectionRequestBuilder.setConnectionTimeout(configuration.getConnectionTimeout());
+        }
+
         return connectionRequestBuilder;
     }
 
@@ -197,6 +215,12 @@ public class ConnectionManager {
                         entry.getKey().ordinal(), channelsBuilder.build());
             }
             connectionRequestBuilder.setPubsubSubscriptions(subscriptionsBuilder.build());
+        }
+
+        if (configuration.getAdvancedConfiguration() != null) {
+            connectionRequestBuilder =
+                    setupConnectionRequestBuilderAdvancedBaseConfiguration(
+                            connectionRequestBuilder, configuration.getAdvancedConfiguration());
         }
 
         return connectionRequestBuilder;
