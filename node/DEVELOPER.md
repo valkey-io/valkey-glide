@@ -156,6 +156,7 @@ In order to run these tests, use:
 ```bash
 npm run test-modules -- --cluster-endpoints=<address>:<port>
 ```
+
 Note: these tests don't run with standalone server as of now.
 
 ### REPL (interactive shell)
