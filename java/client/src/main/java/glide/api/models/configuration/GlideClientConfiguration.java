@@ -39,4 +39,7 @@ public class GlideClientConfiguration extends BaseClientConfiguration {
 
     /** Subscription configuration for the current client. */
     private final StandaloneSubscriptionConfiguration subscriptionConfiguration;
+
+    /** */
+    private final AdvancedGlideClientConfiguration advancedConfiguration;
 }
