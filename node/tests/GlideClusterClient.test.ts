@@ -2083,35 +2083,43 @@ describe("GlideClusterClient", () => {
             expectedCmdStat: string,
             nReplicas: number,
             maxRetries: number = 10,
-            delayMs: number = 2000
+            delayMs: number = 2000,
         ): Promise<number> {
             for (let attempt = 1; attempt <= maxRetries; attempt++) {
-                const infoResult = await client.customCommand(["INFO", "ALL"], { route: "allNodes" });
-                
+                const infoResult = await client.customCommand(["INFO", "ALL"], {
+                    route: "allNodes",
+                });
+
                 if (Array.isArray(infoResult)) {
                     const matchingEntriesCount = infoResult.filter((node) => {
-                        const nodeInfo = node as { key: string; value: string | string[] | null };
+                        const nodeInfo = node as {
+                            key: string;
+                            value: string | string[] | null;
+                        };
                         const infoStr = nodeInfo.value?.toString() || "";
                         const isReplicaNode =
-                            infoStr.includes("role:slave") || infoStr.includes("role:replica");
-                        return isReplicaNode && infoStr.includes(expectedCmdStat);
+                            infoStr.includes("role:slave") ||
+                            infoStr.includes("role:replica");
+                        return (
+                            isReplicaNode && infoStr.includes(expectedCmdStat)
+                        );
                     }).length;
-        
+
                     console.log(
-                        `Attempt ${attempt}: Matching entries count = ${matchingEntriesCount}, Expected = ${nReplicas}`
+                        `Attempt ${attempt}: Matching entries count = ${matchingEntriesCount}, Expected = ${nReplicas}`,
                     );
-        
+
                     if (matchingEntriesCount === nReplicas) {
                         return matchingEntriesCount; // Success
                     }
                 }
-        
+
                 // Wait and retry
                 await new Promise((resolve) => setTimeout(resolve, delayMs));
             }
-        
+
             throw new Error(
-                `INFO command did not return correct results after ${maxRetries} attempts`
+                `INFO command did not return correct results after ${maxRetries} attempts`,
             );
         }
 
@@ -2231,11 +2239,10 @@ describe("GlideClusterClient", () => {
                         client_for_testing_az,
                         get_cmdstat,
                         n_replicas,
-                        10,    // Maximum retries
-                        2000   // Delay between retries in milliseconds
+                        10, // Maximum retries
+                        2000, // Delay between retries in milliseconds
                     );
                     expect(matchingEntriesCount).toBe(n_replicas);
-                    
                 } finally {
                     // Cleanup
                     await client_for_config_set?.close();
