@@ -2082,8 +2082,8 @@ describe("GlideClusterClient", () => {
             client: GlideClusterClient,
             expectedCmdStat: string,
             nReplicas: number,
-            maxRetries: number = 10,
-            delayMs: number = 2000,
+            maxRetries = 10,
+            delayMs = 2000,
         ): Promise<number> {
             for (let attempt = 1; attempt <= maxRetries; attempt++) {
                 const infoResult = await client.customCommand(["INFO", "ALL"], {
