@@ -2,6 +2,7 @@
 import eslint from "@eslint/js";
 import prettierConfig from "eslint-config-prettier";
 import tseslint from "typescript-eslint";
+import jsdoc from "eslint-plugin-jsdoc";
 
 export default tseslint.config(
     eslint.configs.recommended,
@@ -54,6 +55,13 @@ export default tseslint.config(
                     next: "*",
                 },
             ],
+            "@typescript-eslint/indent": ["error", 4, {
+            "SwitchCase": 1,
+            "ObjectExpression": 1,
+            "FunctionDeclaration": {"parameters": "first"},
+            "FunctionExpression": {"parameters": "first"},
+            "ignoredNodes": ["TSTypeParameterInstantiation"]
+        }],
         },
     },
     prettierConfig,

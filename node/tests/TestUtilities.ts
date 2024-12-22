@@ -84,6 +84,51 @@ function intoArrayInternal(obj: any, builder: string[]) {
     }
 }
 
+// The function is used to check if the cluster is ready with the count nodes known command using the client supplied.
+// The way it works is by parsing the response of the CLUSTER INFO command and checking if the cluster_state is ok and the cluster_known_nodes is equal to the count.
+// If so, we know the cluster is ready, and it has the amount of nodes we expect.
+export async function waitForClusterReady(
+    client: GlideClusterClient,
+    count: number,
+): Promise<boolean> {
+    const timeout = 20000; // 20 seconds timeout in milliseconds
+    const startTime = Date.now();
+
+    while (true) {
+        if (Date.now() - startTime > timeout) {
+            return false;
+        }
+
+        const clusterInfo = await client.customCommand(["CLUSTER", "INFO"]);
+        // parse the response
+        const clusterInfoMap = new Map<string, string>();
+
+        if (clusterInfo) {
+            const clusterInfoLines = clusterInfo
+                .toString()
+                .split("\n")
+                .filter((line) => line.length > 0);
+
+            for (const line of clusterInfoLines) {
+                const [key, value] = line.split(":");
+
+                clusterInfoMap.set(key.trim(), value.trim());
+            }
+
+            if (
+                clusterInfoMap.get("cluster_state") == "ok" &&
+                Number(clusterInfoMap.get("cluster_known_nodes")) == count
+            ) {
+                break;
+            }
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+
+    return true;
+}
+
 /**
  * accept any variable `v` and convert it into String, recursively
  */
