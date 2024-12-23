@@ -1046,6 +1046,7 @@ describe("GlideClient", () => {
                 client.close();
             }
         },
+        TIMEOUT,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
