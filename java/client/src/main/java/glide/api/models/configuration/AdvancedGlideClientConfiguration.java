@@ -11,8 +11,7 @@ import lombok.experimental.SuperBuilder;
  * GlideClientConfiguration}.
  *
  * @example
- *
- * <pre>{@code
+ *     <pre>{@code
  * AdvancedGlideClientConfiguration config = AdvancedGlideClientConfiguration.builder()
  *     .connectionTimeout(500)
  *     .build();
