@@ -26,9 +26,11 @@ import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.ReadFrom;
 import glide.api.models.configuration.RequestRoutingConfiguration;
 import glide.api.models.exceptions.ClosingException;
+import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
@@ -252,65 +254,67 @@ public class ConnectionTests {
                 BackoffStrategy.builder().exponentBase(2).factor(100).numOfRetries(1).build();
         var client = createConnectionTimeoutClient(clusterMode, 250, 20000, backoffStrategy);
 
-        // Run a long-running DEBUG SLEEP command to simulate a blocking operation
-        CompletableFuture<Void> runDebugSleep =
-                CompletableFuture.runAsync(
-                        () -> {
-                            try {
-                                if (client instanceof GlideClusterClient) {
-                                    ((GlideClusterClient) client)
-                                            .customCommand(new String[] {"DEBUG", "sleep", "7"}, ALL_NODES)
-                                            .get();
-                                } else if (client instanceof GlideClient) {
-                                    ((GlideClient) client).customCommand(new String[] {"DEBUG", "sleep", "7"}).get();
-                                }
-                            } catch (InterruptedException | ExecutionException e) {
-                                throw new RuntimeException("Error during DEBUG SLEEP command", e);
-                            }
-                        });
+        // Runnable for long-running DEBUG SLEEP command
+        Runnable debugSleepTask =
+                () -> {
+                    try {
+                        if (client instanceof GlideClusterClient) {
+                            ((GlideClusterClient) client)
+                                    .customCommand(new String[] {"DEBUG", "sleep", "7"}, ALL_NODES)
+                                    .get();
+                        } else if (client instanceof GlideClient) {
+                            ((GlideClient) client).customCommand(new String[] {"DEBUG", "sleep", "7"}).get();
+                        }
+                    } catch (InterruptedException | ExecutionException e) {
+                        throw new RuntimeException("Error during DEBUG SLEEP command", e);
+                    }
+                };
 
-        // Test case 1: Client connection failure due to timeout
-        CompletableFuture<Void> failToConnect =
-                CompletableFuture.runAsync(
-                        () -> {
-                            try {
-                                // Attempt to connect with a small timeout
-                                Thread.sleep(1000);
-                                ExecutionException executionException =
-                                        assertThrows(
-                                                ExecutionException.class,
-                                                () ->
-                                                        createConnectionTimeoutClient(clusterMode, 100, 250, backoffStrategy));
-                                assertInstanceOf(ClosingException.class, executionException.getCause());
-                                assertTrue(executionException.getMessage().toLowerCase().contains("timed out"));
-                            } catch (InterruptedException e) {
-                                Thread.currentThread().interrupt();
-                                throw new RuntimeException("Thread was interrupted", e);
-                            }
-                        });
+        // Runnable for testing connection failure due to timeout
+        Runnable failToConnectTask =
+                () -> {
+                    try {
+                        Thread.sleep(1000); // Wait to ensure the debug sleep command is running
+                        ExecutionException executionException =
+                                assertThrows(
+                                        ExecutionException.class,
+                                        () -> createConnectionTimeoutClient(clusterMode, 100, 250, backoffStrategy));
+                        assertInstanceOf(ClosingException.class, executionException.getCause());
+                        assertTrue(executionException.getMessage().toLowerCase().contains("timed out"));
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException("Thread was interrupted", e);
+                    }
+                };
 
-        // Test case 2: Client connection success
-        CompletableFuture<Void> connectToClient =
-                CompletableFuture.runAsync(
-                        () -> {
-                            try {
-                                // Create a second client with a connection timeout of 10 seconds
-                                Thread.sleep(1000); // Wait to ensure the debug sleep command is running
-                                var timeoutClient =
-                                        createConnectionTimeoutClient(clusterMode, 10000, 250, backoffStrategy);
-                                assertEquals(timeoutClient.set("key", "value").get(), "OK");
-                                timeoutClient.close();
-                            } catch (Exception e) {
-                                throw new RuntimeException("Error during successful connection attempt", e);
-                            }
-                        });
+        // Runnable for testing successful connection
+        Runnable connectToClientTask =
+                () -> {
+                    try {
+                        Thread.sleep(1000); // Wait to ensure the debug sleep command is running
+                        var timeoutClient =
+                                createConnectionTimeoutClient(clusterMode, 10000, 250, backoffStrategy);
+                        assertEquals(timeoutClient.set("key", "value").get(), "OK");
+                        timeoutClient.close();
+                    } catch (Exception e) {
+                        throw new RuntimeException("Error during successful connection attempt", e);
+                    }
+                };
 
-        // Run all the futures concurrently
-        CompletableFuture.allOf(runDebugSleep, failToConnect, connectToClient).join();
-
-        // Clean up the main client
-        if (client != null) {
-            client.close();
+        // Execute all tasks concurrently
+        ExecutorService executorService = Executors.newFixedThreadPool(3);
+        try {
+            executorService.invokeAll(
+                    List.of(
+                            Executors.callable(debugSleepTask),
+                            Executors.callable(failToConnectTask),
+                            Executors.callable(connectToClientTask)));
+        } finally {
+            executorService.shutdown();
+            // Clean up the main client
+            if (client != null) {
+                client.close();
+            }
         }
     }
 }
