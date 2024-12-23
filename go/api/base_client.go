@@ -1029,22 +1029,32 @@ func (client *baseClient) BLMove(
 	return handleStringOrNullResponse(result)
 }
 
-func (client *baseClient) Ping() (Result[string], error) {
+func (client *baseClient) Ping() (string, error) {
 	result, err := client.executeCommand(C.Ping, []string{})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return "", err
 	}
 
-	return handleStringResponse(result)
+	response, err := handleStringResponse(result)
+	if err != nil {
+		return "", err
+	}
+	return response.Value(), nil
 }
 
-func (client *baseClient) PingWithMessage(message string) (Result[string], error) {
-	result, err := client.executeCommand(C.Ping, []string{message})
+func (client *baseClient) PingWithMessage(message string) (string, error) {
+	args := []string{message}
+
+	result, err := client.executeCommand(C.Ping, args)
 	if err != nil {
-		return CreateNilStringResult(), err
+		return "", err
 	}
 
-	return handleStringResponse(result)
+	response, err := handleStringResponse(result)
+	if err != nil {
+		return "", err
+	}
+	return response.Value(), nil
 }
 
 func (client *baseClient) Del(keys []string) (Result[int64], error) {

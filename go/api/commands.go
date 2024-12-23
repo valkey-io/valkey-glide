@@ -766,7 +766,7 @@ type ConnectionManagementCommands interface {
 	//  result, err := client.Ping("Hello")
 	//
 	// [valkey.io]: https://valkey.io/commands/ping/
-	Ping() (Result[string], error)
+	Ping() (string, error)
 
 	// Pings the server with a custom message.
 	//
@@ -781,5 +781,5 @@ type ConnectionManagementCommands interface {
 	//  result, err := client.PingWithMessage("Hello")
 	//
 	// [valkey.io]: https://valkey.io/commands/ping/
-	PingWithMessage(message string) (Result[string], error)
+	PingWithMessage(message string) (string, error)
 }

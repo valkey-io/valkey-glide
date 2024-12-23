@@ -1,3 +1,5 @@
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
 package api
 
 import (
@@ -22,12 +24,12 @@ type SimpleNodeRoute int
 const (
 	// Route request to all nodes.
 	// Warning: Don't use it with write commands, they could be routed to a replica (RO) node and fail.
-	SimpleNodeRouteAllNodes SimpleNodeRoute = iota
+	AllNodes SimpleNodeRoute = iota
 	// Route request to all primary nodes.
-	SimpleNodeRouteAllPrimaries
+	AllPrimaries
 	// Route request to a random node.
 	// Warning: Don't use it with write commands, because they could be randomly routed to a replica (RO) node and fail.
-	SimpleNodeRouteRandom
+	RandomRoute
 )
 
 func (simpleNodeRoute SimpleNodeRoute) toRoutesProtobuf() (*protobuf.Routes, error) {
@@ -46,11 +48,11 @@ func (simpleNodeRoute SimpleNodeRoute) toRoutesProtobuf() (*protobuf.Routes, err
 
 func mapSimpleNodeRoute(simpleNodeRoute SimpleNodeRoute) (protobuf.SimpleRoutes, error) {
 	switch simpleNodeRoute {
-	case SimpleNodeRouteAllNodes:
+	case AllNodes:
 		return protobuf.SimpleRoutes_AllNodes, nil
-	case SimpleNodeRouteAllPrimaries:
+	case AllPrimaries:
 		return protobuf.SimpleRoutes_AllPrimaries, nil
-	case SimpleNodeRouteRandom:
+	case RandomRoute:
 		return protobuf.SimpleRoutes_Random, nil
 	default:
 		return protobuf.SimpleRoutes_Random, &RequestError{"Invalid simple node route"}
@@ -81,13 +83,13 @@ func mapSlotType(slotType SlotType) (protobuf.SlotTypes, error) {
 // Request routing configuration overrides the [api.ReadFrom] connection configuration.
 // If SlotTypeReplica is used, the request will be routed to a replica, even if the strategy is ReadFrom [api.PreferReplica].
 type SlotIdRoute struct {
-	// Defines type of the node being addressed.
 	slotType SlotType
-	// Slot number. There are 16384 slots in a Valkey cluster, and each shard manages a slot range.
-	// Unless the slot is known, it's better to route using [api.SlotTypePrimary].
-	slotID int32
+	slotID   int32
 }
 
+// - slotType: Defines type of the node being addressed.
+// - slotId: Slot number. There are 16384 slots in a Valkey cluster, and each shard manages a slot range. Unless the slot is
+// known, it's better to route using [api.SlotTypePrimary].
 func NewSlotIdRoute(slotType SlotType, slotId int32) *SlotIdRoute {
 	return &SlotIdRoute{slotType: slotType, slotID: slotId}
 }
@@ -112,12 +114,12 @@ func (slotIdRoute *SlotIdRoute) toRoutesProtobuf() (*protobuf.Routes, error) {
 // Request routing configuration overrides the [api.ReadFrom] connection configuration.
 // If SlotTypeReplica is used, the request will be routed to a replica, even if the strategy is ReadFrom [api.PreferReplica].
 type SlotKeyRoute struct {
-	// Defines type of the node being addressed.
 	slotType SlotType
-	// The request will be sent to nodes managing this key.
-	slotKey string
+	slotKey  string
 }
 
+// - slotType: Defines type of the node being addressed.
+// - slotKey: The request will be sent to nodes managing this key.
 func NewSlotKeyRoute(slotType SlotType, slotKey string) *SlotKeyRoute {
 	return &SlotKeyRoute{slotType: slotType, slotKey: slotKey}
 }
@@ -141,14 +143,14 @@ func (slotKeyRoute *SlotKeyRoute) toRoutesProtobuf() (*protobuf.Routes, error) {
 
 // Routes a request to a node by its address.
 type ByAddressRoute struct {
-	// The endpoint of the node. If port is not provided, host should be in the "address:port" format, where address is the
-	// preferred endpoint as shown in the output of the CLUSTER SLOTS command.
 	host string
-	// The port to access the node. If port is not provided, host is assumed to be in the format "address:port".
 	port int32
 }
 
 // Create a route using hostname/address and port.
+// - host: The endpoint of the node. If port is not provided, host should be in the "address:port" format, where address is the
+// preferred endpoint as shown in the output of the CLUSTER SLOTS command.
+// - port: The port to access the node. If port is not provided, host is assumed to be in the format "address:port".
 func NewByAddressRoute(host string, port int32) *ByAddressRoute {
 	return &ByAddressRoute{host: host, port: port}
 }
