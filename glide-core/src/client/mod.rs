@@ -35,7 +35,6 @@ pub const HEARTBEAT_SLEEP_DURATION: Duration = Duration::from_secs(1);
 pub const DEFAULT_RETRIES: u32 = 3;
 /// Note: If you change the default value, make sure to change the documentation in *all* wrappers.
 pub const DEFAULT_RESPONSE_TIMEOUT: Duration = Duration::from_millis(250);
-pub const DEFAULT_CONNECTION_ATTEMPT_TIMEOUT: Duration = Duration::from_millis(250);
 pub const DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL: Duration = Duration::from_secs(60);
 /// Note: If you change the default value, make sure to change the documentation in *all* wrappers.
 pub const DEFAULT_CONNECTION_TIMEOUT: Duration = Duration::from_millis(250);

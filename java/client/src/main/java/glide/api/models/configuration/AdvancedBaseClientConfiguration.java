@@ -13,14 +13,11 @@ import lombok.experimental.SuperBuilder;
 public abstract class AdvancedBaseClientConfiguration {
 
     /**
-     * The duration in milliseconds that the client will wait for a connection to be established.
-     *
-     * <p>This timeout applies both during initial client creation and any reconnections that may
-     * occur during request processing. A high connection timeout may lead to prolonged blocking of
-     * the entire command pipeline. If the client cannot establish a connection within the specified
-     * duration, a timeout error will occur.
-     *
-     * <p>If not explicitly set, a default value of 250 milliseconds will be used.
+     * The duration in milliseconds to wait for a TCP/TLS connection to complete. This applies both
+     * during initial client creation and any reconnections that may occur during request processing.
+     * **Note**: A high connection timeout may lead to prolonged blocking of the entire command
+     * pipeline. If the client cannot establish a connection within the specified duration, a timeout
+     * error will occur. If not explicitly set, a default value of 250 milliseconds will be used.
      */
     private final Integer connectionTimeout;
 }
