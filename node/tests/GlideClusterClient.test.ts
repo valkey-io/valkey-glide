@@ -1991,7 +1991,8 @@ describe("GlideClusterClient", () => {
             try {
                 // Run a long-running DEBUG SLEEP command using the first client (client)
                 const debugCommandPromise = client.customCommand(
-                    ["DEBUG", "sleep", "7"], // Sleep for 7 seconds
+                    ["DEBUG", "sleep", "7"],
+                    { route: "allNodes" }, // Sleep for 7 seconds
                 );
 
                 // Function that tries to create a client with a short connection timeout (100ms)
