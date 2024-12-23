@@ -300,6 +300,8 @@ func handleBooleanArrayResponse(response *C.struct_CommandResponse) ([]Result[bo
 }
 
 func handleStringDoubleMapResponse(response *C.struct_CommandResponse) (map[Result[string]]Result[float64], error) {
+	defer C.free_command_response(response)
+
 	typeErr := checkResponseType(response, C.Map, false)
 	if typeErr != nil {
 		return nil, typeErr
@@ -311,10 +313,11 @@ func handleStringDoubleMapResponse(response *C.struct_CommandResponse) (map[Resu
 		if err != nil {
 			return nil, err
 		}
-		value, err := handleDoubleResponse(v.map_value)
-		if err != nil {
-			return nil, err
+		typeErr := checkResponseType(v.map_value, C.Float, false)
+		if typeErr != nil {
+			return nil, typeErr
 		}
+		value := CreateFloat64Result(float64(v.map_value.float_value))
 		m[key] = value
 	}
 	return m, nil
