@@ -3,6 +3,8 @@
 package integTest
 
 import (
+	"strings"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/glide/api"
 )
@@ -20,4 +22,24 @@ func (suite *GlideTestSuite) TestPingWithRouteAndMessage() {
 	result, err := client.PingWithRouteAndMessage("Hello", api.SimpleNodeRouteAllPrimaries)
 	assert.Equal(suite.T(), "Hello", result.Value())
 	assert.Nil(suite.T(), err)
+}
+
+func (suite *GlideTestSuite) TestClusterCustomCommandInfo() {
+	client := suite.defaultClusterClient()
+	result, err := client.CustomCommand([]string{"INFO"})
+
+	assert.Nil(suite.T(), err)
+	// INFO is routed to all primary nodes by default
+	for _, value := range result.Value().(map[string]interface{}) {
+		assert.True(suite.T(), strings.Contains(value.(string), "# Stats"))
+	}
+}
+
+func (suite *GlideTestSuite) TestClusterCustomCommandEcho() {
+	client := suite.defaultClusterClient()
+	result, err := client.CustomCommand([]string{"ECHO", "GO GLIDE GO"})
+
+	assert.Nil(suite.T(), err)
+	// ECHO is routed to a single random node
+	assert.Equal(suite.T(), "GO GLIDE GO", result.Value().(string))
 }

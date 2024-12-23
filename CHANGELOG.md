@@ -1,11 +1,16 @@
 #### Changes
-
-* Go: Add SUNIONSTORE command ([#2805](https://github.com/valkey-io/valkey-glide/pull/2805)
-* Go: Add SUNION ([#2787](https://github.com/valkey-io/valkey-glide/pull/2787)
+* Node, Python: Add allow uncovered slots scanning flag option in cluster scan ([#2814](https://github.com/valkey-io/valkey-glide/pull/2814), [#2815](https://github.com/valkey-io/valkey-glide/pull/2815))
+* Go: Add HINCRBY command ([#2847](https://github.com/valkey-io/valkey-glide/pull/2847))
+* Go: Add HINCRBYFLOAT command ([#2846](https://github.com/valkey-io/valkey-glide/pull/2846))
+* Go: Add SUNIONSTORE command ([#2805](https://github.com/valkey-io/valkey-glide/pull/2805))
+* Go: Add SUNION ([#2787](https://github.com/valkey-io/valkey-glide/pull/2787))
 * Java: bump `netty` version ([#2795](https://github.com/valkey-io/valkey-glide/pull/2795))
 * Java: Bump protobuf (protoc) version ([#2796](https://github.com/valkey-io/valkey-glide/pull/2796), [#2800](https://github.com/valkey-io/valkey-glide/pull/2800))
 * Go: Add `SInterStore` ([#2779](https://github.com/valkey-io/valkey-glide/issues/2779))
 * Node: Remove native package references for MacOs x64 architecture ([#2799](https://github.com/valkey-io/valkey-glide/issues/2799))
+* Go: Add `ZIncrBy` command ([#2830](https://github.com/valkey-io/valkey-glide/pull/2830))
+* Go: Add `SScan` and `SMove` ([#2789](https://github.com/valkey-io/valkey-glide/issues/2789))
+* Go: Add `ZADD` ([#2813](https://github.com/valkey-io/valkey-glide/issues/2813))
 
 #### Breaking Changes
 
