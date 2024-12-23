@@ -248,10 +248,6 @@ public class ConnectionTests {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void test_connection_timeout(boolean clusterMode) {
-        assumeTrue(
-                SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"),
-                "DEBUG command only allowed from ver 7.0.0");
-
         var backoffStrategy =
                 BackoffStrategy.builder().exponentBase(2).factor(100).numOfRetries(1).build();
         var client = createConnectionTimeoutClient(clusterMode, 250, 20000, backoffStrategy);

@@ -333,18 +333,12 @@ class TestGlideClients:
         cluster_mode: bool,
         protocol: ProtocolVersion,
     ):
-        min_version = "7.0.0"
-
         client = await create_client(
             request,
             cluster_mode,
             protocol=protocol,
             request_timeout=20000,  # 20 seconds timeout
         )
-
-        if await check_if_server_version_lt(client, min_version):
-            # Debug is only enabled after 7.0.0
-            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         async def run_debug_sleep():
             """
