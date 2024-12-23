@@ -18,7 +18,7 @@ use tokio::task;
 use tokio::time::timeout;
 use tokio_retry2::{Retry, RetryError};
 
-use super::{run_with_timeout, DEFAULT_CONNECTION_ATTEMPT_TIMEOUT};
+use super::{run_with_timeout, DEFAULT_CONNECTION_TIMEOUT};
 
 /// The reason behind the call to `reconnect()`
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -74,7 +74,7 @@ async fn get_multiplexed_connection(
         Some(
             connection_options
                 .connection_timeout
-                .unwrap_or(DEFAULT_CONNECTION_ATTEMPT_TIMEOUT),
+                .unwrap_or(DEFAULT_CONNECTION_TIMEOUT),
         ),
         client.get_multiplexed_async_connection(connection_options.clone()),
     )

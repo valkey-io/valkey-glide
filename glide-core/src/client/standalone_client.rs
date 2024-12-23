@@ -2,7 +2,7 @@
 
 use super::get_redis_connection_info;
 use super::reconnecting_connection::{ReconnectReason, ReconnectingConnection};
-use super::{to_duration, DEFAULT_CONNECTION_ATTEMPT_TIMEOUT};
+use super::{to_duration, DEFAULT_CONNECTION_TIMEOUT};
 use super::{ConnectionRequest, NodeAddress, TlsMode};
 use crate::client::types::ReadFrom as ClientReadFrom;
 use crate::retry_strategies::RetryStrategy;
@@ -134,7 +134,7 @@ impl StandaloneClient {
 
         let connection_timeout = to_duration(
             connection_request.connection_timeout,
-            DEFAULT_CONNECTION_ATTEMPT_TIMEOUT,
+            DEFAULT_CONNECTION_TIMEOUT,
         );
 
         let mut stream = stream::iter(connection_request.addresses.iter())
