@@ -11,7 +11,7 @@ type ConnectionManagementCommands interface {
 	// Pings the server.
 	//
 	// Return value:
-	//  If no argument is provided, returns "PONG".
+	//  Returns "PONG".
 	//
 	// For example:
 	//  result, err := client.Ping()
@@ -21,8 +21,11 @@ type ConnectionManagementCommands interface {
 
 	// Pings the server with a custom message.
 	//
+	// Parameters:
+	//  message - A message to include in the `PING` command.
+	//
 	// Return value:
-	//  If an argument is provided, returns the argument.
+	//  Returns the copy of message.
 	//
 	// For example:
 	//  result, err := client.PingWithMessage("Hello")
