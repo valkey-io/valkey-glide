@@ -10,7 +10,7 @@ import (
 )
 
 func TestSimpleNodeRoute(t *testing.T) {
-	config := SimpleNodeRouteAllNodes
+	config := AllNodes
 	expected := &protobuf.Routes{
 		Value: &protobuf.Routes_SimpleRoutes{
 			SimpleRoutes: protobuf.SimpleRoutes_AllNodes,

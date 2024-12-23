@@ -636,7 +636,7 @@ fn get_route(route: Routes, cmd: Option<&Cmd>) -> Option<RoutingInfo> {
                 None
             }
         },
-        _ => todo!(),
+        _ => panic!("unknown route type"),
     }
 }
 
