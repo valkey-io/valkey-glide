@@ -10,8 +10,8 @@ import {
     expect,
     it,
 } from "@jest/globals";
-import {BufferReader,BufferWriter} from "protobufjs";
-import {v4 as uuidv4} from "uuid";
+import { BufferReader, BufferWriter } from "protobufjs";
+import { v4 as uuidv4 } from "uuid";
 import {
     Decoder,
     FlushMode,
@@ -26,9 +26,9 @@ import {
     Transaction,
     convertGlideRecordToRecord,
 } from "..";
-import {ValkeyCluster} from "../../utils/TestUtils.js";
-import {command_request} from "../src/ProtobufMessage";
-import {runBaseTests} from "./SharedTests";
+import { ValkeyCluster } from "../../utils/TestUtils.js";
+import { command_request } from "../src/ProtobufMessage";
+import { runBaseTests } from "./SharedTests";
 import {
     checkFunctionListResponse,
     checkFunctionStatsResponse,
@@ -980,67 +980,73 @@ describe("GlideClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        'should handle connection timeout when client is blocked by long-running command (protocol: %p)',
+        "should handle connection timeout when client is blocked by long-running command (protocol: %p)",
         async (protocol) => {
-          // Create a client configuration with a generous request timeout
-        const config = getClientConfigurationOption(
-            cluster.getAddresses(),
-            protocol,
-            { requestTimeout: 20000 } // Long timeout to allow debugging operations (sleep for 7 seconds)
-        );
-
-        // Initialize the primary client
-        const client = await GlideClient.createClient(config);
-
-          try {
-            // Run a long-running DEBUG SLEEP command using the first client (client)
-            const debugCommandPromise = client.customCommand(
-              ['DEBUG', 'sleep', '7'] // Sleep for 7 seconds
+            // Create a client configuration with a generous request timeout
+            const config = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+                { requestTimeout: 20000 }, // Long timeout to allow debugging operations (sleep for 7 seconds)
             );
 
-            // Function that tries to create a client with a short connection timeout (100ms)
-        const failToCreateClient = async () => {
-            await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait for 1 second before retry
-            await expect(GlideClient.createClient({
-                connectionBackoff: {exponentBase: 2, factor: 100, numberOfRetries: 1},
-              advancedConfiguration: {connectionTimeout: 100}, // 100ms connection timeout
-              ...config, // Include the rest of the config
-            })).rejects.toThrowError(/timed out/i); // Ensure it throws a timeout error
-          };
+            // Initialize the primary client
+            const client = await GlideClient.createClient(config);
 
-          // Function that verifies that a larger connection timeout allows connection
-        const connectWithLargeTimeout = async () => {
-            await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait for 1 second before retry
-            const longerTimeoutClient = await GlideClient.createClient({
-            connectionBackoff: { exponentBase: 2, factor: 100, numberOfRetries: 1 },
-            advancedConfiguration: { connectionTimeout: 10000 }, // 10s connection timeout
-            ...config, // Include the rest of the config
-            });
-            expect(await client.set("x", "y")).toEqual("OK");
-            longerTimeoutClient.close(); // Close the client after successful connection
-        };
+            try {
+                // Run a long-running DEBUG SLEEP command using the first client (client)
+                const debugCommandPromise = client.customCommand(
+                    ["DEBUG", "sleep", "7"], // Sleep for 7 seconds
+                );
 
-          // Run both the long-running DEBUG SLEEP command and the client creation attempt in parallel
-          await Promise.all([
-            debugCommandPromise, // Run the long-running command
-            failToCreateClient(), // Attempt to create the client with a short timeout
+                // Function that tries to create a client with a short connection timeout (100ms)
+                const failToCreateClient = async () => {
+                    await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait for 1 second before retry
+                    await expect(
+                        GlideClient.createClient({
+                            connectionBackoff: {
+                                exponentBase: 2,
+                                factor: 100,
+                                numberOfRetries: 1,
+                            },
+                            advancedConfiguration: { connectionTimeout: 100 }, // 100ms connection timeout
+                            ...config, // Include the rest of the config
+                        }),
+                    ).rejects.toThrowError(/timed out/i); // Ensure it throws a timeout error
+                };
 
-          ]);
+                // Function that verifies that a larger connection timeout allows connection
+                const connectWithLargeTimeout = async () => {
+                    await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait for 1 second before retry
+                    const longerTimeoutClient = await GlideClient.createClient({
+                        connectionBackoff: {
+                            exponentBase: 2,
+                            factor: 100,
+                            numberOfRetries: 1,
+                        },
+                        advancedConfiguration: { connectionTimeout: 10000 }, // 10s connection timeout
+                        ...config, // Include the rest of the config
+                    });
+                    expect(await client.set("x", "y")).toEqual("OK");
+                    longerTimeoutClient.close(); // Close the client after successful connection
+                };
 
-          // Run all tasks: fail short timeout, succeed with large timeout, and run the debug command
-      await Promise.all([
-        debugCommandPromise, // Run the long-running command
-        connectWithLargeTimeout(), // Attempt to create the client with a short timeout
+                // Run both the long-running DEBUG SLEEP command and the client creation attempt in parallel
+                await Promise.all([
+                    debugCommandPromise, // Run the long-running command
+                    failToCreateClient(), // Attempt to create the client with a short timeout
+                ]);
 
-      ]);
-
-
-          } finally {
-            // Clean up the test client and ensure everything is flushed and closed
-            client.close();
-          }
-        }
-      );
+                // Run all tasks: fail short timeout, succeed with large timeout, and run the debug command
+                await Promise.all([
+                    debugCommandPromise, // Run the long-running command
+                    connectWithLargeTimeout(), // Attempt to create the client with a short timeout
+                ]);
+            } finally {
+                // Clean up the test client and ensure everything is flushed and closed
+                client.close();
+            }
+        },
+    );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "function kill RW func %p",
