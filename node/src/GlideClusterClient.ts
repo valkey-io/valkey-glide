@@ -2,7 +2,7 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import {ClusterScanCursor,Script} from "glide-rs";
+import { ClusterScanCursor, Script } from "glide-rs";
 import * as net from "net";
 import {
     AdvancedBaseClientConfiguration,
@@ -61,8 +61,8 @@ import {
     createTime,
     createUnWatch,
 } from "./Commands";
-import {command_request,connection_request} from "./ProtobufMessage";
-import {ClusterTransaction} from "./Transaction";
+import { command_request, connection_request } from "./ProtobufMessage";
+import { ClusterTransaction } from "./Transaction";
 
 /** An extension to command option types with {@link Routes}. */
 export interface RouteOption {
@@ -195,7 +195,8 @@ export type GlideClusterClientConfiguration = BaseClientConfiguration & {
     advancedConfiguration?: AdvancedGlideClusterClientConfiguration;
 };
 
-export type AdvancedGlideClusterClientConfiguration = AdvancedBaseClientConfiguration & {};
+export type AdvancedGlideClusterClientConfiguration =
+    AdvancedBaseClientConfiguration & {};
 
 /**
  * If the command's routing is to one node we will get T as a response type,
@@ -509,7 +510,10 @@ export class GlideClusterClient extends BaseClient {
         }
 
         this.configurePubsub(options, configuration);
-        this.configureAdvancedConfigurationBase(configuration, options.advancedConfiguration);
+        this.configureAdvancedConfigurationBase(
+            configuration,
+            options.advancedConfiguration,
+        );
         return configuration;
     }
     /**
