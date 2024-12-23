@@ -10,7 +10,7 @@ import lombok.experimental.SuperBuilder;
  * Represents advanced configuration settings for a Standalone {@link GlideClient} used in {@link
  * GlideClientConfiguration}.
  *
- * <p>Example Usage:
+ * @example
  *
  * <pre>{@code
  * AdvancedGlideClientConfiguration config = AdvancedGlideClientConfiguration.builder()
