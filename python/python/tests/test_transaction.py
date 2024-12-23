@@ -1033,10 +1033,7 @@ class TestTransaction:
         assert result[5:13] == [2, 2, 2, [b"Bob", b"Alice"], 2, OK, None, 0]
         assert result[13:] == expected
 
-    @pytest.mark.filterwarnings(
-        action="ignore", message="The test <Function test_transaction_clear>"
-    )
-    def test_transaction_clear(self):
+    async def test_transaction_clear(self):
         transaction = Transaction()
         transaction.info()
         transaction.select(1)
