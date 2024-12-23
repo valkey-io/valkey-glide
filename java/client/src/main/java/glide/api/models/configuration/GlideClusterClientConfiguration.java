@@ -23,6 +23,7 @@ import lombok.experimental.SuperBuilder;
  *         .clientName("GLIDE")
  *         .subscriptionConfiguration(subscriptionConfiguration)
  *         .inflightRequestsLimit(1000)
+ *         .advancedConfiguration(AdvancedGlideClusterClientConfiguration.builder().connectionTimeout(500).build())
  *         .build();
  * }</pre>
  */
@@ -33,6 +34,6 @@ public class GlideClusterClientConfiguration extends BaseClientConfiguration {
     /** Subscription configuration for the current client. */
     private final ClusterSubscriptionConfiguration subscriptionConfiguration;
 
-    /** */
+    /** Advanced configuration settings for the client. */
     private final AdvancedGlideClusterClientConfiguration advancedConfiguration;
 }
