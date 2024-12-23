@@ -4,6 +4,7 @@
 
 import * as net from "net";
 import {
+    AdvancedBaseClientConfiguration,
     BaseClient,
     BaseClientConfiguration,
     convertGlideRecordToRecord,
@@ -58,8 +59,8 @@ import {
     LolwutOptions,
     ScanOptions,
 } from "./Commands";
-import { connection_request } from "./ProtobufMessage";
-import { Transaction } from "./Transaction";
+import {connection_request} from "./ProtobufMessage";
+import {Transaction} from "./Transaction";
 
 /* eslint-disable-next-line @typescript-eslint/no-namespace */
 export namespace GlideClientConfiguration {
@@ -171,7 +172,10 @@ export type GlideClientConfiguration = BaseClientConfiguration & {
      * Will be applied via SUBSCRIBE/PSUBSCRIBE commands during connection establishment.
      */
     pubsubSubscriptions?: GlideClientConfiguration.PubSubSubscriptions;
+    advancedConfiguration?: AdvancedGlideClientConfiguration;
 };
+
+export type AdvancedGlideClientConfiguration = AdvancedBaseClientConfiguration & {};
 
 /**
  * Client used for connection to standalone servers.
@@ -189,6 +193,7 @@ export class GlideClient extends BaseClient {
         configuration.databaseId = options.databaseId;
         configuration.connectionRetryStrategy = options.connectionBackoff;
         this.configurePubsub(options, configuration);
+        this.configureAdvancedConfigurationBase(configuration, options.advancedConfiguration);
         return configuration;
     }
     /**

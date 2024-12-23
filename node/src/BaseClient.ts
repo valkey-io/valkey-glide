@@ -11,7 +11,7 @@ import {
     valueFromSplitPointer,
 } from "glide-rs";
 import * as net from "net";
-import { Buffer, BufferWriter, Long, Reader, Writer } from "protobufjs";
+import {Buffer,BufferWriter,Long,Reader,Writer} from "protobufjs";
 import {
     AggregationType,
     BaseScanOptions,
@@ -242,13 +242,13 @@ import {
     TimeoutError,
     ValkeyError,
 } from "./Errors";
-import { GlideClientConfiguration } from "./GlideClient";
+import {GlideClientConfiguration} from "./GlideClient";
 import {
     GlideClusterClientConfiguration,
     RouteOption,
     Routes,
 } from "./GlideClusterClient";
-import { Logger } from "./Logger";
+import {Logger} from "./Logger";
 import {
     command_request,
     connection_request,
@@ -648,6 +648,10 @@ export interface BaseClientConfiguration {
      * ```
      */
     clientAz?: string;
+}
+
+export interface AdvancedBaseClientConfiguration {
+    connectionTimeout? : number;
 }
 
 /**
@@ -7655,6 +7659,13 @@ export class BaseClient {
             inflightRequestsLimit: options.inflightRequestsLimit,
             clientAz: options.clientAz ?? null,
         };
+    }
+
+    protected configureAdvancedConfigurationBase(
+        request: connection_request.IConnectionRequest,
+        options?: AdvancedBaseClientConfiguration,
+    ) {
+        request.connectionTimeout = options?.connectionTimeout;
     }
 
     /**
