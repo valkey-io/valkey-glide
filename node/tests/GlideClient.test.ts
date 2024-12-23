@@ -982,15 +982,16 @@ describe("GlideClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         'should handle connection timeout when client is blocked by long-running command (protocol: %p)',
         async (protocol) => {
-          // Create the client with a connection timeout of 100ms (simulating timeout)
-          const config = getClientConfigurationOption(
+          // Create a client configuration with a generous request timeout
+        const config = getClientConfigurationOption(
             cluster.getAddresses(),
             protocol,
-            { requestTimeout: 20000 },
-            );
-            const client = await GlideClient.createClient(config);
-          //testClient = await createClient(protocol, 10000); // Second client with a longer timeout
-    
+            { requestTimeout: 20000 } // Long timeout to allow debugging operations (sleep for 7 seconds)
+        );
+
+        // Initialize the primary client
+        const client = await GlideClient.createClient(config);
+
           try {
             // Run a long-running DEBUG SLEEP command using the first client (client)
             const debugCommandPromise = client.customCommand(
@@ -1001,18 +1002,39 @@ describe("GlideClient", () => {
         const failToCreateClient = async () => {
             await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait for 1 second before retry
             await expect(GlideClient.createClient({
-              connectionTimeout: 100, // 100ms connection timeout
+                connectionBackoff: {exponentBase: 2, factor: 100, numberOfRetries: 1},
+              advancedConfiguration: {connectionTimeout: 100}, // 100ms connection timeout
               ...config, // Include the rest of the config
             })).rejects.toThrowError(/timed out/i); // Ensure it throws a timeout error
           };
-  
+
+          // Function that verifies that a larger connection timeout allows connection
+        const connectWithLargeTimeout = async () => {
+            await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait for 1 second before retry
+            const longerTimeoutClient = await GlideClient.createClient({
+            connectionBackoff: { exponentBase: 2, factor: 100, numberOfRetries: 1 },
+            advancedConfiguration: { connectionTimeout: 10000 }, // 10s connection timeout
+            ...config, // Include the rest of the config
+            });
+            expect(await client.set("x", "y")).toEqual("OK");
+            longerTimeoutClient.close(); // Close the client after successful connection
+        };
+
           // Run both the long-running DEBUG SLEEP command and the client creation attempt in parallel
           await Promise.all([
-            failToCreateClient(), // Attempt to create the client with a short timeout
             debugCommandPromise, // Run the long-running command
+            failToCreateClient(), // Attempt to create the client with a short timeout
+
           ]);
-            
-    
+
+          // Run all tasks: fail short timeout, succeed with large timeout, and run the debug command
+      await Promise.all([
+        debugCommandPromise, // Run the long-running command
+        connectWithLargeTimeout(), // Attempt to create the client with a short timeout
+
+      ]);
+
+
           } finally {
             // Clean up the test client and ensure everything is flushed and closed
             client.close();
