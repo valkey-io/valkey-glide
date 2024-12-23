@@ -2,6 +2,7 @@
 
 use super::get_redis_connection_info;
 use super::reconnecting_connection::{ReconnectReason, ReconnectingConnection};
+use super::{to_duration, DEFAULT_CONNECTION_TIMEOUT};
 use super::{ConnectionRequest, NodeAddress, TlsMode};
 use crate::client::types::ReadFrom as ClientReadFrom;
 use crate::retry_strategies::RetryStrategy;
@@ -15,6 +16,7 @@ use redis::{PushInfo, RedisError, RedisResult, Value};
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::time::Duration;
 use telemetrylib::Telemetry;
 use tokio::sync::mpsc;
 use tokio::task;
@@ -130,6 +132,11 @@ impl StandaloneClient {
             Some(ClientReadFrom::AZAffinity(_))
         );
 
+        let connection_timeout = to_duration(
+            connection_request.connection_timeout,
+            DEFAULT_CONNECTION_TIMEOUT,
+        );
+
         let mut stream = stream::iter(connection_request.addresses.iter())
             .map(|address| async {
                 get_connection_and_replication_info(
@@ -143,6 +150,7 @@ impl StandaloneClient {
                     tls_mode.unwrap_or(TlsMode::NoTls),
                     &push_sender,
                     discover_az,
+                    connection_timeout,
                 )
                 .await
                 .map_err(|err| (format!("{}:{}", address.host, address.port), err))
@@ -552,6 +560,7 @@ async fn get_connection_and_replication_info(
     tls_mode: TlsMode,
     push_sender: &Option<mpsc::UnboundedSender<PushInfo>>,
     discover_az: bool,
+    connection_timeout: Duration,
 ) -> Result<(ReconnectingConnection, Value), (ReconnectingConnection, RedisError)> {
     let result = ReconnectingConnection::new(
         address,
@@ -560,6 +569,7 @@ async fn get_connection_and_replication_info(
         tls_mode,
         push_sender.clone(),
         discover_az,
+        connection_timeout,
     )
     .await;
     let reconnecting_connection = match result {

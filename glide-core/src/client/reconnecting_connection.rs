@@ -18,7 +18,7 @@ use tokio::task;
 use tokio::time::timeout;
 use tokio_retry2::{Retry, RetryError};
 
-use super::{run_with_timeout, DEFAULT_CONNECTION_ATTEMPT_TIMEOUT};
+use super::{run_with_timeout, DEFAULT_CONNECTION_TIMEOUT};
 
 /// The reason behind the call to `reconnect()`
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -71,7 +71,11 @@ async fn get_multiplexed_connection(
     connection_options: &GlideConnectionOptions,
 ) -> RedisResult<MultiplexedConnection> {
     run_with_timeout(
-        Some(DEFAULT_CONNECTION_ATTEMPT_TIMEOUT),
+        Some(
+            connection_options
+                .connection_timeout
+                .unwrap_or(DEFAULT_CONNECTION_TIMEOUT),
+        ),
         client.get_multiplexed_async_connection(connection_options.clone()),
     )
     .await
@@ -113,6 +117,7 @@ async fn create_connection(
     retry_strategy: RetryStrategy,
     push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     discover_az: bool,
+    connection_timeout: Duration,
 ) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
     let client = &connection_backend.connection_info;
     let connection_options = GlideConnectionOptions {
@@ -121,6 +126,7 @@ async fn create_connection(
             TokioDisconnectNotifier::new(),
         )),
         discover_az,
+        connection_timeout: Some(connection_timeout),
     };
     let action = || async {
         get_multiplexed_connection(client, &connection_options)
@@ -206,6 +212,7 @@ impl ReconnectingConnection {
         tls_mode: TlsMode,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
         discover_az: bool,
+        connection_timeout: Duration,
     ) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
         log_debug(
             "connection creation",
@@ -218,7 +225,14 @@ impl ReconnectingConnection {
             connection_available_signal: ManualResetEvent::new(true),
             client_dropped_flagged: AtomicBool::new(false),
         };
-        create_connection(backend, connection_retry_strategy, push_sender, discover_az).await
+        create_connection(
+            backend,
+            connection_retry_strategy,
+            push_sender,
+            discover_az,
+            connection_timeout,
+        )
+        .await
     }
 
     pub(crate) fn node_address(&self) -> String {

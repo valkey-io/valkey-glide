@@ -5,6 +5,9 @@ from typing import AsyncGenerator, List, Optional, Union
 
 import pytest
 from glide.config import (
+    AdvancedGlideClientConfiguration,
+    AdvancedGlideClusterClientConfiguration,
+    BackoffStrategy,
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
     NodeAddress,
@@ -242,7 +245,8 @@ async def create_client(
     addresses: Optional[List[NodeAddress]] = None,
     client_name: Optional[str] = None,
     protocol: ProtocolVersion = ProtocolVersion.RESP3,
-    timeout: Optional[int] = 1000,
+    request_timeout: Optional[int] = 1000,
+    connection_timeout: Optional[int] = 1000,
     cluster_mode_pubsub: Optional[
         GlideClusterClientConfiguration.PubSubSubscriptions
     ] = None,
@@ -252,6 +256,7 @@ async def create_client(
     inflight_requests_limit: Optional[int] = None,
     read_from: ReadFrom = ReadFrom.PRIMARY,
     client_az: Optional[str] = None,
+    reconnect_strategy: Optional[BackoffStrategy] = None,
 ) -> Union[GlideClient, GlideClusterClient]:
     # Create async socket client
     use_tls = request.config.getoption("--tls")
@@ -266,11 +271,12 @@ async def create_client(
             credentials=credentials,
             client_name=client_name,
             protocol=protocol,
-            request_timeout=timeout,
+            request_timeout=request_timeout,
             pubsub_subscriptions=cluster_mode_pubsub,
             inflight_requests_limit=inflight_requests_limit,
             read_from=read_from,
             client_az=client_az,
+            advanced_config=AdvancedGlideClusterClientConfiguration(connection_timeout),
         )
         return await GlideClusterClient.create(cluster_config)
     else:
@@ -284,11 +290,13 @@ async def create_client(
             database_id=database_id,
             client_name=client_name,
             protocol=protocol,
-            request_timeout=timeout,
+            request_timeout=request_timeout,
             pubsub_subscriptions=standalone_mode_pubsub,
             inflight_requests_limit=inflight_requests_limit,
             read_from=read_from,
             client_az=client_az,
+            advanced_config=AdvancedGlideClientConfiguration(connection_timeout),
+            reconnect_strategy=reconnect_strategy,
         )
         return await GlideClient.create(config)
 
@@ -341,7 +349,7 @@ async def test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
     try:
         # Try connecting without credentials
         client = await create_client(
-            request, cluster_mode, protocol=protocol, timeout=2000
+            request, cluster_mode, protocol=protocol, request_timeout=2000
         )
         await client.custom_command(["FLUSHALL"])
         await client.close()
@@ -354,7 +362,7 @@ async def test_teardown(request, cluster_mode: bool, protocol: ProtocolVersion):
                 request,
                 cluster_mode,
                 protocol=protocol,
-                timeout=2000,
+                request_timeout=2000,
                 credentials=credentials,
             )
             try:

@@ -193,6 +193,7 @@ where
             push_sender: None,
             disconnect_notifier,
             discover_az,
+            connection_timeout: None,
         },
     )
     .await

@@ -89,6 +89,11 @@ pub struct GlideConnectionOptions {
     /// If ReadFromReplica strategy is set to AZAffinity, this parameter will be set to 'true'.
     /// In this case, an INFO command will be triggered in the connection's setup to update the connection's 'availability_zone' property.
     pub discover_az: bool,
+    /// Connection timeout duration.
+    ///
+    /// This optional field sets the maximum duration to wait when attempting to establish
+    /// a connection. If `None`, the connection will use `DEFAULT_CONNECTION_TIMEOUT`.
+    pub connection_timeout: Option<Duration>,
 }
 
 /// To enable async support you need to enable the feature: `tokio-comp`
