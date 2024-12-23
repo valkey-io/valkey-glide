@@ -172,9 +172,23 @@ export type GlideClientConfiguration = BaseClientConfiguration & {
      * Will be applied via SUBSCRIBE/PSUBSCRIBE commands during connection establishment.
      */
     pubsubSubscriptions?: GlideClientConfiguration.PubSubSubscriptions;
+    /**
+     * Advanced configuration settings for the client.
+     */
     advancedConfiguration?: AdvancedGlideClientConfiguration;
 };
 
+/**
+ * Represents advanced configuration settings for creating a {@link GlideClient | GlideClient} used in {@link GlideClientConfiguration | GlideClientConfiguration}.
+ *
+ *
+ * @example
+ * ```typescript
+ * const config: AdvancedGlideClientConfiguration = {
+ *   connectionTimeout: 500, // Set the connection timeout to 500ms
+ * };
+ * ```
+ */
 export type AdvancedGlideClientConfiguration =
     AdvancedBaseClientConfiguration & {};
 

@@ -191,10 +191,23 @@ export type GlideClusterClientConfiguration = BaseClientConfiguration & {
      * Will be applied via SUBSCRIBE/PSUBSCRIBE/SSUBSCRIBE commands during connection establishment.
      */
     pubsubSubscriptions?: GlideClusterClientConfiguration.PubSubSubscriptions;
-
+    /**
+     * Advanced configuration settings for the client.
+     */
     advancedConfiguration?: AdvancedGlideClusterClientConfiguration;
 };
 
+/**
+ * Represents advanced configuration settings for creating a {@link GlideClusterClient | GlideClusterClient} used in {@link GlideClusterClientConfiguration | GlideClusterClientConfiguration}.
+ *
+ *
+ * @example
+ * ```typescript
+ * const config: AdvancedGlideClusterClientConfiguration = {
+ *   connectionTimeout: 500, // Set the connection timeout to 500ms
+ * };
+ * ```
+ */
 export type AdvancedGlideClusterClientConfiguration =
     AdvancedBaseClientConfiguration & {};
 
@@ -564,7 +577,6 @@ export class GlideClusterClient extends BaseClient {
     public static async createClient(
         options: GlideClusterClientConfiguration,
     ): Promise<GlideClusterClient> {
-        console.log("options are: ", options);
         return await super.createClientInternal(
             options,
             (socket: net.Socket, options?: GlideClusterClientConfiguration) =>

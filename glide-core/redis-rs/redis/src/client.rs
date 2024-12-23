@@ -92,7 +92,7 @@ pub struct GlideConnectionOptions {
     /// Connection timeout duration.
     ///
     /// This optional field sets the maximum duration to wait when attempting to establish
-    /// a connection. If `None`, the connection will use a default timeout.
+    /// a connection. If `None`, the connection will use `DEFAULT_CONNECTION_TIMEOUT`.
     pub connection_timeout: Option<Duration>,
 }
 

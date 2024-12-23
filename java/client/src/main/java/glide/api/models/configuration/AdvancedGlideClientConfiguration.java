@@ -1,10 +1,23 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.configuration;
 
+import glide.api.GlideClient;
 import lombok.Getter;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
+/**
+ * Represents advanced configuration settings for a Standalone {@link GlideClient} used in {@link
+ * GlideClientConfiguration}.
+ *
+ * <p>Example Usage:
+ *
+ * <pre>{@code
+ * AdvancedGlideClientConfiguration config = AdvancedGlideClientConfiguration.builder()
+ *     .connectionTimeout(500)
+ *     .build();
+ * }</pre>
+ */
 @Getter
 @SuperBuilder
 @ToString

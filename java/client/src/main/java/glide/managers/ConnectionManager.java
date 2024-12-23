@@ -70,8 +70,7 @@ public class ConnectionManager {
      * @param configuration Connection Request Configuration
      * @return ConnectionRequest protobuf message
      */
-    private ConnectionRequest createConnectionRequest(
-            BaseClientConfiguration configuration) { // shoham
+    private ConnectionRequest createConnectionRequest(BaseClientConfiguration configuration) {
         if (configuration instanceof GlideClusterClientConfiguration) {
             return setupConnectionRequestBuilderGlideClusterClient(
                             (GlideClusterClientConfiguration) configuration)
@@ -182,6 +181,14 @@ public class ConnectionManager {
         return connectionRequestBuilder;
     }
 
+    /**
+     * Configures the {@link ConnectionRequest.Builder} with settings from the provided {@link
+     * AdvancedBaseClientConfiguration}.
+     *
+     * @param connectionRequestBuilder The builder for the {@link ConnectionRequest}.
+     * @param configuration The advanced configuration settings.
+     * @return The updated {@link ConnectionRequest.Builder}.
+     */
     private ConnectionRequest.Builder setupConnectionRequestBuilderAdvancedBaseConfiguration(
             ConnectionRequest.Builder connectionRequestBuilder,
             AdvancedBaseClientConfiguration configuration) {
