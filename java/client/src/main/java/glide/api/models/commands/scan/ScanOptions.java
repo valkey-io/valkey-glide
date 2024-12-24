@@ -96,7 +96,7 @@ public class ScanOptions extends BaseScanOptions {
     }
 
     /**
-     * @return whether allow non covered slots.
+     * @return whether non-covered slots are allowed.
      */
     public Boolean getAllowNonCoveredSlots() {
         return allowNonCoveredSlots;
