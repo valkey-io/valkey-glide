@@ -43,11 +43,12 @@ serde_json = "1"
 serde = { version = "1", features = ["derive"] }
 
 [features]
+proto = ["protobuf"]
 socket-layer = [
+    "proto",
     "directories",
     "integer-encoding",
     "num_cpus",
-    "protobuf",
     "tokio-util",
 ]
 standalone_heartbeat = []
