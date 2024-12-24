@@ -20,7 +20,7 @@
 from typing import List, Optional, Union, cast
 
 from glide.async_commands.core import ConditionalChange
-from glide.async_commands.server_modules.json import (
+from glide.async_commands.server_modules.glide_json import (
     JsonArrIndexOptions,
     JsonArrPopOptions,
     JsonGetOptions,
