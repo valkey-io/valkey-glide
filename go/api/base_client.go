@@ -104,14 +104,18 @@ func (client *baseClient) Close() {
 	client.coreClient = nil
 }
 
-func (client *baseClient) executeCommand(
+func (client *baseClient) executeCommand(requestType C.RequestType, args []string) (*C.struct_CommandResponse, error) {
+	return client.executeCommandWithRoute(requestType, args, nil)
+}
+
+func (client *baseClient) executeCommandWithRoute(
 	requestType C.RequestType,
 	args []string,
+	route route,
 ) (*C.struct_CommandResponse, error) {
 	if client.coreClient == nil {
 		return nil, &ClosingError{"ExecuteCommand failed. The client is closed."}
 	}
-
 	var cArgsPtr *C.uintptr_t = nil
 	var argLengthsPtr *C.ulong = nil
 	if len(args) > 0 {
@@ -123,6 +127,22 @@ func (client *baseClient) executeCommand(
 	resultChannel := make(chan payload)
 	resultChannelPtr := uintptr(unsafe.Pointer(&resultChannel))
 
+	var routeBytesPtr *C.uchar = nil
+	var routeBytesCount C.uintptr_t = 0
+	if route != nil {
+		routeProto, err := route.toRoutesProtobuf()
+		if err != nil {
+			return nil, &RequestError{"ExecuteCommand failed due to invalid route"}
+		}
+		msg, err := proto.Marshal(routeProto)
+		if err != nil {
+			return nil, err
+		}
+
+		routeBytesCount = C.uintptr_t(len(msg))
+		routeBytesPtr = (*C.uchar)(C.CBytes(msg))
+	}
+
 	C.command(
 		client.coreClient,
 		C.uintptr_t(resultChannelPtr),
@@ -130,6 +150,8 @@ func (client *baseClient) executeCommand(
 		C.size_t(len(args)),
 		cArgsPtr,
 		argLengthsPtr,
+		routeBytesPtr,
+		routeBytesCount,
 	)
 	payload := <-resultChannel
 	if payload.error != nil {
