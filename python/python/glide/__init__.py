@@ -267,10 +267,10 @@ __all__ = [
     "PubSubMsg",
     # Json
     "glide_json",
+    "json_transaction",
     "JsonGetOptions",
     "JsonArrIndexOptions",
     "JsonArrPopOptions",
-    "json_transaction"
     # Logger
     "Logger",
     "LogLevel",
