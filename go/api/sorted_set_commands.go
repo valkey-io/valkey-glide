@@ -2,10 +2,6 @@
 
 package api
 
-import (
-	"github.com/valkey-io/valkey-glide/go/glide/api/options"
-)
-
 // SortedSetCommands supports commands and transactions for the "Sorted Set Commands" group for standalone and cluster clients.
 //
 // See [valkey.io] for details.
@@ -48,7 +44,7 @@ type SortedSetCommands interface {
 	//   fmt.Println(res.Value()) // Output: 3
 	//
 	// [valkey.io]: https://valkey.io/commands/zadd/
-	ZAddWithOptions(key string, membersScoreMap map[string]float64, opts *options.ZAddOptions) (Result[int64], error)
+	ZAddWithOptions(key string, membersScoreMap map[string]float64, opts *ZAddOptions) (Result[int64], error)
 
 	// Adds one or more members to a sorted set, or updates their scores. Creates the key if it doesn't exist.
 	//
@@ -87,7 +83,7 @@ type SortedSetCommands interface {
 	//   fmt.Println(res.Value()) // Output: 1.0
 	//
 	// [valkey.io]: https://valkey.io/commands/zadd/
-	ZAddIncrWithOptions(key string, member string, increment float64, opts *options.ZAddOptions) (Result[float64], error)
+	ZAddIncrWithOptions(key string, member string, increment float64, opts *ZAddOptions) (Result[float64], error)
 
 	// Increments the score of member in the sorted set stored at key by increment.
 	// If member does not exist in the sorted set, it is added with increment as its score.

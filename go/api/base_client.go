@@ -16,7 +16,6 @@ import (
 	"strconv"
 	"unsafe"
 
-	"github.com/valkey-io/valkey-glide/go/glide/api/options"
 	"github.com/valkey-io/valkey-glide/go/glide/protobuf"
 	"github.com/valkey-io/valkey-glide/go/glide/utils"
 	"google.golang.org/protobuf/proto"
@@ -1234,12 +1233,22 @@ func (client *baseClient) Renamenx(key string, newKey string) (Result[bool], err
 }
 
 func (client *baseClient) XAdd(key string, values [][]string) (Result[string], error) {
-	args := make([]string, 0, 2+2*len(values))
-	args = append(args, key, "*")
+	return client.XAddWithOptions(key, values, NewXAddOptions())
+}
+
+func (client *baseClient) XAddWithOptions(key string, values [][]string, options *XAddOptions) (Result[string], error) {
+	args := []string{}
+	args = append(args, key)
+	optionArgs, err := options.toArgs()
+	if err != nil {
+		return CreateNilStringResult(), err
+	} else {
+		args = append(args, optionArgs...)
+	}
 	for _, pair := range values {
 		if len(pair) != 2 {
 			return CreateNilStringResult(), fmt.Errorf(
-				"Array entry had the wrong length. Expected length 2 but got length %d",
+				"array entry had the wrong length. Expected length 2 but got length %d",
 				len(pair),
 			)
 		}
@@ -1250,7 +1259,7 @@ func (client *baseClient) XAdd(key string, values [][]string) (Result[string], e
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	return handleStringResponse(result)
+	return handleStringOrNullResponse(result)
 }
 
 func (client *baseClient) ZAdd(
@@ -1271,9 +1280,9 @@ func (client *baseClient) ZAdd(
 func (client *baseClient) ZAddWithOptions(
 	key string,
 	membersScoreMap map[string]float64,
-	opts *options.ZAddOptions,
+	opts *ZAddOptions,
 ) (Result[int64], error) {
-	optionArgs, err := opts.ToArgs()
+	optionArgs, err := opts.toArgs()
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}
@@ -1289,8 +1298,8 @@ func (client *baseClient) ZAddWithOptions(
 	return handleLongResponse(result)
 }
 
-func (client *baseClient) zAddIncrBase(key string, opts *options.ZAddOptions) (Result[float64], error) {
-	optionArgs, err := opts.ToArgs()
+func (client *baseClient) zAddIncrBase(key string, opts *ZAddOptions) (Result[float64], error) {
+	optionArgs, err := opts.toArgs()
 	if err != nil {
 		return CreateNilFloat64Result(), err
 	}
@@ -1308,7 +1317,7 @@ func (client *baseClient) ZAddIncr(
 	member string,
 	increment float64,
 ) (Result[float64], error) {
-	options, err := options.NewZAddOptionsBuilder().SetIncr(true, increment, member)
+	options, err := NewZAddOptionsBuilder().SetIncr(true, increment, member)
 	if err != nil {
 		return CreateNilFloat64Result(), err
 	}
@@ -1320,7 +1329,7 @@ func (client *baseClient) ZAddIncrWithOptions(
 	key string,
 	member string,
 	increment float64,
-	opts *options.ZAddOptions,
+	opts *ZAddOptions,
 ) (Result[float64], error) {
 	incrOpts, err := opts.SetIncr(true, increment, member)
 	if err != nil {

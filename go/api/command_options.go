@@ -3,6 +3,7 @@
 package api
 
 import (
+	"errors"
 	"strconv"
 
 	"github.com/valkey-io/valkey-glide/go/glide/utils"
@@ -282,19 +283,7 @@ func (listDirection ListDirection) toString() (string, error) {
 // This base option struct represents the common set of optional arguments for the SCAN family of commands.
 // Concrete implementations of this class are tied to specific SCAN commands (`SCAN`, `SSCAN`).
 type BaseScanOptions struct {
-	/**
-	 * The match filter is applied to the result of the command and will only include
-	 * strings that match the pattern specified. If the sorted set is large enough for scan commands to return
-	 * only a subset of the sorted set then there could be a case where the result is empty although there are
-	 * items that match the pattern specified. This is due to the default `COUNT` being `10` which indicates
-	 * that it will only fetch and match `10` items from the list.
-	 */
 	match string
-	/**
-	 * `COUNT` is a just a hint for the command for how many elements to fetch from the
-	 * sorted set. `COUNT` could be ignored until the sorted set is large enough for the `SCAN` commands to
-	 * represent the results as compact single-allocation packed encoding.
-	 */
 	count int64
 }
 
@@ -302,11 +291,19 @@ func NewBaseScanOptionsBuilder() *BaseScanOptions {
 	return &BaseScanOptions{}
 }
 
+// The match filter is applied to the result of the command and will only include
+// strings that match the pattern specified. If the sorted set is large enough for scan commands to return
+// only a subset of the sorted set then there could be a case where the result is empty although there are
+// items that match the pattern specified. This is due to the default `COUNT` being `10` which indicates
+// that it will only fetch and match `10` items from the list.
 func (scanOptions *BaseScanOptions) SetMatch(m string) *BaseScanOptions {
 	scanOptions.match = m
 	return scanOptions
 }
 
+// `COUNT` is a just a hint for the command for how many elements to fetch from the
+// sorted set. `COUNT` could be ignored until the sorted set is large enough for the `SCAN` commands to
+// represent the results as compact single-allocation packed encoding.
 func (scanOptions *BaseScanOptions) SetCount(c int64) *BaseScanOptions {
 	scanOptions.count = c
 	return scanOptions
@@ -323,5 +320,204 @@ func (opts *BaseScanOptions) toArgs() ([]string, error) {
 		args = append(args, CountKeyword, strconv.FormatInt(opts.count, 10))
 	}
 
+	return args, err
+}
+
+// Optional arguments to `ZAdd` in [SortedSetCommands]
+type ZAddOptions struct {
+	conditionalChange ConditionalSet
+	updateOptions     UpdateOptions
+	changed           bool
+	incr              bool
+	increment         float64
+	member            string
+}
+
+func NewZAddOptionsBuilder() *ZAddOptions {
+	return &ZAddOptions{}
+}
+
+// `conditionalChange` defines conditions for updating or adding elements with `ZAdd` command.
+func (options *ZAddOptions) SetConditionalChange(c ConditionalSet) *ZAddOptions {
+	options.conditionalChange = c
+	return options
+}
+
+// `updateOptions` specifies conditions for updating scores with `ZAdd` command.
+func (options *ZAddOptions) SetUpdateOptions(u UpdateOptions) *ZAddOptions {
+	options.updateOptions = u
+	return options
+}
+
+// `Changed` changes the return value from the number of new elements added to the total number of elements changed.
+func (options *ZAddOptions) SetChanged(ch bool) (*ZAddOptions, error) {
+	if options.incr {
+		return nil, errors.New("changed cannot be set when incr is true")
+	}
+	options.changed = ch
+	return options, nil
+}
+
+// `INCR` sets the increment value to use when incr is true.
+func (options *ZAddOptions) SetIncr(incr bool, increment float64, member string) (*ZAddOptions, error) {
+	if options.changed {
+		return nil, errors.New("incr cannot be set when changed is true")
+	}
+	options.incr = incr
+	options.increment = increment
+	options.member = member
+	return options, nil
+}
+
+// `toArgs` converts the options to a list of arguments.
+func (opts *ZAddOptions) toArgs() ([]string, error) {
+	args := []string{}
+	var err error
+
+	if opts.conditionalChange == OnlyIfExists || opts.conditionalChange == OnlyIfDoesNotExist {
+		args = append(args, string(opts.conditionalChange))
+	}
+
+	if opts.updateOptions == ScoreGreaterThanCurrent || opts.updateOptions == ScoreLessThanCurrent {
+		args = append(args, string(opts.updateOptions))
+	}
+
+	if opts.changed {
+		args = append(args, ChangedKeyword)
+	}
+
+	if opts.incr {
+		args = append(args, IncrKeyword, utils.FloatToString(opts.increment), opts.member)
+	}
+
+	return args, err
+}
+
+type UpdateOptions string
+
+const (
+	// Only update existing elements if the new score is less than the current score. Equivalent to
+	// "LT" in the Valkey API.
+	ScoreLessThanCurrent UpdateOptions = "LT"
+	// Only update existing elements if the new score is greater than the current score. Equivalent
+	// to "GT" in the Valkey API.
+	ScoreGreaterThanCurrent UpdateOptions = "GT"
+)
+
+const (
+	ChangedKeyword string = "CH"   // Valkey API keyword used to return total number of elements changed
+	IncrKeyword    string = "INCR" // Valkey API keyword to make zadd act like ZINCRBY.
+)
+
+type triStateBool int
+
+// Tri-state bool for use option builders. We cannot rely on the default value of an non-initialized variable.
+const (
+	triStateBoolUndefined triStateBool = iota
+	triStateBoolTrue
+	triStateBoolFalse
+)
+
+// Optional arguments to `XAdd` in [StreamCommands]
+type XAddOptions struct {
+	id          string
+	makeStream  triStateBool
+	trimOptions *XTrimOptions
+}
+
+// Create new empty `XAddOptions`
+func NewXAddOptions() *XAddOptions {
+	return &XAddOptions{}
+}
+
+// New entry will be added with this `id“.
+func (xao *XAddOptions) SetId(id string) *XAddOptions {
+	xao.id = id
+	return xao
+}
+
+// If set, a new stream won't be created if no stream matches the given key.
+func (xao *XAddOptions) SetDontMakeNewStream() *XAddOptions {
+	xao.makeStream = triStateBoolFalse
+	return xao
+}
+
+// If set, add operation will also trim the older entries in the stream.
+func (xao *XAddOptions) SetTrimOptions(options *XTrimOptions) *XAddOptions {
+	xao.trimOptions = options
+	return xao
+}
+
+func (xao *XAddOptions) toArgs() ([]string, error) {
+	args := []string{}
+	var err error
+	if xao.makeStream == triStateBoolFalse {
+		args = append(args, "NOMKSTREAM")
+	}
+	if xao.trimOptions != nil {
+		moreArgs, err := xao.trimOptions.toArgs()
+		if err != nil {
+			return args, err
+		}
+		args = append(args, moreArgs...)
+	}
+	if xao.id != "" {
+		args = append(args, xao.id)
+	} else {
+		args = append(args, "*")
+	}
+	return args, err
+}
+
+// Optional arguments for `XTrim` and `XAdd` in [StreamCommands]
+type XTrimOptions struct {
+	exact     triStateBool
+	limit     int64
+	method    string
+	threshold string
+}
+
+// Option to trim the stream according to minimum ID.
+func NewXTrimOptionsWithMinId(threshold string) *XTrimOptions {
+	return &XTrimOptions{threshold: threshold, method: "MINID"}
+}
+
+// Option to trim the stream according to maximum stream length.
+func NewXTrimOptionsWithMaxLen(threshold int64) *XTrimOptions {
+	return &XTrimOptions{threshold: utils.IntToString(threshold), method: "MAXLEN"}
+}
+
+// Match exactly on the threshold.
+func (xto *XTrimOptions) SetExactTrimming() *XTrimOptions {
+	xto.exact = triStateBoolTrue
+	return xto
+}
+
+// Trim in a near-exact manner, which is more efficient.
+func (xto *XTrimOptions) SetNearlyExactTrimming() *XTrimOptions {
+	xto.exact = triStateBoolFalse
+	return xto
+}
+
+// Max number of stream entries to be trimmed for non-exact match.
+func (xto *XTrimOptions) SetNearlyExactTrimmingAndLimit(limit int64) *XTrimOptions {
+	xto.exact = triStateBoolFalse
+	xto.limit = limit
+	return xto
+}
+
+func (xto *XTrimOptions) toArgs() ([]string, error) {
+	args := []string{}
+	args = append(args, xto.method)
+	if xto.exact == triStateBoolTrue {
+		args = append(args, "=")
+	} else if xto.exact == triStateBoolFalse {
+		args = append(args, "~")
+	}
+	args = append(args, xto.threshold)
+	if xto.limit > 0 {
+		args = append(args, "LIMIT", utils.IntToString(xto.limit))
+	}
+	var err error
 	return args, err
 }
