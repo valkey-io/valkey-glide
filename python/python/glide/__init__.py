@@ -270,6 +270,7 @@ __all__ = [
     "JsonGetOptions",
     "JsonArrIndexOptions",
     "JsonArrPopOptions",
+    "json_transaction"
     # Logger
     "Logger",
     "LogLevel",
