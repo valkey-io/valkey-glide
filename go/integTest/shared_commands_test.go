@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/glide/api"
+	"github.com/valkey-io/valkey-glide/go/glide/api/options"
 )
 
 const (
@@ -3880,12 +3881,16 @@ func (suite *GlideTestSuite) TestXAddWithOptions() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.NewString()
 		// stream does not exist
-		res, err := client.XAddWithOptions(key, [][]string{{"field1", "value1"}}, api.NewXAddOptions().SetDontMakeNewStream())
+		res, err := client.XAddWithOptions(
+			key,
+			[][]string{{"field1", "value1"}},
+			options.NewXAddOptions().SetDontMakeNewStream(),
+		)
 		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), res.IsNil())
 
 		// adding data to with given ID
-		res, err = client.XAddWithOptions(key, [][]string{{"field1", "value1"}}, api.NewXAddOptions().SetId("0-1"))
+		res, err = client.XAddWithOptions(key, [][]string{{"field1", "value1"}}, options.NewXAddOptions().SetId("0-1"))
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "0-1", res.Value())
 
@@ -3895,7 +3900,7 @@ func (suite *GlideTestSuite) TestXAddWithOptions() {
 		res, err = client.XAddWithOptions(
 			key,
 			[][]string{{"field3", "value3"}},
-			api.NewXAddOptions().SetTrimOptions(api.NewXTrimOptionsWithMaxLen(2).SetExactTrimming()),
+			options.NewXAddOptions().SetTrimOptions(options.NewXTrimOptionsWithMaxLen(2).SetExactTrimming()),
 		)
 		assert.Nil(suite.T(), err)
 		assert.False(suite.T(), res.IsNil())
@@ -3939,8 +3944,8 @@ func (suite *GlideTestSuite) TestZAddAndZAddIncr() {
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 
 		// with NX & XX
-		onlyIfExistsOpts := api.NewZAddOptionsBuilder().SetConditionalChange(api.OnlyIfExists)
-		onlyIfDoesNotExistOpts := api.NewZAddOptionsBuilder().SetConditionalChange(api.OnlyIfDoesNotExist)
+		onlyIfExistsOpts := options.NewZAddOptionsBuilder().SetConditionalChange(options.OnlyIfExists)
+		onlyIfDoesNotExistOpts := options.NewZAddOptionsBuilder().SetConditionalChange(options.OnlyIfDoesNotExist)
 
 		res, err = client.ZAddWithOptions(key3, membersScoreMap, onlyIfExistsOpts)
 		assert.Nil(suite.T(), err)
@@ -3971,10 +3976,10 @@ func (suite *GlideTestSuite) TestZAddAndZAddIncr() {
 
 		membersScoreMap2["one"] = 10.0
 
-		gtOpts := api.NewZAddOptionsBuilder().SetUpdateOptions(api.ScoreGreaterThanCurrent)
-		ltOpts := api.NewZAddOptionsBuilder().SetUpdateOptions(api.ScoreLessThanCurrent)
-		gtOptsChanged, _ := api.NewZAddOptionsBuilder().SetUpdateOptions(api.ScoreGreaterThanCurrent).SetChanged(true)
-		ltOptsChanged, _ := api.NewZAddOptionsBuilder().SetUpdateOptions(api.ScoreLessThanCurrent).SetChanged(true)
+		gtOpts := options.NewZAddOptionsBuilder().SetUpdateOptions(options.ScoreGreaterThanCurrent)
+		ltOpts := options.NewZAddOptionsBuilder().SetUpdateOptions(options.ScoreLessThanCurrent)
+		gtOptsChanged, _ := options.NewZAddOptionsBuilder().SetUpdateOptions(options.ScoreGreaterThanCurrent).SetChanged(true)
+		ltOptsChanged, _ := options.NewZAddOptionsBuilder().SetUpdateOptions(options.ScoreLessThanCurrent).SetChanged(true)
 
 		res, err = client.ZAddWithOptions(key4, membersScoreMap2, gtOptsChanged)
 		assert.Nil(suite.T(), err)

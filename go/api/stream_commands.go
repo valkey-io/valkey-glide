@@ -2,6 +2,8 @@
 
 package api
 
+import "github.com/valkey-io/valkey-glide/go/glide/api/options"
+
 // Supports commands and transactions for the "Stream" group of commands for standalone and cluster clients.
 //
 // See [valkey.io] for details.
@@ -40,11 +42,11 @@ type StreamCommands interface {
 	//  The id of the added entry.
 	//
 	// For example:
-	//  options := NewXAddOptions().WithId("0-1").WithDontMakeNewStream()
-	//  result, err := client.XAdd("myStream", [][]string{{"field1", "value1"}, {"field2", "value2"}}, options)
+	//  options := options.NewXAddOptions().SetId("100-500").SetDontMakeNewStream()
+	//  result, err := client.XAddWithOptions("myStream", [][]string{{"field1", "value1"}, {"field2", "value2"}}, options)
 	//  result.IsNil(): false
-	//  result.Value(): "0-1"
+	//  result.Value(): "100-500"
 	//
 	// [valkey.io]: https://valkey.io/commands/xadd/
-	XAddWithOptions(key string, values [][]string, options *XAddOptions) (Result[string], error)
+	XAddWithOptions(key string, values [][]string, options *options.XAddOptions) (Result[string], error)
 }
