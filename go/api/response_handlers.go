@@ -299,6 +299,30 @@ func handleBooleanArrayResponse(response *C.struct_CommandResponse) ([]Result[bo
 	return slice, nil
 }
 
+func handleStringDoubleMapResponse(response *C.struct_CommandResponse) (map[Result[string]]Result[float64], error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	m := make(map[Result[string]]Result[float64], response.array_value_len)
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		key, err := convertCharArrayToString(v.map_key, true)
+		if err != nil {
+			return nil, err
+		}
+		typeErr := checkResponseType(v.map_value, C.Float, false)
+		if typeErr != nil {
+			return nil, typeErr
+		}
+		value := CreateFloat64Result(float64(v.map_value.float_value))
+		m[key] = value
+	}
+	return m, nil
+}
+
 func handleStringToStringMapResponse(response *C.struct_CommandResponse) (map[Result[string]]Result[string], error) {
 	defer C.free_command_response(response)
 
