@@ -1253,7 +1253,7 @@ class ClusterCommands(CoreCommands):
 
         Examples:
             >>> lua_script = Script("return { KEYS[1], ARGV[1] }")
-            >>> await invoke_script(lua_script, keys=["foo"], args=["bar"] );
+            >>> await client.invoke_script(lua_script, keys=["foo"], args=["bar"] );
                 [b"foo", b"bar"]
         """
         return await self._execute_script(script.get_hash(), keys, args)
@@ -1284,7 +1284,7 @@ class ClusterCommands(CoreCommands):
 
         Examples:
             >>> lua_script = Script("return { ARGV[1] }")
-            >>> await invoke_script(lua_script, args=["bar"], route=AllPrimaries());
+            >>> await client.invoke_script(lua_script, args=["bar"], route=AllPrimaries());
                 [b"bar"]
         """
         return await self._execute_script(
