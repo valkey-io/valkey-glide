@@ -4136,11 +4136,13 @@ func (suite *GlideTestSuite) TestZincrBy() {
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
+}
 
 func (suite *GlideTestSuite) TestBZPopMin() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key1 := "{listKey}-1-" + uuid.NewString()
-		// key2 := "{listKey}-2-" + uuid.NewString()
+		key2 := "{listKey}-2-" + uuid.NewString()
+		key3 := "{listKey}-2-" + uuid.NewString()
 
 		// Add elements to key1
 		zaddResult1, err := client.ZAdd(key1, map[string]float64{"a": 1.0, "b": 1.5})
@@ -4148,34 +4150,34 @@ func (suite *GlideTestSuite) TestBZPopMin() {
 		assert.Equal(suite.T(), int64(2), zaddResult1.Value())
 
 		// Add elements to key2
-		// zaddResult2, err := client.ZAdd(key2, map[string]float64{"c": 2.0})
-		// assert.Nil(suite.T(), err)
-		// assert.Equal(suite.T(), int64(1), zaddResult2.Value())
+		zaddResult2, err := client.ZAdd(key2, map[string]float64{"c": 2.0})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), zaddResult2.Value())
 
-		// // Pop minimum element from key1 and key2
-		// bzpopminResult1, err := client.BZPopMin([]string{key1, key2}, 500*time.Millisecond)
-		// assert.NoError(suite.T(), err)
-		// assert.Equal(suite.T() []interface{}{key1, "a", 1.0}, bzpopminResult1)
+		// Pop minimum element from key1 and key2
+		bzpopminResult1, err := client.BZPopMin([]string{key1, key2}, float64(500*time.Millisecond))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), []interface{}{key1, "a", 1.0}, bzpopminResult1)
 
-		// // Attempt to pop from non-existent key3
-		// bzpopminResult2, err := client.BZPopMin([]string{key3}, 1*time.Second)
-		// assert.NoError(suite.T() err)
-		// assert.Nil(suite.T() bzpopminResult2)
+		// Attempt to pop from non-existent key3
+		bzpopminResult2, err := client.BZPopMin([]string{key3}, float64(1*time.Second))
+		assert.Nil(suite.T(), err)
+		assert.Nil(suite.T(), bzpopminResult2)
 
-		// // Pop minimum element from key2
-		// bzpopminResult3, err := client.BZPopMin([]string{key3, key2}, 500*time.Millisecond)
-		// assert.NoError(suite.T() err)
-		// assert.Equal(suite.T() []interface{}{key2, "c", 2.0}, bzpopminResult3)
+		// Pop minimum element from key2
+		bzpopminResult3, err := client.BZPopMin([]string{key3, key2}, float64(500*time.Millisecond))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), []interface{}{key2, "c", 2.0}, bzpopminResult3)
 
-		// // Set key3 to a non-sorted set value
-		// setResult, err := client.Set(key3, "value")
-		// assert.NoError(suite.T() err)
-		// assert.Equal(suite.T() "OK", setResult)
+		// Set key3 to a non-sorted set value
+		setResult, err := client.Set(key3, "value")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "OK", setResult)
 
 		// // Attempt to pop from key3 which is not a sorted set
-		// _, err = client.BZPopMin([]string{key3}, 500*time.Millisecond)
-		// assert.Error(suite.T() err)
-		// assert.IsType(suite.T() RequestException{}, err)
+		// _, err = client.BZPopMin([]string{key3}, float64(500*time.Millisecond))
+		// assert.Error(suite.T(), err)
+		// assert.IsType(suite.T(), RequestException{}, err)
 	})
 }
 
