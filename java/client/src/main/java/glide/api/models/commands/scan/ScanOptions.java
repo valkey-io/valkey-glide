@@ -30,8 +30,8 @@ public class ScanOptions extends BaseScanOptions {
     private final ObjectType type;
 
     /**
-     * If set to True, the scan will perform even if some slots are not covered by any node. It's
-     * important to note that when set to True, the scan has no guarantee to cover all keys in the
+     * If set to true, the scan will perform even if some slots are not covered by any node. It's
+     * important to note that when set to true, the scan has no guarantee to cover all keys in the
      * cluster, and the method loses its way to validate the progress of the scan. Defaults to false.
      */
     @Builder.Default private final Boolean allowNonCoveredSlots = false;
