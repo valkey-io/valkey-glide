@@ -1348,3 +1348,11 @@ func (client *baseClient) ZPopMaxWithCount(key string, count int64) (map[Result[
 	}
 	return handleStringDoubleMapResponse(result)
 }
+
+func (client *baseClient) Echo(message string) (Result[string], error) {
+	result, err := client.executeCommand(C.Echo, []string{message})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNullResponse(result)
+}
