@@ -1371,11 +1371,11 @@ func (client *baseClient) ZPopMaxWithCount(key string, count int64) (map[Result[
 	return handleStringDoubleMapResponse(result)
 }
 
-func (client *baseClient) BZPopMin(keys []string, timeoutSecs float64) ([]Result[string], error) {
+func (client *baseClient) BZPopMin(keys []string, timeoutSecs float64) (Result[KeyWithMemberAndScore], error) {
 	result, err := client.executeCommand(C.BZPopMin, append(keys, utils.FloatToString(timeoutSecs)))
 	if err != nil {
-		return nil, err
+		return CreateNilKeyWithMemberAndScoreResult(), err
 	}
 
-	return handleStringArrayOrNullResponse(result)
+	return handleKeyWithMemberAndScoreResponse(result)
 }
