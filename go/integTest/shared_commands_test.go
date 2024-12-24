@@ -4029,3 +4029,72 @@ func (suite *GlideTestSuite) TestZincrBy() {
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
 }
+
+func (suite *GlideTestSuite) TestZPopMin() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.New().String()
+		key2 := uuid.New().String()
+		memberScoreMap := map[string]float64{
+			"one":   1.0,
+			"two":   2.0,
+			"three": 3.0,
+		}
+
+		res, err := client.ZAdd(key1, memberScoreMap)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res.Value())
+
+		res2, err := client.ZPopMin(key1)
+		assert.Nil(suite.T(), err)
+		assert.Len(suite.T(), res2, 1)
+		assert.Equal(suite.T(), float64(1.0), res2[api.CreateStringResult("one")].Value())
+
+		res3, err := client.ZPopMinWithCount(key1, 2)
+		assert.Nil(suite.T(), err)
+		assert.Len(suite.T(), res3, 2)
+		assert.Equal(suite.T(), float64(2.0), res3[api.CreateStringResult("two")].Value())
+		assert.Equal(suite.T(), float64(3.0), res3[api.CreateStringResult("three")].Value())
+
+		// non sorted set key
+		_, err = client.Set(key2, "test")
+		assert.Nil(suite.T(), err)
+
+		_, err = client.ZPopMin(key2)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestZPopMax() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.New().String()
+		key2 := uuid.New().String()
+		memberScoreMap := map[string]float64{
+			"one":   1.0,
+			"two":   2.0,
+			"three": 3.0,
+		}
+		res, err := client.ZAdd(key1, memberScoreMap)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res.Value())
+
+		res2, err := client.ZPopMax(key1)
+		assert.Nil(suite.T(), err)
+		assert.Len(suite.T(), res2, 1)
+		assert.Equal(suite.T(), float64(3.0), res2[api.CreateStringResult("three")].Value())
+
+		res3, err := client.ZPopMaxWithCount(key1, 2)
+		assert.Nil(suite.T(), err)
+		assert.Len(suite.T(), res3, 2)
+		assert.Equal(suite.T(), float64(2.0), res3[api.CreateStringResult("two")].Value())
+		assert.Equal(suite.T(), float64(1.0), res3[api.CreateStringResult("one")].Value())
+
+		// non sorted set key
+		_, err = client.Set(key2, "test")
+		assert.Nil(suite.T(), err)
+
+		_, err = client.ZPopMax(key2)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}

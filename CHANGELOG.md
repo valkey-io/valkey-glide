@@ -11,6 +11,7 @@
 * Go: Add `ZIncrBy` command ([#2830](https://github.com/valkey-io/valkey-glide/pull/2830))
 * Go: Add `SScan` and `SMove` ([#2789](https://github.com/valkey-io/valkey-glide/issues/2789))
 * Go: Add `ZADD` ([#2813](https://github.com/valkey-io/valkey-glide/issues/2813))
+* Go: Add `ZPopMin` and `ZPopMax` ([#2850](https://github.com/valkey-io/valkey-glide/pull/2850))
 
 #### Breaking Changes
 
