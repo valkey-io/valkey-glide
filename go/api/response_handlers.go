@@ -408,9 +408,6 @@ func handleKeyWithMemberAndScoreResponse(response *C.struct_CommandResponse) (Re
 	if typeErr != nil {
 		return CreateNilKeyWithMemberAndScoreResult(), typeErr
 	}
-	if response.array_value_len != 3 {
-		return CreateNilKeyWithMemberAndScoreResult(), &RequestError{"Unexpected number of elements in response"}
-	}
 
 	slice, err := parseArray(response)
 	if err != nil {
@@ -418,18 +415,9 @@ func handleKeyWithMemberAndScoreResponse(response *C.struct_CommandResponse) (Re
 	}
 
 	arr := slice.([]interface{})
-	key, ok := arr[0].(string)
-	if !ok {
-		return CreateNilKeyWithMemberAndScoreResult(), &RequestError{"Unexpected type of key"}
-	}
-	member, ok := arr[1].(string)
-	if !ok {
-		return CreateNilKeyWithMemberAndScoreResult(), &RequestError{"Unexpected type of member"}
-	}
+	key := arr[0].(string)
+	member := arr[1].(string)
 	score := arr[2].(float64)
-	if !ok {
-		return CreateNilKeyWithMemberAndScoreResult(), &RequestError{"Unexpected type of score"}
-	}
 	kms := KeyWithMemberAndScore{key, member, score}
 	return CreateKeyWithMemberAndScoreResult(kms), nil
 }
