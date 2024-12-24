@@ -397,34 +397,41 @@ func handleStringSetResponse(response *C.struct_CommandResponse) (map[Result[str
 	return slice, nil
 }
 
-func describe(i interface{}) {
-	fmt.Printf("(%v, %T)\n", i, i)
-}
-
 func handleKeyWithMemberAndScoreResponse(response *C.struct_CommandResponse) (Result[KeyWithMemberAndScore], error) {
 	defer C.free_command_response(response)
 
-	describe(response)
-	typeErr := checkResponseType(response, C.Array, false)
+	if response == nil || response.response_type == uint32(C.Null) {
+		return CreateNilKeyWithMemberAndScoreResult(), nil
+	}
+
+	typeErr := checkResponseType(response, C.Array, true)
 	if typeErr != nil {
 		return CreateNilKeyWithMemberAndScoreResult(), typeErr
 	}
+	if response.array_value_len != 3 {
+		return CreateNilKeyWithMemberAndScoreResult(), &RequestError{"Unexpected number of elements in response"}
+	}
 
-	return CreateNilKeyWithMemberAndScoreResult(), nil
-	// m := make(map[Result[string]]Result[float64], response.array_value_len)
-	// for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
-	// 	key, err := convertCharArrayToString(v.map_key, true)
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	// 	value, err := handleDoubleResponse(v.map_value)
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	// 	m[key] = value
-	// }
+	slice, err := parseArray(response)
+	if err != nil {
+		return CreateNilKeyWithMemberAndScoreResult(), err
+	}
 
-	// return m, nil
+	arr := slice.([]interface{})
+	key, ok := arr[0].(string)
+	if !ok {
+		return CreateNilKeyWithMemberAndScoreResult(), &RequestError{"Unexpected type of key"}
+	}
+	member, ok := arr[1].(string)
+	if !ok {
+		return CreateNilKeyWithMemberAndScoreResult(), &RequestError{"Unexpected type of member"}
+	}
+	score := arr[2].(float64)
+	if !ok {
+		return CreateNilKeyWithMemberAndScoreResult(), &RequestError{"Unexpected type of score"}
+	}
+	kms := KeyWithMemberAndScore{key, member, score}
+	return CreateKeyWithMemberAndScoreResult(kms), nil
 }
 
 func handleScanResponse(
