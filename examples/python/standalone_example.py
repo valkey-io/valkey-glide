@@ -3,14 +3,14 @@ from typing import List, Tuple
 
 from glide import (
     ClosingError,
-    ConnectionError,
+    ConnectionError as GlideConnectionError,
     GlideClient,
     GlideClientConfiguration,
     Logger,
     LogLevel,
     NodeAddress,
     RequestError,
-    TimeoutError,
+    TimeoutError as GlideTimeoutError,
 )
 
 
@@ -91,11 +91,11 @@ async def exec_app_logic():
                 "glide",
                 f"Client has closed and needs to be re-created: {e}",
             )
-        except TimeoutError as e:
+        except GlideTimeoutError as e:
             # A request timed out. You may choose to retry the execution based on your application's logic
             Logger.log(LogLevel.ERROR, "glide", f"TimeoutError encountered: {e}")
             raise e
-        except ConnectionError as e:
+        except GlideConnectionError as e:
             # The client wasn't able to reestablish the connection within the given retries
             Logger.log(LogLevel.ERROR, "glide", f"ConnectionError encountered: {e}")
             raise e
