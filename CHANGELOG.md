@@ -1,4 +1,7 @@
 #### Changes
+* Java: Add transaction commands for JSON module ([#2691](https://github.com/valkey-io/valkey-glide/pull/2691))
+* Node transaction commands json([#2690](https://github.com/valkey-io/valkey-glide/pull/2690))
+* Python: Add JSON commands in transaction ([#2684](https://github.com/valkey-io/valkey-glide/pull/2684))
 * Node, Python: Add allow uncovered slots scanning flag option in cluster scan ([#2814](https://github.com/valkey-io/valkey-glide/pull/2814), [#2815](https://github.com/valkey-io/valkey-glide/pull/2815))
 * Go: Add HINCRBY command ([#2847](https://github.com/valkey-io/valkey-glide/pull/2847))
 * Go: Add HINCRBYFLOAT command ([#2846](https://github.com/valkey-io/valkey-glide/pull/2846))
@@ -111,6 +114,7 @@
 * Node: Add `JSON.NUMINCRBY` and `JSON.NUMMULTBY` command ([#2555](https://github.com/valkey-io/valkey-glide/pull/2555))
 * Core: Add support to Availability Zone Affinity read strategy ([#2539](https://github.com/valkey-io/valkey-glide/pull/2539))
 * Core: Fix list of readonly commands ([#2634](https://github.com/valkey-io/valkey-glide/pull/2634), [#2649](https://github.com/valkey-io/valkey-glide/pull/2649))
+* Java: Add transaction commands for JSON module ([#2691](https://github.com/valkey-io/valkey-glide/pull/2691))
 * Core: Improve retry logic and update unmaintained dependencies for Rust lint CI ([#2673](https://github.com/valkey-io/valkey-glide/pull/2643))
 * Core: Release the read lock while creating connections in `refresh_connections` ([#2630](https://github.com/valkey-io/valkey-glide/issues/2630))
 * Core: SlotMap refactor - Added NodesMap, Update the slot map upon MOVED errors ([#2682](https://github.com/valkey-io/valkey-glide/issues/2682))
