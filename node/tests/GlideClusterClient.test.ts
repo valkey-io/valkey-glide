@@ -33,8 +33,8 @@ import {
     Script,
     SlotKeyTypes,
     SortOrder,
-    convertRecordToGlideRecord,
     convertGlideRecordToRecord,
+    convertRecordToGlideRecord,
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import { runBaseTests } from "./SharedTests";
@@ -2216,11 +2216,24 @@ describe("GlideClusterClient", () => {
                             getClientConfigurationOption(
                                 azCluster.getAddresses(),
                                 protocol,
+                                { requestTimeout: 3000 },
                             ),
                         );
-                    await client_for_config_set.configResetStat();
-                    await client_for_config_set.configSet(
-                        { "availability-zone": az },
+
+                    // Skip test if version is below 8.0.0
+                    if (cluster.checkIfServerVersionLessThan("8.0.0")) {
+                        console.log(
+                            "Skipping test: requires Valkey 8.0.0 or higher",
+                        );
+                        return;
+                    }
+
+                    await client_for_config_set.customCommand([
+                        "CONFIG",
+                        "RESETSTAT",
+                    ]);
+                    await client_for_config_set.customCommand(
+                        ["CONFIG", "SET", "availability-zone", az],
                         { route: "allNodes" },
                     );
 
@@ -2245,7 +2258,8 @@ describe("GlideClusterClient", () => {
                                 azCluster.getAddresses(),
                                 protocol,
                                 {
-                                    readFrom: "AZAffinity",
+                                    requestTimeout: 3000,
+                                    readFrom: "AZAffinity" as ReadFrom,
                                     clientAz: az,
                                 },
                             ),
@@ -2317,11 +2331,20 @@ describe("GlideClusterClient", () => {
                             getClientConfigurationOption(
                                 azCluster.getAddresses(),
                                 protocol,
+                                { requestTimeout: 3000 },
                             ),
                         );
 
-                    await client_for_config_set.configSet(
-                        { "availability-zone": "" },
+                    // Skip test if version is below 8.0.0
+                    if (cluster.checkIfServerVersionLessThan("8.0.0")) {
+                        console.log(
+                            "Skipping test: requires Valkey 8.0.0 or higher",
+                        );
+                        return;
+                    }
+
+                    await client_for_config_set.customCommand(
+                        ["CONFIG", "SET", "availability-zone", ""],
                         { route: "allNodes" },
                     );
 
@@ -2339,6 +2362,7 @@ describe("GlideClusterClient", () => {
                                 azCluster.getAddresses(),
                                 protocol,
                                 {
+                                    requestTimeout: 3000,
                                     readFrom: "AZAffinity",
                                     clientAz: az,
                                 },
@@ -2408,7 +2432,7 @@ describe("GlideClusterClient", () => {
                                 {
                                     readFrom: "AZAffinity",
                                     clientAz: "non-existing-az",
-                                    requestTimeout: 2000,
+                                    requestTimeout: 3000,
                                 },
                             ),
                         );
