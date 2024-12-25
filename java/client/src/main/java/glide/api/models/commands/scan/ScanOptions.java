@@ -6,6 +6,7 @@ import glide.api.commands.GenericCommands;
 import glide.api.models.GlideString;
 import glide.ffi.resolvers.ObjectTypeResolver;
 import glide.utils.ArrayTransformUtils;
+import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.experimental.SuperBuilder;
 
@@ -27,6 +28,13 @@ public class ScanOptions extends BaseScanOptions {
      * may receive no elements in many iterations.
      */
     private final ObjectType type;
+
+    /**
+     * If set to true, the scan will perform even if some slots are not covered by any node. It's
+     * important to note that when set to true, the scan has no guarantee to cover all keys in the
+     * cluster, and the method loses its way to validate the progress of the scan. Defaults to false.
+     */
+    @Builder.Default private final Boolean allowNonCoveredSlots = false;
 
     /** Defines the complex data types available for a <code>SCAN</code> request. */
     public enum ObjectType {
@@ -85,5 +93,12 @@ public class ScanOptions extends BaseScanOptions {
      */
     public ObjectType getType() {
         return type;
+    }
+
+    /**
+     * @return whether non-covered slots are allowed.
+     */
+    public Boolean getAllowNonCoveredSlots() {
+        return allowNonCoveredSlots;
     }
 }

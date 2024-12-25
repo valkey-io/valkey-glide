@@ -1,14 +1,94 @@
-from __future__ import annotations
-
-from typing import List, cast
+import asyncio
+from typing import AsyncGenerator, List, cast
 
 import pytest
-from glide import ClusterScanCursor
+from glide import ByAddressRoute
 from glide.async_commands.command_args import ObjectType
 from glide.config import ProtocolVersion
 from glide.exceptions import RequestError
+from glide.glide import ClusterScanCursor
 from glide.glide_client import GlideClient, GlideClusterClient
+from tests.conftest import create_client
+from tests.utils.cluster import ValkeyCluster
 from tests.utils.utils import get_random_string
+
+
+# Helper function to get a number of nodes, and ask the cluster till we get the number of nodes
+async def is_cluster_ready(client: GlideClusterClient, count: int) -> bool:
+    # we allow max 20 seconds to get the nodes
+    timeout = 20
+    start_time = asyncio.get_event_loop().time()
+
+    while True:
+        if asyncio.get_event_loop().time() - start_time > timeout:
+            return False
+
+        cluster_info = await client.custom_command(["CLUSTER", "INFO"])
+        cluster_info_map = {}
+
+        if cluster_info:
+            info_str = (
+                cluster_info
+                if isinstance(cluster_info, str)
+                else (
+                    cluster_info.decode()
+                    if isinstance(cluster_info, bytes)
+                    else str(cluster_info)
+                )
+            )
+            cluster_info_lines = info_str.split("\n")
+            cluster_info_lines = [line for line in cluster_info_lines if line]
+
+            for line in cluster_info_lines:
+                key, value = line.split(":")
+                cluster_info_map[key.strip()] = value.strip()
+
+            if (
+                cluster_info_map.get("cluster_state") == "ok"
+                and int(cluster_info_map.get("cluster_known_nodes", "0")) == count
+            ):
+                break
+
+        await asyncio.sleep(2)
+
+    return True
+
+
+# The slots not covered testing is messing with the cluster by removing a node, and then scanning the cluster
+# When a node is forgot its getting into a banned state for one minutes, so in order to bring back the cluster to normal state
+# we need to wait for the node to be unbanned, and then we can continue with the tests
+# In order to avoid the time wasting and the chance that the restoration will not happen, we will run the test on separate cluster
+@pytest.fixture(scope="function")
+async def function_scoped_cluster():
+    """
+    Function-scoped fixture to create a new cluster for each test invocation.
+    """
+    cluster = ValkeyCluster(
+        tls=False, cluster_mode=True, shard_count=3, replica_count=0
+    )
+    yield cluster
+    del cluster
+
+
+# Since the cluster for slots covered is created separately, we need to create a client for the specific cluster
+# The client is created with 100 timeout so looping over the keys with scan will return the error before we finish the loop
+# otherwise the test will be flaky
+@pytest.fixture(scope="function")
+async def glide_client_scoped(
+    request, function_scoped_cluster: ValkeyCluster, protocol: ProtocolVersion
+) -> AsyncGenerator[GlideClusterClient, None]:
+    """
+    Get client for tests, adjusted to use the function-scoped cluster.
+    """
+    client = await create_client(
+        request,
+        True,
+        valkey_cluster=function_scoped_cluster,
+        protocol=protocol,
+    )
+    assert isinstance(client, GlideClusterClient)
+    yield client
+    await client.close()
 
 
 @pytest.mark.asyncio
@@ -250,6 +330,75 @@ class TestScan:
         assert not set(encoded_hash_keys).intersection(set(keys))
         assert not set(encoded_list_keys).intersection(set(keys))
         assert not set(encoded_zset_keys).intersection(set(keys))
+
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_cluster_scan_non_covered_slots(
+        self,
+        protocol: ProtocolVersion,
+        function_scoped_cluster: ValkeyCluster,
+        glide_client_scoped: GlideClusterClient,
+    ):
+        key = get_random_string(10)
+        for i in range(1000):
+            await glide_client_scoped.set(f"{key}:{i}", "value")
+        cursor = ClusterScanCursor()
+        result = await glide_client_scoped.scan(cursor)
+        cursor = cast(ClusterScanCursor, result[0])
+        assert not cursor.is_finished()
+        await glide_client_scoped.config_set({"cluster-require-full-coverage": "no"})
+        # forget one server
+        address_to_forget = glide_client_scoped.config.addresses[0]
+        all_other_addresses = glide_client_scoped.config.addresses[1:]
+        id_to_forget = await glide_client_scoped.custom_command(
+            ["CLUSTER", "MYID"],
+            ByAddressRoute(address_to_forget.host, address_to_forget.port),
+        )
+        for address in all_other_addresses:
+            await glide_client_scoped.custom_command(
+                ["CLUSTER", "FORGET", cast(str, id_to_forget)],
+                ByAddressRoute(address.host, address.port),
+            )
+        # now we let it few seconds gossip to get the new cluster configuration
+        await is_cluster_ready(glide_client_scoped, len(all_other_addresses))
+        # Iterate scan until error is returned, as it might take time for the inner core to forget the missing node
+        cursor = ClusterScanCursor()
+        while True:
+            try:
+                while not cursor.is_finished():
+                    result = await glide_client_scoped.scan(cursor)
+                    cursor = cast(ClusterScanCursor, result[0])
+                # Reset cursor for next iteration
+                cursor = ClusterScanCursor()
+            except RequestError as e_info:
+                assert (
+                    "Could not find an address covering a slot, SCAN operation cannot continue"
+                    in str(e_info)
+                )
+                break
+        # Scan with allow_non_covered_slots=True
+        while not cursor.is_finished():
+            result = await glide_client_scoped.scan(
+                cursor, allow_non_covered_slots=True
+            )
+            cursor = cast(ClusterScanCursor, result[0])
+        assert cursor.is_finished()
+        # check the keys we can get with keys command, and scan from the beginning
+        keys = []
+        for address in all_other_addresses:
+            result = await glide_client_scoped.custom_command(
+                ["KEYS", "*"], ByAddressRoute(address.host, address.port)
+            )
+            keys.extend(cast(List[bytes], result))
+
+        cursor = ClusterScanCursor()
+        results = []
+        while not cursor.is_finished():
+            result = await glide_client_scoped.scan(
+                cursor, allow_non_covered_slots=True
+            )
+            results.extend(cast(List[bytes], result[1]))
+            cursor = cast(ClusterScanCursor, result[0])
+        assert set(keys) == set(results)
 
     # Standalone scan tests
     @pytest.mark.parametrize("cluster_mode", [False])

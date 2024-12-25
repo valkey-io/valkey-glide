@@ -428,6 +428,10 @@ public class CommandManager {
             clusterScanBuilder.setObjectType(options.getType().getNativeName());
         }
 
+        if (options.getAllowNonCoveredSlots() != null) {
+            clusterScanBuilder.setAllowNonCoveredSlots(options.getAllowNonCoveredSlots());
+        }
+
         return CommandRequest.newBuilder().setClusterScan(clusterScanBuilder.build());
     }
 
