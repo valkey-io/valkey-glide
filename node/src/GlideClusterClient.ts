@@ -23,7 +23,7 @@ import {
     FunctionStatsSingleResponse,
     InfoOptions,
     LolwutOptions,
-    ScanOptions,
+    ClusterScanOptions,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -146,7 +146,7 @@ export namespace GlideClusterClientConfiguration {
 /**
  * Configuration options for creating a {@link GlideClusterClient | GlideClusterClient}.
  *
- * Extends `BaseClientConfiguration` with properties specific to `GlideClusterClient`, such as periodic topology checks
+ * Extends {@link BaseClientConfiguration | BaseClientConfiguration} with properties specific to `GlideClusterClient`, such as periodic topology checks
  * and Pub/Sub subscription settings.
  *
  * @remarks
@@ -579,7 +579,7 @@ export class GlideClusterClient extends BaseClient {
      */
     protected scanOptionsToProto(
         cursor: string,
-        options?: ScanOptions,
+        options?: ClusterScanOptions,
     ): command_request.ClusterScan {
         const command = command_request.ClusterScan.create();
         command.cursor = cursor;
@@ -596,6 +596,7 @@ export class GlideClusterClient extends BaseClient {
             command.objectType = options.type;
         }
 
+        command.allowNonCoveredSlots = options?.allowNonCoveredSlots ?? false;
         return command;
     }
 
@@ -604,7 +605,7 @@ export class GlideClusterClient extends BaseClient {
      */
     protected createClusterScanPromise(
         cursor: ClusterScanCursor,
-        options?: ScanOptions & DecoderOption,
+        options?: ClusterScanOptions & DecoderOption,
     ): Promise<[ClusterScanCursor, GlideString[]]> {
         // separate decoder option from scan options
         const { decoder, ...scanOptions } = options || {};
@@ -633,7 +634,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * @param cursor - The cursor object that wraps the scan state.
      *   To start a new scan, create a new empty `ClusterScanCursor` using {@link ClusterScanCursor}.
-     * @param options - (Optional) The scan options, see {@link ScanOptions} and  {@link DecoderOption}.
+     * @param options - (Optional) The scan options, see {@link ClusterScanOptions} and  {@link DecoderOption}.
      * @returns A Promise resolving to an array containing the next cursor and an array of keys,
      *   formatted as [`ClusterScanCursor`, `string[]`].
      *
@@ -651,14 +652,14 @@ export class GlideClusterClient extends BaseClient {
      * console.log(allKeys); // ["key1", "key2", "key3"]
      *
      * // Iterate over keys matching a pattern
-     * await client.mset([{key: "key1", value: "value1"}, {key: "key2", value: "value2"}, {key: "notMykey", value: "value3"}, {key: "somethingElse", value: "value4"}]);
+     * await client.mset([{key: "key1", value: "value1"}, {key: "key2", value: "value2"}, {key: "notMyKey", value: "value3"}, {key: "somethingElse", value: "value4"}]);
      * let cursor = new ClusterScanCursor();
      * const matchedKeys: GlideString[] = [];
      * while (!cursor.isFinished()) {
      *   const [cursor, keys] = await client.scan(cursor, { match: "*key*", count: 10 });
      *   matchedKeys.push(...keys);
      * }
-     * console.log(matchedKeys); // ["key1", "key2", "notMykey"]
+     * console.log(matchedKeys); // ["key1", "key2", "notMyKey"]
      *
      * // Iterate over keys of a specific type
      * await client.mset([{key: "key1", value: "value1"}, {key: "key2", value: "value2"}, {key: "key3", value: "value3"}]);
@@ -674,7 +675,7 @@ export class GlideClusterClient extends BaseClient {
      */
     public async scan(
         cursor: ClusterScanCursor,
-        options?: ScanOptions & DecoderOption,
+        options?: ClusterScanOptions & DecoderOption,
     ): Promise<[ClusterScanCursor, GlideString[]]> {
         return this.createClusterScanPromise(cursor, options);
     }
