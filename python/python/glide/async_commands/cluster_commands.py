@@ -1076,67 +1076,78 @@ class ClusterCommands(CoreCommands):
         match: Optional[TEncodable] = None,
         count: Optional[int] = None,
         type: Optional[ObjectType] = None,
+        allow_non_covered_slots: bool = False,
     ) -> List[Union[ClusterScanCursor, List[bytes]]]:
         """
-        Incrementally iterates over the keys in the Cluster.
+        Incrementally iterates over the keys in the cluster.
         The method returns a list containing the next cursor and a list of keys.
 
-        This command is similar to the SCAN command, but it is designed to work in a Cluster environment.
-        For each iteration the new cursor object should be used to continue the scan.
+        This command is similar to the SCAN command but is designed to work in a cluster environment.
+        For each iteration, the new cursor object should be used to continue the scan.
         Using the same cursor object for multiple iterations will result in the same keys or unexpected behavior.
-        For more information about the Cluster Scan implementation,
-        see [Cluster Scan](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan).
+        For more information about the Cluster Scan implementation, see [Cluster Scan](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan).
 
-        As the SCAN command, the method can be used to iterate over the keys in the database,
-        to return all keys the database have from the time the scan started till the scan ends.
-        The same key can be returned in multiple scans iteration.
+        Like the SCAN command, the method can be used to iterate over the keys in the database,
+        returning all keys the database has from when the scan started until the scan ends.
+        The same key can be returned in multiple scan iterations.
 
         See https://valkey.io/commands/scan/ for more details.
 
         Args:
             cursor (ClusterScanCursor): The cursor object that wraps the scan state.
-              To start a new scan, create a new empty ClusterScanCursor using ClusterScanCursor().
+                To start a new scan, create a new empty ClusterScanCursor using ClusterScanCursor().
             match (Optional[TEncodable]): A pattern to match keys against.
             count (Optional[int]): The number of keys to return in a single iteration.
-              The actual number returned can vary and is not guaranteed to match this count exactly.
-              This parameter serves as a hint to the server on the number of steps to perform in each iteration.
-              The default value is 10.
+                The actual number returned can vary and is not guaranteed to match this count exactly.
+                This parameter serves as a hint to the server on the number of steps to perform in each iteration.
+                The default value is 10.
             type (Optional[ObjectType]): The type of object to scan for.
+            allow_non_covered_slots (bool): If set to True, the scan will perform even if some slots are not covered by any node.
+                It's important to note that when set to True, the scan has no guarantee to cover all keys in the cluster,
+                and the method loses its way to validate the progress of the scan. Defaults to False.
 
         Returns:
             List[Union[ClusterScanCursor, List[TEncodable]]]: A list containing the next cursor and a list of keys,
-              formatted as [ClusterScanCursor, [key1, key2, ...]].
+                formatted as [ClusterScanCursor, [key1, key2, ...]].
 
         Examples:
-            >>> # In the following example, we will iterate over the keys in the cluster.
-                await client.mset({b'key1': b'value1', b'key2': b'value2', b'key3': b'value3'})
-                cursor = ClusterScanCursor()
-                all_keys = []
-                while not cursor.is_finished():
-                    cursor, keys = await client.scan(cursor, count=10)
-                    all_keys.extend(keys)
-                print(all_keys) # [b'key1', b'key2', b'key3']
-            >>> # In the following example, we will iterate over the keys in the cluster that match the pattern "*key*".
-                await client.mset({b"key1": b"value1", b"key2": b"value2", b"not_my_key": b"value3", b"something_else": b"value4"})
-                cursor = ClusterScanCursor()
-                all_keys = []
-                while not cursor.is_finished():
-                    cursor, keys = await client.scan(cursor, match=b"*key*", count=10)
-                    all_keys.extend(keys)
-                print(all_keys) # [b'my_key1', b'my_key2', b'not_my_key']
-            >>> # In the following example, we will iterate over the keys in the cluster that are of type STRING.
-                await client.mset({b'key1': b'value1', b'key2': b'value2', b'key3': b'value3'})
-                await client.sadd(b"this_is_a_set", [b"value4"])
-                cursor = ClusterScanCursor()
-                all_keys = []
-                while not cursor.is_finished():
-                    cursor, keys = await client.scan(cursor, type=ObjectType.STRING)
-                    all_keys.extend(keys)
-                print(all_keys) # [b'key1', b'key2', b'key3']
+            >>> # Iterate over all keys in the cluster.
+            >>> await client.mset({b'key1': b'value1', b'key2': b'value2', b'key3': b'value3'})
+            >>> cursor = ClusterScanCursor()
+            >>> all_keys = []
+            >>> while not cursor.is_finished():
+            >>>     cursor, keys = await client.scan(cursor, count=10, allow_non_covered_slots=False)
+            >>>     all_keys.extend(keys)
+            >>> print(all_keys)  # [b'key1', b'key2', b'key3']
+
+            >>> # Iterate over keys matching the pattern "*key*".
+            >>> await client.mset({b"key1": b"value1", b"key2": b"value2", b"not_my_key": b"value3", b"something_else": b"value4"})
+            >>> cursor = ClusterScanCursor()
+            >>> all_keys = []
+            >>> while not cursor.is_finished():
+            >>>     cursor, keys = await client.scan(cursor, match=b"*key*", count=10, allow_non_covered_slots=False)
+            >>>     all_keys.extend(keys)
+            >>> print(all_keys)  # [b'key1', b'key2', b'not_my_key']
+
+            >>> # Iterate over keys of type STRING.
+            >>> await client.mset({b'key1': b'value1', b'key2': b'value2', b'key3': b'value3'})
+            >>> await client.sadd(b"this_is_a_set", [b"value4"])
+            >>> cursor = ClusterScanCursor()
+            >>> all_keys = []
+            >>> while not cursor.is_finished():
+            >>>     cursor, keys = await client.scan(cursor, type=ObjectType.STRING, allow_non_covered_slots=False)
+            >>>     all_keys.extend(keys)
+            >>> print(all_keys)  # [b'key1', b'key2', b'key3']
         """
         return cast(
             List[Union[ClusterScanCursor, List[bytes]]],
-            await self._cluster_scan(cursor, match, count, type),
+            await self._cluster_scan(
+                cursor=cursor,
+                match=match,
+                count=count,
+                type=type,
+                allow_non_covered_slots=allow_non_covered_slots,
+            ),
         )
 
     async def script_exists(
