@@ -16,6 +16,7 @@ import {
     convertGlideRecordToRecord,
 } from "./BaseClient";
 import {
+    ClusterScanOptions,
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
@@ -23,7 +24,6 @@ import {
     FunctionStatsSingleResponse,
     InfoOptions,
     LolwutOptions,
-    ClusterScanOptions,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -785,6 +785,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * The command will be routed to all primary nodes, unless `route` is provided.
      *
+     * When `route` is set to `allNodes`, the `INFO` command may return partial data, as the response from each node might be incomplete due to factors like network conditions or node load. This can lead to varying results across different executions.
      * @see {@link https://valkey.io/commands/info/|valkey.io} for details.
      *
      * @param options - (Optional) Additional parameters:
