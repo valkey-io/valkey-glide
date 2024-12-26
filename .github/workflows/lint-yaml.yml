@@ -27,4 +27,4 @@ jobs:
 
             - name: Run Prettier on YAML files
               run: |
-                  npx prettier -w .github/
+                  npx prettier --check .github/
