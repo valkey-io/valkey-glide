@@ -341,10 +341,22 @@ def start_redis_server(
             except Exception as e:
                 logging.error(f"Error checking {server}: {e}")
         raise Exception(
-            "Neither valkey-server nor redis-server found in the system."
+            "Neither valkey-server nor redis-server found in the system.")
+
+    def get_server_version(server_name):
+        result = subprocess.run(
+            [server_name, "--version"], capture_output=True, text=True
         )
+        version_output = result.stdout
+        version_match = re.search(
+            r"(?:Redis|Valkey) server v=(\d+\.\d+\.\d+)", version_output, re.IGNORECASE
+        )
+        if version_match:
+            return tuple(map(int, version_match.group(1).split(".")))
+        raise Exception("Unable to determine server version.")
 
     server_name = get_server_command()
+    server_version = get_server_version(server_name)
     logfile = f"{node_folder}/redis.log"
     # Define command arguments
     cmd_args = [
@@ -360,6 +372,8 @@ def start_redis_server(
         "--logfile",
         logfile,
     ]
+    if server_version >= (7, 0, 0):
+        cmd_args.extend(["--enable-debug-command", "yes"])
     if load_module:
         if len(load_module) == 0:
             raise ValueError(
