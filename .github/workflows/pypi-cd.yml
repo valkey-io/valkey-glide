@@ -223,7 +223,7 @@ jobs:
             - name: Setup self-hosted runner access
               if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-gnu' }}
               run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
-            
+
             - name: checkout
               uses: actions/checkout@v4
 
