@@ -33,10 +33,11 @@ use versions::Versioning;
 
 pub const HEARTBEAT_SLEEP_DURATION: Duration = Duration::from_secs(1);
 pub const DEFAULT_RETRIES: u32 = 3;
+/// Note: If you change the default value, make sure to change the documentation in *all* wrappers.
 pub const DEFAULT_RESPONSE_TIMEOUT: Duration = Duration::from_millis(250);
-pub const DEFAULT_CONNECTION_ATTEMPT_TIMEOUT: Duration = Duration::from_millis(250);
 pub const DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL: Duration = Duration::from_secs(60);
-pub const INTERNAL_CONNECTION_TIMEOUT: Duration = Duration::from_millis(250);
+/// Note: If you change the default value, make sure to change the documentation in *all* wrappers.
+pub const DEFAULT_CONNECTION_TIMEOUT: Duration = Duration::from_millis(250);
 pub const FINISHED_SCAN_CURSOR: &str = "finished";
 
 /// The value of 1000 for the maximum number of inflight requests is determined based on Little's Law in queuing theory:
@@ -571,8 +572,9 @@ async fn create_cluster_client(
         Some(PeriodicCheck::ManualInterval(interval)) => Some(interval),
         None => Some(DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL),
     };
+    let connection_timeout = to_duration(request.connection_timeout, DEFAULT_CONNECTION_TIMEOUT);
     let mut builder = redis::cluster::ClusterClientBuilder::new(initial_nodes)
-        .connection_timeout(INTERNAL_CONNECTION_TIMEOUT)
+        .connection_timeout(connection_timeout)
         .retries(DEFAULT_RETRIES);
     let read_from_strategy = request.read_from.unwrap_or_default();
     builder = builder.read_from(match read_from_strategy {
@@ -718,6 +720,8 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
         "\nStandalone mode"
     };
     let request_timeout = format_optional_value("Request timeout", request.request_timeout);
+    let connection_timeout =
+        format_optional_value("Connection timeout", request.connection_timeout);
     let database_id = format!("\ndatabase ID: {}", request.database_id);
     let rfr_strategy = request
         .read_from
@@ -774,7 +778,7 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
     );
 
     format!(
-        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}{periodic_checks}{pubsub_subscriptions}{inflight_requests_limit}",
+        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{connection_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}{periodic_checks}{pubsub_subscriptions}{inflight_requests_limit}",
     )
 }
 

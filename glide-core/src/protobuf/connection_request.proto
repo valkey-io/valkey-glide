@@ -26,7 +26,7 @@ message AuthenticationInfo {
 
 enum ProtocolVersion {
     RESP3 = 0;
-    RESP2 = 1; 
+    RESP2 = 1;
 }
 
 message PeriodicChecksManualInterval {
@@ -71,6 +71,7 @@ message ConnectionRequest {
     PubSubSubscriptions pubsub_subscriptions = 13;
     uint32 inflight_requests_limit = 14;
     string client_az = 15;
+    uint32 connection_timeout = 16;
 }
 
 message ConnectionRetryStrategy {
