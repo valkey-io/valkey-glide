@@ -77,7 +77,7 @@ jobs:
         steps:
             - name: Setup self-hosted runner access
               run: |
-                  GHA_HOME=/home/ubuntu/actions-runner/_work/valkey-glide
+                  GHA_HOME=/home/ubuntu/action-runner-ilia/_work/valkey-glide
                   if [ -d $GHA_HOME ]; then
                     sudo chown -R $USER:$USER $GHA_HOME
                     sudo rm -rf $GHA_HOME

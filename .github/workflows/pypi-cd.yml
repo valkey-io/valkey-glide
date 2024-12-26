@@ -75,7 +75,8 @@ jobs:
         steps:
             - name: Setup self-hosted runner access
               if: ${{ contains(matrix.build.RUNNER, 'self-hosted') }}
-              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
+              run: sudo chown -R $USER:$USER /home/ubuntu/action-runner-ilia/_work/valkey-glide
+
 
             - name: Checkout
               uses: actions/checkout@v4
@@ -222,7 +223,7 @@ jobs:
         steps:
             - name: Setup self-hosted runner access
               if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-gnu' }}
-              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
+              run: sudo chown -R $USER:$USER /home/ubuntu/action-runner-ilia/_work/valkey-glide
             
             - name: checkout
               uses: actions/checkout@v4
