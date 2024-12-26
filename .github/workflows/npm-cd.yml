@@ -309,11 +309,11 @@ jobs:
               run: sudo chown -R $USER:$USER /home/ubuntu/action-runner-ilia/_work/valkey-glide
 
 
-            - name: install and git for alpine
+            - name: install redis and git for alpine
               if: ${{ contains(matrix.build.TARGET, 'musl') }}
               run: |
                   apk update
-                  apk add git
+                  apk add git redis
                   node -v
 
             - name: install Python for ubuntu
@@ -336,6 +336,7 @@ jobs:
                   arch: ${{ matrix.build.ARCH }}
 
             - name: Install engine
+              if: ${{ !contains(matrix.build.TARGET, 'musl') }}
               uses: ./.github/workflows/install-engine
               with:
                   engine-version: "8.0"
