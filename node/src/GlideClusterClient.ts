@@ -523,10 +523,14 @@ export class GlideClusterClient extends BaseClient {
         }
 
         this.configurePubsub(options, configuration);
-        this.configureAdvancedConfigurationBase(
-            configuration,
-            options.advancedConfiguration,
-        );
+
+        if (options.advancedConfiguration) {
+            this.configureAdvancedConfigurationBase(
+                options.advancedConfiguration,
+                configuration,
+            );
+        }
+
         return configuration;
     }
     /**

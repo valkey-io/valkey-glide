@@ -137,7 +137,6 @@ class AdvancedBaseClientConfiguration:
         connection_timeout (Optional[int]): The duration in milliseconds to wait for a TCP/TLS connection to complete.
             This applies both during initial client creation and any reconnections that may occur during request processing.
             **Note**: A high connection timeout may lead to prolonged blocking of the entire command pipeline.
-            If the client cannot establish a connection within the specified duration, a timeout error will occur.
             If not explicitly set, a default value of 250 milliseconds will be used.
     """
 

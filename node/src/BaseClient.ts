@@ -659,7 +659,7 @@ export interface BaseClientConfiguration {
  *
  * ### Connection Timeout
  *
- * - **Connection Timeout**: The `connectionTimeout` property specifies the duration (in milliseconds) the client should wait for a connection to be established. If the connection is not successful within the specified time, a timeout error will occur.
+ * - **Connection Timeout**: The `connectionTimeout` property specifies the duration (in milliseconds) the client should wait for a connection to be established.
  *
  * @example
  * ```typescript
@@ -673,7 +673,6 @@ export interface AdvancedBaseClientConfiguration {
      * The duration in milliseconds to wait for a TCP/TLS connection to complete.
      * This applies both during initial client creation and any reconnections that may occur during request processing.
      * **Note**: A high connection timeout may lead to prolonged blocking of the entire command pipeline.
-     * If the client cannot establish a connection within the specified duration, a timeout error will occur.
      * If not explicitly set, a default value of 250 milliseconds will be used.
      */
     connectionTimeout?: number;
@@ -7690,11 +7689,11 @@ export class BaseClient {
      * @internal
      */
     protected configureAdvancedConfigurationBase(
+        options: AdvancedBaseClientConfiguration,
         request: connection_request.IConnectionRequest,
-        options?: AdvancedBaseClientConfiguration,
     ) {
         request.connectionTimeout =
-            options?.connectionTimeout ??
+            options.connectionTimeout ??
             DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS;
     }
 

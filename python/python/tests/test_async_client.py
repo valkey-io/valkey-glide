@@ -359,7 +359,9 @@ class TestGlideClients:
                     cluster_mode,
                     protocol=protocol,
                     connection_timeout=100,  # 100 ms
-                    reconnect_strategy=BackoffStrategy(1, 100, 2),
+                    reconnect_strategy=BackoffStrategy(
+                        1, 100, 2
+                    ),  # needs to be configured so that we wont be connected within 7 seconds bc of default retries
                 )
             assert "timed out" in str(e)
 

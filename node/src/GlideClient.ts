@@ -208,10 +208,14 @@ export class GlideClient extends BaseClient {
         configuration.databaseId = options.databaseId;
         configuration.connectionRetryStrategy = options.connectionBackoff;
         this.configurePubsub(options, configuration);
-        this.configureAdvancedConfigurationBase(
-            configuration,
-            options.advancedConfiguration,
-        );
+
+        if (options.advancedConfiguration) {
+            this.configureAdvancedConfigurationBase(
+                options.advancedConfiguration,
+                configuration,
+            );
+        }
+
         return configuration;
     }
     /**
