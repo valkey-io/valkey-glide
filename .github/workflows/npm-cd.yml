@@ -322,12 +322,6 @@ jobs:
                   sudo apt-get update
                   sudo apt-get install python3
 
-            - name: Install engine
-              uses: ./.github/workflows/install-engine
-              with:
-                  engine-version: "8.0"
-                  target: ${{ matrix.build.target }}
-
             - name: Checkout
               if: ${{  matrix.build.TARGET != 'aarch64-unknown-linux-musl'}}
               uses: actions/checkout@v4
@@ -340,6 +334,12 @@ jobs:
                   npm-scope: ${{ vars.NPM_SCOPE }}
                   npm-auth-token: ${{ secrets.NPM_AUTH_TOKEN }}
                   arch: ${{ matrix.build.ARCH }}
+
+            - name: Install engine
+              uses: ./.github/workflows/install-engine
+              with:
+                  engine-version: "8.0"
+                  target: ${{ matrix.build.target }}
 
             - name: Setup node
               if: ${{ !contains(matrix.build.TARGET, 'musl') }}
