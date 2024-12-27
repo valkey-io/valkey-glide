@@ -33,8 +33,9 @@
         "clean": "rm -rf build-ts rust-client/target docs glide-logs rust-client/glide-rs.*.node rust-client/index.* src/ProtobufMessage.*",
         "fix-protobuf-file": "replace 'this\\.encode\\(message, writer\\)\\.ldelim' 'this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim' src/ProtobufMessage.js",
         "test": "npm run build-test-utils && jest --verbose --testPathIgnorePatterns='ServerModules'",
+        "test-dbg": "npm run build-test-utils && jest --runInBand",
         "test-minimum": "npm run build-test-utils && jest --verbose --runInBand --testNamePattern='^(.(?!(GlideJson|GlideFt|pubsub|kill)))*$'",
-        "test-modules": "npm run build-test-utils && jest --verbose --testNamePattern='(GlideJson|GlideFt)'",
+        "test-modules": "npm run build-test-utils && jest --verbose --runInBand --testNamePattern='(GlideJson|GlideFt)'",
         "build-test-utils": "cd ../utils && npm i && npm run build",
         "lint:fix": "npm run install-linting && npx eslint -c ../eslint.config.mjs --fix && npm run prettier:format",
         "lint": "npm run install-linting && npx eslint -c ../eslint.config.mjs && npm run prettier:check:ci",
@@ -59,8 +60,9 @@
         "replace": "^1.2.2",
         "semver": "^7.6.3",
         "ts-jest": "^29.2.5",
-        "typescript": "^5.5.4",
-        "uuid": "^10.0.0"
+        "ts-node": "^10.9.2",
+        "typescript": "^5.6.3",
+        "uuid": "^11.0.3"
     },
     "author": "Valkey GLIDE Maintainers",
     "license": "Apache-2.0",

@@ -2,15 +2,13 @@
 
 This document describes how to set up your development environment to build and test the Valkey GLIDE Python wrapper.
 
-### Development Overview
-
 The Valkey GLIDE Python wrapper consists of both Python and Rust code. Rust bindings for Python are implemented using [PyO3](https://github.com/PyO3/pyo3), and the Python package is built using [maturin](https://github.com/PyO3/maturin). The Python and Rust components communicate using the [protobuf](https://github.com/protocolbuffers/protobuf) protocol.
 
-### Build from source
+# Prerequisites
+---
 
-#### Prerequisites
+Before building the package from source, make sure that you have installed the listed dependencies below:
 
-Software Dependencies
 
 -   python3 virtualenv
 -   git
@@ -21,7 +19,10 @@ Software Dependencies
 -   openssl-dev
 -   rustup
 
-**Dependencies installation for Ubuntu**
+For your convenience, we wrapped the steps in a "copy-paste" code blocks for common operating systems:
+
+<details>
+<summary>Ubuntu / Debian</summary>
 
 ```bash
 sudo apt update -y
@@ -42,7 +43,10 @@ export PATH="$PATH:$HOME/.local/bin"
 protoc --version
 ```
 
-**Dependencies installation for CentOS**
+</details>
+
+<details>
+<summary>CentOS</summary>
 
 ```bash
 sudo yum update -y
@@ -62,7 +66,10 @@ export PATH="$PATH:$HOME/.local/bin"
 protoc --version
 ```
 
-**Dependencies installation for MacOS**
+</details>
+
+<details>
+<summary>MacOS</summary>
 
 ```bash
 brew update
@@ -80,112 +87,107 @@ source /Users/$USER/.bash_profile
 protoc --version
 ```
 
-#### Building and installation steps
+</details>
 
-Before starting this step, make sure you've installed all software requirments.
+# Building
+---
 
-1. Clone the repository:
-    ```bash
-    git clone https://github.com/valkey-io/valkey-glide.git
-    cd valkey-glide
-    ```
-2. Initialize git submodule:
-    ```bash
-    git submodule update --init --recursive
-    ```
-3. Generate protobuf files:
-    ```bash
-    GLIDE_ROOT_FOLDER_PATH=.
-    protoc -Iprotobuf=${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/ --python_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/glide ${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/*.proto
-    ```
-4. Create a virtual environment:
-    ```bash
-    cd python
-    python3 -m venv .env
-    ```
-5. Activate the virtual environment:
-    ```bash
-    source .env/bin/activate
-    ```
-6. Install requirements:
-    ```bash
-    pip install -r requirements.txt
-    ```
-7. Build the Python wrapper in release mode:
-    ```
-    maturin develop --release --strip
-    ```
-    > **Note:** To build the wrapper binary with debug symbols remove the --strip flag.
-8. Run tests:
-    1. Ensure that you have installed redis-server or valkey-server and redis-cli or valkey-cli on your host. You can find the Redis installation guide at the following link: [Redis Installation Guide](https://redis.io/docs/install/install-redis/install-redis-on-linux/). You can get Valkey from the following link: [Valkey Download](https://valkey.io/download/).
-    2. Validate the activation of the virtual environment from step 4 by ensuring its name (`.env`) is displayed next to your command prompt.
-    3. Execute the following command from the python folder:
-        ```bash
-        pytest --asyncio-mode=auto
-        ```
-        > **Note:** To run Valkey modules tests, add -k "test_server_modules.py".
+Before starting this step, make sure you've installed all software requirements.
 
--   Install Python development requirements with:
-
-    ```bash
-    pip install -r python/dev_requirements.txt
-    ```
-
--   For a fast build, execute `maturin develop` without the release flag. This will perform an unoptimized build, which is suitable for developing tests. Keep in mind that performance is significantly affected in an unoptimized build, so it's required to include the "--release" flag when measuring performance.
-
-### Test
-
-To run tests, use the following command:
+## Prepare your environment
 
 ```bash
+mkdir -p $HOME/src
+cd $_
+git clone https://github.com/valkey-io/valkey-glide.git
+cd valkey-glide
+GLIDE_ROOT=$(pwd)
+protoc -Iprotobuf=${GLIDE_ROOT}/glide-core/src/protobuf/    \
+        --python_out=${GLIDE_ROOT}/python/python/glide      \
+        ${GLIDE_ROOT}/glide-core/src/protobuf/*.proto
+cd python
+python3 -m venv .env
+source .env/bin/activate
+pip install -r requirements.txt
+```
+
+## Build the package (in release mode):
+
+```bash
+maturin develop --release --strip
+```
+
+> **Note:** to build the wrapper binary with debug symbols remove the `--strip` flag.
+
+> **Note 2:** for a faster build time, execute `maturin develop` without the release flag. This will perform an unoptimized build, which is suitable for developing tests. Keep in mind that performance is significantly affected in an unoptimized build, so it's required to include the `--release` flag when measuring performance.
+
+# Running tests
+---
+
+Ensure that you have installed `redis-server` or `valkey-server` along with `redis-cli` or `valkey-cli` on your host. You can find the Redis installation guide at the following link: [Redis Installation Guide](https://redis.io/docs/install/install-redis/install-redis-on-linux/). You can get Valkey from the following link: [Valkey Download](https://valkey.io/download/).
+
+From a terminal, change directory to the GLIDE source folder and type:
+
+```bash
+cd $HOME/src/valkey-glide
+cd python
+source .env/bin/activate
 pytest --asyncio-mode=auto
 ```
 
-To execute a specific test, include the `-k <test_name>` option. For example:
+To run modules tests:
 
 ```bash
-pytest --asyncio-mode=auto -k test_socket_set_and_get
+cd $HOME/src/valkey-glide
+cd python
+source .env/bin/activate
+pytest --asyncio-mode=auto -k "test_server_modules.py"
 ```
 
-IT suite starts the server for testing - standalone and cluster installation using `cluster_manager` script.
-If you want IT to use already started servers, use the following command line from `python/python` dir:
+**TIP:** to run a specific test, append `-k <test_name>` to the `pytest` execution line
+
+To run tests against an already running servers, change the `pytest` line above to this:
 
 ```bash
 pytest --asyncio-mode=auto --cluster-endpoints=localhost:7000 --standalone-endpoints=localhost:6379
 ```
 
-### Submodules
+# Generate protobuf files
+---
 
-After pulling new changes, ensure that you update the submodules by running the following command:
-
-```bash
-git submodule update
-```
-
-### Generate protobuf files
-
-During the initial build, Python protobuf files were created in `python/python/glide/protobuf`. If modifications are made to the protobuf definition files (.proto files located in `glide-core/src/protofuf`), it becomes necessary to regenerate the Python protobuf files. To do so, run:
+During the initial build, Python protobuf files were created in `python/python/glide/protobuf`. If modifications are made
+to the protobuf definition files (`.proto` files located in `glide-core/src/protofuf`), it becomes necessary to
+regenerate the Python protobuf files. To do so, run:
 
 ```bash
-GLIDE_ROOT_FOLDER_PATH=. # e.g. /home/ubuntu/valkey-glide
-protoc -Iprotobuf=${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/ --python_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/glide ${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/*.proto
+cd $HOME/src/valkey-glide
+GLIDE_ROOT_FOLDER_PATH=.
+protoc -Iprotobuf=${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/    \
+    --python_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/glide          \
+    ${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/*.proto
 ```
 
-#### Protobuf interface files
+## Protobuf interface files
 
 To generate the protobuf files with Python Interface files (pyi) for type-checking purposes, ensure you have installed `mypy-protobuf` with pip, and then execute the following command:
 
 ```bash
-GLIDE_ROOT_FOLDER_PATH=. # e.g. /home/ubuntu/valkey-glide
+cd $HOME/src/valkey-glide
+GLIDE_ROOT_FOLDER_PATH=.
 MYPY_PROTOC_PATH=`which protoc-gen-mypy`
-protoc --plugin=protoc-gen-mypy=${MYPY_PROTOC_PATH} -Iprotobuf=${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/ --python_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/glide --mypy_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/glide ${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/*.proto
+protoc --plugin=protoc-gen-mypy=${MYPY_PROTOC_PATH}                     \
+        -Iprotobuf=${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/   \
+        --python_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/glide      \
+        --mypy_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/glide        \
+        ${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/*.proto
 ```
 
-### Linters
+# Linters
+---
 
 Development on the Python wrapper may involve changes in either the Python or Rust code. Each language has distinct linter tests that must be passed before committing changes.
 
-#### Language-specific Linters
+## Language-specific Linters
 
 **Python:**
 
@@ -199,31 +201,37 @@ Development on the Python wrapper may involve changes in either the Python or Ru
 -   clippy
 -   fmt
 
-#### Running the linters
+## Running the linters
 
 Run from the main `/python` folder
 
 1. Python
-    > Note: make sure to [generate protobuf with interface files]("#protobuf-interface-files") before running mypy linter
+    > Note: make sure to [generate protobuf with interface files]("#protobuf-interface-files") before running `mypy` linter
     ```bash
-    pip install -r dev_requirements.txt
+    cd $HOME/src/valkey-glide/python
+    source .env/bin/activate
+    pip install -r requirements.txt
     isort . --profile black --skip-glob python/glide/protobuf --skip-glob .env
     black . --exclude python/glide/protobuf --exclude .env
-    flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=python/glide/protobuf,.env/* --extend-ignore=E230
-    flake8 . --count --exit-zero --max-complexity=12 --max-line-length=127 --statistics --exclude=python/glide/protobuf,.env/* --extend-ignore=E230
+    flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics      \
+            --exclude=python/glide/protobuf,.env/* --extend-ignore=E230
+    flake8 . --count --exit-zero --max-complexity=12 --max-line-length=127  \
+            --statistics --exclude=python/glide/protobuf,.env/*             \
+            --extend-ignore=E230
     # run type check
     mypy .
     ```
+
 2. Rust
 
     ```bash
     rustup component add clippy rustfmt
     cargo clippy --all-features --all-targets -- -D warnings
     cargo fmt --manifest-path ./Cargo.toml --all
-
     ```
 
-### Recommended extensions for VS Code
+# Recommended extensions for VS Code
+---
 
 -   [Python](https://marketplace.visualstudio.com/items?itemName=ms-python.python)
 -   [isort](https://marketplace.visualstudio.com/items?itemName=ms-python.isort)

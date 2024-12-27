@@ -59,11 +59,11 @@ jobs:
         name: Run CI for GLIDE core lib
         secrets: inherit
 
-    # run-full-tests-for-redis-rs:
-    #     if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.redis-rs == true)
-    #     uses: ./.github/workflows/redis-rs.yml
-    #     name: Run CI for Redis-RS client
-    #     secrets: inherit
+    run-full-tests-for-redis-rs:
+        if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.redis-rs == true)
+        uses: ./.github/workflows/redis-rs.yml
+        name: Run CI for Redis-RS client
+        secrets: inherit
 
     run-full-tests-for-java:
         if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.java == true)

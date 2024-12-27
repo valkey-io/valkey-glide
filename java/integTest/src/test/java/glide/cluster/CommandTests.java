@@ -107,7 +107,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-@Timeout(10) // seconds
+@Timeout(30) // seconds
 public class CommandTests {
 
     private static GlideClusterClient clusterClient = null;
@@ -473,7 +473,7 @@ public class CommandTests {
         if (configFile.isEmpty()) {
             ExecutionException executionException =
                     assertThrows(ExecutionException.class, () -> clusterClient.configRewrite().get());
-            assertTrue(executionException.getCause() instanceof RequestException);
+            assertInstanceOf(RequestException.class, executionException.getCause());
         } else {
             assertEquals(OK, clusterClient.configRewrite().get());
         }
@@ -495,7 +495,7 @@ public class CommandTests {
         var exception =
                 assertThrows(
                         ExecutionException.class, () -> clusterClient.configGet(new String[] {}).get());
-        assertTrue(exception.getCause() instanceof GlideException);
+        assertInstanceOf(GlideException.class, exception.getCause());
     }
 
     @Test
@@ -1660,7 +1660,7 @@ public class CommandTests {
 
         assertEquals(libName, clusterClient.functionLoad(code, false).get());
         // let replica sync with the primary node
-        assertEquals(1L, clusterClient.wait(1L, 3000L).get());
+        assertEquals(1L, clusterClient.wait(1L, 4000L).get());
 
         // fcall on a replica node should fail, because a function isn't guaranteed to be RO
         var executionException =
@@ -3169,6 +3169,9 @@ public class CommandTests {
                         .get();
         assertArrayEquals(expected, result);
         assertArrayEquals(expected, result2);
+        script1.close();
+        script2.close();
+        script3.close();
     }
 
     @Test
@@ -3202,6 +3205,9 @@ public class CommandTests {
                         .get();
         assertArrayEquals(expected, result);
         assertArrayEquals(expected, result2);
+        script1.close();
+        script2.close();
+        script3.close();
     }
 
     @Test
@@ -3229,6 +3235,7 @@ public class CommandTests {
         assertEquals(OK, clusterClient.scriptFlush(FlushMode.ASYNC, ALL_PRIMARIES).get());
         result = clusterClient.scriptExists(new String[] {script.getHash()}, ALL_PRIMARIES).get();
         assertArrayEquals(new Boolean[] {false}, result);
+        script.close();
     }
 
     @Test
@@ -3277,6 +3284,7 @@ public class CommandTests {
                 assertTrue(scriptKilled);
             } finally {
                 waitForNotBusy(clusterClient::scriptKill);
+                script.close();
             }
         }
 
@@ -3340,6 +3348,7 @@ public class CommandTests {
                     promise.get();
                 } catch (Exception ignored) {
                 }
+                script.close();
             }
         }
     }

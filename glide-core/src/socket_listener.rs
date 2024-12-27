@@ -1,6 +1,5 @@
-/**
- * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
- */
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+
 use super::rotating_buffer::RotatingBuffer;
 use crate::client::Client;
 use crate::cluster_scan_container::get_cluster_scan_cursor;
@@ -11,30 +10,29 @@ use crate::connection_request::ConnectionRequest;
 use crate::errors::{error_message, error_type, RequestErrorType};
 use crate::response;
 use crate::response::Response;
-use crate::retry_strategies::get_fixed_interval_backoff;
 use bytes::Bytes;
 use directories::BaseDirs;
-use dispose::{Disposable, Dispose};
 use logger_core::{log_debug, log_error, log_info, log_trace, log_warn};
+use once_cell::sync::Lazy;
 use protobuf::{Chars, Message};
 use redis::cluster_routing::{
     MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
 };
 use redis::cluster_routing::{ResponsePolicy, Routable};
-use redis::{Cmd, PushInfo, RedisError, ScanStateRC, Value};
+use redis::{ClusterScanArgs, Cmd, PushInfo, RedisError, ScanStateRC, Value};
 use std::cell::Cell;
+use std::collections::HashSet;
 use std::rc::Rc;
+use std::sync::RwLock;
 use std::{env, str};
 use std::{io, thread};
 use thiserror::Error;
-use tokio::io::ErrorKind::AddrInUse;
 use tokio::net::{UnixListener, UnixStream};
 use tokio::runtime::Builder;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{channel, Sender};
 use tokio::sync::Mutex;
 use tokio::task;
-use tokio_retry::Retry;
 use tokio_util::task::LocalPoolHandle;
 use ClosingReason::*;
 use PipeListeningResult::*;
@@ -52,20 +50,6 @@ pub const SET: &str = "set";
 pub const ZSET: &str = "zset";
 pub const HASH: &str = "hash";
 pub const STREAM: &str = "stream";
-
-/// struct containing all objects needed to bind to a socket and clean it.
-struct SocketListener {
-    socket_path: String,
-    cleanup_socket: bool,
-}
-
-impl Dispose for SocketListener {
-    fn dispose(self) {
-        if self.cleanup_socket {
-            close_socket(&self.socket_path);
-        }
-    }
-}
 
 /// struct containing all objects needed to read from a unix stream.
 struct UnixStreamListener {
@@ -337,30 +321,23 @@ async fn cluster_scan(cluster_scan: ClusterScan, mut client: Client) -> ClientUs
     } else {
         get_cluster_scan_cursor(cursor)?
     };
-
-    let match_pattern = cluster_scan.match_pattern.map(|pattern| pattern.into());
-    let count = cluster_scan.count.map(|count| count as usize);
-
-    let object_type = match cluster_scan.object_type {
-        Some(char_object_type) => match char_object_type.to_string().to_lowercase().as_str() {
-            STRING => Some(redis::ObjectType::String),
-            LIST => Some(redis::ObjectType::List),
-            SET => Some(redis::ObjectType::Set),
-            ZSET => Some(redis::ObjectType::ZSet),
-            HASH => Some(redis::ObjectType::Hash),
-            STREAM => Some(redis::ObjectType::Stream),
-            _ => {
-                return Err(ClientUsageError::Internal(format!(
-                    "Received invalid object type: {:?}",
-                    char_object_type
-                )))
-            }
-        },
-        None => None,
-    };
+    let mut cluster_scan_args_builder =
+        ClusterScanArgs::builder().allow_non_covered_slots(cluster_scan.allow_non_covered_slots);
+    if let Some(match_pattern) = cluster_scan.match_pattern {
+        cluster_scan_args_builder =
+            cluster_scan_args_builder.with_match_pattern::<Bytes>(match_pattern);
+    }
+    if let Some(count) = cluster_scan.count {
+        cluster_scan_args_builder = cluster_scan_args_builder.with_count(count as u32);
+    }
+    if let Some(object_type) = cluster_scan.object_type {
+        cluster_scan_args_builder =
+            cluster_scan_args_builder.with_object_type(object_type.to_string().into());
+    }
+    let cluster_scan_args = cluster_scan_args_builder.build();
 
     client
-        .cluster_scan(&cluster_scan_cursor, &match_pattern, count, object_type)
+        .cluster_scan(&cluster_scan_cursor, cluster_scan_args)
         .await
         .map_err(|err| err.into())
 }
@@ -390,7 +367,7 @@ async fn invoke_script(
 
 async fn send_transaction(
     request: Transaction,
-    mut client: Client,
+    client: &mut Client,
     routing: Option<RoutingInfo>,
 ) -> ClientUsageResult<Value> {
     let mut pipeline = redis::Pipeline::with_capacity(request.commands.capacity());
@@ -476,7 +453,7 @@ fn get_route(
     }
 }
 
-fn handle_request(request: CommandRequest, client: Client, writer: Rc<Writer>) {
+fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer>) {
     task::spawn_local(async move {
         let mut updated_inflight_counter = true;
         let client_clone = client.clone();
@@ -504,7 +481,7 @@ fn handle_request(request: CommandRequest, client: Client, writer: Rc<Writer>) {
                     }
                     command_request::Command::Transaction(transaction) => {
                         match get_route(request.route.0, None) {
-                            Ok(routes) => send_transaction(transaction, client, routes).await,
+                            Ok(routes) => send_transaction(transaction, &mut client, routes).await,
                             Err(e) => Err(e),
                         }
                     }
@@ -537,6 +514,17 @@ fn handle_request(request: CommandRequest, client: Client, writer: Rc<Writer>) {
                             Err(e) => Err(e),
                         }
                     }
+                    command_request::Command::UpdateConnectionPassword(
+                        update_connection_password_command,
+                    ) => client
+                        .update_connection_password(
+                            update_connection_password_command
+                                .password
+                                .map(|chars| chars.to_string()),
+                            update_connection_password_command.immediate_auth,
+                        )
+                        .await
+                        .map_err(|err| err.into()),
                 },
                 None => {
                     log_debug(
@@ -734,109 +722,6 @@ async fn listen_on_client_stream(socket: UnixStream) {
     log_trace("client closing", "closing connection");
 }
 
-enum SocketCreationResult {
-    // Socket creation was successful, returned a socket listener.
-    Created(UnixListener),
-    // There's an existing a socket listener.
-    PreExisting,
-    // Socket creation failed with an error.
-    Err(io::Error),
-}
-
-impl SocketListener {
-    fn new(socket_path: String) -> Self {
-        SocketListener {
-            socket_path,
-            // Don't cleanup the socket resources unless we know that the socket is in use, and owned by this listener.
-            cleanup_socket: false,
-        }
-    }
-
-    /// Return true if it's possible to connect to socket.
-    async fn socket_is_available(&self) -> bool {
-        if UnixStream::connect(&self.socket_path).await.is_ok() {
-            return true;
-        }
-
-        let retry_strategy = get_fixed_interval_backoff(10, 3);
-
-        let action = || async {
-            UnixStream::connect(&self.socket_path)
-                .await
-                .map(|_| ())
-                .map_err(|_| ())
-        };
-        let result = Retry::spawn(retry_strategy.get_iterator(), action).await;
-        result.is_ok()
-    }
-
-    async fn get_socket_listener(&self) -> SocketCreationResult {
-        const RETRY_COUNT: u8 = 3;
-        let mut retries = RETRY_COUNT;
-        while retries > 0 {
-            match UnixListener::bind(self.socket_path.clone()) {
-                Ok(listener) => {
-                    return SocketCreationResult::Created(listener);
-                }
-                Err(err) if err.kind() == AddrInUse => {
-                    if self.socket_is_available().await {
-                        return SocketCreationResult::PreExisting;
-                    } else {
-                        // socket file might still exist, even if nothing is listening on it.
-                        close_socket(&self.socket_path);
-                        retries -= 1;
-                        continue;
-                    }
-                }
-                Err(err) => {
-                    return SocketCreationResult::Err(err);
-                }
-            }
-        }
-        SocketCreationResult::Err(io::Error::new(
-            io::ErrorKind::Other,
-            "Failed to connect to socket",
-        ))
-    }
-
-    pub(crate) async fn listen_on_socket<InitCallback>(&mut self, init_callback: InitCallback)
-    where
-        InitCallback: FnOnce(Result<String, String>) + Send + 'static,
-    {
-        // Bind to socket
-        let listener = match self.get_socket_listener().await {
-            SocketCreationResult::Created(listener) => listener,
-            SocketCreationResult::Err(err) => {
-                log_info("listen_on_socket", format!("failed with error: {err}"));
-                init_callback(Err(err.to_string()));
-                return;
-            }
-            SocketCreationResult::PreExisting => {
-                init_callback(Ok(self.socket_path.clone()));
-                return;
-            }
-        };
-
-        self.cleanup_socket = true;
-        init_callback(Ok(self.socket_path.clone()));
-        let local_set_pool = LocalPoolHandle::new(num_cpus::get());
-        loop {
-            match listener.accept().await {
-                Ok((stream, _addr)) => {
-                    local_set_pool.spawn_pinned(move || listen_on_client_stream(stream));
-                }
-                Err(err) => {
-                    log_debug(
-                        "listen_on_socket",
-                        format!("Socket closed with error: `{err}`"),
-                    );
-                    return;
-                }
-            }
-        }
-    }
-}
-
 #[derive(Debug)]
 /// Enum describing the reason that a socket listener stopped listening on a socket.
 pub enum ClosingReason {
@@ -924,23 +809,114 @@ pub fn start_socket_listener_internal<InitCallback>(
     init_callback: InitCallback,
     socket_path: Option<String>,
 ) where
-    InitCallback: FnOnce(Result<String, String>) + Send + 'static,
+    InitCallback: FnOnce(Result<String, String>) + Send + Clone + 'static,
 {
+    static INITIALIZED_SOCKETS: Lazy<RwLock<HashSet<String>>> =
+        Lazy::new(|| RwLock::new(HashSet::new()));
+
+    let socket_path = socket_path.unwrap_or_else(get_socket_path);
+
+    {
+        // Optimize for already initialized
+        let initialized_sockets = INITIALIZED_SOCKETS
+            .read()
+            .expect("Failed to acquire sockets db read guard");
+        if initialized_sockets.contains(&socket_path) {
+            init_callback(Ok(socket_path.clone()));
+            return;
+        }
+    }
+
+    // Retry with write lock, will be dropped upon the function completion
+    let mut sockets_write_guard = INITIALIZED_SOCKETS
+        .write()
+        .expect("Failed to acquire sockets db write guard");
+    if sockets_write_guard.contains(&socket_path) {
+        init_callback(Ok(socket_path.clone()));
+        return;
+    }
+
+    let (tx, rx) = std::sync::mpsc::channel();
+    let socket_path_cloned = socket_path.clone();
+    let init_callback_cloned = init_callback.clone();
+    let tx_cloned = tx.clone();
     thread::Builder::new()
         .name("socket_listener_thread".to_string())
         .spawn(move || {
-            let runtime = Builder::new_current_thread().enable_all().build();
-            match runtime {
-                Ok(runtime) => {
-                    let mut listener = Disposable::new(SocketListener::new(
-                        socket_path.unwrap_or_else(get_socket_path),
-                    ));
-                    runtime.block_on(listener.listen_on_socket(init_callback));
-                }
-                Err(err) => init_callback(Err(err.to_string())),
+            let init_result = {
+                let runtime = match Builder::new_current_thread().enable_all().build() {
+                    Err(err) => {
+                        log_error(
+                            "listen_on_socket",
+                            format!("Error failed to create a new tokio thread: {err}"),
+                        );
+                        return Err(err);
+                    }
+                    Ok(runtime) => runtime,
+                };
+
+                runtime.block_on(async move {
+                    let listener_socket = match UnixListener::bind(socket_path_cloned.clone()) {
+                        Err(err) => {
+                            log_error(
+                                "listen_on_socket",
+                                format!("Error failed to bind listening socket: {err}"),
+                            );
+                            return Err(err);
+                        }
+                        Ok(listener_socket) => listener_socket,
+                    };
+
+                    // Signal initialization is successful.
+                    // IMPORTANT:
+                    // tx.send() must be called before init_callback_cloned() to ensure runtimes, such as Python, can properly complete the main function
+                    let _ = tx.send(true);
+                    init_callback_cloned(Ok(socket_path_cloned.clone()));
+
+                    let local_set_pool = LocalPoolHandle::new(num_cpus::get());
+                    loop {
+                        match listener_socket.accept().await {
+                            Ok((stream, _addr)) => {
+                                local_set_pool
+                                    .spawn_pinned(move || listen_on_client_stream(stream));
+                            }
+                            Err(err) => {
+                                log_error(
+                                    "listen_on_socket",
+                                    format!("Error accepting connection: {err}"),
+                                );
+                                break;
+                            }
+                        }
+                    }
+
+                    // ensure socket file removal
+                    drop(listener_socket);
+                    let _ = std::fs::remove_file(socket_path_cloned.clone());
+
+                    // no more listening on socket - update the sockets db
+                    let mut sockets_write_guard = INITIALIZED_SOCKETS
+                        .write()
+                        .expect("Failed to acquire sockets db write guard");
+                    sockets_write_guard.remove(&socket_path_cloned);
+                    Ok(())
+                })
             };
+
+            if let Err(err) = init_result {
+                init_callback(Err(err.to_string()));
+                let _ = tx_cloned.send(false);
+            }
+            Ok(())
         })
         .expect("Thread spawn failed. Cannot report error because callback was moved.");
+
+    // wait for thread initialization signaling, callback invocation is done in the thread
+    let _ = rx.recv().map(|res| {
+        if res {
+            sockets_write_guard.insert(socket_path);
+        }
+    });
 }
 
 /// Creates a new thread with a main loop task listening on the socket for new connections.
@@ -950,7 +926,7 @@ pub fn start_socket_listener_internal<InitCallback>(
 /// * `init_callback` - called when the socket listener fails to initialize, with the reason for the failure.
 pub fn start_socket_listener<InitCallback>(init_callback: InitCallback)
 where
-    InitCallback: FnOnce(Result<String, String>) + Send + 'static,
+    InitCallback: FnOnce(Result<String, String>) + Send + Clone + 'static,
 {
     start_socket_listener_internal(init_callback, None);
 }

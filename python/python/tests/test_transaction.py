@@ -558,7 +558,7 @@ async def transaction_test(
         args.append(OK)
         transaction.bitcount(key20, OffsetOptions(5, 30, BitmapIndexType.BIT))
         args.append(17)
-        transaction.bitpos_interval(key20, 1, 44, 50, BitmapIndexType.BIT)
+        transaction.bitpos(key20, 1, OffsetOptions(44, 50, BitmapIndexType.BIT))
         args.append(46)
 
     if not await check_if_server_version_lt(glide_client, "8.0.0"):
@@ -1033,7 +1033,7 @@ class TestTransaction:
         assert result[5:13] == [2, 2, 2, [b"Bob", b"Alice"], 2, OK, None, 0]
         assert result[13:] == expected
 
-    def test_transaction_clear(self):
+    async def test_transaction_clear(self):
         transaction = Transaction()
         transaction.info()
         transaction.select(1)

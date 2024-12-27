@@ -506,6 +506,12 @@ message ClusterScan {
     optional bytes match_pattern = 2;
     optional int64 count = 3;
     optional string object_type = 4;
+    bool allow_non_covered_slots = 5;
+}
+
+message UpdateConnectionPassword {
+    optional string password = 1;
+    bool immediate_auth = 2;
 }
 
 message CommandRequest {
@@ -517,6 +523,7 @@ message CommandRequest {
         ScriptInvocation script_invocation = 4;
         ScriptInvocationPointers script_invocation_pointers = 5;
         ClusterScan cluster_scan = 6;
+        UpdateConnectionPassword update_connection_password = 7;
     }
-    Routes route = 7;
+    Routes route = 8;
 }

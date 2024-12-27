@@ -390,7 +390,46 @@ class CoreCommands(Protocol):
         match: Optional[TEncodable] = ...,
         count: Optional[int] = ...,
         type: Optional[ObjectType] = ...,
+        allow_non_covered_slots: bool = ...,
     ) -> TResult: ...
+
+    async def _update_connection_password(
+        self, password: Optional[str], immediate_auth: bool
+    ) -> TResult: ...
+
+    async def update_connection_password(
+        self, password: Optional[str], immediate_auth=False
+    ) -> TOK:
+        """
+        Update the current connection password with a new password.
+
+        **Note:** This method updates the client's internal password configuration and does
+        not perform password rotation on the server side.
+
+        This method is useful in scenarios where the server password has changed or when
+        utilizing short-lived passwords for enhanced security. It allows the client to
+        update its password to reconnect upon disconnection without the need to recreate
+        the client instance. This ensures that the internal reconnection mechanism can
+        handle reconnection seamlessly, preventing the loss of in-flight commands.
+
+        Args:
+            password (`Optional[str]`): The new password to use for the connection,
+            if `None` the password will be removed.
+            immediate_auth (`bool`):
+                - `True`: The client will authenticate immediately with the new password against all connections, Using `AUTH` command.
+                          If password supplied is an empty string, auth will not be performed and warning will be returned.
+                          The default is `False`.
+
+        Returns:
+            TOK: A simple OK response. If `immediate_auth=True` returns OK if the reauthenticate succeed.
+
+        Example:
+            >>> await client.update_connection_password("new_password", immediate_auth=True)
+            'OK'
+        """
+        return cast(
+            TOK, await self._update_connection_password(password, immediate_auth)
+        )
 
     async def set(
         self,
@@ -613,7 +652,13 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/del/ for details.
 
         Note:
-            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+            In cluster mode, if keys in `keys` map to different hash slots,
+            the command will be split across these slots and executed separately for each.
+            This means the command is atomic only at the slot level. If one or more slot-specific
+            requests fail, the entire call will return the first encountered error, even
+            though some requests may have succeeded while others did not.
+            If this behavior impacts your application logic, consider splitting the
+            request into sub-requests per slot to ensure atomicity.
 
         Args:
             keys (List[TEncodable]): A list of keys to be deleted from the database.
@@ -730,7 +775,13 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/mset/ for more details.
 
         Note:
-            When in cluster mode, the command may route to multiple nodes when keys in `key_value_map` map to different hash slots.
+            In cluster mode, if keys in `key_value_map` map to different hash slots,
+            the command will be split across these slots and executed separately for each.
+            This means the command is atomic only at the slot level. If one or more slot-specific
+            requests fail, the entire call will return the first encountered error, even
+            though some requests may have succeeded while others did not.
+            If this behavior impacts your application logic, consider splitting the
+            request into sub-requests per slot to ensure atomicity.
 
         Args:
             key_value_map (Mapping[TEncodable, TEncodable]): A map of key value pairs.
@@ -783,8 +834,13 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/mget/ for more details.
 
         Note:
-            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
-
+            In cluster mode, if keys in `keys` map to different hash slots,
+            the command will be split across these slots and executed separately for each.
+            This means the command is atomic only at the slot level. If one or more slot-specific
+            requests fail, the entire call will return the first encountered error, even
+            though some requests may have succeeded while others did not.
+            If this behavior impacts your application logic, consider splitting the
+            request into sub-requests per slot to ensure atomicity.
         Args:
             keys (List[TEncodable]): A list of keys to retrieve values for.
 
@@ -850,7 +906,14 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/touch/ for details.
 
         Note:
-            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+            In cluster mode, if keys in `key_value_map` map to different hash slots,
+            the command will be split across these slots and executed separately for each.
+            This means the command is atomic only at the slot level. If one or more slot-specific
+            requests fail, the entire call will return the first encountered error, even
+            though some requests may have succeeded while others did not.
+            If this behavior impacts your application logic, consider splitting the
+            request into sub-requests per slot to ensure atomicity.        Args:
+            keys (List[TEncodable]): The list of keys to unlink.
 
         Args:
             keys (List[TEncodable]): The keys to update last access time.
@@ -2303,7 +2366,13 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/exists/ for more details.
 
         Note:
-            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+            In cluster mode, if keys in `keys` map to different hash slots,
+            the command will be split across these slots and executed separately for each.
+            This means the command is atomic only at the slot level. If one or more slot-specific
+            requests fail, the entire call will return the first encountered error, even
+            though some requests may have succeeded while others did not.
+            If this behavior impacts your application logic, consider splitting the
+            request into sub-requests per slot to ensure atomicity.
 
         Args:
             keys (List[TEncodable]): The list of keys to check.
@@ -2327,7 +2396,13 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/unlink/ for more details.
 
         Note:
-            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+            In cluster mode, if keys in `key_value_map` map to different hash slots,
+            the command will be split across these slots and executed separately for each.
+            This means the command is atomic only at the slot level. If one or more slot-specific
+            requests fail, the entire call will return the first encountered error, even
+            though some requests may have succeeded while others did not.
+            If this behavior impacts your application logic, consider splitting the
+            request into sub-requests per slot to ensure atomicity.
 
         Args:
             keys (List[TEncodable]): The list of keys to unlink.
@@ -5593,51 +5668,13 @@ class CoreCommands(Protocol):
         )
 
     async def bitpos(
-        self, key: TEncodable, bit: int, start: Optional[int] = None
+        self, key: TEncodable, bit: int, options: Optional[OffsetOptions] = None
     ) -> int:
         """
         Returns the position of the first bit matching the given `bit` value. The optional starting offset
         `start` is a zero-based index, with `0` being the first byte of the list, `1` being the next byte and so on.
         The offset can also be a negative number indicating an offset starting at the end of the list, with `-1` being
         the last byte of the list, `-2` being the penultimate, and so on.
-
-        See https://valkey.io/commands/bitpos for more details.
-
-        Args:
-            key (TEncodable): The key of the string.
-            bit (int): The bit value to match. Must be `0` or `1`.
-            start (Optional[int]): The starting offset.
-
-        Returns:
-            int: The position of the first occurrence of `bit` in the binary value of the string held at `key`.
-                If `start` was provided, the search begins at the offset indicated by `start`.
-
-        Examples:
-            >>> await client.set("key1", "A1")  # "A1" has binary value 01000001 00110001
-            >>> await client.bitpos("key1", 1)
-                1  # The first occurrence of bit value 1 in the string stored at "key1" is at the second position.
-            >>> await client.bitpos("key1", 1, -1)
-                10  # The first occurrence of bit value 1, starting at the last byte in the string stored at "key1", is at the eleventh position.
-        """
-        args = [key, str(bit)] if start is None else [key, str(bit), str(start)]
-        return cast(
-            int,
-            await self._execute_command(RequestType.BitPos, args),
-        )
-
-    async def bitpos_interval(
-        self,
-        key: TEncodable,
-        bit: int,
-        start: int,
-        end: int,
-        index_type: Optional[BitmapIndexType] = None,
-    ) -> int:
-        """
-        Returns the position of the first bit matching the given `bit` value. The offsets are zero-based indexes, with
-        `0` being the first element of the list, `1` being the next, and so on. These offsets can also be negative
-        numbers indicating offsets starting at the end of the list, with `-1` being the last element of the list, `-2`
-        being the penultimate, and so on.
 
         If you are using Valkey 7.0.0 or above, the optional `index_type` can also be provided to specify whether the
         `start` and `end` offsets specify BIT or BYTE offsets. If `index_type` is not provided, BYTE offsets
@@ -5649,27 +5686,28 @@ class CoreCommands(Protocol):
         Args:
             key (TEncodable): The key of the string.
             bit (int): The bit value to match. Must be `0` or `1`.
-            start (int): The starting offset.
-            end (int): The ending offset.
-            index_type (Optional[BitmapIndexType]): The index offset type. This option can only be specified if you are
-                using Valkey version 7.0.0 or above. Could be either `BitmapIndexType.BYTE` or `BitmapIndexType.BIT`.
-                If no index type is provided, the indexes will be assumed to be byte indexes.
+            options (Optional[OffsetOptions]): The offset options.
 
         Returns:
-            int: The position of the first occurrence from the `start` to the `end` offsets of the `bit` in the binary
-                value of the string held at `key`.
+            int: The position of the first occurrence of `bit` in the binary value of the string held at `key`.
+                If `start` was provided, the search begins at the offset indicated by `start`.
 
         Examples:
-            >>> await client.set("key1", "A12")  # "A12" has binary value 01000001 00110001 00110010
-            >>> await client.bitpos_interval("key1", 1, 1, -1)
+            >>> await client.set("key1", "A1")  # "A1" has binary value 01000001 00110001
+            >>> await client.bitpos("key1", 1)
+                1  # The first occurrence of bit value 1 in the string stored at "key1" is at the second position.
+            >>> await client.bitpos("key1", 1, OffsetOptions(-1))
+                10  # The first occurrence of bit value 1, starting at the last byte in the string stored at "key1", is at the eleventh position.
+
+            >>> await client.set("key2", "A12")  # "A12" has binary value 01000001 00110001 00110010
+            >>> await client.bitpos("key2", 1, OffsetOptions(1, -1))
                 10  # The first occurrence of bit value 1 in the second byte to the last byte of the string stored at "key1" is at the eleventh position.
-            >>> await client.bitpos_interval("key1", 1, 2, 9, BitmapIndexType.BIT)
+            >>> await client.bitpos("key2", 1, OffsetOptions(2, 9, BitmapIndexType.BIT))
                 7  # The first occurrence of bit value 1 in the third to tenth bits of the string stored at "key1" is at the eighth position.
         """
-        if index_type is not None:
-            args = [key, str(bit), str(start), str(end), index_type.value]
-        else:
-            args = [key, str(bit), str(start), str(end)]
+        args: List[TEncodable] = [key, str(bit)]
+        if options is not None:
+            args.extend(options.to_args())
 
         return cast(
             int,
@@ -6360,7 +6398,13 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/watch for more details.
 
         Note:
-            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+            In cluster mode, if keys in `key_value_map` map to different hash slots,
+            the command will be split across these slots and executed separately for each.
+            This means the command is atomic only at the slot level. If one or more slot-specific
+            requests fail, the entire call will return the first encountered error, even
+            though some requests may have succeeded while others did not.
+            If this behavior impacts your application logic, consider splitting the
+            request into sub-requests per slot to ensure atomicity.
 
         Args:
             keys (List[TEncodable]): The keys to watch.

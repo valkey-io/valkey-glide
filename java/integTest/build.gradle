@@ -11,12 +11,13 @@ dependencies {
     implementation project(':client')
 
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
+    implementation 'com.google.code.gson:gson:2.10.1'
 
     // https://github.com/netty/netty/wiki/Native-transports
     // At the moment, Windows is not supported
-    implementation group: 'io.netty', name: 'netty-transport-native-epoll', version: '4.1.100.Final', classifier: 'linux-x86_64'
-    implementation group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.100.Final', classifier: 'osx-x86_64'
-    implementation group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.100.Final', classifier: 'osx-aarch_64'
+    implementation group: 'io.netty', name: 'netty-transport-native-epoll', version: '4.1.115.Final', classifier: 'linux-x86_64'
+    implementation group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.115.Final', classifier: 'osx-x86_64'
+    implementation group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.115.Final', classifier: 'osx-aarch_64'
 
     // junit
     testImplementation 'org.mockito:mockito-junit-jupiter:3.12.4'
@@ -32,6 +33,7 @@ dependencies {
 
 def standaloneHosts = ''
 def clusterHosts = ''
+def azClusterHosts = ''
 
 ext {
     extractAddressesFromClusterManagerOutput = { String output ->
@@ -47,7 +49,7 @@ ext {
 
 tasks.register('stopAllAfterTests', Exec) {
     workingDir "${project.rootDir}/../utils"
-    commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'redis-cluster', '--keep-folder'
+    commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster', '--keep-folder'
 }
 
 // We need to call for stop before and after the test, but gradle doesn't support executing a task
@@ -55,7 +57,7 @@ tasks.register('stopAllAfterTests', Exec) {
 // We need to call for stop in case if previous test run was interrupted/crashed and didn't stop.
 tasks.register('stopAllBeforeTests', Exec) {
     workingDir "${project.rootDir}/../utils"
-    commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'redis-cluster'
+    commandLine 'python3', 'cluster_manager.py', 'stop', '--prefix', 'cluster'
     ignoreExitValue true // ignore fail if servers are stopped before
 }
 
@@ -83,6 +85,25 @@ tasks.register('startCluster') {
     }
 }
 
+tasks.register('startClusterForAz') {
+    doLast {
+        if (System.getProperty("cluster-endpoints") == null) {
+            new ByteArrayOutputStream().withStream { os ->
+                exec {
+                    workingDir "${project.rootDir}/../utils"
+                    def args = ['python3', 'cluster_manager.py', 'start', '--cluster-mode', '-r', '4']
+                    if (System.getProperty("tls") == 'true') args.add(2, '--tls')
+                    commandLine args
+                    standardOutput = os
+                }
+                azClusterHosts = extractAddressesFromClusterManagerOutput(os.toString())
+            }
+        } else {
+            azClusterHosts = System.getProperty("cluster-endpoints")
+        }
+    }
+}
+
 tasks.register('startStandalone') {
     doLast {
         if (System.getProperty("standalone-endpoints") == null) {
@@ -102,20 +123,19 @@ tasks.register('startStandalone') {
     }
 }
 
-
 test.dependsOn 'stopAllBeforeTests'
 stopAllBeforeTests.finalizedBy 'clearDirs'
 clearDirs.finalizedBy 'startStandalone'
 clearDirs.finalizedBy 'startCluster'
+clearDirs.finalizedBy 'startClusterForAz'
 test.finalizedBy 'stopAllAfterTests'
 test.dependsOn ':client:buildRustRelease'
 
 tasks.withType(Test) {
     doFirst {
-        println "Cluster hosts = ${clusterHosts}"
-        println "Standalone hosts = ${standaloneHosts}"
         systemProperty 'test.server.standalone', standaloneHosts
         systemProperty 'test.server.cluster', clusterHosts
+        systemProperty 'test.server.azcluster', azClusterHosts
         systemProperty 'test.server.tls', System.getProperty("tls")
     }
 

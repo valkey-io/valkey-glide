@@ -132,9 +132,12 @@ type StringCommands interface {
 	// Sets multiple keys to multiple values in a single operation.
 	//
 	// Note:
-	//  When in cluster mode, the command may route to multiple nodes when keys in keyValueMap map to different hash slots.
-	//
-	// See [valkey.io] for details.
+	//  In cluster mode, if keys in `keyValueMap` map to different hash slots, the command
+	//  will be split across these slots and executed separately for each. This means the command
+	//  is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+	//  call will return the first encountered error, even though some requests may have succeeded
+	//  while others did not. If this behavior impacts your application logic, consider splitting
+	//  the request into sub-requests per slot to ensure atomicity.
 	//
 	// Parameters:
 	//  keyValueMap - A key-value map consisting of keys and their respective values to set.
@@ -153,9 +156,12 @@ type StringCommands interface {
 	// Retrieves the values of multiple keys.
 	//
 	// Note:
-	//  When in cluster mode, the command may route to multiple nodes when keys map to different hash slots.
-	//
-	// See [valkey.io] for details.
+	//  In cluster mode, if keys in `keys` map to different hash slots, the command
+	//  will be split across these slots and executed separately for each. This means the command
+	//  is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+	//  call will return the first encountered error, even though some requests may have succeeded
+	//  while others did not. If this behavior impacts your application logic, consider splitting
+	//  the request into sub-requests per slot to ensure atomicity.
 	//
 	// Parameters:
 	//  keys - A list of keys to retrieve values for.
@@ -180,9 +186,12 @@ type StringCommands interface {
 	// the entire operation fails.
 	//
 	// Note:
-	//  When in cluster mode, all keys in keyValueMap must map to the same hash slot.
-	//
-	// See [valkey.io] for details.
+	//  In cluster mode, if keys in `keyValueMap` map to different hash slots, the command
+	//  will be split across these slots and executed separately for each. This means the command
+	//  is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+	//  call will return the first encountered error, even though some requests may have succeeded
+	//  while others did not. If this behavior impacts your application logic, consider splitting
+	//  the request into sub-requests per slot to ensure atomicity.
 	//
 	// Parameters:
 	//  keyValueMap - A key-value map consisting of keys and their respective values to set.
@@ -408,9 +417,12 @@ type StringCommands interface {
 	//  Valkey 7.0 and above.
 	//
 	// Note:
-	//  When in cluster mode, key1 and key2 must map to the same hash slot.
-	//
-	// See [valkey.io] for details.
+	//  In cluster mode, if keys in `keyValueMap` map to different hash slots, the command
+	//  will be split across these slots and executed separately for each. This means the command
+	//  is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+	//  call will return the first encountered error, even though some requests may have succeeded
+	//  while others did not. If this behavior impacts your application logic, consider splitting
+	//  the request into sub-requests per slot to ensure atomicity.
 	//
 	// Parameters:
 	//  key1 - The key that stores the first string.
@@ -692,6 +704,50 @@ type HashCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/hstrlen/
 	HStrLen(key string, field string) (Result[int64], error)
+
+	// Increments the number stored at `field` in the hash stored at `key` by increment.
+	// By using a negative increment value, the value stored at `field` in the hash stored at `key` is decremented.
+	// If `field` or `key` does not exist, it is set to 0 before performing the operation.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	// 	key - The key of the hash.
+	// 	field - The field in the hash stored at `key` to increment its value.
+	// 	increment - The amount to increment.
+	//
+	// Return value:
+	// 	The Result[int64] value of `field` in the hash stored at `key` after the increment.
+	//
+	// Example:
+	//  _, err := client.HSet("key", map[string]string{"field": "10"})
+	//  hincrByResult, err := client.HIncrBy("key", "field", 1)
+	//	// hincrByResult.Value(): 11
+	//
+	// [valkey.io]: https://valkey.io/commands/hincrby/
+	HIncrBy(key string, field string, increment int64) (Result[int64], error)
+
+	// Increments the string representing a floating point number stored at `field` in the hash stored at `key` by increment.
+	// By using a negative increment value, the value stored at `field` in the hash stored at `key` is decremented.
+	// If `field` or `key` does not exist, it is set to 0 before performing the operation.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	// 	key - The key of the hash.
+	// 	field - The field in the hash stored at `key` to increment its value.
+	// 	increment - The amount to increment.
+	//
+	// Return value:
+	// 	The Result[float64] value of `field` in the hash stored at `key` after the increment.
+	//
+	// Example:
+	//  _, err := client.HSet("key", map[string]string{"field": "10"})
+	//  hincrByFloatResult, err := client.HIncrByFloat("key", "field", 1.5)
+	//	// hincrByFloatResult.Value(): 11.5
+	//
+	// [valkey.io]: https://valkey.io/commands/hincrbyfloat/
+	HIncrByFloat(key string, field string, increment float64) (Result[float64], error)
 }
 
 // ConnectionManagementCommands defines an interface for connection management-related commands.

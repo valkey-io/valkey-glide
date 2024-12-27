@@ -105,7 +105,7 @@ Before starting this step, make sure you've installed all software requirements.
     git clone --branch ${VERSION} https://github.com/valkey-io/valkey-glide.git
     cd valkey-glide
     ```
-2. Initialize git submodule:
+2. Initialize git submodules:
     ```bash
     git submodule update --init --recursive
     ```
@@ -140,30 +140,35 @@ Before starting this step, make sure you've installed all software requirements.
 
 ### Test
 
-To run tests, use the following command:
+To run tests, use the benefit on makefile. To run unit tests, run the following command:
 
 ```bash
-go test -race ./...
+make unit-test
 ```
 
-For more detailed test output, add the `-v` flag:
+To run integration tests, run:
 
 ```bash
-go test -race ./... -v
+make integ-test
 ```
 
-To execute a specific test, include `-run <test_name>`. For example:
+To run modules tests, run:
 
 ```bash
-go test -race ./... -run TestConnectionRequestProtobufGeneration_allFieldsSet -v
+make modules-test
 ```
 
-### Submodules
-
-After pulling new changes, ensure that you update the submodules by running the following command:
+To execute a specific test, include `test-filter=<test_name>`. For example:
 
 ```bash
-git submodule update
+make unit-test test-filter=TestConnectionRequestProtobufGeneration_allFieldsSet
+```
+
+Integration and modules tests accept `standalone-endpoints`, `cluster-endpoints` and `tls` parameters to run tests on existing servers.
+By default, those test suite start standalone and cluster servers without TLS and stop them at the end.
+
+```bash
+make integ-test standalone-endpoints=localhost:6379 cluster-endpoints=localhost:7000 tls=true
 ```
 
 ### Generate protobuf files

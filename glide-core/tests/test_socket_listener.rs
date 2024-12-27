@@ -1,6 +1,4 @@
-/*
- * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
- */
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 #![cfg(feature = "socket-layer")]
 use glide_core::*;
@@ -172,7 +170,7 @@ mod socket_listener {
     }
 
     fn read_from_socket(buffer: &mut Vec<u8>, socket: &mut UnixStream) -> usize {
-        buffer.resize(100, 0_u8);
+        buffer.resize(300, 0_u8);
         socket.read(buffer).unwrap()
     }
 
@@ -518,8 +516,10 @@ mod socket_listener {
     #[rstest]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_working_after_socket_listener_was_dropped() {
-        let socket_path =
-            get_socket_path_from_name("test_working_after_socket_listener_was_dropped".to_string());
+        let socket_path = get_socket_path_from_name(format!(
+            "{}_test_working_after_socket_listener_was_dropped",
+            std::process::id()
+        ));
         close_socket(&socket_path);
         // create a socket listener and drop it, to simulate a panic in a previous iteration.
         Builder::new_current_thread()
@@ -528,6 +528,8 @@ mod socket_listener {
             .unwrap()
             .block_on(async {
                 let _ = UnixListener::bind(socket_path.clone()).unwrap();
+                // UDS sockets require explicit removal of the socket file
+                close_socket(&socket_path);
             });
 
         const CALLBACK_INDEX: u32 = 99;
@@ -554,9 +556,10 @@ mod socket_listener {
     #[rstest]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_multiple_listeners_competing_for_the_socket() {
-        let socket_path = get_socket_path_from_name(
-            "test_multiple_listeners_competing_for_the_socket".to_string(),
-        );
+        let socket_path = get_socket_path_from_name(format!(
+            "{}_test_multiple_listeners_competing_for_the_socket",
+            std::process::id()
+        ));
         close_socket(&socket_path);
         let server = Arc::new(RedisServer::new(ServerType::Tcp { tls: false }));
 

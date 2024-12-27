@@ -11,7 +11,8 @@ runs:
 
     steps:
         - shell: bash
-          run: redis-server &
+          # Disable RDB snapshots to avoid configuration errors
+          run: redis-server --save "" --daemonize "yes"
 
         - shell: bash
           working-directory: ./benchmarks

@@ -7,6 +7,7 @@ import static glide.TestUtilities.getRandomString;
 import static glide.api.BaseClient.OK;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -32,7 +33,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-@Timeout(25) // seconds
+@Timeout(35) // seconds
 public class SharedClientTests {
 
     private static GlideClient standaloneClient = null;
@@ -47,8 +48,16 @@ public class SharedClientTests {
         clusterClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get();
-
         clients = List.of(Arguments.of(standaloneClient), Arguments.of(clusterClient));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void validate_statistics(BaseClient client) {
+        assertFalse(client.getStatistics().isEmpty());
+        // we expect 2 items in the statistics map
+        assertEquals(2, client.getStatistics().size());
     }
 
     @AfterAll
@@ -165,7 +174,7 @@ public class SharedClientTests {
             responses.get(inflightRequestsLimit).get(100, TimeUnit.MILLISECONDS);
             fail("Expected the last request to throw an exception");
         } catch (ExecutionException e) {
-            assertTrue(e.getCause() instanceof RequestException);
+            assertInstanceOf(RequestException.class, e.getCause());
             assertTrue(e.getCause().getMessage().contains("maximum inflight requests"));
         }
 

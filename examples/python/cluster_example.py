@@ -1,10 +1,10 @@
 import asyncio
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 from glide import (
     AllNodes,
     ClosingError,
-    ConnectionError,
+    ConnectionError as GlideConnectionError,
     GlideClusterClient,
     GlideClusterClientConfiguration,
     InfoSection,
@@ -12,12 +12,12 @@ from glide import (
     LogLevel,
     NodeAddress,
     RequestError,
-    TimeoutError,
+    TimeoutError as GlideTimeoutError,
 )
 
 
 async def create_client(
-    nodes_list: List[Tuple[str, int]] = [("localhost", 6379)]
+    nodes_list: Optional[List[Tuple[str, int]]] = None
 ) -> GlideClusterClient:
     """
     Creates and returns a GlideClusterClient instance.
@@ -33,6 +33,8 @@ async def create_client(
     Returns:
         GlideClusterClient: An instance of GlideClusterClient connected to the discovered nodes.
     """
+    if nodes_list is None:
+        nodes_list = [("localhost", 6379)]
     addresses = [NodeAddress(host, port) for host, port in nodes_list]
     # Check `GlideClusterClientConfiguration` for additional options.
     config = GlideClusterClientConfiguration(
@@ -99,11 +101,11 @@ async def exec_app_logic():
                     f"Client has closed and needs to be re-created: {e}",
                 )
             raise e
-        except TimeoutError as e:
+        except GlideTimeoutError as e:
             # A request timed out. You may choose to retry the execution based on your application's logic
             Logger.log(LogLevel.ERROR, "glide", f"TimeoutError encountered: {e}")
             raise e
-        except ConnectionError as e:
+        except GlideConnectionError as e:
             # The client wasn't able to reestablish the connection within the given retries
             Logger.log(LogLevel.ERROR, "glide", f"ConnectionError encountered: {e}")
             raise e
