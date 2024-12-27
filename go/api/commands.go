@@ -2,6 +2,8 @@
 
 package api
 
+import "github.com/valkey-io/valkey-glide/go/glide/api/options"
+
 // StringCommands defines an interface for the "String Commands" group of commands for standalone and cluster clients.
 //
 // See [valkey.io] for details.
@@ -748,6 +750,39 @@ type HashCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/hincrbyfloat/
 	HIncrByFloat(key string, field string, increment float64) (Result[float64], error)
+
+	// Iterates fields of Hash types and their associated values. This definition of HSCAN command does not include the optional arguments of the command.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	// 	key - The key of the hash.
+	// 	cursor - The cursor that points to the next iteration of results. A value of "0" indicates the start of the search.
+	//
+	// Return value:
+	//
+	// Example:
+	//
+	//
+	// [valkey.io]: https://valkey.io/commands/hscan/
+	HScan(key string, cursor string) (Result[string], []Result[string], error)
+
+	// Iterates fields of Hash types and their associated values. This definition of HSCAN includes optional arguments of the command.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	// 	key - The key of the hash.
+	// 	cursor - The cursor that points to the next iteration of results. A value of "0" indicates the start of the search.
+	//  options - The [api.HashScanOptions].
+	//
+	// Return value:
+	//
+	// Example:
+	//
+	//
+	// [valkey.io]: https://valkey.io/commands/hscan/
+	HScanWithOptions(key string, cursor string, options *options.HashScanOptions) (Result[string], []Result[string], error)
 }
 
 // ConnectionManagementCommands defines an interface for connection management-related commands.

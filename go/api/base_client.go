@@ -481,6 +481,27 @@ func (client *baseClient) HIncrByFloat(key string, field string, increment float
 	return handleDoubleResponse(result)
 }
 
+func (client *baseClient) HScan(key string, cursor string) (Result[string], []Result[string], error) {
+	result, err := client.executeCommand(C.HScan, []string{key, cursor})
+	if err != nil {
+		return CreateNilStringResult(), nil, err
+	}
+	return handleScanResponse(result)
+}
+
+func (client *baseClient) HScanWithOptions(key string, cursor string, options *options.HashScanOptions) (Result[string], []Result[string], error) {
+	optionArgs, err := options.ToArgs()
+	if err != nil {
+		return CreateNilStringResult(), nil, err
+	}
+
+	result, err := client.executeCommand(C.HScan, append([]string{key, cursor}, optionArgs...))
+	if err != nil {
+		return CreateNilStringResult(), nil, err
+	}
+	return handleScanResponse(result)
+}
+
 func (client *baseClient) LPush(key string, elements []string) (Result[int64], error) {
 	result, err := client.executeCommand(C.LPush, append([]string{key}, elements...))
 	if err != nil {
