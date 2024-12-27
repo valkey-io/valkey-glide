@@ -1269,9 +1269,8 @@ func (client *baseClient) XAddWithOptions(
 	optionArgs, err := options.ToArgs()
 	if err != nil {
 		return CreateNilStringResult(), err
-	} else {
-		args = append(args, optionArgs...)
 	}
+	args = append(args, optionArgs...)
 	for _, pair := range values {
 		if len(pair) != 2 {
 			return CreateNilStringResult(), fmt.Errorf(
