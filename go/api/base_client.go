@@ -11,6 +11,7 @@ import "C"
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"strconv"
 	"unsafe"
@@ -27,6 +28,7 @@ type BaseClient interface {
 	HashCommands
 	ListCommands
 	SetCommands
+	StreamCommands
 	SortedSetCommands
 	ConnectionManagementCommands
 	GenericBaseCommands
@@ -1251,6 +1253,39 @@ func (client *baseClient) Renamenx(key string, newKey string) (Result[bool], err
 		return CreateNilBoolResult(), err
 	}
 	return handleBooleanResponse(result)
+}
+
+func (client *baseClient) XAdd(key string, values [][]string) (Result[string], error) {
+	return client.XAddWithOptions(key, values, options.NewXAddOptions())
+}
+
+func (client *baseClient) XAddWithOptions(
+	key string,
+	values [][]string,
+	options *options.XAddOptions,
+) (Result[string], error) {
+	args := []string{}
+	args = append(args, key)
+	optionArgs, err := options.ToArgs()
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	args = append(args, optionArgs...)
+	for _, pair := range values {
+		if len(pair) != 2 {
+			return CreateNilStringResult(), fmt.Errorf(
+				"array entry had the wrong length. Expected length 2 but got length %d",
+				len(pair),
+			)
+		}
+		args = append(args, pair...)
+	}
+
+	result, err := client.executeCommand(C.XAdd, args)
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNullResponse(result)
 }
 
 func (client *baseClient) ZAdd(
