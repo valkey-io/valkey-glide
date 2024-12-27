@@ -1,4 +1,5 @@
 #### Changes
+
 * Node, Python, Java: Add allow uncovered slots scanning flag option in cluster scan ([#2814](https://github.com/valkey-io/valkey-glide/pull/2814), [#2815](https://github.com/valkey-io/valkey-glide/pull/2815), [#2860](https://github.com/valkey-io/valkey-glide/pull/2860))
 * Go: Add HINCRBY command ([#2847](https://github.com/valkey-io/valkey-glide/pull/2847))
 * Go: Add HINCRBYFLOAT command ([#2846](https://github.com/valkey-io/valkey-glide/pull/2846))
@@ -12,6 +13,7 @@
 * Go: Add `SScan` and `SMove` ([#2789](https://github.com/valkey-io/valkey-glide/issues/2789))
 * Go: Add `ZADD` ([#2813](https://github.com/valkey-io/valkey-glide/issues/2813))
 * Go: Add `ZPopMin` and `ZPopMax` ([#2850](https://github.com/valkey-io/valkey-glide/pull/2850))
+* Go: Add `BZPopMin` ([#2849](https://github.com/valkey-io/valkey-glide/pull/2849))
 
 #### Breaking Changes
 
