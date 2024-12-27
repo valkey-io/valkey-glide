@@ -325,3 +325,74 @@ func (opts *BaseScanOptions) toArgs() ([]string, error) {
 
 	return args, err
 }
+
+// Optional arguments to Restore(key string, ttl int64, value string, option *RestoreOptions)
+//
+// Note IDLETIME and FREQ modifiers cannot be set at the same time.
+//
+// [valkey.io]: https://valkey.io/commands/restore/
+type RestoreOptions struct {
+	// Subcommand string to replace existing key.
+	REPLACE string
+	// Subcommand string to represent absolute timestamp (in milliseconds) for TTL.
+	ABSTTL string
+	// It represents the idletime/frequency of object.
+	Eviction Eviction
+}
+
+func NewRestoreOptionsBuilder() *RestoreOptions {
+	return &RestoreOptions{}
+}
+
+const (
+	// Subcommand string to replace existing key.
+	HasREPLACE string = "REPLACE"
+
+	// Subcommand string to represent absolute timestamp (in milliseconds) for TTL.
+	HasABSTTL string = "ABSTTL"
+)
+
+func (restoreOption *RestoreOptions) SetReplace() *RestoreOptions {
+	restoreOption.REPLACE = HasREPLACE
+	return restoreOption
+}
+
+func (restoreOption *RestoreOptions) SetABSTTL() *RestoreOptions {
+	restoreOption.ABSTTL = HasABSTTL
+	return restoreOption
+}
+
+type Eviction struct {
+	Type  EvictionType
+	Count int64
+}
+
+type EvictionType string
+
+const (
+	// It represents the idletime of object
+	IDLETIME EvictionType = "IDLETIME"
+	// It represents the frequency of object
+	FREQ EvictionType = "FREQ"
+)
+
+func (restoreOption *RestoreOptions) SetEviction(evictionType EvictionType, count int64) *RestoreOptions {
+	restoreOption.Eviction.Type = evictionType
+	restoreOption.Eviction.Count = count
+	return restoreOption
+}
+
+func (opts *RestoreOptions) toArgs() ([]string, error) {
+	args := []string{}
+	var err error
+	if opts.REPLACE != "" {
+		args = append(args, string(opts.REPLACE))
+	}
+	if opts.ABSTTL != "" {
+		args = append(args, string(opts.ABSTTL))
+	}
+	if (opts.Eviction != Eviction{}) {
+		args = append(args, string(opts.Eviction.Type), utils.IntToString(opts.Eviction.Count))
+	}
+	return args, err
+}

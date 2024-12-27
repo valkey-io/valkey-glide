@@ -1371,6 +1371,26 @@ func (client *baseClient) ZPopMaxWithCount(key string, count int64) (map[Result[
 	return handleStringDoubleMapResponse(result)
 }
 
+func (client *baseClient) Restore(key string, ttl int64, value string) (Result[string], error) {
+	result, err := client.executeCommand(C.Restore, []string{key, utils.IntToString(ttl), value})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNullResponse(result)
+}
+
+func (client *baseClient) RestoreWithOptions(key string, ttl int64, value string, options *RestoreOptions) (Result[string], error) {
+	optionArgs, err := options.toArgs()
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	result, err := client.executeCommand(C.Restore, append([]string{key, utils.IntToString(ttl), value}, optionArgs...))
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNullResponse(result)
+}
+
 func (client *baseClient) Dump(key string) (Result[string], error) {
 	result, err := client.executeCommand(C.Dump, []string{key})
 	if err != nil {
@@ -1381,14 +1401,6 @@ func (client *baseClient) Dump(key string) (Result[string], error) {
 
 func (client *baseClient) ObjectEncoding(key string) (Result[string], error) {
 	result, err := client.executeCommand(C.ObjectEncoding, []string{key})
-	if err != nil {
-		return CreateNilStringResult(), err
-	}
-	return handleStringOrNullResponse(result)
-}
-
-func (client *baseClient) Restore(key string, ttl int64, value string) (Result[string], error) {
-	result, err := client.executeCommand(C.Restore, []string{key, utils.IntToString(ttl), value})
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
