@@ -1370,3 +1370,11 @@ func (client *baseClient) ZPopMaxWithCount(key string, count int64) (map[Result[
 	}
 	return handleStringDoubleMapResponse(result)
 }
+
+func (client *baseClient) ZRem(key string, members []string) (Result[int64], error) {
+	result, err := client.executeCommand(C.ZRem, append([]string{key}, members...))
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+	return handleLongResponse(result)
+}
