@@ -114,9 +114,9 @@ func extractAddresses(suite *GlideTestSuite, output string) []api.NodeAddress {
 
 func runClusterManager(suite *GlideTestSuite, args []string, ignoreExitCode bool) string {
 	pythonArgs := append([]string{"../../utils/cluster_manager.py"}, args...)
-	output, err := exec.Command("python3", pythonArgs...).Output()
+	output, err := exec.Command("python3", pythonArgs...).CombinedOutput()
 	if len(output) > 0 {
-		suite.T().Logf("cluster_manager.py stdout:\n====\n%s\n====\n", string(output))
+		suite.T().Logf("cluster_manager.py output:\n====\n%s\n====\n", string(output))
 	}
 
 	if err != nil {
