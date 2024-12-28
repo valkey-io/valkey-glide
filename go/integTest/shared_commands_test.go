@@ -3908,6 +3908,25 @@ func (suite *GlideTestSuite) TestXAddWithOptions() {
 	})
 }
 
+func (suite *GlideTestSuite) TestXRead() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{xread}" + uuid.NewString()
+		key2 := "{xread}" + uuid.NewString()
+
+		res, err := client.XAdd(key1, [][]string{{"k1_field1", "k1_value1"}, {"k1_field1", "k1_value2"}})
+		assert.Nil(suite.T(), err)
+		assert.False(suite.T(), res.IsNil())
+
+		res, err = client.XAdd(key2, [][]string{{"k2_field1", "k2_value1"}})
+		assert.Nil(suite.T(), err)
+		assert.False(suite.T(), res.IsNil())
+
+		read, err := client.XRead(map[string]string{key1: "0-0", key2: "0-0"})
+		assert.Nil(suite.T(), err)
+		assert.NotNil(suite.T(), read)
+	})
+}
+
 func (suite *GlideTestSuite) TestZAddAndZAddIncr() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()

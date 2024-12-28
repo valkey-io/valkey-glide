@@ -234,7 +234,7 @@ func (client *baseClient) GetExWithOptions(key string, options *GetExOptions) (R
 }
 
 func (client *baseClient) MSet(keyValueMap map[string]string) (Result[string], error) {
-	result, err := client.executeCommand(C.MSet, utils.MapToString(keyValueMap))
+	result, err := client.executeCommand(C.MSet, utils.ConvertMapToValueKeyStringArray(keyValueMap))
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
@@ -243,7 +243,7 @@ func (client *baseClient) MSet(keyValueMap map[string]string) (Result[string], e
 }
 
 func (client *baseClient) MSetNX(keyValueMap map[string]string) (Result[bool], error) {
-	result, err := client.executeCommand(C.MSetNX, utils.MapToString(keyValueMap))
+	result, err := client.executeCommand(C.MSetNX, utils.ConvertMapToValueKeyStringArray(keyValueMap))
 	if err != nil {
 		return CreateNilBoolResult(), err
 	}
@@ -1286,6 +1286,42 @@ func (client *baseClient) XAddWithOptions(
 		return CreateNilStringResult(), err
 	}
 	return handleStringOrNullResponse(result)
+}
+
+func (client *baseClient) XRead(keys_and_ids map[string]string) (map[string]map[string][][]string, error) {
+	args := make([]string, 0, 1+2*len(keys_and_ids))
+
+	// Note: this loop iterates in an indeterminate order, but it is OK for that case
+	keys := make([]string, 0, len(keys_and_ids))
+	values := make([]string, 0, len(keys_and_ids))
+	for key := range keys_and_ids {
+		keys = append(keys, key)
+		values = append(values, keys_and_ids[key])
+	}
+	args = append(args, "STREAMS")
+	args = append(args, keys...)
+	args = append(args, values...)
+
+	result, err := client.executeCommand(C.XRead, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleXReadResponse(result)
+	// res, err := handleInterfaceResponse(result)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// describe(res)
+	// return res.(map[string]map[string][][]string), nil
+	// if casted, ok := res.(map[string]map[string][][]string); ok {
+	// 	return casted, nil
+	// }
+	// return nil, &RequestError{fmt.Sprintf("Unexpected type received: %T", res)}
+}
+
+func describe(i interface{}) {
+	fmt.Printf("\n=====\n%v\n===\n%T\n=====\n", i, i)
 }
 
 func (client *baseClient) ZAdd(

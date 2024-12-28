@@ -73,7 +73,7 @@ func (client *GlideClient) CustomCommand(args []string) (interface{}, error) {
 //
 // [valkey.io]: https://valkey.io/commands/config-set/
 func (client *GlideClient) ConfigSet(parameters map[string]string) (Result[string], error) {
-	result, err := client.executeCommand(C.ConfigSet, utils.MapToString(parameters))
+	result, err := client.executeCommand(C.ConfigSet, utils.ConvertMapToValueKeyStringArray(parameters))
 	if err != nil {
 		return CreateNilStringResult(), err
 	}

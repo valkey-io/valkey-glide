@@ -434,3 +434,45 @@ func convertToResultStringArray(input []interface{}) ([]Result[string], error) {
 	}
 	return result, nil
 }
+
+func handleXReadResponse(response *C.struct_CommandResponse) (map[string]map[string][][]string, error) {
+	data1, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+	m1 := make(map[string]map[string][][]string, 0)
+	// m1 := data.(map[string]interface{}) // m1 has type `map[string]inteface{}` where `inteface{}` is actually `m2`
+	for k1, v1 := range data1.(map[string]interface{}) {
+		m2 := make(map[string][][]string, 0)
+		if data2, ok := v1.(map[string]interface{}); ok {
+			// m2 has type `map[string]inteface{}` where `inteface{}` is actually `[][]string`
+			for k2, v2 := range data2 {
+				if data3, ok := v2.([]interface{}); ok {
+					arr1 := make([][]string, 0, len(data3))
+					for _, e1 := range data3 {
+						if data4, ok := e1.([]interface{}); ok {
+							arr2 := make([]string, 0, len(data4))
+							for _, e2 := range data4 {
+								if str, ok := e2.(string); ok {
+									arr2 = append(arr2, str)
+								} else {
+									return nil, &RequestError{fmt.Sprintf("444 Unexpected type received: %T", e2)}
+								}
+							}
+							arr1 = append(arr1, arr2)
+						} else {
+							return nil, &RequestError{fmt.Sprintf("333 Unexpected type received: %T", e1)}
+						}
+					}
+					m2[k2] = arr1
+				} else {
+					return nil, &RequestError{fmt.Sprintf("222 Unexpected type received: %T", v2)}
+				}
+			}
+			m1[k1] = m2
+		} else {
+			return nil, &RequestError{fmt.Sprintf("111 Unexpected type received: %T", v1)}
+		}
+	}
+	return m1, nil
+}

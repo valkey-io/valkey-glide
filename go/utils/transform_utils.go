@@ -41,16 +41,7 @@ func ConvertMapToKeyValueStringArray(key string, args map[string]string) []strin
 	return values
 }
 
-// Flattens the Map: { (key1, value1), (key2, value2), ..} to a slice { key1, value1, key2, value2, ..}
-func MapToString(parameter map[string]string) []string {
-	flat := make([]string, 0, len(parameter)*2)
-	for key, value := range parameter {
-		flat = append(flat, key, value)
-	}
-	return flat
-}
-
-// Flattens a map[string, V] to a value-key string array
+// Flattens a map[string, V] to a value-key string array like { key1, value1, key2, value2, ..}
 func ConvertMapToValueKeyStringArray[V any](args map[string]V) []string {
 	result := make([]string, 0, len(args)*2)
 	for key, value := range args {
