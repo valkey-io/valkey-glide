@@ -3623,6 +3623,223 @@ func (suite *GlideTestSuite) TestPTTL_WithExpiredKey() {
 	})
 }
 
+func (suite *GlideTestSuite) TestSortWithOptions_AscendingOrder() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.LPush(key, []string{"b", "a", "c"})
+
+		options := api.NewSortOptions().
+			SetOrderBy(api.ASC).
+			SetIsAlpha(true)
+
+		sortResult, err := client.SortWithOptions(key, options)
+
+		assert.Nil(suite.T(), err)
+
+		resultList := []api.Result[string]{
+			api.CreateStringResult("a"),
+			api.CreateStringResult("b"),
+			api.CreateStringResult("c"),
+		}
+		assert.Equal(suite.T(), resultList, sortResult)
+	})
+}
+
+func (suite *GlideTestSuite) TestSortWithOptions_DescendingOrder() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.LPush(key, []string{"b", "a", "c"})
+
+		options := api.NewSortOptions().
+			SetOrderBy(api.DESC).
+			SetIsAlpha(true).
+			SetLimit(0, 3)
+
+		sortResult, err := client.SortWithOptions(key, options)
+
+		assert.Nil(suite.T(), err)
+
+		resultList := []api.Result[string]{
+			api.CreateStringResult("c"),
+			api.CreateStringResult("b"),
+			api.CreateStringResult("a"),
+		}
+
+		assert.Equal(suite.T(), resultList, sortResult)
+	})
+}
+
+func (suite *GlideTestSuite) TestSort_SuccessfulSort() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.LPush(key, []string{"3", "1", "2"})
+
+		sortResult, err := client.Sort(key)
+
+		assert.Nil(suite.T(), err)
+
+		resultList := []api.Result[string]{
+			api.CreateStringResult("1"),
+			api.CreateStringResult("2"),
+			api.CreateStringResult("3"),
+		}
+
+		assert.Equal(suite.T(), resultList, sortResult)
+	})
+}
+
+func (suite *GlideTestSuite) TestSortStore_BasicSorting() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := "{listKey}" + uuid.New().String()
+		sortedKey := "{listKey}" + uuid.New().String()
+		client.LPush(key, []string{"10", "2", "5", "1", "4"})
+
+		result, err := client.SortStore(key, sortedKey)
+
+		assert.Nil(suite.T(), err)
+		assert.NotNil(suite.T(), result)
+		assert.Equal(suite.T(), int64(5), result.Value())
+
+		sortedValues, err := client.LRange(sortedKey, 0, -1)
+		resultList := []api.Result[string]{
+			api.CreateStringResult("1"),
+			api.CreateStringResult("2"),
+			api.CreateStringResult("4"),
+			api.CreateStringResult("5"),
+			api.CreateStringResult("10"),
+		}
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), resultList, sortedValues)
+	})
+}
+
+func (suite *GlideTestSuite) TestSortStore_ErrorHandling() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		result, err := client.SortStore("{listKey}nonExistingKey", "{listKey}mydestinationKey")
+
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), result.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestSortStoreWithOptions_DescendingOrder() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := "{key}" + uuid.New().String()
+		sortedKey := "{key}" + uuid.New().String()
+		client.LPush(key, []string{"30", "20", "10", "40", "50"})
+
+		options := api.NewSortOptions().SetOrderBy(api.DESC).SetIsAlpha(false)
+		result, err := client.SortStoreWithOptions(key, sortedKey, options)
+
+		assert.Nil(suite.T(), err)
+		assert.NotNil(suite.T(), result)
+		assert.Equal(suite.T(), int64(5), result.Value())
+
+		sortedValues, err := client.LRange(sortedKey, 0, -1)
+		resultList := []api.Result[string]{
+			api.CreateStringResult("50"),
+			api.CreateStringResult("40"),
+			api.CreateStringResult("30"),
+			api.CreateStringResult("20"),
+			api.CreateStringResult("10"),
+		}
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), resultList, sortedValues)
+	})
+}
+
+func (suite *GlideTestSuite) TestSortStoreWithOptions_AlphaSorting() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := "{listKey}" + uuid.New().String()
+		sortedKey := "{listKey}" + uuid.New().String()
+		client.LPush(key, []string{"apple", "banana", "cherry", "date", "elderberry"})
+
+		options := api.NewSortOptions().SetIsAlpha(true)
+		result, err := client.SortStoreWithOptions(key, sortedKey, options)
+
+		assert.Nil(suite.T(), err)
+		assert.NotNil(suite.T(), result)
+		assert.Equal(suite.T(), int64(5), result.Value())
+
+		sortedValues, err := client.LRange(sortedKey, 0, -1)
+		resultList := []api.Result[string]{
+			api.CreateStringResult("apple"),
+			api.CreateStringResult("banana"),
+			api.CreateStringResult("cherry"),
+			api.CreateStringResult("date"),
+			api.CreateStringResult("elderberry"),
+		}
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), resultList, sortedValues)
+	})
+}
+
+func (suite *GlideTestSuite) TestSortStoreWithOptions_Limit() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := "{listKey}" + uuid.New().String()
+		sortedKey := "{listKey}" + uuid.New().String()
+		client.LPush(key, []string{"10", "20", "30", "40", "50"})
+
+		options := api.NewSortOptions().SetLimit(1, 3)
+		result, err := client.SortStoreWithOptions(key, sortedKey, options)
+
+		assert.Nil(suite.T(), err)
+		assert.NotNil(suite.T(), result)
+		assert.Equal(suite.T(), int64(3), result.Value())
+
+		sortedValues, err := client.LRange(sortedKey, 0, -1)
+		resultList := []api.Result[string]{
+			api.CreateStringResult("20"),
+			api.CreateStringResult("30"),
+			api.CreateStringResult("40"),
+		}
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), resultList, sortedValues)
+	})
+}
+
+func (suite *GlideTestSuite) TestSortReadOnly_SuccessfulSort() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.LPush(key, []string{"3", "1", "2"})
+
+		sortResult, err := client.SortReadOnly(key)
+
+		assert.Nil(suite.T(), err)
+
+		resultList := []api.Result[string]{
+			api.CreateStringResult("1"),
+			api.CreateStringResult("2"),
+			api.CreateStringResult("3"),
+		}
+
+		assert.Equal(suite.T(), resultList, sortResult)
+	})
+}
+
+func (suite *GlideTestSuite) TestSortReadyOnlyWithOptions_DescendingOrder() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.LPush(key, []string{"b", "a", "c"})
+
+		options := api.NewSortOptions().
+			SetOrderBy(api.DESC).
+			SetIsAlpha(true).
+			SetLimit(0, 3)
+
+		sortResult, err := client.SortReadOnlyWithOptions(key, options)
+
+		assert.Nil(suite.T(), err)
+
+		resultList := []api.Result[string]{
+			api.CreateStringResult("c"),
+			api.CreateStringResult("b"),
+			api.CreateStringResult("a"),
+		}
+		assert.Equal(suite.T(), resultList, sortResult)
+	})
+}
+
 func (suite *GlideTestSuite) TestBLMove() {
 	if suite.serverVersion < "6.2.0" {
 		suite.T().Skip("This feature is added in version 6.2.0")

@@ -314,6 +314,178 @@ type GenericBaseCommands interface {
 	// [valkey.io]: https://valkey.io/commands/pttl/
 	PTTL(key string) (Result[int64], error)
 
+	// Sorts the elements in the list, set, or sorted set at key and returns the result.
+	// The sort command can be used to sort elements based on different criteria and apply
+	// transformations on sorted elements.
+	// To store the result into a new key, see {@link #sortStore(string, string)}.
+	//
+	// Parameters:
+	// key - The key of the list, set, or sorted set to be sorted.
+	//
+	// Return value:
+	// An Array of sorted elements.
+	//
+	// Example:
+	//
+	// result, err := client.Sort("key")
+	// result.Value(): [{1 false} {2 false} {3 false}]
+	// result.IsNil(): false
+	//
+	// [valkey.io]: https://valkey.io/commands/sort/
+	Sort(key string) ([]Result[string], error)
+
+	// Sorts the elements in the list, set, or sorted set at key and returns the result.
+	// The sort command can be used to sort elements based on different criteria and apply
+	// transformations on sorted elements.
+	// To store the result into a new key, see {@link #sortStore(string, string)}.
+	//
+	// Note:
+	//  In cluster mode, if keys in `keyValueMap` map to different hash slots, the command
+	//  will be split across these slots and executed separately for each. This means the command
+	//  is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+	//  call will return the first encountered error, even though some requests may have succeeded
+	//  while others did not. If this behavior impacts your application logic, consider splitting
+	//  the request into sub-requests per slot to ensure atomicity.
+	//  The use of {@link SortOptions#byPattern} and {@link SortOptions#getPatterns} in cluster mode is
+	//  supported since Valkey version 8.0.
+	//
+	// Parameters:
+	// key - The key of the list, set, or sorted set to be sorted.
+	// sortOptions- The {@link SortOptions}.
+	//
+	// Return value:
+	// An Array of sorted elements.
+	//
+	// Example:
+	//
+	// options := api.NewSortOptions().SetByPattern("weight_*").SetIsAlpha(false).AddGetPattern("object_*").AddGetPattern("#")
+	// result, err := client.Sort("key", options)
+	// result.Value(): [{Object_3 false} {c false} {Object_1 false} {a false} {Object_2 false} {b false}]
+	// result.IsNil(): false
+	//
+	// [valkey.io]: https://valkey.io/commands/sort/
+	SortWithOptions(key string, sortOptions *SortOptions) ([]Result[string], error)
+
+	// Sorts the elements in the list, set, or sorted set at key and stores the result in
+	// destination. The sort command can be used to sort elements based on
+	// different criteria, apply transformations on sorted elements, and store the result in a new key.
+	// The sort command can be used to sort elements based on different criteria and apply
+	// transformations on sorted elements.
+	// To get the sort result without storing it into a key, see {@link #sort(String)} or {@link #sortReadOnly(String)}.
+	//
+	// Note:
+	//  In cluster mode, if keys in `keyValueMap` map to different hash slots, the command
+	//  will be split across these slots and executed separately for each. This means the command
+	//  is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+	//  call will return the first encountered error, even though some requests may have succeeded
+	//  while others did not. If this behavior impacts your application logic, consider splitting
+	//  the request into sub-requests per slot to ensure atomicity.
+	//
+	// Parameters:
+	// key - The key of the list, set, or sorted set to be sorted.
+	// destination - The key where the sorted result will be stored.
+	//
+	// Return value:
+	// The number of elements in the sorted key stored at destination.
+	//
+	// Example:
+	//
+	// result, err := client.SortStore("key","destkey")
+	// result.Value(): 1
+	// result.IsNil(): false
+	//
+	// [valkey.io]: https://valkey.io/commands/sort/
+	SortStore(key string, destination string) (Result[int64], error)
+
+	// Sorts the elements in the list, set, or sorted set at key and stores the result in
+	// destination. The sort command can be used to sort elements based on
+	// different criteria, apply transformations on sorted elements, and store the result in a new key.
+	// The sort command can be used to sort elements based on different criteria and apply
+	// transformations on sorted elements.
+	// To get the sort result without storing it into a key, see {@link #sort(String)} or {@link #sortReadOnly(String)}.
+	//
+	// Note:
+	//  In cluster mode, if keys in `keyValueMap` map to different hash slots, the command
+	//  will be split across these slots and executed separately for each. This means the command
+	//  is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+	//  call will return the first encountered error, even though some requests may have succeeded
+	//  while others did not. If this behavior impacts your application logic, consider splitting
+	//  the request into sub-requests per slot to ensure atomicity.
+	//  The use of {@link SortOptions#byPattern} and {@link SortOptions#getPatterns}
+	//  in cluster mode is supported since Valkey version 8.0.
+	//
+	// Parameters:
+	// key - The key of the list, set, or sorted set to be sorted.
+	// destination - The key where the sorted result will be stored.
+	// sortOptions- The {@link SortOptions}.
+	//
+	// Return value:
+	// The number of elements in the sorted key stored at destination.
+	//
+	// Example:
+	//
+	// options := api.NewSortOptions().SetByPattern("weight_*").SetIsAlpha(false).AddGetPattern("object_*").AddGetPattern("#")
+	// result, err := client.SortStore("key","destkey",options)
+	// result.Value(): 1
+	// result.IsNil(): false
+	//
+	// [valkey.io]: https://valkey.io/commands/sort/
+	SortStoreWithOptions(key string, destination string, sortOptions *SortOptions) (Result[int64], error)
+
+	// Sorts the elements in the list, set, or sorted set at key and returns the result.
+	// The sortReadOnly command can be used to sort elements based on different criteria and apply
+	// transformations on sorted elements.
+	// This command is routed depending on the client's {@link ReadFrom} strategy.
+	//
+	// Parameters:
+	// key - The key of the list, set, or sorted set to be sorted.
+	//
+	// Return value:
+	// An Array of sorted elements.
+	//
+	// Example:
+	//
+	// result, err := client.SortReadOnly("key")
+	// result.Value(): [{1 false} {2 false} {3 false}]
+	// result.IsNil(): false
+	//
+	// [valkey.io]: https://valkey.io/commands/sort/
+	SortReadOnly(key string) ([]Result[string], error)
+
+	// Sorts the elements in the list, set, or sorted set at key and returns the result.
+	// The sort command can be used to sort elements based on different criteria and apply
+	// transformations on sorted elements.
+	// This command is routed depending on the client's {@link ReadFrom} strategy.
+	//
+	// Note:
+	//  In cluster mode, if keys in `keyValueMap` map to different hash slots, the command
+	//  will be split across these slots and executed separately for each. This means the command
+	//  is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+	//  call will return the first encountered error, even though some requests may have succeeded
+	//  while others did not. If this behavior impacts your application logic, consider splitting
+	//  the request into sub-requests per slot to ensure atomicity.
+	//  The use of {@link SortOptions#byPattern} and {@link SortOptions#getPatterns} in cluster mode is
+	//  supported since Valkey version 8.0.
+	//  The use of {@link SortOptions#byPattern} and {@link SortOptions#getPatterns} in cluster mode is
+	//  supported since Valkey version 8.0.
+	//
+	// Parameters:
+	// key - The key of the list, set, or sorted set to be sorted.
+	// sortOptions- The {@link SortOptions}.
+	//
+	// Return value:
+	// An Array of sorted elements.
+	//
+	// Example:
+	//
+	// options := api.NewSortOptions().SetByPattern("weight_*").SetIsAlpha(false).AddGetPattern("object_*").AddGetPattern("#")
+	// result, err := client.SortReadOnly("key", options)
+	// result.Value(): [{Object_3 false} {c false} {Object_1 false} {a false} {Object_2 false} {b false}]
+	// result.IsNil(): false
+	//
+	// [valkey.io]: https://valkey.io/commands/sort/
+	SortReadOnlyWithOptions(key string, sortOptions *SortOptions) ([]Result[string], error)
+
 	// Unlink (delete) multiple keys from the database. A key is ignored if it does not exist.
 	// This command, similar to Del However, this command does not block the server
 	//
