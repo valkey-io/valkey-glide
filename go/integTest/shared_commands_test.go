@@ -3799,6 +3799,7 @@ func (suite *GlideTestSuite) TestSortStoreWithOptions_Limit() {
 }
 
 func (suite *GlideTestSuite) TestSortReadOnly_SuccessfulSort() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		client.LPush(key, []string{"3", "1", "2"})
@@ -3818,6 +3819,7 @@ func (suite *GlideTestSuite) TestSortReadOnly_SuccessfulSort() {
 }
 
 func (suite *GlideTestSuite) TestSortReadyOnlyWithOptions_DescendingOrder() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		client.LPush(key, []string{"b", "a", "c"})
