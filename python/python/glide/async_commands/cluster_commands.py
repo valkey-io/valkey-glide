@@ -68,6 +68,8 @@ class ClusterCommands(CoreCommands):
             information to retrieve. When no parameter is provided, the default option is assumed.
             route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided, in which
             case the client will route the command to the nodes defined by `route`. Defaults to None.
+            When `route` is set to `allNodes`, the `INFO` command may return partial data, as the response from each node
+            might be incomplete due to factors like network conditions or node load. This can lead to varying results across different executions.
 
         Returns:
             TClusterResponse[bytes]: If a single node route is requested, returns a bytes string containing the information for
