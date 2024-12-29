@@ -16,8 +16,8 @@ In the current release, Valkey GLIDE is available for Python, Java and Node.js. 
 - Vector Similarity Search and JSON modules support
 - Availability zone routing for Read from Replica
 
-#### v1.3 (TBD)
-- GO support
+#### v1.3 (Feb. 2025)
+- Public preview for GO support
 - Observability with Open Telemetry
 - Client side metrics
 
