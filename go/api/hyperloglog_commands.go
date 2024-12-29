@@ -2,10 +2,11 @@
 
 package api
 
-// HyperLogLogCommands defines an interface for the "HyperLogLog Commands" group of commands for standalone and cluster
-// clients.
+// Supports commands and transactions for the "HyperLogLog" group of commands for standalone and cluster clients.
 //
-// [valkey.io]: https://valkey.io/commands/?group=string#hyperloglog
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/#hyperloglog
 type HyperLogLogCommands interface {
 	// PfAdd adds all elements to the HyperLogLog data structure stored at the specified key.
 	// Creates a new structure if the key does not exist.
