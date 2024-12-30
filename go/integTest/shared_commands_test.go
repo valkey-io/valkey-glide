@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/glide/api"
+	"github.com/valkey-io/valkey-glide/go/glide/api/options"
 )
 
 const (
@@ -1036,6 +1037,72 @@ func (suite *GlideTestSuite) TestHStrLen_WithNotExistingField() {
 		res2, err := client.HStrLen(key, "field3")
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(0), res2.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestHIncrBy_WithExistingField() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		field := uuid.NewString()
+		fieldValueMap := map[string]string{field: "10"}
+
+		hsetResult, err := client.HSet(key, fieldValueMap)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), hsetResult.Value())
+
+		hincrByResult, hincrByErr := client.HIncrBy(key, field, 1)
+		assert.Nil(suite.T(), hincrByErr)
+		assert.Equal(suite.T(), int64(11), hincrByResult.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestHIncrBy_WithNonExistingField() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		field := uuid.NewString()
+		field2 := uuid.NewString()
+		fieldValueMap := map[string]string{field2: "1"}
+
+		hsetResult, err := client.HSet(key, fieldValueMap)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), hsetResult.Value())
+
+		hincrByResult, hincrByErr := client.HIncrBy(key, field, 2)
+		assert.Nil(suite.T(), hincrByErr)
+		assert.Equal(suite.T(), int64(2), hincrByResult.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestHIncrByFloat_WithExistingField() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		field := uuid.NewString()
+		fieldValueMap := map[string]string{field: "10"}
+
+		hsetResult, err := client.HSet(key, fieldValueMap)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), hsetResult.Value())
+
+		hincrByFloatResult, hincrByFloatErr := client.HIncrByFloat(key, field, 1.5)
+		assert.Nil(suite.T(), hincrByFloatErr)
+		assert.Equal(suite.T(), float64(11.5), hincrByFloatResult.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestHIncrByFloat_WithNonExistingField() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		field := uuid.NewString()
+		field2 := uuid.NewString()
+		fieldValueMap := map[string]string{field2: "1"}
+
+		hsetResult, err := client.HSet(key, fieldValueMap)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), hsetResult.Value())
+
+		hincrByFloatResult, hincrByFloatErr := client.HIncrByFloat(key, field, 1.5)
+		assert.Nil(suite.T(), hincrByFloatErr)
+		assert.Equal(suite.T(), float64(1.5), hincrByFloatResult.Value())
 	})
 }
 
@@ -3824,7 +3891,7 @@ func (suite *GlideTestSuite) TestUnlink() {
 	})
 }
 
-func (suite *GlideTestSuite) Test_Rename() {
+func (suite *GlideTestSuite) TestRename() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		// Test 1 Check if the command successfully renamed
 		key := "{keyName}" + uuid.NewString()
@@ -3860,5 +3927,255 @@ func (suite *GlideTestSuite) TestRenamenx() {
 		res2, err := client.Renamenx(key3, key4)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), false, res2.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestXAdd() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		// stream does not exist
+		res, err := client.XAdd(key, [][]string{{"field1", "value1"}, {"field1", "value2"}})
+		assert.Nil(suite.T(), err)
+		assert.False(suite.T(), res.IsNil())
+		// don't check the value, because it contains server's timestamp
+
+		// adding data to existing stream
+		res, err = client.XAdd(key, [][]string{{"field3", "value3"}})
+		assert.Nil(suite.T(), err)
+		assert.False(suite.T(), res.IsNil())
+
+		// incorrect input
+		_, err = client.XAdd(key, [][]string{})
+		assert.NotNil(suite.T(), err)
+		_, err = client.XAdd(key, [][]string{{"1", "2", "3"}})
+		assert.NotNil(suite.T(), err)
+
+		// key is not a string
+		key = uuid.NewString()
+		client.Set(key, "abc")
+		_, err = client.XAdd(key, [][]string{{"f", "v"}})
+		assert.NotNil(suite.T(), err)
+	})
+}
+
+func (suite *GlideTestSuite) TestXAddWithOptions() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		// stream does not exist
+		res, err := client.XAddWithOptions(
+			key,
+			[][]string{{"field1", "value1"}},
+			options.NewXAddOptions().SetDontMakeNewStream(),
+		)
+		assert.Nil(suite.T(), err)
+		assert.True(suite.T(), res.IsNil())
+
+		// adding data to with given ID
+		res, err = client.XAddWithOptions(key, [][]string{{"field1", "value1"}}, options.NewXAddOptions().SetId("0-1"))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "0-1", res.Value())
+
+		client.XAdd(key, [][]string{{"field2", "value2"}})
+		// TODO run XLen there
+		// this will trim the first entry.
+		res, err = client.XAddWithOptions(
+			key,
+			[][]string{{"field3", "value3"}},
+			options.NewXAddOptions().SetTrimOptions(options.NewXTrimOptionsWithMaxLen(2).SetExactTrimming()),
+		)
+		assert.Nil(suite.T(), err)
+		assert.False(suite.T(), res.IsNil())
+		// TODO run XLen there
+	})
+}
+
+func (suite *GlideTestSuite) TestZAddAndZAddIncr() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		key2 := uuid.New().String()
+		key3 := uuid.New().String()
+		key4 := uuid.New().String()
+		membersScoreMap := map[string]float64{
+			"one":   1.0,
+			"two":   2.0,
+			"three": 3.0,
+		}
+		t := suite.T()
+
+		res, err := client.ZAdd(key, membersScoreMap)
+		assert.Nil(t, err)
+		assert.Equal(t, int64(3), res.Value())
+
+		resIncr, err := client.ZAddIncr(key, "one", float64(2))
+		assert.Nil(t, err)
+		assert.Equal(t, float64(3), resIncr.Value())
+
+		// exceptions
+		// non-sortedset key
+		_, err = client.Set(key2, "test")
+		assert.NoError(t, err)
+
+		_, err = client.ZAdd(key2, membersScoreMap)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		// wrong key type for zaddincr
+		_, err = client.ZAddIncr(key2, "one", float64(2))
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		// with NX & XX
+		onlyIfExistsOpts := options.NewZAddOptionsBuilder().SetConditionalChange(options.OnlyIfExists)
+		onlyIfDoesNotExistOpts := options.NewZAddOptionsBuilder().SetConditionalChange(options.OnlyIfDoesNotExist)
+
+		res, err = client.ZAddWithOptions(key3, membersScoreMap, onlyIfExistsOpts)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res.Value())
+
+		res, err = client.ZAddWithOptions(key3, membersScoreMap, onlyIfDoesNotExistOpts)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res.Value())
+
+		resIncr, err = client.ZAddIncrWithOptions(key3, "one", 5, onlyIfDoesNotExistOpts)
+		assert.NotNil(suite.T(), err)
+		assert.True(suite.T(), resIncr.IsNil())
+
+		resIncr, err = client.ZAddIncrWithOptions(key3, "one", 5, onlyIfExistsOpts)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), float64(6), resIncr.Value())
+
+		// with GT or LT
+		membersScoreMap2 := map[string]float64{
+			"one":   -3.0,
+			"two":   2.0,
+			"three": 3.0,
+		}
+
+		res, err = client.ZAdd(key4, membersScoreMap2)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res.Value())
+
+		membersScoreMap2["one"] = 10.0
+
+		gtOpts := options.NewZAddOptionsBuilder().SetUpdateOptions(options.ScoreGreaterThanCurrent)
+		ltOpts := options.NewZAddOptionsBuilder().SetUpdateOptions(options.ScoreLessThanCurrent)
+		gtOptsChanged, _ := options.NewZAddOptionsBuilder().SetUpdateOptions(options.ScoreGreaterThanCurrent).SetChanged(true)
+		ltOptsChanged, _ := options.NewZAddOptionsBuilder().SetUpdateOptions(options.ScoreLessThanCurrent).SetChanged(true)
+
+		res, err = client.ZAddWithOptions(key4, membersScoreMap2, gtOptsChanged)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res.Value())
+
+		res, err = client.ZAddWithOptions(key4, membersScoreMap2, ltOptsChanged)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res.Value())
+
+		resIncr, err = client.ZAddIncrWithOptions(key4, "one", -3, ltOpts)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), float64(7), resIncr.Value())
+
+		resIncr, err = client.ZAddIncrWithOptions(key4, "one", -3, gtOpts)
+		assert.NotNil(suite.T(), err)
+		assert.True(suite.T(), resIncr.IsNil())
+	})
+}
+
+func (suite *GlideTestSuite) TestZincrBy() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.New().String()
+		key2 := uuid.New().String()
+
+		// key does not exist
+		res1, err := client.ZIncrBy(key1, 2.5, "value1")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), 2.5, res1.Value())
+
+		// key exists, but value doesn't
+		res2, err := client.ZIncrBy(key1, -3.3, "value2")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), -3.3, res2.Value())
+
+		// updating existing value in existing key
+		res3, err := client.ZIncrBy(key1, 1.0, "value1")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), 3.5, res3.Value())
+
+		// Key exists, but it is not a sorted set
+		res4, err := client.SAdd(key2, []string{"one", "two"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res4.Value())
+
+		_, err = client.ZIncrBy(key2, 0.5, "_")
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestZPopMin() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.New().String()
+		key2 := uuid.New().String()
+		memberScoreMap := map[string]float64{
+			"one":   1.0,
+			"two":   2.0,
+			"three": 3.0,
+		}
+
+		res, err := client.ZAdd(key1, memberScoreMap)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res.Value())
+
+		res2, err := client.ZPopMin(key1)
+		assert.Nil(suite.T(), err)
+		assert.Len(suite.T(), res2, 1)
+		assert.Equal(suite.T(), float64(1.0), res2[api.CreateStringResult("one")].Value())
+
+		res3, err := client.ZPopMinWithCount(key1, 2)
+		assert.Nil(suite.T(), err)
+		assert.Len(suite.T(), res3, 2)
+		assert.Equal(suite.T(), float64(2.0), res3[api.CreateStringResult("two")].Value())
+		assert.Equal(suite.T(), float64(3.0), res3[api.CreateStringResult("three")].Value())
+
+		// non sorted set key
+		_, err = client.Set(key2, "test")
+		assert.Nil(suite.T(), err)
+
+		_, err = client.ZPopMin(key2)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestZPopMax() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.New().String()
+		key2 := uuid.New().String()
+		memberScoreMap := map[string]float64{
+			"one":   1.0,
+			"two":   2.0,
+			"three": 3.0,
+		}
+		res, err := client.ZAdd(key1, memberScoreMap)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res.Value())
+
+		res2, err := client.ZPopMax(key1)
+		assert.Nil(suite.T(), err)
+		assert.Len(suite.T(), res2, 1)
+		assert.Equal(suite.T(), float64(3.0), res2[api.CreateStringResult("three")].Value())
+
+		res3, err := client.ZPopMaxWithCount(key1, 2)
+		assert.Nil(suite.T(), err)
+		assert.Len(suite.T(), res3, 2)
+		assert.Equal(suite.T(), float64(2.0), res3[api.CreateStringResult("two")].Value())
+		assert.Equal(suite.T(), float64(1.0), res3[api.CreateStringResult("one")].Value())
+
+		// non sorted set key
+		_, err = client.Set(key2, "test")
+		assert.Nil(suite.T(), err)
+
+		_, err = client.ZPopMax(key2)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
 }
