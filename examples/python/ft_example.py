@@ -10,7 +10,7 @@ import uuid
 from glide import (
     AllNodes,
     ClosingError,
-    ConnectionError,
+    ConnectionError as GlideConnectionError,
     GlideClusterClient,
     GlideClusterClientConfiguration,
     InfoSection,
@@ -18,7 +18,7 @@ from glide import (
     LogLevel,
     NodeAddress,
     RequestError,
-    TimeoutError,
+    TimeoutError as GlideTimeoutError,
 )
 
 from glide.async_commands.server_modules.ft_options.ft_create_options import (
@@ -141,11 +141,11 @@ async def exec_app_logic():
                     f"Client has closed and needs to be re-created: {e}",
                 )
             raise e
-        except TimeoutError as e:
+        except GlideTimeoutError as e:
             # A request timed out. You may choose to retry the execution based on your application's logic
             Logger.log(LogLevel.ERROR, "glide", f"TimeoutError encountered: {e}")
             raise e
-        except ConnectionError as e:
+        except GlideConnectionError as e:
             # The client wasn't able to reestablish the connection within the given retries
             Logger.log(LogLevel.ERROR, "glide", f"ConnectionError encountered: {e}")
             raise e

@@ -11,10 +11,12 @@ import "C"
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"strconv"
 	"unsafe"
 
+	"github.com/valkey-io/valkey-glide/go/glide/api/options"
 	"github.com/valkey-io/valkey-glide/go/glide/protobuf"
 	"github.com/valkey-io/valkey-glide/go/glide/utils"
 	"google.golang.org/protobuf/proto"
@@ -26,6 +28,8 @@ type BaseClient interface {
 	HashCommands
 	ListCommands
 	SetCommands
+	StreamCommands
+	SortedSetCommands
 	ConnectionManagementCommands
 	GenericBaseCommands
 	// Close terminates the client by closing all associated resources.
@@ -103,10 +107,17 @@ func (client *baseClient) Close() {
 }
 
 func (client *baseClient) executeCommand(requestType C.RequestType, args []string) (*C.struct_CommandResponse, error) {
+	return client.executeCommandWithRoute(requestType, args, nil)
+}
+
+func (client *baseClient) executeCommandWithRoute(
+	requestType C.RequestType,
+	args []string,
+	route route,
+) (*C.struct_CommandResponse, error) {
 	if client.coreClient == nil {
 		return nil, &ClosingError{"ExecuteCommand failed. The client is closed."}
 	}
-
 	var cArgsPtr *C.uintptr_t = nil
 	var argLengthsPtr *C.ulong = nil
 	if len(args) > 0 {
@@ -118,6 +129,22 @@ func (client *baseClient) executeCommand(requestType C.RequestType, args []strin
 	resultChannel := make(chan payload)
 	resultChannelPtr := uintptr(unsafe.Pointer(&resultChannel))
 
+	var routeBytesPtr *C.uchar = nil
+	var routeBytesCount C.uintptr_t = 0
+	if route != nil {
+		routeProto, err := route.toRoutesProtobuf()
+		if err != nil {
+			return nil, &RequestError{"ExecuteCommand failed due to invalid route"}
+		}
+		msg, err := proto.Marshal(routeProto)
+		if err != nil {
+			return nil, err
+		}
+
+		routeBytesCount = C.uintptr_t(len(msg))
+		routeBytesPtr = (*C.uchar)(C.CBytes(msg))
+	}
+
 	C.command(
 		client.coreClient,
 		C.uintptr_t(resultChannelPtr),
@@ -125,6 +152,8 @@ func (client *baseClient) executeCommand(requestType C.RequestType, args []strin
 		C.size_t(len(args)),
 		cArgsPtr,
 		argLengthsPtr,
+		routeBytesPtr,
+		routeBytesCount,
 	)
 	payload := <-resultChannel
 	if payload.error != nil {
@@ -436,6 +465,24 @@ func (client *baseClient) HStrLen(key string, field string) (Result[int64], erro
 	return handleLongResponse(result)
 }
 
+func (client *baseClient) HIncrBy(key string, field string, increment int64) (Result[int64], error) {
+	result, err := client.executeCommand(C.HIncrBy, []string{key, field, utils.IntToString(increment)})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) HIncrByFloat(key string, field string, increment float64) (Result[float64], error) {
+	result, err := client.executeCommand(C.HIncrByFloat, []string{key, field, utils.FloatToString(increment)})
+	if err != nil {
+		return CreateNilFloat64Result(), err
+	}
+
+	return handleDoubleResponse(result)
+}
+
 func (client *baseClient) LPush(key string, elements []string) (Result[int64], error) {
 	result, err := client.executeCommand(C.LPush, append([]string{key}, elements...))
 	if err != nil {
@@ -662,6 +709,39 @@ func (client *baseClient) SUnion(keys []string) (map[Result[string]]struct{}, er
 	return handleStringSetResponse(result)
 }
 
+func (client *baseClient) SScan(key string, cursor string) (Result[string], []Result[string], error) {
+	result, err := client.executeCommand(C.SScan, []string{key, cursor})
+	if err != nil {
+		return CreateNilStringResult(), nil, err
+	}
+	return handleScanResponse(result)
+}
+
+func (client *baseClient) SScanWithOptions(
+	key string,
+	cursor string,
+	options *BaseScanOptions,
+) (Result[string], []Result[string], error) {
+	optionArgs, err := options.toArgs()
+	if err != nil {
+		return CreateNilStringResult(), nil, err
+	}
+
+	result, err := client.executeCommand(C.SScan, append([]string{key, cursor}, optionArgs...))
+	if err != nil {
+		return CreateNilStringResult(), nil, err
+	}
+	return handleScanResponse(result)
+}
+
+func (client *baseClient) SMove(source string, destination string, member string) (Result[bool], error) {
+	result, err := client.executeCommand(C.SMove, []string{source, destination, member})
+	if err != nil {
+		return CreateNilBoolResult(), err
+	}
+	return handleBooleanResponse(result)
+}
+
 func (client *baseClient) LRange(key string, start int64, end int64) ([]Result[string], error) {
 	result, err := client.executeCommand(C.LRange, []string{key, utils.IntToString(start), utils.IntToString(end)})
 	if err != nil {
@@ -736,7 +816,10 @@ func (client *baseClient) LInsert(
 		return CreateNilInt64Result(), err
 	}
 
-	result, err := client.executeCommand(C.LInsert, []string{key, insertPositionStr, pivot, element})
+	result, err := client.executeCommand(
+		C.LInsert,
+		[]string{key, insertPositionStr, pivot, element},
+	)
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}
@@ -1154,6 +1237,173 @@ func (client *baseClient) Touch(keys []string) (Result[int64], error) {
 	}
 
 	return handleLongResponse(result)
+}
+
+func (client *baseClient) Rename(key string, newKey string) (Result[string], error) {
+	result, err := client.executeCommand(C.Rename, []string{key, newKey})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNullResponse(result)
+}
+
+func (client *baseClient) Renamenx(key string, newKey string) (Result[bool], error) {
+	result, err := client.executeCommand(C.RenameNX, []string{key, newKey})
+	if err != nil {
+		return CreateNilBoolResult(), err
+	}
+	return handleBooleanResponse(result)
+}
+
+func (client *baseClient) XAdd(key string, values [][]string) (Result[string], error) {
+	return client.XAddWithOptions(key, values, options.NewXAddOptions())
+}
+
+func (client *baseClient) XAddWithOptions(
+	key string,
+	values [][]string,
+	options *options.XAddOptions,
+) (Result[string], error) {
+	args := []string{}
+	args = append(args, key)
+	optionArgs, err := options.ToArgs()
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	args = append(args, optionArgs...)
+	for _, pair := range values {
+		if len(pair) != 2 {
+			return CreateNilStringResult(), fmt.Errorf(
+				"array entry had the wrong length. Expected length 2 but got length %d",
+				len(pair),
+			)
+		}
+		args = append(args, pair...)
+	}
+
+	result, err := client.executeCommand(C.XAdd, args)
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNullResponse(result)
+}
+
+func (client *baseClient) ZAdd(
+	key string,
+	membersScoreMap map[string]float64,
+) (Result[int64], error) {
+	result, err := client.executeCommand(
+		C.ZAdd,
+		append([]string{key}, utils.ConvertMapToValueKeyStringArray(membersScoreMap)...),
+	)
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) ZAddWithOptions(
+	key string,
+	membersScoreMap map[string]float64,
+	opts *options.ZAddOptions,
+) (Result[int64], error) {
+	optionArgs, err := opts.ToArgs()
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+	commandArgs := append([]string{key}, optionArgs...)
+	result, err := client.executeCommand(
+		C.ZAdd,
+		append(commandArgs, utils.ConvertMapToValueKeyStringArray(membersScoreMap)...),
+	)
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) zAddIncrBase(key string, opts *options.ZAddOptions) (Result[float64], error) {
+	optionArgs, err := opts.ToArgs()
+	if err != nil {
+		return CreateNilFloat64Result(), err
+	}
+
+	result, err := client.executeCommand(C.ZAdd, append([]string{key}, optionArgs...))
+	if err != nil {
+		return CreateNilFloat64Result(), err
+	}
+
+	return handleDoubleResponse(result)
+}
+
+func (client *baseClient) ZAddIncr(
+	key string,
+	member string,
+	increment float64,
+) (Result[float64], error) {
+	options, err := options.NewZAddOptionsBuilder().SetIncr(true, increment, member)
+	if err != nil {
+		return CreateNilFloat64Result(), err
+	}
+
+	return client.zAddIncrBase(key, options)
+}
+
+func (client *baseClient) ZAddIncrWithOptions(
+	key string,
+	member string,
+	increment float64,
+	opts *options.ZAddOptions,
+) (Result[float64], error) {
+	incrOpts, err := opts.SetIncr(true, increment, member)
+	if err != nil {
+		return CreateNilFloat64Result(), err
+	}
+
+	return client.zAddIncrBase(key, incrOpts)
+}
+
+func (client *baseClient) ZIncrBy(key string, increment float64, member string) (Result[float64], error) {
+	result, err := client.executeCommand(C.ZIncrBy, []string{key, utils.FloatToString(increment), member})
+	if err != nil {
+		return CreateNilFloat64Result(), err
+	}
+
+	return handleDoubleResponse(result)
+}
+
+func (client *baseClient) ZPopMin(key string) (map[Result[string]]Result[float64], error) {
+	result, err := client.executeCommand(C.ZPopMin, []string{key})
+	if err != nil {
+		return nil, err
+	}
+	return handleStringDoubleMapResponse(result)
+}
+
+func (client *baseClient) ZPopMinWithCount(key string, count int64) (map[Result[string]]Result[float64], error) {
+	result, err := client.executeCommand(C.ZPopMin, []string{key, utils.IntToString(count)})
+	if err != nil {
+		return nil, err
+	}
+	return handleStringDoubleMapResponse(result)
+}
+
+func (client *baseClient) ZPopMax(key string) (map[Result[string]]Result[float64], error) {
+	result, err := client.executeCommand(C.ZPopMax, []string{key})
+	if err != nil {
+		return nil, err
+	}
+	return handleStringDoubleMapResponse(result)
+}
+
+func (client *baseClient) ZPopMaxWithCount(key string, count int64) (map[Result[string]]Result[float64], error) {
+	result, err := client.executeCommand(C.ZPopMax, []string{key, utils.IntToString(count)})
+	if err != nil {
+		return nil, err
+	}
+	return handleStringDoubleMapResponse(result)
 }
 
 func (client *baseClient) Persist(key string) (Result[bool], error) {

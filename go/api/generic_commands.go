@@ -386,8 +386,53 @@ type GenericBaseCommands interface {
 	// [valkey.io]: Https://valkey.io/commands/type/
 	Type(key string) (Result[string], error)
 
+	// Renames key to new key.
+	//  If new Key already exists it is overwritten.
+	//
+	// Note:
+	//  When in cluster mode, both key and newKey must map to the same hash slot.
+	//
+	// Parameters:
+	//  key to rename.
+	//  newKey The new name of the key.
+	//
+	// Return value:
+	// If the key was successfully renamed, return "OK". If key does not exist, an error is thrown.
+	//
+	// Example:
+	//  result, err := client.Rename([]string{"key","newkey"})
+	//	if err != nil {
+	//	    // handle error
+	//	}
+	//	fmt.Println(result.Value()) // Output: OK
+	//
+	// [valkey.io]: https://valkey.io/commands/rename/
+	Rename(key string, newKey string) (Result[string], error)
+
+	// Renames key to newkey if newKey does not yet exist.
+	//
+	// Note:
+	//  When in cluster mode, both key and newkey must map to the same hash slot.
+	//
+	// Parameters:
+	//  key to rename.
+	//  newKey The new name of the key.
+	//
+	// Return value:
+	// true if key was renamed to newKey, false if newKey already exists.
+	//
+	// Example:
+	//  result, err := client.Renamenx([]string{"key","newkey"})
+	//	if err != nil {
+	//	    // handle error
+	//	}
+	//	fmt.Println(result.Value()) // Output: OK
+	//
+	// [valkey.io]: https://valkey.io/commands/renamenx/
+	Renamenx(key string, newKey string) (Result[bool], error)
+
 	// Removes the existing timeout on key, turning the key from volatile
-	// (a key with an expire set) to persis tent (a key that will never expire as no timeout is associated).
+	// (a key with an expire set) to persistent (a key that will never expire as no timeout is associated).
 	//
 	// Parameters:
 	//  The key to remove the existing timeout on.
