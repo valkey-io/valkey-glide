@@ -738,20 +738,4 @@ type ConnectionManagementCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/ping/
 	PingWithMessage(message string) (string, error)
-
-	// Select changes the currently selected database.
-	//
-	// Parameters:
-	//  index - The index of the database to select.
-	//
-	// Return value:
-	//  A simple OK response.
-	//
-	// Example:
-	//  result, err := client.Select(2)
-	//  result.Value() : "OK"
-	//  result.IsNil() : false
-	//
-	// [valkey.io]: https://valkey.io/commands/select/
-	Select(index int64) (Result[string], error)
 }

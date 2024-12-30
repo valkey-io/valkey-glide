@@ -1182,15 +1182,6 @@ func (client *baseClient) PfCount(keys []string) (Result[int64], error) {
 	return handleLongResponse(result)
 }
 
-func (client *baseClient) Select(index int64) (Result[string], error) {
-	result, err := client.executeCommand(C.Select, []string{utils.IntToString(index)})
-	if err != nil {
-		return CreateNilStringResult(), err
-	}
-
-	return handleStringResponse(result)
-}
-
 func (client *baseClient) Unlink(keys []string) (Result[int64], error) {
 	result, err := client.executeCommand(C.Unlink, keys)
 	if err != nil {
