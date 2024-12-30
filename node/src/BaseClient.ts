@@ -3,8 +3,9 @@
  */
 import {
     ClusterScanCursor,
+    DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS,
     DEFAULT_INFLIGHT_REQUESTS_LIMIT,
-    DEFAULT_TIMEOUT_IN_MILLISECONDS,
+    DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
     Script,
     StartSocketConnection,
     getStatistics,
@@ -605,7 +606,7 @@ export interface BaseClientConfiguration {
      * The duration in milliseconds that the client should wait for a request to complete.
      * This duration encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries.
      * If the specified timeout is exceeded for a pending request, it will result in a timeout error.
-     * If not set, a default value will be used.
+     * If not explicitly set, a default value of 250 milliseconds will be used.
      * Value must be an integer.
      */
     requestTimeout?: number;
@@ -647,6 +648,33 @@ export interface BaseClientConfiguration {
      * ```
      */
     clientAz?: string;
+}
+
+/**
+ * Represents advanced configuration settings for a client, including connection-related options.
+ *
+ * @remarks
+ * The `AdvancedBaseClientConfiguration` interface defines advanced configuration settings for managing the client's connection behavior.
+ *
+ * ### Connection Timeout
+ *
+ * - **Connection Timeout**: The `connectionTimeout` property specifies the duration (in milliseconds) the client should wait for a connection to be established.
+ *
+ * @example
+ * ```typescript
+ * const config: AdvancedBaseClientConfiguration = {
+ *   connectionTimeout: 5000, // 5 seconds
+ * };
+ * ```
+ */
+export interface AdvancedBaseClientConfiguration {
+    /**
+     * The duration in milliseconds to wait for a TCP/TLS connection to complete.
+     * This applies both during initial client creation and any reconnections that may occur during request processing.
+     * **Note**: A high connection timeout may lead to prolonged blocking of the entire command pipeline.
+     * If not explicitly set, a default value of 250 milliseconds will be used.
+     */
+    connectionTimeout?: number;
 }
 
 /**
@@ -950,7 +978,7 @@ export class BaseClient {
         Logger.log("info", "Client lifetime", `construct client`);
         this.config = options;
         this.requestTimeout =
-            options?.requestTimeout ?? DEFAULT_TIMEOUT_IN_MILLISECONDS;
+            options?.requestTimeout ?? DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS;
         this.socket = socket;
         this.socket
             .on("data", (data) => this.handleReadData(data))
@@ -7617,6 +7645,18 @@ export class BaseClient {
             inflightRequestsLimit: options.inflightRequestsLimit,
             clientAz: options.clientAz ?? null,
         };
+    }
+
+    /**
+     * @internal
+     */
+    protected configureAdvancedConfigurationBase(
+        options: AdvancedBaseClientConfiguration,
+        request: connection_request.IConnectionRequest,
+    ) {
+        request.connectionTimeout =
+            options.connectionTimeout ??
+            DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS;
     }
 
     /**
