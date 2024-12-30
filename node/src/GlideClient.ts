@@ -4,6 +4,7 @@
 
 import * as net from "net";
 import {
+    AdvancedBaseClientConfiguration,
     BaseClient,
     BaseClientConfiguration,
     convertGlideRecordToRecord,
@@ -171,7 +172,25 @@ export type GlideClientConfiguration = BaseClientConfiguration & {
      * Will be applied via SUBSCRIBE/PSUBSCRIBE commands during connection establishment.
      */
     pubsubSubscriptions?: GlideClientConfiguration.PubSubSubscriptions;
+    /**
+     * Advanced configuration settings for the client.
+     */
+    advancedConfiguration?: AdvancedGlideClientConfiguration;
 };
+
+/**
+ * Represents advanced configuration settings for creating a {@link GlideClient | GlideClient} used in {@link GlideClientConfiguration | GlideClientConfiguration}.
+ *
+ *
+ * @example
+ * ```typescript
+ * const config: AdvancedGlideClientConfiguration = {
+ *   connectionTimeout: 500, // Set the connection timeout to 500ms
+ * };
+ * ```
+ */
+export type AdvancedGlideClientConfiguration =
+    AdvancedBaseClientConfiguration & {};
 
 /**
  * Client used for connection to standalone servers.
@@ -189,6 +208,14 @@ export class GlideClient extends BaseClient {
         configuration.databaseId = options.databaseId;
         configuration.connectionRetryStrategy = options.connectionBackoff;
         this.configurePubsub(options, configuration);
+
+        if (options.advancedConfiguration) {
+            this.configureAdvancedConfigurationBase(
+                options.advancedConfiguration,
+                configuration,
+            );
+        }
+
         return configuration;
     }
     /**
