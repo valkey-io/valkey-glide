@@ -302,10 +302,17 @@ async fn send_command(
     mut client: Client,
     routing: Option<RoutingInfo>,
 ) -> ClientUsageResult<Value> {
-    client
+    if let Some(span) = cmd.span() {
+        telemetrylib::GlideOpenTelemetry::add_event(span, "RequestSent", None);
+    }
+    let res = client
         .send_command(&cmd, routing)
         .await
-        .map_err(|err| err.into())
+        .map_err(|err| err.into());
+    if let Some(span) = cmd.span() {
+        telemetrylib::GlideOpenTelemetry::add_event(span, "ResponseArrived", None);
+    }
+    res
 }
 
 // Parse the cluster scan command parameters from protobuf and send the command to redis-rs.
