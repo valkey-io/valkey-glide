@@ -55,6 +55,7 @@ excluded_symbol_list = [
     "FtSearchKeywords",  # ClassDef
     "FtAggregateKeywords",  # ClassDef
     "FtProfileKeywords",  # ClassDef
+    "AdvancedBaseClientConfiguration",  # ClassDef
 ]
 
 
