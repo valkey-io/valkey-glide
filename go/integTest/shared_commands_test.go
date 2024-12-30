@@ -1116,8 +1116,8 @@ func (suite *GlideTestSuite) TestHScan() {
 
 		// Setup test data
 		numberMap := make(map[string]string)
-		// This is an unusually large dataset because the server can ignore the COUNT option if the dataset is small enough because
-		// it is more efficient to transfer its entire content at once.
+		// This is an unusually large dataset because the server can ignore the COUNT option if the dataset is small enough
+		// because it is more efficient to transfer its entire content at once.
 		for i := 0; i < 50000; i++ {
 			numberMap[strconv.Itoa(i)] = "num" + strconv.Itoa(i)
 		}
@@ -1129,7 +1129,7 @@ func (suite *GlideTestSuite) TestHScan() {
 
 		t := suite.T()
 
-		//Check for empty set.
+		// Check for empty set.
 		resCursor, resCollection, err := client.HScan(key1, initialCursor)
 		assert.NoError(t, err)
 		assert.Equal(t, initialCursor, resCursor.Value())

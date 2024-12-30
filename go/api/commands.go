@@ -751,7 +751,8 @@ type HashCommands interface {
 	// [valkey.io]: https://valkey.io/commands/hincrbyfloat/
 	HIncrByFloat(key string, field string, increment float64) (Result[float64], error)
 
-	// Iterates fields of Hash types and their associated values. This definition of HSCAN command does not include the optional arguments of the command.
+	// Iterates fields of Hash types and their associated values. This definition of HSCAN command does not include the
+	// optional arguments of the command.
 	//
 	// See [valkey.io] for details.
 	//
@@ -775,7 +776,8 @@ type HashCommands interface {
 	// [valkey.io]: https://valkey.io/commands/hscan/
 	HScan(key string, cursor string) (Result[string], []Result[string], error)
 
-	// Iterates fields of Hash types and their associated values. This definition of HSCAN includes optional arguments of the command.
+	// Iterates fields of Hash types and their associated values. This definition of HSCAN includes optional arguments of the
+	// command.
 	//
 	// See [valkey.io] for details.
 	//
@@ -797,7 +799,8 @@ type HashCommands interface {
 	//	resCursor, resCollection, _ = client.HScan(key, initialCursor, opts)
 	//  // resCursor = {0 false}
 	//  // resCollection = [{a false} {1 false}]
-	//  // The resCollection only contains the hash map entry that matches with the match option provided with the command input.
+	//  // The resCollection only contains the hash map entry that matches with the match option provided with the command
+	//  // input.
 	//
 	// [valkey.io]: https://valkey.io/commands/hscan/
 	HScanWithOptions(key string, cursor string, options *options.HashScanOptions) (Result[string], []Result[string], error)

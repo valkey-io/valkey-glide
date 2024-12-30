@@ -489,7 +489,11 @@ func (client *baseClient) HScan(key string, cursor string) (Result[string], []Re
 	return handleScanResponse(result)
 }
 
-func (client *baseClient) HScanWithOptions(key string, cursor string, options *options.HashScanOptions) (Result[string], []Result[string], error) {
+func (client *baseClient) HScanWithOptions(
+	key string,
+	cursor string,
+	options *options.HashScanOptions,
+) (Result[string], []Result[string], error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
 		return CreateNilStringResult(), nil, err
