@@ -784,11 +784,14 @@ type ConnectionManagementCommands interface {
 	PingWithMessage(message string) (string, error)
 
 	// Echo the provided message back.
+	// The command will be routed a random node.
+	//
 	// Parameters:
-	//  string message
+	// 	message - The provided message.
 	//
 	// Return value:
 	//  The provided message
+	//
 	//
 	// For example:
 	//  result, err := client.Echo("Hello World")

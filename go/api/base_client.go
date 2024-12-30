@@ -1411,5 +1411,5 @@ func (client *baseClient) Echo(message string) (Result[string], error) {
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	return handleStringOrNullResponse(result)
+	return handleStringResponse(result)
 }
