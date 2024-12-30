@@ -432,7 +432,7 @@ type GenericBaseCommands interface {
 	Renamenx(key string, newKey string) (Result[bool], error)
 
 	// Create a key associated with a value that is obtained by
-	// deserializing the provided serialized value (obtained via dump).
+	// deserializing the provided serialized value (obtained via [valkey.io]: Https://valkey.io/commands/dump/).
 	//
 	// Parameters:
 	//  key - The key to create.
@@ -453,7 +453,7 @@ type GenericBaseCommands interface {
 	Restore(key string, ttl int64, value string) (Result[string], error)
 
 	// Create a key associated with a value that is obtained by
-	// deserializing the provided serialized value (obtained via dump).
+	// deserializing the provided serialized value (obtained via [valkey.io]: Https://valkey.io/commands/dump/).
 	//
 	// Parameters:
 	//  key - The key to create.
@@ -465,7 +465,8 @@ type GenericBaseCommands interface {
 	//  Return OK if successfully create a key with a value.
 	//
 	// Example:
-	// result, err := client.Restore("key",ttl, value, restoreOptions)
+	// restoreOptions := api.NewRestoreOptionsBuilder().SetReplace().SetABSTTL().SetEviction(api.FREQ, 10)
+	// resultRestoreOpt, err := client.RestoreWithOptions(key, ttl, value, restoreOptions)
 	//	if err != nil {
 	//	    // handle error
 	//	}

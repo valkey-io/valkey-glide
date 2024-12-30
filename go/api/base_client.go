@@ -1407,11 +1407,7 @@ func (client *baseClient) ZPopMaxWithCount(key string, count int64) (map[Result[
 }
 
 func (client *baseClient) Restore(key string, ttl int64, value string) (Result[string], error) {
-	result, err := client.executeCommand(C.Restore, []string{key, utils.IntToString(ttl), value})
-	if err != nil {
-		return CreateNilStringResult(), err
-	}
-	return handleStringOrNullResponse(result)
+	return client.RestoreWithOptions(key, ttl, value, NewRestoreOptionsBuilder())
 }
 
 func (client *baseClient) RestoreWithOptions(key string, ttl int64, value string, options *RestoreOptions) (Result[string], error) {

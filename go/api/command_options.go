@@ -348,6 +348,7 @@ const (
 	HasABSTTL string = "ABSTTL"
 )
 
+// Custom setter methods for replace and absttl.
 func (restoreOption *RestoreOptions) SetReplace() *RestoreOptions {
 	restoreOption.REPLACE = HasREPLACE
 	return restoreOption
