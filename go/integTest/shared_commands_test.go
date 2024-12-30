@@ -4098,3 +4098,39 @@ func (suite *GlideTestSuite) TestZPopMax() {
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
 }
+
+func (suite *GlideTestSuite) TestZRem() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		memberScoreMap := map[string]float64{
+			"one":   1.0,
+			"two":   2.0,
+			"three": 3.0,
+		}
+		res, err := client.ZAdd(key, memberScoreMap)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res.Value())
+
+		// no members to remove
+		_, err = client.ZRem(key, []string{})
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		res, err = client.ZRem(key, []string{"one"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res.Value())
+
+		// TODO: run ZCard there
+		res, err = client.ZRem(key, []string{"one", "two", "three"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res.Value())
+
+		// non sorted set key
+		_, err = client.Set(key, "test")
+		assert.Nil(suite.T(), err)
+
+		_, err = client.ZRem(key, []string{"value"})
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
