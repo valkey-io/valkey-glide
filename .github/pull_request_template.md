@@ -19,4 +19,4 @@ Before submitting the PR make sure the following are checked:
 -   [ ] Tests are added or updated.
 -   [ ] CHANGELOG.md and documentation files are updated.
 -   [ ] Destination branch is correct - main or release
--   [ ] Create merge commit if merging release branach into main, squash otherwise.
+-   [ ] Create merge commit if merging release branch into main, squash otherwise.
