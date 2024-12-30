@@ -12,8 +12,22 @@ type HashScanOptions struct {
 	noValue bool
 }
 
+func NewHashScanOptionsBuilder() *HashScanOptions {
+	return &HashScanOptions{}
+}
+
 func (hashScanOptions *HashScanOptions) SetNoValue(noValue bool) *HashScanOptions {
 	hashScanOptions.noValue = noValue
+	return hashScanOptions
+}
+
+func (hashScanOptions *HashScanOptions) SetMatch(match string) *HashScanOptions {
+	hashScanOptions.BaseScanOptions.SetMatch(match)
+	return hashScanOptions
+}
+
+func (hashScanOptions *HashScanOptions) SetCount(count int64) *HashScanOptions {
+	hashScanOptions.BaseScanOptions.SetCount(count)
 	return hashScanOptions
 }
 
