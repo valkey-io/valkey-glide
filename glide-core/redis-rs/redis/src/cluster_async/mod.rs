@@ -1094,6 +1094,7 @@ where
             push_sender,
             disconnect_notifier,
             discover_az,
+            connection_timeout: Some(cluster_params.connection_timeout),
         };
 
         let connections = Self::create_initial_connections(

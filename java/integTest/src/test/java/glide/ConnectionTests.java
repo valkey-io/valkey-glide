@@ -10,19 +10,33 @@ import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleM
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.PRIMARY;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.REPLICA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.commands.InfoOptions;
+import glide.api.models.configuration.AdvancedGlideClientConfiguration;
+import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
+import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.ReadFrom;
 import glide.api.models.configuration.RequestRoutingConfiguration;
+import glide.api.models.exceptions.ClosingException;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 @Timeout(10) // seconds
 public class ConnectionTests {
@@ -48,6 +62,35 @@ public class ConnectionTests {
                                 .readFrom(ReadFrom.AZ_AFFINITY)
                                 .clientAZ(az)
                                 .requestTimeout(2000)
+                                .build())
+                .get();
+    }
+
+    @SneakyThrows
+    public BaseClient createConnectionTimeoutClient(
+            Boolean clusterMode,
+            int connectionTimeout,
+            int requestTimeout,
+            BackoffStrategy backoffStrategy) {
+        if (clusterMode) {
+            var advancedConfiguration =
+                    AdvancedGlideClusterClientConfiguration.builder()
+                            .connectionTimeout(connectionTimeout)
+                            .build();
+            return GlideClusterClient.createClient(
+                            commonClusterClientConfig()
+                                    .advancedConfiguration(advancedConfiguration)
+                                    .requestTimeout(requestTimeout)
+                                    .build())
+                    .get();
+        }
+        var advancedConfiguration =
+                AdvancedGlideClientConfiguration.builder().connectionTimeout(connectionTimeout).build();
+        return GlideClient.createClient(
+                        commonClientConfig()
+                                .advancedConfiguration(advancedConfiguration)
+                                .requestTimeout(requestTimeout)
+                                .reconnectStrategy(backoffStrategy)
                                 .build())
                 .get();
     }
@@ -201,5 +244,77 @@ public class ConnectionTests {
                 infoData.values().stream().filter(value -> value.contains(getCmdstat)).count();
         assertEquals(4, matchingEntries);
         azTestClient.close();
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void test_connection_timeout(boolean clusterMode) {
+        var backoffStrategy =
+                BackoffStrategy.builder().exponentBase(2).factor(100).numOfRetries(1).build();
+        var client = createConnectionTimeoutClient(clusterMode, 250, 20000, backoffStrategy);
+
+        // Runnable for long-running DEBUG SLEEP command
+        Runnable debugSleepTask =
+                () -> {
+                    try {
+                        if (client instanceof GlideClusterClient) {
+                            ((GlideClusterClient) client)
+                                    .customCommand(new String[] {"DEBUG", "sleep", "7"}, ALL_NODES)
+                                    .get();
+                        } else if (client instanceof GlideClient) {
+                            ((GlideClient) client).customCommand(new String[] {"DEBUG", "sleep", "7"}).get();
+                        }
+                    } catch (InterruptedException | ExecutionException e) {
+                        throw new RuntimeException("Error during DEBUG SLEEP command", e);
+                    }
+                };
+
+        // Runnable for testing connection failure due to timeout
+        Runnable failToConnectTask =
+                () -> {
+                    try {
+                        Thread.sleep(1000); // Wait to ensure the debug sleep command is running
+                        ExecutionException executionException =
+                                assertThrows(
+                                        ExecutionException.class,
+                                        () -> createConnectionTimeoutClient(clusterMode, 100, 250, backoffStrategy));
+                        assertInstanceOf(ClosingException.class, executionException.getCause());
+                        assertTrue(executionException.getMessage().toLowerCase().contains("timed out"));
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException("Thread was interrupted", e);
+                    }
+                };
+
+        // Runnable for testing successful connection
+        Runnable connectToClientTask =
+                () -> {
+                    try {
+                        Thread.sleep(1000); // Wait to ensure the debug sleep command is running
+                        var timeoutClient =
+                                createConnectionTimeoutClient(clusterMode, 10000, 250, backoffStrategy);
+                        assertEquals(timeoutClient.set("key", "value").get(), "OK");
+                        timeoutClient.close();
+                    } catch (Exception e) {
+                        throw new RuntimeException("Error during successful connection attempt", e);
+                    }
+                };
+
+        // Execute all tasks concurrently
+        ExecutorService executorService = Executors.newFixedThreadPool(3);
+        try {
+            executorService.invokeAll(
+                    List.of(
+                            Executors.callable(debugSleepTask),
+                            Executors.callable(failToConnectTask),
+                            Executors.callable(connectToClientTask)));
+        } finally {
+            executorService.shutdown();
+            // Clean up the main client
+            if (client != null) {
+                client.close();
+            }
+        }
     }
 }

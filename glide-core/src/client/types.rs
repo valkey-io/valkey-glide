@@ -20,6 +20,7 @@ pub struct ConnectionRequest {
     pub addresses: Vec<NodeAddress>,
     pub cluster_mode_enabled: bool,
     pub request_timeout: Option<u32>,
+    pub connection_timeout: Option<u32>,
     pub connection_retry_strategy: Option<ConnectionRetryStrategy>,
     pub periodic_checks: Option<PeriodicCheck>,
     pub pubsub_subscriptions: Option<redis::PubSubSubscriptionInfo>,
@@ -147,6 +148,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             .collect();
         let cluster_mode_enabled = value.cluster_mode_enabled;
         let request_timeout = none_if_zero(value.request_timeout);
+        let connection_timeout = none_if_zero(value.connection_timeout);
         let connection_retry_strategy =
             value
                 .connection_retry_strategy
@@ -214,6 +216,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             addresses,
             cluster_mode_enabled,
             request_timeout,
+            connection_timeout,
             connection_retry_strategy,
             periodic_checks,
             pubsub_subscriptions,

@@ -623,6 +623,7 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"FUNCTION STATS" => RouteBy::AllNodes,
 
         b"DBSIZE"
+        | b"DEBUG"
         | b"FLUSHALL"
         | b"FLUSHDB"
         | b"FT._ALIASLIST"
@@ -717,7 +718,6 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"COMMAND LIST"
         | b"COMMAND"
         | b"CONFIG GET"
-        | b"DEBUG"
         | b"ECHO"
         | b"FUNCTION LIST"
         | b"LASTSAVE"

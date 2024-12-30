@@ -5,6 +5,7 @@
 import { ClusterScanCursor, Script } from "glide-rs";
 import * as net from "net";
 import {
+    AdvancedBaseClientConfiguration,
     BaseClient,
     BaseClientConfiguration,
     Decoder,
@@ -190,7 +191,25 @@ export type GlideClusterClientConfiguration = BaseClientConfiguration & {
      * Will be applied via SUBSCRIBE/PSUBSCRIBE/SSUBSCRIBE commands during connection establishment.
      */
     pubsubSubscriptions?: GlideClusterClientConfiguration.PubSubSubscriptions;
+    /**
+     * Advanced configuration settings for the client.
+     */
+    advancedConfiguration?: AdvancedGlideClusterClientConfiguration;
 };
+
+/**
+ * Represents advanced configuration settings for creating a {@link GlideClusterClient | GlideClusterClient} used in {@link GlideClusterClientConfiguration | GlideClusterClientConfiguration}.
+ *
+ *
+ * @example
+ * ```typescript
+ * const config: AdvancedGlideClusterClientConfiguration = {
+ *   connectionTimeout: 500, // Set the connection timeout to 500ms
+ * };
+ * ```
+ */
+export type AdvancedGlideClusterClientConfiguration =
+    AdvancedBaseClientConfiguration & {};
 
 /**
  * If the command's routing is to one node we will get T as a response type,
@@ -504,6 +523,14 @@ export class GlideClusterClient extends BaseClient {
         }
 
         this.configurePubsub(options, configuration);
+
+        if (options.advancedConfiguration) {
+            this.configureAdvancedConfigurationBase(
+                options.advancedConfiguration,
+                configuration,
+            );
+        }
+
         return configuration;
     }
     /**
