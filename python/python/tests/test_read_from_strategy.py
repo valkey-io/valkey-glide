@@ -46,7 +46,7 @@ class TestAZAffinity:
             cluster_mode,
             # addresses=multiple_replicas_cluster.nodes_addr,
             protocol=protocol,
-            timeout=2000,
+            request_timeout=2000,
         )
 
         # Reset the availability zone for all nodes
@@ -67,7 +67,7 @@ class TestAZAffinity:
             cluster_mode,
             protocol=protocol,
             read_from=ReadFrom.AZ_AFFINITY,
-            timeout=2000,
+            request_timeout=2000,
             client_az=az,
         )
 
@@ -113,7 +113,7 @@ class TestAZAffinity:
             cluster_mode,
             # addresses=multiple_replicas_cluster.nodes_addr,
             protocol=protocol,
-            timeout=2000,
+            request_timeout=2000,
         )
         assert await client_for_config_set.config_resetstat() == OK
         await client_for_config_set.custom_command(
@@ -125,7 +125,7 @@ class TestAZAffinity:
             cluster_mode,
             protocol=protocol,
             read_from=ReadFrom.AZ_AFFINITY,
-            timeout=2000,
+            request_timeout=2000,
             client_az=az,
         )
         azs = await client_for_testing_az.custom_command(
@@ -181,7 +181,7 @@ class TestAZAffinity:
             # addresses=multiple_replicas_cluster.nodes_addr,
             protocol=protocol,
             read_from=ReadFrom.AZ_AFFINITY,
-            timeout=2000,
+            request_timeout=2000,
             client_az="non-existing-az",
         )
         assert await client_for_testing_az.config_resetstat() == OK
@@ -217,5 +217,5 @@ class TestAZAffinity:
                 cluster_mode=cluster_mode,
                 protocol=protocol,
                 read_from=ReadFrom.AZ_AFFINITY,
-                timeout=2000,
+                request_timeout=2000,
             )
