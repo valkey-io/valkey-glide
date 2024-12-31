@@ -22,7 +22,7 @@ pub enum GlideOpenTelemetryTraceExporter {
     Grpc(String),
     /// Collector is listening on http
     Http(String),
-    /// No collector, instead, write the traces collected to file. The contained value "PathBuf"
+    /// No collector. Instead, write the traces collected to a file. The contained value "PathBuf"
     /// points to the folder where the collected data should be placed.
     File(PathBuf),
 }
@@ -234,7 +234,7 @@ mod tests {
             span.set_status(GlideSpanStatus::Ok);
             drop(span); // writes the span
 
-            tokio::time::sleep(tokio::time::Duration::from_secs(6)).await;
+            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         });
     }
 }
