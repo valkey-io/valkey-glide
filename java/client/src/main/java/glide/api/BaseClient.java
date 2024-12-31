@@ -2208,6 +2208,15 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Object[]> zrankWithScore(
+            @NonNull GlideString key, @NonNull GlideString member) {
+        return commandManager.submitNewCommand(
+                ZRank,
+                new GlideString[] {key, member, gs(WITH_SCORE_VALKEY_API)},
+                this::handleArrayOrNullResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> zrevrank(@NonNull String key, @NonNull String member) {
         return commandManager.submitNewCommand(
                 ZRevRank, new String[] {key, member}, this::handleLongOrNullResponse);
