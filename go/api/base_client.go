@@ -31,6 +31,7 @@ type BaseClient interface {
 	StreamCommands
 	SortedSetCommands
 	ConnectionManagementCommands
+	HyperLogLogCommands
 	GenericBaseCommands
 	// Close terminates the client by closing all associated resources.
 	Close()
@@ -1206,6 +1207,24 @@ func (client *baseClient) TTL(key string) (Result[int64], error) {
 
 func (client *baseClient) PTTL(key string) (Result[int64], error) {
 	result, err := client.executeCommand(C.PTTL, []string{key})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) PfAdd(key string, elements []string) (Result[int64], error) {
+	result, err := client.executeCommand(C.PfAdd, append([]string{key}, elements...))
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) PfCount(keys []string) (Result[int64], error) {
+	result, err := client.executeCommand(C.PfCount, keys)
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}

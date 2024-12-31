@@ -3623,6 +3623,87 @@ func (suite *GlideTestSuite) TestPTTL_WithExpiredKey() {
 	})
 }
 
+func (suite *GlideTestSuite) TestPfAdd_SuccessfulAddition() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		res, err := client.PfAdd(key, []string{"a", "b", "c", "d", "e"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestPfAdd_DuplicateElements() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+
+		// case : Add elements and add same elements again
+		res, err := client.PfAdd(key, []string{"a", "b", "c", "d", "e"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res.Value())
+
+		res2, err := client.PfAdd(key, []string{"a", "b", "c", "d", "e"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res2.Value())
+
+		// case : (mixed elements) add new elements with 1 duplicate elements
+		res1, err := client.PfAdd(key, []string{"f", "g", "h"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res1.Value())
+
+		res2, err = client.PfAdd(key, []string{"i", "j", "g"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res2.Value())
+
+		// case : add empty array(no elements to the HyperLogLog)
+		res, err = client.PfAdd(key, []string{})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestPfCount_SingleKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		res, err := client.PfAdd(key, []string{"i", "j", "g"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res.Value())
+
+		resCount, err := client.PfCount([]string{key})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), resCount.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestPfCount_MultipleKeys() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.New().String() + "{group}"
+		key2 := uuid.New().String() + "{group}"
+
+		res, err := client.PfAdd(key1, []string{"a", "b", "c"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res.Value())
+
+		res, err = client.PfAdd(key2, []string{"c", "d", "e"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res.Value())
+
+		resCount, err := client.PfCount([]string{key1, key2})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(5), resCount.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestPfCount_NoExistingKeys() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.New().String() + "{group}"
+		key2 := uuid.New().String() + "{group}"
+
+		resCount, err := client.PfCount([]string{key1, key2})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), resCount.Value())
+	})
+}
+
 func (suite *GlideTestSuite) TestBLMove() {
 	if suite.serverVersion < "6.2.0" {
 		suite.T().Skip("This feature is added in version 6.2.0")
