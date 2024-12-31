@@ -8,8 +8,9 @@ package api
 //
 // [valkey.io]: https://valkey.io/commands/#generic
 type GenericClusterCommands interface {
-	// CustomCommand executes a single command, specified by args, without checking inputs. Every part of the command, including
-	// the command name and subcommands, should be added as a separate value in args. The returning value depends on the executed
+	// CustomCommand executes a single command, specified by args, without checking inputs. Every part of the command,
+	// including the command name and subcommands, should be added as a separate value in args. The returning value depends on
+	// the executed
 	// command.
 	//
 	// The command will be routed automatically based on the passed command's default request policy.

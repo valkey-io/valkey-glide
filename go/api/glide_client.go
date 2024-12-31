@@ -5,6 +5,7 @@ package api
 // #cgo LDFLAGS: -L../target/release -lglide_rs
 // #include "../lib.h"
 import "C"
+
 import (
 	"github.com/valkey-io/valkey-glide/go/glide/utils"
 )
@@ -58,24 +59,7 @@ func (client *glideClient) ConfigGet(args []string) (map[Result[string]]Result[s
 	return handleStringToStringMapResponse(res)
 }
 
-// Select changes the currently selected database.
-//
-// Parameters:
-//
-//	index - The index of the database to select.
-//
-// Return value:
-//
-//	A simple OK response.
-//
-// Example:
-//
-//	result, err := client.Select(2)
-//	result.Value() : "OK"
-//	result.IsNil() : false
-//
-// [valkey.io]: https://valkey.io/commands/select/
-func (client *GlideClient) Select(index int64) (Result[string], error) {
+func (client *glideClient) Select(index int64) (Result[string], error) {
 	result, err := client.executeCommand(C.Select, []string{utils.IntToString(index)})
 	if err != nil {
 		return CreateNilStringResult(), err

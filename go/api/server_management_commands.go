@@ -8,6 +8,22 @@ package api
 //
 // [valkey.io]: https://valkey.io/commands/#server
 type ServerManagementCommands interface {
+	// Select changes the currently selected database.
+	//
+	// Parameters:
+	//	index - The index of the database to select.
+	//
+	// Return value:
+	//	A simple OK response.
+	//
+	// Example:
+	//	result, err := client.Select(2)
+	//	result.Value() : "OK"
+	//	result.IsNil() : false
+	//
+	// [valkey.io]: https://valkey.io/commands/select/
+	Select(index int64) (Result[string], error)
+
 	// Gets the values of configuration parameters.
 	//
 	// Note: Prior to Version 7.0.0, only one parameter can be send.

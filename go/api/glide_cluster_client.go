@@ -6,14 +6,13 @@ package api
 // #include "../lib.h"
 import "C"
 
-// GlideClient interface compliance check.
+// GlideClusterClient interface compliance check.
 var _ GlideClusterClient = (*glideClusterClient)(nil)
 
 // GlideClusterClient is a client used for connection in cluster mode.
 type GlideClusterClient interface {
 	BaseClient
 	GenericClusterCommands
-	ServerManagementClusterCommands
 }
 
 // glideClusterClient implements cluster mode operations by extending baseClient functionality.

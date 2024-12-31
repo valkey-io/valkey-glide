@@ -8,8 +8,9 @@ package api
 //
 // [valkey.io]: https://valkey.io/commands/#generic
 type GenericCommands interface {
-	// CustomCommand executes a single command, specified by args, without checking inputs. Every part of the command, including
-	// the command name and subcommands, should be added as a separate value in args. The returning value depends on the executed
+	// CustomCommand executes a single command, specified by args, without checking inputs. Every part of the command,
+	// including the command name and subcommands, should be added as a separate value in args. The returning value depends on
+	// the executed
 	// command.
 	//
 	// See [Valkey GLIDE Wiki] for details on the restrictions and limitations of the custom command API.
