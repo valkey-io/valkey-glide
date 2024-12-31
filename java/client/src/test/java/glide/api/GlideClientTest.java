@@ -5654,6 +5654,31 @@ public class GlideClientTest {
 
     @SneakyThrows
     @Test
+    public void zrankWithScore_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString member = gs("testMember");
+        GlideString[] arguments = new GlideString[] {key, member, gs(WITH_SCORE_VALKEY_API)};
+        Object[] value = new Object[] {1, 6.0};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(ZRank), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response = service.zrankWithScore(key, member);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void zrevrank_returns_success() {
         // setup
         String key = "testKey";

@@ -3924,6 +3924,7 @@ public class SharedCommandTests {
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.2.0")) {
             assertArrayEquals(new Object[] {0L, 1.5}, client.zrankWithScore(key, "one").get());
+            assertArrayEquals(new Object[] {0L, 1.5}, client.zrankWithScore(gs(key), gs("one")).get());
             assertNull(client.zrankWithScore(key, "nonExistingMember").get());
             assertNull(client.zrankWithScore("nonExistingKey", "nonExistingMember").get());
         }
