@@ -3561,13 +3561,7 @@ func (suite *GlideTestSuite) Test_ZCard() {
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(3), res2.Value())
 
-		/**
-		  TODO: update from custom command to proper implementation
-		  change client from base to glide to use custom command
-		*/
-
-		ZremArgs := append([]string{key}, []string{"one"}...)
-		res3, err := client.CustomCommand(append([]string{"zrem"}, ZremArgs...))
+		res3, err := client.ZRem(key, []string{"one"})
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(1), res3.Value())
 
