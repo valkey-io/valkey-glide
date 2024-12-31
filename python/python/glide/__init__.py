@@ -111,6 +111,8 @@ from glide.async_commands.transaction import (
     TTransaction,
 )
 from glide.config import (
+    AdvancedGlideClientConfiguration,
+    AdvancedGlideClusterClientConfiguration,
     BackoffStrategy,
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
@@ -176,6 +178,8 @@ __all__ = [
     "TGlideClient",
     "TTransaction",
     # Config
+    "AdvancedGlideClientConfiguration",
+    "AdvancedGlideClusterClientConfiguration",
     "GlideClientConfiguration",
     "GlideClusterClientConfiguration",
     "BackoffStrategy",
