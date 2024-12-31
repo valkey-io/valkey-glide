@@ -2,8 +2,10 @@ use lazy_static::lazy_static;
 use serde::Serialize;
 use std::sync::RwLock as StdRwLock;
 mod open_telemetry;
+mod open_telemetry_exporter_file;
 
 pub use open_telemetry::{GlideOpenTelemetry, GlideSpan};
+pub use open_telemetry_exporter_file::SpanExporterFile;
 
 #[derive(Default, Serialize)]
 #[allow(dead_code)]
