@@ -371,7 +371,7 @@ impl Cmd {
     /// A span is used by an OpenTelemetry backend to track the lifetime of the command
     #[inline]
     pub fn with_span(&mut self, name: &str) -> &mut Cmd {
-        self.span = Some(telemetrylib::GlideOpenTelemetry::new_span(name.to_string()));
+        self.span = Some(telemetrylib::GlideOpenTelemetry::new_span(name));
         self
     }
 

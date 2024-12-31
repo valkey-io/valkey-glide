@@ -26,6 +26,7 @@ use std::rc::Rc;
 use std::sync::RwLock;
 use std::{env, str};
 use std::{io, thread};
+use telemetrylib::GlideSpan;
 use thiserror::Error;
 use tokio::net::{UnixListener, UnixStream};
 use tokio::runtime::Builder;
@@ -303,14 +304,14 @@ async fn send_command(
     routing: Option<RoutingInfo>,
 ) -> ClientUsageResult<Value> {
     if let Some(span) = cmd.span() {
-        telemetrylib::GlideOpenTelemetry::add_event(span, "RequestSent", None);
+        span.add_event("RequestSent");
     }
     let res = client
         .send_command(&cmd, routing)
         .await
         .map_err(|err| err.into());
     if let Some(span) = cmd.span() {
-        telemetrylib::GlideOpenTelemetry::add_event(span, "ResponseArrived", None);
+        span.add_event("ResponseArrived");
     }
     res
 }
