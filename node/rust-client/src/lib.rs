@@ -24,6 +24,7 @@ use num_traits::sign::Signed;
 use redis::{aio::MultiplexedConnection, AsyncCommands, Value};
 #[cfg(feature = "testing_utilities")]
 use std::collections::HashMap;
+use std::ptr::from_mut;
 use std::str;
 use tokio::runtime::{Builder, Runtime};
 #[napi]
@@ -314,8 +315,6 @@ fn split_pointer<T>(pointer: *mut T) -> [u32; 2] {
 /// Should NOT be used in production.
 #[cfg(feature = "testing_utilities")]
 pub fn create_leaked_string(message: String) -> [u32; 2] {
-    use std::ptr::from_mut;
-
     let value = Value::SimpleString(message);
     let pointer = from_mut(Box::leak(Box::new(value)));
     split_pointer(pointer)
