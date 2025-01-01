@@ -8255,7 +8255,10 @@ export function runBaseTests(config: {
         expect(await client.get(key)).toEqual(newValue);
     }
 
-    async function testSetWithAllCombination(client: BaseClient) {
+    async function testSetWithAllCombination(
+        client: BaseClient,
+        cluster: ValkeyCluster,
+    ) {
         const key = uuidv4();
         const value = uuidv4(); // Initial value
         const value2 = uuidv4(); // New value for IFEQ testing
@@ -8318,31 +8321,33 @@ export function runBaseTests(config: {
         }
 
         //  onlyIfEqual tests
-        for (const expiryVal of expiryCombination) {
-            // Set the key with the initial value
-            await client.set(key, value);
+        if (!cluster.checkIfServerVersionLessThan("8.1.0")) {
+            for (const expiryVal of expiryCombination) {
+                // Set the key with the initial value
+                await client.set(key, value);
 
-            const setRes = await client.set(key, value2, {
-                expiry: expiryVal as
-                    | "keepExisting"
-                    | {
-                          type:
-                              | TimeUnit.Seconds
-                              | TimeUnit.Milliseconds
-                              | TimeUnit.UnixSeconds
-                              | TimeUnit.UnixMilliseconds;
-                          count: number;
-                      },
-                conditionalSet: "onlyIfEqual",
-                providedValue: value, // Ensure it matches the current key's value
-            });
+                const setRes = await client.set(key, value2, {
+                    expiry: expiryVal as
+                        | "keepExisting"
+                        | {
+                              type:
+                                  | TimeUnit.Seconds
+                                  | TimeUnit.Milliseconds
+                                  | TimeUnit.UnixSeconds
+                                  | TimeUnit.UnixMilliseconds;
+                              count: number;
+                          },
+                    conditionalSet: "onlyIfEqual",
+                    providedValue: value, // Ensure it matches the current key's value
+                });
 
-            if (setRes) {
-                expect(setRes).toEqual("OK"); // Should return 'OK' if the condition is met
-            } else {
-                // If condition fails, ensure value remains unchanged
-                const getRes = await client.get(key);
-                expect(getRes).toEqual(value);
+                if (setRes) {
+                    expect(setRes).toEqual("OK"); // Should return 'OK' if the condition is met
+                } else {
+                    // If condition fails, ensure value remains unchanged
+                    const getRes = await client.get(key);
+                    expect(getRes).toEqual(value);
+                }
             }
         }
     }
@@ -8350,15 +8355,19 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "Set commands with options test_%p",
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
+            await runTest(async (client: BaseClient, cluster) => {
                 await setWithExpiryOptions(client);
-                await setWithOnlyIfEquals(client);
                 await setWithOnlyIfExistOptions(client);
                 await setWithOnlyIfNotExistOptions(client);
                 await setWithGetOldOptions(client);
                 await setWithAllOptions(client);
-                await setIfeqWithAllOptions(client);
-                await testSetWithAllCombination(client);
+
+                if (!cluster.checkIfServerVersionLessThan("8.1.0")) {
+                    await setWithOnlyIfEquals(client);
+                    await setIfeqWithAllOptions(client);
+                }
+
+                await testSetWithAllCombination(client, cluster);
             }, protocol);
         },
         config.timeout,
