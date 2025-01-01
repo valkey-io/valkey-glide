@@ -174,6 +174,7 @@ export function createSet(
             args.push("NX");
         } else if (options.conditionalSet === "onlyIfEqual") {
             args.push("IFEQ");
+
             if (options.providedValue != undefined) {
                 args.push(options.providedValue);
             } else {
