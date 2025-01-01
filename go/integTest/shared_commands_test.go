@@ -3544,6 +3544,33 @@ func (suite *GlideTestSuite) TestPExpireTime() {
 	})
 }
 
+func (suite *GlideTestSuite) Test_ZCard() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := "{key}" + uuid.NewString()
+		membersScores := map[string]float64{
+			"one":   1.0,
+			"two":   2.0,
+			"three": 3.0,
+		}
+		t := suite.T()
+		res1, err := client.ZAdd(key, membersScores)
+		assert.Nil(t, err)
+		assert.Equal(t, int64(3), res1.Value())
+
+		res2, err := client.ZCard(key)
+		assert.Nil(t, err)
+		assert.Equal(t, int64(3), res2.Value())
+
+		res3, err := client.ZRem(key, []string{"one"})
+		assert.Nil(t, err)
+		assert.Equal(t, int64(1), res3.Value())
+
+		res4, err := client.ZCard(key)
+		assert.Nil(t, err)
+		assert.Equal(t, int64(2), res4.Value())
+	})
+}
+
 func (suite *GlideTestSuite) TestPExpireTime_KeyDoesNotExist() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0")
 	suite.runWithDefaultClients(func(client api.BaseClient) {
