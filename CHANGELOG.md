@@ -12,6 +12,7 @@
 * Go: Add `ZADD` ([#2813](https://github.com/valkey-io/valkey-glide/issues/2813))
 * Go: Add `ZPopMin` and `ZPopMax` ([#2850](https://github.com/valkey-io/valkey-glide/pull/2850))
 * Java: Add binary version of `ZRANK WITHSCORE` ([#2896](https://github.com/valkey-io/valkey-glide/pull/2896))
+* Go: Add `ZCARD` ([#2838](https://github.com/valkey-io/valkey-glide/issues/2838))
 
 #### Breaking Changes
 
