@@ -238,7 +238,6 @@ jobs:
                   engine-version: "8.0"
                   target: ${{ matrix.build.target }}
 
-
             - name: Check if RC and set a distribution tag for the package
               shell: bash
               run: |
