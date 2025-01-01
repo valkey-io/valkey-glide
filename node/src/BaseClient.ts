@@ -777,7 +777,7 @@ function toProtobufRoute(
             if (split.length !== 2) {
                 throw new RequestError(
                     "No port provided, expected host to be formatted as `{hostname}:{port}`. Received " +
-                        host,
+                    host,
                 );
             }
 
@@ -1097,30 +1097,30 @@ export class BaseClient {
     ) {
         const message = Array.isArray(command)
             ? command_request.CommandRequest.create({
-                  callbackIdx,
-                  transaction: command_request.Transaction.create({
-                      commands: command,
-                  }),
-              })
+                callbackIdx,
+                transaction: command_request.Transaction.create({
+                    commands: command,
+                }),
+            })
             : command instanceof command_request.Command
-              ? command_request.CommandRequest.create({
+                ? command_request.CommandRequest.create({
                     callbackIdx,
                     singleCommand: command,
                 })
-              : command instanceof command_request.ClusterScan
-                ? command_request.CommandRequest.create({
-                      callbackIdx,
-                      clusterScan: command,
-                  })
-                : command instanceof command_request.UpdateConnectionPassword
-                  ? command_request.CommandRequest.create({
+                : command instanceof command_request.ClusterScan
+                    ? command_request.CommandRequest.create({
                         callbackIdx,
-                        updateConnectionPassword: command,
+                        clusterScan: command,
                     })
-                  : command_request.CommandRequest.create({
-                        callbackIdx,
-                        scriptInvocation: command,
-                    });
+                    : command instanceof command_request.UpdateConnectionPassword
+                        ? command_request.CommandRequest.create({
+                            callbackIdx,
+                            updateConnectionPassword: command,
+                        })
+                        : command_request.CommandRequest.create({
+                            callbackIdx,
+                            scriptInvocation: command,
+                        });
         message.route = route;
 
         this.writeOrBufferRequest(
@@ -1473,7 +1473,7 @@ export class BaseClient {
      * @param value - The value to store with the given key.
      * @param options - (Optional) See {@link SetOptions} and {@link DecoderOption}.
      * @returns - If the value is successfully set, return OK.
-     * If value isn't set because of `onlyIfExists` or `onlyIfDoesNotExist` conditions, return null.
+     * If value isn't set because of `onlyIfExists` or `onlyIfDoesNotExist` or `onlyIfEqual`conditions, return null.
      * If `returnOldValue` is set, return the old value as a string.
      *
      * @example
@@ -1493,6 +1493,10 @@ export class BaseClient {
      * // Example usage of get method to retrieve the value of a key
      * const result4 = await client.get("key");
      * console.log(result4); // Output: 'new_value' - Value wasn't modified back to being "value" because of "NX" flag.
+     * 
+     * // Example usage of set method with conditional option IFEQ
+     * const result5 = await client.set("key", "ifeq_value", {conditionalSet: "onlyIfEqual", providedValue: "new_value");
+     * console.log(result5); // Output: 'OK' - Set "ifeq_value" to "key" only if providedValue is equal to the value of "key".
      * ```
      */
     public async set(
@@ -6059,10 +6063,10 @@ export class BaseClient {
         ReadFrom,
         connection_request.ReadFrom
     > = {
-        primary: connection_request.ReadFrom.Primary,
-        preferReplica: connection_request.ReadFrom.PreferReplica,
-        AZAffinity: connection_request.ReadFrom.AZAffinity,
-    };
+            primary: connection_request.ReadFrom.Primary,
+            preferReplica: connection_request.ReadFrom.PreferReplica,
+            AZAffinity: connection_request.ReadFrom.AZAffinity,
+        };
 
     /**
      * Returns the number of messages that were successfully acknowledged by the consumer group member of a stream.
@@ -7371,8 +7375,8 @@ export class BaseClient {
             res === null
                 ? null
                 : res!.map((r) => {
-                      return { key: r.key, elements: r.value };
-                  })[0],
+                    return { key: r.key, elements: r.value };
+                })[0],
         );
     }
 
@@ -7414,8 +7418,8 @@ export class BaseClient {
             res === null
                 ? null
                 : res!.map((r) => {
-                      return { key: r.key, elements: r.value };
-                  })[0],
+                    return { key: r.key, elements: r.value };
+                })[0],
         );
     }
 
@@ -7622,11 +7626,11 @@ export class BaseClient {
             : connection_request.ReadFrom.Primary;
         const authenticationInfo =
             options.credentials !== undefined &&
-            "password" in options.credentials
+                "password" in options.credentials
                 ? {
-                      password: options.credentials.password,
-                      username: options.credentials.username,
-                  }
+                    password: options.credentials.password,
+                    username: options.credentials.username,
+                }
                 : undefined;
         const protocol = options.protocol as
             | connection_request.ProtocolVersion

@@ -73,10 +73,12 @@ class ConditionalChange(Enum):
     A condition to the `SET`, `ZADD` and `GEOADD` commands.
     - ONLY_IF_EXISTS - Only update key / elements that already exist. Equivalent to `XX` in the Valkey API.
     - ONLY_IF_DOES_NOT_EXIST - Only set key / add elements that does not already exist. Equivalent to `NX` in the Valkey API.
+    - ONLY_IF_EQUAL - Only update key if the provided value is equal to the old value. Equivalent to `IFEQ` in the Valkey API.
     """
 
     ONLY_IF_EXISTS = "XX"
     ONLY_IF_DOES_NOT_EXIST = "NX"
+    ONLY_IF_EQUAL = "IFEQ"
 
 
 class ExpiryType(Enum):

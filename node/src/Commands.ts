@@ -132,7 +132,11 @@ export interface SetOptions {
      * not set the value will be set regardless of prior value existence. If value
      * isn't set because of the condition, return null.
      */
-    conditionalSet?: "onlyIfExists" | "onlyIfDoesNotExist";
+    conditionalSet?: "onlyIfExists" | "onlyIfDoesNotExist" | "onlyIfEqual";
+    /**
+     * If onlyIfEqual is set, the value to compare the existing value with.
+     */
+    providedValue?: GlideString;
     /**
      * Return the old string stored at key, or nil if key did not exist. An error
      * is returned and SET aborted if the value stored at key is not a string.
@@ -168,6 +172,15 @@ export function createSet(
             args.push("XX");
         } else if (options.conditionalSet === "onlyIfDoesNotExist") {
             args.push("NX");
+        } else if (options.conditionalSet === "onlyIfEqual") {
+            args.push("IFEQ");
+            if (options.providedValue != undefined) {
+                args.push(options.providedValue);
+            } else {
+                throw new Error(
+                    "The 'providedValue' option must be set when using 'onlyIfEqual'",
+                );
+            }
         }
 
         if (options.returnOldValue) {
