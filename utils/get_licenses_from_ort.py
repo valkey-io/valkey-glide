@@ -38,6 +38,8 @@ APPROVED_LICENSES = [
     "Unicode-3.0",
     "(Apache-2.0 OR MIT) AND Unicode-3.0"
 ]
+
+# Packages with non-pre-approved licenses that received manual approval.
 APPROVED_PACKAGES = [
     "PyPI::pathspec:0.12.1",
     "PyPI::certifi:2023.11.17"
