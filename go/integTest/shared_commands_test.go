@@ -3552,22 +3552,22 @@ func (suite *GlideTestSuite) Test_ZCard() {
 			"two":   2.0,
 			"three": 3.0,
 		}
-
+		t := suite.T()
 		res1, err := client.ZAdd(key, membersScores)
-		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(3), res1.Value())
+		assert.Nil(t, err)
+		assert.Equal(t, int64(3), res1.Value())
 
 		res2, err := client.ZCard(key)
-		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(3), res2.Value())
+		assert.Nil(t, err)
+		assert.Equal(t, int64(3), res2.Value())
 
 		res3, err := client.ZRem(key, []string{"one"})
-		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), res3.Value())
+		assert.Nil(t, err)
+		assert.Equal(t, int64(1), res3.Value())
 
 		res4, err := client.ZCard(key)
-		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res4.Value())
+		assert.Nil(t, err)
+		assert.Equal(t, int64(2), res4.Value())
 	})
 }
 
