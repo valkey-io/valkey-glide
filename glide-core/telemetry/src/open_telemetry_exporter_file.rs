@@ -61,7 +61,7 @@ impl opentelemetry_sdk::export::trace::SpanExporter for SpanExporterFile {
 
         let spans = to_jsons(batch);
         for span in &spans {
-            if let Ok(s) = serde_json::to_string_pretty(&span) {
+            if let Ok(s) = serde_json::to_string(&span) {
                 file_writeln!(data_file, s);
             }
         }
@@ -173,6 +173,21 @@ fn to_jsons(batch: Vec<export::trace::SpanData>) -> Vec<Value> {
             events.push(Value::Object(evt));
         }
         map.insert("events".to_string(), Value::Array(events));
+
+        let mut links = Vec::<Value>::new();
+        for link in span.links.iter() {
+            let mut lk = Map::new();
+            lk.insert(
+                "trace_id".to_string(),
+                Value::String(link.span_context.trace_id().to_string()),
+            );
+            lk.insert(
+                "span_id".to_string(),
+                Value::String(link.span_context.span_id().to_string()),
+            );
+            links.push(Value::Object(lk));
+        }
+        map.insert("links".to_string(), Value::Array(links));
         spans.push(Value::Object(map));
     }
     spans
