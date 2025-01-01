@@ -7,6 +7,7 @@ use glide_core::errors;
 use glide_core::errors::RequestErrorType;
 use glide_core::request_type::RequestType;
 use glide_core::ConnectionRequest;
+use glide_core::client::{NodeAddress, TlsMode};
 use protobuf::Message;
 use redis::{RedisResult, Value};
 use std::slice::from_raw_parts;
@@ -112,34 +113,27 @@ pub type FailureCallback = unsafe extern "C" fn(
     error_type: RequestErrorType,
 ) -> ();
 
-/// The connection response.
-///
-/// It contains either a connection or an error. It is represented as a struct instead of a union for ease of use in the wrapper language.
-///
-/// The struct is freed by the external caller by using `free_connection_response` to avoid memory leaks.
-#[repr(C)]
-pub struct ConnectionResponse {
-    conn_ptr: *const c_void,
-    connection_error_message: *const c_char,
-}
+    /// The connection response.
+    ///
+    /// It contains either a connection or an error. It is represented as a struct instead of a union for ease of use in the wrapper language.
+    ///
+    /// The struct is freed by the external caller by using `free_connection_response` to avoid memory leaks.
+    #[repr(C)]
+    pub struct ConnectionResponse {
+        conn_ptr: *const c_void,
+        connection_error_message: *const c_char,
+    }
 
 /// A `GlideClient` adapter.
 // TODO: Remove allow(dead_code) once connection logic is implemented
 #[allow(dead_code)]
 pub struct ClientAdapter {
     client: GlideClient,
-    success_callback: SuccessCallback,
-    failure_callback: FailureCallback,
     runtime: Runtime,
 }
 
 fn create_client_internal(
-    connection_request_bytes: &[u8],
-    success_callback: SuccessCallback,
-    failure_callback: FailureCallback,
 ) -> Result<ClientAdapter, String> {
-    let request = connection_request::ConnectionRequest::parse_from_bytes(connection_request_bytes)
-        .map_err(|err| err.to_string())?;
     // TODO: optimize this using multiple threads instead of a single worker thread (e.g. by pinning each go thread to a rust thread)
     let runtime = Builder::new_multi_thread()
         .enable_all()
@@ -150,13 +144,17 @@ fn create_client_internal(
             let redis_error = err.into();
             errors::error_message(&redis_error)
         })?;
+    let addresses = vec![NodeAddress { host: "localhost".to_string(), port: 6379}];
+    let use_tls = true;
     let client = runtime
-        .block_on(GlideClient::new(ConnectionRequest::from(request), None))
+        .block_on(GlideClient::new(ConnectionRequest {addresses, tls_mode: if use_tls {
+            Some(TlsMode::SecureTls)
+        } else {
+            Some(TlsMode::NoTls)
+        }, cluster_mode_enabled: true, ..Default::default()}, None))
         .map_err(|err| err.to_string())?;
     Ok(ClientAdapter {
         client,
-        success_callback,
-        failure_callback,
         runtime,
     })
 }
@@ -179,15 +177,10 @@ fn create_client_internal(
 /// * Both the `success_callback` and `failure_callback` function pointers need to live while the client is open/active. The caller is responsible for freeing both callbacks.
 // TODO: Consider making this async
 #[no_mangle]
-pub unsafe extern "C" fn create_client(
-    connection_request_bytes: *const u8,
-    connection_request_len: usize,
-    success_callback: SuccessCallback,
-    failure_callback: FailureCallback,
-) -> *const ConnectionResponse {
-    let request_bytes =
-        unsafe { std::slice::from_raw_parts(connection_request_bytes, connection_request_len) };
-    let response = match create_client_internal(request_bytes, success_callback, failure_callback) {
+pub unsafe extern "C" fn create_client() -> *const ConnectionResponse {
+    // let request_bytes =
+    //     unsafe { std::slice::from_raw_parts(connection_request_bytes, connection_request_len) };
+    let response = match create_client_internal() {
         Err(err) => ConnectionResponse {
             conn_ptr: std::ptr::null(),
             connection_error_message: CString::into_raw(
@@ -515,61 +508,46 @@ pub unsafe extern "C" fn command(
     arg_count: c_ulong,
     args: *const usize,
     args_len: *const c_ulong,
-) {
+) -> *mut CommandResponse {
     let client_adapter =
         unsafe { Box::leak(Box::from_raw(client_adapter_ptr as *mut ClientAdapter)) };
-    // The safety of this needs to be ensured by the calling code. Cannot dispose of the pointer before
-    // all operations have completed.
-    let ptr_address = client_adapter_ptr as usize;
 
+    // Ensure the arguments are converted properly
     let arg_vec =
         unsafe { convert_double_pointer_to_vec(args as *const *const c_void, arg_count, args_len) };
 
     let mut client_clone = client_adapter.client.clone();
 
     // Create the command outside of the task to ensure that the command arguments passed
-    // from "go" are still valid
+    // from the caller are still valid
     let mut cmd = command_type
         .get_command()
         .expect("Couldn't fetch command type");
+
     for command_arg in arg_vec {
         cmd.arg(command_arg);
     }
 
-    client_adapter.runtime.spawn(async move {
-        let result = client_clone.send_command(&cmd, None).await;
-        let client_adapter = unsafe { Box::leak(Box::from_raw(ptr_address as *mut ClientAdapter)) };
-        let value = match result {
-            Ok(value) => value,
-            Err(err) => {
-                let message = errors::error_message(&err);
-                let error_type = errors::error_type(&err);
-
-                let c_err_str = CString::into_raw(
-                    CString::new(message).expect("Couldn't convert error message to CString"),
-                );
-                unsafe { (client_adapter.failure_callback)(channel, c_err_str, error_type) };
-                return;
-            }
-        };
-
-        let result: RedisResult<CommandResponse> = valkey_value_to_command_response(value);
-
-        unsafe {
-            match result {
-                Ok(message) => {
-                    (client_adapter.success_callback)(channel, Box::into_raw(Box::new(message)))
-                }
-                Err(err) => {
-                    let message = errors::error_message(&err);
-                    let error_type = errors::error_type(&err);
-
-                    let c_err_str = CString::into_raw(
-                        CString::new(message).expect("Couldn't convert error message to CString"),
-                    );
-                    (client_adapter.failure_callback)(channel, c_err_str, error_type);
-                }
-            };
-        }
+    // Block on the async task to execute the command
+    let result = client_adapter.runtime.block_on(async move {
+        client_clone.send_command(&cmd, None).await
     });
+
+    match result {
+        Ok(value) => {
+            // Convert the value to a CommandResponse
+            match valkey_value_to_command_response(value) {
+                Ok(command_response) => Box::into_raw(Box::new(command_response)), // Return a pointer to the CommandResponse
+                Err(err) => {
+                    eprintln!("Error converting value to CommandResponse: {:?}", err);
+                    std::ptr::null_mut()
+                }
+            }
+        }
+        Err(err) => {
+            // Handle the error case
+            eprintln!("Error executing command: {:?}", err);
+            std::ptr::null_mut()
+        }
+    }
 }
