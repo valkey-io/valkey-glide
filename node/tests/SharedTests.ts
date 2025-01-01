@@ -8147,14 +8147,14 @@ export function runBaseTests(config: {
         // Attempt to set with a non-matching value (should fail -> return null)
         const conditionalSetFailResponse = await client.set(key, newValue, {
             conditionalSet: "onlyIfEqual",
-            providedValue: newValue,
+            comparisonValue: newValue,
         });
         expect(conditionalSetFailResponse).toEqual(null);
 
         // Attempt to set with a matching value (should succeed -> return OK)
         const conditionalSetSuccessResponse = await client.set(key, newValue, {
             conditionalSet: "onlyIfEqual",
-            providedValue: initialValue,
+            comparisonValue: initialValue,
         });
         expect(conditionalSetSuccessResponse).toEqual("OK");
 
@@ -8246,7 +8246,7 @@ export function runBaseTests(config: {
                 count: Math.floor(Date.now() / 1000) + 1,
             },
             conditionalSet: "onlyIfEqual",
-            providedValue: initialValue,
+            comparisonValue: initialValue,
             returnOldValue: true,
         });
         // initialValue should be get from the key
@@ -8338,7 +8338,7 @@ export function runBaseTests(config: {
                               count: number;
                           },
                     conditionalSet: "onlyIfEqual",
-                    providedValue: value, // Ensure it matches the current key's value
+                    comparisonValue: value, // Ensure it matches the current key's value
                 });
 
                 if (setRes) {
