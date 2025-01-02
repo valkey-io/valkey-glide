@@ -11,6 +11,7 @@ import "C"
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"strconv"
 	"unsafe"
@@ -27,8 +28,10 @@ type BaseClient interface {
 	HashCommands
 	ListCommands
 	SetCommands
+	StreamCommands
 	SortedSetCommands
 	ConnectionManagementCommands
+	HyperLogLogCommands
 	GenericBaseCommands
 	// Close terminates the client by closing all associated resources.
 	Close()
@@ -104,14 +107,18 @@ func (client *baseClient) Close() {
 	client.coreClient = nil
 }
 
-func (client *baseClient) executeCommand(
+func (client *baseClient) executeCommand(requestType C.RequestType, args []string) (*C.struct_CommandResponse, error) {
+	return client.executeCommandWithRoute(requestType, args, nil)
+}
+
+func (client *baseClient) executeCommandWithRoute(
 	requestType C.RequestType,
 	args []string,
+	route route,
 ) (*C.struct_CommandResponse, error) {
 	if client.coreClient == nil {
 		return nil, &ClosingError{"ExecuteCommand failed. The client is closed."}
 	}
-
 	var cArgsPtr *C.uintptr_t = nil
 	var argLengthsPtr *C.ulong = nil
 	if len(args) > 0 {
@@ -123,6 +130,22 @@ func (client *baseClient) executeCommand(
 	resultChannel := make(chan payload)
 	resultChannelPtr := uintptr(unsafe.Pointer(&resultChannel))
 
+	var routeBytesPtr *C.uchar = nil
+	var routeBytesCount C.uintptr_t = 0
+	if route != nil {
+		routeProto, err := route.toRoutesProtobuf()
+		if err != nil {
+			return nil, &RequestError{"ExecuteCommand failed due to invalid route"}
+		}
+		msg, err := proto.Marshal(routeProto)
+		if err != nil {
+			return nil, err
+		}
+
+		routeBytesCount = C.uintptr_t(len(msg))
+		routeBytesPtr = (*C.uchar)(C.CBytes(msg))
+	}
+
 	C.command(
 		client.coreClient,
 		C.uintptr_t(resultChannelPtr),
@@ -130,6 +153,8 @@ func (client *baseClient) executeCommand(
 		C.size_t(len(args)),
 		cArgsPtr,
 		argLengthsPtr,
+		routeBytesPtr,
+		routeBytesCount,
 	)
 	payload := <-resultChannel
 	if payload.error != nil {
@@ -1189,6 +1214,24 @@ func (client *baseClient) PTTL(key string) (Result[int64], error) {
 	return handleLongResponse(result)
 }
 
+func (client *baseClient) PfAdd(key string, elements []string) (Result[int64], error) {
+	result, err := client.executeCommand(C.PfAdd, append([]string{key}, elements...))
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) PfCount(keys []string) (Result[int64], error) {
+	result, err := client.executeCommand(C.PfCount, keys)
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
 func (client *baseClient) Unlink(keys []string) (Result[int64], error) {
 	result, err := client.executeCommand(C.Unlink, keys)
 	if err != nil {
@@ -1229,6 +1272,39 @@ func (client *baseClient) Renamenx(key string, newKey string) (Result[bool], err
 		return CreateNilBoolResult(), err
 	}
 	return handleBooleanResponse(result)
+}
+
+func (client *baseClient) XAdd(key string, values [][]string) (Result[string], error) {
+	return client.XAddWithOptions(key, values, options.NewXAddOptions())
+}
+
+func (client *baseClient) XAddWithOptions(
+	key string,
+	values [][]string,
+	options *options.XAddOptions,
+) (Result[string], error) {
+	args := []string{}
+	args = append(args, key)
+	optionArgs, err := options.ToArgs()
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	args = append(args, optionArgs...)
+	for _, pair := range values {
+		if len(pair) != 2 {
+			return CreateNilStringResult(), fmt.Errorf(
+				"array entry had the wrong length. Expected length 2 but got length %d",
+				len(pair),
+			)
+		}
+		args = append(args, pair...)
+	}
+
+	result, err := client.executeCommand(C.XAdd, args)
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNullResponse(result)
 }
 
 func (client *baseClient) ZAdd(
@@ -1347,4 +1423,21 @@ func (client *baseClient) ZPopMaxWithCount(key string, count int64) (map[Result[
 		return nil, err
 	}
 	return handleStringDoubleMapResponse(result)
+}
+
+func (client *baseClient) ZRem(key string, members []string) (Result[int64], error) {
+	result, err := client.executeCommand(C.ZRem, append([]string{key}, members...))
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) ZCard(key string) (Result[int64], error) {
+	result, err := client.executeCommand(C.ZCard, []string{key})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
 }

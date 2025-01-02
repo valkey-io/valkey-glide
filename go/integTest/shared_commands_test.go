@@ -3544,6 +3544,33 @@ func (suite *GlideTestSuite) TestPExpireTime() {
 	})
 }
 
+func (suite *GlideTestSuite) Test_ZCard() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := "{key}" + uuid.NewString()
+		membersScores := map[string]float64{
+			"one":   1.0,
+			"two":   2.0,
+			"three": 3.0,
+		}
+		t := suite.T()
+		res1, err := client.ZAdd(key, membersScores)
+		assert.Nil(t, err)
+		assert.Equal(t, int64(3), res1.Value())
+
+		res2, err := client.ZCard(key)
+		assert.Nil(t, err)
+		assert.Equal(t, int64(3), res2.Value())
+
+		res3, err := client.ZRem(key, []string{"one"})
+		assert.Nil(t, err)
+		assert.Equal(t, int64(1), res3.Value())
+
+		res4, err := client.ZCard(key)
+		assert.Nil(t, err)
+		assert.Equal(t, int64(2), res4.Value())
+	})
+}
+
 func (suite *GlideTestSuite) TestPExpireTime_KeyDoesNotExist() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0")
 	suite.runWithDefaultClients(func(client api.BaseClient) {
@@ -3620,6 +3647,87 @@ func (suite *GlideTestSuite) TestPTTL_WithExpiredKey() {
 		resPTTL, err := client.PTTL(key)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(-2), resPTTL.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestPfAdd_SuccessfulAddition() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		res, err := client.PfAdd(key, []string{"a", "b", "c", "d", "e"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestPfAdd_DuplicateElements() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+
+		// case : Add elements and add same elements again
+		res, err := client.PfAdd(key, []string{"a", "b", "c", "d", "e"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res.Value())
+
+		res2, err := client.PfAdd(key, []string{"a", "b", "c", "d", "e"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res2.Value())
+
+		// case : (mixed elements) add new elements with 1 duplicate elements
+		res1, err := client.PfAdd(key, []string{"f", "g", "h"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res1.Value())
+
+		res2, err = client.PfAdd(key, []string{"i", "j", "g"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res2.Value())
+
+		// case : add empty array(no elements to the HyperLogLog)
+		res, err = client.PfAdd(key, []string{})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestPfCount_SingleKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		res, err := client.PfAdd(key, []string{"i", "j", "g"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res.Value())
+
+		resCount, err := client.PfCount([]string{key})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), resCount.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestPfCount_MultipleKeys() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.New().String() + "{group}"
+		key2 := uuid.New().String() + "{group}"
+
+		res, err := client.PfAdd(key1, []string{"a", "b", "c"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res.Value())
+
+		res, err = client.PfAdd(key2, []string{"c", "d", "e"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res.Value())
+
+		resCount, err := client.PfCount([]string{key1, key2})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(5), resCount.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestPfCount_NoExistingKeys() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.New().String() + "{group}"
+		key2 := uuid.New().String() + "{group}"
+
+		resCount, err := client.PfCount([]string{key1, key2})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), resCount.Value())
 	})
 }
 
@@ -3810,7 +3918,7 @@ func (suite *GlideTestSuite) TestUnlink() {
 	})
 }
 
-func (suite *GlideTestSuite) Test_Rename() {
+func (suite *GlideTestSuite) TestRename() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		// Test 1 Check if the command successfully renamed
 		key := "{keyName}" + uuid.NewString()
@@ -3846,6 +3954,65 @@ func (suite *GlideTestSuite) TestRenamenx() {
 		res2, err := client.Renamenx(key3, key4)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), false, res2.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestXAdd() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		// stream does not exist
+		res, err := client.XAdd(key, [][]string{{"field1", "value1"}, {"field1", "value2"}})
+		assert.Nil(suite.T(), err)
+		assert.False(suite.T(), res.IsNil())
+		// don't check the value, because it contains server's timestamp
+
+		// adding data to existing stream
+		res, err = client.XAdd(key, [][]string{{"field3", "value3"}})
+		assert.Nil(suite.T(), err)
+		assert.False(suite.T(), res.IsNil())
+
+		// incorrect input
+		_, err = client.XAdd(key, [][]string{})
+		assert.NotNil(suite.T(), err)
+		_, err = client.XAdd(key, [][]string{{"1", "2", "3"}})
+		assert.NotNil(suite.T(), err)
+
+		// key is not a string
+		key = uuid.NewString()
+		client.Set(key, "abc")
+		_, err = client.XAdd(key, [][]string{{"f", "v"}})
+		assert.NotNil(suite.T(), err)
+	})
+}
+
+func (suite *GlideTestSuite) TestXAddWithOptions() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		// stream does not exist
+		res, err := client.XAddWithOptions(
+			key,
+			[][]string{{"field1", "value1"}},
+			options.NewXAddOptions().SetDontMakeNewStream(),
+		)
+		assert.Nil(suite.T(), err)
+		assert.True(suite.T(), res.IsNil())
+
+		// adding data to with given ID
+		res, err = client.XAddWithOptions(key, [][]string{{"field1", "value1"}}, options.NewXAddOptions().SetId("0-1"))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "0-1", res.Value())
+
+		client.XAdd(key, [][]string{{"field2", "value2"}})
+		// TODO run XLen there
+		// this will trim the first entry.
+		res, err = client.XAddWithOptions(
+			key,
+			[][]string{{"field3", "value3"}},
+			options.NewXAddOptions().SetTrimOptions(options.NewXTrimOptionsWithMaxLen(2).SetExactTrimming()),
+		)
+		assert.Nil(suite.T(), err)
+		assert.False(suite.T(), res.IsNil())
+		// TODO run XLen there
 	})
 }
 
@@ -4035,6 +4202,42 @@ func (suite *GlideTestSuite) TestZPopMax() {
 		assert.Nil(suite.T(), err)
 
 		_, err = client.ZPopMax(key2)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestZRem() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		memberScoreMap := map[string]float64{
+			"one":   1.0,
+			"two":   2.0,
+			"three": 3.0,
+		}
+		res, err := client.ZAdd(key, memberScoreMap)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res.Value())
+
+		// no members to remove
+		_, err = client.ZRem(key, []string{})
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		res, err = client.ZRem(key, []string{"one"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res.Value())
+
+		// TODO: run ZCard there
+		res, err = client.ZRem(key, []string{"one", "two", "three"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res.Value())
+
+		// non sorted set key
+		_, err = client.Set(key, "test")
+		assert.Nil(suite.T(), err)
+
+		_, err = client.ZRem(key, []string{"value"})
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
