@@ -264,8 +264,8 @@ func (suite *GlideTestSuite) clusterClient(config *api.GlideClusterClientConfigu
 }
 
 func (suite *GlideTestSuite) runWithClients(clients []api.BaseClient, test func(client api.BaseClient)) {
-	for i, client := range clients {
-		suite.T().Run(fmt.Sprintf("Testing [%v]", i), func(t *testing.T) {
+	for _, client := range clients {
+		suite.T().Run(fmt.Sprintf("%T", client)[5:], func(t *testing.T) {
 			test(client)
 		})
 	}
