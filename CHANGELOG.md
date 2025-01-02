@@ -1,7 +1,5 @@
 #### Changes
-* Java: Add transaction commands for JSON module ([#2691](https://github.com/valkey-io/valkey-glide/pull/2691))
-* Node transaction commands json([#2690](https://github.com/valkey-io/valkey-glide/pull/2690))
-* Python: Add JSON commands in transaction ([#2684](https://github.com/valkey-io/valkey-glide/pull/2684))
+* Java, Node, Python: Add transaction commands for JSON module ([#2862](https://github.com/valkey-io/valkey-glide/pull/2862))
 * Node, Python: Add allow uncovered slots scanning flag option in cluster scan ([#2814](https://github.com/valkey-io/valkey-glide/pull/2814), [#2815](https://github.com/valkey-io/valkey-glide/pull/2815))
 * Go: Add HINCRBY command ([#2847](https://github.com/valkey-io/valkey-glide/pull/2847))
 * Go: Add HINCRBYFLOAT command ([#2846](https://github.com/valkey-io/valkey-glide/pull/2846))

@@ -4,6 +4,7 @@
     Examples:
         >>> import json
         >>> from glide import json_transaction
+        >>> transaction = ClusterTransaction()
         >>> value = {'a': 1.0, 'b': 2}
         >>> json_str = json.dumps(value) # Convert Python dictionary to JSON string using json.dumps()
         >>> json_transaction.set(transaction, "doc", "$", json_str)
@@ -14,7 +15,7 @@
         >>> print result[1] # get result
             b"[{\"a\":1.0,\"b\":2}]"
         >>> print json.loads(str(result[1]))
-            [{"a": 1.0, "b" :2}] # JSON object retrieved from the key `doc` using json.loads()
+            [{"a": 1.0, "b": 2}] # JSON object retrieved from the key `doc` using json.loads()
         """
 
 from typing import List, Optional, Union, cast

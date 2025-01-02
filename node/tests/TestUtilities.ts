@@ -1884,7 +1884,12 @@ export async function transactionTest(
     return responseData;
 }
 
-export async function transactionMultiJsonForArrCommands(
+/**
+ * Populates a transaction with JSON commands to test.
+ * @param baseTransaction - A transaction.
+ * @returns Array of tuples, where first element is a test name/description, second - expected return value.
+ */
+export async function transactionForJsonModule(
     baseTransaction: ClusterTransaction,
 ): Promise<[string, GlideReturnType][]> {
     const responseData: [string, GlideReturnType][] = [];
