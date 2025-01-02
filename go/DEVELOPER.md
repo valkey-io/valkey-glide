@@ -167,6 +167,8 @@ By default, those test suite start standalone and cluster servers without TLS an
 make integ-test standalone-endpoints=localhost:6379 cluster-endpoints=localhost:7000 tls=true
 ```
 
+Test reports generated in `reports` folder.
+
 ### Generate protobuf files
 
 During the initial build, Go protobuf files were created in `go/protobuf`. If modifications are made to the protobuf definition files (.proto files located in `glide-core/src/protobuf`), it becomes necessary to regenerate the Go protobuf files. To do so, run:
