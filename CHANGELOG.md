@@ -1,8 +1,8 @@
 #### Changes
-* Java: Add transaction commands for JSON module ([#2691](https://github.com/valkey-io/valkey-glide/pull/2691))
-* Node transaction commands json([#2690](https://github.com/valkey-io/valkey-glide/pull/2690))
-* Python: Add JSON commands in transaction ([#2684](https://github.com/valkey-io/valkey-glide/pull/2684))
 * Node, Python: Add allow uncovered slots scanning flag option in cluster scan ([#2814](https://github.com/valkey-io/valkey-glide/pull/2814), [#2815](https://github.com/valkey-io/valkey-glide/pull/2815))
+* Java: Add transaction commands for JSON module ([#2691](https://github.com/valkey-io/valkey-glide/pull/2691))
+* Node: Add transaction commands for JSON module ([#2690](https://github.com/valkey-io/valkey-glide/pull/2690))
+* Python: Add transaction commands for JSON module ([#2684](https://github.com/valkey-io/valkey-glide/pull/2684))
 * Go: Add HINCRBY command ([#2847](https://github.com/valkey-io/valkey-glide/pull/2847))
 * Go: Add HINCRBYFLOAT command ([#2846](https://github.com/valkey-io/valkey-glide/pull/2846))
 * Go: Add SUNIONSTORE command ([#2805](https://github.com/valkey-io/valkey-glide/pull/2805))
@@ -10,15 +10,35 @@
 * Java: bump `netty` version ([#2795](https://github.com/valkey-io/valkey-glide/pull/2795))
 * Java: Bump protobuf (protoc) version ([#2796](https://github.com/valkey-io/valkey-glide/pull/2796), [#2800](https://github.com/valkey-io/valkey-glide/pull/2800))
 * Go: Add `SInterStore` ([#2779](https://github.com/valkey-io/valkey-glide/issues/2779))
-* Node: Remove native package references for MacOs x64 architecture ([#2799](https://github.com/valkey-io/valkey-glide/issues/2799))
 * Go: Add `ZIncrBy` command ([#2830](https://github.com/valkey-io/valkey-glide/pull/2830))
 * Go: Add `SScan` and `SMove` ([#2789](https://github.com/valkey-io/valkey-glide/issues/2789))
 * Go: Add `ZADD` ([#2813](https://github.com/valkey-io/valkey-glide/issues/2813))
 * Go: Add `ZPopMin` and `ZPopMax` ([#2850](https://github.com/valkey-io/valkey-glide/pull/2850))
+* Java: Add binary version of `ZRANK WITHSCORE` ([#2896](https://github.com/valkey-io/valkey-glide/pull/2896))
+* Go: Add `ZCARD` ([#2838](https://github.com/valkey-io/valkey-glide/pull/2838))
 
 #### Breaking Changes
 
 #### Fixes
+
+#### Operational Enhancements
+
+## 1.2.1 (2024-12-29)
+
+#### Changes
+
+* Node, Python, Java: Add allow uncovered slots scanning flag option in cluster scan ([#2814](https://github.com/valkey-io/valkey-glide/pull/2814), [#2815](https://github.com/valkey-io/valkey-glide/pull/2815), [#2860](https://github.com/valkey-io/valkey-glide/pull/2860))
+* Java: Bump protobuf (protoc) version ([#2561](https://github.com/valkey-io/valkey-glide/pull/2561), [#2802](https://github.com/valkey-io/valkey-glide/pull/2802))
+* Java: bump `netty` version ([#2777](https://github.com/valkey-io/valkey-glide/pull/2777))
+* Node: Remove native package references for MacOs x64 architecture ([#2799](https://github.com/valkey-io/valkey-glide/issues/2799))
+* Node, Python, Java: Add connection timeout to client configuration ([#2823](https://github.com/valkey-io/valkey-glide/issues/2823))
+
+#### Breaking Changes
+
+#### Fixes
+
+* Core: Fix RESP2 multi-node response from cluster ([#2381](https://github.com/valkey-io/valkey-glide/pull/2381))
+* Core: Ensure cluster client creation fail when engine is < 7.0 and sharded subscriptions are configured ([#2819](https://github.com/valkey-io/valkey-glide/pull/2819))
 
 #### Operational Enhancements
 
@@ -114,14 +134,11 @@
 * Node: Add `JSON.NUMINCRBY` and `JSON.NUMMULTBY` command ([#2555](https://github.com/valkey-io/valkey-glide/pull/2555))
 * Core: Add support to Availability Zone Affinity read strategy ([#2539](https://github.com/valkey-io/valkey-glide/pull/2539))
 * Core: Fix list of readonly commands ([#2634](https://github.com/valkey-io/valkey-glide/pull/2634), [#2649](https://github.com/valkey-io/valkey-glide/pull/2649))
-* Java: Add transaction commands for JSON module ([#2691](https://github.com/valkey-io/valkey-glide/pull/2691))
 * Core: Improve retry logic and update unmaintained dependencies for Rust lint CI ([#2673](https://github.com/valkey-io/valkey-glide/pull/2643))
 * Core: Release the read lock while creating connections in `refresh_connections` ([#2630](https://github.com/valkey-io/valkey-glide/issues/2630))
 * Core: SlotMap refactor - Added NodesMap, Update the slot map upon MOVED errors ([#2682](https://github.com/valkey-io/valkey-glide/issues/2682))
 
 #### Breaking Changes
-
-**None**
 
 #### Fixes
 

@@ -308,23 +308,18 @@ jobs:
               if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-gnu' }}
               run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
 
-            - name: install Redis and git for alpine
+            - name: install redis and git for alpine
               if: ${{ contains(matrix.build.TARGET, 'musl') }}
               run: |
                   apk update
-                  apk add redis git
+                  apk add git redis
                   node -v
 
-            - name: install Redis and Python for ubuntu
+            - name: install Python for ubuntu
               if: ${{ contains(matrix.build.TARGET, 'linux-gnu') }}
               run: |
                   sudo apt-get update
-                  sudo apt-get install redis-server python3
-
-            - name: install Redis, Python for macos
-              if: ${{ contains(matrix.build.RUNNER, 'mac') }}
-              run: |
-                  brew install redis python3
+                  sudo apt-get install python3
 
             - name: Checkout
               if: ${{  matrix.build.TARGET != 'aarch64-unknown-linux-musl'}}
@@ -338,6 +333,13 @@ jobs:
                   npm-scope: ${{ vars.NPM_SCOPE }}
                   npm-auth-token: ${{ secrets.NPM_AUTH_TOKEN }}
                   arch: ${{ matrix.build.ARCH }}
+
+            - name: Install engine
+              if: ${{ !contains(matrix.build.TARGET, 'musl') }}
+              uses: ./.github/workflows/install-engine
+              with:
+                  engine-version: "8.0"
+                  target: ${{ matrix.build.target }}
 
             - name: Setup node
               if: ${{ !contains(matrix.build.TARGET, 'musl') }}
