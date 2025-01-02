@@ -14,7 +14,6 @@ import (
 func checkResponseType(response *C.struct_CommandResponse, expectedType C.ResponseType, isNilable bool) error {
 	expectedTypeInt := uint32(expectedType)
 	expectedTypeStr := C.get_response_type_string(expectedTypeInt)
-	defer C.free_response_type_string(expectedTypeStr)
 
 	if !isNilable && response == nil {
 		return &RequestError{
@@ -34,7 +33,6 @@ func checkResponseType(response *C.struct_CommandResponse, expectedType C.Respon
 	}
 
 	actualTypeStr := C.get_response_type_string(response.response_type)
-	defer C.free_response_type_string(actualTypeStr)
 	return &RequestError{
 		fmt.Sprintf(
 			"Unexpected return type from Valkey: got %s, expected %s",
