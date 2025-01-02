@@ -522,7 +522,6 @@ impl MultiplexedConnection {
             .pipeline
             .send_single(cmd.get_packed_command(), self.response_timeout)
             .await;
-
         if self.protocol != ProtocolVersion::RESP2 {
             if let Err(e) = &result {
                 if e.is_connection_dropped() {
