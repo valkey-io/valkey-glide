@@ -2,11 +2,11 @@
 
 package api
 
-// SetCommands supports commands and transactions for the "Set Commands" group for standalone and cluster clients.
+// Supports commands and transactions for the "Set" group of commands for standalone and cluster clients.
 //
 // See [valkey.io] for details.
 //
-// [valkey.io]: https://valkey.io/commands/?group=set
+// [valkey.io]: https://valkey.io/commands/#set
 type SetCommands interface {
 	// SAdd adds specified members to the set stored at key.
 	//
