@@ -31,6 +31,7 @@ type BaseClient interface {
 	StreamCommands
 	SortedSetCommands
 	ConnectionManagementCommands
+	HyperLogLogCommands
 	GenericBaseCommands
 	// Close terminates the client by closing all associated resources.
 	Close()
@@ -1213,6 +1214,24 @@ func (client *baseClient) PTTL(key string) (Result[int64], error) {
 	return handleLongResponse(result)
 }
 
+func (client *baseClient) PfAdd(key string, elements []string) (Result[int64], error) {
+	result, err := client.executeCommand(C.PfAdd, append([]string{key}, elements...))
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) PfCount(keys []string) (Result[int64], error) {
+	result, err := client.executeCommand(C.PfCount, keys)
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
 func (client *baseClient) Unlink(keys []string) (Result[int64], error) {
 	result, err := client.executeCommand(C.Unlink, keys)
 	if err != nil {
@@ -1404,6 +1423,23 @@ func (client *baseClient) ZPopMaxWithCount(key string, count int64) (map[Result[
 		return nil, err
 	}
 	return handleStringDoubleMapResponse(result)
+}
+
+func (client *baseClient) ZRem(key string, members []string) (Result[int64], error) {
+	result, err := client.executeCommand(C.ZRem, append([]string{key}, members...))
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) ZCard(key string) (Result[int64], error) {
+	result, err := client.executeCommand(C.ZCard, []string{key})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
 }
 
 func (client *baseClient) Restore(key string, ttl int64, value string) (Result[string], error) {

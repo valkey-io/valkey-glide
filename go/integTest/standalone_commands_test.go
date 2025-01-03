@@ -225,3 +225,60 @@ func (suite *GlideTestSuite) TestConfigSetAndGet_invalidArgs() {
 	assert.Equal(suite.T(), map[api.Result[string]]api.Result[string]{}, result2)
 	assert.Nil(suite.T(), err)
 }
+
+func (suite *GlideTestSuite) TestSelect_WithValidIndex() {
+	client := suite.defaultClient()
+	index := int64(1)
+	result, err := client.Select(index)
+
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "OK", result.Value())
+
+	key := uuid.New().String()
+	value := uuid.New().String()
+	suite.verifyOK(client.Set(key, value))
+
+	res, err := client.Get(key)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), value, res.Value())
+}
+
+func (suite *GlideTestSuite) TestSelect_InvalidIndex_OutOfBounds() {
+	client := suite.defaultClient()
+
+	result, err := client.Select(-1)
+	assert.NotNil(suite.T(), err)
+	assert.Equal(suite.T(), "", result.Value())
+
+	result, err = client.Select(1000)
+	assert.NotNil(suite.T(), err)
+	assert.Equal(suite.T(), "", result.Value())
+}
+
+func (suite *GlideTestSuite) TestSelect_SwitchBetweenDatabases() {
+	client := suite.defaultClient()
+
+	key1 := uuid.New().String()
+	value1 := uuid.New().String()
+	suite.verifyOK(client.Select(0))
+	suite.verifyOK(client.Set(key1, value1))
+
+	key2 := uuid.New().String()
+	value2 := uuid.New().String()
+	suite.verifyOK(client.Select(1))
+	suite.verifyOK(client.Set(key2, value2))
+
+	result, err := client.Get(key1)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "", result.Value())
+
+	suite.verifyOK(client.Select(0))
+	result, err = client.Get(key2)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), "", result.Value())
+
+	suite.verifyOK(client.Select(1))
+	result, err = client.Get(key2)
+	assert.Nil(suite.T(), err)
+	assert.Equal(suite.T(), value2, result.Value())
+}
