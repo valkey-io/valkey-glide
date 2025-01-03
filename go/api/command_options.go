@@ -359,8 +359,11 @@ func (restoreOption *RestoreOptions) SetABSTTL() *RestoreOptions {
 	return restoreOption
 }
 
+// For eviction purpose, you may use IDLETIME or FREQ modifiers.
 type Eviction struct {
-	Type  EvictionType
+	// It represent IDLETIME or FREQ.
+	Type EvictionType
+	// It represents count(int) of the idletime/frequency of object.
 	Count int64
 }
 
