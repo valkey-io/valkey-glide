@@ -1473,7 +1473,7 @@ export class BaseClient {
      * @param value - The value to store with the given key.
      * @param options - (Optional) See {@link SetOptions} and {@link DecoderOption}.
      * @returns - If the value is successfully set, return OK.
-     * If value isn't set because of `onlyIfExists` or `onlyIfDoesNotExist` conditions, return null.
+     * If value isn't set because of `onlyIfExists` or `onlyIfDoesNotExist` or `onlyIfEqual`conditions, return null.
      * If `returnOldValue` is set, return the old value as a string.
      *
      * @example
@@ -1493,6 +1493,10 @@ export class BaseClient {
      * // Example usage of get method to retrieve the value of a key
      * const result4 = await client.get("key");
      * console.log(result4); // Output: 'new_value' - Value wasn't modified back to being "value" because of "NX" flag.
+     *
+     * // Example usage of set method with conditional option IFEQ
+     * const result5 = await client.set("key", "ifeq_value", {conditionalSet: "onlyIfEqual", comparisonValue: "new_value");
+     * console.log(result5); // Output: 'OK' - Set "ifeq_value" to "key" only if comparisonValue is equal to the value of "key".
      * ```
      */
     public async set(
