@@ -1441,3 +1441,11 @@ func (client *baseClient) ZCard(key string) (Result[int64], error) {
 
 	return handleLongResponse(result)
 }
+
+func (client *baseClient) Persist(key string) (Result[bool], error) {
+	result, err := client.executeCommand(C.Persist, []string{key})
+	if err != nil {
+		return CreateNilBoolResult(), err
+	}
+	return handleBooleanResponse(result)
+}
