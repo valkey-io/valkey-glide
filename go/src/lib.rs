@@ -16,6 +16,7 @@ use redis::cluster_routing::{
 use redis::cluster_routing::{ResponsePolicy, Routable};
 use redis::{Cmd, RedisResult, Value};
 use std::slice::from_raw_parts;
+use std::sync::Arc;
 use std::{
     ffi::{c_void, CString},
     mem,
@@ -201,7 +202,7 @@ pub unsafe extern "C" fn create_client(
             ),
         },
         Ok(client) => ConnectionResponse {
-            conn_ptr: Box::into_raw(Box::new(client)) as *const c_void,
+            conn_ptr: Arc::into_raw(Arc::new(client)) as *const c_void,
             connection_error_message: std::ptr::null(),
         },
     };
@@ -226,7 +227,9 @@ pub unsafe extern "C" fn create_client(
 #[no_mangle]
 pub unsafe extern "C" fn close_client(client_adapter_ptr: *const c_void) {
     assert!(!client_adapter_ptr.is_null());
-    drop(unsafe { Box::from_raw(client_adapter_ptr as *mut ClientAdapter) });
+    let client_adapter = unsafe { Arc::from_raw(client_adapter_ptr as *mut ClientAdapter) };
+    let count = Arc::strong_count(&client_adapter);
+    assert!(count == 1, "Client is still in use.");
 }
 
 /// Deallocates a `ConnectionResponse`.
@@ -512,7 +515,8 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
 ///
 /// # Safety
 ///
-/// * TODO: finish safety section.
+/// This function should only be called, and should complete and call one of the response callbacks before `close_client` is called.
+/// After `close_client` is called, the `client_ptr` is not in a valid state.
 #[no_mangle]
 pub unsafe extern "C" fn command(
     client_adapter_ptr: *const c_void,
@@ -524,11 +528,13 @@ pub unsafe extern "C" fn command(
     route_bytes: *const u8,
     route_bytes_len: usize,
 ) {
-    let client_adapter =
-        unsafe { Box::leak(Box::from_raw(client_adapter_ptr as *mut ClientAdapter)) };
-    // The safety of this needs to be ensured by the calling code. Cannot dispose of the pointer before
-    // all operations have completed.
-    let ptr_address = client_adapter_ptr as usize;
+    let client_adapter = unsafe {
+        // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
+        Arc::increment_strong_count(client_adapter_ptr);
+        Arc::from_raw(client_adapter_ptr as *mut ClientAdapter)
+    };
+
+    let client_adapter_clone = client_adapter.clone();
 
     let arg_vec =
         unsafe { convert_double_pointer_to_vec(args as *const *const c_void, arg_count, args_len) };
@@ -552,7 +558,6 @@ pub unsafe extern "C" fn command(
         let result = client_clone
             .send_command(&cmd, get_route(route, Some(&cmd)))
             .await;
-        let client_adapter = unsafe { Box::leak(Box::from_raw(ptr_address as *mut ClientAdapter)) };
         let value = match result {
             Ok(value) => value,
             Err(err) => {
@@ -562,7 +567,7 @@ pub unsafe extern "C" fn command(
                 let c_err_str = CString::into_raw(
                     CString::new(message).expect("Couldn't convert error message to CString"),
                 );
-                unsafe { (client_adapter.failure_callback)(channel, c_err_str, error_type) };
+                unsafe { (client_adapter_clone.failure_callback)(channel, c_err_str, error_type) };
                 return;
             }
         };
@@ -571,9 +576,10 @@ pub unsafe extern "C" fn command(
 
         unsafe {
             match result {
-                Ok(message) => {
-                    (client_adapter.success_callback)(channel, Box::into_raw(Box::new(message)))
-                }
+                Ok(message) => (client_adapter_clone.success_callback)(
+                    channel,
+                    Box::into_raw(Box::new(message)),
+                ),
                 Err(err) => {
                     let message = errors::error_message(&err);
                     let error_type = errors::error_type(&err);
@@ -581,7 +587,7 @@ pub unsafe extern "C" fn command(
                     let c_err_str = CString::into_raw(
                         CString::new(message).expect("Couldn't convert error message to CString"),
                     );
-                    (client_adapter.failure_callback)(channel, c_err_str, error_type);
+                    (client_adapter_clone.failure_callback)(channel, c_err_str, error_type);
                 }
             };
         }
