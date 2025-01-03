@@ -769,7 +769,7 @@ type HashCommands interface {
 	//
 	// Example:
 	//  // Assume key contains a hash {{"a": "1"}, {"b", "2"}}
-	//	resCursor, resCollection, _ = client.HScan(key, initialCursor)
+	//	resCursor, resCollection, err = client.HScan(key, initialCursor)
 	//  // resCursor = {0 false}
 	//  // resCollection = [{a false} {1 false} {b false} {2 false}]
 	//

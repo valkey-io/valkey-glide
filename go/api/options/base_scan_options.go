@@ -7,7 +7,7 @@ import (
 )
 
 // This base option struct represents the common set of optional arguments for the SCAN family of commands.
-// Concrete implementations of this class are tied to specific SCAN commands (`SCAN`, `SSCAN`).
+// Concrete implementations of this class are tied to specific SCAN commands (`SCAN`, `SSCAN`, `HSCAN`).
 type BaseScanOptions struct {
 	/**
 	 * The match filter is applied to the result of the command and will only include
