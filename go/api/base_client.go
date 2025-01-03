@@ -1441,3 +1441,11 @@ func (client *baseClient) ZCard(key string) (Result[int64], error) {
 
 	return handleLongResponse(result)
 }
+
+func (client *baseClient) Echo(message string) (Result[string], error) {
+	result, err := client.executeCommand(C.Echo, []string{message})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringResponse(result)
+}
