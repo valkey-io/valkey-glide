@@ -2,13 +2,11 @@
 
 package api
 
-// Supports commands and transactions for the "List Commands" group for standalone and cluster clients.
+// Supports commands and transactions for the "Generic" group of commands for standalone and cluster clients.
 //
 // See [valkey.io] for details.
 //
-// GenericBaseCommands defines an interface for the "Generic Commands".
-//
-// [valkey.io]: https://valkey.io/commands/?group=Generic
+// [valkey.io]: https://valkey.io/commands/#generic
 type GenericBaseCommands interface {
 	// Del removes the specified keys from the database. A key is ignored if it does not exist.
 	//
