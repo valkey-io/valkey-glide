@@ -55,7 +55,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_ReturnOldValue() {
 
 func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfExists_overwrite() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "TestSetWithOptions_OnlyIfExists_overwrite"
+		key := uuid.New().String()
 		suite.verifyOK(client.Set(key, initialValue))
 
 		opts := api.NewSetOptionsBuilder().SetConditionalSet(api.OnlyIfExists)
@@ -70,7 +70,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfExists_overwrite() {
 
 func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfExists_missingKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "TestSetWithOptions_OnlyIfExists_missingKey"
+		key := uuid.New().String()
 		opts := api.NewSetOptionsBuilder().SetConditionalSet(api.OnlyIfExists)
 		result, err := client.SetWithOptions(key, anotherValue, opts)
 
@@ -81,7 +81,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfExists_missingKey() {
 
 func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfDoesNotExist_missingKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "TestSetWithOptions_OnlyIfDoesNotExist_missingKey"
+		key := uuid.New().String()
 		opts := api.NewSetOptionsBuilder().SetConditionalSet(api.OnlyIfDoesNotExist)
 		suite.verifyOK(client.SetWithOptions(key, anotherValue, opts))
 
@@ -94,7 +94,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfDoesNotExist_missingKey() 
 
 func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfDoesNotExist_existingKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "TestSetWithOptions_OnlyIfDoesNotExist_existingKey"
+		key := uuid.New().String()
 		opts := api.NewSetOptionsBuilder().SetConditionalSet(api.OnlyIfDoesNotExist)
 		suite.verifyOK(client.Set(key, initialValue))
 
@@ -112,7 +112,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfDoesNotExist_existingKey()
 
 func (suite *GlideTestSuite) TestSetWithOptions_KeepExistingExpiry() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "TestSetWithOptions_KeepExistingExpiry"
+		key := uuid.New().String()
 		opts := api.NewSetOptionsBuilder().SetExpiry(api.NewExpiryBuilder().SetType(api.Milliseconds).SetCount(uint64(2000)))
 		suite.verifyOK(client.SetWithOptions(key, initialValue, opts))
 
@@ -139,7 +139,7 @@ func (suite *GlideTestSuite) TestSetWithOptions_KeepExistingExpiry() {
 
 func (suite *GlideTestSuite) TestSetWithOptions_UpdateExistingExpiry() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "TestSetWithOptions_UpdateExistingExpiry"
+		key := uuid.New().String()
 		opts := api.NewSetOptionsBuilder().SetExpiry(api.NewExpiryBuilder().SetType(api.Milliseconds).SetCount(uint64(100500)))
 		suite.verifyOK(client.SetWithOptions(key, initialValue, opts))
 
@@ -166,14 +166,14 @@ func (suite *GlideTestSuite) TestSetWithOptions_UpdateExistingExpiry() {
 
 func (suite *GlideTestSuite) TestGetEx_existingAndNonExistingKeys() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "TestGetEx_ExisitingKey"
+		key := uuid.New().String()
 		suite.verifyOK(client.Set(key, initialValue))
 
 		result, err := client.GetEx(key)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), initialValue, result.Value())
 
-		key = "TestGetEx_NonExisitingKey"
+		key = uuid.New().String()
 		result, err = client.Get(key)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "", result.Value())
@@ -182,7 +182,7 @@ func (suite *GlideTestSuite) TestGetEx_existingAndNonExistingKeys() {
 
 func (suite *GlideTestSuite) TestGetExWithOptions_PersistKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "TestGetExWithOptions_PersistKey"
+		key := uuid.New().String()
 		suite.verifyOK(client.Set(key, initialValue))
 
 		opts := api.NewGetExOptionsBuilder().SetExpiry(api.NewExpiryBuilder().SetType(api.Milliseconds).SetCount(uint64(2000)))
@@ -205,7 +205,7 @@ func (suite *GlideTestSuite) TestGetExWithOptions_PersistKey() {
 
 func (suite *GlideTestSuite) TestGetExWithOptions_UpdateExpiry() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "TestGetExWithOptions_UpdateExpiry"
+		key := uuid.New().String()
 		suite.verifyOK(client.Set(key, initialValue))
 
 		opts := api.NewGetExOptionsBuilder().SetExpiry(api.NewExpiryBuilder().SetType(api.Milliseconds).SetCount(uint64(2000)))
@@ -227,7 +227,7 @@ func (suite *GlideTestSuite) TestGetExWithOptions_UpdateExpiry() {
 
 func (suite *GlideTestSuite) TestSetWithOptions_ReturnOldValue_nonExistentKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "TestSetWithOptions_ReturnOldValue_nonExistentKey"
+		key := uuid.New().String()
 		opts := api.NewSetOptionsBuilder().SetReturnOldValue(true)
 
 		result, err := client.SetWithOptions(key, anotherValue, opts)
@@ -3544,6 +3544,33 @@ func (suite *GlideTestSuite) TestPExpireTime() {
 	})
 }
 
+func (suite *GlideTestSuite) Test_ZCard() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := "{key}" + uuid.NewString()
+		membersScores := map[string]float64{
+			"one":   1.0,
+			"two":   2.0,
+			"three": 3.0,
+		}
+		t := suite.T()
+		res1, err := client.ZAdd(key, membersScores)
+		assert.Nil(t, err)
+		assert.Equal(t, int64(3), res1.Value())
+
+		res2, err := client.ZCard(key)
+		assert.Nil(t, err)
+		assert.Equal(t, int64(3), res2.Value())
+
+		res3, err := client.ZRem(key, []string{"one"})
+		assert.Nil(t, err)
+		assert.Equal(t, int64(1), res3.Value())
+
+		res4, err := client.ZCard(key)
+		assert.Nil(t, err)
+		assert.Equal(t, int64(2), res4.Value())
+	})
+}
+
 func (suite *GlideTestSuite) TestPExpireTime_KeyDoesNotExist() {
 	suite.SkipIfServerVersionLowerThanBy("7.0.0")
 	suite.runWithDefaultClients(func(client api.BaseClient) {
@@ -3620,6 +3647,87 @@ func (suite *GlideTestSuite) TestPTTL_WithExpiredKey() {
 		resPTTL, err := client.PTTL(key)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), int64(-2), resPTTL.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestPfAdd_SuccessfulAddition() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		res, err := client.PfAdd(key, []string{"a", "b", "c", "d", "e"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestPfAdd_DuplicateElements() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+
+		// case : Add elements and add same elements again
+		res, err := client.PfAdd(key, []string{"a", "b", "c", "d", "e"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res.Value())
+
+		res2, err := client.PfAdd(key, []string{"a", "b", "c", "d", "e"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res2.Value())
+
+		// case : (mixed elements) add new elements with 1 duplicate elements
+		res1, err := client.PfAdd(key, []string{"f", "g", "h"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res1.Value())
+
+		res2, err = client.PfAdd(key, []string{"i", "j", "g"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res2.Value())
+
+		// case : add empty array(no elements to the HyperLogLog)
+		res, err = client.PfAdd(key, []string{})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), res.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestPfCount_SingleKey() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		res, err := client.PfAdd(key, []string{"i", "j", "g"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res.Value())
+
+		resCount, err := client.PfCount([]string{key})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), resCount.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestPfCount_MultipleKeys() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.New().String() + "{group}"
+		key2 := uuid.New().String() + "{group}"
+
+		res, err := client.PfAdd(key1, []string{"a", "b", "c"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res.Value())
+
+		res, err = client.PfAdd(key2, []string{"c", "d", "e"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res.Value())
+
+		resCount, err := client.PfCount([]string{key1, key2})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(5), resCount.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestPfCount_NoExistingKeys() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.New().String() + "{group}"
+		key2 := uuid.New().String() + "{group}"
+
+		resCount, err := client.PfCount([]string{key1, key2})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), resCount.Value())
 	})
 }
 
@@ -4094,6 +4202,42 @@ func (suite *GlideTestSuite) TestZPopMax() {
 		assert.Nil(suite.T(), err)
 
 		_, err = client.ZPopMax(key2)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestZRem() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		memberScoreMap := map[string]float64{
+			"one":   1.0,
+			"two":   2.0,
+			"three": 3.0,
+		}
+		res, err := client.ZAdd(key, memberScoreMap)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), res.Value())
+
+		// no members to remove
+		_, err = client.ZRem(key, []string{})
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		res, err = client.ZRem(key, []string{"one"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res.Value())
+
+		// TODO: run ZCard there
+		res, err = client.ZRem(key, []string{"one", "two", "three"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), res.Value())
+
+		// non sorted set key
+		_, err = client.Set(key, "test")
+		assert.Nil(suite.T(), err)
+
+		_, err = client.ZRem(key, []string{"value"})
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})

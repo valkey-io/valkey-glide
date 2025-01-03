@@ -192,4 +192,44 @@ type SortedSetCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/zpopmin/
 	ZPopMaxWithCount(key string, count int64) (map[Result[string]]Result[float64], error)
+
+	// Removes the specified members from the sorted set stored at `key`.
+	// Specified members that are not a member of this set are ignored.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   key - The key of the sorted set.
+	//   members - The members to remove.
+	//
+	// Return value:
+	//   The number of members that were removed from the sorted set, not including non-existing members.
+	//   If `key` does not exist, it is treated as an empty sorted set, and this command returns 0.
+	//
+	// Example:
+	//   res, err := client.ZRem("mySortedSet", []string{""member1", "member2", "missing"})
+	//   fmt.Println(res.Value()) // Output: 2
+	//
+	// [valkey.io]: https://valkey.io/commands/zrem/
+	ZRem(key string, members []string) (Result[int64], error)
+
+	// Returns the cardinality (number of elements) of the sorted set stored at `key`.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   key - The key of the set.
+	//
+	// Return value:
+	//   The number of elements in the sorted set.
+	//
+	// If `key` does not exist, it is treated as an empty sorted set, and this command returns 0.
+	// If `key` holds a value that is not a sorted set, an error is returned.
+	//
+	// Example:
+	//   result1, err := client.ZCard("mySet")
+	//   result1.Value() :1 // There is 1 item in the set
+	//
+	// [valkey.io]: https://valkey.io/commands/zcard/
+	ZCard(key string) (Result[int64], error)
 }
