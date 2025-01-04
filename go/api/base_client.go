@@ -234,7 +234,7 @@ func (client *baseClient) GetExWithOptions(key string, options *GetExOptions) (R
 }
 
 func (client *baseClient) MSet(keyValueMap map[string]string) (Result[string], error) {
-	result, err := client.executeCommand(C.MSet, utils.ConvertMapToValueKeyStringArray(keyValueMap))
+	result, err := client.executeCommand(C.MSet, utils.MapToString(keyValueMap))
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
@@ -243,7 +243,7 @@ func (client *baseClient) MSet(keyValueMap map[string]string) (Result[string], e
 }
 
 func (client *baseClient) MSetNX(keyValueMap map[string]string) (Result[bool], error) {
-	result, err := client.executeCommand(C.MSetNX, utils.ConvertMapToValueKeyStringArray(keyValueMap))
+	result, err := client.executeCommand(C.MSetNX, utils.MapToString(keyValueMap))
 	if err != nil {
 		return CreateNilBoolResult(), err
 	}
