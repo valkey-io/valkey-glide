@@ -8,6 +8,7 @@ import "C"
 
 import (
 	"fmt"
+	"reflect"
 	"unsafe"
 )
 
@@ -435,44 +436,87 @@ func convertToResultStringArray(input []interface{}) ([]Result[string], error) {
 	return result, nil
 }
 
+// get type of T
+func getType[T any]() reflect.Type {
+	var zero [0]T
+	return reflect.TypeOf(zero).Elem()
+}
+
+// convert (typecast) untyped response into a typed value
+// for example, an arbitrary array `[]interface{}` into `[]string`
+type responseConverter interface {
+	convert(data interface{}) (interface{}, error)
+}
+
+// convert maps, T - type of the value, key is string
+type mapConverter[T any] struct {
+	next responseConverter
+}
+
+func (node mapConverter[T]) convert(data interface{}) (interface{}, error) {
+	mapType := reflect.MapOf(reflect.TypeOf("key"), getType[T]())
+	aMap := reflect.MakeMap(mapType)
+
+	for key, value := range data.(map[string]interface{}) {
+		if node.next == nil {
+			aMap.SetMapIndex(reflect.ValueOf(key), reflect.ValueOf(value))
+		} else {
+			val, err := node.next.convert(value)
+			if err != nil {
+				return nil, err
+			}
+			aMap.SetMapIndex(reflect.ValueOf(key), reflect.ValueOf(val))
+		}
+	}
+
+	return aMap.Interface(), nil
+}
+
+// convert arrays, T - type of the value
+type arrayConverter[T any] struct {
+	next responseConverter
+}
+
+func (node arrayConverter[T]) convert(data interface{}) (interface{}, error) {
+	arrData := data.([]interface{})
+	arrayType := reflect.SliceOf(getType[T]())
+	anArray := reflect.MakeSlice(arrayType, 0, len(arrData))
+	for _, value := range arrData {
+		if node.next == nil {
+			anArray = reflect.Append(anArray, reflect.ValueOf(value))
+		} else {
+			val, err := node.next.convert(value)
+			if err != nil {
+				return nil, err
+			}
+			anArray = reflect.Append(anArray, reflect.ValueOf(val))
+		}
+	}
+
+	return anArray.Interface(), nil
+}
+
+// TODO: convert sets
+
 func handleXReadResponse(response *C.struct_CommandResponse) (map[string]map[string][][]string, error) {
 	data1, err := parseMap(response)
 	if err != nil {
 		return nil, err
 	}
-	m1 := make(map[string]map[string][][]string, 0)
-	// m1 := data.(map[string]interface{}) // m1 has type `map[string]inteface{}` where `inteface{}` is actually `m2`
-	for k1, v1 := range data1.(map[string]interface{}) {
-		m2 := make(map[string][][]string, 0)
-		if data2, ok := v1.(map[string]interface{}); ok {
-			// m2 has type `map[string]inteface{}` where `inteface{}` is actually `[][]string`
-			for k2, v2 := range data2 {
-				if data3, ok := v2.([]interface{}); ok {
-					arr1 := make([][]string, 0, len(data3))
-					for _, e1 := range data3 {
-						if data4, ok := e1.([]interface{}); ok {
-							arr2 := make([]string, 0, len(data4))
-							for _, e2 := range data4 {
-								if str, ok := e2.(string); ok {
-									arr2 = append(arr2, str)
-								} else {
-									return nil, &RequestError{fmt.Sprintf("444 Unexpected type received: %T", e2)}
-								}
-							}
-							arr1 = append(arr1, arr2)
-						} else {
-							return nil, &RequestError{fmt.Sprintf("333 Unexpected type received: %T", e1)}
-						}
-					}
-					m2[k2] = arr1
-				} else {
-					return nil, &RequestError{fmt.Sprintf("222 Unexpected type received: %T", v2)}
-				}
-			}
-			m1[k1] = m2
-		} else {
-			return nil, &RequestError{fmt.Sprintf("111 Unexpected type received: %T", v1)}
-		}
+	converters := mapConverter[map[string][][]string]{
+		mapConverter[[][]string]{
+			arrayConverter[[]string]{
+				arrayConverter[string]{},
+			},
+		},
 	}
-	return m1, nil
+
+	res, err := converters.convert(data1)
+	if err != nil {
+		return nil, err
+	}
+	if result, ok := res.(map[string]map[string][][]string); ok {
+		return result, nil
+	}
+	return nil, &RequestError{fmt.Sprintf("unexpected type received: %T", res)}
 }

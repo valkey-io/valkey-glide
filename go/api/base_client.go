@@ -1308,20 +1308,6 @@ func (client *baseClient) XRead(keys_and_ids map[string]string) (map[string]map[
 	}
 
 	return handleXReadResponse(result)
-	// res, err := handleInterfaceResponse(result)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// describe(res)
-	// return res.(map[string]map[string][][]string), nil
-	// if casted, ok := res.(map[string]map[string][][]string); ok {
-	// 	return casted, nil
-	// }
-	// return nil, &RequestError{fmt.Sprintf("Unexpected type received: %T", res)}
-}
-
-func describe(i interface{}) {
-	fmt.Printf("\n=====\n%v\n===\n%T\n=====\n", i, i)
 }
 
 func (client *baseClient) ZAdd(

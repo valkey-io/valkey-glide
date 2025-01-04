@@ -3913,17 +3913,28 @@ func (suite *GlideTestSuite) TestXRead() {
 		key1 := "{xread}" + uuid.NewString()
 		key2 := "{xread}" + uuid.NewString()
 
-		res, err := client.XAdd(key1, [][]string{{"k1_field1", "k1_value1"}, {"k1_field1", "k1_value2"}})
+		res, err := client.XAddWithOptions(
+			key1,
+			[][]string{{"k1_field1", "k1_value1"}, {"k1_field1", "k1_value2"}},
+			options.NewXAddOptions().SetId("0-1"),
+		)
 		assert.Nil(suite.T(), err)
 		assert.False(suite.T(), res.IsNil())
 
-		res, err = client.XAdd(key2, [][]string{{"k2_field1", "k2_value1"}})
+		res, err = client.XAddWithOptions(key2, [][]string{{"k2_field1", "k2_value1"}}, options.NewXAddOptions().SetId("2-0"))
 		assert.Nil(suite.T(), err)
 		assert.False(suite.T(), res.IsNil())
 
 		read, err := client.XRead(map[string]string{key1: "0-0", key2: "0-0"})
 		assert.Nil(suite.T(), err)
-		assert.NotNil(suite.T(), read)
+		assert.Equal(suite.T(), map[string]map[string][][]string{
+			key1: {
+				"0-1": {{"k1_field1", "k1_value1"}, {"k1_field1", "k1_value2"}},
+			},
+			key2: {
+				"2-0": {{"k2_field1", "k2_value1"}},
+			},
+		}, read)
 	})
 }
 
