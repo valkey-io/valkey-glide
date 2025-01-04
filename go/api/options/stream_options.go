@@ -134,7 +134,7 @@ func (xro *XReadOptions) SetCount(count int64) *XReadOptions {
 }
 
 // If set, the request will be blocked for the set amount of milliseconds or until the server has
-// the required number of entries. Equivalent to `BLOCK` in the Valkey API.
+// the required number of entries. A value of `0` will block indefinitely. Equivalent to `BLOCK` in the Valkey API.
 func (xro *XReadOptions) SetBlock(block int64) *XReadOptions {
 	xro.block = block
 	return xro

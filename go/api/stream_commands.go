@@ -62,7 +62,7 @@ type StreamCommands interface {
 	//
 	// Return value:
 	// A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
-	// key does not exist.
+	// a key does not exist or does not contain requiested entries.
 	//
 	// For example:
 	//  result, err := client.XRead({"stream1": "0-0", "stream2": "0-1"})
@@ -88,7 +88,7 @@ type StreamCommands interface {
 	//
 	// Return value:
 	// A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
-	// key does not exist.
+	// a key does not exist or does not contain requiested entries.
 	//
 	// For example:
 	//  options := options.NewXReadOptions().SetBlock(100500)
