@@ -53,12 +53,12 @@ type StreamCommands interface {
 	// Reads entries from the given streams.
 	//
 	// Note:
-	//  When in cluster mode, all keys in `keys_and_ids` must map to the same hash slot.
+	//  When in cluster mode, all keys in `keysAndIds` must map to the same hash slot.
 	//
 	// See [valkey.io] for details.
 	//
 	// Parameters:
-	//  keys_and_ids - A map of keys and entry IDs to read from
+	//  keysAndIds - A map of keys and entry IDs to read from.
 	//
 	// Return value:
 	// A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
@@ -67,9 +67,38 @@ type StreamCommands interface {
 	// For example:
 	//  result, err := client.XRead({"stream1": "0-0", "stream2": "0-1"})
 	//  err == nil: true
-	// result: map[string]map[string][][]string{"stream1": {"0-1": {{"field1", "value1"}}, "0-2": {{"field2", "value2"},
-	// {"field2", "value3"}}}, "stream2": {}}
+	//  result: map[string]map[string][][]string{
+	//    "stream1": {"0-1": {{"field1", "value1"}}, "0-2": {{"field2", "value2"}, {"field2", "value3"}}},
+	//    "stream2": {},
+	//  }
 	//
 	// [valkey.io]: https://valkey.io/commands/xread/
-	XRead(keys_and_ids map[string]string) (map[string]map[string][][]string, error)
+	XRead(keysAndIds map[string]string) (map[string]map[string][][]string, error)
+
+	// Reads entries from the given streams.
+	//
+	// Note:
+	//  When in cluster mode, all keys in `keysAndIds` must map to the same hash slot.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//  keysAndIds - A map of keys and entry IDs to read from.
+	//  options - Options detailing how to read the stream.
+	//
+	// Return value:
+	// A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
+	// key does not exist.
+	//
+	// For example:
+	//  options := options.NewXReadOptions().SetBlock(100500)
+	//  result, err := client.XReadWithOptions({"stream1": "0-0", "stream2": "0-1"}, options)
+	//  err == nil: true
+	//  result: map[string]map[string][][]string{
+	//    "stream1": {"0-1": {{"field1", "value1"}}, "0-2": {{"field2", "value2"}, {"field2", "value3"}}},
+	//    "stream2": {},
+	//  }
+	//
+	// [valkey.io]: https://valkey.io/commands/xread/
+	XReadWithOptions(keysAndIds map[string]string, options *options.XReadOptions) (map[string]map[string][][]string, error)
 }

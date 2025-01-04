@@ -27,7 +27,7 @@ func NewXAddOptions() *XAddOptions {
 	return &XAddOptions{}
 }
 
-// New entry will be added with this `id“.
+// New entry will be added with this `id`.
 func (xao *XAddOptions) SetId(id string) *XAddOptions {
 	xao.id = id
 	return xao
@@ -47,7 +47,6 @@ func (xao *XAddOptions) SetTrimOptions(options *XTrimOptions) *XAddOptions {
 
 func (xao *XAddOptions) ToArgs() ([]string, error) {
 	args := []string{}
-	var err error
 	if xao.makeStream == triStateBoolFalse {
 		args = append(args, "NOMKSTREAM")
 	}
@@ -63,7 +62,7 @@ func (xao *XAddOptions) ToArgs() ([]string, error) {
 	} else {
 		args = append(args, "*")
 	}
-	return args, err
+	return args, nil
 }
 
 // Optional arguments for `XTrim` and `XAdd` in [StreamCommands]
@@ -115,6 +114,39 @@ func (xto *XTrimOptions) ToArgs() ([]string, error) {
 	if xto.limit > 0 {
 		args = append(args, "LIMIT", utils.IntToString(xto.limit))
 	}
-	var err error
-	return args, err
+	return args, nil
+}
+
+// Optional arguments for `XRead` in [StreamCommands]
+type XReadOptions struct {
+	count, block int64
+}
+
+// Create new empty `XReadOptions`
+func NewXReadOptions() *XReadOptions {
+	return &XReadOptions{-1, -1}
+}
+
+// The maximal number of elements requested. Equivalent to `COUNT` in the Valkey API.
+func (xro *XReadOptions) SetCount(count int64) *XReadOptions {
+	xro.count = count
+	return xro
+}
+
+// If set, the request will be blocked for the set amount of milliseconds or until the server has
+// the required number of entries. Equivalent to `BLOCK` in the Valkey API.
+func (xro *XReadOptions) SetBlock(block int64) *XReadOptions {
+	xro.block = block
+	return xro
+}
+
+func (xro *XReadOptions) ToArgs() ([]string, error) {
+	args := []string{}
+	if xro.count >= 0 {
+		args = append(args, "COUNT", utils.IntToString(xro.count))
+	}
+	if xro.block >= 0 {
+		args = append(args, "BLOCK", utils.IntToString(xro.block))
+	}
+	return args, nil
 }

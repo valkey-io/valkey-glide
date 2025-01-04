@@ -499,10 +499,14 @@ func (node arrayConverter[T]) convert(data interface{}) (interface{}, error) {
 // TODO: convert sets
 
 func handleXReadResponse(response *C.struct_CommandResponse) (map[string]map[string][][]string, error) {
-	data1, err := parseMap(response)
+	data, err := parseMap(response)
 	if err != nil {
 		return nil, err
 	}
+	if data == nil {
+		return nil, nil
+	}
+
 	converters := mapConverter[map[string][][]string]{
 		mapConverter[[][]string]{
 			arrayConverter[[]string]{
@@ -511,7 +515,7 @@ func handleXReadResponse(response *C.struct_CommandResponse) (map[string]map[str
 		},
 	}
 
-	res, err := converters.convert(data1)
+	res, err := converters.convert(data)
 	if err != nil {
 		return nil, err
 	}
