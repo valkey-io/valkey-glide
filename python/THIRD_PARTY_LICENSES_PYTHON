@@ -1619,7 +1619,7 @@ the following restrictions:
 
 ----
 
-Package: async-trait:0.1.83
+Package: async-trait:0.1.84
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -2816,7 +2816,7 @@ For more information, please refer to <http://unlicense.org/>
 
 ----
 
-Package: bytes:1.8.0
+Package: bytes:1.9.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -3070,7 +3070,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: chrono:0.4.38
+Package: chrono:0.4.39
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -4036,7 +4036,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: crossbeam-channel:0.5.13
+Package: crossbeam-channel:0.5.14
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -4265,7 +4265,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: crossbeam-utils:0.8.20
+Package: crossbeam-utils:0.8.21
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -11907,7 +11907,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: js-sys:0.3.72
+Package: js-sys:0.3.76
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -12365,7 +12365,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: libc:0.2.165
+Package: libc:0.2.169
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -13362,7 +13362,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: miniz_oxide:0.8.0
+Package: miniz_oxide:0.8.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -13611,7 +13611,7 @@ the following restrictions:
 
 ----
 
-Package: mio:1.0.2
+Package: mio:1.0.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -14831,7 +14831,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: object:0.36.5
+Package: object:0.36.7
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -19257,7 +19257,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: quote:1.0.37
+Package: quote:1.0.38
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -20204,7 +20204,7 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----
 
-Package: redox_syscall:0.5.7
+Package: redox_syscall:0.5.8
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -21212,7 +21212,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: rustls-pki-types:1.10.0
+Package: rustls-pki-types:1.10.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -21459,7 +21459,7 @@ THIS SOFTWARE.
 
 ----
 
-Package: rustversion:1.0.18
+Package: rustversion:1.0.19
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -22405,7 +22405,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: security-framework-sys:2.12.1
+Package: security-framework-sys:2.13.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -22634,7 +22634,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: serde:1.0.215
+Package: serde:1.0.217
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -22863,7 +22863,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: serde_derive:1.0.215
+Package: serde_derive:1.0.217
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -23402,7 +23402,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: socket2:0.5.7
+Package: socket2:0.5.8
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -23966,7 +23966,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: syn:2.0.89
+Package: syn:2.0.94
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -25106,7 +25106,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: time:0.3.36
+Package: time:0.3.37
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -25564,7 +25564,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: time-macros:0.2.18
+Package: time-macros:0.2.19
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -25793,7 +25793,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: tinyvec:1.8.0
+Package: tinyvec:1.8.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -26291,7 +26291,7 @@ the following restrictions:
 
 ----
 
-Package: tokio:1.41.1
+Package: tokio:1.42.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -26595,7 +26595,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: tokio-util:0.7.12
+Package: tokio-util:0.7.13
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -26620,7 +26620,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: tracing:0.1.40
+Package: tracing:0.1.41
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -26670,7 +26670,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: tracing-attributes:0.1.27
+Package: tracing-attributes:0.1.28
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -26745,7 +26745,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: tracing-subscriber:0.3.18
+Package: tracing-subscriber:0.3.19
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -26770,7 +26770,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: unicode-bidi:0.3.17
+Package: unicode-bidi:0.3.18
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -28441,7 +28441,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen:0.2.95
+Package: wasm-bindgen:0.2.99
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -28670,7 +28670,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-backend:0.2.95
+Package: wasm-bindgen-backend:0.2.99
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -28899,7 +28899,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-macro:0.2.95
+Package: wasm-bindgen-macro:0.2.99
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -29128,7 +29128,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-macro-support:0.2.95
+Package: wasm-bindgen-macro-support:0.2.99
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -29357,7 +29357,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-shared:0.2.95
+Package: wasm-bindgen-shared:0.2.99
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -33962,31 +33962,6 @@ The following copyrights and licenses were found in the source code of this pack
 
 ----
 
-Package: attrs:24.2.0
-
-The following copyrights and licenses were found in the source code of this package:
-
-Permission is hereby granted, free of charge, to any person obtaining
-a copy of this software and associated documentation files (the
-"Software"), to deal in the Software without restriction, including
-without limitation the rights to use, copy, modify, merge, publish,
-distribute, sublicense, and/or sell copies of the Software, and to
-permit persons to whom the Software is furnished to do so, subject to
-the following conditions:
-
-The above copyright notice and this permission notice shall be
-included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
-SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-----
-
 Package: black:24.10.0
 
 The following copyrights and licenses were found in the source code of this package:
@@ -34037,7 +34012,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: certifi:2024.8.30
+Package: certifi:2024.12.14
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -34417,7 +34392,7 @@ Exhibit B - "Incompatible With Secondary Licenses" Notice
 
 ----
 
-Package: charset-normalizer:3.4.0
+Package: charset-normalizer:3.4.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -34439,37 +34414,6 @@ IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
 CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
 TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-----
-
-Package: click:8.1.7
-
-The following copyrights and licenses were found in the source code of this package:
-
-Redistribution and use in source and binary forms, with or without modification,
-are permitted provided that the following conditions are met:
-
-Redistributions of source code must retain the above copyright notice, this list
-of conditions and the following disclaimer.
-
-Redistributions in binary form must reproduce the above copyright notice, this
-list of conditions and the following disclaimer in the documentation and/or
-other materials provided with the distribution.
-
-Neither the name of the ORGANIZATION nor the names of its contributors may be
-used to endorse or promote products derived from this software without specific
-prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
-THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
-THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----
 
@@ -34498,7 +34442,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: google-api-core:2.23.0
+Package: google-api-core:2.24.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -34914,7 +34858,7 @@ The following copyrights and licenses were found in the source code of this pack
 
 ----
 
-Package: google-auth:2.36.0
+Package: google-auth:2.37.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -37002,7 +36946,7 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----
 
-Package: protobuf:5.28.3
+Package: protobuf:5.29.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -37166,7 +37110,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: pyparsing:3.2.0
+Package: pyparsing:3.2.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -38245,7 +38189,7 @@ The following copyrights and licenses were found in the source code of this pack
 
 ----
 
-Package: tomli:2.1.0
+Package: tomli:2.2.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -38270,7 +38214,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: types-protobuf:5.28.3.20241030
+Package: types-protobuf:5.29.1.20241207
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -38747,7 +38691,7 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----
 
-Package: urllib3:2.2.3
+Package: urllib3:2.3.0
 
 The following copyrights and licenses were found in the source code of this package:
 
