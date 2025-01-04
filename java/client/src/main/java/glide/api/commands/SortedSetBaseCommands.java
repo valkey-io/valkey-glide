@@ -1164,6 +1164,28 @@ public interface SortedSetBaseCommands {
     CompletableFuture<Object[]> zrankWithScore(String key, String member);
 
     /**
+     * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code> with its
+     * score, where scores are ordered from the lowest to highest, starting from <code>0</code>.<br>
+     *
+     * @see <a href="https://valkey.io/commands/zrank/">valkey.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param member The member whose rank is to be retrieved.
+     * @return An array containing the rank (as <code>Long</code>) and score (as <code>Double</code>)
+     *     of <code>member</code> in the sorted set.<br>
+     *     If <code>key</code> doesn't exist, or if <code>member</code> is not present in the set,
+     *     <code>null</code> will be returned.
+     * @example
+     *     <pre>{@code
+     * Object[] result1 = client.zrankWithScore(gs("mySortedSet"), gs("member2")).get();
+     * assert ((Long) result1[0]) == 1L && ((Double) result1[1]) == 6.0; // Indicates that "member2" with score 6.0 has the second-lowest score in the sorted set "mySortedSet".
+     *
+     * Object[] result2 = client.zrankWithScore(gs("mySortedSet"), gs("nonExistingMember")).get();
+     * assert result2 == null; // Indicates that "nonExistingMember" is not present in the sorted set "mySortedSet".
+     * }</pre>
+     */
+    CompletableFuture<Object[]> zrankWithScore(GlideString key, GlideString member);
+
+    /**
      * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code>, where
      * scores are ordered from the highest to lowest, starting from <code>0</code>.<br>
      * To get the rank of <code>member</code> with its score, see {@link #zrevrankWithScore}.
