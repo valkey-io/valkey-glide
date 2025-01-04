@@ -4084,7 +4084,7 @@ func (suite *GlideTestSuite) TestXRead() {
 			finished <- true
 		}()
 		select {
-		case _ = <-finished:
+		case <-finished:
 			assert.Fail(suite.T(), "Infinite block finished")
 		case <-time.After(3 * time.Second):
 		}
