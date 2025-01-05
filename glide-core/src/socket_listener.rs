@@ -302,15 +302,17 @@ async fn send_command(
     mut client: Client,
     routing: Option<RoutingInfo>,
 ) -> ClientUsageResult<Value> {
-    if let Some(span) = cmd.span() {
-        span.add_event("RequestSent");
-    }
+    let child_span = if let Some(span) = cmd.span() {
+        Some(span.add_span("send_command"))
+    } else {
+        None
+    };
     let res = client
         .send_command(&cmd, routing)
         .await
         .map_err(|err| err.into());
-    if let Some(span) = cmd.span() {
-        span.add_event("ResponseArrived");
+    if let Some(child_span) = child_span {
+        child_span.end();
     }
     res
 }

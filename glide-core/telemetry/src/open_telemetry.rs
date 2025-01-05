@@ -130,6 +130,11 @@ impl GlideSpanInner {
             .span_id()
             .to_string()
     }
+
+    /// Finishes the `Span`.
+    pub fn end(&self) {
+        self.span.write().expect(SPAN_READ_LOCK_ERR).end()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -168,11 +173,16 @@ impl GlideSpan {
     pub fn id(&self) -> String {
         self.inner.id()
     }
+
+    /// Finishes the `Span`.
+    pub fn end(&self) {
+        self.inner.end()
+    }
 }
 
 /// OpenTelemetry configuration object. Use `GlideOpenTelemetryConfigBuilder` to construct it:
 ///
-/// ```rust,no_compile
+/// ```text
 /// let config = GlideOpenTelemetryConfigBuilder::default()
 ///    .with_flush_interval(std::time::Duration::from_millis(100))
 ///    .build();
@@ -272,6 +282,12 @@ impl GlideOpenTelemetry {
 mod tests {
     use super::*;
     const SPANS_JSON: &str = "/tmp/spans.json";
+
+    fn string_property_to_u64(json: &serde_json::Value, prop: &str) -> u64 {
+        let s = json[prop].to_string().replace('"', "");
+        s.parse::<u64>().unwrap()
+    }
+
     #[test]
     fn test_span_json_exporter() {
         let runtime = tokio::runtime::Builder::new_current_thread()
@@ -291,9 +307,13 @@ mod tests {
 
             let child1 = span.add_span("Network_Span");
 
-            // keep the ids for testing purposes
-            drop(child1); // close the child span
-            drop(span); // writes the span
+            // Simulate some work
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            child1.end();
+
+            // Simulate that the parent span is still doing some work
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            span.end();
 
             let span = GlideOpenTelemetry::new_span("Root_Span_2");
             span.add_event("Event1");
@@ -311,10 +331,23 @@ mod tests {
             let span_json: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
             assert_eq!(span_json["name"], "Network_Span");
             let network_span_id = span_json["span_id"].to_string();
+            let network_span_start_time = string_property_to_u64(&span_json, "start_time");
+            let network_span_end_time = string_property_to_u64(&span_json, "end_time");
+
+            // Because of the sleep above, the network span should be at least 100ms (units are microseconds)
+            assert!(network_span_end_time - network_span_start_time >= 100_000);
 
             let span_json: serde_json::Value = serde_json::from_str(lines[1]).unwrap();
             assert_eq!(span_json["name"], "Root_Span_1");
             assert_eq!(span_json["links"].as_array().unwrap().len(), 1); // we expect 1 child
+            let root_1_span_start_time = string_property_to_u64(&span_json, "start_time");
+            let root_1_span_end_time = string_property_to_u64(&span_json, "end_time");
+
+            // The network span started *after* its parent
+            assert!(network_span_start_time >= root_1_span_start_time);
+
+            // The parent span ends *after* the child span (by at least 100ms)
+            assert!(root_1_span_end_time - network_span_end_time >= 100_000);
 
             let child_span_id = span_json["links"][0]["span_id"].to_string();
             assert_eq!(child_span_id, network_span_id);

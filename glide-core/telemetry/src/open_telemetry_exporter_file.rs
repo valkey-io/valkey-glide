@@ -126,13 +126,13 @@ fn to_jsons(batch: Vec<export::trace::SpanData>) -> Vec<Value> {
         let datetime: DateTime<Utc> = span.start_time.into();
         map.insert(
             "start_time".to_string(),
-            Value::String(datetime.format("%Y-%m-%d %H:%M:%S%.6f").to_string()),
+            Value::String(datetime.timestamp_micros().to_string()),
         );
 
         let datetime: DateTime<Utc> = span.end_time.into();
         map.insert(
             "end_time".to_string(),
-            Value::String(datetime.format("%Y-%m-%d %H:%M:%S%.6f").to_string()),
+            Value::String(datetime.timestamp_micros().to_string()),
         );
 
         map.insert(
