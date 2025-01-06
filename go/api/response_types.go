@@ -7,9 +7,12 @@ type Result[T any] struct {
 	isNil bool
 }
 
+// KeyWithMemberAndScore is used by BZPOPMIN/BZPOPMAX, which return an object consisting of the key of the sorted set that was
+// popped, the popped member, and its score.
 type KeyWithMemberAndScore struct {
-	Key, Member string
-	Score       float64
+	Key    string
+	Member string
+	Score  float64
 }
 
 func (result Result[T]) IsNil() bool {

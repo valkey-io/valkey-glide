@@ -4140,9 +4140,9 @@ func (suite *GlideTestSuite) TestZincrBy() {
 
 func (suite *GlideTestSuite) TestBZPopMin() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key1 := "{listKey}-1-" + uuid.NewString()
-		key2 := "{listKey}-2-" + uuid.NewString()
-		key3 := "{listKey}-2-" + uuid.NewString()
+		key1 := "{zset}-1-" + uuid.NewString()
+		key2 := "{zset}-2-" + uuid.NewString()
+		key3 := "{zset}-2-" + uuid.NewString()
 
 		// Add elements to key1
 		zaddResult1, err := client.ZAdd(key1, map[string]float64{"a": 1.0, "b": 1.5})

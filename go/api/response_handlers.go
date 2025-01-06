@@ -418,8 +418,7 @@ func handleKeyWithMemberAndScoreResponse(response *C.struct_CommandResponse) (Re
 	key := arr[0].(string)
 	member := arr[1].(string)
 	score := arr[2].(float64)
-	kms := KeyWithMemberAndScore{key, member, score}
-	return CreateKeyWithMemberAndScoreResult(KeyWithMemberAndScore{arr[0].(string), arr[1].(string), arr[2].(float64)}), nil
+	return CreateKeyWithMemberAndScoreResult(KeyWithMemberAndScore{key, member, score}), nil
 }
 
 func handleScanResponse(
