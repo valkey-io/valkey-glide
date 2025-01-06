@@ -4308,6 +4308,50 @@ func (suite *GlideTestSuite) TestZincrBy() {
 	})
 }
 
+func (suite *GlideTestSuite) TestBZPopMin() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{zset}-1-" + uuid.NewString()
+		key2 := "{zset}-2-" + uuid.NewString()
+		key3 := "{zset}-2-" + uuid.NewString()
+
+		// Add elements to key1
+		zaddResult1, err := client.ZAdd(key1, map[string]float64{"a": 1.0, "b": 1.5})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), zaddResult1.Value())
+
+		// Add elements to key2
+		zaddResult2, err := client.ZAdd(key2, map[string]float64{"c": 2.0})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), zaddResult2.Value())
+
+		// Pop minimum element from key1 and key2
+		bzpopminResult1, err := client.BZPopMin([]string{key1, key2}, float64(.5))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), api.KeyWithMemberAndScore{Key: key1, Member: "a", Score: 1.0}, bzpopminResult1.Value())
+
+		// Attempt to pop from non-existent key3
+		bzpopminResult2, err := client.BZPopMin([]string{key3}, float64(1))
+		assert.Nil(suite.T(), err)
+		assert.True(suite.T(), bzpopminResult2.IsNil())
+
+		// Pop minimum element from key2
+		bzpopminResult3, err := client.BZPopMin([]string{key3, key2}, float64(.5))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), api.KeyWithMemberAndScore{Key: key2, Member: "c", Score: 2.0}, bzpopminResult3.Value())
+
+		// Set key3 to a non-sorted set value
+		setResult, err := client.Set(key3, "value")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "OK", setResult.Value())
+
+		// Attempt to pop from key3 which is not a sorted set
+		_, err = client.BZPopMin([]string{key3}, float64(.5))
+		if assert.Error(suite.T(), err) {
+			assert.IsType(suite.T(), &api.RequestError{}, err)
+		}
+	})
+}
+
 func (suite *GlideTestSuite) TestZPopMin() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key1 := uuid.New().String()
