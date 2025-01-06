@@ -2,6 +2,8 @@
 
 package api
 
+import "github.com/valkey-io/valkey-glide/go/glide/api/options"
+
 // Supports commands and transactions for the "Set" group of commands for standalone and cluster clients.
 //
 // See [valkey.io] for details.
@@ -429,7 +431,7 @@ type SetCommands interface {
 	//   cursor - The cursor that points to the next iteration of results.
 	//            A value of `"0"` indicates the start of the search.
 	//            For Valkey 8.0 and above, negative cursors are treated like the initial cursor("0").
-	//   options - [BaseScanOptions]
+	//   options - [options.BaseScanOptions]
 	//
 	// Return value:
 	//  An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and
@@ -440,7 +442,7 @@ type SetCommands interface {
 	//	 // assume "key" contains a set
 	//   resCursor resCol, err := client.sscan("key", "0", opts)
 	//   for resCursor != "0" {
-	//   	opts := api.NewBaseScanOptionsBuilder().SetMatch("*")
+	//   	opts := options.NewBaseScanOptionsBuilder().SetMatch("*")
 	// 	 	resCursor, resCol, err = client.sscan("key", "0", opts)
 	//   	fmt.Println("Cursor: ", resCursor.Value())
 	//   	fmt.Println("Members: ", resCol.Value())
@@ -454,7 +456,7 @@ type SetCommands interface {
 	//   // Members:  ['47', '122', '1', '53', '10', '14', '80']
 	//
 	// [valkey.io]: https://valkey.io/commands/sscan/
-	SScanWithOptions(key string, cursor string, options *BaseScanOptions) (Result[string], []Result[string], error)
+	SScanWithOptions(key string, cursor string, options *options.BaseScanOptions) (Result[string], []Result[string], error)
 
 	// Moves `member` from the set at `source` to the set at `destination`, removing it from the source set.
 	// Creates a new destination set if needed. The operation is atomic.
