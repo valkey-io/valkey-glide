@@ -251,7 +251,7 @@ type SortedSetCommands interface {
 	//
 	// Return value:
 	//   A `KeyWithMemberAndScore` struct containing the key where the member was popped out, the member
-	//   itself, and the member score. If no member could be popped and the `timeout` expired, returns `null`.
+	//   itself, and the member score. If no member could be popped and the `timeout` expired, returns `nil`.
 	//
 	// example
 	//   zaddResult1, err := client.ZAdd(key1, map[string]float64{"a": 1.0, "b": 1.5})
