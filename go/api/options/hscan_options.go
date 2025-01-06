@@ -5,10 +5,6 @@ package options
 // This struct represents the optional arguments for the HSCAN command.
 type HashScanOptions struct {
 	BaseScanOptions
-
-	/** If this value is set to true, the HSCAN command will be called with NOVALUES option.
-	 * In the NOVALUES option, values are not included in the response.
-	 */
 	noValue bool
 }
 
@@ -16,6 +12,10 @@ func NewHashScanOptionsBuilder() *HashScanOptions {
 	return &HashScanOptions{}
 }
 
+/*
+If this value is set to true, the HSCAN command will be called with NOVALUES option.
+In the NOVALUES option, values are not included in the response.
+*/
 func (hashScanOptions *HashScanOptions) SetNoValue(noValue bool) *HashScanOptions {
 	hashScanOptions.noValue = noValue
 	return hashScanOptions
