@@ -6,6 +6,7 @@ import (
 	"math"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -1103,6 +1104,175 @@ func (suite *GlideTestSuite) TestHIncrByFloat_WithNonExistingField() {
 		hincrByFloatResult, hincrByFloatErr := client.HIncrByFloat(key, field, 1.5)
 		assert.Nil(suite.T(), hincrByFloatErr)
 		assert.Equal(suite.T(), float64(1.5), hincrByFloatResult.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestHScan() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1" + uuid.NewString()
+		key2 := "{key}-2" + uuid.NewString()
+		initialCursor := "0"
+		defaultCount := 20
+
+		// Setup test data
+		numberMap := make(map[string]string)
+		// This is an unusually large dataset because the server can ignore the COUNT option if the dataset is small enough
+		// because it is more efficient to transfer its entire content at once.
+		for i := 0; i < 50000; i++ {
+			numberMap[strconv.Itoa(i)] = "num" + strconv.Itoa(i)
+		}
+		charMembers := []string{"a", "b", "c", "d", "e"}
+		charMap := make(map[string]string)
+		for i, val := range charMembers {
+			charMap[val] = strconv.Itoa(i)
+		}
+
+		t := suite.T()
+
+		// Check for empty set.
+		resCursor, resCollection, err := client.HScan(key1, initialCursor)
+		assert.NoError(t, err)
+		assert.Equal(t, initialCursor, resCursor.Value())
+		assert.Empty(t, resCollection)
+
+		// Negative cursor check.
+		if suite.serverVersion >= "8.0.0" {
+			_, _, err = client.HScan(key1, "-1")
+			assert.NotEmpty(t, err)
+		} else {
+			resCursor, resCollection, _ = client.HScan(key1, "-1")
+			assert.Equal(t, initialCursor, resCursor.Value())
+			assert.Empty(t, resCollection)
+		}
+
+		// Result contains the whole set
+		hsetResult, _ := client.HSet(key1, charMap)
+		assert.Equal(t, int64(len(charMembers)), hsetResult.Value())
+
+		resCursor, resCollection, _ = client.HScan(key1, initialCursor)
+		assert.Equal(t, initialCursor, resCursor.Value())
+		// Length includes the score which is twice the map size
+		assert.Equal(t, len(charMap)*2, len(resCollection))
+
+		resultKeys := make([]api.Result[string], 0)
+		resultValues := make([]api.Result[string], 0)
+
+		for i := 0; i < len(resCollection); i += 2 {
+			resultKeys = append(resultKeys, resCollection[i])
+			resultValues = append(resultValues, resCollection[i+1])
+		}
+		keysList, valuesList := convertMapKeysAndValuesToResultList(charMap)
+		assert.True(t, isSubset(resultKeys, keysList) && isSubset(keysList, resultKeys))
+		assert.True(t, isSubset(resultValues, valuesList) && isSubset(valuesList, resultValues))
+
+		opts := options.NewHashScanOptionsBuilder().SetMatch("a")
+		resCursor, resCollection, _ = client.HScanWithOptions(key1, initialCursor, opts)
+		assert.Equal(t, initialCursor, resCursor.Value())
+		assert.Equal(t, len(resCollection), 2)
+		assert.Equal(t, resCollection[0].Value(), "a")
+		assert.Equal(t, resCollection[1].Value(), "0")
+
+		// Result contains a subset of the key
+		combinedMap := make(map[string]string)
+		for key, value := range numberMap {
+			combinedMap[key] = value
+		}
+		for key, value := range charMap {
+			combinedMap[key] = value
+		}
+
+		hsetResult, _ = client.HSet(key1, combinedMap)
+		assert.Equal(t, int64(len(numberMap)), hsetResult.Value())
+		resultCursor := "0"
+		secondResultAllKeys := make([]api.Result[string], 0)
+		secondResultAllValues := make([]api.Result[string], 0)
+		isFirstLoop := true
+		for {
+			resCursor, resCollection, _ = client.HScan(key1, resultCursor)
+			resultCursor = resCursor.Value()
+			for i := 0; i < len(resCollection); i += 2 {
+				secondResultAllKeys = append(secondResultAllKeys, resCollection[i])
+				secondResultAllValues = append(secondResultAllValues, resCollection[i+1])
+			}
+			if isFirstLoop {
+				assert.NotEqual(t, "0", resultCursor)
+				isFirstLoop = false
+			} else if resultCursor == "0" {
+				break
+			}
+
+			// Scan with result cursor to get the next set of data.
+			newResultCursor, secondResult, _ := client.HScan(key1, resultCursor)
+			assert.NotEqual(t, resultCursor, newResultCursor)
+			resultCursor = newResultCursor.Value()
+			assert.False(t, reflect.DeepEqual(secondResult, resCollection))
+			for i := 0; i < len(secondResult); i += 2 {
+				secondResultAllKeys = append(secondResultAllKeys, secondResult[i])
+				secondResultAllValues = append(secondResultAllValues, secondResult[i+1])
+			}
+
+			// 0 is returned for the cursor of the last iteration.
+			if resultCursor == "0" {
+				break
+			}
+		}
+		numberKeysList, numberValuesList := convertMapKeysAndValuesToResultList(numberMap)
+		assert.True(t, isSubset(numberKeysList, secondResultAllKeys))
+		assert.True(t, isSubset(numberValuesList, secondResultAllValues))
+
+		// Test match pattern
+		opts = options.NewHashScanOptionsBuilder().SetMatch("*")
+		resCursor, resCollection, _ = client.HScanWithOptions(key1, initialCursor, opts)
+		resCursorInt, _ := strconv.Atoi(resCursor.Value())
+		assert.True(t, resCursorInt >= 0)
+		assert.True(t, int(len(resCollection)) >= defaultCount)
+
+		// Test count
+		opts = options.NewHashScanOptionsBuilder().SetCount(int64(20))
+		resCursor, resCollection, _ = client.HScanWithOptions(key1, initialCursor, opts)
+		resCursorInt, _ = strconv.Atoi(resCursor.Value())
+		assert.True(t, resCursorInt >= 0)
+		assert.True(t, len(resCollection) >= 20)
+
+		// Test count with match returns a non-empty list
+		opts = options.NewHashScanOptionsBuilder().SetMatch("1*").SetCount(int64(20))
+		resCursor, resCollection, _ = client.HScanWithOptions(key1, initialCursor, opts)
+		resCursorInt, _ = strconv.Atoi(resCursor.Value())
+		assert.True(t, resCursorInt >= 0)
+		assert.True(t, len(resCollection) >= 0)
+
+		if suite.serverVersion >= "8.0.0" {
+			opts = options.NewHashScanOptionsBuilder().SetNoValue(true)
+			resCursor, resCollection, _ = client.HScanWithOptions(key1, initialCursor, opts)
+			resCursorInt, _ = strconv.Atoi(resCursor.Value())
+			assert.True(t, resCursorInt >= 0)
+
+			// Check if all fields don't start with "num"
+			containsElementsWithNumKeyword := false
+			for i := 0; i < len(resCollection); i++ {
+				if strings.Contains(resCollection[i].Value(), "num") {
+					containsElementsWithNumKeyword = true
+					break
+				}
+			}
+			assert.False(t, containsElementsWithNumKeyword)
+		}
+
+		// Check if Non-hash key throws an error.
+		setResult, _ := client.Set(key2, "test")
+		assert.Equal(t, setResult.Value(), "OK")
+		_, _, err = client.HScan(key2, initialCursor)
+		assert.NotEmpty(t, err)
+
+		// Check if Non-hash key throws an error when HSCAN called with options.
+		opts = options.NewHashScanOptionsBuilder().SetMatch("test").SetCount(int64(1))
+		_, _, err = client.HScanWithOptions(key2, initialCursor, opts)
+		assert.NotEmpty(t, err)
+
+		// Check if a negative cursor value throws an error.
+		opts = options.NewHashScanOptionsBuilder().SetCount(int64(-1))
+		_, _, err = client.HScanWithOptions(key1, initialCursor, opts)
+		assert.NotEmpty(t, err)
 	})
 }
 
