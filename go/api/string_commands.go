@@ -465,7 +465,6 @@ type StringCommands interface {
 	// Return value:
 	//  The provided message
 	//
-	//
 	// For example:
 	//  result, err := client.Echo("Hello World")
 	//	if err != nil {
