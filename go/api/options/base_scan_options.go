@@ -25,7 +25,6 @@ items that match the pattern specified. This is due to the default `COUNT` being
 that it will only fetch and match `10` items from the list.
 */
 func (scanOptions *BaseScanOptions) SetMatch(m string) *BaseScanOptions {
-
 	scanOptions.match = m
 	return scanOptions
 }
