@@ -302,11 +302,7 @@ async fn send_command(
     mut client: Client,
     routing: Option<RoutingInfo>,
 ) -> ClientUsageResult<Value> {
-    let child_span = if let Some(span) = cmd.span() {
-        Some(span.add_span("send_command"))
-    } else {
-        None
-    };
+    let child_span = cmd.span().map(|span| span.add_span("send_command"));
     let res = client
         .send_command(&cmd, routing)
         .await
