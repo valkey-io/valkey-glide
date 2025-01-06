@@ -313,7 +313,7 @@ type HashCommands interface {
 	//
 	// Example:
 	//  // Assume key contains a hash {{"a": "1"}, {"b", "2"}}
-	//	resCursor, resCollection, _ = client.HScan(key, initialCursor)
+	//	resCursor, resCollection, err = client.HScan(key, initialCursor)
 	//  // resCursor = {0 false}
 	//  // resCollection = [{a false} {1 false} {b false} {2 false}]
 	//
@@ -340,7 +340,7 @@ type HashCommands interface {
 	// Example:
 	//  // Assume key contains a hash {{"a": "1"}, {"b", "2"}}
 	//	opts := options.NewHashScanOptionsBuilder().SetMatch("a")
-	//	resCursor, resCollection, _ = client.HScan(key, initialCursor, opts)
+	//	resCursor, resCollection, err = client.HScan(key, initialCursor, opts)
 	//  // resCursor = {0 false}
 	//  // resCollection = [{a false} {1 false}]
 	//  // The resCollection only contains the hash map entry that matches with the match option provided with the command
