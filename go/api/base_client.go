@@ -1450,7 +1450,7 @@ func (client *baseClient) Sort(key string) ([]Result[string], error) {
 	return handleStringArrayResponse(result)
 }
 
-func (client *baseClient) SortWithOptions(key string, options *SortOptions) ([]Result[string], error) {
+func (client *baseClient) SortWithOptions(key string, options *options.SortOptions) ([]Result[string], error) {
 	optionArgs := options.ToArgs()
 	result, err := client.executeCommand(C.Sort, append([]string{key}, optionArgs...))
 	if err != nil {
@@ -1467,7 +1467,7 @@ func (client *baseClient) SortReadOnly(key string) ([]Result[string], error) {
 	return handleStringArrayResponse(result)
 }
 
-func (client *baseClient) SortReadOnlyWithOptions(key string, options *SortOptions) ([]Result[string], error) {
+func (client *baseClient) SortReadOnlyWithOptions(key string, options *options.SortOptions) ([]Result[string], error) {
 	optionArgs := options.ToArgs()
 	result, err := client.executeCommand(C.SortReadOnly, append([]string{key}, optionArgs...))
 	if err != nil {
@@ -1484,7 +1484,7 @@ func (client *baseClient) SortStore(key string, destination string) (Result[int6
 	return handleLongResponse(result)
 }
 
-func (client *baseClient) SortStoreWithOptions(key string, destination string, options *SortOptions) (Result[int64], error) {
+func (client *baseClient) SortStoreWithOptions(key string, destination string, options *options.SortOptions) (Result[int64], error) {
 	optionArgs := options.ToArgs()
 	result, err := client.executeCommand(C.Sort, append([]string{key, "STORE", destination}, optionArgs...))
 	if err != nil {

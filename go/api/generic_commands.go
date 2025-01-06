@@ -2,6 +2,8 @@
 
 package api
 
+import "github.com/valkey-io/valkey-glide/go/glide/api/options"
+
 // Supports commands and transactions for the "Generic" group of commands for standalone and cluster clients.
 //
 // See [valkey.io] for details.
@@ -11,7 +13,7 @@ type GenericBaseCommands interface {
 	// Del removes the specified keys from the database. A key is ignored if it does not exist.
 	//
 	// Note:
-	//  In cluster mode, if keys in `keyValueMap` map to different hash slots, the command
+	//  In cluster mode, if `key` and `destination` map to different hash slots, the command
 	//  will be split across these slots and executed separately for each. This means the command
 	//  is atomic only at the slot level. If one or more slot-specific requests fail, the entire
 	//  call will return the first encountered error, even though some requests may have succeeded
@@ -37,7 +39,7 @@ type GenericBaseCommands interface {
 	// Exists returns the number of keys that exist in the database
 	//
 	// Note:
-	//  In cluster mode, if keys in `keyValueMap` map to different hash slots, the command
+	// In cluster mode, if `key` and `destination` map to different hash slots, the command
 	//  will be split across these slots and executed separately for each. This means the command
 	//  is atomic only at the slot level. If one or more slot-specific requests fail, the entire
 	//  call will return the first encountered error, even though some requests may have succeeded
@@ -338,7 +340,7 @@ type GenericBaseCommands interface {
 	// To store the result into a new key, see {@link #sortStore(string, string)}.
 	//
 	// Note:
-	//  In cluster mode, if keys in `keyValueMap` map to different hash slots, the command
+	//  In cluster mode, if `key` and `destination` map to different hash slots, the command
 	//  will be split across these slots and executed separately for each. This means the command
 	//  is atomic only at the slot level. If one or more slot-specific requests fail, the entire
 	//  call will return the first encountered error, even though some requests may have succeeded
@@ -362,7 +364,7 @@ type GenericBaseCommands interface {
 	// result.IsNil(): false
 	//
 	// [valkey.io]: https://valkey.io/commands/sort/
-	SortWithOptions(key string, sortOptions *SortOptions) ([]Result[string], error)
+	SortWithOptions(key string, sortOptions *options.SortOptions) ([]Result[string], error)
 
 	// Sorts the elements in the list, set, or sorted set at key and stores the result in
 	// destination. The sort command can be used to sort elements based on
@@ -372,7 +374,7 @@ type GenericBaseCommands interface {
 	// To get the sort result without storing it into a key, see {@link #sort(String)} or {@link #sortReadOnly(String)}.
 	//
 	// Note:
-	//  In cluster mode, if keys in `keyValueMap` map to different hash slots, the command
+	//  In cluster mode, if `key` and `destination` map to different hash slots, the command
 	//  will be split across these slots and executed separately for each. This means the command
 	//  is atomic only at the slot level. If one or more slot-specific requests fail, the entire
 	//  call will return the first encountered error, even though some requests may have succeeded
@@ -403,7 +405,7 @@ type GenericBaseCommands interface {
 	// To get the sort result without storing it into a key, see {@link #sort(String)} or {@link #sortReadOnly(String)}.
 	//
 	// Note:
-	//  In cluster mode, if keys in `keyValueMap` map to different hash slots, the command
+	//  In cluster mode, if `key` and `destination` map to different hash slots, the command
 	//  will be split across these slots and executed separately for each. This means the command
 	//  is atomic only at the slot level. If one or more slot-specific requests fail, the entire
 	//  call will return the first encountered error, even though some requests may have succeeded
@@ -428,7 +430,7 @@ type GenericBaseCommands interface {
 	// result.IsNil(): false
 	//
 	// [valkey.io]: https://valkey.io/commands/sort/
-	SortStoreWithOptions(key string, destination string, sortOptions *SortOptions) (Result[int64], error)
+	SortStoreWithOptions(key string, destination string, sortOptions *options.SortOptions) (Result[int64], error)
 
 	// Sorts the elements in the list, set, or sorted set at key and returns the result.
 	// The sortReadOnly command can be used to sort elements based on different criteria and apply
@@ -456,14 +458,12 @@ type GenericBaseCommands interface {
 	// This command is routed depending on the client's {@link ReadFrom} strategy.
 	//
 	// Note:
-	//  In cluster mode, if keys in `keyValueMap` map to different hash slots, the command
+	//  In cluster mode, if `key` and `destination` map to different hash slots, the command
 	//  will be split across these slots and executed separately for each. This means the command
 	//  is atomic only at the slot level. If one or more slot-specific requests fail, the entire
 	//  call will return the first encountered error, even though some requests may have succeeded
 	//  while others did not. If this behavior impacts your application logic, consider splitting
 	//  the request into sub-requests per slot to ensure atomicity.
-	//  The use of {@link SortOptions#byPattern} and {@link SortOptions#getPatterns} in cluster mode is
-	//  supported since Valkey version 8.0.
 	//  The use of {@link SortOptions#byPattern} and {@link SortOptions#getPatterns} in cluster mode is
 	//  supported since Valkey version 8.0.
 	//
@@ -482,7 +482,7 @@ type GenericBaseCommands interface {
 	// result.IsNil(): false
 	//
 	// [valkey.io]: https://valkey.io/commands/sort/
-	SortReadOnlyWithOptions(key string, sortOptions *SortOptions) ([]Result[string], error)
+	SortReadOnlyWithOptions(key string, sortOptions *options.SortOptions) ([]Result[string], error)
 
 	// Unlink (delete) multiple keys from the database. A key is ignored if it does not exist.
 	// This command, similar to Del However, this command does not block the server

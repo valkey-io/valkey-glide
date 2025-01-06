@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/valkey-io/valkey-glide/go/glide/api"
+	"github.com/valkey-io/valkey-glide/go/glide/api/options"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -292,7 +293,7 @@ func (suite *GlideTestSuite) TestSortWithOptions_ExternalWeights() {
 	client.Set("weight_item2", "1")
 	client.Set("weight_item3", "2")
 
-	options := api.NewSortOptions().
+	options := options.NewSortOptions().
 		SetByPattern("weight_*").
 		SetOrderBy(api.ASC).
 		SetIsAlpha(false)
@@ -318,7 +319,7 @@ func (suite *GlideTestSuite) TestSortWithOptions_GetPatterns() {
 	client.Set("object_item2", "Object_2")
 	client.Set("object_item3", "Object_3")
 
-	options := api.NewSortOptions().
+	options := options.NewSortOptions().
 		SetByPattern("weight_*").
 		SetOrderBy(api.ASC).
 		SetIsAlpha(false).
@@ -350,7 +351,7 @@ func (suite *GlideTestSuite) TestSortWithOptions_SuccessfulSortByWeightAndGet() 
 	client.Set("object_item2", "Object 2")
 	client.Set("object_item3", "Object 3")
 
-	options := api.NewSortOptions().
+	options := options.NewSortOptions().
 		SetOrderBy(api.ASC).
 		SetIsAlpha(false).
 		SetByPattern("weight_*").
@@ -400,7 +401,7 @@ func (suite *GlideTestSuite) TestSortStoreWithOptions_ByPattern() {
 	client.Set("{listKey}weight_d", "1")
 	client.Set("{listKey}weight_e", "4")
 
-	options := api.NewSortOptions().SetByPattern("{listKey}weight_*")
+	options := options.NewSortOptions().SetByPattern("{listKey}weight_*")
 
 	result, err := client.SortStoreWithOptions(key, sortedKey, options)
 
@@ -432,7 +433,7 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_ExternalWeights() {
 	client.Set("weight_item2", "1")
 	client.Set("weight_item3", "2")
 
-	options := api.NewSortOptions().
+	options := options.NewSortOptions().
 		SetByPattern("weight_*").
 		SetOrderBy(api.ASC).
 		SetIsAlpha(false)
@@ -460,7 +461,7 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_GetPatterns() {
 	client.Set("object_item2", "Object_2")
 	client.Set("object_item3", "Object_3")
 
-	options := api.NewSortOptions().
+	options := options.NewSortOptions().
 		SetByPattern("weight_*").
 		SetOrderBy(api.ASC).
 		SetIsAlpha(false).
@@ -495,7 +496,7 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_SuccessfulSortByWeightA
 	client.Set("object_item2", "Object 2")
 	client.Set("object_item3", "Object 3")
 
-	options := api.NewSortOptions().
+	options := options.NewSortOptions().
 		SetOrderBy(api.ASC).
 		SetIsAlpha(false).
 		SetByPattern("weight_*").

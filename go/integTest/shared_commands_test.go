@@ -3736,7 +3736,7 @@ func (suite *GlideTestSuite) TestSortWithOptions_AscendingOrder() {
 		key := uuid.New().String()
 		client.LPush(key, []string{"b", "a", "c"})
 
-		options := api.NewSortOptions().
+		options := options.NewSortOptions().
 			SetOrderBy(api.ASC).
 			SetIsAlpha(true)
 
@@ -3758,7 +3758,7 @@ func (suite *GlideTestSuite) TestSortWithOptions_DescendingOrder() {
 		key := uuid.New().String()
 		client.LPush(key, []string{"b", "a", "c"})
 
-		options := api.NewSortOptions().
+		options := options.NewSortOptions().
 			SetOrderBy(api.DESC).
 			SetIsAlpha(true).
 			SetLimit(0, 3)
@@ -3836,7 +3836,7 @@ func (suite *GlideTestSuite) TestSortStoreWithOptions_DescendingOrder() {
 		sortedKey := "{key}" + uuid.New().String()
 		client.LPush(key, []string{"30", "20", "10", "40", "50"})
 
-		options := api.NewSortOptions().SetOrderBy(api.DESC).SetIsAlpha(false)
+		options := options.NewSortOptions().SetOrderBy(api.DESC).SetIsAlpha(false)
 		result, err := client.SortStoreWithOptions(key, sortedKey, options)
 
 		assert.Nil(suite.T(), err)
@@ -3862,7 +3862,7 @@ func (suite *GlideTestSuite) TestSortStoreWithOptions_AlphaSorting() {
 		sortedKey := "{listKey}" + uuid.New().String()
 		client.LPush(key, []string{"apple", "banana", "cherry", "date", "elderberry"})
 
-		options := api.NewSortOptions().SetIsAlpha(true)
+		options := options.NewSortOptions().SetIsAlpha(true)
 		result, err := client.SortStoreWithOptions(key, sortedKey, options)
 
 		assert.Nil(suite.T(), err)
@@ -3888,7 +3888,7 @@ func (suite *GlideTestSuite) TestSortStoreWithOptions_Limit() {
 		sortedKey := "{listKey}" + uuid.New().String()
 		client.LPush(key, []string{"10", "20", "30", "40", "50"})
 
-		options := api.NewSortOptions().SetLimit(1, 3)
+		options := options.NewSortOptions().SetLimit(1, 3)
 		result, err := client.SortStoreWithOptions(key, sortedKey, options)
 
 		assert.Nil(suite.T(), err)
@@ -3932,7 +3932,7 @@ func (suite *GlideTestSuite) TestSortReadyOnlyWithOptions_DescendingOrder() {
 		key := uuid.New().String()
 		client.LPush(key, []string{"b", "a", "c"})
 
-		options := api.NewSortOptions().
+		options := options.NewSortOptions().
 			SetOrderBy(api.DESC).
 			SetIsAlpha(true).
 			SetLimit(0, 3)
