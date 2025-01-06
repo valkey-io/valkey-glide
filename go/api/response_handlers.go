@@ -397,6 +397,30 @@ func handleStringSetResponse(response *C.struct_CommandResponse) (map[Result[str
 	return slice, nil
 }
 
+func handleKeyWithMemberAndScoreResponse(response *C.struct_CommandResponse) (Result[KeyWithMemberAndScore], error) {
+	defer C.free_command_response(response)
+
+	if response == nil || response.response_type == uint32(C.Null) {
+		return CreateNilKeyWithMemberAndScoreResult(), nil
+	}
+
+	typeErr := checkResponseType(response, C.Array, true)
+	if typeErr != nil {
+		return CreateNilKeyWithMemberAndScoreResult(), typeErr
+	}
+
+	slice, err := parseArray(response)
+	if err != nil {
+		return CreateNilKeyWithMemberAndScoreResult(), err
+	}
+
+	arr := slice.([]interface{})
+	key := arr[0].(string)
+	member := arr[1].(string)
+	score := arr[2].(float64)
+	return CreateKeyWithMemberAndScoreResult(KeyWithMemberAndScore{key, member, score}), nil
+}
+
 func handleScanResponse(
 	response *C.struct_CommandResponse,
 ) (Result[string], []Result[string], error) {

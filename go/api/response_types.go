@@ -7,6 +7,14 @@ type Result[T any] struct {
 	isNil bool
 }
 
+// KeyWithMemberAndScore is used by BZPOPMIN/BZPOPMAX, which return an object consisting of the key of the sorted set that was
+// popped, the popped member, and its score.
+type KeyWithMemberAndScore struct {
+	Key    string
+	Member string
+	Score  float64
+}
+
 func (result Result[T]) IsNil() bool {
 	return result.isNil
 }
@@ -45,6 +53,14 @@ func CreateBoolResult(boolVal bool) Result[bool] {
 
 func CreateNilBoolResult() Result[bool] {
 	return Result[bool]{val: false, isNil: true}
+}
+
+func CreateKeyWithMemberAndScoreResult(kmsVal KeyWithMemberAndScore) Result[KeyWithMemberAndScore] {
+	return Result[KeyWithMemberAndScore]{val: kmsVal, isNil: false}
+}
+
+func CreateNilKeyWithMemberAndScoreResult() Result[KeyWithMemberAndScore] {
+	return Result[KeyWithMemberAndScore]{val: KeyWithMemberAndScore{"", "", 0.0}, isNil: true}
 }
 
 // Enum to distinguish value types stored in `ClusterValue`
