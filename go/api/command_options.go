@@ -329,7 +329,7 @@ func (opts *BaseScanOptions) toArgs() ([]string, error) {
 // [valkey.io]: https://valkey.io/commands/restore/
 type RestoreOptions struct {
 	// Subcommand string to replace existing key.
-	REPLACE string
+	Replace string
 	// Subcommand string to represent absolute timestamp (in milliseconds) for TTL.
 	ABSTTL string
 	// It represents the idletime/frequency of object.
@@ -342,20 +342,20 @@ func NewRestoreOptionsBuilder() *RestoreOptions {
 
 const (
 	// Subcommand string to replace existing key.
-	HasREPLACE string = "REPLACE"
+	Replace_keyword = "REPLACE"
 
 	// Subcommand string to represent absolute timestamp (in milliseconds) for TTL.
-	HasABSTTL string = "ABSTTL"
+	ABSTTL_keyword string = "ABSTTL"
 )
 
 // Custom setter methods for replace and absttl.
 func (restoreOption *RestoreOptions) SetReplace() *RestoreOptions {
-	restoreOption.REPLACE = HasREPLACE
+	restoreOption.Replace = Replace_keyword
 	return restoreOption
 }
 
 func (restoreOption *RestoreOptions) SetABSTTL() *RestoreOptions {
-	restoreOption.ABSTTL = HasABSTTL
+	restoreOption.ABSTTL = ABSTTL_keyword
 	return restoreOption
 }
 
@@ -385,8 +385,8 @@ func (restoreOption *RestoreOptions) SetEviction(evictionType EvictionType, coun
 func (opts *RestoreOptions) toArgs() ([]string, error) {
 	args := []string{}
 	var err error
-	if opts.REPLACE != "" {
-		args = append(args, string(opts.REPLACE))
+	if opts.Replace != "" {
+		args = append(args, string(opts.Replace))
 	}
 	if opts.ABSTTL != "" {
 		args = append(args, string(opts.ABSTTL))
