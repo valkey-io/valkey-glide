@@ -454,22 +454,29 @@ type mapConverter[T any] struct {
 }
 
 func (node mapConverter[T]) convert(data interface{}) (interface{}, error) {
-	mapType := reflect.MapOf(reflect.TypeOf("key"), getType[T]())
-	aMap := reflect.MakeMap(mapType)
+	result := make(map[string]T)
 
 	for key, value := range data.(map[string]interface{}) {
 		if node.next == nil {
-			aMap.SetMapIndex(reflect.ValueOf(key), reflect.ValueOf(value))
+			valueT, ok := value.(T)
+			if !ok {
+				return nil, &RequestError{fmt.Sprintf("Unexpected type received: %T, expected: %v", value, getType[T]())}
+			}
+			result[key] = valueT
 		} else {
 			val, err := node.next.convert(value)
 			if err != nil {
 				return nil, err
 			}
-			aMap.SetMapIndex(reflect.ValueOf(key), reflect.ValueOf(val))
+			valueT, ok := val.(T)
+			if !ok {
+				return nil, &RequestError{fmt.Sprintf("Unexpected type received: %T, expected: %v", valueT, getType[T]())}
+			}
+			result[key] = valueT
 		}
 	}
 
-	return aMap.Interface(), nil
+	return result, nil
 }
 
 // convert arrays, T - type of the value
@@ -479,21 +486,28 @@ type arrayConverter[T any] struct {
 
 func (node arrayConverter[T]) convert(data interface{}) (interface{}, error) {
 	arrData := data.([]interface{})
-	arrayType := reflect.SliceOf(getType[T]())
-	anArray := reflect.MakeSlice(arrayType, 0, len(arrData))
+	result := make([]T, 0, len(arrData))
 	for _, value := range arrData {
 		if node.next == nil {
-			anArray = reflect.Append(anArray, reflect.ValueOf(value))
+			valueT, ok := value.(T)
+			if !ok {
+				return nil, &RequestError{fmt.Sprintf("Unexpected type received: %T, expected: %v", value, getType[T]())}
+			}
+			result = append(result, valueT)
 		} else {
 			val, err := node.next.convert(value)
 			if err != nil {
 				return nil, err
 			}
-			anArray = reflect.Append(anArray, reflect.ValueOf(val))
+			valueT, ok := val.(T)
+			if !ok {
+				return nil, &RequestError{fmt.Sprintf("Unexpected type received: %T, expected: %v", valueT, getType[T]())}
+			}
+			result = append(result, valueT)
 		}
 	}
 
-	return anArray.Interface(), nil
+	return result, nil
 }
 
 // TODO: convert sets
