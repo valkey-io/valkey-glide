@@ -2405,7 +2405,7 @@ func (suite *GlideTestSuite) TestSScan() {
 		assert.Equal(t, len(charMembers), len(resCollection))
 		assert.True(t, isSubset(resCollection, charMembersResult))
 
-		opts := api.NewBaseScanOptionsBuilder().SetMatch("a")
+		opts := options.NewBaseScanOptionsBuilder().SetMatch("a")
 		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
 		assert.Equal(t, initialCursor, resCursor.Value())
@@ -2433,21 +2433,21 @@ func (suite *GlideTestSuite) TestSScan() {
 		assert.True(t, isSubset(charMembersResult, resultCollection))
 
 		// test match pattern
-		opts = api.NewBaseScanOptionsBuilder().SetMatch("*")
+		opts = options.NewBaseScanOptionsBuilder().SetMatch("*")
 		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
 		assert.NotEqual(t, initialCursor, resCursor.Value())
 		assert.GreaterOrEqual(t, len(resCollection), defaultCount)
 
 		// test count
-		opts = api.NewBaseScanOptionsBuilder().SetCount(20)
+		opts = options.NewBaseScanOptionsBuilder().SetCount(20)
 		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
 		assert.NotEqual(t, initialCursor, resCursor.Value())
 		assert.GreaterOrEqual(t, len(resCollection), 20)
 
 		// test count with match, returns a non-empty array
-		opts = api.NewBaseScanOptionsBuilder().SetMatch("1*").SetCount(20)
+		opts = options.NewBaseScanOptionsBuilder().SetMatch("1*").SetCount(20)
 		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
 		assert.NotEqual(t, initialCursor, resCursor.Value())

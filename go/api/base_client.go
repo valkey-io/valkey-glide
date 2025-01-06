@@ -746,9 +746,9 @@ func (client *baseClient) SScan(key string, cursor string) (Result[string], []Re
 func (client *baseClient) SScanWithOptions(
 	key string,
 	cursor string,
-	options *BaseScanOptions,
+	options *options.BaseScanOptions,
 ) (Result[string], []Result[string], error) {
-	optionArgs, err := options.toArgs()
+	optionArgs, err := options.ToArgs()
 	if err != nil {
 		return CreateNilStringResult(), nil, err
 	}
