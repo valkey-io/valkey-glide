@@ -234,9 +234,9 @@ type SortedSetCommands interface {
 	ZCard(key string) (Result[int64], error)
 
 	// Blocks the connection until it removes and returns a member with the lowest score from the
-	// first non-empty sorted set, with the given `keys`` being checked in the order they
+	// first non-empty sorted set, with the given `keys` being checked in the order they
 	// are provided.
-	// `BZPOPMIN` is the blocking variant of `ZPOPMIN``.
+	// `BZPOPMIN` is the blocking variant of `ZPOPMIN`.
 	//
 	// Note:
 	//   - When in cluster mode, all `keys` must map to the same hash slot.
