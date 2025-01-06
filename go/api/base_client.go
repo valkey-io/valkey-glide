@@ -33,6 +33,7 @@ type BaseClient interface {
 	ConnectionManagementCommands
 	HyperLogLogCommands
 	GenericBaseCommands
+	BitmapCommands
 	// Close terminates the client by closing all associated resources.
 	Close()
 }
@@ -1439,5 +1440,56 @@ func (client *baseClient) ZCard(key string) (Result[int64], error) {
 		return CreateNilInt64Result(), err
 	}
 
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) SetBit(key string, offset int64, value int64) (Result[int64], error) {
+	result, err := client.executeCommand(C.SetBit, []string{key, utils.IntToString(offset), utils.IntToString(value)})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) GetBit(key string, offset int64) (Result[int64], error) {
+	result, err := client.executeCommand(C.GetBit, []string{key, utils.IntToString(offset)})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) Wait(numberOfReplicas int64, timeout int64) (Result[int64], error) {
+	if numberOfReplicas <= 0 {
+		return CreateNilInt64Result(), fmt.Errorf("Number of Replicas should be greater than 0")
+	}
+	if timeout < 0 {
+		return CreateNilInt64Result(), fmt.Errorf("Timeout cannot be lesser than 0")
+	}
+	result, err := client.executeCommand(C.Wait, []string{utils.IntToString(numberOfReplicas), utils.IntToString(timeout)})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) BitCount(key string) (Result[int64], error) {
+	result, err := client.executeCommand(C.BitCount, []string{key})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) BitCountWithOptions(key string, opts *options.BitCountOptions) (Result[int64], error) {
+	optionArgs, err := opts.ToArgs()
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+	commandArgs := append([]string{key}, optionArgs...)
+	result, err := client.executeCommand(C.BitCount, commandArgs)
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
 	return handleLongResponse(result)
 }
