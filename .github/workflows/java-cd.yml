@@ -225,6 +225,10 @@ jobs:
                 host: ${{ fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX) }}
         runs-on: ${{ matrix.host.RUNNER }}
         steps:
+            - name: Setup self-hosted runner access
+              if: ${{matrix.host.TARGET == 'aarch64-unknown-linux-gnu' }}
+              run: sudo chown -R $USER:$USER /home/ubuntu/action-runner-ilia/_work/valkey-glide
+
             - name: Checkout
               uses: actions/checkout@v4
 
