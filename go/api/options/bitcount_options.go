@@ -40,7 +40,9 @@ func (options *BitCountOptions) SetEnd(end int64) (*BitCountOptions, error) {
 // SetBitmapIndexType to specify start and end are in BYTE or BIT
 func (options *BitCountOptions) SetBitmapIndexType(bitMapIndexType BitmapIndexType) (*BitCountOptions, error) {
 	if options.Start == nil || options.End == nil {
-		return options, fmt.Errorf("SetBitmapIndexType value cannot be set without start and end values, use SetStart() and SetEnd()")
+		return options, fmt.Errorf(
+			"SetBitmapIndexType value cannot be set without start and end values, use SetStart() and SetEnd()",
+		)
 	}
 	if bitMapIndexType != BIT && bitMapIndexType != BYTE {
 		return options, fmt.Errorf("Invalid argument: BIT and BYTE are the only allowed values")
