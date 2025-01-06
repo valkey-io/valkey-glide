@@ -813,7 +813,13 @@ public class TransactionTestUtilities {
                 .flushdb(ASYNC)
                 .dbsize();
 
-        return new Object[] {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            transaction
+                .configSet(Map.of("timeout", "2000", "rdb-save-incremental-fsync", "no"))
+                .configGet(new String[] {"timeout", "rdb-save-incremental-fsync"});
+        }
+
+        var expectedResults = new Object[] {
             OK, // configSet(Map.of("timeout", "1000"))
             Map.of("timeout", "1000"), // configGet(new String[] {"timeout"})
             OK, // configResetStat()
@@ -824,6 +830,18 @@ public class TransactionTestUtilities {
             OK, // flushdb(ASYNC)
             0L, // dbsize()
         };
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            expectedResults =
+                concatenateArrays(
+                    expectedResults,
+                    new Object[] {
+                        OK, // configSet(Map.of("timeout", "2000", "rdb-save-incremental-fsync", "no"))
+                        Map.of("timeout", "2000", "rdb-save-incremental-fsync", "no"), // configGet(new String[] {"timeout", "rdb-save-incremental-fsync"})
+                    });
+        }
+
+        return expectedResults;
     }
 
     private static Object[] connectionManagementCommands(BaseTransaction<?> transaction) {
