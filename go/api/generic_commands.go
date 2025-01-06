@@ -433,7 +433,7 @@ type GenericBaseCommands interface {
 	// (a key with an expire set) to persistent (a key that will never expire as no timeout is associated).
 	//
 	// Parameters:
-	//  The key to remove the existing timeout on.
+	//  key - The key to remove the existing timeout on.
 	//
 	// Return value:
 	//  false if key does not exist or does not have an associated timeout, true if the timeout has been removed.

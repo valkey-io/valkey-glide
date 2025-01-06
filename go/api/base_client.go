@@ -484,6 +484,31 @@ func (client *baseClient) HIncrByFloat(key string, field string, increment float
 	return handleDoubleResponse(result)
 }
 
+func (client *baseClient) HScan(key string, cursor string) (Result[string], []Result[string], error) {
+	result, err := client.executeCommand(C.HScan, []string{key, cursor})
+	if err != nil {
+		return CreateNilStringResult(), nil, err
+	}
+	return handleScanResponse(result)
+}
+
+func (client *baseClient) HScanWithOptions(
+	key string,
+	cursor string,
+	options *options.HashScanOptions,
+) (Result[string], []Result[string], error) {
+	optionArgs, err := options.ToArgs()
+	if err != nil {
+		return CreateNilStringResult(), nil, err
+	}
+
+	result, err := client.executeCommand(C.HScan, append([]string{key, cursor}, optionArgs...))
+	if err != nil {
+		return CreateNilStringResult(), nil, err
+	}
+	return handleScanResponse(result)
+}
+
 func (client *baseClient) LPush(key string, elements []string) (Result[int64], error) {
 	result, err := client.executeCommand(C.LPush, append([]string{key}, elements...))
 	if err != nil {
@@ -721,9 +746,9 @@ func (client *baseClient) SScan(key string, cursor string) (Result[string], []Re
 func (client *baseClient) SScanWithOptions(
 	key string,
 	cursor string,
-	options *BaseScanOptions,
+	options *options.BaseScanOptions,
 ) (Result[string], []Result[string], error) {
-	optionArgs, err := options.toArgs()
+	optionArgs, err := options.ToArgs()
 	if err != nil {
 		return CreateNilStringResult(), nil, err
 	}
@@ -1440,6 +1465,15 @@ func (client *baseClient) ZCard(key string) (Result[int64], error) {
 	}
 
 	return handleLongResponse(result)
+}
+
+func (client *baseClient) BZPopMin(keys []string, timeoutSecs float64) (Result[KeyWithMemberAndScore], error) {
+	result, err := client.executeCommand(C.BZPopMin, append(keys, utils.FloatToString(timeoutSecs)))
+	if err != nil {
+		return CreateNilKeyWithMemberAndScoreResult(), err
+	}
+
+	return handleKeyWithMemberAndScoreResponse(result)
 }
 
 func (client *baseClient) Persist(key string) (Result[bool], error) {
