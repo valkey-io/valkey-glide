@@ -242,7 +242,7 @@ type SortedSetCommands interface {
 	//   - When in cluster mode, all `keys` must map to the same hash slot.
 	//   - `BZPOPMIN` is a client blocking command, see [Blocking Commands] for more details and best practices.
 	//
-	// see [valkey.io] for more details.
+	// See [valkey.io] for more details.
 	//
 	// Parameters:
 	//   keys - The keys of the sorted sets.
