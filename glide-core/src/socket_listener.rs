@@ -302,10 +302,15 @@ async fn send_command(
     mut client: Client,
     routing: Option<RoutingInfo>,
 ) -> ClientUsageResult<Value> {
-    client
+    let child_span = cmd.span().map(|span| span.add_span("send_command"));
+    let res = client
         .send_command(&cmd, routing)
         .await
-        .map_err(|err| err.into())
+        .map_err(|err| err.into());
+    if let Some(child_span) = child_span {
+        child_span.end();
+    }
+    res
 }
 
 // Parse the cluster scan command parameters from protobuf and send the command to redis-rs.
