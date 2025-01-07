@@ -50,7 +50,9 @@ unsound = "deny"
 # output a note when they are encountered.
 ignore = [
     # Unmaintained dependency error that needs more attention due to nested dependencies
-    "RUSTSEC-2024-0370"
+    "RUSTSEC-2024-0370",
+    "RUSTSEC-2024-0384",
+    "RUSTSEC-2024-0388",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories
@@ -84,6 +86,7 @@ allow = [
     "BSD-2-Clause",
     "BSD-3-Clause",
     "Unicode-DFS-2016",
+    "Unicode-3.0",
     "ISC",
     "OpenSSL"
 ]
