@@ -1475,3 +1475,11 @@ func (client *baseClient) BZPopMin(keys []string, timeoutSecs float64) (Result[K
 
 	return handleKeyWithMemberAndScoreResponse(result)
 }
+
+func (client *baseClient) Echo(message string) (Result[string], error) {
+	result, err := client.executeCommand(C.Echo, []string{message})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringResponse(result)
+}

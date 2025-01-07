@@ -4456,3 +4456,14 @@ func (suite *GlideTestSuite) TestZRem() {
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
 }
+
+func (suite *GlideTestSuite) TestEcho() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		// Test 1: Check if Echo command return the message
+		value := "Hello world"
+		t := suite.T()
+		resultEcho, err := client.Echo(value)
+		assert.Nil(t, err)
+		assert.Equal(t, value, resultEcho.Value())
+	})
+}
