@@ -17,7 +17,7 @@ The Valkey GLIDE Java wrapper consists of both Java and Rust code. Rust bindings
 -   git
 -   GCC
 -   pkg-config
--   protoc (protobuf compiler) >= 26.1
+-   protoc (protobuf compiler) >= 28.1
 -   openssl
 -   openssl-dev
 -   rustup
@@ -64,17 +64,17 @@ Continue with **Install protobuf compiler** below.
 To install protobuf for MacOS, run:
 ```bash
 brew install protobuf
-# Check that the protobuf compiler version 26.1 or higher is installed
+# Check that the protobuf compiler version 28.1 or higher is installed
 protoc --version
 ```
 
 For the remaining systems, do the following:
 ```bash
 PB_REL="https://github.com/protocolbuffers/protobuf/releases"
-curl -LO $PB_REL/download/v26.1/protoc-26.1-linux-x86_64.zip
-unzip protoc-26.1-linux-x86_64.zip -d $HOME/.local
+curl -LO $PB_REL/download/v28.1/protoc-28.1-linux-x86_64.zip
+unzip protoc-28.1-linux-x86_64.zip -d $HOME/.local
 export PATH="$PATH:$HOME/.local/bin"
-# Check that the protobuf compiler version 26.1 or higher is installed
+# Check that the protobuf compiler version 28.1 or higher is installed
 protoc --version
 ```
 
@@ -165,7 +165,7 @@ Some troubleshooting issues:
     - Failed to find `cargo` after `rustup`.
     - No Protobuf compiler (protoc) found.
 - If build fails because of rust compiler fails, make sure submodules are updated using `git submodule update`.
-- If protobuf 26.0 or earlier is detected, upgrade to the latest protobuf release.
+- If protobuf 28.0 or earlier is detected, upgrade to the latest protobuf release.
 
 ## Running Examples App
 

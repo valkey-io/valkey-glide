@@ -14,7 +14,7 @@ repositories {
 }
 
 dependencies {
-    implementation group: 'com.google.protobuf', name: 'protobuf-java', version: '4.27.1'
+    implementation group: 'com.google.protobuf', name: 'protobuf-java', version: '4.28.1'
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
 
     implementation group: 'io.netty', name: 'netty-handler', version: '4.1.100.Final'
@@ -39,11 +39,11 @@ dependencies {
 
 ext {
     checkProtocVersion = { String output ->
-        // Line in format like: libprotoc 26.1
+        // Line in format like: libprotoc 28.1
         int majorVersion = Integer.parseInt(output.split(" ")[1].split("\\.")[0].trim());
         int minorVersion = Integer.parseInt(output.split(" ")[1].split("\\.")[1].trim());
-        if (majorVersion < 26 || (majorVersion == 26 && minorVersion < 1)) {
-            throw new GradleException("Protobuf compiler (protoc) version 26.1 or newer is required. Current version: $output");
+        if (majorVersion < 28) {
+            throw new GradleException("Protobuf compiler (protoc) version 28.0 or newer is required. Current version: $output");
         }
         return output.split(" ")[1]
     }
@@ -62,7 +62,7 @@ tasks.register('protobuf', Exec) {
             }
         } catch (Exception e) {
             if (e.getMessage().startsWith("A problem occurred starting process")) {
-                throw new GradleException("No Protobuf compiler (protoc) found. Protobuf compiler version 26.1 or newer is required.");
+                throw new GradleException("No Protobuf compiler (protoc) found. Protobuf compiler version 28.0 or newer is required.");
             }
             throw e
         }
