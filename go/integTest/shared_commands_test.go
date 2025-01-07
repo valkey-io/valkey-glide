@@ -4509,7 +4509,6 @@ func (suite *GlideTestSuite) Test_Dump_Restore() {
 		resultDumpNull, err := client.Dump(key1)
 		assert.Nil(t, err)
 		assert.Equal(t, "", resultDumpNull.Value())
-
 	})
 }
 
