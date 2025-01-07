@@ -1237,6 +1237,7 @@ export function runBaseTests(config: {
                 if (cluster.checkIfServerVersionLessThan("7.0.0")) {
                     return;
                 }
+
                 const prevTimeout = (await client.configGet([
                     "timeout",
                 ])) as Record<string, GlideString>;
