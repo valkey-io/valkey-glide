@@ -329,11 +329,11 @@ func (opts *BaseScanOptions) toArgs() ([]string, error) {
 // [valkey.io]: https://valkey.io/commands/restore/
 type RestoreOptions struct {
 	// Subcommand string to replace existing key.
-	Replace string
+	replace string
 	// Subcommand string to represent absolute timestamp (in milliseconds) for TTL.
-	ABSTTL string
+	absTTL string
 	// It represents the idletime/frequency of object.
-	Eviction Eviction
+	eviction Eviction
 }
 
 func NewRestoreOptionsBuilder() *RestoreOptions {
@@ -348,14 +348,15 @@ const (
 	ABSTTL_keyword string = "ABSTTL"
 )
 
-// Custom setter methods for replace and absttl.
+// Custom setter methods to replace existing key.
 func (restoreOption *RestoreOptions) SetReplace() *RestoreOptions {
-	restoreOption.Replace = Replace_keyword
+	restoreOption.replace = Replace_keyword
 	return restoreOption
 }
 
+// Custom setter methods to represent absolute timestamp (in milliseconds) for TTL.
 func (restoreOption *RestoreOptions) SetABSTTL() *RestoreOptions {
-	restoreOption.ABSTTL = ABSTTL_keyword
+	restoreOption.absTTL = ABSTTL_keyword
 	return restoreOption
 }
 
@@ -376,23 +377,24 @@ const (
 	FREQ EvictionType = "FREQ"
 )
 
+// Custom setter methods set the idletime/frequency of object.
 func (restoreOption *RestoreOptions) SetEviction(evictionType EvictionType, count int64) *RestoreOptions {
-	restoreOption.Eviction.Type = evictionType
-	restoreOption.Eviction.Count = count
+	restoreOption.eviction.Type = evictionType
+	restoreOption.eviction.Count = count
 	return restoreOption
 }
 
 func (opts *RestoreOptions) toArgs() ([]string, error) {
 	args := []string{}
 	var err error
-	if opts.Replace != "" {
-		args = append(args, string(opts.Replace))
+	if opts.replace != "" {
+		args = append(args, string(opts.replace))
 	}
-	if opts.ABSTTL != "" {
-		args = append(args, string(opts.ABSTTL))
+	if opts.absTTL != "" {
+		args = append(args, string(opts.absTTL))
 	}
-	if (opts.Eviction != Eviction{}) {
-		args = append(args, string(opts.Eviction.Type), utils.IntToString(opts.Eviction.Count))
+	if (opts.eviction != Eviction{}) {
+		args = append(args, string(opts.eviction.Type), utils.IntToString(opts.eviction.Count))
 	}
 	return args, err
 }

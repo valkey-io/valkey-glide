@@ -4245,7 +4245,7 @@ func (suite *GlideTestSuite) TestZRem() {
 
 func (suite *GlideTestSuite) TestObjectEncoding() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		//Test 1: Check object encoding for embstr
+		// Test 1: Check object encoding for embstr
 		key := "{keyName}" + uuid.NewString()
 		value1 := "Hello"
 		t := suite.T()
@@ -4254,7 +4254,7 @@ func (suite *GlideTestSuite) TestObjectEncoding() {
 		assert.Nil(t, err)
 		assert.Equal(t, "embstr", resultObjectEncoding.Value(), "The result should be embstr")
 
-		//Test 2: Check object encoding for listpack
+		// Test 2: Check object encoding for listpack
 		list := []string{"value1", "value2", "value3"}
 		key1 := "{keyName}" + uuid.NewString()
 		res1, err := client.LPush(key1, list)
@@ -4264,7 +4264,7 @@ func (suite *GlideTestSuite) TestObjectEncoding() {
 		assert.Nil(t, err)
 		assert.Equal(t, "listpack", resultListPack.Value(), "The result should be listpack")
 
-		//Test 3: Check object encoding command for non existing key
+		// Test 3: Check object encoding command for non existing key
 		key3 := "{keyName}" + uuid.NewString()
 		resultDumpNull, err := client.ObjectEncoding(key3)
 		assert.Nil(t, err)
@@ -4274,7 +4274,7 @@ func (suite *GlideTestSuite) TestObjectEncoding() {
 
 func (suite *GlideTestSuite) Test_Dump_Restore() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
-		//Test 1: Check restore command for deleted key and check value
+		// Test 1: Check restore command for deleted key and check value
 		key := "testKey1_" + uuid.New().String()
 		value := "hello"
 		t := suite.T()
@@ -4290,7 +4290,7 @@ func (suite *GlideTestSuite) Test_Dump_Restore() {
 		assert.Nil(t, err)
 		assert.Equal(t, value, resultGetRestoreKey.Value())
 
-		//Test 2: Check dump command for non existing key
+		// Test 2: Check dump command for non existing key
 		key1 := "{keyName}" + uuid.NewString()
 		resultDumpNull, err := client.Dump(key1)
 		assert.Nil(t, err)
@@ -4310,7 +4310,7 @@ func (suite *GlideTestSuite) TestRestoreWithOptions() {
 		assert.Nil(t, err)
 		assert.NotNil(t, resultDump)
 
-		//Test 1: Check restore command with restoreOptions REPLACE modifier
+		// Test 1: Check restore command with restoreOptions REPLACE modifier
 		deletedCount, err := client.Del([]string{key})
 		assert.Nil(t, err)
 		assert.Equal(t, int64(1), deletedCount.Value())
@@ -4320,7 +4320,7 @@ func (suite *GlideTestSuite) TestRestoreWithOptions() {
 		assert.Nil(t, err)
 		assert.Equal(t, value, resultGetRestoreKey.Value())
 
-		//Test 2: Check restore command with restoreOptions ABSTTL modifier
+		// Test 2: Check restore command with restoreOptions ABSTTL modifier
 		delete_test2, err := client.Del([]string{key})
 		assert.Nil(t, err)
 		assert.Equal(t, int64(1), delete_test2.Value())
@@ -4330,7 +4330,7 @@ func (suite *GlideTestSuite) TestRestoreWithOptions() {
 		assert.Nil(t, err)
 		assert.Equal(t, value, resultGet_test2.Value())
 
-		//Test 3: Check restore command with restoreOptions FREQ modifier
+		// Test 3: Check restore command with restoreOptions FREQ modifier
 		delete_test3, err := client.Del([]string{key})
 		assert.Nil(t, err)
 		assert.Equal(t, int64(1), delete_test3.Value())
@@ -4340,7 +4340,7 @@ func (suite *GlideTestSuite) TestRestoreWithOptions() {
 		assert.Nil(t, err)
 		assert.Equal(t, value, resultGet_test3.Value())
 
-		//Test 4: Check restore command with restoreOptions IDLETIME modifier
+		// Test 4: Check restore command with restoreOptions IDLETIME modifier
 		delete_test4, err := client.Del([]string{key})
 		assert.Nil(t, err)
 		assert.Equal(t, int64(1), delete_test4.Value())
