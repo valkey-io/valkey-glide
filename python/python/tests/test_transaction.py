@@ -271,6 +271,11 @@ async def transaction_test(
     args.append(OK)
     transaction.config_get(["timeout"])
     args.append({b"timeout": b"1000"})
+    if not await check_if_server_version_lt(glide_client, "7.0.0"):
+        transaction.config_set({"timeout": "2000", "logfile": "foo"})
+        args.append(OK)
+        transaction.config_get(["timeout", "logfile"])
+        args.append({b"timeout": b"2000", b"logfile": b"foo"})
 
     transaction.hset(key4, {key: value, key2: value2})
     args.append(2)

@@ -855,6 +855,25 @@ class TestCommands:
             == OK
         )
 
+        if not await check_if_server_version_lt(glide_client, "7.0.0"):
+            previous_timeout = await glide_client.config_get(["timeout"])
+            previous_logfile = await glide_client.config_get(["logfile"])
+            assert await glide_client.config_set({"timeout": "1000", "logfile": "foo"}) == OK
+            assert await glide_client.config_get(["timeout", "logfile"]) == {b"timeout": b"1000", b"logfile": b"foo"}
+            # revert changes to previous timeout
+            previous_timeout_decoded = convert_bytes_to_string_object(previous_timeout)
+            previous_logfile_decoded = convert_bytes_to_string_object(previous_logfile)
+            assert isinstance(previous_timeout_decoded, dict)
+            assert isinstance(previous_logfile_decoded, dict)
+            assert isinstance(previous_timeout_decoded["timeout"], str)
+            assert isinstance(previous_logfile_decoded["logfile"], str)
+            assert (
+                await glide_client.config_set(
+                    {"timeout": previous_timeout_decoded["timeout"], "logfile": previous_logfile_decoded["logfile"]}
+                )
+                == OK
+            )
+
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_config_get_with_wildcard_and_multi_node_route(
