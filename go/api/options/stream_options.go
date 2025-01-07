@@ -118,3 +118,69 @@ func (xto *XTrimOptions) ToArgs() ([]string, error) {
 	var err error
 	return args, err
 }
+
+// Optional arguments for `XClaim` in [StreamCommands]
+type StreamClaimOptions struct {
+	idleTime     int64
+	idleUnixTime int64
+	retryCount   int64
+	isForce      bool
+}
+
+func NewStreamClaimOptions() *StreamClaimOptions {
+	return &StreamClaimOptions{}
+}
+
+// Set the idle time in milliseconds.
+func (sco *StreamClaimOptions) SetIdleTime(idleTime int64) *StreamClaimOptions {
+	sco.idleTime = idleTime
+	return sco
+}
+
+// Set the idle time in unix-milliseconds.
+func (sco *StreamClaimOptions) SetIdleUnixTime(idleUnixTime int64) *StreamClaimOptions {
+	sco.idleUnixTime = idleUnixTime
+	return sco
+}
+
+// Set the retry count.
+func (sco *StreamClaimOptions) SetRetryCount(retryCount int64) *StreamClaimOptions {
+	sco.retryCount = retryCount
+	return sco
+}
+
+// Valkey API keywords for stream claim options
+const (
+	// ValKey API string to designate IDLE time in milliseconds
+	IDLE_VALKEY_API string = "IDLE"
+	// ValKey API string to designate TIME time in unix-milliseconds
+	TIME_VALKEY_API string = "TIME"
+	// ValKey API string to designate RETRYCOUNT
+	RETRY_COUNT_VALKEY_API string = "RETRYCOUNT"
+	// ValKey API string to designate FORCE
+	FORCE_VALKEY_API string = "FORCE"
+	// ValKey API string to designate JUSTID
+	JUST_ID_VALKEY_API string = "JUSTID"
+)
+
+func (sco *StreamClaimOptions) ToArgs() ([]string, error) {
+	optionArgs := []string{}
+
+	if sco.idleTime > 0 {
+		optionArgs = append(optionArgs, IDLE_VALKEY_API, utils.IntToString(sco.idleTime))
+	}
+
+	if sco.idleUnixTime > 0 {
+		optionArgs = append(optionArgs, TIME_VALKEY_API, utils.IntToString(sco.idleUnixTime))
+	}
+
+	if sco.retryCount > 0 {
+		optionArgs = append(optionArgs, RETRY_COUNT_VALKEY_API, utils.IntToString(sco.retryCount))
+	}
+
+	if sco.isForce {
+		optionArgs = append(optionArgs, FORCE_VALKEY_API)
+	}
+
+	return optionArgs, nil
+}

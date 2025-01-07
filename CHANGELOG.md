@@ -16,6 +16,7 @@
 * Java: Add binary version of `ZRANK WITHSCORE` ([#2896](https://github.com/valkey-io/valkey-glide/pull/2896))
 * Go: Add `ZCARD` ([#2838](https://github.com/valkey-io/valkey-glide/pull/2838))
 * Go: Add `BZPopMin` ([#2849](https://github.com/valkey-io/valkey-glide/pull/2849))
+* Go: Add `XClaimJustID` and `XClaimJustIDWithOptions` ([#TBD](https://github.com/valkey-io/valkey-glide/pull/TBD))
 
 #### Breaking Changes
 
