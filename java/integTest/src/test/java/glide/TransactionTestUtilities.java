@@ -815,30 +815,35 @@ public class TransactionTestUtilities {
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction
-                .configSet(Map.of("timeout", "2000", "rdb-save-incremental-fsync", "no"))
-                .configGet(new String[] {"timeout", "rdb-save-incremental-fsync"});
+                    .configSet(Map.of("timeout", "2000", "rdb-save-incremental-fsync", "no"))
+                    .configGet(new String[] {"timeout", "rdb-save-incremental-fsync"});
         }
 
-        var expectedResults = new Object[] {
-            OK, // configSet(Map.of("timeout", "1000"))
-            Map.of("timeout", "1000"), // configGet(new String[] {"timeout"})
-            OK, // configResetStat()
-            "Redis ver. " + SERVER_VERSION + '\n', // lolwut(1)
-            OK, // flushall()
-            OK, // flushall(ASYNC)
-            OK, // flushdb()
-            OK, // flushdb(ASYNC)
-            0L, // dbsize()
-        };
+        var expectedResults =
+                new Object[] {
+                    OK, // configSet(Map.of("timeout", "1000"))
+                    Map.of("timeout", "1000"), // configGet(new String[] {"timeout"})
+                    OK, // configResetStat()
+                    "Redis ver. " + SERVER_VERSION + '\n', // lolwut(1)
+                    OK, // flushall()
+                    OK, // flushall(ASYNC)
+                    OK, // flushdb()
+                    OK, // flushdb(ASYNC)
+                    0L, // dbsize()
+                };
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             expectedResults =
-                concatenateArrays(
-                    expectedResults,
-                    new Object[] {
-                        OK, // configSet(Map.of("timeout", "2000", "rdb-save-incremental-fsync", "no"))
-                        Map.of("timeout", "2000", "rdb-save-incremental-fsync", "no"), // configGet(new String[] {"timeout", "rdb-save-incremental-fsync"})
-                    });
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                OK, // configSet(Map.of("timeout", "2000", "rdb-save-incremental-fsync", "no"))
+                                Map.of(
+                                        "timeout",
+                                        "2000",
+                                        "rdb-save-incremental-fsync",
+                                        "no"), // configGet(new String[] {"timeout", "rdb-save-incremental-fsync"})
+                            });
         }
 
         return expectedResults;
