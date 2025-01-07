@@ -744,6 +744,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Reads the configuration parameters of the running server.
+     * Starting from server version 7, command supports multiple parameters.
      *
      * @see {@link https://valkey.io/commands/config-get/|valkey.io} for details.
      *
@@ -758,6 +759,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Sets configuration parameters to the specified values.
+     * Starting from server version 7, command supports multiple parameters.
      *
      * @see {@link https://valkey.io/commands/config-set/|valkey.io} for details.
      *

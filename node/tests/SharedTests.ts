@@ -1231,6 +1231,39 @@ export function runBaseTests(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `config get and config set with timeout and logfile parameters_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                if (cluster.checkIfServerVersionLessThan("7.0.0")) {
+                    return;
+                }
+                const prevTimeout = (await client.configGet([
+                    "timeout",
+                ])) as Record<string, GlideString>;
+                const prevLogfile = (await client.configGet([
+                    "logfile",
+                ])) as Record<string, GlideString>;
+                expect(await client.configSet({ timeout: "1000", logfile: "foo" })).toEqual(
+                    "OK",
+                );
+                const currParameterValues = (await client.configGet([
+                    "timeout",
+                    "logfile"
+                ])) as Record<string, GlideString>;
+                expect(currParameterValues).toEqual({ timeout: "1000", logfile: "foo" });
+                /// Revert to the previous configuration
+                expect(
+                    await client.configSet({
+                        timeout: prevTimeout["timeout"],
+                        logfile: prevLogfile["logfile"]
+                    }),
+                ).toEqual("OK");
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `getdel test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
