@@ -1301,7 +1301,7 @@ where
                 .extend_connection_map(connection_map);
             if let Err(err) = Self::refresh_slots_and_subscriptions_with_retries(
                 inner.clone(),
-                &RefreshPolicy::Throttable,
+                &RefreshPolicy::NotThrottable,
             )
             .await
             {
