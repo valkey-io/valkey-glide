@@ -1244,19 +1244,22 @@ export function runBaseTests(config: {
                 const prevLogfile = (await client.configGet([
                     "logfile",
                 ])) as Record<string, GlideString>;
-                expect(await client.configSet({ timeout: "1000", logfile: "foo" })).toEqual(
-                    "OK",
-                );
+                expect(
+                    await client.configSet({ timeout: "1000", logfile: "foo" }),
+                ).toEqual("OK");
                 const currParameterValues = (await client.configGet([
                     "timeout",
-                    "logfile"
+                    "logfile",
                 ])) as Record<string, GlideString>;
-                expect(currParameterValues).toEqual({ timeout: "1000", logfile: "foo" });
+                expect(currParameterValues).toEqual({
+                    timeout: "1000",
+                    logfile: "foo",
+                });
                 /// Revert to the previous configuration
                 expect(
                     await client.configSet({
                         timeout: prevTimeout["timeout"],
-                        logfile: prevLogfile["logfile"]
+                        logfile: prevLogfile["logfile"],
                     }),
                 ).toEqual("OK");
             }, protocol);
