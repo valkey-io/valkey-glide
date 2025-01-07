@@ -1233,7 +1233,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `config get and config set with timeout and logfile parameters_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
+            await runTest(async (client: BaseClient, cluster) => {
                 if (cluster.checkIfServerVersionLessThan("7.0.0")) {
                     return;
                 }
