@@ -6539,3 +6539,12 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
 }
+
+func (suite *GlideTestSuite) TestXClaim() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		client.XAdd(key, [][]string{{"field1", "value1"}})
+
+		// TODO: finish test case using custom commands
+	})
+}

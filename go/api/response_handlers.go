@@ -189,6 +189,33 @@ func convertStringOrNilArray(response *C.struct_CommandResponse) ([]Result[strin
 // array could be nillable, but strings - aren't
 func convertStringArray(response *C.struct_CommandResponse, isNilable bool) ([]string, error) {
 	typeErr := checkResponseType(response, C.Array, isNilable)
+func convertArrayOfArrayOfString(response *C.struct_CommandResponse) ([][]Result[string], error) {
+	typeErr := checkResponseType(response, C.Array, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	slice := make([][]Result[string], 0, response.array_value_len)
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		res, err := convertStringArray(&v)
+		if err != nil {
+			return nil, err
+		}
+		slice = append(slice, res)
+	}
+	return slice, nil
+}
+
+func handleStringArrayResponse(response *C.struct_CommandResponse) ([]Result[string], error) {
+	defer C.free_command_response(response)
+
+	return convertStringArray(response)
+}
+
+func handleStringArrayOrNullResponse(response *C.struct_CommandResponse) ([]Result[string], error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Array, true)
 	if typeErr != nil {
 		return nil, typeErr
 	}
@@ -435,6 +462,36 @@ func handleStringToStringArrayMapOrNilResponse(
 	}
 	if result, ok := res.(map[string][]string); ok {
 		return result, nil
+	}
+
+	return m, nil
+}
+
+func handleStringToArrayOfStringArrayMapResponse(
+	response *C.struct_CommandResponse,
+) (map[Result[string]][][]Result[string], error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Map, true)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	if response.response_type == C.Null {
+		return nil, nil
+	}
+
+	m := make(map[Result[string]][][]Result[string], response.array_value_len)
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		key, err := convertCharArrayToString(v.map_key, true)
+		if err != nil {
+			return nil, err
+		}
+		value, err := convertArrayOfArrayOfString(v.map_value)
+		if err != nil {
+			return nil, err
+		}
+		m[key] = value
 	}
 
 	return nil, &RequestError{fmt.Sprintf("unexpected type received: %T", res)}

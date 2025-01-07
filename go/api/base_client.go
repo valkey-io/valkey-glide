@@ -2969,3 +2969,79 @@ func (client *baseClient) XAck(key string, group string, ids []string) (int64, e
 	}
 	return handleIntResponse(result)
 }
+
+func (client *baseClient) XClaim(
+	key string,
+	group string,
+	consumer string,
+	minIdleTime int64,
+	ids []string,
+) (map[Result[string]][][]Result[string], error) {
+	result, err := client.executeCommand(
+		C.XClaim,
+		append([]string{key, group, consumer, utils.IntToString(minIdleTime)}, ids...),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return handleStringToArrayOfStringArrayMapResponse(result)
+}
+
+func (client *baseClient) XClaimWithOptions(
+	key string,
+	group string,
+	consumer string,
+	minIdleTime int64,
+	ids []string,
+	opts *options.StreamClaimOptions,
+) (map[Result[string]][][]Result[string], error) {
+	args := append([]string{key, group, consumer, utils.IntToString(minIdleTime)}, ids...)
+	optionArgs, err := opts.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, optionArgs...)
+	result, err := client.executeCommand(C.XClaim, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleStringToArrayOfStringArrayMapResponse(result)
+}
+
+func (client *baseClient) XClaimJustId(
+	key string,
+	group string,
+	consumer string,
+	minIdleTime int64,
+	ids []string,
+) ([]Result[string], error) {
+	args := append([]string{key, group, consumer, utils.IntToString(minIdleTime)}, ids...)
+	args = append(args, options.JUST_ID_VALKEY_API)
+	result, err := client.executeCommand(C.XClaim, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
+
+func (client *baseClient) XClaimJustIdWithOptions(
+	key string,
+	group string,
+	consumer string,
+	minIdleTime int64,
+	ids []string,
+	opts *options.StreamClaimOptions,
+) ([]Result[string], error) {
+	args := append([]string{key, group, consumer, utils.IntToString(minIdleTime)}, ids...)
+	optionArgs, err := opts.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, optionArgs...)
+	args = append(args, options.JUST_ID_VALKEY_API)
+	result, err := client.executeCommand(C.XClaim, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
