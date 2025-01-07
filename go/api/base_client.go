@@ -1475,3 +1475,30 @@ func (client *baseClient) BZPopMin(keys []string, timeoutSecs float64) (Result[K
 
 	return handleKeyWithMemberAndScoreResponse(result)
 }
+
+func (client *baseClient) ObjectFreq(key string) (Result[int64], error) {
+	result, err := client.executeCommand(C.ObjectFreq, []string{key})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) ObjectIdle(key string) (Result[int64], error) {
+	result, err := client.executeCommand(C.ObjectIdleTime, []string{key})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) ObjectRefCount(key string) (Result[int64], error) {
+	result, err := client.executeCommand(C.ObjectRefCount, []string{key})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+
+	return handleLongResponse(result)
+}
