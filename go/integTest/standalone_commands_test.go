@@ -295,7 +295,7 @@ func (suite *GlideTestSuite) TestSortWithOptions_ExternalWeights() {
 
 	options := options.NewSortOptions().
 		SetByPattern("weight_*").
-		SetOrderBy(api.ASC).
+		SetOrderBy(options.ASC).
 		SetIsAlpha(false)
 
 	sortResult, err := client.SortWithOptions(key, options)
@@ -321,7 +321,7 @@ func (suite *GlideTestSuite) TestSortWithOptions_GetPatterns() {
 
 	options := options.NewSortOptions().
 		SetByPattern("weight_*").
-		SetOrderBy(api.ASC).
+		SetOrderBy(options.ASC).
 		SetIsAlpha(false).
 		AddGetPattern("object_*")
 
@@ -352,7 +352,7 @@ func (suite *GlideTestSuite) TestSortWithOptions_SuccessfulSortByWeightAndGet() 
 	client.Set("object_item3", "Object 3")
 
 	options := options.NewSortOptions().
-		SetOrderBy(api.ASC).
+		SetOrderBy(options.ASC).
 		SetIsAlpha(false).
 		SetByPattern("weight_*").
 		AddGetPattern("object_*").
@@ -435,7 +435,7 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_ExternalWeights() {
 
 	options := options.NewSortOptions().
 		SetByPattern("weight_*").
-		SetOrderBy(api.ASC).
+		SetOrderBy(options.ASC).
 		SetIsAlpha(false)
 
 	sortResult, err := client.SortReadOnlyWithOptions(key, options)
@@ -463,7 +463,7 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_GetPatterns() {
 
 	options := options.NewSortOptions().
 		SetByPattern("weight_*").
-		SetOrderBy(api.ASC).
+		SetOrderBy(options.ASC).
 		SetIsAlpha(false).
 		AddGetPattern("object_*")
 
@@ -497,7 +497,7 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_SuccessfulSortByWeightA
 	client.Set("object_item3", "Object 3")
 
 	options := options.NewSortOptions().
-		SetOrderBy(api.ASC).
+		SetOrderBy(options.ASC).
 		SetIsAlpha(false).
 		SetByPattern("weight_*").
 		AddGetPattern("object_*").

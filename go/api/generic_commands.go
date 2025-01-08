@@ -13,7 +13,7 @@ type GenericBaseCommands interface {
 	// Del removes the specified keys from the database. A key is ignored if it does not exist.
 	//
 	// Note:
-	//  In cluster mode, if `key` and `destination` map to different hash slots, the command
+	//  In cluster mode, if `keys` map to different hash slots, the command
 	//  will be split across these slots and executed separately for each. This means the command
 	//  is atomic only at the slot level. If one or more slot-specific requests fail, the entire
 	//  call will return the first encountered error, even though some requests may have succeeded
@@ -39,7 +39,7 @@ type GenericBaseCommands interface {
 	// Exists returns the number of keys that exist in the database
 	//
 	// Note:
-	// In cluster mode, if `key` and `destination` map to different hash slots, the command
+	//  In cluster mode, if `keys` map to different hash slots, the command
 	//  will be split across these slots and executed separately for each. This means the command
 	//  is atomic only at the slot level. If one or more slot-specific requests fail, the entire
 	//  call will return the first encountered error, even though some requests may have succeeded
@@ -317,7 +317,7 @@ type GenericBaseCommands interface {
 	// Sorts the elements in the list, set, or sorted set at key and returns the result.
 	// The sort command can be used to sort elements based on different criteria and apply
 	// transformations on sorted elements.
-	// To store the result into a new key, see {@link #sortStore(string, string)}.
+	// To store the result into a new key, see the sortStore function.
 	//
 	// Parameters:
 	// key - The key of the list, set, or sorted set to be sorted.
@@ -337,21 +337,21 @@ type GenericBaseCommands interface {
 	// Sorts the elements in the list, set, or sorted set at key and returns the result.
 	// The sort command can be used to sort elements based on different criteria and apply
 	// transformations on sorted elements.
-	// To store the result into a new key, see {@link #sortStore(string, string)}.
+	// To store the result into a new key, see the sortStore function.
 	//
 	// Note:
-	//  In cluster mode, if `key` and `destination` map to different hash slots, the command
+	//  In cluster mode, if `key` map to different hash slots, the command
 	//  will be split across these slots and executed separately for each. This means the command
 	//  is atomic only at the slot level. If one or more slot-specific requests fail, the entire
 	//  call will return the first encountered error, even though some requests may have succeeded
 	//  while others did not. If this behavior impacts your application logic, consider splitting
 	//  the request into sub-requests per slot to ensure atomicity.
-	//  The use of {@link SortOptions#byPattern} and {@link SortOptions#getPatterns} in cluster mode is
+	//  The use of SortOptions.byPattern and SortOptions.getPatterns in cluster mode is
 	//  supported since Valkey version 8.0.
 	//
 	// Parameters:
 	// key - The key of the list, set, or sorted set to be sorted.
-	// sortOptions- The {@link SortOptions}.
+	// sortOptions - The SortOptions type.
 	//
 	// Return value:
 	// An Array of sorted elements.
@@ -371,7 +371,7 @@ type GenericBaseCommands interface {
 	// different criteria, apply transformations on sorted elements, and store the result in a new key.
 	// The sort command can be used to sort elements based on different criteria and apply
 	// transformations on sorted elements.
-	// To get the sort result without storing it into a key, see {@link #sort(String)} or {@link #sortReadOnly(String)}.
+	// To get the sort result without storing it into a key, see the sort or sortReadOnly function.
 	//
 	// Note:
 	//  In cluster mode, if `key` and `destination` map to different hash slots, the command
@@ -402,7 +402,7 @@ type GenericBaseCommands interface {
 	// different criteria, apply transformations on sorted elements, and store the result in a new key.
 	// The sort command can be used to sort elements based on different criteria and apply
 	// transformations on sorted elements.
-	// To get the sort result without storing it into a key, see {@link #sort(String)} or {@link #sortReadOnly(String)}.
+	// To get the sort result without storing it into a key, see the sort or sortReadOnly function.
 	//
 	// Note:
 	//  In cluster mode, if `key` and `destination` map to different hash slots, the command
@@ -411,13 +411,13 @@ type GenericBaseCommands interface {
 	//  call will return the first encountered error, even though some requests may have succeeded
 	//  while others did not. If this behavior impacts your application logic, consider splitting
 	//  the request into sub-requests per slot to ensure atomicity.
-	//  The use of {@link SortOptions#byPattern} and {@link SortOptions#getPatterns}
+	//  The use of SortOptions.byPattern and SortOptions.getPatterns
 	//  in cluster mode is supported since Valkey version 8.0.
 	//
 	// Parameters:
 	// key - The key of the list, set, or sorted set to be sorted.
 	// destination - The key where the sorted result will be stored.
-	// sortOptions- The {@link SortOptions}.
+	// sortOptions - The SortOptions type.
 	//
 	// Return value:
 	// The number of elements in the sorted key stored at destination.
@@ -435,7 +435,7 @@ type GenericBaseCommands interface {
 	// Sorts the elements in the list, set, or sorted set at key and returns the result.
 	// The sortReadOnly command can be used to sort elements based on different criteria and apply
 	// transformations on sorted elements.
-	// This command is routed depending on the client's {@link ReadFrom} strategy.
+	// This command is routed depending on the client's ReadFrom strategy.
 	//
 	// Parameters:
 	// key - The key of the list, set, or sorted set to be sorted.
@@ -455,21 +455,21 @@ type GenericBaseCommands interface {
 	// Sorts the elements in the list, set, or sorted set at key and returns the result.
 	// The sort command can be used to sort elements based on different criteria and apply
 	// transformations on sorted elements.
-	// This command is routed depending on the client's {@link ReadFrom} strategy.
+	// This command is routed depending on the client's ReadFrom strategy.
 	//
 	// Note:
-	//  In cluster mode, if `key` and `destination` map to different hash slots, the command
+	//  In cluster mode, if `key` map to different hash slots, the command
 	//  will be split across these slots and executed separately for each. This means the command
 	//  is atomic only at the slot level. If one or more slot-specific requests fail, the entire
 	//  call will return the first encountered error, even though some requests may have succeeded
 	//  while others did not. If this behavior impacts your application logic, consider splitting
 	//  the request into sub-requests per slot to ensure atomicity.
-	//  The use of {@link SortOptions#byPattern} and {@link SortOptions#getPatterns} in cluster mode is
+	//  The use of SortOptions.byPattern and SortOptions.getPatterns in cluster mode is
 	//  supported since Valkey version 8.0.
 	//
 	// Parameters:
 	// key - The key of the list, set, or sorted set to be sorted.
-	// sortOptions- The {@link SortOptions}.
+	// sortOptions - The SortOptions type.
 	//
 	// Return value:
 	// An Array of sorted elements.

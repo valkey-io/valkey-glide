@@ -3737,7 +3737,7 @@ func (suite *GlideTestSuite) TestSortWithOptions_AscendingOrder() {
 		client.LPush(key, []string{"b", "a", "c"})
 
 		options := options.NewSortOptions().
-			SetOrderBy(api.ASC).
+			SetOrderBy(options.ASC).
 			SetIsAlpha(true)
 
 		sortResult, err := client.SortWithOptions(key, options)
@@ -3759,7 +3759,7 @@ func (suite *GlideTestSuite) TestSortWithOptions_DescendingOrder() {
 		client.LPush(key, []string{"b", "a", "c"})
 
 		options := options.NewSortOptions().
-			SetOrderBy(api.DESC).
+			SetOrderBy(options.DESC).
 			SetIsAlpha(true).
 			SetLimit(0, 3)
 
@@ -3836,7 +3836,7 @@ func (suite *GlideTestSuite) TestSortStoreWithOptions_DescendingOrder() {
 		sortedKey := "{key}" + uuid.New().String()
 		client.LPush(key, []string{"30", "20", "10", "40", "50"})
 
-		options := options.NewSortOptions().SetOrderBy(api.DESC).SetIsAlpha(false)
+		options := options.NewSortOptions().SetOrderBy(options.DESC).SetIsAlpha(false)
 		result, err := client.SortStoreWithOptions(key, sortedKey, options)
 
 		assert.Nil(suite.T(), err)
@@ -3933,7 +3933,7 @@ func (suite *GlideTestSuite) TestSortReadyOnlyWithOptions_DescendingOrder() {
 		client.LPush(key, []string{"b", "a", "c"})
 
 		options := options.NewSortOptions().
-			SetOrderBy(api.DESC).
+			SetOrderBy(options.DESC).
 			SetIsAlpha(true).
 			SetLimit(0, 3)
 
