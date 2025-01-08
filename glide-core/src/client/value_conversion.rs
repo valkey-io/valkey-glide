@@ -1387,7 +1387,9 @@ fn convert_flat_array_to_array_of_pairs(
     Ok(Value::Array(result))
 }
 
-const IS_ARRAY: &'static (dyn Fn(Value) -> bool + Sync) = &|val| matches!(val, Value::Array(_));
+fn is_array(val: Value) -> bool {
+    matches!(val, Value::Array(_))
+}
 
 pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
     let command = cmd.command()?;
@@ -1405,7 +1407,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
                 key_type: &None,
                 value_type: &None,
             }),
-            Some(&IS_ARRAY),
+            Some(&is_array),
         )),
         b"XCLAIM" => {
             if cmd.position(b"JUSTID").is_some() {
@@ -1499,7 +1501,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
         ))),
         b"FUNCTION STATS" => Some(ExpectedReturnType::SingleOrMultiNode(
             &Some(ExpectedReturnType::FunctionStatsReturnType),
-            Some(&IS_ARRAY),
+            Some(&is_array),
         )),
         b"GEOSEARCH" => {
             if cmd.position(b"WITHDIST").is_some()
