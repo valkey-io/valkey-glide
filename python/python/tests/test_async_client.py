@@ -873,7 +873,7 @@ class TestCommands:
             # revert changes to previous timeout
             previous_timeout_decoded = convert_bytes_to_string_object(previous_timeout)
             previous_node_cluster_timeout_decoded = convert_bytes_to_string_object(
-                pprevious_node_cluster_timeout
+                previous_node_cluster_timeout
             )
             assert isinstance(previous_timeout_decoded, dict)
             assert isinstance(previous_node_cluster_timeout_decoded, dict)
