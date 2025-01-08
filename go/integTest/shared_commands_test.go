@@ -4456,3 +4456,238 @@ func (suite *GlideTestSuite) TestZRem() {
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
 }
+
+func (suite *GlideTestSuite) TestZRange() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		memberScoreMap := map[string]float64{
+			"a": 1.0,
+			"b": 2.0,
+			"c": 3.0,
+		}
+		_, err := client.ZAdd(key, memberScoreMap)
+		assert.Nil(suite.T(), err)
+		// index [0:1]
+		res, err := client.ZRange(key, options.NewRangeByIndexQuery(0, 1))
+		expected := []api.Result[string]{
+			api.CreateStringResult("a"),
+			api.CreateStringResult("b"),
+		}
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), expected, res)
+		// index [0:-1] (all)
+		res, err = client.ZRange(key, options.NewRangeByIndexQuery(0, -1))
+		expected = []api.Result[string]{
+			api.CreateStringResult("a"),
+			api.CreateStringResult("b"),
+			api.CreateStringResult("c"),
+		}
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), expected, res)
+		// index [3:1] (none)
+		res, err = client.ZRange(key, options.NewRangeByIndexQuery(3, 1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), 0, len(res))
+		// score [-inf:3]
+		var query options.ZRangeQuery
+		query = options.NewRangeByScoreQuery(
+			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
+			options.NewScoreBoundary(3, true))
+		res, err = client.ZRange(key, query)
+		expected = []api.Result[string]{
+			api.CreateStringResult("a"),
+			api.CreateStringResult("b"),
+			api.CreateStringResult("c"),
+		}
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), expected, res)
+		// score [-inf:3)
+		query = options.NewRangeByScoreQuery(
+			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
+			options.NewScoreBoundary(3, false))
+		res, err = client.ZRange(key, query)
+		expected = []api.Result[string]{
+			api.CreateStringResult("a"),
+			api.CreateStringResult("b"),
+		}
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), expected, res)
+		// score (3:-inf] reverse
+		query = options.NewRangeByScoreQuery(
+			options.NewScoreBoundary(3, false),
+			options.NewInfiniteScoreBoundary(options.NegativeInfinity)).
+			SetReverse()
+		res, err = client.ZRange(key, query)
+		expected = []api.Result[string]{
+			api.CreateStringResult("b"),
+			api.CreateStringResult("a"),
+		}
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), expected, res)
+		// score [-inf:+inf] limit 1 2
+		query = options.NewRangeByScoreQuery(
+			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
+			options.NewInfiniteScoreBoundary(options.PositiveInfinity)).
+			SetLimit(1, 2)
+		res, err = client.ZRange(key, query)
+		expected = []api.Result[string]{
+			api.CreateStringResult("b"),
+			api.CreateStringResult("c"),
+		}
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), expected, res)
+		// score [-inf:3) reverse (none)
+		query = options.NewRangeByScoreQuery(
+			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
+			options.NewScoreBoundary(3, true)).
+			SetReverse()
+		res, err = client.ZRange(key, query)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), 0, len(res))
+		// score [+inf:3) (none)
+		query = options.NewRangeByScoreQuery(
+			options.NewInfiniteScoreBoundary(options.PositiveInfinity),
+			options.NewScoreBoundary(3, false))
+		res, err = client.ZRange(key, query)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), 0, len(res))
+		// lex [-:c)
+		query = options.NewRangeByLexQuery(
+			options.NewInfiniteLexBoundary(options.NegativeInfinity),
+			options.NewLexBoundary("c", false))
+		res, err = client.ZRange(key, query)
+		expected = []api.Result[string]{
+			api.CreateStringResult("a"),
+			api.CreateStringResult("b"),
+		}
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), expected, res)
+		// lex [+:-] reverse limit 1 2
+		query = options.NewRangeByLexQuery(
+			options.NewInfiniteLexBoundary(options.PositiveInfinity),
+			options.NewInfiniteLexBoundary(options.NegativeInfinity)).
+			SetReverse().SetLimit(1, 2)
+		res, err = client.ZRange(key, query)
+		expected = []api.Result[string]{
+			api.CreateStringResult("b"),
+			api.CreateStringResult("a"),
+		}
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), expected, res)
+		// lex (c:-] reverse
+		query = options.NewRangeByLexQuery(
+			options.NewLexBoundary("c", false),
+			options.NewInfiniteLexBoundary(options.NegativeInfinity)).
+			SetReverse()
+		res, err = client.ZRange(key, query)
+		expected = []api.Result[string]{
+			api.CreateStringResult("b"),
+			api.CreateStringResult("a"),
+		}
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), expected, res)
+		// lex [+:c] (none)
+		query = options.NewRangeByLexQuery(
+			options.NewInfiniteLexBoundary(options.PositiveInfinity),
+			options.NewLexBoundary("c", true))
+		res, err = client.ZRange(key, query)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), 0, len(res))
+	})
+}
+
+func (suite *GlideTestSuite) TestZRangeWithScores() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		memberScoreMap := map[string]float64{
+			"a": 1.0,
+			"b": 2.0,
+			"c": 3.0,
+		}
+		_, err := client.ZAdd(key, memberScoreMap)
+		assert.Nil(suite.T(), err)
+		// index [0:1]
+		res, err := client.ZRangeWithScores(key, options.NewRangeByIndexQuery(0, 1))
+		expected := map[api.Result[string]]api.Result[float64]{
+			api.CreateStringResult("a"): api.CreateFloat64Result(1.0),
+			api.CreateStringResult("b"): api.CreateFloat64Result(2.0),
+		}
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), expected, res)
+		// index [0:-1] (all)
+		res, err = client.ZRangeWithScores(key, options.NewRangeByIndexQuery(0, -1))
+		expected = map[api.Result[string]]api.Result[float64]{
+			api.CreateStringResult("a"): api.CreateFloat64Result(1.0),
+			api.CreateStringResult("b"): api.CreateFloat64Result(2.0),
+			api.CreateStringResult("c"): api.CreateFloat64Result(3.0),
+		}
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), expected, res)
+		// index [3:1] (none)
+		res, err = client.ZRangeWithScores(key, options.NewRangeByIndexQuery(3, 1))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), 0, len(res))
+		// score [-inf:3]
+		query := options.NewRangeByScoreQuery(
+			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
+			options.NewScoreBoundary(3, true))
+		res, err = client.ZRangeWithScores(key, query)
+		expected = map[api.Result[string]]api.Result[float64]{
+			api.CreateStringResult("a"): api.CreateFloat64Result(1.0),
+			api.CreateStringResult("b"): api.CreateFloat64Result(2.0),
+			api.CreateStringResult("c"): api.CreateFloat64Result(3.0),
+		}
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), expected, res)
+		// score [-inf:3)
+		query = options.NewRangeByScoreQuery(
+			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
+			options.NewScoreBoundary(3, false))
+		res, err = client.ZRangeWithScores(key, query)
+		expected = map[api.Result[string]]api.Result[float64]{
+			api.CreateStringResult("a"): api.CreateFloat64Result(1.0),
+			api.CreateStringResult("b"): api.CreateFloat64Result(2.0),
+		}
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), expected, res)
+		// score (3:-inf] reverse
+		query = options.NewRangeByScoreQuery(
+			options.NewScoreBoundary(3, false),
+			options.NewInfiniteScoreBoundary(options.NegativeInfinity)).
+			SetReverse()
+		res, err = client.ZRangeWithScores(key, query)
+		expected = map[api.Result[string]]api.Result[float64]{
+			api.CreateStringResult("b"): api.CreateFloat64Result(2.0),
+			api.CreateStringResult("a"): api.CreateFloat64Result(1.0),
+		}
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), expected, res)
+		// score [-inf:+inf] limit 1 2
+		query = options.NewRangeByScoreQuery(
+			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
+			options.NewInfiniteScoreBoundary(options.PositiveInfinity)).
+			SetLimit(1, 2)
+		res, err = client.ZRangeWithScores(key, query)
+		expected = map[api.Result[string]]api.Result[float64]{
+			api.CreateStringResult("b"): api.CreateFloat64Result(2.0),
+			api.CreateStringResult("c"): api.CreateFloat64Result(3.0),
+		}
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), expected, res)
+		// score [-inf:3) reverse (none)
+		query = options.NewRangeByScoreQuery(
+			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
+			options.NewScoreBoundary(3, true)).
+			SetReverse()
+		res, err = client.ZRangeWithScores(key, query)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), 0, len(res))
+		// score [+inf:3) (none)
+		query = options.NewRangeByScoreQuery(
+			options.NewInfiniteScoreBoundary(options.PositiveInfinity),
+			options.NewScoreBoundary(3, false))
+		res, err = client.ZRangeWithScores(key, query)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), 0, len(res))
+	})
+}

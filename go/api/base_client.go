@@ -1475,3 +1475,33 @@ func (client *baseClient) BZPopMin(keys []string, timeoutSecs float64) (Result[K
 
 	return handleKeyWithMemberAndScoreResponse(result)
 }
+
+// TODO rework once we get other handlers - return `[]string`
+func (client *baseClient) ZRange(key string, rangeQuery options.ZRangeQuery) ([]Result[string], error) {
+	args := make([]string, 0, 10)
+	args = append(args, key)
+	args = append(args, rangeQuery.ToArgs()...)
+	result, err := client.executeCommand(C.ZRange, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayResponse(result)
+}
+
+// TODO rework once we get other handlers - return `map[string]float64`
+func (client *baseClient) ZRangeWithScores(
+	key string,
+	rangeQuery options.ZRangeQueryWithScores,
+) (map[Result[string]]Result[float64], error) {
+	args := make([]string, 0, 10)
+	args = append(args, key)
+	args = append(args, rangeQuery.ToArgs()...)
+	args = append(args, "WITHSCORES")
+	result, err := client.executeCommand(C.ZRange, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringDoubleMapResponse(result)
+}
