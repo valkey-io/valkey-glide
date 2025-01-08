@@ -262,4 +262,21 @@ type SortedSetCommands interface {
 	// [valkey.io]: https://valkey.io/commands/bzpopmin/
 	// [blocking commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
 	BZPopMin(keys []string, timeoutSecs float64) (Result[KeyWithMemberAndScore], error)
+
+	// Returns the number of members in the sorted set stored at `key` with scores between `minScore` and `maxScore`.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//  key - The key of the set.
+	//  minScore - The minimum score to count from. Can be positive/negative infinity, or specific score and inclusivity.
+	//  maxScore - The maximum score to count up to. Can be positive/negative infinity, or specific score and inclusivity.
+	//
+	// Return value:
+	// Result[int64] - The number of members in the specified score range.
+	//
+	// Example:
+	//
+	// [valkey.io]: https://valkey.io/commands/zcount/
+	ZCount(key string, minScore *options.ScoreRange, maxScore *options.ScoreRange) (Result[int64], error)
 }
