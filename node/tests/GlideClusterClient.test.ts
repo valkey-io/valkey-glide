@@ -326,16 +326,18 @@ describe("GlideClusterClient", () => {
 
             if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
                 const transaction = new ClusterTransaction()
-                    .configSet({ timeout: "2000", logfile: "foo" })
-                    .configGet(["timeout", "logfile"]);
+                    .configSet({ timeout: "2000", "cluster-node-timeout": "16000" })
+                    .configGet(["timeout", "cluster-node-timeout"]);
                 const result = await client.exec(transaction);
-                expect(result).toEqual([
-                    "OK",
-                    convertRecordToGlideRecord({
-                        timeout: "2000",
-                        logfile: "foo",
-                    }),
-                ]);
+                expect(result[0]).toEqual("OK");
+                const expectedConfigGetResult = convertRecordToGlideRecord({
+                    timeout: "2000",
+                    "cluster-node-timeout": "16000",
+                });
+                expect(result[1][0]["key"]).toEqual("cluster-node-timeout");
+                expect(result[1][0]["value"]).toEqual("16000");
+                expect(result[1][1]["key"]).toEqual("timeout");
+                expect(result[1][1]["value"]).toEqual("2000");
             }
         },
         TIMEOUT,
