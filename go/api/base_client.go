@@ -1495,8 +1495,10 @@ func (client *baseClient) RestoreWithOptions(key string, ttl int64,
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	result, err := client.executeCommand(C.Restore, append([]string{key,
-		utils.IntToString(ttl), value}, optionArgs...))
+	result, err := client.executeCommand(C.Restore, append([]string{
+		key,
+		utils.IntToString(ttl), value,
+	}, optionArgs...))
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
