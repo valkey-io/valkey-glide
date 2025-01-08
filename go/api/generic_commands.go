@@ -428,4 +428,23 @@ type GenericBaseCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/renamenx/
 	Renamenx(key string, newKey string) (Result[bool], error)
+
+	// Removes the existing timeout on key, turning the key from volatile
+	// (a key with an expire set) to persistent (a key that will never expire as no timeout is associated).
+	//
+	// Parameters:
+	//  key - The key to remove the existing timeout on.
+	//
+	// Return value:
+	//  false if key does not exist or does not have an associated timeout, true if the timeout has been removed.
+	//
+	// Example:
+	//  result, err := client.Persist([]string{"key"})
+	//	if err != nil {
+	//	    // handle error
+	//	}
+	//	fmt.Println(result.Value()) // Output: true
+	//
+	// [valkey.io]: https://valkey.io/commands/persist/
+	Persist(key string) (Result[bool], error)
 }
