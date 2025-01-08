@@ -1480,12 +1480,14 @@ func (client *baseClient) Restore(key string, ttl int64, value string) (Result[s
 	return client.RestoreWithOptions(key, ttl, value, NewRestoreOptionsBuilder())
 }
 
-func (client *baseClient) RestoreWithOptions(key string, ttl int64, value string, options *RestoreOptions) (Result[string], error) {
+func (client *baseClient) RestoreWithOptions(key string, ttl int64,
+	value string, options *RestoreOptions) (Result[string], error) {
 	optionArgs, err := options.toArgs()
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	result, err := client.executeCommand(C.Restore, append([]string{key, utils.IntToString(ttl), value}, optionArgs...))
+	result, err := client.executeCommand(C.Restore, append([]string{key,
+		utils.IntToString(ttl), value}, optionArgs...))
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
