@@ -105,32 +105,28 @@ Before starting this step, make sure you've installed all software requirements.
     git clone --branch ${VERSION} https://github.com/valkey-io/valkey-glide.git
     cd valkey-glide
     ```
-2. Initialize git submodules:
-    ```bash
-    git submodule update --init --recursive
-    ```
-3. Install build dependencies:
+2. Install build dependencies:
     ```bash
     cd go
     make install-build-tools
     ```
-4. If on CentOS or Ubuntu, add the glide-rs library to LD_LIBRARY_PATH:
+3. If on CentOS or Ubuntu, add the glide-rs library to LD_LIBRARY_PATH:
     ```bash
     # Replace "<path to valkey-glide>" with the path to the valkey-glide root, eg "$HOME/Projects/valkey-glide"
     GLIDE_ROOT_FOLDER_PATH=<path to valkey-glide>
     export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$GLIDE_ROOT_FOLDER_PATH/go/target/release/deps/
     ```
-5. Build the Go wrapper:
+4. Build the Go wrapper:
     ```bash
     make build
     ```
-6. Run tests:
+5. Run tests:
     1. Ensure that you have installed valkey-server and valkey-cli on your host. You can find the Valkey installation guide at the following link: [Valkey Installation Guide](https://github.com/valkey-io/valkey).
     2. Execute the following command from the go folder:
         ```bash
         go test -race ./...
         ```
-7. Install Go development tools with:
+6. Install Go development tools with:
     ```bash
     # For go1.22:
     make install-dev-tools
@@ -140,31 +136,38 @@ Before starting this step, make sure you've installed all software requirements.
 
 ### Test
 
-To run tests, use the following command:
+To run tests, use the benefit on makefile. To run unit tests, run the following command:
 
 ```bash
-go test -race ./...
+make unit-test
 ```
 
-For more detailed test output, add the `-v` flag:
+To run integration tests, run:
 
 ```bash
-go test -race ./... -v
+make integ-test
 ```
 
-To execute a specific test, include `-run <test_name>`. For example:
+To run modules tests, run:
 
 ```bash
-go test -race ./... -run TestConnectionRequestProtobufGeneration_allFieldsSet -v
+make modules-test
 ```
 
-### Submodules
-
-After pulling new changes, ensure that you update the submodules by running the following command:
+To execute a specific test, include `test-filter=<test_name>`. For example:
 
 ```bash
-git submodule update --init --recursive
+make unit-test test-filter=TestConnectionRequestProtobufGeneration_allFieldsSet
 ```
+
+Integration and modules tests accept `standalone-endpoints`, `cluster-endpoints` and `tls` parameters to run tests on existing servers.
+By default, those test suite start standalone and cluster servers without TLS and stop them at the end.
+
+```bash
+make integ-test standalone-endpoints=localhost:6379 cluster-endpoints=localhost:7000 tls=true
+```
+
+Test reports generated in `reports` folder.
 
 ### Generate protobuf files
 

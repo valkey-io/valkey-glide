@@ -120,6 +120,34 @@ const (
 	OnlyIfDoesNotExist ConditionalSet = "NX"
 )
 
+type ExpireCondition string
+
+const (
+	// HasExistingExpiry only sets the key if it already exists. Equivalent to "XX" in the valkey API.
+	HasExistingExpiry ExpireCondition = "XX"
+	// HasNoExpiry only sets the key if it does not already exist. Equivalent to "NX" in the valkey API.
+	HasNoExpiry ExpireCondition = "NX"
+	// NewExpiryGreaterThanCurrent only sets the key if its greater than current. Equivalent to "GT" in the valkey API.
+	NewExpiryGreaterThanCurrent ExpireCondition = "GT"
+	// NewExpiryLessThanCurrent only sets the key if its lesser than current. Equivalent to "LT" in the valkey API.
+	NewExpiryLessThanCurrent ExpireCondition = "LT"
+)
+
+func (expireCondition ExpireCondition) toString() (string, error) {
+	switch expireCondition {
+	case HasExistingExpiry:
+		return string(HasExistingExpiry), nil
+	case HasNoExpiry:
+		return string(HasNoExpiry), nil
+	case NewExpiryGreaterThanCurrent:
+		return string(NewExpiryGreaterThanCurrent), nil
+	case NewExpiryLessThanCurrent:
+		return string(NewExpiryLessThanCurrent), nil
+	default:
+		return "", &RequestError{"Invalid expire condition"}
+	}
+}
+
 // Expiry is used to configure the lifetime of a value.
 type Expiry struct {
 	Type  ExpiryType
@@ -202,6 +230,7 @@ const (
 	CountKeyword  string = "COUNT"  // Valkey API keyword used to extract specific number of matching indices from a list.
 	RankKeyword   string = "RANK"   // Valkey API keyword use to determine the rank of the match to return.
 	MaxLenKeyword string = "MAXLEN" // Valkey API keyword used to determine the maximum number of list items to compare.
+	MatchKeyword  string = "MATCH"  // Valkey API keyword used to indicate the match filter.
 )
 
 // A InsertPosition defines where to insert new elements into a list.

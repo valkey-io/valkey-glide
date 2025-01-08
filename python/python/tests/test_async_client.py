@@ -72,6 +72,7 @@ from glide.async_commands.stream import (
 )
 from glide.async_commands.transaction import ClusterTransaction, Transaction
 from glide.config import (
+    BackoffStrategy,
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
     ProtocolVersion,
@@ -128,7 +129,7 @@ class TestGlideClients:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_send_and_receive_large_values(self, request, cluster_mode, protocol):
         glide_client = await create_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, timeout=5000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
         )
         length = 2**25  # 33mb
         key = "0" * length
@@ -301,6 +302,90 @@ class TestGlideClients:
         assert "total_connections" in stats
         assert "total_clients" in stats
         assert len(stats) == 2
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_connection_timeout(
+        self,
+        request,
+        cluster_mode: bool,
+        protocol: ProtocolVersion,
+    ):
+
+        client = await create_client(
+            request,
+            cluster_mode,
+            protocol=protocol,
+            request_timeout=2000,
+            connection_timeout=2000,
+        )
+        assert isinstance(client, (GlideClient, GlideClusterClient))
+
+        assert await client.set("key", "value") == "OK"
+
+        await client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_connection_timeout_when_client_is_blocked(
+        self,
+        request,
+        cluster_mode: bool,
+        protocol: ProtocolVersion,
+    ):
+        client = await create_client(
+            request,
+            cluster_mode,
+            protocol=protocol,
+            request_timeout=20000,  # 20 seconds timeout
+        )
+
+        async def run_debug_sleep():
+            """
+            Run a long-running DEBUG SLEEP command.
+            """
+            command = ["DEBUG", "sleep", "7"]
+            if isinstance(client, GlideClusterClient):
+                await client.custom_command(command, AllNodes())
+            else:
+                await client.custom_command(command)
+
+        async def fail_to_connect_to_client():
+            # try to connect with a small timeout connection
+            await asyncio.sleep(1)
+            with pytest.raises(ClosingError) as e:
+                await create_client(
+                    request,
+                    cluster_mode,
+                    protocol=protocol,
+                    connection_timeout=100,  # 100 ms
+                    reconnect_strategy=BackoffStrategy(
+                        1, 100, 2
+                    ),  # needs to be configured so that we wont be connected within 7 seconds bc of default retries
+                )
+            assert "timed out" in str(e)
+
+        async def connect_to_client():
+            # Create a second client with a connection timeout of 7 seconds
+            await asyncio.sleep(1)
+            timeout_client = await create_client(
+                request,
+                cluster_mode,
+                protocol=protocol,
+                connection_timeout=10000,  # 10-second connection timeout
+                reconnect_strategy=BackoffStrategy(1, 100, 2),
+            )
+
+            # Ensure the second client can connect and perform a simple operation
+            assert await timeout_client.set("key", "value") == "OK"
+            await timeout_client.close()
+
+        # Run tests
+        await asyncio.gather(run_debug_sleep(), fail_to_connect_to_client())
+        await asyncio.gather(run_debug_sleep(), connect_to_client())
+
+        # Clean up the main client
+        await client.close()
 
 
 @pytest.mark.asyncio
@@ -5424,7 +5509,10 @@ class TestCommands:
         )
 
         test_client = await create_client(
-            request=request, protocol=protocol, cluster_mode=cluster_mode, timeout=900
+            request=request,
+            protocol=protocol,
+            cluster_mode=cluster_mode,
+            request_timeout=900,
         )
         # ensure command doesn't time out even if timeout > request timeout
         assert (
@@ -5817,7 +5905,10 @@ class TestCommands:
             )
 
         test_client = await create_client(
-            request=request, protocol=protocol, cluster_mode=cluster_mode, timeout=900
+            request=request,
+            protocol=protocol,
+            cluster_mode=cluster_mode,
+            request_timeout=900,
         )
         timeout_key = f"{{testKey}}:{get_random_string(10)}"
         timeout_group_name = get_random_string(10)
@@ -8345,11 +8436,11 @@ class TestCommands:
 
         # create a second client to run fcall
         test_client = await create_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, timeout=30000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=30000
         )
 
         test_client2 = await create_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, timeout=30000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=30000
         )
 
         async def endless_fcall_route_call():
@@ -8474,7 +8565,7 @@ class TestCommands:
 
         # create a second client to run fcall
         test_client = await create_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, timeout=15000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=15000
         )
 
         async def endless_fcall_route_call():
@@ -8529,7 +8620,7 @@ class TestCommands:
 
         # create a second client to run fcall - and give it a long timeout
         test_client = await create_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, timeout=15000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=15000
         )
 
         # call fcall to run the function loaded function
@@ -10377,7 +10468,7 @@ class TestScripts:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_script_large_keys_no_args(self, request, cluster_mode, protocol):
         glide_client = await create_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, timeout=5000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
         )
         length = 2**13  # 8kb
         key = "0" * length
@@ -10389,7 +10480,7 @@ class TestScripts:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_script_large_args_no_keys(self, request, cluster_mode, protocol):
         glide_client = await create_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, timeout=5000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
         )
         length = 2**12  # 4kb
         arg1 = "0" * length
@@ -10405,7 +10496,7 @@ class TestScripts:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_script_large_keys_and_args(self, request, cluster_mode, protocol):
         glide_client = await create_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, timeout=5000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
         )
         length = 2**12  # 4kb
         key = "0" * length
@@ -10489,7 +10580,7 @@ class TestScripts:
 
         # Create a second client to run the script
         test_client = await create_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, timeout=30000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=30000
         )
 
         await script_kill_tests(glide_client, test_client, route)
@@ -10505,7 +10596,7 @@ class TestScripts:
     ):
         # Create a second client to run the script
         test_client = await create_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, timeout=30000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=30000
         )
 
         await script_kill_tests(glide_client, test_client)
@@ -10517,12 +10608,12 @@ class TestScripts:
     ):
         # Create a second client to run the script
         test_client = await create_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, timeout=30000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=30000
         )
 
         # Create a second client to kill the script
         test_client2 = await create_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, timeout=15000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=15000
         )
 
         # Add test for script_kill with writing script

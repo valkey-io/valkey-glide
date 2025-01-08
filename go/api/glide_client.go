@@ -26,13 +26,26 @@ func NewGlideClient(config *GlideClientConfiguration) (*GlideClient, error) {
 // the command name and subcommands, should be added as a separate value in args. The returning value depends on the executed
 // command.
 //
+// See [Valkey GLIDE Wiki] for details on the restrictions and limitations of the custom command API.
+//
 // This function should only be used for single-response commands. Commands that don't return complete response and awaits
 // (such as SUBSCRIBE), or that return potentially more than a single response (such as XREAD), or that change the client's
 // behavior (such as entering pub/sub mode on RESP2 connections) shouldn't be called using this function.
 //
-// For example, to return a list of all pub/sub clients:
+// Parameters:
 //
-//	client.CustomCommand([]string{"CLIENT", "LIST","TYPE", "PUBSUB"})
+//	args - Arguments for the custom command including the command name.
+//
+// Return value:
+//
+//	The returned value for the custom command.
+//
+// For example:
+//
+//	result, err := client.CustomCommand([]string{"ping"})
+//	result.(string): "PONG"
+//
+// [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
 func (client *GlideClient) CustomCommand(args []string) (interface{}, error) {
 	res, err := client.executeCommand(C.CustomCommand, args)
 	if err != nil {
@@ -92,4 +105,30 @@ func (client *GlideClient) ConfigGet(args []string) (map[Result[string]]Result[s
 		return nil, err
 	}
 	return handleStringToStringMapResponse(res)
+}
+
+// Select changes the currently selected database.
+//
+// Parameters:
+//
+//	index - The index of the database to select.
+//
+// Return value:
+//
+//	A simple OK response.
+//
+// Example:
+//
+//	result, err := client.Select(2)
+//	result.Value() : "OK"
+//	result.IsNil() : false
+//
+// [valkey.io]: https://valkey.io/commands/select/
+func (client *GlideClient) Select(index int64) (Result[string], error) {
+	result, err := client.executeCommand(C.Select, []string{utils.IntToString(index)})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+
+	return handleStringResponse(result)
 }

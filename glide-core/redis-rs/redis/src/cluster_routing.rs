@@ -623,6 +623,7 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"FUNCTION STATS" => RouteBy::AllNodes,
 
         b"DBSIZE"
+        | b"DEBUG"
         | b"FLUSHALL"
         | b"FLUSHDB"
         | b"FT._ALIASLIST"
@@ -671,7 +672,8 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"OBJECT ENCODING"
         | b"OBJECT FREQ"
         | b"OBJECT IDLETIME"
-        | b"OBJECT REFCOUNT" => RouteBy::SecondArg,
+        | b"OBJECT REFCOUNT"
+        | b"JSON.DEBUG" => RouteBy::SecondArg,
 
         b"LMPOP" | b"SINTERCARD" | b"ZDIFF" | b"ZINTER" | b"ZINTERCARD" | b"ZMPOP" | b"ZUNION" => {
             RouteBy::SecondArgAfterKeyCount
@@ -717,7 +719,6 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"COMMAND LIST"
         | b"COMMAND"
         | b"CONFIG GET"
-        | b"DEBUG"
         | b"ECHO"
         | b"FUNCTION LIST"
         | b"LASTSAVE"

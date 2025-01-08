@@ -11,6 +11,7 @@ use pyo3::types::{PyAny, PyBool, PyBytes, PyDict, PyFloat, PyList, PySet, PyStri
 use pyo3::Python;
 use redis::Value;
 use std::collections::HashMap;
+use std::ptr::from_mut;
 use std::sync::Arc;
 
 pub const DEFAULT_TIMEOUT_IN_MILLISECONDS: u32 =
@@ -84,7 +85,7 @@ impl Script {
     fn new(code: &Bound<PyAny>) -> PyResult<Self> {
         let hash = if let Ok(code_str) = code.extract::<String>() {
             glide_core::scripts_container::add_script(code_str.as_bytes())
-        } else if let Ok(code_bytes) = code.extract::<&PyBytes>() {
+        } else if let Ok(code_bytes) = code.extract::<Bound<PyBytes>>() {
             glide_core::scripts_container::add_script(code_bytes.as_bytes())
         } else {
             return Err(PyTypeError::new_err(
@@ -263,11 +264,11 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     /// Should NOT be used in production.
     pub fn create_leaked_value(message: String) -> usize {
         let value = Value::SimpleString(message);
-        Box::leak(Box::new(value)) as *mut Value as usize
+        from_mut(Box::leak(Box::new(value))) as usize
     }
 
     #[pyfunction]
-    pub fn create_leaked_bytes_vec(args_vec: Vec<&PyBytes>) -> usize {
+    pub fn create_leaked_bytes_vec(args_vec: Vec<Bound<PyBytes>>) -> usize {
         // Convert the bytes vec -> Bytes vector
         let bytes_vec: Vec<Bytes> = args_vec
             .iter()
@@ -276,7 +277,7 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
                 Bytes::from(bytes.to_vec())
             })
             .collect();
-        Box::leak(Box::new(bytes_vec)) as *mut Vec<Bytes> as usize
+        from_mut(Box::leak(Box::new(bytes_vec))) as usize
     }
     Ok(())
 }

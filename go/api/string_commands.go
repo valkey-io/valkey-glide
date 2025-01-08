@@ -2,11 +2,11 @@
 
 package api
 
-// StringCommands defines an interface for the "String Commands" group of commands for standalone and cluster clients.
+// Supports commands and transactions for the "String" group of commands for standalone and cluster clients.
 //
 // See [valkey.io] for details.
 //
-// [valkey.io]: https://valkey.io/commands/?group=string
+// [valkey.io]: https://valkey.io/commands/#string
 type StringCommands interface {
 	// Set the given key with the given value. The return value is a response from Valkey containing the string "OK".
 	//
@@ -186,9 +186,12 @@ type StringCommands interface {
 	// the entire operation fails.
 	//
 	// Note:
-	//  When in cluster mode, all keys in keyValueMap must map to the same hash slot.
-	//
-	// See [valkey.io] for details.
+	//  In cluster mode, if keys in `keyValueMap` map to different hash slots, the command
+	//  will be split across these slots and executed separately for each. This means the command
+	//  is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+	//  call will return the first encountered error, even though some requests may have succeeded
+	//  while others did not. If this behavior impacts your application logic, consider splitting
+	//  the request into sub-requests per slot to ensure atomicity.
 	//
 	// Parameters:
 	//  keyValueMap - A key-value map consisting of keys and their respective values to set.
@@ -414,9 +417,12 @@ type StringCommands interface {
 	//  Valkey 7.0 and above.
 	//
 	// Note:
-	//  When in cluster mode, key1 and key2 must map to the same hash slot.
-	//
-	// See [valkey.io] for details.
+	//  In cluster mode, if keys in `keyValueMap` map to different hash slots, the command
+	//  will be split across these slots and executed separately for each. This means the command
+	//  is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+	//  call will return the first encountered error, even though some requests may have succeeded
+	//  while others did not. If this behavior impacts your application logic, consider splitting
+	//  the request into sub-requests per slot to ensure atomicity.
 	//
 	// Parameters:
 	//  key1 - The key that stores the first string.
@@ -449,287 +455,4 @@ type StringCommands interface {
 	//
 	//[valkey.io]: https://valkey.io/commands/getdel/
 	GetDel(key string) (Result[string], error)
-}
-
-// HashCommands supports commands and transactions for the "Hash Commands" group for standalone and cluster
-// clients.
-//
-// See [valkey.io] for details.
-//
-// [valkey.io]: https://valkey.io/commands/?group=hash
-type HashCommands interface {
-	// HGet returns the value associated with field in the hash stored at key.
-	//
-	// See [valkey.io] for details.
-	//
-	// Parameters:
-	//  key   - The key of the hash.
-	//  field - The field in the hash stored at key to retrieve from the database.
-	//
-	// Return value:
-	// The Result[string] associated with field, or [api.NilResult[string]](api.CreateNilStringResult()) when field is not
-	// present in the hash or key does not exist.
-	//
-	// For example:
-	//  Assume we have the following hash:
-	//  my_hash := map[string]string{"field1": "value", "field2": "another_value"}
-	//  payload, err := client.HGet("my_hash", "field1")
-	//  // payload.Value(): "value"
-	//  // payload.IsNil(): false
-	//  payload, err = client.HGet("my_hash", "nonexistent_field")
-	//  // payload equals api.CreateNilStringResult()
-	//
-	// [valkey.io]: https://valkey.io/commands/hget/
-	HGet(key string, field string) (Result[string], error)
-
-	// HGetAll returns all fields and values of the hash stored at key.
-	//
-	// See [valkey.io] for details.
-	//
-	// Parameters:
-	//  key - The key of the hash.
-	//
-	// Return value:
-	//  A map of all fields and their values as Result[string] in the hash, or an empty map when key does not exist.
-	//
-	// For example:
-	//  fieldValueMap, err := client.HGetAll("my_hash")
-	//  // field1 equals api.CreateStringResult("field1")
-	//  // value1 equals api.CreateStringResult("value1")
-	//  // field2 equals api.CreateStringResult("field2")
-	//  // value2 equals api.CreateStringResult("value2")
-	//  // fieldValueMap equals map[api.Result[string]]api.Result[string]{field1: value1, field2: value2}
-	//
-	// [valkey.io]: https://valkey.io/commands/hgetall/
-	HGetAll(key string) (map[Result[string]]Result[string], error)
-
-	// HMGet returns the values associated with the specified fields in the hash stored at key.
-	//
-	// See [valkey.io] for details.
-	//
-	// Parameters:
-	//  key    - The key of the hash.
-	//  fields - The fields in the hash stored at key to retrieve from the database.
-	//
-	// Return value:
-	//  An array of Result[string]s associated with the given fields, in the same order as they are requested.
-	// For every field that does not exist in the hash, a [api.NilResult[string]](api.CreateNilStringResult()) is
-	// returned.
-	//  If key does not exist, returns an empty string array.
-	//
-	// For example:
-	//  values, err := client.HMGet("my_hash", []string{"field1", "field2"})
-	//  // value1 equals api.CreateStringResult("value1")
-	//  // value2 equals api.CreateStringResult("value2")
-	//  // values equals []api.Result[string]{value1, value2}
-	//
-	// [valkey.io]: https://valkey.io/commands/hmget/
-	HMGet(key string, fields []string) ([]Result[string], error)
-
-	// HSet sets the specified fields to their respective values in the hash stored at key.
-	// This command overwrites the values of specified fields that exist in the hash.
-	// If key doesn't exist, a new key holding a hash is created.
-	//
-	// See [valkey.io] for details.
-	//
-	// Parameters:
-	//  key    - The key of the hash.
-	//  values - A map of field-value pairs to set in the hash.
-	//
-	// Return value:
-	//  The Result[int64] containing number of fields that were added or updated.
-	//
-	// For example:
-	//  num, err := client.HSet("my_hash", map[string]string{"field": "value", "field2": "value2"})
-	//  // num.Value(): 2
-	//  // num.IsNil(): false
-	//
-	// [valkey.io]: https://valkey.io/commands/hset/
-	HSet(key string, values map[string]string) (Result[int64], error)
-
-	// HSetNX sets field in the hash stored at key to value, only if field does not yet exist.
-	// If key does not exist, a new key holding a hash is created.
-	// If field already exists, this operation has no effect.
-	//
-	// See [valkey.io] for details.
-	//
-	// Parameters:
-	//  key   - The key of the hash.
-	//  field - The field to set.
-	//  value - The value to set.
-	//
-	// Return value:
-	//  A Result[bool] containing true if field is a new field in the hash and value was set.
-	//  false if field already exists in the hash and no operation was performed.
-	//
-	// For example:
-	//  payload1, err := client.HSetNX("myHash", "field", "value")
-	//  // payload1.Value(): true
-	//  // payload1.IsNil(): false
-	//  payload2, err := client.HSetNX("myHash", "field", "newValue")
-	//  // payload2.Value(): false
-	//  // payload2.IsNil(): false
-	//
-	// [valkey.io]: https://valkey.io/commands/hsetnx/
-	HSetNX(key string, field string, value string) (Result[bool], error)
-
-	// HDel removes the specified fields from the hash stored at key.
-	// Specified fields that do not exist within this hash are ignored.
-	// If key does not exist, it is treated as an empty hash and this command returns 0.
-	//
-	// See [valkey.io] for details.
-	//
-	// Parameters:
-	//  key    - The key of the hash.
-	//  fields - The fields to remove from the hash stored at key.
-	//
-	// Return value:
-	// The Result[int64] containing number of fields that were removed from the hash, not including specified but non-existing
-	// fields.
-	//
-	// For example:
-	//  num, err := client.HDel("my_hash", []string{"field_1", "field_2"})
-	//  // num.Value(): 2
-	//  // num.IsNil(): false
-	//
-	// [valkey.io]: https://valkey.io/commands/hdel/
-	HDel(key string, fields []string) (Result[int64], error)
-
-	// HLen returns the number of fields contained in the hash stored at key.
-	//
-	// See [valkey.io] for details.
-	//
-	// Parameters:
-	//  key - The key of the hash.
-	//
-	// Return value:
-	//  The Result[int64] containing number of fields in the hash, or 0 when key does not exist.
-	//  If key holds a value that is not a hash, an error is returned.
-	//
-	// For example:
-	//  num1, err := client.HLen("myHash")
-	//  // num.Value(): 3
-	//  // num.IsNil(): false
-	//  num2, err := client.HLen("nonExistingKey")
-	//  // num.Value(): 0
-	//  // num.IsNil(): false
-	//
-	// [valkey.io]: https://valkey.io/commands/hlen/
-	HLen(key string) (Result[int64], error)
-
-	// HVals returns all values in the hash stored at key.
-	//
-	// See [valkey.io] for details.
-	//
-	// Parameters:
-	//  key - The key of the hash.
-	//
-	// Return value:
-	//  A slice of Result[string]s containing all the values in the hash, or an empty slice when key does not exist.
-	//
-	// For example:
-	//  values, err := client.HVals("myHash")
-	//  // value1 equals api.CreateStringResult("value1")
-	//  // value2 equals api.CreateStringResult("value2")
-	//  // value3 equals api.CreateStringResult("value3")
-	//  // values equals []api.Result[string]{value1, value2, value3}
-	//
-	// [valkey.io]: https://valkey.io/commands/hvals/
-	HVals(key string) ([]Result[string], error)
-
-	// HExists returns if field is an existing field in the hash stored at key.
-	//
-	// See [valkey.io] for details.
-	//
-	// Parameters:
-	//  key   - The key of the hash.
-	//  field - The field to check in the hash stored at key.
-	//
-	// Return value:
-	//  A Result[bool] containing true if the hash contains the specified field.
-	//  false if the hash does not contain the field, or if the key does not exist.
-	//
-	// For example:
-	//  exists, err := client.HExists("my_hash", "field1")
-	//  // exists.Value(): true
-	//  // exists.IsNil(): false
-	//  exists, err = client.HExists("my_hash", "non_existent_field")
-	//  // exists.Value(): false
-	//  // exists.IsNil(): false
-	//
-	// [valkey.io]: https://valkey.io/commands/hexists/
-	HExists(key string, field string) (Result[bool], error)
-
-	// HKeys returns all field names in the hash stored at key.
-	//
-	// See [valkey.io] for details.
-	//
-	// Parameters:
-	//  key - The key of the hash.
-	//
-	// Return value:
-	//  A slice of Result[string]s containing all the field names in the hash, or an empty slice when key does not exist.
-	//
-	// For example:
-	//  names, err := client.HKeys("my_hash")
-	//  // field1 equals api.CreateStringResult("field_1")
-	//  // field2 equals api.CreateStringResult("field_2")
-	//  // names equals []api.Result[string]{field1, field2}
-	//
-	// [valkey.io]: https://valkey.io/commands/hkeys/
-	HKeys(key string) ([]Result[string], error)
-
-	// HStrLen returns the string length of the value associated with field in the hash stored at key.
-	// If the key or the field do not exist, 0 is returned.
-	//
-	// See [valkey.io] for details.
-	//
-	// Parameters:
-	//  key   - The key of the hash.
-	//  field - The field to get the string length of its value.
-	//
-	// Return value:
-	//  The Result[int64] containing length of the string value associated with field, or 0 when field or key do not exist.
-	//
-	// For example:
-	//  strlen, err := client.HStrLen("my_hash", "my_field")
-	//  // strlen.Value(): 10
-	//  // strlen.IsNil(): false
-	//
-	// [valkey.io]: https://valkey.io/commands/hstrlen/
-	HStrLen(key string, field string) (Result[int64], error)
-}
-
-// ConnectionManagementCommands defines an interface for connection management-related commands.
-//
-// See [valkey.io] for details.
-type ConnectionManagementCommands interface {
-	// Pings the server.
-	//
-	// If no argument is provided, returns "PONG". If a message is provided, returns the message.
-	//
-	// Return value:
-	//  If no argument is provided, returns "PONG".
-	//  If an argument is provided, returns the argument.
-	//
-	// For example:
-	//  result, err := client.Ping("Hello")
-	//
-	// [valkey.io]: https://valkey.io/commands/ping/
-	Ping() (string, error)
-
-	// Pings the server with a custom message.
-	//
-	// If a message is provided, returns the message.
-	// If no argument is provided, returns "PONG".
-	//
-	// Return value:
-	//  If no argument is provided, returns "PONG".
-	//  If an argument is provided, returns the argument.
-	//
-	// For example:
-	//  result, err := client.PingWithMessage("Hello")
-	//
-	// [valkey.io]: https://valkey.io/commands/ping/
-	PingWithMessage(message string) (string, error)
 }

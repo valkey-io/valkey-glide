@@ -2,13 +2,19 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 use glide_core::client::Client as GlideClient;
+use glide_core::command_request::SimpleRoutes;
+use glide_core::command_request::{Routes, SlotTypes};
 use glide_core::connection_request;
 use glide_core::errors;
 use glide_core::errors::RequestErrorType;
 use glide_core::request_type::RequestType;
 use glide_core::ConnectionRequest;
 use protobuf::Message;
-use redis::{RedisResult, Value};
+use redis::cluster_routing::{
+    MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
+};
+use redis::cluster_routing::{ResponsePolicy, Routable};
+use redis::{Cmd, RedisResult, Value};
 use std::slice::from_raw_parts;
 use std::{
     ffi::{c_void, CString},
@@ -252,31 +258,21 @@ pub unsafe extern "C" fn free_connection_response(
 }
 
 /// Provides the string mapping for the ResponseType enum.
-#[no_mangle]
-pub extern "C" fn get_response_type_string(response_type: ResponseType) -> *mut c_char {
-    let s = match response_type {
-        ResponseType::Null => "Null",
-        ResponseType::Int => "Int",
-        ResponseType::Float => "Float",
-        ResponseType::Bool => "Bool",
-        ResponseType::String => "String",
-        ResponseType::Array => "Array",
-        ResponseType::Map => "Map",
-        ResponseType::Sets => "Sets",
-    };
-    let c_str = CString::new(s).unwrap_or_default();
-    c_str.into_raw()
-}
-
-/// Deallocates a string generated via get_response_type_string.
 ///
-/// # Safety
-/// free_response_type_string can be called only once per response_string.
+/// Important: the returned pointer is a pointer to a constant string and should not be freed.
 #[no_mangle]
-pub extern "C" fn free_response_type_string(response_string: *mut c_char) {
-    if !response_string.is_null() {
-        drop(unsafe { CString::from_raw(response_string as *mut c_char) });
-    }
+pub extern "C" fn get_response_type_string(response_type: ResponseType) -> *const c_char {
+    let c_str = match response_type {
+        ResponseType::Null => c"Null",
+        ResponseType::Int => c"Int",
+        ResponseType::Float => c"Float",
+        ResponseType::Bool => c"Bool",
+        ResponseType::String => c"String",
+        ResponseType::Array => c"Array",
+        ResponseType::Map => c"Map",
+        ResponseType::Sets => c"Sets",
+    };
+    c_str.as_ptr()
 }
 
 /// Deallocates a `CommandResponse`.
@@ -515,6 +511,8 @@ pub unsafe extern "C" fn command(
     arg_count: c_ulong,
     args: *const usize,
     args_len: *const c_ulong,
+    route_bytes: *const u8,
+    route_bytes_len: usize,
 ) {
     let client_adapter =
         unsafe { Box::leak(Box::from_raw(client_adapter_ptr as *mut ClientAdapter)) };
@@ -536,8 +534,14 @@ pub unsafe extern "C" fn command(
         cmd.arg(command_arg);
     }
 
+    let r_bytes = unsafe { std::slice::from_raw_parts(route_bytes, route_bytes_len) };
+
+    let route = Routes::parse_from_bytes(r_bytes).unwrap();
+
     client_adapter.runtime.spawn(async move {
-        let result = client_clone.send_command(&cmd, None).await;
+        let result = client_clone
+            .send_command(&cmd, get_route(route, Some(&cmd)))
+            .await;
         let client_adapter = unsafe { Box::leak(Box::from_raw(ptr_address as *mut ClientAdapter)) };
         let value = match result {
             Ok(value) => value,
@@ -572,4 +576,66 @@ pub unsafe extern "C" fn command(
             };
         }
     });
+}
+
+fn get_route(route: Routes, cmd: Option<&Cmd>) -> Option<RoutingInfo> {
+    use glide_core::command_request::routes::Value;
+    let route = route.value?;
+    let get_response_policy = |cmd: Option<&Cmd>| {
+        cmd.and_then(|cmd| {
+            cmd.command()
+                .and_then(|cmd| ResponsePolicy::for_command(&cmd))
+        })
+    };
+    match route {
+        Value::SimpleRoutes(simple_route) => {
+            let simple_route = simple_route.enum_value().unwrap();
+            match simple_route {
+                SimpleRoutes::AllNodes => Some(RoutingInfo::MultiNode((
+                    MultipleNodeRoutingInfo::AllNodes,
+                    get_response_policy(cmd),
+                ))),
+                SimpleRoutes::AllPrimaries => Some(RoutingInfo::MultiNode((
+                    MultipleNodeRoutingInfo::AllMasters,
+                    get_response_policy(cmd),
+                ))),
+                SimpleRoutes::Random => {
+                    Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random))
+                }
+            }
+        }
+        Value::SlotKeyRoute(slot_key_route) => Some(RoutingInfo::SingleNode(
+            SingleNodeRoutingInfo::SpecificNode(Route::new(
+                redis::cluster_topology::get_slot(slot_key_route.slot_key.as_bytes()),
+                get_slot_addr(&slot_key_route.slot_type),
+            )),
+        )),
+        Value::SlotIdRoute(slot_id_route) => Some(RoutingInfo::SingleNode(
+            SingleNodeRoutingInfo::SpecificNode(Route::new(
+                slot_id_route.slot_id as u16,
+                get_slot_addr(&slot_id_route.slot_type),
+            )),
+        )),
+        Value::ByAddressRoute(by_address_route) => match u16::try_from(by_address_route.port) {
+            Ok(port) => Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+                host: by_address_route.host.to_string(),
+                port,
+            })),
+            Err(_) => {
+                // TODO: Handle error propagation.
+                None
+            }
+        },
+        _ => panic!("unknown route type"),
+    }
+}
+
+fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> SlotAddr {
+    slot_type
+        .enum_value()
+        .map(|slot_type| match slot_type {
+            SlotTypes::Primary => SlotAddr::Master,
+            SlotTypes::Replica => SlotAddr::ReplicaRequired,
+        })
+        .expect("Received unexpected slot id type")
 }

@@ -2,11 +2,13 @@
 
 package api
 
-// SetCommands supports commands and transactions for the "Set Commands" group for standalone and cluster clients.
+import "github.com/valkey-io/valkey-glide/go/glide/api/options"
+
+// Supports commands and transactions for the "Set" group of commands for standalone and cluster clients.
 //
 // See [valkey.io] for details.
 //
-// [valkey.io]: https://valkey.io/commands/?group=set
+// [valkey.io]: https://valkey.io/commands/#set
 type SetCommands interface {
 	// SAdd adds specified members to the set stored at key.
 	//
@@ -184,6 +186,29 @@ type SetCommands interface {
 	// [valkey.io]: https://valkey.io/commands/sinter/
 	SInter(keys []string) (map[Result[string]]struct{}, error)
 
+	// Stores the members of the intersection of all given sets specified by `keys` into a new set at `destination`
+	//
+	// Note: When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//	 destination - The key of the destination set.
+	//   keys - The keys from which to retrieve the set members.
+	//
+	// Return value:
+	//   The number of elements in the resulting set.
+	//
+	// Example:
+	//   result, err := client.SInterStore("my_set", []string{"set1", "set2"})
+	//   if err != nil {
+	//       fmt.Println(result)
+	//   }
+	//   // Output: 2 - Two elements were stored at "my_set", and those elements are the intersection of "set1" and "set2".
+	//
+	// [valkey.io]: https://valkey.io/commands/sinterstore/
+	SInterStore(destination string, keys []string) (Result[int64], error)
+
 	// SInterCard gets the cardinality of the intersection of all the given sets.
 	//
 	// Since:
@@ -251,8 +276,8 @@ type SetCommands interface {
 	// Example:
 	//   client.SAdd("test", []string{"one"})
 	//   response, err := client.SRandMember("test")
-	//   // response.Value() == "one"
-	//   // err == nil
+	//   // response.Value(): "one"
+	//   // err: nil
 	//
 	// [valkey.io]: https://valkey.io/commands/srandmember/
 	SRandMember(key string) (Result[string], error)
@@ -271,11 +296,187 @@ type SetCommands interface {
 	// Example:
 	//   value1, err := client.SPop("mySet")
 	//   // value1.Value() might be "value1"
-	//   // err == nil
+	//   // err: nil
 	//   value2, err := client.SPop("nonExistingSet")
-	//   // value2.IsNil() == true
-	//   // err == nil
+	//   // value2.IsNil(): true
+	//   // err: nil
 	//
 	// [valkey.io]: https://valkey.io/commands/spop/
 	SPop(key string) (Result[string], error)
+
+	// SMIsMember returns whether each member is a member of the set stored at key.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   key - The key of the set.
+	//
+	// Return value:
+	//   A []Result[bool] containing whether each member is a member of the set stored at key.
+	//
+	// Example:
+	//	 client.SAdd("myKey", []string{"one", "two"})
+	//   value1, err := client.SMIsMember("myKey", []string{"two", "three"})
+	//   // value1[0].Value(): true
+	//   // value1[1].Value(): false
+	//   // err: nil
+	//   value2, err := client.SPop("nonExistingKey", []string{"one"})
+	//   // value2[0].Value(): false
+	//   // err: nil
+	//
+	// [valkey.io]: https://valkey.io/commands/smismember/
+	SMIsMember(key string, members []string) ([]Result[bool], error)
+
+	// SUnionStore stores the members of the union of all given sets specified by `keys` into a new set at `destination`.
+	//
+	// Note: When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//	 destination - The key of the destination set.
+	//   keys - The keys from which to retrieve the set members.
+	//
+	// Return value:
+	//   The number of elements in the resulting set.
+	//
+	// Example:
+	//   result, err := client.SUnionStore("my_set", []string{"set1", "set2"})
+	//   if err != nil {
+	//       fmt.Println(result.Value())
+	//   }
+	//   // Output: 2 - Two elements were stored at "my_set", and those elements are the union of "set1" and "set2".
+	//
+	// [valkey.io]: https://valkey.io/commands/sunionstore/
+	SUnionStore(destination string, keys []string) (Result[int64], error)
+
+	// SUnion gets the union of all the given sets.
+	//
+	// Note: When in cluster mode, all keys must map to the same hash slot.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   keys - The keys of the sets.
+	//
+	// Return value:
+	//   A map[Result[string]]struct{} of members which are present in at least one of the given sets.
+	//   If none of the sets exist, an empty map will be returned.
+	//
+	//
+	// Example:
+	//  result1, err := client.SAdd("my_set1", []string {"member1", "member2"})
+	//  // result.Value(): 2
+	//  // result.IsNil(): false
+	//
+	//  result2, err := client.SAdd("my_set2", []string {"member2", "member3"})
+	//  // result.Value(): 2
+	//  // result.IsNil(): false
+	//
+	//  result3, err := client.SUnion([]string {"my_set1", "my_set2"})
+	//  // result3.Value(): "{'member1', 'member2', 'member3'}"
+	//  // err: nil
+	//
+	//  result4, err := client.SUnion([]string {"my_set1", "non_existing_set"})
+	//  // result4.Value(): "{'member1', 'member2'}"
+	//  // err: nil
+	//
+	// [valkey.io]: https://valkey.io/commands/sunion/
+	SUnion(keys []string) (map[Result[string]]struct{}, error)
+
+	// Iterates incrementally over a set.
+	//
+	// Note: When in cluster mode, all keys must map to the same hash slot.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   key - The key of the set.
+	//   cursor - The cursor that points to the next iteration of results.
+	//            A value of `"0"` indicates the start of the search.
+	//            For Valkey 8.0 and above, negative cursors are treated like the initial cursor("0").
+	//
+	// Return value:
+	//  An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and
+	//  for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the set.
+	//  The second element is always an array of the subset of the set held in `key`.
+	//
+	// Example:
+	//	 // assume "key" contains a set
+	// 	 resCursor, resCol, err := client.sscan("key", "0")
+	//   for resCursor != "0" {
+	// 	 	resCursor, resCol, err = client.sscan("key", "0")
+	//   	fmt.Println("Cursor: ", resCursor.Value())
+	//   	fmt.Println("Members: ", resCol.Value())
+	//   }
+	//   // Output:
+	// 	 // Cursor:  48
+	//   // Members:  ['3', '118', '120', '86', '76', '13', '61', '111', '55', '45']
+	//   // Cursor:  24
+	//   // Members:  ['38', '109', '11', '119', '34', '24', '40', '57', '20', '17']
+	//   // Cursor:  0
+	//   // Members:  ['47', '122', '1', '53', '10', '14', '80']
+	//
+	// [valkey.io]: https://valkey.io/commands/sscan/
+	SScan(key string, cursor string) (Result[string], []Result[string], error)
+
+	// Iterates incrementally over a set.
+	//
+	// Note: When in cluster mode, all keys must map to the same hash slot.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   key - The key of the set.
+	//   cursor - The cursor that points to the next iteration of results.
+	//            A value of `"0"` indicates the start of the search.
+	//            For Valkey 8.0 and above, negative cursors are treated like the initial cursor("0").
+	//   options - [options.BaseScanOptions]
+	//
+	// Return value:
+	//  An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and
+	//  for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the set.
+	//  The second element is always an array of the subset of the set held in `key`.
+	//
+	// Example:
+	//	 // assume "key" contains a set
+	//   resCursor resCol, err := client.sscan("key", "0", opts)
+	//   for resCursor != "0" {
+	//   	opts := options.NewBaseScanOptionsBuilder().SetMatch("*")
+	// 	 	resCursor, resCol, err = client.sscan("key", "0", opts)
+	//   	fmt.Println("Cursor: ", resCursor.Value())
+	//   	fmt.Println("Members: ", resCol.Value())
+	//   }
+	//   // Output:
+	// 	 // Cursor:  48
+	//   // Members:  ['3', '118', '120', '86', '76', '13', '61', '111', '55', '45']
+	//   // Cursor:  24
+	//   // Members:  ['38', '109', '11', '119', '34', '24', '40', '57', '20', '17']
+	//   // Cursor:  0
+	//   // Members:  ['47', '122', '1', '53', '10', '14', '80']
+	//
+	// [valkey.io]: https://valkey.io/commands/sscan/
+	SScanWithOptions(key string, cursor string, options *options.BaseScanOptions) (Result[string], []Result[string], error)
+
+	// Moves `member` from the set at `source` to the set at `destination`, removing it from the source set.
+	// Creates a new destination set if needed. The operation is atomic.
+	//
+	// Note: When in cluster mode, `source` and `destination` must map to the same hash slot.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   source - The key of the set to remove the element from.
+	//   destination - The key of the set to add the element to.
+	//   member - The set element to move.
+	//
+	// Return value:
+	//   `true` on success, or `false` if the `source` set does not exist or the element is not a member of the source set.
+	//
+	// Example:
+	//	 moved := SMove("set1", "set2", "element")
+	//   fmt.Println(moved.Value()) // Output: true
+	//
+	// [valkey.io]: https://valkey.io/commands/smove/
+	SMove(source string, destination string, member string) (Result[bool], error)
 }

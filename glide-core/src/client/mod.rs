@@ -12,7 +12,10 @@ use redis::cluster_routing::{
     MultipleNodeRoutingInfo, ResponsePolicy, Routable, RoutingInfo, SingleNodeRoutingInfo,
 };
 use redis::cluster_slotmap::ReadFromReplicaStrategy;
-use redis::{Cmd, ErrorKind, ObjectType, PushInfo, RedisError, RedisResult, ScanStateRC, Value};
+use redis::{
+    ClusterScanArgs, Cmd, ErrorKind, FromRedisValue, PushInfo, RedisError, RedisResult,
+    ScanStateRC, Value,
+};
 pub use standalone_client::StandaloneClient;
 use std::io;
 use std::sync::atomic::{AtomicIsize, Ordering};
@@ -24,14 +27,17 @@ use self::value_conversion::{convert_to_expected_type, expected_type_for_cmd, ge
 mod reconnecting_connection;
 mod standalone_client;
 mod value_conversion;
+use redis::InfoDict;
 use tokio::sync::mpsc;
+use versions::Versioning;
 
 pub const HEARTBEAT_SLEEP_DURATION: Duration = Duration::from_secs(1);
 pub const DEFAULT_RETRIES: u32 = 3;
+/// Note: If you change the default value, make sure to change the documentation in *all* wrappers.
 pub const DEFAULT_RESPONSE_TIMEOUT: Duration = Duration::from_millis(250);
-pub const DEFAULT_CONNECTION_ATTEMPT_TIMEOUT: Duration = Duration::from_millis(250);
 pub const DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL: Duration = Duration::from_secs(60);
-pub const INTERNAL_CONNECTION_TIMEOUT: Duration = Duration::from_millis(250);
+/// Note: If you change the default value, make sure to change the documentation in *all* wrappers.
+pub const DEFAULT_CONNECTION_TIMEOUT: Duration = Duration::from_millis(250);
 pub const FINISHED_SCAN_CURSOR: &str = "finished";
 
 /// The value of 1000 for the maximum number of inflight requests is determined based on Little's Law in queuing theory:
@@ -306,33 +312,16 @@ impl Client {
     pub async fn cluster_scan<'a>(
         &'a mut self,
         scan_state_cursor: &'a ScanStateRC,
-        match_pattern: &'a Option<Vec<u8>>,
-        count: Option<usize>,
-        object_type: Option<ObjectType>,
+        cluster_scan_args: ClusterScanArgs,
     ) -> RedisResult<Value> {
         match self.internal_client {
             ClientWrapper::Standalone(_) => {
                 unreachable!("Cluster scan is not supported in standalone mode")
             }
             ClientWrapper::Cluster { ref mut client } => {
-                let (cursor, keys) = match match_pattern {
-                    Some(pattern) => {
-                        client
-                            .cluster_scan_with_pattern(
-                                scan_state_cursor.clone(),
-                                pattern,
-                                count,
-                                object_type,
-                            )
-                            .await?
-                    }
-                    None => {
-                        client
-                            .cluster_scan(scan_state_cursor.clone(), count, object_type)
-                            .await?
-                    }
-                };
-
+                let (cursor, keys) = client
+                    .cluster_scan(scan_state_cursor.clone(), cluster_scan_args)
+                    .await?;
                 let cluster_cursor_id = if cursor.is_finished() {
                     Value::BulkString(FINISHED_SCAN_CURSOR.into())
                 } else {
@@ -583,8 +572,9 @@ async fn create_cluster_client(
         Some(PeriodicCheck::ManualInterval(interval)) => Some(interval),
         None => Some(DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL),
     };
+    let connection_timeout = to_duration(request.connection_timeout, DEFAULT_CONNECTION_TIMEOUT);
     let mut builder = redis::cluster::ClusterClientBuilder::new(initial_nodes)
-        .connection_timeout(INTERNAL_CONNECTION_TIMEOUT)
+        .connection_timeout(connection_timeout)
         .retries(DEFAULT_RETRIES);
     let read_from_strategy = request.read_from.unwrap_or_default();
     builder = builder.read_from(match read_from_strategy {
@@ -607,7 +597,7 @@ async fn create_cluster_client(
         };
         builder = builder.tls(tls);
     }
-    if let Some(pubsub_subscriptions) = redis_connection_info.pubsub_subscriptions {
+    if let Some(pubsub_subscriptions) = redis_connection_info.pubsub_subscriptions.clone() {
         builder = builder.pubsub_subscriptions(pubsub_subscriptions);
     }
 
@@ -615,7 +605,55 @@ async fn create_cluster_client(
     builder = builder.periodic_connections_checks(CONNECTION_CHECKS_INTERVAL);
 
     let client = builder.build()?;
-    client.get_async_connection(push_sender).await
+    let mut con = client.get_async_connection(push_sender).await?;
+
+    // This validation ensures that sharded subscriptions are not applied to Redis engines older than version 7.0,
+    // preventing scenarios where the client becomes inoperable or, worse, unaware that sharded pubsub messages are not being received.
+    // The issue arises because `client.get_async_connection()` might succeed even if the engine does not support sharded pubsub.
+    // For example, initial connections may exclude the target node for sharded subscriptions, allowing the creation to succeed,
+    // but subsequent resubscription tasks will fail when `setup_connection()` cannot establish a connection to the node.
+    //
+    // One approach to handle this would be to check the engine version inside `setup_connection()` and skip applying sharded subscriptions.
+    // However, this approach would leave the application unaware that the subscriptions were not applied, requiring the user to analyze logs to identify the issue.
+    // Instead, we explicitly check the engine version here and fail the connection creation if it is incompatible with sharded subscriptions.
+
+    if let Some(pubsub_subscriptions) = redis_connection_info.pubsub_subscriptions {
+        if pubsub_subscriptions.contains_key(&redis::PubSubSubscriptionKind::Sharded) {
+            let info_res = con
+                .route_command(
+                    redis::cmd("INFO").arg("SERVER"),
+                    RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random),
+                )
+                .await?;
+            let info_dict: InfoDict = FromRedisValue::from_redis_value(&info_res)?;
+            match info_dict.get::<String>("redis_version") {
+                Some(version) => match (Versioning::new(version), Versioning::new("7.0")) {
+                    (Some(server_ver), Some(min_ver)) => {
+                        if server_ver < min_ver {
+                            return Err(RedisError::from((
+                                ErrorKind::InvalidClientConfig,
+                                "Sharded subscriptions provided, but the engine version is < 7.0",
+                            )));
+                        }
+                    }
+                    _ => {
+                        return Err(RedisError::from((
+                            ErrorKind::ResponseError,
+                            "Failed to parse engine version",
+                        )))
+                    }
+                },
+                _ => {
+                    return Err(RedisError::from((
+                        ErrorKind::ResponseError,
+                        "Could not determine engine version from INFO result",
+                    )))
+                }
+            }
+        }
+    }
+
+    Ok(con)
 }
 
 #[derive(thiserror::Error)]
@@ -682,6 +720,8 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
         "\nStandalone mode"
     };
     let request_timeout = format_optional_value("Request timeout", request.request_timeout);
+    let connection_timeout =
+        format_optional_value("Connection timeout", request.connection_timeout);
     let database_id = format!("\ndatabase ID: {}", request.database_id);
     let rfr_strategy = request
         .read_from
@@ -738,7 +778,7 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
     );
 
     format!(
-        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}{periodic_checks}{pubsub_subscriptions}{inflight_requests_limit}",
+        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{connection_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}{periodic_checks}{pubsub_subscriptions}{inflight_requests_limit}",
     )
 }
 
