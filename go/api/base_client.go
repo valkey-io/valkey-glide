@@ -1489,7 +1489,8 @@ func (client *baseClient) Restore(key string, ttl int64, value string) (Result[s
 }
 
 func (client *baseClient) RestoreWithOptions(key string, ttl int64,
-	value string, options *RestoreOptions) (Result[string], error) {
+	value string, options *RestoreOptions,
+) (Result[string], error) {
 	optionArgs, err := options.toArgs()
 	if err != nil {
 		return CreateNilStringResult(), err
