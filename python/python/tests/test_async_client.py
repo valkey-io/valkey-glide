@@ -857,9 +857,13 @@ class TestCommands:
 
         if not await check_if_server_version_lt(glide_client, "7.0.0"):
             previous_timeout = await glide_client.config_get(["timeout"])
-            previous_node_cluster_timeout = await glide_client.config_get(["node-cluster-timeout"])
+            previous_node_cluster_timeout = await glide_client.config_get(
+                ["node-cluster-timeout"]
+            )
             assert (
-                await glide_client.config_set({"timeout": "1000", "node-cluster-timeout": "16000"})
+                await glide_client.config_set(
+                    {"timeout": "1000", "node-cluster-timeout": "16000"}
+                )
                 == OK
             )
             assert await glide_client.config_get(["timeout", "logfile"]) == {
@@ -868,16 +872,22 @@ class TestCommands:
             }
             # revert changes to previous timeout
             previous_timeout_decoded = convert_bytes_to_string_object(previous_timeout)
-            previous_node_cluster_timeout_decoded = convert_bytes_to_string_object(pprevious_node_cluster_timeout)
+            previous_node_cluster_timeout_decoded = convert_bytes_to_string_object(
+                pprevious_node_cluster_timeout
+            )
             assert isinstance(previous_timeout_decoded, dict)
             assert isinstance(previous_node_cluster_timeout_decoded, dict)
             assert isinstance(previous_timeout_decoded["timeout"], str)
-            assert isinstance(previous_node_cluster_timeout_decoded["node-cluster-timeout"], str)
+            assert isinstance(
+                previous_node_cluster_timeout_decoded["node-cluster-timeout"], str
+            )
             assert (
                 await glide_client.config_set(
                     {
                         "timeout": previous_timeout_decoded["timeout"],
-                        "node-cluster-timeout": previous_node_cluster_timeout_decoded["node-cluster-timeout"],
+                        "node-cluster-timeout": previous_node_cluster_timeout_decoded[
+                            "node-cluster-timeout"
+                        ],
                     }
                 )
                 == OK
