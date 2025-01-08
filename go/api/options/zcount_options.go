@@ -5,7 +5,7 @@ package options
 import "github.com/valkey-io/valkey-glide/go/glide/utils"
 
 type ScoreRange interface {
-	ToArgs() []string
+	ToArgs() ([]string, error)
 }
 
 type (
@@ -74,7 +74,15 @@ type ZCountRange struct {
 
 func (zCountRange *ZCountRange) ToArgs() ([]string, error) {
 	args := []string{}
-	args = append(args, zCountRange.min.ToArgs()...)
-	args = append(args, zCountRange.max.ToArgs()...)
+	minArgs, err := zCountRange.min.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, minArgs...)
+	maxArgs, err := zCountRange.max.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, maxArgs...)
 	return args, nil
 }
