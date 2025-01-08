@@ -43,7 +43,9 @@ use crate::{
 use dashmap::DashMap;
 use std::{
     collections::{HashMap, HashSet},
-    fmt, io, mem,
+    fmt, io,
+    iter::once,
+    mem,
     net::{IpAddr, SocketAddr},
     pin::Pin,
     sync::{
@@ -1341,13 +1343,13 @@ where
         }
 
         // identify nodes with closed connection
-        let mut addrs_to_refresh = Vec::new();
+        let mut addrs_to_refresh = HashSet::new();
         for (addr, con_fut) in &all_valid_conns {
             let con = con_fut.clone().await;
             // connection object might be present despite the transport being closed
             if con.is_closed() {
                 // transport is closed, need to refresh
-                addrs_to_refresh.push(addr.clone());
+                addrs_to_refresh.insert(addr.clone());
             }
         }
 
@@ -1373,60 +1375,141 @@ where
 
     async fn refresh_connections(
         inner: Arc<InnerCore<C>>,
-        addresses: Vec<String>,
+        addresses: HashSet<String>,
         conn_type: RefreshConnectionType,
         check_existing_conn: bool,
     ) {
         info!("Started refreshing connections to {:?}", addresses);
-        let mut tasks = FuturesUnordered::new();
-        let inner = inner.clone();
 
-        for address in addresses.into_iter() {
-            let inner = inner.clone();
+        for address in addresses {
+            if inner
+                .conn_lock
+                .read()
+                .expect(MUTEX_READ_ERR)
+                .refresh_conn_state
+                .refresh_address_in_progress
+                .contains_key(&address)
+            {
+                info!("Skipping refresh for {}: already in progress", address);
+                continue;
+            }
 
-            tasks.push(async move {
-                let node_option = if check_existing_conn {
-                    let connections_container = inner.conn_lock.read().expect(MUTEX_READ_ERR);
-                    connections_container.remove_node(&address)
-                } else {
-                    None
-                };
+            let inner_clone = inner.clone();
+            let address_clone = address.clone();
+            let address_clone_for_task = address.clone();
 
-                // Override subscriptions for this connection
-                let mut cluster_params = inner.cluster_params.read().expect(MUTEX_READ_ERR).clone();
-                let subs_guard = inner.subscriptions_by_address.read().await;
-                cluster_params.pubsub_subscriptions = subs_guard.get(&address).cloned();
-                drop(subs_guard);
+            let handle = tokio::spawn(async move {
+                info!(
+                    "Refreshing connection task to {:?} started",
+                    address_clone_for_task
+                );
+                let _ = async {
+                    let node_option = if check_existing_conn {
+                        let connections_container =
+                            inner_clone.conn_lock.read().expect(MUTEX_READ_ERR);
+                        connections_container
+                            .connection_map()
+                            .get(&address_clone_for_task)
+                            .map(|node| node.value().clone())
+                    } else {
+                        None
+                    };
 
-                let node = get_or_create_conn(
-                    &address,
-                    node_option,
-                    &cluster_params,
-                    conn_type,
-                    inner.glide_connection_options.clone(),
-                )
+                    // Add this address to be removed in poll_flush so all requests see a consistent connection map.
+                    // See next comment for elaborated explanation.
+                    inner_clone
+                        .conn_lock
+                        .write()
+                        .expect(MUTEX_READ_ERR)
+                        .refresh_conn_state
+                        .refresh_addresses_started
+                        .insert(address_clone_for_task.clone());
+
+                    let mut cluster_params = inner_clone
+                        .cluster_params
+                        .read()
+                        .expect(MUTEX_READ_ERR)
+                        .clone();
+                    let subs_guard = inner_clone.subscriptions_by_address.read().await;
+                    cluster_params.pubsub_subscriptions =
+                        subs_guard.get(&address_clone_for_task).cloned();
+                    drop(subs_guard);
+
+                    let node_result = get_or_create_conn(
+                        &address_clone_for_task,
+                        node_option,
+                        &cluster_params,
+                        conn_type,
+                        inner_clone.glide_connection_options.clone(),
+                    )
+                    .await;
+
+                    // Maintain the newly refreshed connection separately from the main connection map.
+                    // This refreshed connection will be incorporated into the main connection map at the start of the poll_flush operation.
+                    // This approach ensures that all requests within the current batch interact with a consistent connection map,
+                    // preventing potential reordering issues.
+                    //
+                    // By delaying the integration of the refreshed connection:
+                    //
+                    // 1. We maintain consistency throughout the processing of a batch of requests.
+                    // 2. We avoid mid-batch changes to the connection map that could lead to inconsistent routing or ordering of operations.
+                    // 3. We ensure that all requests in a batch see the same cluster topology, reducing the risk of race conditions or unexpected behavior.
+                    //
+                    // This strategy effectively creates a synchronization point at the beginning of poll_flush, where the connection map is
+                    // updated atomically for the next batch of operations. This approach balances the need for up-to-date connection information
+                    // with the requirement for consistent request handling within each processing cycle.
+                    match node_result {
+                        Ok(node) => {
+                            debug!(
+                                "Succeeded to refresh connection for node {}.",
+                                address_clone_for_task
+                            );
+                            inner_clone
+                                .conn_lock
+                                .write()
+                                .expect(MUTEX_READ_ERR)
+                                .refresh_conn_state
+                                .refresh_addresses_done
+                                .insert(address_clone_for_task, Some(node));
+                        }
+                        Err(err) => {
+                            warn!(
+                                "Failed to refresh connection for node {}. Error: `{:?}`",
+                                address_clone_for_task, err
+                            );
+                            inner_clone
+                                .conn_lock
+                                .write()
+                                .expect(MUTEX_READ_ERR)
+                                .refresh_conn_state
+                                .refresh_addresses_done
+                                .insert(address_clone_for_task, None);
+                        }
+                    }
+                }
                 .await;
 
-                (address, node)
+                info!("Refreshing connection task to {:?} is done", address_clone);
             });
-        }
 
-        // Poll connection tasks as soon as each one finishes
-        while let Some(result) = tasks.next().await {
-            match result {
-                (address, Ok(node)) => {
-                    let connections_container = inner.conn_lock.read().expect(MUTEX_READ_ERR);
-                    connections_container.replace_or_add_connection_for_address(address, node);
-                }
-                (address, Err(err)) => {
-                    warn!(
-                        "Failed to refresh connection for node {}. Error: `{:?}`",
-                        address, err
-                    );
-                }
-            }
+            // Keep the task handle into the RefreshState of this address
+            info!(
+                "Inserting tokio task to refresh_ops map of address {:?}",
+                address.clone()
+            );
+            inner
+                .conn_lock
+                .write()
+                .expect(MUTEX_READ_ERR)
+                .refresh_conn_state
+                .refresh_address_in_progress
+                .insert(address.clone(), handle);
+            info!(
+                "Inserted tokio task to refresh_ops map of address {:?}",
+                address.clone()
+            );
         }
-        debug!("refresh connections completed");
+        debug!("refresh connection tasks initiated");
     }
 
     async fn aggregate_results(
@@ -1762,7 +1845,7 @@ where
             // immediately trigger connection reestablishment
             Self::refresh_connections(
                 inner.clone(),
-                addrs_to_refresh.into_iter().collect(),
+                addrs_to_refresh,
                 RefreshConnectionType::AllConnections,
                 false,
             )
@@ -1798,7 +1881,7 @@ where
         if !failed_connections.is_empty() {
             Self::refresh_connections(
                 inner,
-                failed_connections,
+                failed_connections.into_iter().collect::<HashSet<String>>(),
                 RefreshConnectionType::OnlyManagementConnection,
                 true,
             )
@@ -1899,6 +1982,9 @@ where
         info!("refresh_slots found nodes:\n{new_connections}");
         // Reset the current slot map and connection vector with the new ones
         let mut write_guard = inner.conn_lock.write().expect(MUTEX_WRITE_ERR);
+        // Clear the refresh tasks of the prev instance
+        // TODO - Maybe we can take the running refresh tasks and use them instead of running new connection creation
+        write_guard.refresh_conn_state.clear_refresh_state();
         let read_from_replicas = inner
             .get_cluster_param(|params| params.read_from_replicas.clone())
             .expect(MUTEX_READ_ERR);
@@ -2271,32 +2357,18 @@ where
         let (address, mut conn) = match conn_check {
             ConnectionCheck::Found((address, connection)) => (address, connection.await),
             ConnectionCheck::OnlyAddress(addr) => {
-                let mut this_conn_params = core.get_cluster_param(|params| params.clone())?;
-                let subs_guard = core.subscriptions_by_address.read().await;
-                this_conn_params.pubsub_subscriptions = subs_guard.get(addr.as_str()).cloned();
-                drop(subs_guard);
-                match connect_and_check::<C>(
-                    &addr,
-                    this_conn_params,
-                    None,
+                // No connection in for this address in the conn_map
+                Self::refresh_connections(
+                    core,
+                    HashSet::from_iter(once(addr)),
                     RefreshConnectionType::AllConnections,
-                    None,
-                    core.glide_connection_options.clone(),
+                    false,
                 )
-                .await
-                .get_node()
-                {
-                    Ok(node) => {
-                        let connection_clone = node.user_connection.conn.clone().await;
-                        let connections = core.conn_lock.read().expect(MUTEX_READ_ERR);
-                        let address = connections.replace_or_add_connection_for_address(addr, node);
-                        drop(connections);
-                        (address, connection_clone)
-                    }
-                    Err(err) => {
-                        return Err(err);
-                    }
-                }
+                .await;
+                return Err(RedisError::from((
+                    ErrorKind::ConnectionNotFoundForRoute,
+                    "No connection for the address, started a refresh task",
+                )));
             }
             ConnectionCheck::RandomConnection => {
                 let random_conn = core
@@ -2391,6 +2463,120 @@ where
         }
 
         Self::try_request(info, core).await
+    }
+
+    fn update_refreshed_connection(&mut self) {
+        trace!("update_refreshed_connection started");
+        loop {
+            let connections_container = self.inner.conn_lock.read().expect(MUTEX_READ_ERR);
+
+            // Check if both sets are empty
+            if connections_container
+                .refresh_conn_state
+                .refresh_addresses_started
+                .is_empty()
+                && connections_container
+                    .refresh_conn_state
+                    .refresh_addresses_done
+                    .is_empty()
+            {
+                break;
+            }
+
+            let addresses_to_remove: Vec<String> = connections_container
+                .refresh_conn_state
+                .refresh_addresses_started
+                .iter()
+                .cloned()
+                .collect();
+
+            let addresses_done: Vec<String> = connections_container
+                .refresh_conn_state
+                .refresh_addresses_done
+                .keys()
+                .cloned()
+                .collect();
+
+            let current_existing_addresses_in_slot_map =
+                connections_container.slot_map.all_node_addresses();
+
+            drop(connections_container);
+
+            // Process refresh_addresses_started
+            for address in addresses_to_remove {
+                self.inner
+                    .conn_lock
+                    .write()
+                    .expect(MUTEX_READ_ERR)
+                    .refresh_conn_state
+                    .refresh_addresses_started
+                    .remove(&address);
+                self.inner
+                    .conn_lock
+                    .write()
+                    .expect(MUTEX_READ_ERR)
+                    .remove_node(&address);
+            }
+
+            // Process refresh_addresses_done
+            for address in addresses_done {
+                // Check if this address appears in the current topology
+                if current_existing_addresses_in_slot_map.contains(&address) {
+                    // Check if the address exists in refresh_addresses_done
+                    let mut conn_lock_write = self.inner.conn_lock.write().expect(MUTEX_READ_ERR);
+                    if let Some(conn_option) = conn_lock_write
+                        .refresh_conn_state
+                        .refresh_addresses_done
+                        .get_mut(&address)
+                    {
+                        // Match the content of the Option
+                        match conn_option.take() {
+                            Some(conn) => {
+                                debug!(
+                                    "update_refreshed_connection: found refreshed connection for address {}",
+                                    address
+                                );
+                                // Move the node_conn to the function
+                                conn_lock_write
+                                    .replace_or_add_connection_for_address(address.clone(), conn);
+                            }
+                            None => {
+                                debug!(
+                                    "update_refreshed_connection: task completed, but no connection for address {}",
+                                    address
+                                );
+                            }
+                        }
+                    }
+                }
+
+                // Remove this address from refresh_addresses_done
+                self.inner
+                    .conn_lock
+                    .write()
+                    .expect(MUTEX_READ_ERR)
+                    .refresh_conn_state
+                    .refresh_addresses_done
+                    .remove(&address);
+
+                // Remove this entry from refresh_address_in_progress
+                if self
+                    .inner
+                    .conn_lock
+                    .write()
+                    .expect(MUTEX_READ_ERR)
+                    .refresh_conn_state
+                    .refresh_address_in_progress
+                    .remove(&address)
+                    .is_none()
+                {
+                    warn!(
+                        "update_refreshed_connection: No refresh operation found to remove for address: {:?}",
+                        address
+                    );
+                }
+            }
+        }
     }
 
     fn poll_complete(&mut self, cx: &mut task::Context<'_>) -> Poll<PollFlushAction> {
@@ -2497,8 +2683,8 @@ where
                     }
                 }
                 Next::Reconnect { request, target } => {
-                    poll_flush_action =
-                        poll_flush_action.change_state(PollFlushAction::Reconnect(vec![target]));
+                    poll_flush_action = poll_flush_action
+                        .change_state(PollFlushAction::Reconnect(HashSet::from_iter([target])));
                     if let Some(request) = request {
                         self.inner.pending_requests.lock().unwrap().push(request);
                     }
@@ -2543,7 +2729,7 @@ where
 enum PollFlushAction {
     None,
     RebuildSlots,
-    Reconnect(Vec<String>),
+    Reconnect(HashSet<String>),
     ReconnectFromInitialConnections,
 }
 
@@ -2616,6 +2802,12 @@ where
                 cx.waker().wake_by_ref();
                 return Poll::Pending;
             }
+
+            // Updating the connection_map with all the refreshed_connections
+            // In case of active poll_recovery, the <RecoverSlots / Reconnect(reconnect_to_initial_nodes)> work should
+            // take care of the refreshed_connection, add them if still relevant, and kill the refresh_tasks of
+            // non-relevant addresses.
+            self.update_refreshed_connection();
 
             match ready!(self.poll_complete(cx)) {
                 PollFlushAction::None => return Poll::Ready(Ok(())),
