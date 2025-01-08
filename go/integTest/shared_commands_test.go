@@ -4457,6 +4457,34 @@ func (suite *GlideTestSuite) TestZRem() {
 	})
 }
 
+func (suite *GlideTestSuite) TestPersist() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		// Test 1: Check if persist command removes the expiration time of a key.
+		keyName := "{keyName}" + uuid.NewString()
+		t := suite.T()
+		suite.verifyOK(client.Set(keyName, initialValue))
+		resultExpire, err := client.Expire(keyName, 300)
+		assert.Nil(t, err)
+		assert.True(t, resultExpire.Value())
+		resultPersist, err := client.Persist(keyName)
+		assert.Nil(t, err)
+		assert.True(t, resultPersist.Value())
+
+		// Test 2: Check if persist command return false if key that doesnt have associated timeout.
+		keyNoExp := "{keyName}" + uuid.NewString()
+		suite.verifyOK(client.Set(keyNoExp, initialValue))
+		resultPersistNoExp, err := client.Persist(keyNoExp)
+		assert.Nil(t, err)
+		assert.False(t, resultPersistNoExp.Value())
+
+		// Test 3: Check if persist command return false if key not exist.
+		keyInvalid := "{invalidkey_forPersistTest}" + uuid.NewString()
+		resultInvalidKey, err := client.Persist(keyInvalid)
+		assert.Nil(t, err)
+		assert.False(t, resultInvalidKey.Value())
+	})
+}
+
 func (suite *GlideTestSuite) TestObjectEncoding() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		// Test 1: Check object encoding for embstr

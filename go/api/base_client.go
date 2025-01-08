@@ -1476,6 +1476,14 @@ func (client *baseClient) BZPopMin(keys []string, timeoutSecs float64) (Result[K
 	return handleKeyWithMemberAndScoreResponse(result)
 }
 
+func (client *baseClient) Persist(key string) (Result[bool], error) {
+	result, err := client.executeCommand(C.Persist, []string{key})
+	if err != nil {
+		return CreateNilBoolResult(), err
+	}
+	return handleBooleanResponse(result)
+}
+
 func (client *baseClient) Restore(key string, ttl int64, value string) (Result[string], error) {
 	return client.RestoreWithOptions(key, ttl, value, NewRestoreOptionsBuilder())
 }
