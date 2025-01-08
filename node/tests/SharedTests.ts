@@ -1245,7 +1245,10 @@ export function runBaseTests(config: {
                     "cluster-node-timeout",
                 ])) as Record<string, GlideString>;
                 expect(
-                    await client.configSet({ timeout: "1000", "cluster-node-timeout": "16000" }),
+                    await client.configSet({
+                        timeout: "1000",
+                        "cluster-node-timeout": "16000",
+                    }),
                 ).toEqual("OK");
                 const currParameterValues = (await client.configGet([
                     "timeout",
@@ -1259,7 +1262,8 @@ export function runBaseTests(config: {
                 expect(
                     await client.configSet({
                         timeout: prevTimeout["timeout"],
-                        "cluster-node-timeout": prevClusterNodeTimeout["cluster-node-timeout"],
+                        "cluster-node-timeout":
+                            prevClusterNodeTimeout["cluster-node-timeout"],
                     }),
                 ).toEqual("OK");
             }, protocol);
