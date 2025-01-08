@@ -25,7 +25,7 @@ type glideClient struct {
 	*baseClient
 }
 
-// NewGlideClient creates a [*glideClient] in standalone mode using the given [GlideClientConfiguration].
+// NewGlideClient creates a [GlideClient] in standalone mode using the given [GlideClientConfiguration].
 func NewGlideClient(config *GlideClientConfiguration) (GlideClient, error) {
 	client, err := createClient(config)
 	if err != nil {

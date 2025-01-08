@@ -6,8 +6,6 @@ package api
 //
 // See [valkey.io] for details.
 //
-// GenericBaseCommands defines an interface for the "Generic Commands".
-//
 // [valkey.io]: https://valkey.io/commands/?group=Generic
 type GenericBaseCommands interface {
 	// Del removes the specified keys from the database. A key is ignored if it does not exist.
