@@ -21,6 +21,8 @@
 
 #### Fixes
 
+* Node: Fix `zrangeWithScores` (disallow `RangeByLex` as it is not supported) ([#2926](https://github.com/valkey-io/valkey-glide/pull/2926))
+
 #### Operational Enhancements
 
 ## 1.2.1 (2024-12-29)
