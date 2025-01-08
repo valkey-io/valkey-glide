@@ -212,4 +212,54 @@ type SortedSetCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/zrem/
 	ZRem(key string, members []string) (Result[int64], error)
+
+	// Returns the cardinality (number of elements) of the sorted set stored at `key`.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   key - The key of the set.
+	//
+	// Return value:
+	//   The number of elements in the sorted set.
+	//
+	// If `key` does not exist, it is treated as an empty sorted set, and this command returns 0.
+	// If `key` holds a value that is not a sorted set, an error is returned.
+	//
+	// Example:
+	//   result1, err := client.ZCard("mySet")
+	//   result1.Value() :1 // There is 1 item in the set
+	//
+	// [valkey.io]: https://valkey.io/commands/zcard/
+	ZCard(key string) (Result[int64], error)
+
+	// Blocks the connection until it removes and returns a member with the lowest score from the
+	// first non-empty sorted set, with the given `keys` being checked in the order they
+	// are provided.
+	// `BZPOPMIN` is the blocking variant of `ZPOPMIN`.
+	//
+	// Note:
+	//   - When in cluster mode, all `keys` must map to the same hash slot.
+	//   - `BZPOPMIN` is a client blocking command, see [Blocking Commands] for more details and best practices.
+	//
+	// See [valkey.io] for more details.
+	//
+	// Parameters:
+	//   keys - The keys of the sorted sets.
+	//   timeout - The number of seconds to wait for a blocking operation to complete. A value of
+	//     `0` will block indefinitely.
+	//
+	// Return value:
+	//   A `KeyWithMemberAndScore` struct containing the key where the member was popped out, the member
+	//   itself, and the member score. If no member could be popped and the `timeout` expired, returns `nil`.
+	//
+	// example
+	//   zaddResult1, err := client.ZAdd(key1, map[string]float64{"a": 1.0, "b": 1.5})
+	//   zaddResult2, err := client.ZAdd(key2, map[string]float64{"c": 2.0})
+	//   result, err := client.BZPopMin([]string{key1, key2}, float64(.5))
+	//   fmt.Println(res.Value()) // Output: {key: key1 member:a, score:1}
+	//
+	// [valkey.io]: https://valkey.io/commands/bzpopmin/
+	// [blocking commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+	BZPopMin(keys []string, timeoutSecs float64) (Result[KeyWithMemberAndScore], error)
 }

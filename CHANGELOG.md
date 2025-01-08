@@ -1,5 +1,7 @@
 #### Changes
 
+* Go: Add `HScan` command ([#2917](https://github.com/valkey-io/valkey-glide/pull/2917))
+* Java, Node, Python: Add transaction commands for JSON module ([#2862](https://github.com/valkey-io/valkey-glide/pull/2862))
 * Go: Add HINCRBY command ([#2847](https://github.com/valkey-io/valkey-glide/pull/2847))
 * Go: Add HINCRBYFLOAT command ([#2846](https://github.com/valkey-io/valkey-glide/pull/2846))
 * Go: Add SUNIONSTORE command ([#2805](https://github.com/valkey-io/valkey-glide/pull/2805))
@@ -11,6 +13,9 @@
 * Go: Add `SScan` and `SMove` ([#2789](https://github.com/valkey-io/valkey-glide/issues/2789))
 * Go: Add `ZADD` ([#2813](https://github.com/valkey-io/valkey-glide/issues/2813))
 * Go: Add `ZPopMin` and `ZPopMax` ([#2850](https://github.com/valkey-io/valkey-glide/pull/2850))
+* Java: Add binary version of `ZRANK WITHSCORE` ([#2896](https://github.com/valkey-io/valkey-glide/pull/2896))
+* Go: Add `ZCARD` ([#2838](https://github.com/valkey-io/valkey-glide/pull/2838))
+* Go: Add `BZPopMin` ([#2849](https://github.com/valkey-io/valkey-glide/pull/2849))
 
 #### Breaking Changes
 
