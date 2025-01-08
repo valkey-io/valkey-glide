@@ -857,7 +857,7 @@ class TestCommands:
 
         if not await check_if_server_version_lt(glide_client, "7.0.0"):
             previous_timeout = await glide_client.config_get(["timeout"])
-            previous_cluster_node_timeout= await glide_client.config_get(
+            previous_cluster_node_timeout = await glide_client.config_get(
                 ["cluster-node-timeout"]
             )
             assert (
@@ -866,7 +866,9 @@ class TestCommands:
                 )
                 == OK
             )
-            assert await glide_client.config_get(["timeout", "cluster-node-timeout"]) == {
+            assert await glide_client.config_get(
+                ["timeout", "cluster-node-timeout"]
+            ) == {
                 b"timeout": b"2000",
                 b"cluster-node-timeout": b"16000",
             }
