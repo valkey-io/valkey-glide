@@ -332,11 +332,22 @@ describe("GlideClusterClient", () => {
                     })
                     .configGet(["timeout", "cluster-node-timeout"]);
                 const result = await client.exec(transaction);
-                expect(result[0]).toEqual("OK");
-                expect(result[1][0]["key"]).toEqual("cluster-node-timeout");
-                expect(result[1][0]["value"]).toEqual("16000");
-                expect(result[1][1]["key"]).toEqual("timeout");
-                expect(result[1][1]["value"]).toEqual("2000");
+                result.sort((a, b) => {
+                    if (a.key < b.key) {
+                        return -1;
+                    } else if (a.key > b.key) {
+                        return 1;
+                    } else {
+                        return 0;
+                    }
+                });
+                expect(result).toEqual([
+                    "OK",
+                    convertRecordToGlideRecord({
+                        "cluster-node-timeout": "16000",
+                        timeout: "2000",
+                    }),
+                ]);
             }
         },
         TIMEOUT,
