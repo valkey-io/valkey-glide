@@ -21,6 +21,8 @@
 
 #### Fixes
 
+* Core: improve fix in #2381 ([#2929](https://github.com/valkey-io/valkey-glide/pull/2929))
+
 #### Operational Enhancements
 
 ## 1.2.1 (2024-12-29)
@@ -143,8 +145,6 @@
 #### Fixes
 
 * Core: UDS Socket Handling Rework ([#2482](https://github.com/valkey-io/valkey-glide/pull/2482))
-
-* Core: Fix RESP2 multi-node response from cluster ([#2381](https://github.com/valkey-io/valkey-glide/pull/2381))
 
 #### Operational Enhancements
 
