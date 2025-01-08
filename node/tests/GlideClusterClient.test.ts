@@ -332,7 +332,7 @@ describe("GlideClusterClient", () => {
                     })
                     .configGet(["timeout", "cluster-node-timeout"]);
                 const result = await client.exec(transaction);
-                result.sort((a, b) => {
+                const sortedResult = result.sort((a, b) => {
                     if (a.key < b.key) {
                         return -1;
                     } else if (a.key > b.key) {
@@ -341,7 +341,7 @@ describe("GlideClusterClient", () => {
                         return 0;
                     }
                 });
-                expect(result).toEqual([
+                expect(sortedResult).toEqual([
                     "OK",
                     convertRecordToGlideRecord({
                         "cluster-node-timeout": "16000",
