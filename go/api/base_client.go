@@ -1332,6 +1332,37 @@ func (client *baseClient) XAddWithOptions(
 	return handleStringOrNullResponse(result)
 }
 
+func (client *baseClient) XRead(keysAndIds map[string]string) (map[string]map[string][][]string, error) {
+	return client.XReadWithOptions(keysAndIds, options.NewXReadOptions())
+}
+
+func (client *baseClient) XReadWithOptions(
+	keysAndIds map[string]string,
+	options *options.XReadOptions,
+) (map[string]map[string][][]string, error) {
+	args := make([]string, 0, 5+2*len(keysAndIds))
+	optionArgs, _ := options.ToArgs()
+	args = append(args, optionArgs...)
+
+	// Note: this loop iterates in an indeterminate order, but it is OK for that case
+	keys := make([]string, 0, len(keysAndIds))
+	values := make([]string, 0, len(keysAndIds))
+	for key := range keysAndIds {
+		keys = append(keys, key)
+		values = append(values, keysAndIds[key])
+	}
+	args = append(args, "STREAMS")
+	args = append(args, keys...)
+	args = append(args, values...)
+
+	result, err := client.executeCommand(C.XRead, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleXReadResponse(result)
+}
+
 func (client *baseClient) ZAdd(
 	key string,
 	membersScoreMap map[string]float64,
