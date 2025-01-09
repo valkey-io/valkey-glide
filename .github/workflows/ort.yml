@@ -158,6 +158,11 @@ jobs:
                   distribution: "temurin"
                   java-version: 11
 
+            - name: Build java artifact
+              working-directory: ./java
+              run: |
+                  ./gradlew publishMavenJavaPublicationToMavenLocal -x buildRust -x javadoc
+
             - name: Run ORT tools for Java
               uses: ./.github/workflows/run-ort-tools
               with:
