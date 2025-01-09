@@ -21,6 +21,8 @@
 
 #### Fixes
 
+* Core: improve fix in #2381 ([#2929](https://github.com/valkey-io/valkey-glide/pull/2929))
+
 #### Operational Enhancements
 
 ## 1.2.1 (2024-12-29)
