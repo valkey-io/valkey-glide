@@ -1208,7 +1208,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `config get and config set with multiple parameters_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
+            await runTest(async (client: BaseClient, cluster) => {
                 const prevTimeout = (await client.configGet([
                     "timeout",
                 ])) as Record<string, GlideString>;
