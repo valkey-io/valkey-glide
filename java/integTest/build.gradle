@@ -162,6 +162,7 @@ test {
 }
 
 tasks.register('modulesTest', Test) {
+    dependsOn ':client:publishMavenJavaPublicationToMavenLocal'
     doFirst {
         clusterHosts = System.getProperty("cluster-endpoints")
     }
