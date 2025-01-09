@@ -12,9 +12,6 @@ plugins {
 
 shadowJar {
     dependsOn('copyNativeLib')
-    dependencies {
-        include dependency('com.google.protobuf:protobuf-java:4.29.1')
-    }
     archiveClassifier = osdetector.classifier
 }
 
@@ -24,14 +21,14 @@ repositories {
 
 dependencies {
     implementation group: 'com.google.protobuf', name: 'protobuf-java', version: '4.29.1'
-    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
+    shadow group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
 
-    implementation group: 'io.netty', name: 'netty-handler', version: '4.1.115.Final'
+    shadow group: 'io.netty', name: 'netty-handler', version: '4.1.115.Final'
     // https://github.com/netty/netty/wiki/Native-transports
     // At the moment, Windows is not supported
-    implementation group: 'io.netty', name: 'netty-transport-native-epoll', version: '4.1.115.Final', classifier: 'linux-x86_64'
-    implementation group: 'io.netty', name: 'netty-transport-native-epoll', version: '4.1.115.Final', classifier: 'linux-aarch_64'
-    implementation group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.115.Final', classifier: 'osx-aarch_64'
+    shadow group: 'io.netty', name: 'netty-transport-native-epoll', version: '4.1.115.Final', classifier: 'linux-x86_64'
+    shadow group: 'io.netty', name: 'netty-transport-native-epoll', version: '4.1.115.Final', classifier: 'linux-aarch_64'
+    shadow group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.115.Final', classifier: 'osx-aarch_64'
 
     // junit
     testImplementation group: 'org.mockito', name: 'mockito-inline', version: '3.12.4'
@@ -165,7 +162,7 @@ sourceSets {
 publishing {
     publications {
         mavenJava(MavenPublication) {
-            from components.java
+            from components.shadow
             groupId = 'io.valkey'
             artifactId = 'valkey-glide'
             version = System.getenv("GLIDE_RELEASE_VERSION") ?: project.ext.defaultReleaseVersion
