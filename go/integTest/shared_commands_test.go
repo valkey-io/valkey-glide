@@ -4546,12 +4546,12 @@ func (suite *GlideTestSuite) TestZCount() {
 		assert.Equal(t, int64(0), zCountResult.Value())
 
 		// Key exists, but it is not a set
-		setResult, err := client.Set(key2, "value")
+		setResult, _ := client.Set(key2, "value")
 		assert.Equal(t, setResult.Value(), "OK")
 		zCountRange = options.NewZCountRangeBuilder()
 		zCountRange.SetMin(options.NewInfScoreBoundBuilder().SetValue(options.NegativeInfinity))
 		zCountRange.SetMax(options.NewInfScoreBoundBuilder().SetValue(options.PositiveInfinity))
-		zCountResult, err = client.ZCount(key2, zCountRange)
+		_, err = client.ZCount(key2, zCountRange)
 		assert.NotNil(t, err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
