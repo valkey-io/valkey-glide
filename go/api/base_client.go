@@ -1505,3 +1505,11 @@ func (client *baseClient) ZRangeWithScores(
 
 	return handleStringDoubleMapResponse(result)
 }
+
+func (client *baseClient) Persist(key string) (Result[bool], error) {
+	result, err := client.executeCommand(C.Persist, []string{key})
+	if err != nil {
+		return CreateNilBoolResult(), err
+	}
+	return handleBooleanResponse(result)
+}
