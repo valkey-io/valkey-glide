@@ -4443,7 +4443,6 @@ export class BaseClient {
      * @param key - The key of the sorted set.
      * @param rangeQuery - The range query object representing the type of range query to perform.
      * - For range queries by index (rank), use {@link RangeByIndex}.
-     * - For range queries by lexicographical order, use {@link RangeByLex}.
      * - For range queries by score, use {@link RangeByScore}.
      * @param options - (Optional) Additional parameters:
      * - (Optional) `reverse`: if `true`, reverses the sorted set, with index `0` as the element with the highest score.
@@ -4476,7 +4475,7 @@ export class BaseClient {
      */
     public async zrangeWithScores(
         key: GlideString,
-        rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
+        rangeQuery: RangeByScore | RangeByIndex,
         options?: { reverse?: boolean } & DecoderOption,
     ): Promise<SortedSetDataType> {
         return this.createWritePromise<GlideRecord<number>>(
