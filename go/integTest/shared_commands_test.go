@@ -4514,7 +4514,7 @@ func (suite *GlideTestSuite) TestObjectEncoding() {
 	})
 }
 
-func (suite *GlideTestSuite) Test_Dump_Restore() {
+func (suite *GlideTestSuite) TestDumpRestore() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		// Test 1: Check restore command for deleted key and check value
 		key := "testKey1_" + uuid.New().String()
