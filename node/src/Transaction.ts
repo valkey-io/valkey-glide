@@ -1989,7 +1989,6 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key - The key of the sorted set.
      * @param rangeQuery - The range query object representing the type of range query to perform.
      * - For range queries by index (rank), use {@link RangeByIndex}.
-     * - For range queries by lexicographical order, use {@link RangeByLex}.
      * - For range queries by score, use {@link RangeByScore}.
      * @param reverse - If `true`, reverses the sorted set, with index `0` as the element with the highest score.
      *
@@ -1999,7 +1998,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zrangeWithScores(
         key: GlideString,
-        rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
+        rangeQuery: RangeByScore | RangeByIndex,
         reverse = false,
     ): T {
         return this.addAndReturn(
