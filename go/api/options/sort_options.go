@@ -22,10 +22,8 @@ const (
 // The LIMIT argument is commonly used to specify a subset of results from the matching elements, similar to the
 // LIMIT clause in SQL (e.g., `SELECT LIMIT offset, count`).
 type Limit struct {
-	// The starting position of the range, zero based.
 	Offset int64
-	// The maximum number of elements to include in the range. A negative count returns all elementsnfrom the offset.
-	Count int64
+	Count  int64
 }
 
 // OrderBy specifies the order to sort the elements. Can be ASC (ascending) or DESC(descending).
@@ -53,6 +51,9 @@ func NewSortOptions() *SortOptions {
 }
 
 // Limit Limits the range of elements
+// Offset is the starting position of the range, zero based.
+// Count is the maximum number of elements to include in the range.
+// A negative count returns all elements from the offset.
 func (opts *SortOptions) SetLimit(offset, count int64) *SortOptions {
 	opts.Limit = &Limit{Offset: offset, Count: count}
 	return opts

@@ -1526,7 +1526,11 @@ func (client *baseClient) SortStore(key string, destination string) (Result[int6
 	return handleLongResponse(result)
 }
 
-func (client *baseClient) SortStoreWithOptions(key string, destination string, options *options.SortOptions) (Result[int64], error) {
+func (client *baseClient) SortStoreWithOptions(
+	key string,
+	destination string,
+	options *options.SortOptions,
+) (Result[int64], error) {
 	optionArgs := options.ToArgs()
 	result, err := client.executeCommand(C.Sort, append([]string{key, "STORE", destination}, optionArgs...))
 	if err != nil {
