@@ -1484,7 +1484,7 @@ func (client *baseClient) Persist(key string) (Result[bool], error) {
 	return handleBooleanResponse(result)
 }
 
-func (client *baseClient) ZCount(key string, rangeOptions options.ZCountRange) (Result[int64], error) {
+func (client *baseClient) ZCount(key string, rangeOptions *options.ZCountRange) (Result[int64], error) {
 	zCountRangeArgs, err := rangeOptions.ToArgs()
 	if err != nil {
 		return CreateNilInt64Result(), err

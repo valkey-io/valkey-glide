@@ -23,7 +23,7 @@ type InfScoreBound struct {
 	value InfBoundary
 }
 
-func NewInfScoreBuilder() *InfScoreBound {
+func NewInfScoreBoundBuilder() *InfScoreBound {
 	return &InfScoreBound{}
 }
 
@@ -70,6 +70,20 @@ func (scoreBoundary *ScoreBoundary) ToArgs() ([]string, error) {
 type ZCountRange struct {
 	min ScoreRange
 	max ScoreRange
+}
+
+func NewZCountRangeBuilder() *ZCountRange {
+	return &ZCountRange{}
+}
+
+func (zCountRange *ZCountRange) SetMin(min ScoreRange) *ZCountRange {
+	zCountRange.min = min
+	return zCountRange
+}
+
+func (zCountRange *ZCountRange) SetMax(max ScoreRange) *ZCountRange {
+	zCountRange.max = max
+	return zCountRange
 }
 
 func (zCountRange *ZCountRange) ToArgs() ([]string, error) {

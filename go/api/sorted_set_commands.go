@@ -278,5 +278,5 @@ type SortedSetCommands interface {
 	// Example:
 	//
 	// [valkey.io]: https://valkey.io/commands/zcount/
-	ZCount(key string, minScore *options.ScoreRange, maxScore *options.ScoreRange) (Result[int64], error)
+	ZCount(key string, rangeOptions *options.ZCountRange) (Result[int64], error)
 }
