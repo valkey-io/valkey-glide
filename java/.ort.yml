@@ -21,3 +21,6 @@ excludes:
     - pattern: "compileClasspath.*"
       reason: "TEST_DEPENDENCY_OF"
       comment: Packages for Gradle only. Not part of released artifacts.
+    - pattern: "io.valkey.valkey-glide.*"
+      reason: "TEST_DEPENDENCY_OF"
+      comment: A module of Valkey-Glide java client built during tests.

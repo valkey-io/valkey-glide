@@ -131,7 +131,7 @@ clearDirs.finalizedBy 'startStandalone'
 clearDirs.finalizedBy 'startCluster'
 clearDirs.finalizedBy 'startClusterForAz'
 test.finalizedBy 'stopAllAfterTests'
-test.dependsOn ':client:publishMavenJavaPublicationToMavenLocal'
+compileTestJava.dependsOn ':client:publishMavenJavaPublicationToMavenLocal'
 
 tasks.withType(Test) {
     doFirst {
@@ -162,7 +162,6 @@ test {
 }
 
 tasks.register('modulesTest', Test) {
-    dependsOn ':client:publishMavenJavaPublicationToMavenLocal'
     doFirst {
         clusterHosts = System.getProperty("cluster-endpoints")
     }
