@@ -4500,47 +4500,53 @@ func (suite *GlideTestSuite) TestZCount() {
 		assert.Equal(t, int64(3), res1.Value())
 
 		// In range negative to positive infinity.
-		zCountRange := options.NewZCountRangeBuilder()
-		zCountRange.SetMin(options.NewInfScoreBoundBuilder().SetValue(options.NegativeInfinity))
-		zCountRange.SetMax(options.NewInfScoreBoundBuilder().SetValue(options.PositiveInfinity))
+		zCountRange := options.NewZCountRangeBuilder(
+			options.NewInfScoreBoundBuilder().SetValue(options.NegativeInfinity),
+			options.NewInfScoreBoundBuilder().SetValue(options.PositiveInfinity),
+		)
 		zCountResult, err := client.ZCount(key1, zCountRange)
 		assert.Nil(t, err)
 		assert.Equal(t, int64(3), zCountResult.Value())
-		zCountRange = options.NewZCountRangeBuilder()
-		zCountRange.SetMin(options.NewScoreBoundaryBuilder().SetBound(math.Inf(-1)))
-		zCountRange.SetMax(options.NewScoreBoundaryBuilder().SetBound(math.Inf(+1)))
+		zCountRange = options.NewZCountRangeBuilder(
+			options.NewScoreBoundaryBuilder().SetBound(math.Inf(-1)),
+			options.NewScoreBoundaryBuilder().SetBound(math.Inf(+1)),
+		)
 		zCountResult, err = client.ZCount(key1, zCountRange)
 		assert.Nil(t, err)
 		assert.Equal(t, int64(3), zCountResult.Value())
 
 		// In range 1 (exclusive) to 3 (inclusive)
-		zCountRange = options.NewZCountRangeBuilder()
-		zCountRange.SetMin(options.NewScoreBoundaryBuilder().SetBound(1).SetIsInclusive(false))
-		zCountRange.SetMax(options.NewScoreBoundaryBuilder().SetBound(3).SetIsInclusive(true))
+		zCountRange = options.NewZCountRangeBuilder(
+			options.NewScoreBoundaryBuilder().SetBound(1).SetIsInclusive(false),
+			options.NewScoreBoundaryBuilder().SetBound(3).SetIsInclusive(true),
+		)
 		zCountResult, err = client.ZCount(key1, zCountRange)
 		assert.Nil(t, err)
 		assert.Equal(t, int64(2), zCountResult.Value())
 
 		// In range negative infinity to 3 (inclusive)
-		zCountRange = options.NewZCountRangeBuilder()
-		zCountRange.SetMin(options.NewInfScoreBoundBuilder().SetValue(options.NegativeInfinity))
-		zCountRange.SetMax(options.NewScoreBoundaryBuilder().SetBound(3).SetIsInclusive(true))
+		zCountRange = options.NewZCountRangeBuilder(
+			options.NewInfScoreBoundBuilder().SetValue(options.NegativeInfinity),
+			options.NewScoreBoundaryBuilder().SetBound(3).SetIsInclusive(true),
+		)
 		zCountResult, err = client.ZCount(key1, zCountRange)
 		assert.Nil(t, err)
 		assert.Equal(t, int64(3), zCountResult.Value())
 
 		// Incorrect range start > end
-		zCountRange = options.NewZCountRangeBuilder()
-		zCountRange.SetMin(options.NewInfScoreBoundBuilder().SetValue(options.PositiveInfinity))
-		zCountRange.SetMax(options.NewScoreBoundaryBuilder().SetBound(3).SetIsInclusive(true))
+		zCountRange = options.NewZCountRangeBuilder(
+			options.NewInfScoreBoundBuilder().SetValue(options.PositiveInfinity),
+			options.NewScoreBoundaryBuilder().SetBound(3).SetIsInclusive(true),
+		)
 		zCountResult, err = client.ZCount(key1, zCountRange)
 		assert.Nil(t, err)
 		assert.Equal(t, int64(0), zCountResult.Value())
 
 		// Non-existing key
-		zCountRange = options.NewZCountRangeBuilder()
-		zCountRange.SetMin(options.NewInfScoreBoundBuilder().SetValue(options.NegativeInfinity))
-		zCountRange.SetMax(options.NewInfScoreBoundBuilder().SetValue(options.PositiveInfinity))
+		zCountRange = options.NewZCountRangeBuilder(
+			options.NewInfScoreBoundBuilder().SetValue(options.NegativeInfinity),
+			options.NewInfScoreBoundBuilder().SetValue(options.PositiveInfinity),
+		)
 		zCountResult, err = client.ZCount("non_existing_key", zCountRange)
 		assert.Nil(t, err)
 		assert.Equal(t, int64(0), zCountResult.Value())
@@ -4548,9 +4554,10 @@ func (suite *GlideTestSuite) TestZCount() {
 		// Key exists, but it is not a set
 		setResult, _ := client.Set(key2, "value")
 		assert.Equal(t, setResult.Value(), "OK")
-		zCountRange = options.NewZCountRangeBuilder()
-		zCountRange.SetMin(options.NewInfScoreBoundBuilder().SetValue(options.NegativeInfinity))
-		zCountRange.SetMax(options.NewInfScoreBoundBuilder().SetValue(options.PositiveInfinity))
+		zCountRange = options.NewZCountRangeBuilder(
+			options.NewInfScoreBoundBuilder().SetValue(options.NegativeInfinity),
+			options.NewInfScoreBoundBuilder().SetValue(options.PositiveInfinity),
+		)
 		_, err = client.ZCount(key2, zCountRange)
 		assert.NotNil(t, err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)

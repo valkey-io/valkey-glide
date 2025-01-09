@@ -82,18 +82,9 @@ type ZCountRange struct {
 }
 
 // Create a new Zcount range.
-func NewZCountRangeBuilder() *ZCountRange {
-	return &ZCountRange{}
-}
-
-// Set the minimum value for the Zcount command range.
-func (zCountRange *ZCountRange) SetMin(min ScoreRange) *ZCountRange {
+func NewZCountRangeBuilder(min ScoreRange, max ScoreRange) *ZCountRange {
+	zCountRange := &ZCountRange{}
 	zCountRange.min = min
-	return zCountRange
-}
-
-// Set the maximum value for the Zcount command range.
-func (zCountRange *ZCountRange) SetMax(max ScoreRange) *ZCountRange {
 	zCountRange.max = max
 	return zCountRange
 }
