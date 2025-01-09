@@ -22,21 +22,22 @@ type RangeByIndex struct {
 
 // Queries a range of elements from a sorted set by theirs score.
 type RangeByScore struct {
-	start, end boundary
+	start, end scoreBoundary
 	reverse    bool
 	Limit      *Limit
 }
 
 // Queries a range of elements from a sorted set by theirs lexicographical order.
 type RangeByLex struct {
-	start, end boundary
+	start, end lexBoundary
 	reverse    bool
 	Limit      *Limit
 }
 
 type (
-	InfBoundary string
-	boundary    string
+	InfBoundary   string
+	scoreBoundary string
+	lexBoundary   string
 )
 
 const (
@@ -47,34 +48,34 @@ const (
 )
 
 // Create a new inclusive score boundary.
-func NewInclusiveScoreBoundary(bound float64) boundary {
-	return boundary(utils.FloatToString(bound))
+func NewInclusiveScoreBoundary(bound float64) scoreBoundary {
+	return scoreBoundary(utils.FloatToString(bound))
 }
 
 // Create a new score boundary.
-func NewScoreBoundary(bound float64, isInclusive bool) boundary {
+func NewScoreBoundary(bound float64, isInclusive bool) scoreBoundary {
 	if !isInclusive {
-		return boundary("(" + utils.FloatToString(bound))
+		return scoreBoundary("(" + utils.FloatToString(bound))
 	}
-	return boundary(utils.FloatToString(bound))
+	return scoreBoundary(utils.FloatToString(bound))
 }
 
 // Create a new score boundary defined by an infinity.
-func NewInfiniteScoreBoundary(bound InfBoundary) boundary {
-	return boundary(string(bound) + "inf")
+func NewInfiniteScoreBoundary(bound InfBoundary) scoreBoundary {
+	return scoreBoundary(string(bound) + "inf")
 }
 
 // Create a new lex boundary.
-func NewLexBoundary(bound string, isInclusive bool) boundary {
+func NewLexBoundary(bound string, isInclusive bool) lexBoundary {
 	if !isInclusive {
-		return boundary("(" + bound)
+		return lexBoundary("(" + bound)
 	}
-	return boundary("[" + bound)
+	return lexBoundary("[" + bound)
 }
 
 // Create a new lex boundary defined by an infinity.
-func NewInfiniteLexBoundary(bound InfBoundary) boundary {
-	return boundary(string(bound))
+func NewInfiniteLexBoundary(bound InfBoundary) lexBoundary {
+	return lexBoundary(string(bound))
 }
 
 // TODO re-use limit from `SORT` https://github.com/valkey-io/valkey-glide/pull/2888
@@ -123,7 +124,7 @@ func (rbi *RangeByIndex) ToArgs() []string {
 //
 //	start - The start score of the range.
 //	end   - The end score of the range.
-func NewRangeByScoreQuery(start boundary, end boundary) *RangeByScore {
+func NewRangeByScoreQuery(start scoreBoundary, end scoreBoundary) *RangeByScore {
 	return &RangeByScore{start, end, false, nil}
 }
 
@@ -157,7 +158,7 @@ func (rbs *RangeByScore) ToArgs() []string {
 //
 //	start - The start lex of the range.
 //	end   - The end lex of the range.
-func NewRangeByLexQuery(start boundary, end boundary) *RangeByLex {
+func NewRangeByLexQuery(start lexBoundary, end lexBoundary) *RangeByLex {
 	return &RangeByLex{start, end, false, nil}
 }
 
