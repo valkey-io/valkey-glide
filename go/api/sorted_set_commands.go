@@ -263,19 +263,31 @@ type SortedSetCommands interface {
 	// [blocking commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
 	BZPopMin(keys []string, timeoutSecs float64) (Result[KeyWithMemberAndScore], error)
 
-	// Returns the number of members in the sorted set stored at `key` with scores between `minScore` and `maxScore`.
+	// Returns the number of members in the sorted set stored at `key` with scores between `min` and `max` score.
 	//
 	// See [valkey.io] for details.
 	//
 	// Parameters:
 	//  key - The key of the set.
-	//  minScore - The minimum score to count from. Can be positive/negative infinity, or specific score and inclusivity.
-	//  maxScore - The maximum score to count up to. Can be positive/negative infinity, or specific score and inclusivity.
+	//	rangeOptions - Contains `min` and `max` score. `min` contains the minimum score to count from.
+	//  	`max` contains the maximum score to count up to. Can be positive/negative infinity, or
+	//		specific score and inclusivity.
 	//
 	// Return value:
-	// Result[int64] - The number of members in the specified score range.
+	// 	Result[int64] - The number of members in the specified score range.
 	//
 	// Example:
+	//  key1 := uuid.NewString()
+	//  membersScores := map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0 }
+	//  zAddResult, err := client.ZAdd(key1, membersScores)
+	//  zCountRange := options.NewZCountRangeBuilder()
+	//  zCountRange.SetMin(options.NewInfScoreBoundBuilder().SetValue(options.NegativeInfinity))
+	//  zCountRange.SetMax(options.NewInfScoreBoundBuilder().SetValue(options.PositiveInfinity))
+	//  zCountResult, err := client.ZCount(key1, zCountRange)
+	//  if err!= nil {
+	//     // Print err
+	//  }
+	//  fmt.Println(zCountResult.Value()) // Output: 3
 	//
 	// [valkey.io]: https://valkey.io/commands/zcount/
 	ZCount(key string, rangeOptions *options.ZCountRange) (Result[int64], error)

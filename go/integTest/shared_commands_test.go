@@ -4488,7 +4488,7 @@ func (suite *GlideTestSuite) TestPersist() {
 func (suite *GlideTestSuite) TestZCount() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key1 := uuid.NewString()
-		//		key2 := uuid.NewString()
+		key2 := uuid.NewString()
 		membersScores := map[string]float64{
 			"one":   1.0,
 			"two":   2.0,
@@ -4499,45 +4499,60 @@ func (suite *GlideTestSuite) TestZCount() {
 		assert.Nil(t, err)
 		assert.Equal(t, int64(3), res1.Value())
 
+		// In range negative to positive infinity.
 		zCountRange := options.NewZCountRangeBuilder()
 		zCountRange.SetMin(options.NewInfScoreBoundBuilder().SetValue(options.NegativeInfinity))
 		zCountRange.SetMax(options.NewInfScoreBoundBuilder().SetValue(options.PositiveInfinity))
 		zCountResult, err := client.ZCount(key1, zCountRange)
 		assert.Nil(t, err)
 		assert.Equal(t, int64(3), zCountResult.Value())
+		zCountRange = options.NewZCountRangeBuilder()
+		zCountRange.SetMin(options.NewScoreBoundaryBuilder().SetBound(math.Inf(-1)))
+		zCountRange.SetMax(options.NewScoreBoundaryBuilder().SetBound(math.Inf(+1)))
+		zCountResult, err = client.ZCount(key1, zCountRange)
+		assert.Nil(t, err)
+		assert.Equal(t, int64(3), zCountResult.Value())
+
+		// In range 1 (exclusive) to 3 (inclusive)
+		zCountRange = options.NewZCountRangeBuilder()
+		zCountRange.SetMin(options.NewScoreBoundaryBuilder().SetBound(1).SetIsInclusive(false))
+		zCountRange.SetMax(options.NewScoreBoundaryBuilder().SetBound(3).SetIsInclusive(true))
+		zCountResult, err = client.ZCount(key1, zCountRange)
+		assert.Nil(t, err)
+		assert.Equal(t, int64(2), zCountResult.Value())
+
+		// In range negative infinity to 3 (inclusive)
+		zCountRange = options.NewZCountRangeBuilder()
+		zCountRange.SetMin(options.NewInfScoreBoundBuilder().SetValue(options.NegativeInfinity))
+		zCountRange.SetMax(options.NewScoreBoundaryBuilder().SetBound(3).SetIsInclusive(true))
+		zCountResult, err = client.ZCount(key1, zCountRange)
+		assert.Nil(t, err)
+		assert.Equal(t, int64(3), zCountResult.Value())
+
+		// Incorrect range start > end
+		zCountRange = options.NewZCountRangeBuilder()
+		zCountRange.SetMin(options.NewInfScoreBoundBuilder().SetValue(options.PositiveInfinity))
+		zCountRange.SetMax(options.NewScoreBoundaryBuilder().SetBound(3).SetIsInclusive(true))
+		zCountResult, err = client.ZCount(key1, zCountRange)
+		assert.Nil(t, err)
+		assert.Equal(t, int64(0), zCountResult.Value())
+
+		// Non-existing key
+		zCountRange = options.NewZCountRangeBuilder()
+		zCountRange.SetMin(options.NewInfScoreBoundBuilder().SetValue(options.NegativeInfinity))
+		zCountRange.SetMax(options.NewInfScoreBoundBuilder().SetValue(options.PositiveInfinity))
+		zCountResult, err = client.ZCount("non_existing_key", zCountRange)
+		assert.Nil(t, err)
+		assert.Equal(t, int64(0), zCountResult.Value())
+
+		// Key exists, but it is not a set
+		setResult, err := client.Set(key2, "value")
+		assert.Equal(t, setResult.Value(), "OK")
+		zCountRange = options.NewZCountRangeBuilder()
+		zCountRange.SetMin(options.NewInfScoreBoundBuilder().SetValue(options.NegativeInfinity))
+		zCountRange.SetMax(options.NewInfScoreBoundBuilder().SetValue(options.PositiveInfinity))
+		zCountResult, err = client.ZCount(key2, zCountRange)
+		assert.NotNil(t, err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
 }
-
-// 		   String key1 = UUID.randomUUID().toString();
-//         String key2 = UUID.randomUUID().toString();
-//         Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
-//         assertEquals(3, client.zadd(key1, membersScores).get());
-
-//         // In range negative to positive infinity.
-//         assertEquals(3, client.zcount(key1, NEGATIVE_INFINITY, POSITIVE_INFINITY).get());
-/////////----Done
-//         assertEquals(
-//                 3,
-//                 client
-//                         .zcount(
-//                                 key1,
-//                                 new ScoreBoundary(Double.NEGATIVE_INFINITY),
-//                                 new ScoreBoundary(Double.POSITIVE_INFINITY))
-//                         .get());
-//         // In range 1 (exclusive) to 3 (inclusive)
-//         assertEquals(
-//                 2, client.zcount(key1, new ScoreBoundary(1, false), new ScoreBoundary(3, true)).get());
-//         // In range negative infinity to 3 (inclusive)
-//         assertEquals(3, client.zcount(key1, NEGATIVE_INFINITY, new ScoreBoundary(3, true)).get());
-//         // Incorrect range start > end
-//         assertEquals(0, client.zcount(key1, POSITIVE_INFINITY, new ScoreBoundary(3, true)).get());
-//         // Non-existing key
-//         assertEquals(0, client.zcount("non_existing_key", NEGATIVE_INFINITY, POSITIVE_INFINITY).get());
-
-//         // Key exists, but it is not a set
-//         assertEquals(OK, client.set(key2, "value").get());
-//         ExecutionException executionException =
-//                 assertThrows(
-//                         ExecutionException.class,
-//                         () -> client.zcount(key2, NEGATIVE_INFINITY, POSITIVE_INFINITY).get());
-//         assertInstanceOf(RequestException.class, executionException.getCause());

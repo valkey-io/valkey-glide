@@ -44,7 +44,7 @@ type ScoreBoundary struct {
 }
 
 func NewScoreBoundaryBuilder() *ScoreBoundary {
-	return &ScoreBoundary{}
+	return &ScoreBoundary{isInclusive: true}
 }
 
 func (scoreBoundary *ScoreBoundary) SetBound(bound float64) *ScoreBoundary {
