@@ -4928,12 +4928,12 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_ExternalWeights() {
 		key := "{listKey}" + uuid.New().String()
 		client.LPush(key, []string{"item1", "item2", "item3"})
 
-		client.Set("weight_item1", "3")
-		client.Set("weight_item2", "1")
-		client.Set("weight_item3", "2")
+		client.Set("{weight}_item1", "3")
+		client.Set("{weight}_item2", "1")
+		client.Set("{weight}_item3", "2")
 
 		options := options.NewSortOptions().
-			SetByPattern("weight_*").
+			SetByPattern("{weight}_*").
 			SetOrderBy(options.ASC).
 			SetIsAlpha(false)
 
@@ -4958,15 +4958,15 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_GetPatterns() {
 		key := "{listKey}" + uuid.New().String()
 		client.LPush(key, []string{"item1", "item2", "item3"})
 
-		client.Set("object_item1", "Object_1")
-		client.Set("object_item2", "Object_2")
-		client.Set("object_item3", "Object_3")
+		client.Set("{object}_item1", "Object_1")
+		client.Set("{object}_item2", "Object_2")
+		client.Set("{object}_item3", "Object_3")
 
 		options := options.NewSortOptions().
-			SetByPattern("weight_*").
+			SetByPattern("{weight}_*").
 			SetOrderBy(options.ASC).
 			SetIsAlpha(false).
-			AddGetPattern("object_*")
+			AddGetPattern("{object}_*")
 
 		sortResult, err := client.SortReadOnlyWithOptions(key, options)
 
@@ -4991,19 +4991,19 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_SuccessfulSortByWeightA
 		key := "{listKey}" + uuid.New().String()
 		client.LPush(key, []string{"item1", "item2", "item3"})
 
-		client.Set("weight_item1", "10")
-		client.Set("weight_item2", "5")
-		client.Set("weight_item3", "15")
+		client.Set("{weight}_item1", "10")
+		client.Set("{weight}_item2", "5")
+		client.Set("{weight}_item3", "15")
 
-		client.Set("object_item1", "Object 1")
-		client.Set("object_item2", "Object 2")
-		client.Set("object_item3", "Object 3")
+		client.Set("{object}_item1", "Object 1")
+		client.Set("{object}_item2", "Object 2")
+		client.Set("{object}_item3", "Object 3")
 
 		options := options.NewSortOptions().
 			SetOrderBy(options.ASC).
 			SetIsAlpha(false).
-			SetByPattern("weight_*").
-			AddGetPattern("object_*").
+			SetByPattern("{weight}_*").
+			AddGetPattern("{object}_*").
 			AddGetPattern("#")
 
 		sortResult, err := client.SortReadOnlyWithOptions(key, options)
@@ -5021,15 +5021,15 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_SuccessfulSortByWeightA
 
 		assert.Equal(suite.T(), resultList, sortResult)
 
-		objectItem2, err := client.Get("object_item2")
+		objectItem2, err := client.Get("{object}_item2")
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "Object 2", objectItem2.Value())
 
-		objectItem1, err := client.Get("object_item1")
+		objectItem1, err := client.Get("{object}_item1")
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "Object 1", objectItem1.Value())
 
-		objectItem3, err := client.Get("object_item3")
+		objectItem3, err := client.Get("{object}_item3")
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "Object 3", objectItem3.Value())
 
