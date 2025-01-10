@@ -4567,7 +4567,7 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 			[][]string{{field1, "foo"}, {field2, "bar"}},
 			options.NewXAddOptions().SetDontMakeNewStream(),
 		)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.True(t, xAddResult.IsNil())
 
 		xAddResult, err = client.XAddWithOptions(
@@ -4575,18 +4575,18 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 			[][]string{{field1, "foo1"}, {field2, "bar1"}},
 			options.NewXAddOptions().SetId("0-1"),
 		)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, xAddResult.Value(), "0-1")
 
 		xAddResult, err = client.XAdd(
 			key1,
 			[][]string{{field1, "foo2"}, {field2, "bar2"}},
 		)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.False(t, xAddResult.IsNil())
 
 		xLenResult, err := client.XLen(key1)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, xLenResult.Value(), int64(2))
 
 		// Trim the first entry.
@@ -4598,10 +4598,10 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 			),
 		)
 		assert.NotNil(t, xAddResult.Value())
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		id := xAddResult.Value()
 		xLenResult, err = client.XLen(key1)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, xLenResult.Value(), int64(2))
 
 		// Trim the second entry.
@@ -4612,10 +4612,10 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 				options.NewXTrimOptionsWithMinId(id).SetExactTrimming(),
 			),
 		)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.NotNil(t, xAddResult.Value())
 		xLenResult, err = client.XLen(key1)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, xLenResult.Value(), int64(2))
 
 		// Test xtrim to remove 1 element
@@ -4623,10 +4623,10 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 			key1,
 			options.NewXTrimOptionsWithMaxLen(1).SetExactTrimming(),
 		)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, xTrimResult.Value(), int64(1))
 		xLenResult, err = client.XLen(key1)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, xLenResult.Value(), int64(1))
 
 		// Key does not exist - returns 0
@@ -4634,15 +4634,15 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 			key2,
 			options.NewXTrimOptionsWithMaxLen(1).SetExactTrimming(),
 		)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, xTrimResult.Value(), int64(0))
 		xLenResult, err = client.XLen(key2)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, xLenResult.Value(), int64(0))
 
 		// Throw Exception: Key exists - but it is not a stream
 		setResult, err := client.Set(key2, "xtrimtest")
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, setResult.Value(), "OK")
 		_, err = client.XTrim(key2, options.NewXTrimOptionsWithMinId("0-1"))
 		assert.NotNil(t, err)
