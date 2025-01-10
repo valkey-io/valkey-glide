@@ -263,66 +263,10 @@ type SortedSetCommands interface {
 	// [blocking commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
 	BZPopMin(keys []string, timeoutSecs float64) (Result[KeyWithMemberAndScore], error)
 
-	// Returns the specified range of elements in the sorted set stored at `key`.
-	// `ZRANGE` can perform different types of range queries: by index (rank), by the score, or by lexicographical order.
-	//
-	// To get the elements with their scores, see [ZRangeWithScores].
-	//
-	// See [valkey.io] for more details.
-	//
-	// Parameters:
-	//  key - The key of the sorted set.
-	//  rangeQuery - The range query object representing the type of range query to perform.
-	//    - For range queries by index (rank), use [RangeByIndex].
-	//    - For range queries by lexicographical order, use [RangeByLex].
-	//    - For range queries by score, use [RangeByScore].
-	//
-	// Return value:
-	//  An array of elements within the specified range.
-	//  If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty array.
-	//
-	// Example:
-	//  // Retrieve all members of a sorted set in ascending order
-	//  result, err := client.ZRange("my_sorted_set", options.NewRangeByIndexQuery(0, -1))
-	//
-	//  // Retrieve members within a score range in descending order
-	// query := options.NewRangeByScoreQuery(options.NewScoreBoundary(3, false),
-	// options.NewInfiniteScoreBoundary(options.NegativeInfinity)).
-	//    .SetReverse()
-	//  result, err := client.ZRange("my_sorted_set", query)
-	//  // `result` contains members which have scores within the range of negative infinity to 3, in descending order
-	//
-	// [valkey.io]: https://valkey.io/commands/zrange/
 	ZRange(key string, rangeQuery options.ZRangeQuery) ([]Result[string], error)
 
-	// Returns the specified range of elements with their scores in the sorted set stored at `key`.
-	// `ZRANGE` can perform different types of range queries: by index (rank), by the score, or by lexicographical order.
-	//
-	// See [valkey.io] for more details.
-	//
-	// Parameters:
-	//  key - The key of the sorted set.
-	//  rangeQuery - The range query object representing the type of range query to perform.
-	//    - For range queries by index (rank), use [RangeByIndex].
-	//    - For range queries by score, use [RangeByScore].
-	//
-	// Return value:
-	//  A map of elements and their scores within the specified range.
-	//  If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty map.
-	//
-	// Example:
-	//  // Retrieve all members of a sorted set in ascending order
-	//  result, err := client.ZRangeWithScores("my_sorted_set", options.NewRangeByIndexQuery(0, -1))
-	//
-	//  // Retrieve members within a score range in descending order
-	// query := options.NewRangeByScoreQuery(options.NewScoreBoundary(3, false),
-	// options.NewInfiniteScoreBoundary(options.NegativeInfinity)).
-	//    SetReverse()
-	//  result, err := client.ZRangeWithScores("my_sorted_set", query)
-	//  // `result` contains members with scores within the range of negative infinity to 3, in descending order
-	//
-	// [valkey.io]: https://valkey.io/commands/zrange/
 	ZRangeWithScores(key string, rangeQuery options.ZRangeQueryWithScores) (map[Result[string]]Result[float64], error)
+
 	// Returns the rank of `member` in the sorted set stored at `key`, with
 	// scores ordered from low to high, starting from `0`.
 	// To get the rank of `member` with its score, see [ZRankWithScore].
