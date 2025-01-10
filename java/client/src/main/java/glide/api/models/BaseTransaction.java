@@ -1648,7 +1648,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Reads the configuration parameters of the running server.
+     * Reads the configuration parameters of the running server.<br>
+     * Starting from server version 7, command supports multiple parameters.
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
@@ -1665,7 +1666,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Sets configuration parameters to the specified values.
+     * Sets configuration parameters to the specified values.<br>
+     * Starting from server version 7, command supports multiple parameters.
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.

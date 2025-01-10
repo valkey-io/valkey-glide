@@ -34,6 +34,7 @@ import {
     SlotKeyTypes,
     SortOrder,
     convertRecordToGlideRecord,
+    convertGlideRecordToRecord,
 } from "..";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import { runBaseTests } from "./SharedTests";
@@ -323,6 +324,27 @@ describe("GlideClusterClient", () => {
                 "OK",
                 convertRecordToGlideRecord({ timeout: "1000" }),
             ]);
+
+            if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                const transaction = new ClusterTransaction()
+                    .configSet({
+                        timeout: "2000",
+                        "cluster-node-timeout": "16000",
+                    })
+                    .configGet(["timeout", "cluster-node-timeout"]);
+                const result = await client.exec(transaction);
+                const convertedResult = [
+                    result[0],
+                    convertGlideRecordToRecord(result[1]),
+                ];
+                expect(convertedResult).toEqual([
+                    "OK",
+                    {
+                        timeout: "2000",
+                        "cluster-node-timeout": "16000",
+                    },
+                ]);
+            }
         },
         TIMEOUT,
     );
