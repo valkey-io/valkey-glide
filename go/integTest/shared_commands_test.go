@@ -4491,25 +4491,18 @@ func (suite *GlideTestSuite) TestObjectFreq() {
 		value := "hello"
 		t := suite.T()
 		suite.verifyOK(client.Set(key, value))
-
-		resultDump, err := client.Dump(key)
+		keyValueMap := map[string]string{
+			"maxmemory-policy": "noeviction",
+		}
+		suite.verifyOK(client.ConfigSet(keyValueMap))
+		resultGet, err := client.Get(key)
 		assert.Nil(t, err)
-		assert.NotNil(t, resultDump)
-
-		// Test 1: Check ObjectFreq command
-		//to do config set maxmemory lfu
-		deletedCount, err := client.Del([]string{key})
+		assert.Equal(t, value, resultGet.Value())
+		resultGet2, err := client.Get(key)
 		assert.Nil(t, err)
-		assert.Equal(t, int64(1), deletedCount.Value())
-		optsReplace := api.NewRestoreOptionsBuilder().SetReplace()
-		suite.verifyOK(client.RestoreWithOptions(key, int64(0), resultDump.Value(), optsReplace))
-		resultGetRestoreKey, err := client.Get(key)
-		assert.Nil(t, err)
-		assert.Equal(t, value, resultGetRestoreKey.Value())
-
-		//Object Freq
-		resultObjectFreq := client.ObjectFreq(key)
-		assert.Equal(t, int64(255), resultObjectFreq.Value())
+		assert.Equal(t, value, resultGet2.Value())
+		resultObjFreq, err := client.ObjectFreq(key)
+		assert.Greater(t, uint64(2), resultObjFreq)
 	})
 }
 
@@ -4517,27 +4510,19 @@ func (suite *GlideTestSuite) TestObjectIdleTime() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := "testKey1_" + uuid.New().String()
 		value := "hello"
+		sleepSec := uint64(5)
 		t := suite.T()
 		suite.verifyOK(client.Set(key, value))
-
-		resultDump, err := client.Dump(key)
+		keyValueMap := map[string]string{
+			"maxmemory-policy": "noeviction",
+		}
+		suite.verifyOK(client.ConfigSet(keyValueMap))
+		resultGet, err := client.Get(key)
 		assert.Nil(t, err)
-		assert.NotNil(t, resultDump)
-
-		// Test 1: Check ObjectFreq command
-		//to do config set maxmemory lfu
-		deletedCount, err := client.Del([]string{key})
-		assert.Nil(t, err)
-		assert.Equal(t, int64(1), deletedCount.Value())
-		optsReplace := api.NewRestoreOptionsBuilder().SetReplace()
-		suite.verifyOK(client.RestoreWithOptions(key, int64(0), resultDump.Value(), optsReplace))
-		resultGetRestoreKey, err := client.Get(key)
-		assert.Nil(t, err)
-		assert.Equal(t, value, resultGetRestoreKey.Value())
-
-		//Object Freq
-		resultObjectFreq := client.ObjectIdleTime(key)
-		assert.Equal(t, int64(255), resultObjectFreq.Value())
+		assert.Equal(t, value, resultGet.Value())
+		time.Sleep(time.Duration(sleepSec) * time.Second) // Sleep for 5 seconds
+		resultIdleTime, err := client.ObjectIdleTime(key)
+		assert.Greater(t, resultIdleTime, sleepSec)
 	})
 }
 
@@ -4547,24 +4532,12 @@ func (suite *GlideTestSuite) TestObjectRefCount() {
 		value := "hello"
 		t := suite.T()
 		suite.verifyOK(client.Set(key, value))
-
-		resultDump, err := client.Dump(key)
-		assert.Nil(t, err)
-		assert.NotNil(t, resultDump)
-
-		// Test 1: Check ObjectFreq command
-		//to do config set maxmemory lfu
-		deletedCount, err := client.Del([]string{key})
-		assert.Nil(t, err)
-		assert.Equal(t, int64(1), deletedCount.Value())
-		optsReplace := api.NewRestoreOptionsBuilder().SetReplace()
-		suite.verifyOK(client.RestoreWithOptions(key, int64(0), resultDump.Value(), optsReplace))
 		resultGetRestoreKey, err := client.Get(key)
 		assert.Nil(t, err)
 		assert.Equal(t, value, resultGetRestoreKey.Value())
 
 		//Object Freq
-		resultObjectFreq := client.ObjectRefCount(key)
-		assert.Equal(t, int64(255), resultObjectFreq.Value())
+		resultObjectRefCount := client.ObjectRefCount(key)
+		assert.Equal(t, int64(1), resultObjectRefCount.Value())
 	})
 }
