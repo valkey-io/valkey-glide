@@ -4456,3 +4456,87 @@ func (suite *GlideTestSuite) TestZRem() {
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
 }
+
+func (suite *GlideTestSuite) TestObjectFreq() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := "testKey1_" + uuid.New().String()
+		value := "hello"
+		t := suite.T()
+		suite.verifyOK(client.Set(key, value))
+
+		resultDump, err := client.Dump(key)
+		assert.Nil(t, err)
+		assert.NotNil(t, resultDump)
+
+		// Test 1: Check ObjectFreq command
+		//to do config set maxmemory lfu
+		deletedCount, err := client.Del([]string{key})
+		assert.Nil(t, err)
+		assert.Equal(t, int64(1), deletedCount.Value())
+		optsReplace := api.NewRestoreOptionsBuilder().SetReplace()
+		suite.verifyOK(client.RestoreWithOptions(key, int64(0), resultDump.Value(), optsReplace))
+		resultGetRestoreKey, err := client.Get(key)
+		assert.Nil(t, err)
+		assert.Equal(t, value, resultGetRestoreKey.Value())
+
+		//Object Freq
+		resultObjectFreq := client.ObjectFreq(key)
+		assert.Equal(t, int64(255), resultObjectFreq.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestObjectIdleTime() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := "testKey1_" + uuid.New().String()
+		value := "hello"
+		t := suite.T()
+		suite.verifyOK(client.Set(key, value))
+
+		resultDump, err := client.Dump(key)
+		assert.Nil(t, err)
+		assert.NotNil(t, resultDump)
+
+		// Test 1: Check ObjectFreq command
+		//to do config set maxmemory lfu
+		deletedCount, err := client.Del([]string{key})
+		assert.Nil(t, err)
+		assert.Equal(t, int64(1), deletedCount.Value())
+		optsReplace := api.NewRestoreOptionsBuilder().SetReplace()
+		suite.verifyOK(client.RestoreWithOptions(key, int64(0), resultDump.Value(), optsReplace))
+		resultGetRestoreKey, err := client.Get(key)
+		assert.Nil(t, err)
+		assert.Equal(t, value, resultGetRestoreKey.Value())
+
+		//Object Freq
+		resultObjectFreq := client.ObjectIdleTime(key)
+		assert.Equal(t, int64(255), resultObjectFreq.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestObjectRefCount() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := "testKey1_" + uuid.New().String()
+		value := "hello"
+		t := suite.T()
+		suite.verifyOK(client.Set(key, value))
+
+		resultDump, err := client.Dump(key)
+		assert.Nil(t, err)
+		assert.NotNil(t, resultDump)
+
+		// Test 1: Check ObjectFreq command
+		//to do config set maxmemory lfu
+		deletedCount, err := client.Del([]string{key})
+		assert.Nil(t, err)
+		assert.Equal(t, int64(1), deletedCount.Value())
+		optsReplace := api.NewRestoreOptionsBuilder().SetReplace()
+		suite.verifyOK(client.RestoreWithOptions(key, int64(0), resultDump.Value(), optsReplace))
+		resultGetRestoreKey, err := client.Get(key)
+		assert.Nil(t, err)
+		assert.Equal(t, value, resultGetRestoreKey.Value())
+
+		//Object Freq
+		resultObjectFreq := client.ObjectRefCount(key)
+		assert.Equal(t, int64(255), resultObjectFreq.Value())
+	})
+}
