@@ -1905,3 +1905,37 @@ func (client *baseClient) ZScanWithOptions(
 	}
 	return handleScanResponse(result)
 }
+
+// Returns stream message summary information for pending messages matching a given range of IDs.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the stream.
+//	group - The consumer group name.
+//
+// Return value:
+// An XPendingSummary struct that includes a summary with the following fields:
+//
+//	NumOfMessages: The total number of pending messages for this consumer group.
+//	StartId: The smallest ID among the pending messages or nil if no pending messages exist.
+//	EndId: The greatest ID among the pending messages or nil if no pending messages exists.
+//	GroupConsumers: An array of ConsumerPendingMessages with the following fields:
+//	  ConsumerName: The name of the consumer.
+//	  MessageCount: The number of pending messages for this consumer.
+//
+// @example
+//
+//	[CREATE EXAMPLE]
+//	result, err := client.XPending("myStream", "myGroup")
+//
+// [valkey.io]: https://valkey.io/commands/xpending/
+func (client *baseClient) XPending(key string, group string) (XPendingSummary, error) {
+	result, err := client.executeCommand(C.XPending, []string{key, group})
+	if err != nil {
+		return XPendingSummary{}, err
+	}
+
+	return handleXPendingSummaryResponse(result)
+}

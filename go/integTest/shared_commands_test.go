@@ -3,6 +3,7 @@
 package integTest
 
 import (
+	"fmt"
 	"math"
 	"reflect"
 	"strconv"
@@ -5206,5 +5207,76 @@ func (suite *GlideTestSuite) TestZScan() {
 		_, _, err = client.ZScanWithOptions(key1, "-1", opts)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestXPending() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		// TODO: Update tests when XGroupCreate, XGroupCreateConsumer, XReadGroup, XClaim, XClaimJustId and XAck are added to
+		// the Go client.
+		//
+		// This test splits out the cluster and standalone tests into their own functions because we are forced to use
+		// CustomCommands for many stream commands which are not included in the preview Go client. Using a type switch for
+		// each use of CustomCommand would make the tests difficult to read and maintain. These tests can be
+		// collapsed once the native commands are added in a subsequent release.
+
+		execStandalone := func(client *api.GlideClient) {
+			key := uuid.New().String()
+			groupName := "group" + uuid.New().String()
+			zeroStreamId := "0"
+			consumer1 := "consumer-1-" + uuid.New().String()
+			consumer2 := "consumer-2-" + uuid.New().String()
+
+			command := []string{"XGroup", "Create", key, groupName, zeroStreamId, "MKSTREAM"}
+
+			resp, err := client.CustomCommand(command)
+			assert.Nil(suite.T(), err)
+			assert.Equal(suite.T(), "OK", resp.(string))
+
+			command = []string{"XGroup", "CreateConsumer", key, groupName, consumer1}
+			resp, err = client.CustomCommand(command)
+			assert.Nil(suite.T(), err)
+			assert.True(suite.T(), resp.(bool))
+
+			command = []string{"XGroup", "CreateConsumer", key, groupName, consumer2}
+			resp, err = client.CustomCommand(command)
+			assert.Nil(suite.T(), err)
+			assert.True(suite.T(), resp.(bool))
+
+			_, err1 := client.XAdd(key, [][]string{{"field1", "value1"}})
+			assert.Nil(suite.T(), err1)
+			_, err2 := client.XAdd(key, [][]string{{"field2", "value2"}})
+			assert.Nil(suite.T(), err2)
+
+			command = []string{"XReadGroup", "GROUP", groupName, consumer1, "STREAMS", key, ">"}
+			resp, err = client.CustomCommand(command)
+			assert.Nil(suite.T(), err)
+			fmt.Println("XReadGroup Response", resp)
+
+		}
+
+		execCluster := func(client *api.GlideClusterClient) {
+			key := uuid.New().String()
+			// stringkey := uuid.New().String()
+			groupName := "group" + uuid.New().String()
+			zeroStreamId := "0"
+			// consumer1 := "consumer-1-" + uuid.New().String()
+
+			command := []string{"XGroup", "Create", key, groupName, zeroStreamId, "MKSTREAM"}
+
+			resp, err := client.CustomCommand(command)
+			assert.Nil(suite.T(), err)
+			assert.Equal(suite.T(), "OK", resp.Value().(string))
+		}
+
+		assert.Equal(suite.T(), "OK", "OK")
+
+		// create group and consumer for the group
+		switch c := client.(type) {
+		case *api.GlideClient:
+			execStandalone(c)
+		case *api.GlideClusterClient:
+			execCluster(c)
+		}
 	})
 }

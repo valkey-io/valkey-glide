@@ -86,7 +86,7 @@ unit-test:
 	| tee >(go tool test2json -t -p github.com/valkey-io/valkey-glide/go/glide/utils | go-test-report -o reports/unit-tests.html -t unit-test > /dev/null)
 
 # integration tests - run subtask with skipping modules tests
-integ-test: export TEST_FILTER = -skip TestGlideTestSuite/TestModule $(if $(test-filter), -run $(test-filter))
+integ-test: export TEST_FILTER = -skip TestGlideTestSuite/TestModule $(if $(test-filter), -testify.m $(test-filter))
 integ-test: __it
 
 # modules tests - run substask with default filter

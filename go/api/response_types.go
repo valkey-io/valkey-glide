@@ -146,3 +146,38 @@ func CreateEmptyClusterValue() ClusterValue[interface{}] {
 		value: Result[interface{}]{val: empty, isNil: true},
 	}
 }
+
+type XPendingSummary struct {
+	NumOfMessages    int64
+	StartId          Result[string]
+	EndId            Result[string]
+	ConsumerMessages Result[[]ConsumerPendingMessages]
+}
+
+type ConsumerPendingMessages struct {
+	ConsumerName string
+	MessageCount int64
+}
+
+type XPendingDetail struct {
+	Id            string
+	ConsumerName  string
+	IdleTime      int64
+	DeliveryCount int64
+}
+
+func CreateXPendingSummary() *XPendingSummary {
+	return &XPendingSummary{0, CreateNilStringResult(), CreateNilStringResult(), CreateNilConsumerPendingMessagesResult()}
+}
+
+func CreateNilXPendingSummary() XPendingSummary {
+	return XPendingSummary{0, CreateNilStringResult(), CreateNilStringResult(), CreateNilConsumerPendingMessagesResult()}
+}
+
+func CreateConsumerPendingMessagesResult(pendingMessages []interface{}) Result[[]ConsumerPendingMessages] {
+	return Result[[]ConsumerPendingMessages]{val: make([]ConsumerPendingMessages, 0, 0), isNil: true}
+}
+
+func CreateNilConsumerPendingMessagesResult() Result[[]ConsumerPendingMessages] {
+	return Result[[]ConsumerPendingMessages]{val: make([]ConsumerPendingMessages, 0, 0), isNil: true}
+}
