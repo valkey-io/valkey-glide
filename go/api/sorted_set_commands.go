@@ -274,9 +274,9 @@ type SortedSetCommands interface {
 	//   member - The member to get the rank of.
 	//
 	// Return value:
-	//   The rank of `member` in the sorted set.<br>
+	//   The rank of `member` in the sorted set.
 	//   If `key` doesn't exist, or if `member` is not present in the set,
-	//   `null` will be returned.
+	//   `nil` will be returned.
 	//
 	// Example:
 	//   res, err := client.ZRank("mySortedSet", "member1")
@@ -285,7 +285,7 @@ type SortedSetCommands interface {
 	//   res2, err := client.ZRank("mySortedSet", "non-existing-member")
 	//   if res2.IsNil() {
 	//     fmt.Println("Member not found")
-	//   } // Output: Member not found
+	//   }
 	//
 	// [valkey.io]: https://valkey.io/commands/zrank/
 	ZRank(key string, member string) (Result[int64], error)
@@ -301,6 +301,8 @@ type SortedSetCommands interface {
 	//
 	// Return value:
 	//   A tuple containing the rank of `member` and its score.
+	//   If `key` doesn't exist, or if `member` is not present in the set,
+	//   `nil` will be returned.
 	//
 	// Example:
 	//   resRank, resScore, err := client.ZRankWithScore("mySortedSet", "member1")
@@ -310,7 +312,7 @@ type SortedSetCommands interface {
 	//   res2Rank, res2Score, err := client.ZRankWithScore("mySortedSet", "non-existing-member")
 	//   if res2Rank.IsNil() {
 	//     fmt.Println("Member not found")
-	//   } // Output: Member not found
+	//   }
 	//
 	// [valkey.io]: https://valkey.io/commands/zrank/
 	ZRankWithScore(key string, member string) (Result[int64], Result[float64], error)
@@ -329,7 +331,7 @@ type SortedSetCommands interface {
 	//   The rank of `member` in the sorted set, where ranks are ordered from high to
 	//   low based on scores.
 	//   If `key` doesn't exist, or if `member` is not present in the set,
-	//   `null` will be returned.
+	//   `nil` will be returned.
 	//
 	// Example:
 	//   res, err := client.ZRevRank("mySortedSet", "member2")
@@ -338,14 +340,14 @@ type SortedSetCommands interface {
 	//   res2, err := client.ZRevRank("mySortedSet", "non-existing-member")
 	//   if res2.IsNil() {
 	//     fmt.Println("Member not found")
-	//   } // Output: Member not found
+	//   }
 	//
 	// [valkey.io]: https://valkey.io/commands/zrevrank/
 	ZRevRank(key string, member string) (Result[int64], error)
 
 	// Returns the rank of `member` in the sorted set stored at `key`, where
 	// scores are ordered from the highest to lowest, starting from `0`.
-	// To get the rank of `member` with its score, see [ZRevRankWithScore]	.
+	// To get the rank of `member` with its score, see [ZRevRankWithScore].
 	//
 	// See [valkey.io] for details.
 	//
@@ -355,6 +357,8 @@ type SortedSetCommands interface {
 	//
 	// Return value:
 	//   A tuple containing the rank of `member` and its score.
+	//   If `key` doesn't exist, or if `member` is not present in the set,
+	//   `nil` will be returned.s
 	//
 	// Example:
 	//   resRank, resScore, err := client.ZRevRankWithScore("mySortedSet", "member2")
@@ -364,7 +368,7 @@ type SortedSetCommands interface {
 	//   res2Rank, res2Score, err := client.ZRevRankWithScore("mySortedSet", "non-existing-member")
 	//   if res2Rank.IsNil() {
 	//     fmt.Println("Member not found")
-	//   } // Output: Member not found
+	//   }
 	//
 	// [valkey.io]: https://valkey.io/commands/zrevrank/
 	ZRevRankWithScore(key string, member string) (Result[int64], Result[float64], error)
