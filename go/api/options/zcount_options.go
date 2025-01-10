@@ -75,10 +75,7 @@ type ZCountRange struct {
 
 // Create a new Zcount range.
 func NewZCountRangeBuilder(min ScoreRange, max ScoreRange) *ZCountRange {
-	zCountRange := &ZCountRange{}
-	zCountRange.min = min
-	zCountRange.max = max
-	return zCountRange
+	return &ZCountRange{min, max}
 }
 
 func (zCountRange *ZCountRange) ToArgs() ([]string, error) {
