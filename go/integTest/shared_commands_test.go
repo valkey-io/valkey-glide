@@ -4855,7 +4855,7 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_ExternalWeights() {
 		if suite.serverVersion < "7.0.0" {
 			suite.T().Skip("This feature is added in version 7")
 		}
-		key := uuid.New().String()
+		key := "{listKey}" + uuid.New().String()
 		client.LPush(key, []string{"item1", "item2", "item3"})
 
 		client.Set("weight_item1", "3")
@@ -4885,7 +4885,7 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_GetPatterns() {
 		if suite.serverVersion < "7.0.0" {
 			suite.T().Skip("This feature is added in version 7")
 		}
-		key := uuid.New().String()
+		key := "{listKey}" + uuid.New().String()
 		client.LPush(key, []string{"item1", "item2", "item3"})
 
 		client.Set("object_item1", "Object_1")
@@ -4918,7 +4918,7 @@ func (suite *GlideTestSuite) TestSortReadOnlyWithOptions_SuccessfulSortByWeightA
 		if suite.serverVersion < "7.0.0" {
 			suite.T().Skip("This feature is added in version 7")
 		}
-		key := uuid.New().String()
+		key := "{listKey}" + uuid.New().String()
 		client.LPush(key, []string{"item1", "item2", "item3"})
 
 		client.Set("weight_item1", "10")
