@@ -4775,7 +4775,7 @@ func (suite *GlideTestSuite) TestZRevRank() {
 }
 
 func (suite *GlideTestSuite) TestSortWithOptions_ExternalWeights() {
-	suite.SkipIfServerVersionLowerThanBy("8.0.0")
+	suite.SkipIfServerVersionLowerThanBy("8.1.0")
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		client.LPush(key, []string{"item1", "item2", "item3"})
@@ -4803,7 +4803,7 @@ func (suite *GlideTestSuite) TestSortWithOptions_ExternalWeights() {
 }
 
 func (suite *GlideTestSuite) TestSortWithOptions_GetPatterns() {
-	suite.SkipIfServerVersionLowerThanBy("8.0.0")
+	suite.SkipIfServerVersionLowerThanBy("8.1.0")
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		client.LPush(key, []string{"item1", "item2", "item3"})
@@ -4833,7 +4833,7 @@ func (suite *GlideTestSuite) TestSortWithOptions_GetPatterns() {
 }
 
 func (suite *GlideTestSuite) TestSortWithOptions_SuccessfulSortByWeightAndGet() {
-	suite.SkipIfServerVersionLowerThanBy("8.0.0")
+	suite.SkipIfServerVersionLowerThanBy("8.1.0")
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		client.LPush(key, []string{"item1", "item2", "item3"})
@@ -4887,7 +4887,7 @@ func (suite *GlideTestSuite) TestSortWithOptions_SuccessfulSortByWeightAndGet() 
 }
 
 func (suite *GlideTestSuite) TestSortStoreWithOptions_ByPattern() {
-	suite.SkipIfServerVersionLowerThanBy("8.0.0")
+	suite.SkipIfServerVersionLowerThanBy("8.1.0")
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := "{listKey}" + uuid.New().String()
 		sortedKey := "{listKey}" + uuid.New().String()
