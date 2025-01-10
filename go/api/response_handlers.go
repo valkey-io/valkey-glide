@@ -267,6 +267,32 @@ func handleDoubleResponse(response *C.struct_CommandResponse) (Result[float64], 
 	return CreateFloat64Result(float64(response.float_value)), nil
 }
 
+func handleLongAndDoubleOrNullResponse(response *C.struct_CommandResponse) (Result[int64], Result[float64], error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Array, true)
+	if typeErr != nil {
+		return CreateNilInt64Result(), CreateNilFloat64Result(), typeErr
+	}
+
+	if response.response_type == C.Null {
+		return CreateNilInt64Result(), CreateNilFloat64Result(), nil
+	}
+
+	rank := CreateNilInt64Result()
+	score := CreateNilFloat64Result()
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		if v.response_type == C.Int {
+			rank = CreateInt64Result(int64(v.int_value))
+		}
+		if v.response_type == C.Float {
+			score = CreateFloat64Result(float64(v.float_value))
+		}
+	}
+
+	return rank, score, nil
+}
+
 func handleBooleanResponse(response *C.struct_CommandResponse) (Result[bool], error) {
 	defer C.free_command_response(response)
 

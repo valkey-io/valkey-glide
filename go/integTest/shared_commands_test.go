@@ -4704,6 +4704,76 @@ func (suite *GlideTestSuite) TestPersist() {
 	})
 }
 
+func (suite *GlideTestSuite) TestZRank() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		stringKey := uuid.New().String()
+		client.ZAdd(key, map[string]float64{"one": 1.5, "two": 2.0, "three": 3.0})
+		res, err := client.ZRank(key, "two")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res.Value())
+
+		if suite.serverVersion >= "7.2.0" {
+			res2Rank, res2Score, err := client.ZRankWithScore(key, "one")
+			assert.Nil(suite.T(), err)
+			assert.Equal(suite.T(), int64(0), res2Rank.Value())
+			assert.Equal(suite.T(), float64(1.5), res2Score.Value())
+			res4Rank, res4Score, err := client.ZRankWithScore(key, "non-existing-member")
+			assert.Nil(suite.T(), err)
+			assert.True(suite.T(), res4Rank.IsNil())
+			assert.True(suite.T(), res4Score.IsNil())
+		}
+
+		res3, err := client.ZRank(key, "non-existing-member")
+		assert.Nil(suite.T(), err)
+		assert.True(suite.T(), res3.IsNil())
+
+		// key exists, but it is not a set
+		setRes, err := client.Set(stringKey, "value")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "OK", setRes.Value())
+
+		_, err = client.ZRank(stringKey, "value")
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestZRevRank() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		stringKey := uuid.New().String()
+		client.ZAdd(key, map[string]float64{"one": 1.5, "two": 2.0, "three": 3.0})
+		res, err := client.ZRevRank(key, "two")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res.Value())
+
+		if suite.serverVersion >= "7.2.0" {
+			res2Rank, res2Score, err := client.ZRevRankWithScore(key, "one")
+			assert.Nil(suite.T(), err)
+			assert.Equal(suite.T(), int64(2), res2Rank.Value())
+			assert.Equal(suite.T(), float64(1.5), res2Score.Value())
+			res4Rank, res4Score, err := client.ZRevRankWithScore(key, "non-existing-member")
+			assert.Nil(suite.T(), err)
+			assert.True(suite.T(), res4Rank.IsNil())
+			assert.True(suite.T(), res4Score.IsNil())
+		}
+
+		res3, err := client.ZRevRank(key, "non-existing-member")
+		assert.Nil(suite.T(), err)
+		assert.True(suite.T(), res3.IsNil())
+
+		// key exists, but it is not a set
+		setRes, err := client.Set(stringKey, "value")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "OK", setRes.Value())
+
+		_, err = client.ZRevRank(stringKey, "value")
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
 func (suite *GlideTestSuite) TestSortWithOptions_ExternalWeights() {
 	suite.SkipIfServerVersionLowerThanBy("8.0.0")
 	suite.runWithDefaultClients(func(client api.BaseClient) {
