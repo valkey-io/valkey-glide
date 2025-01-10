@@ -1483,3 +1483,23 @@ func (client *baseClient) Persist(key string) (Result[bool], error) {
 	}
 	return handleBooleanResponse(result)
 }
+
+func (client *baseClient) XTrim(key string, options *options.XTrimOptions) (Result[int64], error) {
+	xTrimArgs, err := options.ToArgs()
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+	result, err := client.executeCommand(C.XTrim, append([]string{key}, xTrimArgs...))
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) XLen(key string) (Result[int64], error) {
+	result, err := client.executeCommand(C.XLen, []string{key})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+	return handleLongResponse(result)
+}
