@@ -128,11 +128,16 @@ export interface SetOptions {
     /**
      *  `onlyIfDoesNotExist` - Only set the key if it does not already exist.
      * Equivalent to `NX` in the Valkey API. `onlyIfExists` - Only set the key if
-     * it already exist. Equivalent to `EX` in the Valkey API. if `conditional` is
-     * not set the value will be set regardless of prior value existence. If value
-     * isn't set because of the condition, return null.
+     * it already exist. Equivalent to `EX` in the Valkey API. `onlyIfEqual` - Only set the
+     * key if the comparison value equals to the key value. Equivalent to `IFEQ` in the Valkey API.
+     * if `conditional` is not set the value will be set regardless of prior value existence.
+     * If value isn't set because of the condition, return null.
      */
-    conditionalSet?: "onlyIfExists" | "onlyIfDoesNotExist";
+    conditionalSet?: "onlyIfExists" | "onlyIfDoesNotExist" | "onlyIfEqual";
+    /**
+     * If onlyIfEqual is set, the value to compare the existing value with.
+     */
+    comparisonValue?: GlideString;
     /**
      * Return the old string stored at key, or nil if key did not exist. An error
      * is returned and SET aborted if the value stored at key is not a string.
@@ -168,6 +173,16 @@ export function createSet(
             args.push("XX");
         } else if (options.conditionalSet === "onlyIfDoesNotExist") {
             args.push("NX");
+        } else if (options.conditionalSet === "onlyIfEqual") {
+            args.push("IFEQ");
+
+            if (options.comparisonValue != undefined) {
+                args.push(options.comparisonValue);
+            } else {
+                throw new Error(
+                    "The 'comparisonValue' option must be set when using 'onlyIfEqual'",
+                );
+            }
         }
 
         if (options.returnOldValue) {
