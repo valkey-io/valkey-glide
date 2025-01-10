@@ -219,7 +219,10 @@ public class ConnectionManager {
         connectionRequestBuilder.setClusterModeEnabled(true);
 
         if (configuration.getSubscriptionConfiguration() != null) {
-            // TODO throw ConfigurationError if RESP2
+            if (configuration.getProtocol() == ProtocolVersion.RESP2) {
+                throw new ConfigurationError(
+                        "PubSub subscriptions require RESP3 protocol, but RESP2 was configured.");
+            }
             var subscriptionsBuilder = PubSubSubscriptions.newBuilder();
             for (var entry : configuration.getSubscriptionConfiguration().getSubscriptions().entrySet()) {
                 var channelsBuilder = PubSubChannelsOrPatterns.newBuilder();

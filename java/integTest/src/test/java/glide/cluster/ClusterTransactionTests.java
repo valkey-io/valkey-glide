@@ -323,8 +323,8 @@ public class ClusterTransactionTests {
     public void sort(GlideClusterClient clusterClient) {
         String key1 = "{key}:1" + UUID.randomUUID();
         String key2 = "{key}:2" + UUID.randomUUID();
-        String key3 = "{key}:3";
-        String key4 = "{key}:4";
+        String key3 = "{key}:3" + UUID.randomUUID();
+        String key4 = "{key}:4" + UUID.randomUUID();
         String key5 = "{key}:5" + UUID.randomUUID();
         String key6 = "{key}:6" + UUID.randomUUID();
         String[] descendingList = new String[] {"3", "2", "1"};

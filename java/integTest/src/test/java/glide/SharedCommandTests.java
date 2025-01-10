@@ -12719,7 +12719,7 @@ public class SharedCommandTests {
             assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0"), "This feature added in version 8");
         }
 
-        String prefix = "{setKey}-" + UUID.randomUUID();
+        String prefix = "{" + UUID.randomUUID() + "}-";
         GlideString listKey = gs(prefix + "listKey");
         GlideString storeKey = gs(prefix + "storeKey");
         GlideString nameField = gs("name");
