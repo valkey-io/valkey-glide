@@ -63,14 +63,14 @@ type StreamCommands interface {
 	//
 	// For example:
 	//  xAddResult, err = client.XAddWithOptions(
-	//		key1,
+	//		"key1",
 	//		[][]string{{field1, "foo4"}, {field2, "bar4"}},
 	//		options.NewXAddOptions().SetTrimOptions(
 	//			options.NewXTrimOptionsWithMinId(id).SetExactTrimming(),
 	//		),
 	//	)
 	//	xTrimResult, err := client.XTrim(
-	//		key1,
+	//		"key1",
 	//		options.NewXTrimOptionsWithMaxLen(1).SetExactTrimming(),
 	//  )
 	//  fmt.Println(xTrimResult.Value()) // Output: 1
@@ -90,13 +90,13 @@ type StreamCommands interface {
 	//
 	// For example:
 	//	xAddResult, err = client.XAddWithOptions(
-	//		key1,
+	//		"key1",
 	//		[][]string{{field1, "foo4"}, {field2, "bar4"}},
 	//		options.NewXAddOptions().SetTrimOptions(
 	//			options.NewXTrimOptionsWithMinId(id).SetExactTrimming(),
 	//		),
 	//	)
-	//	xLenResult, err = client.XLen(key1)
+	//	xLenResult, err = client.XLen("key1")
 	//  fmt.Println(xLenResult.Value()) // Output: 2
 	//
 	// [valkey.io]: https://valkey.io/commands/xlen/
