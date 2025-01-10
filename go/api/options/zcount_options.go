@@ -26,20 +26,12 @@ type InfScoreBound struct {
 }
 
 // Create a new infinite score boundary
-func NewInfScoreBoundBuilder() *InfScoreBound {
-	return &InfScoreBound{}
-}
-
-// The value of the infinite score bound.
-func (infScoreBound *InfScoreBound) SetValue(value InfBoundary) *InfScoreBound {
-	infScoreBound.value = value
-	return infScoreBound
+func NewInfScoreBoundBuilder(value InfBoundary) *InfScoreBound {
+	return &InfScoreBound{value: value}
 }
 
 func (infScoreBound *InfScoreBound) ToArgs() ([]string, error) {
-	args := []string{}
-	args = append(args, string(infScoreBound.value))
-	return args, nil
+	return []string{string(infScoreBound.value)}, nil
 }
 
 // This struct represents score boundary for a bound.
