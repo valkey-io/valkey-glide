@@ -4598,6 +4598,7 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 			),
 		)
 		assert.NotNil(t, xAddResult.Value())
+		assert.Nil(t, err)
 		id := xAddResult.Value()
 		xLenResult, err = client.XLen(key1)
 		assert.Nil(t, err)
@@ -4611,6 +4612,7 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 				options.NewXTrimOptionsWithMinId(id).SetExactTrimming(),
 			),
 		)
+		assert.Nil(t, err)
 		assert.NotNil(t, xAddResult.Value())
 		xLenResult, err = client.XLen(key1)
 		assert.Nil(t, err)
@@ -4621,6 +4623,7 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 			key1,
 			options.NewXTrimOptionsWithMaxLen(1).SetExactTrimming(),
 		)
+		assert.Nil(t, err)
 		assert.Equal(t, xTrimResult.Value(), int64(1))
 		xLenResult, err = client.XLen(key1)
 		assert.Nil(t, err)
@@ -4631,6 +4634,7 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 			key2,
 			options.NewXTrimOptionsWithMaxLen(1).SetExactTrimming(),
 		)
+		assert.Nil(t, err)
 		assert.Equal(t, xTrimResult.Value(), int64(0))
 		xLenResult, err = client.XLen(key2)
 		assert.Nil(t, err)
@@ -4638,11 +4642,11 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 
 		// Throw Exception: Key exists - but it is not a stream
 		setResult, err := client.Set(key2, "xtrimtest")
+		assert.Nil(t, err)
 		assert.Equal(t, setResult.Value(), "OK")
 		_, err = client.XTrim(key2, options.NewXTrimOptionsWithMinId("0-1"))
 		assert.NotNil(t, err)
 		assert.IsType(t, &api.RequestError{}, err)
-
 		_, err = client.XLen(key2)
 		assert.NotNil(t, err)
 		assert.IsType(t, &api.RequestError{}, err)
