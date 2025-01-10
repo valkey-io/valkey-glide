@@ -235,6 +235,6 @@ Run from the main `/python` folder
 
 -   [Python](https://marketplace.visualstudio.com/items?itemName=ms-python.python)
 -   [isort](https://marketplace.visualstudio.com/items?itemName=ms-python.isort)
--   [Black Formetter](https://marketplace.visualstudio.com/items?itemName=ms-python.black-formatter)
+-   [Black Formatter](https://marketplace.visualstudio.com/items?itemName=ms-python.black-formatter)
 -   [Flake8](https://marketplace.visualstudio.com/items?itemName=ms-python.flake8)
 -   [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
