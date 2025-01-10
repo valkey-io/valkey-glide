@@ -5243,16 +5243,31 @@ func (suite *GlideTestSuite) TestXPending() {
 			assert.Nil(suite.T(), err)
 			assert.True(suite.T(), resp.(bool))
 
-			_, err1 := client.XAdd(key, [][]string{{"field1", "value1"}})
-			assert.Nil(suite.T(), err1)
-			_, err2 := client.XAdd(key, [][]string{{"field2", "value2"}})
-			assert.Nil(suite.T(), err2)
+			_, err = client.XAdd(key, [][]string{{"field1", "value1"}})
+			assert.Nil(suite.T(), err)
+			_, err = client.XAdd(key, [][]string{{"field2", "value2"}})
+			assert.Nil(suite.T(), err)
 
 			command = []string{"XReadGroup", "GROUP", groupName, consumer1, "STREAMS", key, ">"}
 			resp, err = client.CustomCommand(command)
 			assert.Nil(suite.T(), err)
 			fmt.Println("XReadGroup Response", resp)
 
+			_, err = client.XAdd(key, [][]string{{"field3", "value3"}})
+			assert.Nil(suite.T(), err)
+			_, err = client.XAdd(key, [][]string{{"field4", "value4"}})
+			assert.Nil(suite.T(), err)
+			_, err = client.XAdd(key, [][]string{{"field5", "value5"}})
+			assert.Nil(suite.T(), err)
+
+			command = []string{"XReadGroup", "GROUP", groupName, consumer2, "STREAMS", key, ">"}
+			resp, err = client.CustomCommand(command)
+			assert.Nil(suite.T(), err)
+			fmt.Println("XReadGroup Response", resp)
+
+			pending_res, err := client.XPending(key, groupName)
+			assert.Nil(suite.T(), err)
+			fmt.Println("XPending Response", pending_res)
 		}
 
 		execCluster := func(client *api.GlideClusterClient) {
