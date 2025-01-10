@@ -1483,3 +1483,35 @@ func (client *baseClient) Persist(key string) (Result[bool], error) {
 	}
 	return handleBooleanResponse(result)
 }
+
+func (client *baseClient) ZRank(key string, member string) (Result[int64], error) {
+	result, err := client.executeCommand(C.ZRank, []string{key, member})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+	return handleLongOrNullResponse(result)
+}
+
+func (client *baseClient) ZRankWithScore(key string, member string) (Result[int64], Result[float64], error) {
+	result, err := client.executeCommand(C.ZRank, []string{key, member, options.WithScore})
+	if err != nil {
+		return CreateNilInt64Result(), CreateNilFloat64Result(), err
+	}
+	return handleLongAndDoubleOrNullResponse(result)
+}
+
+func (client *baseClient) ZRevRank(key string, member string) (Result[int64], error) {
+	result, err := client.executeCommand(C.ZRevRank, []string{key, member})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+	return handleLongOrNullResponse(result)
+}
+
+func (client *baseClient) ZRevRankWithScore(key string, member string) (Result[int64], Result[float64], error) {
+	result, err := client.executeCommand(C.ZRevRank, []string{key, member, options.WithScore})
+	if err != nil {
+		return CreateNilInt64Result(), CreateNilFloat64Result(), err
+	}
+	return handleLongAndDoubleOrNullResponse(result)
+}
