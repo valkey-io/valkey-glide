@@ -1515,3 +1515,58 @@ func (client *baseClient) ZRevRankWithScore(key string, member string) (Result[i
 	}
 	return handleLongAndDoubleOrNullResponse(result)
 }
+
+func (client *baseClient) Sort(key string) ([]Result[string], error) {
+	result, err := client.executeCommand(C.Sort, []string{key})
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
+
+func (client *baseClient) SortWithOptions(key string, options *options.SortOptions) ([]Result[string], error) {
+	optionArgs := options.ToArgs()
+	result, err := client.executeCommand(C.Sort, append([]string{key}, optionArgs...))
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
+
+func (client *baseClient) SortReadOnly(key string) ([]Result[string], error) {
+	result, err := client.executeCommand(C.SortReadOnly, []string{key})
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
+
+func (client *baseClient) SortReadOnlyWithOptions(key string, options *options.SortOptions) ([]Result[string], error) {
+	optionArgs := options.ToArgs()
+	result, err := client.executeCommand(C.SortReadOnly, append([]string{key}, optionArgs...))
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}
+
+func (client *baseClient) SortStore(key string, destination string) (Result[int64], error) {
+	result, err := client.executeCommand(C.Sort, []string{key, "STORE", destination})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) SortStoreWithOptions(
+	key string,
+	destination string,
+	options *options.SortOptions,
+) (Result[int64], error) {
+	optionArgs := options.ToArgs()
+	result, err := client.executeCommand(C.Sort, append([]string{key, "STORE", destination}, optionArgs...))
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+	return handleLongResponse(result)
+}
