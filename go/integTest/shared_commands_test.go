@@ -4496,7 +4496,7 @@ func (suite *GlideTestSuite) TestObjectEncoding() {
 		assert.Nil(t, err)
 		assert.Equal(t, "embstr", resultObjectEncoding.Value(), "The result should be embstr")
 
-		// Test 2: Check object encoding for listpack
+		// Test 2: Check object encoding for quicklist
 		list := []string{"value1", "value2", "value3"}
 		key1 := "{keyName}" + uuid.NewString()
 		res1, err := client.LPush(key1, list)
@@ -4504,7 +4504,7 @@ func (suite *GlideTestSuite) TestObjectEncoding() {
 		assert.Equal(t, int64(3), res1.Value())
 		resultListPack, err := client.ObjectEncoding(key1)
 		assert.Nil(t, err)
-		assert.Equal(t, "listpack", resultListPack.Value(), "The result should be listpack")
+		assert.Equal(t, "quicklist", resultListPack.Value(), "The result should be quicklist")
 
 		// Test 3: Check object encoding command for non existing key
 		key3 := "{keyName}" + uuid.NewString()
