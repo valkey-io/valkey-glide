@@ -158,6 +158,17 @@ sourceSets {
     }
 }
 
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    archiveClassifier = 'javadoc'
+    from javadoc.destinationDir
+}
+
+task sourcesJar(type: Jar, dependsOn: classes) {
+    archiveClassifier = 'sources'
+    from sourceSets.main.allSource
+    exclude 'glide/models' // exclude protobuf files
+}
+
 publishing {
     publications {
         mavenJava(MavenPublication) {
@@ -252,17 +263,6 @@ javadoc {
     source = delombok.outputs
     options.tags = [ "example:a:Example:" ]
     failOnError = false // TODO fix all javadoc errors and warnings and remove that
-}
-
-task javadocJar(type: Jar, dependsOn: javadoc) {
-    archiveClassifier = 'javadoc'
-    from javadoc.destinationDir
-}
-
-task sourcesJar(type: Jar, dependsOn: classes) {
-    archiveClassifier = 'sources'
-    from sourceSets.main.allSource
-    exclude 'glide/models' // exclude protobuf files
 }
 
 spotbugsMain {

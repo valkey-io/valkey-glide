@@ -167,7 +167,7 @@ jobs:
             - name: Build java artifact
               working-directory: ./java
               run: |
-                  ./gradlew publishMavenJavaPublicationToMavenLocal -x buildRust -x javadoc
+                  ./gradlew publishToMavenLocal -x buildRust -x javadoc
 
             - name: Run ORT tools for Java
               uses: ./.github/workflows/run-ort-tools
