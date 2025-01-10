@@ -4648,3 +4648,97 @@ func (suite *GlideTestSuite) TestZRevRank() {
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
 }
+
+func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.NewString()
+		key2 := uuid.NewString()
+		field1 := uuid.NewString()
+		field2 := uuid.NewString()
+		t := suite.T()
+		xAddResult, err := client.XAddWithOptions(
+			key1,
+			[][]string{{field1, "foo"}, {field2, "bar"}},
+			options.NewXAddOptions().SetDontMakeNewStream(),
+		)
+		assert.Nil(t, err)
+		assert.True(t, xAddResult.IsNil())
+
+		xAddResult, err = client.XAddWithOptions(
+			key1,
+			[][]string{{field1, "foo1"}, {field2, "bar1"}},
+			options.NewXAddOptions().SetId("0-1"),
+		)
+		assert.Nil(t, err)
+		assert.Equal(t, xAddResult.Value(), "0-1")
+
+		xAddResult, err = client.XAdd(
+			key1,
+			[][]string{{field1, "foo2"}, {field2, "bar2"}},
+		)
+		assert.Nil(t, err)
+		assert.False(t, xAddResult.IsNil())
+
+		xLenResult, err := client.XLen(key1)
+		assert.Nil(t, err)
+		assert.Equal(t, xLenResult.Value(), int64(2))
+
+		// Trim the first entry.
+		xAddResult, err = client.XAddWithOptions(
+			key1,
+			[][]string{{field1, "foo3"}, {field2, "bar2"}},
+			options.NewXAddOptions().SetTrimOptions(
+				options.NewXTrimOptionsWithMaxLen(2).SetExactTrimming(),
+			),
+		)
+		assert.NotNil(t, xAddResult.Value())
+		id := xAddResult.Value()
+		xLenResult, err = client.XLen(key1)
+		assert.Nil(t, err)
+		assert.Equal(t, xLenResult.Value(), int64(2))
+
+		// Trim the second entry.
+		xAddResult, err = client.XAddWithOptions(
+			key1,
+			[][]string{{field1, "foo4"}, {field2, "bar4"}},
+			options.NewXAddOptions().SetTrimOptions(
+				options.NewXTrimOptionsWithMinId(id).SetExactTrimming(),
+			),
+		)
+		assert.NotNil(t, xAddResult.Value())
+		xLenResult, err = client.XLen(key1)
+		assert.Nil(t, err)
+		assert.Equal(t, xLenResult.Value(), int64(2))
+
+		// Test xtrim to remove 1 element
+		xTrimResult, err := client.XTrim(
+			key1,
+			options.NewXTrimOptionsWithMaxLen(1).SetExactTrimming(),
+		)
+		assert.Equal(t, xTrimResult.Value(), int64(1))
+		xLenResult, err = client.XLen(key1)
+		assert.Nil(t, err)
+		assert.Equal(t, xLenResult.Value(), int64(1))
+
+		// Key does not exist - returns 0
+		xTrimResult, err = client.XTrim(
+			key2,
+			options.NewXTrimOptionsWithMaxLen(1).SetExactTrimming(),
+		)
+		assert.Equal(t, xTrimResult.Value(), int64(0))
+		xLenResult, err = client.XLen(key2)
+		assert.Nil(t, err)
+		assert.Equal(t, xLenResult.Value(), int64(0))
+
+		// Throw Exception: Key exists - but it is not a stream
+		setResult, err := client.Set(key2, "xtrimtest")
+		assert.Equal(t, setResult.Value(), "OK")
+		_, err = client.XTrim(key2, options.NewXTrimOptionsWithMinId("0-1"))
+		assert.NotNil(t, err)
+		assert.IsType(t, &api.RequestError{}, err)
+
+		_, err = client.XLen(key2)
+		assert.NotNil(t, err)
+		assert.IsType(t, &api.RequestError{}, err)
+	})
+}
