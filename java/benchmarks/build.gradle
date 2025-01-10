@@ -25,7 +25,7 @@ dependencies {
     implementation group: 'com.google.code.gson', name: 'gson', version: '2.10.1'
 }
 
-compileJava.dependsOn ':client:publishMavenJavaPublicationToMavenLocal'
+compileJava.dependsOn ':client:publishToMavenLocal'
 
 application {
     // Define the main class for the application.

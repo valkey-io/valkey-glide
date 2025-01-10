@@ -10,11 +10,6 @@ plugins {
     id 'com.gradleup.shadow' version '8.3.5'
 }
 
-shadowJar {
-    dependsOn('copyNativeLib')
-    archiveClassifier = osdetector.classifier
-}
-
 repositories {
     mavenCentral()
 }
@@ -167,6 +162,8 @@ publishing {
     publications {
         mavenJava(MavenPublication) {
             from components.shadow
+            artifact javadocJar
+            artifact sourcesJar
             groupId = 'io.valkey'
             artifactId = 'valkey-glide'
             version = System.getenv("GLIDE_RELEASE_VERSION") ?: project.ext.defaultReleaseVersion
@@ -235,6 +232,11 @@ jar {
     archiveClassifier = osdetector.classifier
 }
 
+shadowJar {
+    dependsOn('copyNativeLib')
+    archiveClassifier = osdetector.classifier
+}
+
 sourcesJar {
     // suppress following error
     // Entry glide/api/BaseClient.java is a duplicate but no duplicate handling strategy has been set
@@ -250,6 +252,17 @@ javadoc {
     source = delombok.outputs
     options.tags = [ "example:a:Example:" ]
     failOnError = false // TODO fix all javadoc errors and warnings and remove that
+}
+
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    archiveClassifier = 'javadoc'
+    from javadoc.destinationDir
+}
+
+task sourcesJar(type: Jar, dependsOn: classes) {
+    archiveClassifier = 'sources'
+    from sourceSets.main.allSource
+    exclude 'glide/models' // exclude protobuf files
 }
 
 spotbugsMain {

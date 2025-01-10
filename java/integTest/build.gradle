@@ -131,7 +131,7 @@ clearDirs.finalizedBy 'startStandalone'
 clearDirs.finalizedBy 'startCluster'
 clearDirs.finalizedBy 'startClusterForAz'
 test.finalizedBy 'stopAllAfterTests'
-compileTestJava.dependsOn ':client:publishMavenJavaPublicationToMavenLocal'
+compileTestJava.dependsOn ':client:publishToMavenLocal'
 
 tasks.withType(Test) {
     doFirst {
