@@ -201,6 +201,10 @@ publishing {
     }
 }
 
+tasks.withType(GenerateModuleMetadata) {
+    dependsOn jar, shadowJar
+}
+
 java {
     modularity.inferModulePath = true
     withSourcesJar()
