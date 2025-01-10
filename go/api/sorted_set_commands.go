@@ -280,9 +280,10 @@ type SortedSetCommands interface {
 	//  key1 := uuid.NewString()
 	//  membersScores := map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0 }
 	//  zAddResult, err := client.ZAdd(key1, membersScores)
-	//  zCountRange := options.NewZCountRangeBuilder()
-	//  zCountRange.SetMin(options.NewInfScoreBoundBuilder().SetValue(options.NegativeInfinity))
-	//  zCountRange.SetMax(options.NewInfScoreBoundBuilder().SetValue(options.PositiveInfinity))
+	//  zCountRange := options.NewZCountRangeBuilder(
+	//		options.NewInfScoreBoundBuilder(options.NegativeInfinity),
+	//	 	options.NewInfScoreBoundBuilder(options.PositiveInfinity),
+	//	)
 	//  zCountResult, err := client.ZCount(key1, zCountRange)
 	//  if err!= nil {
 	//     // Print err
