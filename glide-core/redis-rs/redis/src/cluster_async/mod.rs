@@ -2666,7 +2666,7 @@ where
     }
 }
 
-async fn calculate_topology_from_random_nodes<'a, C>(
+async fn calculate_topology_from_random_nodes<C>(
     inner: &Core<C>,
     num_of_nodes_to_query: usize,
     curr_retry: usize,
