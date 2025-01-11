@@ -179,10 +179,10 @@ func toCStrings(args []string) ([]C.uintptr_t, []C.ulong) {
 	return cStrings, stringLengths
 }
 
-func (client *baseClient) Set(key string, value string) (Result[string], error) {
+func (client *baseClient) Set(key string, value string) (string, error) {
 	result, err := client.executeCommand(C.Set, []string{key, value})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return "", err
 	}
 
 	return handleStringResponse(result)
@@ -234,10 +234,10 @@ func (client *baseClient) GetExWithOptions(key string, options *GetExOptions) (R
 	return handleStringOrNullResponse(result)
 }
 
-func (client *baseClient) MSet(keyValueMap map[string]string) (Result[string], error) {
+func (client *baseClient) MSet(keyValueMap map[string]string) (string, error) {
 	result, err := client.executeCommand(C.MSet, utils.MapToString(keyValueMap))
 	if err != nil {
-		return CreateNilStringResult(), err
+		return "", err
 	}
 
 	return handleStringResponse(result)
@@ -327,10 +327,10 @@ func (client *baseClient) SetRange(key string, offset int, value string) (Result
 	return handleLongResponse(result)
 }
 
-func (client *baseClient) GetRange(key string, start int, end int) (Result[string], error) {
+func (client *baseClient) GetRange(key string, start int, end int) (string, error) {
 	result, err := client.executeCommand(C.GetRange, []string{key, strconv.Itoa(start), strconv.Itoa(end)})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return "", err
 	}
 
 	return handleStringResponse(result)
@@ -345,10 +345,10 @@ func (client *baseClient) Append(key string, value string) (Result[int64], error
 	return handleLongResponse(result)
 }
 
-func (client *baseClient) LCS(key1 string, key2 string) (Result[string], error) {
+func (client *baseClient) LCS(key1 string, key2 string) (string, error) {
 	result, err := client.executeCommand(C.LCS, []string{key1, key2})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return "", err
 	}
 
 	return handleStringResponse(result)
@@ -705,7 +705,7 @@ func (client *baseClient) SRandMember(key string) (Result[string], error) {
 		return CreateNilStringResult(), err
 	}
 
-	return handleStringResponse(result)
+	return handleStringOrNullResponse(result)
 }
 
 func (client *baseClient) SPop(key string) (Result[string], error) {
@@ -714,7 +714,7 @@ func (client *baseClient) SPop(key string) (Result[string], error) {
 		return CreateNilStringResult(), err
 	}
 
-	return handleStringResponse(result)
+	return handleStringOrNullResponse(result)
 }
 
 func (client *baseClient) SMIsMember(key string, members []string) ([]Result[bool], error) {
@@ -786,10 +786,10 @@ func (client *baseClient) LIndex(key string, index int64) (Result[string], error
 	return handleStringOrNullResponse(result)
 }
 
-func (client *baseClient) LTrim(key string, start int64, end int64) (Result[string], error) {
+func (client *baseClient) LTrim(key string, start int64, end int64) (string, error) {
 	result, err := client.executeCommand(C.LTrim, []string{key, utils.IntToString(start), utils.IntToString(end)})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return "", err
 	}
 
 	return handleStringResponse(result)
@@ -998,10 +998,10 @@ func (client *baseClient) BLMPopCount(
 	return handleStringToStringArrayMapOrNullResponse(result)
 }
 
-func (client *baseClient) LSet(key string, index int64, element string) (Result[string], error) {
+func (client *baseClient) LSet(key string, index int64, element string) (string, error) {
 	result, err := client.executeCommand(C.LSet, []string{key, utils.IntToString(index), element})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return "", err
 	}
 
 	return handleStringResponse(result)
@@ -1063,11 +1063,7 @@ func (client *baseClient) Ping() (string, error) {
 		return "", err
 	}
 
-	response, err := handleStringResponse(result)
-	if err != nil {
-		return "", err
-	}
-	return response.Value(), nil
+	return handleStringResponse(result)
 }
 
 func (client *baseClient) PingWithMessage(message string) (string, error) {
@@ -1078,11 +1074,7 @@ func (client *baseClient) PingWithMessage(message string) (string, error) {
 		return "", err
 	}
 
-	response, err := handleStringResponse(result)
-	if err != nil {
-		return "", err
-	}
-	return response.Value(), nil
+	return handleStringResponse(result)
 }
 
 func (client *baseClient) Del(keys []string) (Result[int64], error) {

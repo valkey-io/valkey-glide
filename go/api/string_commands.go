@@ -17,21 +17,19 @@ type StringCommands interface {
 	//  value - The value to store with the given key.
 	//
 	// Return value:
-	//  A api.Result[string] containing "OK" response on success.
+	//  `"OK"` response on success.
 	//
 	// For example:
 	//	result, err := client.Set("key", "value")
-	//  result.Value() : "OK"
-	//  result.IsNil() : false
+	//  result: "OK"
 	//
 	// [valkey.io]: https://valkey.io/commands/set/
-	Set(key string, value string) (Result[string], error)
+	Set(key string, value string) (string, error)
 
 	// SetWithOptions sets the given key with the given value using the given options. The return value is dependent on the
 	// passed options. If the value is successfully set, "OK" is returned. If value isn't set because of [OnlyIfExists] or
 	// [OnlyIfDoesNotExist] conditions, api.CreateNilStringResult() is returned. If [SetOptions#ReturnOldValue] is
-	// set, the old
-	// value is returned.
+	// set, the old value is returned.
 	//
 	// See [valkey.io] for details.
 	//
@@ -143,15 +141,14 @@ type StringCommands interface {
 	//  keyValueMap - A key-value map consisting of keys and their respective values to set.
 	//
 	// Return value:
-	//  A Result[string] containing "OK" on success.
+	//  `"OK"` on success.
 	//
 	// For example:
 	//	result, err := client.MSet(map[string]string{"key1": "value1", "key2": "value2"})
-	//  result.Value(): "OK"
-	//  result.IsNil(): false
+	//  result: "OK"
 	//
 	// [valkey.io]: https://valkey.io/commands/mset/
-	MSet(keyValueMap map[string]string) (Result[string], error)
+	MSet(keyValueMap map[string]string) (string, error)
 
 	// Retrieves the values of multiple keys.
 	//
@@ -361,8 +358,8 @@ type StringCommands interface {
 
 	// Returns the substring of the string value stored at key, determined by the byte's offsets start and end (both are
 	// inclusive).
-	// Negative offsets can be used in order to provide an offset starting from the end of the string. So -1 means the last
-	// character, -2 the penultimate and so forth.
+	// Negative offsets can be used in order to provide an offset starting from the end of the string. So `-1` means the last
+	// character, `-2` the penultimate and so forth.
 	//
 	// See [valkey.io] for details.
 	//
@@ -372,24 +369,20 @@ type StringCommands interface {
 	//  end   - The ending offset.
 	//
 	// Return value:
-	//  A Result[string] containing substring extracted from the value stored at key.
-	//  A [api.NilResult[string]] (api.CreateNilStringResult()) is returned if the offset is out of bounds.
+	//  A substring extracted from the value stored at key. Returns empty string if the offset is out of bounds.
 	//
 	// For example:
 	//  1. mykey: "This is a string"
 	//     result, err := client.GetRange("mykey", 0, 3)
-	//     result.Value(): "This"
-	//     result.IsNil(): false
+	//     result: "This"
 	//     result, err := client.GetRange("mykey", -3, -1)
-	//     result.Value(): "ing" (extracted last 3 characters of a string)
-	//     result.IsNil(): false
+	//     result: "ing" (extracted last 3 characters of a string)
 	//  2. "key": "愛" (value char takes 3 bytes)
 	//     result, err = client.GetRange("key", 0, 1)
-	//     result.Value(): "�" (returns an invalid UTF-8 string)
-	//     result.IsNil(): false
+	//     result: "�" (returns an invalid UTF-8 string)
 	//
 	// [valkey.io]: https://valkey.io/commands/getrange/
-	GetRange(key string, start int, end int) (Result[string], error)
+	GetRange(key string, start int, end int) (string, error)
 
 	// Appends a value to a key. If key does not exist it is created and set as an empty string, so APPEND will be similar to
 	// SET in this special case.
@@ -429,17 +422,16 @@ type StringCommands interface {
 	//  key2 - The key that stores the second string.
 	//
 	// Return value:
-	//  A Result[string] containing the longest common subsequence between the 2 strings.
-	//  A Result[string] containing empty String is returned if the keys do not exist or have no common subsequences.
+	//  The longest common subsequence between the 2 strings.
+	//  An empty string is returned if the keys do not exist or have no common subsequences.
 	//
 	// For example:
 	//  testKey1: foo, testKey2: fao
 	//  result, err := client.LCS("testKey1", "testKey2")
-	//  result.Value(): "fo"
-	//  result.IsNil(): false
+	//  result: "fo"
 	//
 	// [valkey.io]: https://valkey.io/commands/lcs/
-	LCS(key1 string, key2 string) (Result[string], error)
+	LCS(key1 string, key2 string) (string, error)
 
 	// GetDel gets the value associated with the given key and deletes the key.
 	//

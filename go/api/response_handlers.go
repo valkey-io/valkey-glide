@@ -153,10 +153,11 @@ func parseSet(response *C.struct_CommandResponse) (interface{}, error) {
 	return slice, nil
 }
 
-func handleStringResponse(response *C.struct_CommandResponse) (Result[string], error) {
+func handleStringResponse(response *C.struct_CommandResponse) (string, error) {
 	defer C.free_command_response(response)
 
-	return convertCharArrayToString(response, false)
+	res, err := convertCharArrayToString(response, false)
+	return res.Value(), err
 }
 
 func handleStringOrNullResponse(response *C.struct_CommandResponse) (Result[string], error) {

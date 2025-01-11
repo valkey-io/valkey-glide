@@ -262,19 +262,18 @@ type ListCommands interface {
 	//  end   - The end of the range.
 	//
 	// Return value:
-	//  The Result[string] containing always "OK".
-	// If start exceeds the end of the list, or if start is greater than end, the result will be an empty list (which causes
-	// key to be removed).
+	//  Always `"OK"`.
+	//  If start exceeds the end of the list, or if start is greater than end, the result will be an empty list (which causes
+	//  key to be removed).
 	//  If end exceeds the actual end of the list, it will be treated like the last element of the list.
-	//  If key does not exist, OK will be returned without changes to the database.
+	//  If key does not exist, `"OK"` will be returned without changes to the database.
 	//
 	// For example:
 	//  result, err := client.LTrim("my_list", 0, 1)
-	//  result.Value(): "OK"
-	//  result.IsNil(): false
+	//  result: "OK"
 	//
 	// [valkey.io]: https://valkey.io/commands/ltrim/
-	LTrim(key string, start int64, end int64) (Result[string], error)
+	LTrim(key string, start int64, end int64) (string, error)
 
 	// Returns the length of the list stored at key.
 	//
@@ -607,14 +606,14 @@ type ListCommands interface {
 	//  element - The element to be set.
 	//
 	// Return value:
-	//  A Result[string] containing "OK".
+	//  `"OK"`.
 	//
 	// For example:
 	//  result, err: client.LSet("my_list", int64(1), "two")
-	//  result.Value(): "OK"
+	//  result: "OK"
 	//
 	// [valkey.io]: https://valkey.io/commands/lset/
-	LSet(key string, index int64, element string) (Result[string], error)
+	LSet(key string, index int64, element string) (string, error)
 
 	// Atomically pops and removes the left/right-most element to the list stored at source depending on whereFrom, and pushes
 	// the element at the first/last element of the list stored at destination depending on whereTo.
