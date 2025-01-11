@@ -611,12 +611,12 @@ export interface BaseClientConfiguration {
      */
     requestTimeout?: number;
     /**
-     * Represents the client's read from strategy.
+     * The client's read from strategy.
      * If not set, `Primary` will be used.
      */
     readFrom?: ReadFrom;
     /**
-     * Choose the serialization protocol to be used with the server.
+     * Serialization protocol to be used.
      * If not set, `RESP3` will be used.
      */
     protocol?: ProtocolVersion;
