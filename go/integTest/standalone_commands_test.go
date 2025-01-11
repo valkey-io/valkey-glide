@@ -71,7 +71,7 @@ func (suite *GlideTestSuite) TestCustomCommandHExists_BoolResponse() {
 
 	res1, err := client.HSet(key, fields)
 	assert.Nil(suite.T(), err)
-	assert.Equal(suite.T(), int64(1), res1.Value())
+	assert.Equal(suite.T(), int64(1), res1)
 
 	result, err := client.CustomCommand([]string{"HEXISTS", key, "field1"})
 
@@ -138,7 +138,7 @@ func (suite *GlideTestSuite) TestCustomCommandConfigSMembers_SetResponse() {
 
 	res1, err := client.SAdd(key, members)
 	assert.Nil(suite.T(), err)
-	assert.Equal(suite.T(), int64(3), res1.Value())
+	assert.Equal(suite.T(), int64(3), res1)
 
 	result2, err := client.CustomCommand([]string{"SMEMBERS", key})
 	assert.Nil(suite.T(), err)
