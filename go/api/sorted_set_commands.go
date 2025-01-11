@@ -253,7 +253,7 @@ type SortedSetCommands interface {
 	//   A `KeyWithMemberAndScore` struct containing the key where the member was popped out, the member
 	//   itself, and the member score. If no member could be popped and the `timeout` expired, returns `nil`.
 	//
-	// example
+	// Example:
 	//   zaddResult1, err := client.ZAdd(key1, map[string]float64{"a": 1.0, "b": 1.5})
 	//   zaddResult2, err := client.ZAdd(key2, map[string]float64{"c": 2.0})
 	//   result, err := client.BZPopMin([]string{key1, key2}, float64(.5))
@@ -262,6 +262,10 @@ type SortedSetCommands interface {
 	// [valkey.io]: https://valkey.io/commands/bzpopmin/
 	// [blocking commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
 	BZPopMin(keys []string, timeoutSecs float64) (Result[KeyWithMemberAndScore], error)
+
+	ZRange(key string, rangeQuery options.ZRangeQuery) ([]Result[string], error)
+
+	ZRangeWithScores(key string, rangeQuery options.ZRangeQueryWithScores) (map[Result[string]]Result[float64], error)
 
 	// Returns the rank of `member` in the sorted set stored at `key`, with
 	// scores ordered from low to high, starting from `0`.
