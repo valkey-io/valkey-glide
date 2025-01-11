@@ -211,15 +211,15 @@ func handleStringArrayOrNullResponse(response *C.struct_CommandResponse) ([]Resu
 	return slice, nil
 }
 
-func handleLongResponse(response *C.struct_CommandResponse) (Result[int64], error) {
+func handleLongResponse(response *C.struct_CommandResponse) (int64, error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Int, false)
 	if typeErr != nil {
-		return CreateNilInt64Result(), typeErr
+		return 0, typeErr
 	}
 
-	return CreateInt64Result(int64(response.int_value)), nil
+	return int64(response.int_value), nil
 }
 
 func handleLongOrNullResponse(response *C.struct_CommandResponse) (Result[int64], error) {
