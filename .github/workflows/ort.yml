@@ -158,6 +158,17 @@ jobs:
                   distribution: "temurin"
                   java-version: 11
 
+            - name: Install protoc (protobuf)
+              uses: arduino/setup-protoc@v3
+              with:
+                  version: "29.1"
+                  repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Build java artifact
+              working-directory: ./java
+              run: |
+                  ./gradlew publishToMavenLocal -x buildRust -x javadoc
+
             - name: Run ORT tools for Java
               uses: ./.github/workflows/run-ort-tools
               with:
