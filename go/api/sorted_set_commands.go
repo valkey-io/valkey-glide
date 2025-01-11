@@ -106,10 +106,10 @@ type SortedSetCommands interface {
 	//
 	// Example:
 	//   res, err := client.ZIncrBy("myzset", 2.0, "one")
-	//   fmt.Println(res.Value()) // Output: 2.0
+	//   fmt.Println(res) // Output: 2.0
 	//
 	// [valkey.io]: https://valkey.io/commands/zincrby/
-	ZIncrBy(key string, increment float64, member string) (Result[float64], error)
+	ZIncrBy(key string, increment float64, member string) (float64, error)
 
 	// Removes and returns the member with the lowest score from the sorted set
 	// stored at the specified `key`.

@@ -243,10 +243,10 @@ func (client *baseClient) MSet(keyValueMap map[string]string) (Result[string], e
 	return handleStringResponse(result)
 }
 
-func (client *baseClient) MSetNX(keyValueMap map[string]string) (Result[bool], error) {
+func (client *baseClient) MSetNX(keyValueMap map[string]string) (bool, error) {
 	result, err := client.executeCommand(C.MSetNX, utils.MapToString(keyValueMap))
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return false, err
 	}
 
 	return handleBooleanResponse(result)
@@ -279,13 +279,13 @@ func (client *baseClient) IncrBy(key string, amount int64) (Result[int64], error
 	return handleLongResponse(result)
 }
 
-func (client *baseClient) IncrByFloat(key string, amount float64) (Result[float64], error) {
+func (client *baseClient) IncrByFloat(key string, amount float64) (float64, error) {
 	result, err := client.executeCommand(
 		C.IncrByFloat,
 		[]string{key, utils.FloatToString(amount)},
 	)
 	if err != nil {
-		return CreateNilFloat64Result(), err
+		return float64(0), err
 	}
 
 	return handleDoubleResponse(result)
@@ -403,10 +403,10 @@ func (client *baseClient) HSet(key string, values map[string]string) (Result[int
 	return handleLongResponse(result)
 }
 
-func (client *baseClient) HSetNX(key string, field string, value string) (Result[bool], error) {
+func (client *baseClient) HSetNX(key string, field string, value string) (bool, error) {
 	result, err := client.executeCommand(C.HSetNX, []string{key, field, value})
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return false, err
 	}
 
 	return handleBooleanResponse(result)
@@ -439,10 +439,10 @@ func (client *baseClient) HVals(key string) ([]Result[string], error) {
 	return handleStringArrayResponse(result)
 }
 
-func (client *baseClient) HExists(key string, field string) (Result[bool], error) {
+func (client *baseClient) HExists(key string, field string) (bool, error) {
 	result, err := client.executeCommand(C.HExists, []string{key, field})
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return false, err
 	}
 
 	return handleBooleanResponse(result)
@@ -475,10 +475,10 @@ func (client *baseClient) HIncrBy(key string, field string, increment int64) (Re
 	return handleLongResponse(result)
 }
 
-func (client *baseClient) HIncrByFloat(key string, field string, increment float64) (Result[float64], error) {
+func (client *baseClient) HIncrByFloat(key string, field string, increment float64) (float64, error) {
 	result, err := client.executeCommand(C.HIncrByFloat, []string{key, field, utils.FloatToString(increment)})
 	if err != nil {
-		return CreateNilFloat64Result(), err
+		return float64(0), err
 	}
 
 	return handleDoubleResponse(result)
@@ -634,10 +634,10 @@ func (client *baseClient) SCard(key string) (Result[int64], error) {
 	return handleLongResponse(result)
 }
 
-func (client *baseClient) SIsMember(key string, member string) (Result[bool], error) {
+func (client *baseClient) SIsMember(key string, member string) (bool, error) {
 	result, err := client.executeCommand(C.SIsMember, []string{key, member})
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return false, err
 	}
 
 	return handleBooleanResponse(result)
@@ -717,7 +717,7 @@ func (client *baseClient) SPop(key string) (Result[string], error) {
 	return handleStringResponse(result)
 }
 
-func (client *baseClient) SMIsMember(key string, members []string) ([]Result[bool], error) {
+func (client *baseClient) SMIsMember(key string, members []string) ([]bool, error) {
 	result, err := client.executeCommand(C.SMIsMember, append([]string{key}, members...))
 	if err != nil {
 		return nil, err
@@ -760,10 +760,10 @@ func (client *baseClient) SScanWithOptions(
 	return handleScanResponse(result)
 }
 
-func (client *baseClient) SMove(source string, destination string, member string) (Result[bool], error) {
+func (client *baseClient) SMove(source string, destination string, member string) (bool, error) {
 	result, err := client.executeCommand(C.SMove, []string{source, destination, member})
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return false, err
 	}
 	return handleBooleanResponse(result)
 }
@@ -1103,31 +1103,31 @@ func (client *baseClient) Exists(keys []string) (Result[int64], error) {
 	return handleLongResponse(result)
 }
 
-func (client *baseClient) Expire(key string, seconds int64) (Result[bool], error) {
+func (client *baseClient) Expire(key string, seconds int64) (bool, error) {
 	result, err := client.executeCommand(C.Expire, []string{key, utils.IntToString(seconds)})
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return false, err
 	}
 
 	return handleBooleanResponse(result)
 }
 
-func (client *baseClient) ExpireWithOptions(key string, seconds int64, expireCondition ExpireCondition) (Result[bool], error) {
+func (client *baseClient) ExpireWithOptions(key string, seconds int64, expireCondition ExpireCondition) (bool, error) {
 	expireConditionStr, err := expireCondition.toString()
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return false, err
 	}
 	result, err := client.executeCommand(C.Expire, []string{key, utils.IntToString(seconds), expireConditionStr})
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return false, err
 	}
 	return handleBooleanResponse(result)
 }
 
-func (client *baseClient) ExpireAt(key string, unixTimestampInSeconds int64) (Result[bool], error) {
+func (client *baseClient) ExpireAt(key string, unixTimestampInSeconds int64) (bool, error) {
 	result, err := client.executeCommand(C.ExpireAt, []string{key, utils.IntToString(unixTimestampInSeconds)})
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return false, err
 	}
 
 	return handleBooleanResponse(result)
@@ -1137,25 +1137,25 @@ func (client *baseClient) ExpireAtWithOptions(
 	key string,
 	unixTimestampInSeconds int64,
 	expireCondition ExpireCondition,
-) (Result[bool], error) {
+) (bool, error) {
 	expireConditionStr, err := expireCondition.toString()
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return false, err
 	}
 	result, err := client.executeCommand(
 		C.ExpireAt,
 		[]string{key, utils.IntToString(unixTimestampInSeconds), expireConditionStr},
 	)
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return false, err
 	}
 	return handleBooleanResponse(result)
 }
 
-func (client *baseClient) PExpire(key string, milliseconds int64) (Result[bool], error) {
+func (client *baseClient) PExpire(key string, milliseconds int64) (bool, error) {
 	result, err := client.executeCommand(C.PExpire, []string{key, utils.IntToString(milliseconds)})
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return false, err
 	}
 	return handleBooleanResponse(result)
 }
@@ -1164,22 +1164,22 @@ func (client *baseClient) PExpireWithOptions(
 	key string,
 	milliseconds int64,
 	expireCondition ExpireCondition,
-) (Result[bool], error) {
+) (bool, error) {
 	expireConditionStr, err := expireCondition.toString()
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return false, err
 	}
 	result, err := client.executeCommand(C.PExpire, []string{key, utils.IntToString(milliseconds), expireConditionStr})
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return false, err
 	}
 	return handleBooleanResponse(result)
 }
 
-func (client *baseClient) PExpireAt(key string, unixTimestampInMilliSeconds int64) (Result[bool], error) {
+func (client *baseClient) PExpireAt(key string, unixTimestampInMilliSeconds int64) (bool, error) {
 	result, err := client.executeCommand(C.PExpireAt, []string{key, utils.IntToString(unixTimestampInMilliSeconds)})
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return false, err
 	}
 	return handleBooleanResponse(result)
 }
@@ -1188,17 +1188,17 @@ func (client *baseClient) PExpireAtWithOptions(
 	key string,
 	unixTimestampInMilliSeconds int64,
 	expireCondition ExpireCondition,
-) (Result[bool], error) {
+) (bool, error) {
 	expireConditionStr, err := expireCondition.toString()
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return false, err
 	}
 	result, err := client.executeCommand(
 		C.PExpireAt,
 		[]string{key, utils.IntToString(unixTimestampInMilliSeconds), expireConditionStr},
 	)
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return false, err
 	}
 	return handleBooleanResponse(result)
 }
@@ -1291,10 +1291,10 @@ func (client *baseClient) Rename(key string, newKey string) (Result[string], err
 	return handleStringOrNullResponse(result)
 }
 
-func (client *baseClient) Renamenx(key string, newKey string) (Result[bool], error) {
+func (client *baseClient) Renamenx(key string, newKey string) (bool, error) {
 	result, err := client.executeCommand(C.RenameNX, []string{key, newKey})
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return false, err
 	}
 	return handleBooleanResponse(result)
 }
@@ -1379,7 +1379,7 @@ func (client *baseClient) zAddIncrBase(key string, opts *options.ZAddOptions) (R
 		return CreateNilFloat64Result(), err
 	}
 
-	return handleDoubleResponse(result)
+	return handleDoubleOrNullResponse(result)
 }
 
 func (client *baseClient) ZAddIncr(
@@ -1409,10 +1409,10 @@ func (client *baseClient) ZAddIncrWithOptions(
 	return client.zAddIncrBase(key, incrOpts)
 }
 
-func (client *baseClient) ZIncrBy(key string, increment float64, member string) (Result[float64], error) {
+func (client *baseClient) ZIncrBy(key string, increment float64, member string) (float64, error) {
 	result, err := client.executeCommand(C.ZIncrBy, []string{key, utils.FloatToString(increment), member})
 	if err != nil {
-		return CreateNilFloat64Result(), err
+		return float64(0), err
 	}
 
 	return handleDoubleResponse(result)
@@ -1571,10 +1571,10 @@ func (client *baseClient) ZRangeWithScores(
 	return handleStringDoubleMapResponse(result)
 }
 
-func (client *baseClient) Persist(key string) (Result[bool], error) {
+func (client *baseClient) Persist(key string) (bool, error) {
 	result, err := client.executeCommand(C.Persist, []string{key})
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return false, err
 	}
 	return handleBooleanResponse(result)
 }

@@ -111,7 +111,7 @@ type HashCommands interface {
 	//  value - The value to set.
 	//
 	// Return value:
-	//  A Result[bool] containing true if field is a new field in the hash and value was set.
+	//  A bool containing true if field is a new field in the hash and value was set.
 	//  false if field already exists in the hash and no operation was performed.
 	//
 	// For example:
@@ -123,7 +123,7 @@ type HashCommands interface {
 	//  // payload2.IsNil(): false
 	//
 	// [valkey.io]: https://valkey.io/commands/hsetnx/
-	HSetNX(key string, field string, value string) (Result[bool], error)
+	HSetNX(key string, field string, value string) (bool, error)
 
 	// HDel removes the specified fields from the hash stored at key.
 	// Specified fields that do not exist within this hash are ignored.
@@ -198,7 +198,7 @@ type HashCommands interface {
 	//  field - The field to check in the hash stored at key.
 	//
 	// Return value:
-	//  A Result[bool] containing true if the hash contains the specified field.
+	//  A bool containing true if the hash contains the specified field.
 	//  false if the hash does not contain the field, or if the key does not exist.
 	//
 	// For example:
@@ -210,7 +210,7 @@ type HashCommands interface {
 	//  // exists.IsNil(): false
 	//
 	// [valkey.io]: https://valkey.io/commands/hexists/
-	HExists(key string, field string) (Result[bool], error)
+	HExists(key string, field string) (bool, error)
 
 	// HKeys returns all field names in the hash stored at key.
 	//
@@ -275,7 +275,7 @@ type HashCommands interface {
 
 	// Increments the string representing a floating point number stored at `field` in the hash stored at `key` by increment.
 	// By using a negative increment value, the value stored at `field` in the hash stored at `key` is decremented.
-	// If `field` or `key` does not exist, it is set to 0 before performing the operation.
+	// If `field` or `key` does not exist, it is set to `0` before performing the operation.
 	//
 	// See [valkey.io] for details.
 	//
@@ -285,15 +285,15 @@ type HashCommands interface {
 	// 	increment - The amount to increment.
 	//
 	// Return value:
-	// 	The Result[float64] value of `field` in the hash stored at `key` after the increment.
+	// 	The value of `field` in the hash stored at `key` after the increment.
 	//
 	// Example:
 	//  _, err := client.HSet("key", map[string]string{"field": "10"})
 	//  hincrByFloatResult, err := client.HIncrByFloat("key", "field", 1.5)
-	//	// hincrByFloatResult.Value(): 11.5
+	//	// hincrByFloatResult: 11.5
 	//
 	// [valkey.io]: https://valkey.io/commands/hincrbyfloat/
-	HIncrByFloat(key string, field string, increment float64) (Result[float64], error)
+	HIncrByFloat(key string, field string, increment float64) (float64, error)
 
 	// Iterates fields of Hash types and their associated values. This definition of HSCAN command does not include the
 	// optional arguments of the command.

@@ -197,7 +197,7 @@ type StringCommands interface {
 	//  keyValueMap - A key-value map consisting of keys and their respective values to set.
 	//
 	// Return value:
-	//  A Result[bool] containing true, if all keys were set. false, if no key was set.
+	//  A bool containing true, if all keys were set. false, if no key was set.
 	//
 	// For example:
 	//  1. result, err := client.MSetNX(map[string]string{"key1": "value1", "key2": "value2"})
@@ -209,7 +209,7 @@ type StringCommands interface {
 	//     result.IsNil(): false
 	//
 	// [valkey.io]: https://valkey.io/commands/msetnx/
-	MSetNX(keyValueMap map[string]string) (Result[bool], error)
+	MSetNX(keyValueMap map[string]string) (bool, error)
 
 	// Increments the number stored at key by one. If key does not exist, it is set to 0 before performing the operation.
 	//
@@ -251,7 +251,7 @@ type StringCommands interface {
 	IncrBy(key string, amount int64) (Result[int64], error)
 
 	// Increments the string representing a floating point number stored at key by amount. By using a negative increment value,
-	// the result is that the value stored at key is decremented. If key does not exist, it is set to 0 before performing the
+	// the result is that the value stored at key is decremented. If key does not exist, it is set to `0` before performing the
 	// operation.
 	//
 	// See [valkey.io] for details.
@@ -261,16 +261,15 @@ type StringCommands interface {
 	//  amount - The amount to increment.
 	//
 	// Return value:
-	//  The Result[float64] of key after the increment.
+	//  The value of key after the increment.
 	//
 	// For example:
 	//  key: 1
 	//  result, err := client.IncrBy("key", 0.5)
-	//  result.Value(): 1.5
-	//  result.IsNil(): false
+	//  result: 1.5
 	//
 	// [valkey.io]: https://valkey.io/commands/incrbyfloat/
-	IncrByFloat(key string, amount float64) (Result[float64], error)
+	IncrByFloat(key string, amount float64) (float64, error)
 
 	// Decrements the number stored at key by one. If key does not exist, it is set to 0 before performing the operation.
 	//

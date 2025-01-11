@@ -256,7 +256,18 @@ func handleLongArrayResponse(response *C.struct_CommandResponse) ([]Result[int64
 	return slice, nil
 }
 
-func handleDoubleResponse(response *C.struct_CommandResponse) (Result[float64], error) {
+func handleDoubleResponse(response *C.struct_CommandResponse) (float64, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Float, false)
+	if typeErr != nil {
+		return float64(0), typeErr
+	}
+
+	return float64(response.float_value), nil
+}
+
+func handleDoubleOrNullResponse(response *C.struct_CommandResponse) (Result[float64], error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Float, false)
@@ -293,18 +304,18 @@ func handleLongAndDoubleOrNullResponse(response *C.struct_CommandResponse) (Resu
 	return rank, score, nil
 }
 
-func handleBooleanResponse(response *C.struct_CommandResponse) (Result[bool], error) {
+func handleBooleanResponse(response *C.struct_CommandResponse) (bool, error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Bool, false)
 	if typeErr != nil {
-		return CreateNilBoolResult(), typeErr
+		return false, typeErr
 	}
 
-	return CreateBoolResult(bool(response.bool_value)), nil
+	return bool(response.bool_value), nil
 }
 
-func handleBooleanArrayResponse(response *C.struct_CommandResponse) ([]Result[bool], error) {
+func handleBooleanArrayResponse(response *C.struct_CommandResponse) ([]bool, error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Array, false)
@@ -312,13 +323,13 @@ func handleBooleanArrayResponse(response *C.struct_CommandResponse) ([]Result[bo
 		return nil, typeErr
 	}
 
-	slice := make([]Result[bool], 0, response.array_value_len)
+	slice := make([]bool, 0, response.array_value_len)
 	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
 		err := checkResponseType(&v, C.Bool, false)
 		if err != nil {
 			return nil, err
 		}
-		slice = append(slice, CreateBoolResult(bool(v.bool_value)))
+		slice = append(slice, bool(v.bool_value))
 	}
 	return slice, nil
 }
