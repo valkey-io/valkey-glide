@@ -12719,9 +12719,15 @@ public class SharedCommandTests {
             assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0"), "This feature added in version 8");
         }
 
-        String prefix = "{" + UUID.randomUUID() + "}-";
-        GlideString listKey = gs(prefix + "listKey");
-        GlideString storeKey = gs(prefix + "storeKey");
+        var prefix = UUID.randomUUID();
+        GlideString setKey1 = gs("{" + prefix + "}1");
+        GlideString setKey2 = gs("{" + prefix + "}2");
+        GlideString setKey3 = gs("{" + prefix + "}3");
+        GlideString setKey4 = gs("{" + prefix + "}4");
+        GlideString setKey5 = gs("{" + prefix + "}5");
+        GlideString[] setKeys = new GlideString[] {setKey1, setKey2, setKey3, setKey4, setKey5};
+        GlideString listKey = gs("{" + prefix + "}listKey");
+        GlideString storeKey = gs("{" + prefix + "}storeKey");
         GlideString nameField = gs("name");
         GlideString ageField = gs("age");
         GlideString[] names =
@@ -12731,14 +12737,22 @@ public class SharedCommandTests {
                 new GlideString[] {gs("Dave"), gs("Bob"), gs("Alice"), gs("Charlie"), gs("Eve")};
         GlideString[] ages = new GlideString[] {gs("30"), gs("25"), gs("35"), gs("20"), gs("40")};
         GlideString[] userIDs = new GlideString[] {gs("3"), gs("1"), gs("5"), gs("4"), gs("2")};
-        GlideString namePattern = gs(prefix + "*->name");
-        GlideString agePattern = gs(prefix + "*->age");
+        GlideString namePattern = gs("{" + prefix + "}*->name");
+        GlideString agePattern = gs("{" + prefix + "}*->age");
         GlideString missingListKey = gs("100000");
 
-        for (int i = 0; i < names.length; i++) {
+        for (int i = 0; i < setKeys.length; i++) {
             assertEquals(
                     2,
-                    client.hset(gs(prefix + (i + 1)), Map.of(nameField, names[i], ageField, ages[i])).get());
+                    client
+                            .hset(
+                                    setKeys[i].toString(),
+                                    Map.of(
+                                            nameField.toString(),
+                                            names[i].toString(),
+                                            ageField.toString(),
+                                            ages[i].toString()))
+                            .get());
         }
 
         assertEquals(5, client.rpush(listKey, userIDs).get());
@@ -12788,7 +12802,10 @@ public class SharedCommandTests {
                 client
                         .sort(
                                 listKey,
-                                SortOptionsBinary.builder().alpha().getPattern(gs("{setKeyGs}missing")).build())
+                                SortOptionsBinary.builder()
+                                        .alpha()
+                                        .getPattern(gs("{" + prefix + "}missing"))
+                                        .build())
                         .get());
 
         // Missing key in the set
@@ -12851,7 +12868,10 @@ public class SharedCommandTests {
                     client
                             .sortReadOnly(
                                     listKey,
-                                    SortOptionsBinary.builder().alpha().getPattern(gs("{setKeyGs}missing")).build())
+                                    SortOptionsBinary.builder()
+                                            .alpha()
+                                            .getPattern(gs("{" + prefix + "}missing"))
+                                            .build())
                             .get());
 
             assertArrayEquals(

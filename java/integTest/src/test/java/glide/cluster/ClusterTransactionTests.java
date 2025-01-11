@@ -321,12 +321,13 @@ public class ClusterTransactionTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void sort(GlideClusterClient clusterClient) {
-        String key1 = "{key}:1" + UUID.randomUUID();
-        String key2 = "{key}:2" + UUID.randomUUID();
-        String key3 = "{key}:3" + UUID.randomUUID();
-        String key4 = "{key}:4" + UUID.randomUUID();
-        String key5 = "{key}:5" + UUID.randomUUID();
-        String key6 = "{key}:6" + UUID.randomUUID();
+        var prefix = "{" + UUID.randomUUID() + "}:";
+        String key1 = prefix + "1";
+        String key2 = prefix + "2";
+        String key3 = prefix + "3";
+        String key4 = prefix + "4";
+        String key5 = prefix + "5";
+        String key6 = prefix + "6";
         String[] descendingList = new String[] {"3", "2", "1"};
         ClusterTransaction transaction = new ClusterTransaction();
         String[] ascendingListByAge = new String[] {"Bob", "Alice"};
@@ -348,26 +349,32 @@ public class ClusterTransactionTests {
                     .lpush(key5, new String[] {"4", "3"})
                     .sort(
                             key5,
-                            SortOptions.builder().byPattern("{key}:*->age").getPattern("{key}:*->name").build())
+                            SortOptions.builder()
+                                    .byPattern(prefix + "*->age")
+                                    .getPattern(prefix + "*->name")
+                                    .build())
                     .sort(
                             key5,
                             SortOptions.builder()
                                     .orderBy(DESC)
-                                    .byPattern("{key}:*->age")
-                                    .getPattern("{key}:*->name")
+                                    .byPattern(prefix + "*->age")
+                                    .getPattern(prefix + "*->name")
                                     .build())
                     .sortStore(
                             key5,
                             key6,
-                            SortOptions.builder().byPattern("{key}:*->age").getPattern("{key}:*->name").build())
+                            SortOptions.builder()
+                                    .byPattern(prefix + "*->age")
+                                    .getPattern(prefix + "*->name")
+                                    .build())
                     .lrange(key6, 0, -1)
                     .sortStore(
                             key5,
                             key6,
                             SortOptions.builder()
                                     .orderBy(DESC)
-                                    .byPattern("{key}:*->age")
-                                    .getPattern("{key}:*->name")
+                                    .byPattern(prefix + "*->age")
+                                    .getPattern(prefix + "*->name")
                                     .build())
                     .lrange(key6, 0, -1);
         }
