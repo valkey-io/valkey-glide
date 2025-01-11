@@ -85,36 +85,34 @@ func NewXTrimOptionsWithMaxLen(threshold int64) *XTrimOptions {
 }
 
 // Match exactly on the threshold.
-func (xto *XTrimOptions) SetExactTrimming() *XTrimOptions {
-	xto.exact = triStateBoolTrue
-	return xto
+func (xTrimOptions *XTrimOptions) SetExactTrimming() *XTrimOptions {
+	xTrimOptions.exact = triStateBoolTrue
+	return xTrimOptions
 }
 
 // Trim in a near-exact manner, which is more efficient.
-func (xto *XTrimOptions) SetNearlyExactTrimming() *XTrimOptions {
-	xto.exact = triStateBoolFalse
-	return xto
+func (xTrimOptions *XTrimOptions) SetNearlyExactTrimming() *XTrimOptions {
+	xTrimOptions.exact = triStateBoolFalse
+	return xTrimOptions
 }
 
 // Max number of stream entries to be trimmed for non-exact match.
-func (xto *XTrimOptions) SetNearlyExactTrimmingAndLimit(limit int64) *XTrimOptions {
-	xto.exact = triStateBoolFalse
-	xto.limit = limit
-	return xto
+func (xTrimOptions *XTrimOptions) SetNearlyExactTrimmingAndLimit(limit int64) *XTrimOptions {
+	xTrimOptions.exact = triStateBoolFalse
+	xTrimOptions.limit = limit
+	return xTrimOptions
 }
 
-func (xto *XTrimOptions) ToArgs() ([]string, error) {
-	args := []string{}
-	args = append(args, xto.method)
-	if xto.exact == triStateBoolTrue {
+func (xTrimOptions *XTrimOptions) ToArgs() ([]string, error) {
+	args := []string{xTrimOptions.method}
+	if xTrimOptions.exact == triStateBoolTrue {
 		args = append(args, "=")
-	} else if xto.exact == triStateBoolFalse {
+	} else if xTrimOptions.exact == triStateBoolFalse {
 		args = append(args, "~")
 	}
-	args = append(args, xto.threshold)
-	if xto.limit > 0 {
-		args = append(args, "LIMIT", utils.IntToString(xto.limit))
+	args = append(args, xTrimOptions.threshold)
+	if xTrimOptions.limit > 0 {
+		args = append(args, "LIMIT", utils.IntToString(xTrimOptions.limit))
 	}
-	var err error
-	return args, err
+	return args, nil
 }
