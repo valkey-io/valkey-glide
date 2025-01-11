@@ -1579,6 +1579,14 @@ func (client *baseClient) Persist(key string) (Result[bool], error) {
 	return handleBooleanResponse(result)
 }
 
+func (client *baseClient) ZCount(key string, rangeOptions *options.ZCountRange) (Result[int64], error) {
+	zCountRangeArgs, err := rangeOptions.ToArgs()
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+	result, err := client.executeCommand(C.ZCount, append([]string{key}, zCountRangeArgs...))
+}
+
 func (client *baseClient) ZRank(key string, member string) (Result[int64], error) {
 	result, err := client.executeCommand(C.ZRank, []string{key, member})
 	if err != nil {
