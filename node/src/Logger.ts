@@ -2,7 +2,7 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { InitInternalLogger, Level, log } from "glide-rs";
+import { InitInternalLogger, Level, log } from "@valkey/glide-rs";
 
 const LEVEL = new Map<LevelOptions | undefined, Level | undefined>([
     ["error", Level.Error],

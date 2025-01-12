@@ -2,7 +2,7 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "glide-rs";
+import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "@valkey/glide-rs";
 import Long from "long";
 
 import {

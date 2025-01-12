@@ -70,9 +70,37 @@ jobs:
                       )
                   )' < .github/json_matrices/build-matrix.json | jq -c .)
                   echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
+      
+     publish-rust-client:
+        needs: [start-self-hosted-runner, load-platform-matrix]
+        if: github.repository_owner == 'valkey-io'
+        name: Publish Rust client to NPM
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  submodules: "true"
+
+            - name: Setup node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "latest"
+                  registry-url: "https://registry.npmjs.org"
+                  scope: "${{ vars.NPM_SCOPE }}"
+                  always-auth: true
+
+            - name: Publish Rust client
+              working-directory: ./node/rust-client
+              run: |
+                  npm ci
+                  npm run build
+                  npm publish --access public
+              env:
+                  NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
 
     publish-binaries:
-        needs: [start-self-hosted-runner, load-platform-matrix]
+        needs: [start-self-hosted-runner, load-platform-matrix, publish-rust-client]
         if: github.repository_owner == 'valkey-io'
         name: Publish packages to NPM
         runs-on: ${{ matrix.build.RUNNER }}
@@ -224,7 +252,7 @@ jobs:
     publish-base-to-npm:
         if: github.event_name != 'pull_request'
         name: Publish the base NPM package
-        needs: publish-binaries
+        needs: [publish-binaries, publish-rust-client]
         runs-on: ubuntu-latest
         steps:
             - name: Checkout
@@ -386,7 +414,7 @@ jobs:
               working-directory: ./utils/release-candidate-testing/node
               run: |
                   npm install
-                  npm install --no-save @valkey/valkey-glide@${{ env.NPM_TAG }}
+                  npm install --no-save @valkey/valkey-glide@${{ env.NPM_TAG }} @valkey/glide-rs@${{ env.NPM_TAG }}
                   npm run test
 
             - name: Deprecating packages on failure
@@ -425,6 +453,8 @@ jobs:
 
                   # Deprecating base package
                   npm deprecate "@valkey/valkey-glide@${RELEASE_VERSION}" "This version has been deprecated" --force || true
+                  # Deprecating Rust client package
+                  npm deprecate "@valkey/glide-rs@${RELEASE_VERSION}" "This version has been deprecated" --force || true
 
                   # Process platform matrix
                   echo "${PLATFORM_MATRIX}" > platform_matrix.json

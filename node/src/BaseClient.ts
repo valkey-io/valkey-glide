@@ -9,7 +9,7 @@ import {
     StartSocketConnection,
     getStatistics,
     valueFromSplitPointer,
-} from "glide-rs";
+} from "@valkey/glide-rs";
 import * as net from "net";
 import { Buffer, BufferWriter, Long, Reader, Writer } from "protobufjs";
 import {
