@@ -2220,18 +2220,11 @@ describe("GlideClusterClient", () => {
                             ),
                         );
 
-                    // Skip test if version is below 8.0.0
-                    if (cluster.checkIfServerVersionLessThan("8.0.0")) {
-                        console.log(
-                            "Skipping test: requires Valkey 8.0.0 or higher",
-                        );
-                        return;
-                    }
-
                     await client_for_config_set.customCommand([
                         "CONFIG",
                         "RESETSTAT",
                     ]);
+
                     await client_for_config_set.customCommand(
                         ["CONFIG", "SET", "availability-zone", az],
                         { route: "allNodes" },
@@ -2334,14 +2327,6 @@ describe("GlideClusterClient", () => {
                                 { requestTimeout: 3000 },
                             ),
                         );
-
-                    // Skip test if version is below 8.0.0
-                    if (cluster.checkIfServerVersionLessThan("8.0.0")) {
-                        console.log(
-                            "Skipping test: requires Valkey 8.0.0 or higher",
-                        );
-                        return;
-                    }
 
                     await client_for_config_set.customCommand(
                         ["CONFIG", "SET", "availability-zone", ""],
