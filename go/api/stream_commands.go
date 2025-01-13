@@ -116,11 +116,11 @@ type StreamCommands interface {
 	//
 	// For example:
 	//  xAddResult, err := client.XAddWithOptions(
-	//	 	key1,
+	//	 	"key1",
 	//  	[][]string{{"f1", "foo1"}, {"f2", "bar2"}},
 	//		options.NewXAddOptions().SetId(streamId1),
 	//  )
-	//  xDelResult, err := client.XDel(key1, []string{streamId1, streamId3})
+	//  xDelResult, err := client.XDel("key1", []string{streamId1, streamId3})
 	//  fmt.Println(xDelResult.Value()) // Output: 1
 	//
 	// [valkey.io]: https://valkey.io/commands/xdel/
