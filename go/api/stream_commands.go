@@ -101,4 +101,28 @@ type StreamCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/xlen/
 	XLen(key string) (Result[int64], error)
+
+	// Removes the specified entries by id from a stream, and returns the number of entries deleted.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//  key - The key of the stream.
+	// 	ids - An array of entry ids.
+	//
+	// Return value:
+	//  int64 - The number of entries removed from the stream. This number may be less than the number
+	//  of entries in `ids`, if the specified `ids` don't exist in the stream.
+	//
+	// For example:
+	//  xAddResult, err := client.XAddWithOptions(
+	//	 	key1,
+	//  	[][]string{{"f1", "foo1"}, {"f2", "bar2"}},
+	//		options.NewXAddOptions().SetId(streamId1),
+	//  )
+	//  xDelResult, err := client.XDel(key1, []string{streamId1, streamId3})
+	//  fmt.Println(xDelResult.Value()) // Output: 1
+	//
+	// [valkey.io]: https://valkey.io/commands/xdel/
+	XDel(key string, ids []string) (int64, error)
 }

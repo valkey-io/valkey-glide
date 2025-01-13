@@ -1630,3 +1630,11 @@ func (client *baseClient) XLen(key string) (Result[int64], error) {
 	}
 	return handleLongResponse(result)
 }
+
+func (client *baseClient) XDel(key string, ids []string) (int64, error) {
+	result, err := client.executeCommand(C.XDel, append([]string{key}, ids...))
+	if err != nil {
+		return 0, err
+	}
+	return int64(result.int_value), nil
+}
