@@ -396,8 +396,8 @@ type SortedSetCommands interface {
 	//		"three": 3.0,
 	//	}
 	//
-	//	zAddResult, err := client.ZAdd(key1, membersScores)
-	//	zScoreResult, err := client.ZScore(key1, "one")
+	//	zAddResult, err := client.ZAdd("key1", membersScores)
+	//	zScoreResult, err := client.ZScore("key1", "one")
 	//	//fmt.Println(zScoreResult) // Value: 1.0
 	//
 	// [valkey.io]: https://valkey.io/commands/zscore/
