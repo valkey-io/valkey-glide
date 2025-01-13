@@ -17,6 +17,7 @@ import {
     convertGlideRecordToRecord,
 } from "./BaseClient";
 import {
+    ClusterScanOptions,
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
@@ -24,7 +25,6 @@ import {
     FunctionStatsSingleResponse,
     InfoOptions,
     LolwutOptions,
-    ClusterScanOptions,
     createClientGetName,
     createClientId,
     createConfigGet,
