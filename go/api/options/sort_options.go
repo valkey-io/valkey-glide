@@ -104,7 +104,12 @@ func (opts *SortOptions) ToArgs() []string {
 	var args []string
 
 	if opts.SortLimit != nil {
-		args = append(args, LIMIT_COMMAND_STRING, utils.IntToString(opts.SortLimit.Offset), utils.IntToString(opts.SortLimit.Count))
+		args = append(
+			args,
+			LIMIT_COMMAND_STRING,
+			utils.IntToString(opts.SortLimit.Offset),
+			utils.IntToString(opts.SortLimit.Count),
+		)
 	}
 
 	if opts.OrderBy != "" {
