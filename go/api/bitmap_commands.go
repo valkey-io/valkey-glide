@@ -11,9 +11,9 @@ import "github.com/valkey-io/valkey-glide/go/glide/api/options"
 // [valkey.io]: https://valkey.io/commands/#bitmap
 type BitmapCommands interface {
 	// Sets or clears the bit at offset in the string value stored at key.
-	// The offset is a zero-based index, with 0 being the first element of
-	// the list, 1 being the next element, and so on. The offset must be
-	// less than 2^32 and greater than or equal to 0 If a key is
+	// The offset is a zero-based index, with `0`` being the first element of
+	// the list, `1` being the next element, and so on. The offset must be
+	// less than `2^32` and greater than or equal to `0` If a key is
 	// non-existent then the bit at offset is set to value and the preceding
 	// bits are set to 0.
 	//
