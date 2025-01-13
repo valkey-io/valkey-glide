@@ -4926,6 +4926,5 @@ func (suite *GlideTestSuite) Test_ZScore() {
 		_, err = client.ZScore(key2, "one")
 		assert.NotNil(t, err)
 		assert.IsType(t, &api.RequestError{}, err)
-
 	})
 }
