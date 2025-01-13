@@ -18,10 +18,10 @@ const (
 	GET_COMMAND_STRING = "GET"
 )
 
-// Limit struct represents the range of elements to retrieve
+// SortLimit struct represents the range of elements to retrieve
 // The LIMIT argument is commonly used to specify a subset of results from the matching elements, similar to the
 // LIMIT clause in SQL (e.g., `SELECT LIMIT offset, count`).
-type Limit struct {
+type SortLimit struct {
 	Offset int64
 	Count  int64
 }
@@ -36,7 +36,7 @@ const (
 
 // SortOptions struct combines both the base options and additional sorting options
 type SortOptions struct {
-	Limit       *Limit
+	SortLimit   *SortLimit
 	OrderBy     OrderBy
 	IsAlpha     bool
 	ByPattern   string
@@ -50,12 +50,12 @@ func NewSortOptions() *SortOptions {
 	}
 }
 
-// Limit Limits the range of elements
+// SortLimit Limits the range of elements
 // Offset is the starting position of the range, zero based.
 // Count is the maximum number of elements to include in the range.
 // A negative count returns all elements from the offset.
-func (opts *SortOptions) SetLimit(offset, count int64) *SortOptions {
-	opts.Limit = &Limit{Offset: offset, Count: count}
+func (opts *SortOptions) SetSortLimit(offset, count int64) *SortOptions {
+	opts.SortLimit = &SortLimit{Offset: offset, Count: count}
 	return opts
 }
 
@@ -103,8 +103,8 @@ func (opts *SortOptions) AddGetPattern(getPattern string) *SortOptions {
 func (opts *SortOptions) ToArgs() []string {
 	var args []string
 
-	if opts.Limit != nil {
-		args = append(args, LIMIT_COMMAND_STRING, utils.IntToString(opts.Limit.Offset), utils.IntToString(opts.Limit.Count))
+	if opts.SortLimit != nil {
+		args = append(args, LIMIT_COMMAND_STRING, utils.IntToString(opts.SortLimit.Offset), utils.IntToString(opts.SortLimit.Count))
 	}
 
 	if opts.OrderBy != "" {
