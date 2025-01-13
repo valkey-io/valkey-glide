@@ -484,6 +484,31 @@ func (client *baseClient) HIncrByFloat(key string, field string, increment float
 	return handleDoubleResponse(result)
 }
 
+func (client *baseClient) HScan(key string, cursor string) (Result[string], []Result[string], error) {
+	result, err := client.executeCommand(C.HScan, []string{key, cursor})
+	if err != nil {
+		return CreateNilStringResult(), nil, err
+	}
+	return handleScanResponse(result)
+}
+
+func (client *baseClient) HScanWithOptions(
+	key string,
+	cursor string,
+	options *options.HashScanOptions,
+) (Result[string], []Result[string], error) {
+	optionArgs, err := options.ToArgs()
+	if err != nil {
+		return CreateNilStringResult(), nil, err
+	}
+
+	result, err := client.executeCommand(C.HScan, append([]string{key, cursor}, optionArgs...))
+	if err != nil {
+		return CreateNilStringResult(), nil, err
+	}
+	return handleScanResponse(result)
+}
+
 func (client *baseClient) LPush(key string, elements []string) (Result[int64], error) {
 	result, err := client.executeCommand(C.LPush, append([]string{key}, elements...))
 	if err != nil {
@@ -721,9 +746,9 @@ func (client *baseClient) SScan(key string, cursor string) (Result[string], []Re
 func (client *baseClient) SScanWithOptions(
 	key string,
 	cursor string,
-	options *BaseScanOptions,
+	options *options.BaseScanOptions,
 ) (Result[string], []Result[string], error) {
-	optionArgs, err := options.toArgs()
+	optionArgs, err := options.ToArgs()
 	if err != nil {
 		return CreateNilStringResult(), nil, err
 	}
@@ -1307,10 +1332,64 @@ func (client *baseClient) XAddWithOptions(
 	return handleStringOrNullResponse(result)
 }
 
+// Reads entries from the given streams.
+//
+// Note:
+//
+//	When in cluster mode, all keys in `keysAndIds` must map to the same hash slot.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	keysAndIds - A map of keys and entry IDs to read from.
+//
+// Return value:
+// A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
+// a key does not exist or does not contain requiested entries.
+//
+// For example:
+//
+//	result, err := client.XRead({"stream1": "0-0", "stream2": "0-1"})
+//	err == nil: true
+//	result: map[string]map[string][][]string{
+//	  "stream1": {"0-1": {{"field1", "value1"}}, "0-2": {{"field2", "value2"}, {"field2", "value3"}}},
+//	  "stream2": {},
+//	}
+//
+// [valkey.io]: https://valkey.io/commands/xread/
 func (client *baseClient) XRead(keysAndIds map[string]string) (map[string]map[string][][]string, error) {
 	return client.XReadWithOptions(keysAndIds, options.NewXReadOptions())
 }
 
+// Reads entries from the given streams.
+//
+// Note:
+//
+//	When in cluster mode, all keys in `keysAndIds` must map to the same hash slot.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	keysAndIds - A map of keys and entry IDs to read from.
+//	options - Options detailing how to read the stream.
+//
+// Return value:
+// A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
+// a key does not exist or does not contain requiested entries.
+//
+// For example:
+//
+//	options := options.NewXReadOptions().SetBlock(100500)
+//	result, err := client.XReadWithOptions({"stream1": "0-0", "stream2": "0-1"}, options)
+//	err == nil: true
+//	result: map[string]map[string][][]string{
+//	  "stream1": {"0-1": {{"field1", "value1"}}, "0-2": {{"field2", "value2"}, {"field2", "value3"}}},
+//	  "stream2": {},
+//	}
+//
+// [valkey.io]: https://valkey.io/commands/xread/
 func (client *baseClient) XReadWithOptions(
 	keysAndIds map[string]string,
 	options *options.XReadOptions,
@@ -1470,5 +1549,169 @@ func (client *baseClient) ZCard(key string) (Result[int64], error) {
 		return CreateNilInt64Result(), err
 	}
 
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) BZPopMin(keys []string, timeoutSecs float64) (Result[KeyWithMemberAndScore], error) {
+	result, err := client.executeCommand(C.BZPopMin, append(keys, utils.FloatToString(timeoutSecs)))
+	if err != nil {
+		return CreateNilKeyWithMemberAndScoreResult(), err
+	}
+
+	return handleKeyWithMemberAndScoreResponse(result)
+}
+
+// Returns the specified range of elements in the sorted set stored at `key`.
+// `ZRANGE` can perform different types of range queries: by index (rank), by the score, or by lexicographical order.
+//
+// To get the elements with their scores, see [ZRangeWithScores].
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	rangeQuery - The range query object representing the type of range query to perform.
+//	  - For range queries by index (rank), use [RangeByIndex].
+//	  - For range queries by lexicographical order, use [RangeByLex].
+//	  - For range queries by score, use [RangeByScore].
+//
+// Return value:
+//
+//	An array of elements within the specified range.
+//	If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty array.
+//
+// Example:
+//
+//	// Retrieve all members of a sorted set in ascending order
+//	result, err := client.ZRange("my_sorted_set", options.NewRangeByIndexQuery(0, -1))
+//
+//	// Retrieve members within a score range in descending order
+//
+// query := options.NewRangeByScoreQuery(options.NewScoreBoundary(3, false),
+// options.NewInfiniteScoreBoundary(options.NegativeInfinity)).
+//
+//	  .SetReverse()
+//	result, err := client.ZRange("my_sorted_set", query)
+//	// `result` contains members which have scores within the range of negative infinity to 3, in descending order
+//
+// [valkey.io]: https://valkey.io/commands/zrange/
+func (client *baseClient) ZRange(key string, rangeQuery options.ZRangeQuery) ([]Result[string], error) {
+	args := make([]string, 0, 10)
+	args = append(args, key)
+	args = append(args, rangeQuery.ToArgs()...)
+	result, err := client.executeCommand(C.ZRange, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringArrayResponse(result)
+}
+
+// Returns the specified range of elements with their scores in the sorted set stored at `key`.
+// `ZRANGE` can perform different types of range queries: by index (rank), by the score, or by lexicographical order.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	rangeQuery - The range query object representing the type of range query to perform.
+//	  - For range queries by index (rank), use [RangeByIndex].
+//	  - For range queries by score, use [RangeByScore].
+//
+// Return value:
+//
+//	A map of elements and their scores within the specified range.
+//	If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty map.
+//
+// Example:
+//
+//	// Retrieve all members of a sorted set in ascending order
+//	result, err := client.ZRangeWithScores("my_sorted_set", options.NewRangeByIndexQuery(0, -1))
+//
+//	// Retrieve members within a score range in descending order
+//
+// query := options.NewRangeByScoreQuery(options.NewScoreBoundary(3, false),
+// options.NewInfiniteScoreBoundary(options.NegativeInfinity)).
+//
+//	  SetReverse()
+//	result, err := client.ZRangeWithScores("my_sorted_set", query)
+//	// `result` contains members with scores within the range of negative infinity to 3, in descending order
+//
+// [valkey.io]: https://valkey.io/commands/zrange/
+func (client *baseClient) ZRangeWithScores(
+	key string,
+	rangeQuery options.ZRangeQueryWithScores,
+) (map[Result[string]]Result[float64], error) {
+	args := make([]string, 0, 10)
+	args = append(args, key)
+	args = append(args, rangeQuery.ToArgs()...)
+	args = append(args, "WITHSCORES")
+	result, err := client.executeCommand(C.ZRange, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleStringDoubleMapResponse(result)
+}
+
+func (client *baseClient) Persist(key string) (Result[bool], error) {
+	result, err := client.executeCommand(C.Persist, []string{key})
+	if err != nil {
+		return CreateNilBoolResult(), err
+	}
+	return handleBooleanResponse(result)
+}
+
+func (client *baseClient) ZRank(key string, member string) (Result[int64], error) {
+	result, err := client.executeCommand(C.ZRank, []string{key, member})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+	return handleLongOrNullResponse(result)
+}
+
+func (client *baseClient) ZRankWithScore(key string, member string) (Result[int64], Result[float64], error) {
+	result, err := client.executeCommand(C.ZRank, []string{key, member, options.WithScore})
+	if err != nil {
+		return CreateNilInt64Result(), CreateNilFloat64Result(), err
+	}
+	return handleLongAndDoubleOrNullResponse(result)
+}
+
+func (client *baseClient) ZRevRank(key string, member string) (Result[int64], error) {
+	result, err := client.executeCommand(C.ZRevRank, []string{key, member})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+	return handleLongOrNullResponse(result)
+}
+
+func (client *baseClient) ZRevRankWithScore(key string, member string) (Result[int64], Result[float64], error) {
+	result, err := client.executeCommand(C.ZRevRank, []string{key, member, options.WithScore})
+	if err != nil {
+		return CreateNilInt64Result(), CreateNilFloat64Result(), err
+	}
+	return handleLongAndDoubleOrNullResponse(result)
+}
+
+func (client *baseClient) XTrim(key string, options *options.XTrimOptions) (Result[int64], error) {
+	xTrimArgs, err := options.ToArgs()
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+	result, err := client.executeCommand(C.XTrim, append([]string{key}, xTrimArgs...))
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+	return handleLongResponse(result)
+}
+
+func (client *baseClient) XLen(key string) (Result[int64], error) {
+	result, err := client.executeCommand(C.XLen, []string{key})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
 	return handleLongResponse(result)
 }

@@ -15,7 +15,6 @@ import (
 func checkResponseType(response *C.struct_CommandResponse, expectedType C.ResponseType, isNilable bool) error {
 	expectedTypeInt := uint32(expectedType)
 	expectedTypeStr := C.get_response_type_string(expectedTypeInt)
-	defer C.free_response_type_string(expectedTypeStr)
 
 	if !isNilable && response == nil {
 		return &RequestError{
@@ -35,7 +34,6 @@ func checkResponseType(response *C.struct_CommandResponse, expectedType C.Respon
 	}
 
 	actualTypeStr := C.get_response_type_string(response.response_type)
-	defer C.free_response_type_string(actualTypeStr)
 	return &RequestError{
 		fmt.Sprintf(
 			"Unexpected return type from Valkey: got %s, expected %s",
@@ -270,6 +268,32 @@ func handleDoubleResponse(response *C.struct_CommandResponse) (Result[float64], 
 	return CreateFloat64Result(float64(response.float_value)), nil
 }
 
+func handleLongAndDoubleOrNullResponse(response *C.struct_CommandResponse) (Result[int64], Result[float64], error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Array, true)
+	if typeErr != nil {
+		return CreateNilInt64Result(), CreateNilFloat64Result(), typeErr
+	}
+
+	if response.response_type == C.Null {
+		return CreateNilInt64Result(), CreateNilFloat64Result(), nil
+	}
+
+	rank := CreateNilInt64Result()
+	score := CreateNilFloat64Result()
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		if v.response_type == C.Int {
+			rank = CreateInt64Result(int64(v.int_value))
+		}
+		if v.response_type == C.Float {
+			score = CreateFloat64Result(float64(v.float_value))
+		}
+	}
+
+	return rank, score, nil
+}
+
 func handleBooleanResponse(response *C.struct_CommandResponse) (Result[bool], error) {
 	defer C.free_command_response(response)
 
@@ -396,6 +420,30 @@ func handleStringSetResponse(response *C.struct_CommandResponse) (map[Result[str
 	}
 
 	return slice, nil
+}
+
+func handleKeyWithMemberAndScoreResponse(response *C.struct_CommandResponse) (Result[KeyWithMemberAndScore], error) {
+	defer C.free_command_response(response)
+
+	if response == nil || response.response_type == uint32(C.Null) {
+		return CreateNilKeyWithMemberAndScoreResult(), nil
+	}
+
+	typeErr := checkResponseType(response, C.Array, true)
+	if typeErr != nil {
+		return CreateNilKeyWithMemberAndScoreResult(), typeErr
+	}
+
+	slice, err := parseArray(response)
+	if err != nil {
+		return CreateNilKeyWithMemberAndScoreResult(), err
+	}
+
+	arr := slice.([]interface{})
+	key := arr[0].(string)
+	member := arr[1].(string)
+	score := arr[2].(float64)
+	return CreateKeyWithMemberAndScoreResult(KeyWithMemberAndScore{key, member, score}), nil
 }
 
 func handleScanResponse(

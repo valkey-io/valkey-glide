@@ -6,6 +6,7 @@ import (
 	"math"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -1103,6 +1104,175 @@ func (suite *GlideTestSuite) TestHIncrByFloat_WithNonExistingField() {
 		hincrByFloatResult, hincrByFloatErr := client.HIncrByFloat(key, field, 1.5)
 		assert.Nil(suite.T(), hincrByFloatErr)
 		assert.Equal(suite.T(), float64(1.5), hincrByFloatResult.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestHScan() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{key}-1" + uuid.NewString()
+		key2 := "{key}-2" + uuid.NewString()
+		initialCursor := "0"
+		defaultCount := 20
+
+		// Setup test data
+		numberMap := make(map[string]string)
+		// This is an unusually large dataset because the server can ignore the COUNT option if the dataset is small enough
+		// because it is more efficient to transfer its entire content at once.
+		for i := 0; i < 50000; i++ {
+			numberMap[strconv.Itoa(i)] = "num" + strconv.Itoa(i)
+		}
+		charMembers := []string{"a", "b", "c", "d", "e"}
+		charMap := make(map[string]string)
+		for i, val := range charMembers {
+			charMap[val] = strconv.Itoa(i)
+		}
+
+		t := suite.T()
+
+		// Check for empty set.
+		resCursor, resCollection, err := client.HScan(key1, initialCursor)
+		assert.NoError(t, err)
+		assert.Equal(t, initialCursor, resCursor.Value())
+		assert.Empty(t, resCollection)
+
+		// Negative cursor check.
+		if suite.serverVersion >= "8.0.0" {
+			_, _, err = client.HScan(key1, "-1")
+			assert.NotEmpty(t, err)
+		} else {
+			resCursor, resCollection, _ = client.HScan(key1, "-1")
+			assert.Equal(t, initialCursor, resCursor.Value())
+			assert.Empty(t, resCollection)
+		}
+
+		// Result contains the whole set
+		hsetResult, _ := client.HSet(key1, charMap)
+		assert.Equal(t, int64(len(charMembers)), hsetResult.Value())
+
+		resCursor, resCollection, _ = client.HScan(key1, initialCursor)
+		assert.Equal(t, initialCursor, resCursor.Value())
+		// Length includes the score which is twice the map size
+		assert.Equal(t, len(charMap)*2, len(resCollection))
+
+		resultKeys := make([]api.Result[string], 0)
+		resultValues := make([]api.Result[string], 0)
+
+		for i := 0; i < len(resCollection); i += 2 {
+			resultKeys = append(resultKeys, resCollection[i])
+			resultValues = append(resultValues, resCollection[i+1])
+		}
+		keysList, valuesList := convertMapKeysAndValuesToResultList(charMap)
+		assert.True(t, isSubset(resultKeys, keysList) && isSubset(keysList, resultKeys))
+		assert.True(t, isSubset(resultValues, valuesList) && isSubset(valuesList, resultValues))
+
+		opts := options.NewHashScanOptionsBuilder().SetMatch("a")
+		resCursor, resCollection, _ = client.HScanWithOptions(key1, initialCursor, opts)
+		assert.Equal(t, initialCursor, resCursor.Value())
+		assert.Equal(t, len(resCollection), 2)
+		assert.Equal(t, resCollection[0].Value(), "a")
+		assert.Equal(t, resCollection[1].Value(), "0")
+
+		// Result contains a subset of the key
+		combinedMap := make(map[string]string)
+		for key, value := range numberMap {
+			combinedMap[key] = value
+		}
+		for key, value := range charMap {
+			combinedMap[key] = value
+		}
+
+		hsetResult, _ = client.HSet(key1, combinedMap)
+		assert.Equal(t, int64(len(numberMap)), hsetResult.Value())
+		resultCursor := "0"
+		secondResultAllKeys := make([]api.Result[string], 0)
+		secondResultAllValues := make([]api.Result[string], 0)
+		isFirstLoop := true
+		for {
+			resCursor, resCollection, _ = client.HScan(key1, resultCursor)
+			resultCursor = resCursor.Value()
+			for i := 0; i < len(resCollection); i += 2 {
+				secondResultAllKeys = append(secondResultAllKeys, resCollection[i])
+				secondResultAllValues = append(secondResultAllValues, resCollection[i+1])
+			}
+			if isFirstLoop {
+				assert.NotEqual(t, "0", resultCursor)
+				isFirstLoop = false
+			} else if resultCursor == "0" {
+				break
+			}
+
+			// Scan with result cursor to get the next set of data.
+			newResultCursor, secondResult, _ := client.HScan(key1, resultCursor)
+			assert.NotEqual(t, resultCursor, newResultCursor)
+			resultCursor = newResultCursor.Value()
+			assert.False(t, reflect.DeepEqual(secondResult, resCollection))
+			for i := 0; i < len(secondResult); i += 2 {
+				secondResultAllKeys = append(secondResultAllKeys, secondResult[i])
+				secondResultAllValues = append(secondResultAllValues, secondResult[i+1])
+			}
+
+			// 0 is returned for the cursor of the last iteration.
+			if resultCursor == "0" {
+				break
+			}
+		}
+		numberKeysList, numberValuesList := convertMapKeysAndValuesToResultList(numberMap)
+		assert.True(t, isSubset(numberKeysList, secondResultAllKeys))
+		assert.True(t, isSubset(numberValuesList, secondResultAllValues))
+
+		// Test match pattern
+		opts = options.NewHashScanOptionsBuilder().SetMatch("*")
+		resCursor, resCollection, _ = client.HScanWithOptions(key1, initialCursor, opts)
+		resCursorInt, _ := strconv.Atoi(resCursor.Value())
+		assert.True(t, resCursorInt >= 0)
+		assert.True(t, int(len(resCollection)) >= defaultCount)
+
+		// Test count
+		opts = options.NewHashScanOptionsBuilder().SetCount(int64(20))
+		resCursor, resCollection, _ = client.HScanWithOptions(key1, initialCursor, opts)
+		resCursorInt, _ = strconv.Atoi(resCursor.Value())
+		assert.True(t, resCursorInt >= 0)
+		assert.True(t, len(resCollection) >= 20)
+
+		// Test count with match returns a non-empty list
+		opts = options.NewHashScanOptionsBuilder().SetMatch("1*").SetCount(int64(20))
+		resCursor, resCollection, _ = client.HScanWithOptions(key1, initialCursor, opts)
+		resCursorInt, _ = strconv.Atoi(resCursor.Value())
+		assert.True(t, resCursorInt >= 0)
+		assert.True(t, len(resCollection) >= 0)
+
+		if suite.serverVersion >= "8.0.0" {
+			opts = options.NewHashScanOptionsBuilder().SetNoValue(true)
+			resCursor, resCollection, _ = client.HScanWithOptions(key1, initialCursor, opts)
+			resCursorInt, _ = strconv.Atoi(resCursor.Value())
+			assert.True(t, resCursorInt >= 0)
+
+			// Check if all fields don't start with "num"
+			containsElementsWithNumKeyword := false
+			for i := 0; i < len(resCollection); i++ {
+				if strings.Contains(resCollection[i].Value(), "num") {
+					containsElementsWithNumKeyword = true
+					break
+				}
+			}
+			assert.False(t, containsElementsWithNumKeyword)
+		}
+
+		// Check if Non-hash key throws an error.
+		setResult, _ := client.Set(key2, "test")
+		assert.Equal(t, setResult.Value(), "OK")
+		_, _, err = client.HScan(key2, initialCursor)
+		assert.NotEmpty(t, err)
+
+		// Check if Non-hash key throws an error when HSCAN called with options.
+		opts = options.NewHashScanOptionsBuilder().SetMatch("test").SetCount(int64(1))
+		_, _, err = client.HScanWithOptions(key2, initialCursor, opts)
+		assert.NotEmpty(t, err)
+
+		// Check if a negative cursor value throws an error.
+		opts = options.NewHashScanOptionsBuilder().SetCount(int64(-1))
+		_, _, err = client.HScanWithOptions(key1, initialCursor, opts)
+		assert.NotEmpty(t, err)
 	})
 }
 
@@ -2235,7 +2405,7 @@ func (suite *GlideTestSuite) TestSScan() {
 		assert.Equal(t, len(charMembers), len(resCollection))
 		assert.True(t, isSubset(resCollection, charMembersResult))
 
-		opts := api.NewBaseScanOptionsBuilder().SetMatch("a")
+		opts := options.NewBaseScanOptionsBuilder().SetMatch("a")
 		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
 		assert.Equal(t, initialCursor, resCursor.Value())
@@ -2263,21 +2433,21 @@ func (suite *GlideTestSuite) TestSScan() {
 		assert.True(t, isSubset(charMembersResult, resultCollection))
 
 		// test match pattern
-		opts = api.NewBaseScanOptionsBuilder().SetMatch("*")
+		opts = options.NewBaseScanOptionsBuilder().SetMatch("*")
 		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
 		assert.NotEqual(t, initialCursor, resCursor.Value())
 		assert.GreaterOrEqual(t, len(resCollection), defaultCount)
 
 		// test count
-		opts = api.NewBaseScanOptionsBuilder().SetCount(20)
+		opts = options.NewBaseScanOptionsBuilder().SetCount(20)
 		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
 		assert.NotEqual(t, initialCursor, resCursor.Value())
 		assert.GreaterOrEqual(t, len(resCollection), 20)
 
 		// test count with match, returns a non-empty array
-		opts = api.NewBaseScanOptionsBuilder().SetMatch("1*").SetCount(20)
+		opts = options.NewBaseScanOptionsBuilder().SetMatch("1*").SetCount(20)
 		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
 		assert.NotEqual(t, initialCursor, resCursor.Value())
@@ -4214,6 +4384,50 @@ func (suite *GlideTestSuite) TestZincrBy() {
 	})
 }
 
+func (suite *GlideTestSuite) TestBZPopMin() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{zset}-1-" + uuid.NewString()
+		key2 := "{zset}-2-" + uuid.NewString()
+		key3 := "{zset}-2-" + uuid.NewString()
+
+		// Add elements to key1
+		zaddResult1, err := client.ZAdd(key1, map[string]float64{"a": 1.0, "b": 1.5})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), zaddResult1.Value())
+
+		// Add elements to key2
+		zaddResult2, err := client.ZAdd(key2, map[string]float64{"c": 2.0})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), zaddResult2.Value())
+
+		// Pop minimum element from key1 and key2
+		bzpopminResult1, err := client.BZPopMin([]string{key1, key2}, float64(.5))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), api.KeyWithMemberAndScore{Key: key1, Member: "a", Score: 1.0}, bzpopminResult1.Value())
+
+		// Attempt to pop from non-existent key3
+		bzpopminResult2, err := client.BZPopMin([]string{key3}, float64(1))
+		assert.Nil(suite.T(), err)
+		assert.True(suite.T(), bzpopminResult2.IsNil())
+
+		// Pop minimum element from key2
+		bzpopminResult3, err := client.BZPopMin([]string{key3, key2}, float64(.5))
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), api.KeyWithMemberAndScore{Key: key2, Member: "c", Score: 2.0}, bzpopminResult3.Value())
+
+		// Set key3 to a non-sorted set value
+		setResult, err := client.Set(key3, "value")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "OK", setResult.Value())
+
+		// Attempt to pop from key3 which is not a sorted set
+		_, err = client.BZPopMin([]string{key3}, float64(.5))
+		if assert.Error(suite.T(), err) {
+			assert.IsType(suite.T(), &api.RequestError{}, err)
+		}
+	})
+}
+
 func (suite *GlideTestSuite) TestZPopMin() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key1 := uuid.New().String()
@@ -4316,5 +4530,438 @@ func (suite *GlideTestSuite) TestZRem() {
 		_, err = client.ZRem(key, []string{"value"})
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestZRange() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		t := suite.T()
+		key := uuid.New().String()
+		memberScoreMap := map[string]float64{
+			"a": 1.0,
+			"b": 2.0,
+			"c": 3.0,
+		}
+		_, err := client.ZAdd(key, memberScoreMap)
+		assert.NoError(t, err)
+		// index [0:1]
+		res, err := client.ZRange(key, options.NewRangeByIndexQuery(0, 1))
+		expected := []api.Result[string]{
+			api.CreateStringResult("a"),
+			api.CreateStringResult("b"),
+		}
+		assert.NoError(t, err)
+		assert.Equal(t, expected, res)
+		// index [0:-1] (all)
+		res, err = client.ZRange(key, options.NewRangeByIndexQuery(0, -1))
+		expected = []api.Result[string]{
+			api.CreateStringResult("a"),
+			api.CreateStringResult("b"),
+			api.CreateStringResult("c"),
+		}
+		assert.NoError(t, err)
+		assert.Equal(t, expected, res)
+		// index [3:1] (none)
+		res, err = client.ZRange(key, options.NewRangeByIndexQuery(3, 1))
+		assert.NoError(t, err)
+		assert.Equal(t, 0, len(res))
+		// score [-inf:3]
+		var query options.ZRangeQuery
+		query = options.NewRangeByScoreQuery(
+			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
+			options.NewScoreBoundary(3, true))
+		res, err = client.ZRange(key, query)
+		expected = []api.Result[string]{
+			api.CreateStringResult("a"),
+			api.CreateStringResult("b"),
+			api.CreateStringResult("c"),
+		}
+		assert.NoError(t, err)
+		assert.Equal(t, expected, res)
+		// score [-inf:3)
+		query = options.NewRangeByScoreQuery(
+			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
+			options.NewScoreBoundary(3, false))
+		res, err = client.ZRange(key, query)
+		expected = []api.Result[string]{
+			api.CreateStringResult("a"),
+			api.CreateStringResult("b"),
+		}
+		assert.NoError(t, err)
+		assert.Equal(t, expected, res)
+		// score (3:-inf] reverse
+		query = options.NewRangeByScoreQuery(
+			options.NewScoreBoundary(3, false),
+			options.NewInfiniteScoreBoundary(options.NegativeInfinity)).
+			SetReverse()
+		res, err = client.ZRange(key, query)
+		expected = []api.Result[string]{
+			api.CreateStringResult("b"),
+			api.CreateStringResult("a"),
+		}
+		assert.NoError(t, err)
+		assert.Equal(t, expected, res)
+		// score [-inf:+inf] limit 1 2
+		query = options.NewRangeByScoreQuery(
+			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
+			options.NewInfiniteScoreBoundary(options.PositiveInfinity)).
+			SetLimit(1, 2)
+		res, err = client.ZRange(key, query)
+		expected = []api.Result[string]{
+			api.CreateStringResult("b"),
+			api.CreateStringResult("c"),
+		}
+		assert.NoError(t, err)
+		assert.Equal(t, expected, res)
+		// score [-inf:3) reverse (none)
+		query = options.NewRangeByScoreQuery(
+			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
+			options.NewScoreBoundary(3, true)).
+			SetReverse()
+		res, err = client.ZRange(key, query)
+		assert.NoError(t, err)
+		assert.Equal(t, 0, len(res))
+		// score [+inf:3) (none)
+		query = options.NewRangeByScoreQuery(
+			options.NewInfiniteScoreBoundary(options.PositiveInfinity),
+			options.NewScoreBoundary(3, false))
+		res, err = client.ZRange(key, query)
+		assert.NoError(t, err)
+		assert.Equal(t, 0, len(res))
+		// lex [-:c)
+		query = options.NewRangeByLexQuery(
+			options.NewInfiniteLexBoundary(options.NegativeInfinity),
+			options.NewLexBoundary("c", false))
+		res, err = client.ZRange(key, query)
+		expected = []api.Result[string]{
+			api.CreateStringResult("a"),
+			api.CreateStringResult("b"),
+		}
+		assert.NoError(t, err)
+		assert.Equal(t, expected, res)
+		// lex [+:-] reverse limit 1 2
+		query = options.NewRangeByLexQuery(
+			options.NewInfiniteLexBoundary(options.PositiveInfinity),
+			options.NewInfiniteLexBoundary(options.NegativeInfinity)).
+			SetReverse().SetLimit(1, 2)
+		res, err = client.ZRange(key, query)
+		expected = []api.Result[string]{
+			api.CreateStringResult("b"),
+			api.CreateStringResult("a"),
+		}
+		assert.NoError(t, err)
+		assert.Equal(t, expected, res)
+		// lex (c:-] reverse
+		query = options.NewRangeByLexQuery(
+			options.NewLexBoundary("c", false),
+			options.NewInfiniteLexBoundary(options.NegativeInfinity)).
+			SetReverse()
+		res, err = client.ZRange(key, query)
+		expected = []api.Result[string]{
+			api.CreateStringResult("b"),
+			api.CreateStringResult("a"),
+		}
+		assert.NoError(t, err)
+		assert.Equal(t, expected, res)
+		// lex [+:c] (none)
+		query = options.NewRangeByLexQuery(
+			options.NewInfiniteLexBoundary(options.PositiveInfinity),
+			options.NewLexBoundary("c", true))
+		res, err = client.ZRange(key, query)
+		assert.NoError(t, err)
+		assert.Equal(t, 0, len(res))
+	})
+}
+
+func (suite *GlideTestSuite) TestZRangeWithScores() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		t := suite.T()
+		key := uuid.New().String()
+		memberScoreMap := map[string]float64{
+			"a": 1.0,
+			"b": 2.0,
+			"c": 3.0,
+		}
+		_, err := client.ZAdd(key, memberScoreMap)
+		assert.NoError(t, err)
+		// index [0:1]
+		res, err := client.ZRangeWithScores(key, options.NewRangeByIndexQuery(0, 1))
+		expected := map[api.Result[string]]api.Result[float64]{
+			api.CreateStringResult("a"): api.CreateFloat64Result(1.0),
+			api.CreateStringResult("b"): api.CreateFloat64Result(2.0),
+		}
+		assert.NoError(t, err)
+		assert.Equal(t, expected, res)
+		// index [0:-1] (all)
+		res, err = client.ZRangeWithScores(key, options.NewRangeByIndexQuery(0, -1))
+		expected = map[api.Result[string]]api.Result[float64]{
+			api.CreateStringResult("a"): api.CreateFloat64Result(1.0),
+			api.CreateStringResult("b"): api.CreateFloat64Result(2.0),
+			api.CreateStringResult("c"): api.CreateFloat64Result(3.0),
+		}
+		assert.NoError(t, err)
+		assert.Equal(t, expected, res)
+		// index [3:1] (none)
+		res, err = client.ZRangeWithScores(key, options.NewRangeByIndexQuery(3, 1))
+		assert.NoError(t, err)
+		assert.Equal(t, 0, len(res))
+		// score [-inf:3]
+		query := options.NewRangeByScoreQuery(
+			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
+			options.NewScoreBoundary(3, true))
+		res, err = client.ZRangeWithScores(key, query)
+		expected = map[api.Result[string]]api.Result[float64]{
+			api.CreateStringResult("a"): api.CreateFloat64Result(1.0),
+			api.CreateStringResult("b"): api.CreateFloat64Result(2.0),
+			api.CreateStringResult("c"): api.CreateFloat64Result(3.0),
+		}
+		assert.NoError(t, err)
+		assert.Equal(t, expected, res)
+		// score [-inf:3)
+		query = options.NewRangeByScoreQuery(
+			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
+			options.NewScoreBoundary(3, false))
+		res, err = client.ZRangeWithScores(key, query)
+		expected = map[api.Result[string]]api.Result[float64]{
+			api.CreateStringResult("a"): api.CreateFloat64Result(1.0),
+			api.CreateStringResult("b"): api.CreateFloat64Result(2.0),
+		}
+		assert.NoError(t, err)
+		assert.Equal(t, expected, res)
+		// score (3:-inf] reverse
+		query = options.NewRangeByScoreQuery(
+			options.NewScoreBoundary(3, false),
+			options.NewInfiniteScoreBoundary(options.NegativeInfinity)).
+			SetReverse()
+		res, err = client.ZRangeWithScores(key, query)
+		expected = map[api.Result[string]]api.Result[float64]{
+			api.CreateStringResult("b"): api.CreateFloat64Result(2.0),
+			api.CreateStringResult("a"): api.CreateFloat64Result(1.0),
+		}
+		assert.NoError(t, err)
+		assert.Equal(t, expected, res)
+		// score [-inf:+inf] limit 1 2
+		query = options.NewRangeByScoreQuery(
+			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
+			options.NewInfiniteScoreBoundary(options.PositiveInfinity)).
+			SetLimit(1, 2)
+		res, err = client.ZRangeWithScores(key, query)
+		expected = map[api.Result[string]]api.Result[float64]{
+			api.CreateStringResult("b"): api.CreateFloat64Result(2.0),
+			api.CreateStringResult("c"): api.CreateFloat64Result(3.0),
+		}
+		assert.NoError(t, err)
+		assert.Equal(t, expected, res)
+		// score [-inf:3) reverse (none)
+		query = options.NewRangeByScoreQuery(
+			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
+			options.NewScoreBoundary(3, true)).
+			SetReverse()
+		res, err = client.ZRangeWithScores(key, query)
+		assert.NoError(t, err)
+		assert.Equal(t, 0, len(res))
+		// score [+inf:3) (none)
+		query = options.NewRangeByScoreQuery(
+			options.NewInfiniteScoreBoundary(options.PositiveInfinity),
+			options.NewScoreBoundary(3, false))
+		res, err = client.ZRangeWithScores(key, query)
+		assert.NoError(t, err)
+		assert.Equal(t, 0, len(res))
+	})
+}
+
+func (suite *GlideTestSuite) TestPersist() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		// Test 1: Check if persist command removes the expiration time of a key.
+		keyName := "{keyName}" + uuid.NewString()
+		t := suite.T()
+		suite.verifyOK(client.Set(keyName, initialValue))
+		resultExpire, err := client.Expire(keyName, 300)
+		assert.Nil(t, err)
+		assert.True(t, resultExpire.Value())
+		resultPersist, err := client.Persist(keyName)
+		assert.Nil(t, err)
+		assert.True(t, resultPersist.Value())
+
+		// Test 2: Check if persist command return false if key that doesnt have associated timeout.
+		keyNoExp := "{keyName}" + uuid.NewString()
+		suite.verifyOK(client.Set(keyNoExp, initialValue))
+		resultPersistNoExp, err := client.Persist(keyNoExp)
+		assert.Nil(t, err)
+		assert.False(t, resultPersistNoExp.Value())
+
+		// Test 3: Check if persist command return false if key not exist.
+		keyInvalid := "{invalidkey_forPersistTest}" + uuid.NewString()
+		resultInvalidKey, err := client.Persist(keyInvalid)
+		assert.Nil(t, err)
+		assert.False(t, resultInvalidKey.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestZRank() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		stringKey := uuid.New().String()
+		client.ZAdd(key, map[string]float64{"one": 1.5, "two": 2.0, "three": 3.0})
+		res, err := client.ZRank(key, "two")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res.Value())
+
+		if suite.serverVersion >= "7.2.0" {
+			res2Rank, res2Score, err := client.ZRankWithScore(key, "one")
+			assert.Nil(suite.T(), err)
+			assert.Equal(suite.T(), int64(0), res2Rank.Value())
+			assert.Equal(suite.T(), float64(1.5), res2Score.Value())
+			res4Rank, res4Score, err := client.ZRankWithScore(key, "non-existing-member")
+			assert.Nil(suite.T(), err)
+			assert.True(suite.T(), res4Rank.IsNil())
+			assert.True(suite.T(), res4Score.IsNil())
+		}
+
+		res3, err := client.ZRank(key, "non-existing-member")
+		assert.Nil(suite.T(), err)
+		assert.True(suite.T(), res3.IsNil())
+
+		// key exists, but it is not a set
+		setRes, err := client.Set(stringKey, "value")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "OK", setRes.Value())
+
+		_, err = client.ZRank(stringKey, "value")
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestZRevRank() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		stringKey := uuid.New().String()
+		client.ZAdd(key, map[string]float64{"one": 1.5, "two": 2.0, "three": 3.0})
+		res, err := client.ZRevRank(key, "two")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), res.Value())
+
+		if suite.serverVersion >= "7.2.0" {
+			res2Rank, res2Score, err := client.ZRevRankWithScore(key, "one")
+			assert.Nil(suite.T(), err)
+			assert.Equal(suite.T(), int64(2), res2Rank.Value())
+			assert.Equal(suite.T(), float64(1.5), res2Score.Value())
+			res4Rank, res4Score, err := client.ZRevRankWithScore(key, "non-existing-member")
+			assert.Nil(suite.T(), err)
+			assert.True(suite.T(), res4Rank.IsNil())
+			assert.True(suite.T(), res4Score.IsNil())
+		}
+
+		res3, err := client.ZRevRank(key, "non-existing-member")
+		assert.Nil(suite.T(), err)
+		assert.True(suite.T(), res3.IsNil())
+
+		// key exists, but it is not a set
+		setRes, err := client.Set(stringKey, "value")
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "OK", setRes.Value())
+
+		_, err = client.ZRevRank(stringKey, "value")
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.NewString()
+		key2 := uuid.NewString()
+		field1 := uuid.NewString()
+		field2 := uuid.NewString()
+		t := suite.T()
+		xAddResult, err := client.XAddWithOptions(
+			key1,
+			[][]string{{field1, "foo"}, {field2, "bar"}},
+			options.NewXAddOptions().SetDontMakeNewStream(),
+		)
+		assert.NoError(t, err)
+		assert.True(t, xAddResult.IsNil())
+
+		xAddResult, err = client.XAddWithOptions(
+			key1,
+			[][]string{{field1, "foo1"}, {field2, "bar1"}},
+			options.NewXAddOptions().SetId("0-1"),
+		)
+		assert.NoError(t, err)
+		assert.Equal(t, xAddResult.Value(), "0-1")
+
+		xAddResult, err = client.XAdd(
+			key1,
+			[][]string{{field1, "foo2"}, {field2, "bar2"}},
+		)
+		assert.NoError(t, err)
+		assert.False(t, xAddResult.IsNil())
+
+		xLenResult, err := client.XLen(key1)
+		assert.NoError(t, err)
+		assert.Equal(t, xLenResult.Value(), int64(2))
+
+		// Trim the first entry.
+		xAddResult, err = client.XAddWithOptions(
+			key1,
+			[][]string{{field1, "foo3"}, {field2, "bar2"}},
+			options.NewXAddOptions().SetTrimOptions(
+				options.NewXTrimOptionsWithMaxLen(2).SetExactTrimming(),
+			),
+		)
+		assert.NotNil(t, xAddResult.Value())
+		assert.NoError(t, err)
+		id := xAddResult.Value()
+		xLenResult, err = client.XLen(key1)
+		assert.NoError(t, err)
+		assert.Equal(t, xLenResult.Value(), int64(2))
+
+		// Trim the second entry.
+		xAddResult, err = client.XAddWithOptions(
+			key1,
+			[][]string{{field1, "foo4"}, {field2, "bar4"}},
+			options.NewXAddOptions().SetTrimOptions(
+				options.NewXTrimOptionsWithMinId(id).SetExactTrimming(),
+			),
+		)
+		assert.NoError(t, err)
+		assert.NotNil(t, xAddResult.Value())
+		xLenResult, err = client.XLen(key1)
+		assert.NoError(t, err)
+		assert.Equal(t, xLenResult.Value(), int64(2))
+
+		// Test xtrim to remove 1 element
+		xTrimResult, err := client.XTrim(
+			key1,
+			options.NewXTrimOptionsWithMaxLen(1).SetExactTrimming(),
+		)
+		assert.NoError(t, err)
+		assert.Equal(t, xTrimResult.Value(), int64(1))
+		xLenResult, err = client.XLen(key1)
+		assert.NoError(t, err)
+		assert.Equal(t, xLenResult.Value(), int64(1))
+
+		// Key does not exist - returns 0
+		xTrimResult, err = client.XTrim(
+			key2,
+			options.NewXTrimOptionsWithMaxLen(1).SetExactTrimming(),
+		)
+		assert.NoError(t, err)
+		assert.Equal(t, xTrimResult.Value(), int64(0))
+		xLenResult, err = client.XLen(key2)
+		assert.NoError(t, err)
+		assert.Equal(t, xLenResult.Value(), int64(0))
+
+		// Throw Exception: Key exists - but it is not a stream
+		setResult, err := client.Set(key2, "xtrimtest")
+		assert.NoError(t, err)
+		assert.Equal(t, setResult.Value(), "OK")
+		_, err = client.XTrim(key2, options.NewXTrimOptionsWithMinId("0-1"))
+		assert.NotNil(t, err)
+		assert.IsType(t, &api.RequestError{}, err)
+		_, err = client.XLen(key2)
+		assert.NotNil(t, err)
+		assert.IsType(t, &api.RequestError{}, err)
 	})
 }

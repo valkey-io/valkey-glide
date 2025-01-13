@@ -50,55 +50,55 @@ type StreamCommands interface {
 	// [valkey.io]: https://valkey.io/commands/xadd/
 	XAddWithOptions(key string, values [][]string, options *options.XAddOptions) (Result[string], error)
 
-	// Reads entries from the given streams.
-	//
-	// Note:
-	//  When in cluster mode, all keys in `keysAndIds` must map to the same hash slot.
+	// Trims the stream by evicting older entries.
 	//
 	// See [valkey.io] for details.
 	//
 	// Parameters:
-	//  keysAndIds - A map of keys and entry IDs to read from.
+	//  key     - The key of the stream.
+	//  options - Stream trim options
 	//
 	// Return value:
-	// A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
-	// a key does not exist or does not contain requiested entries.
+	//  Result[int64] - The number of entries deleted from the stream.
 	//
 	// For example:
-	//  result, err := client.XRead({"stream1": "0-0", "stream2": "0-1"})
-	//  err == nil: true
-	//  result: map[string]map[string][][]string{
-	//    "stream1": {"0-1": {{"field1", "value1"}}, "0-2": {{"field2", "value2"}, {"field2", "value3"}}},
-	//    "stream2": {},
-	//  }
+	//  xAddResult, err = client.XAddWithOptions(
+	//		"key1",
+	//		[][]string{{field1, "foo4"}, {field2, "bar4"}},
+	//		options.NewXAddOptions().SetTrimOptions(
+	//			options.NewXTrimOptionsWithMinId(id).SetExactTrimming(),
+	//		),
+	//	)
+	//	xTrimResult, err := client.XTrim(
+	//		"key1",
+	//		options.NewXTrimOptionsWithMaxLen(1).SetExactTrimming(),
+	//  )
+	//  fmt.Println(xTrimResult.Value()) // Output: 1
 	//
-	// [valkey.io]: https://valkey.io/commands/xread/
-	XRead(keysAndIds map[string]string) (map[string]map[string][][]string, error)
+	// [valkey.io]: https://valkey.io/commands/xtrim/
+	XTrim(key string, options *options.XTrimOptions) (Result[int64], error)
 
-	// Reads entries from the given streams.
-	//
-	// Note:
-	//  When in cluster mode, all keys in `keysAndIds` must map to the same hash slot.
+	// Returns the number of entries in the stream stored at `key`.
 	//
 	// See [valkey.io] for details.
 	//
 	// Parameters:
-	//  keysAndIds - A map of keys and entry IDs to read from.
-	//  options - Options detailing how to read the stream.
+	//  key - The key of the stream.
 	//
 	// Return value:
-	// A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
-	// a key does not exist or does not contain requiested entries.
+	//  Result[int64] - The number of entries in the stream. If `key` does not exist, return 0.
 	//
 	// For example:
-	//  options := options.NewXReadOptions().SetBlock(100500)
-	//  result, err := client.XReadWithOptions({"stream1": "0-0", "stream2": "0-1"}, options)
-	//  err == nil: true
-	//  result: map[string]map[string][][]string{
-	//    "stream1": {"0-1": {{"field1", "value1"}}, "0-2": {{"field2", "value2"}, {"field2", "value3"}}},
-	//    "stream2": {},
-	//  }
+	//	xAddResult, err = client.XAddWithOptions(
+	//		"key1",
+	//		[][]string{{field1, "foo4"}, {field2, "bar4"}},
+	//		options.NewXAddOptions().SetTrimOptions(
+	//			options.NewXTrimOptionsWithMinId(id).SetExactTrimming(),
+	//		),
+	//	)
+	//	xLenResult, err = client.XLen("key1")
+	//  fmt.Println(xLenResult.Value()) // Output: 2
 	//
-	// [valkey.io]: https://valkey.io/commands/xread/
-	XReadWithOptions(keysAndIds map[string]string, options *options.XReadOptions) (map[string]map[string][][]string, error)
+	// [valkey.io]: https://valkey.io/commands/xlen/
+	XLen(key string) (Result[int64], error)
 }
