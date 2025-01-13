@@ -4225,7 +4225,7 @@ func (suite *GlideTestSuite) TestZAddAndZAddIncr() {
 		assert.Equal(suite.T(), int64(3), res.Value())
 
 		resIncr, err = client.ZAddIncrWithOptions(key3, "one", 5, onlyIfDoesNotExistOpts)
-		assert.NotNil(suite.T(), err)
+		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resIncr.IsNil())
 
 		resIncr, err = client.ZAddIncrWithOptions(key3, "one", 5, onlyIfExistsOpts)
@@ -4263,7 +4263,7 @@ func (suite *GlideTestSuite) TestZAddAndZAddIncr() {
 		assert.Equal(suite.T(), float64(7), resIncr.Value())
 
 		resIncr, err = client.ZAddIncrWithOptions(key4, "one", -3, gtOpts)
-		assert.NotNil(suite.T(), err)
+		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resIncr.IsNil())
 	})
 }

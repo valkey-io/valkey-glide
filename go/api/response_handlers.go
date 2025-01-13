@@ -274,7 +274,9 @@ func handleDoubleOrNullResponse(response *C.struct_CommandResponse) (Result[floa
 	if typeErr != nil {
 		return CreateNilFloat64Result(), typeErr
 	}
-
+	if response.response_type == C.Null {
+		return CreateNilFloat64Result(), nil
+	}
 	return CreateFloat64Result(float64(response.float_value)), nil
 }
 

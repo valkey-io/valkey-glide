@@ -80,7 +80,8 @@ type SortedSetCommands interface {
 	//   opts - The options for the command. See [ZAddOptions] for details.
 	//
 	// Return value:
-	//   Result[float64] - The new score of the member.
+	//   The new score of the member.
+	//   If there was a conflict with the options, the operation aborts and `nil` is returned.
 	//
 	// Example:
 	//   res, err := client.ZAddIncrWithOptions(key, "one", 1.0, options.NewZAddOptionsBuilder().SetChanged(true))
