@@ -2,6 +2,11 @@
 
 package api
 
+import (
+	"fmt"
+	"strconv"
+)
+
 // A value to return alongside with error in case if command failed
 var (
 	defaultFloatResponse  float64
@@ -175,9 +180,34 @@ func CreateNilXPendingSummary() XPendingSummary {
 }
 
 func CreateConsumerPendingMessagesResult(pendingMessages []interface{}) Result[[]ConsumerPendingMessages] {
-	return Result[[]ConsumerPendingMessages]{val: make([]ConsumerPendingMessages, 0, 0), isNil: true}
+	consumerMessages := make([]ConsumerPendingMessages, len(pendingMessages))
+
+	for i, msg := range pendingMessages {
+		switch msg.(type) {
+		case []interface{}:
+			if consumerMessage, ok := msg.([]interface{}); ok {
+				count, err := strconv.ParseInt(consumerMessage[1].(string), 10, 64)
+				if err == nil {
+					consumerMessages[i] = ConsumerPendingMessages{
+						ConsumerName: consumerMessage[0].(string),
+						MessageCount: count,
+					}
+				} else {
+					fmt.Println("Unable to parse message count: ", err)
+					return CreateNilConsumerPendingMessagesResult()
+				}
+			} else {
+				fmt.Println("Failed assertion to []interface{}")
+				return CreateNilConsumerPendingMessagesResult()
+			}
+		default:
+			fmt.Sprintf("Type: %T", msg)
+		}
+
+	}
+	return Result[[]ConsumerPendingMessages]{val: consumerMessages, isNil: false}
 }
 
 func CreateNilConsumerPendingMessagesResult() Result[[]ConsumerPendingMessages] {
-	return Result[[]ConsumerPendingMessages]{val: make([]ConsumerPendingMessages, 0, 0), isNil: true}
+	return Result[[]ConsumerPendingMessages]{val: make([]ConsumerPendingMessages, 0), isNil: true}
 }

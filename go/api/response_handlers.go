@@ -623,7 +623,12 @@ func handleXPendingSummaryResponse(response *C.struct_CommandResponse) (XPending
 	NumOfMessages := arr[0].(int64)
 	StartId := CreateStringResult(arr[1].(string))
 	EndId := CreateStringResult(arr[2].(string))
-	ConsumerPendingMessages := CreateConsumerPendingMessagesResult(arr[3].([]interface{}))
 
-	return XPendingSummary{NumOfMessages, StartId, EndId, ConsumerPendingMessages}, nil
+	if res, ok := arr[3].([]interface{}); ok {
+		ConsumerPendingMessages := CreateConsumerPendingMessagesResult(res)
+		return XPendingSummary{NumOfMessages, StartId, EndId, ConsumerPendingMessages}, nil
+	} else {
+		return XPendingSummary{NumOfMessages, StartId, EndId, CreateNilConsumerPendingMessagesResult()}, nil
+	}
+
 }

@@ -5243,7 +5243,7 @@ func (suite *GlideTestSuite) TestXPending() {
 			assert.Nil(suite.T(), err)
 			assert.True(suite.T(), resp.(bool))
 
-			_, err = client.XAdd(key, [][]string{{"field1", "value1"}})
+			streamid_1, err := client.XAdd(key, [][]string{{"field1", "value1"}})
 			assert.Nil(suite.T(), err)
 			_, err = client.XAdd(key, [][]string{{"field2", "value2"}})
 			assert.Nil(suite.T(), err)
@@ -5251,23 +5251,47 @@ func (suite *GlideTestSuite) TestXPending() {
 			command = []string{"XReadGroup", "GROUP", groupName, consumer1, "STREAMS", key, ">"}
 			resp, err = client.CustomCommand(command)
 			assert.Nil(suite.T(), err)
-			fmt.Println("XReadGroup Response", resp)
 
 			_, err = client.XAdd(key, [][]string{{"field3", "value3"}})
 			assert.Nil(suite.T(), err)
 			_, err = client.XAdd(key, [][]string{{"field4", "value4"}})
 			assert.Nil(suite.T(), err)
-			_, err = client.XAdd(key, [][]string{{"field5", "value5"}})
+			streamid_5, err := client.XAdd(key, [][]string{{"field5", "value5"}})
 			assert.Nil(suite.T(), err)
 
 			command = []string{"XReadGroup", "GROUP", groupName, consumer2, "STREAMS", key, ">"}
 			resp, err = client.CustomCommand(command)
 			assert.Nil(suite.T(), err)
-			fmt.Println("XReadGroup Response", resp)
 
-			pending_res, err := client.XPending(key, groupName)
+			actualResult, err := client.XPending(key, groupName)
 			assert.Nil(suite.T(), err)
-			fmt.Println("XPending Response", pending_res)
+
+			fmt.Println("Starting to build actual result")
+			expectedResult := api.XPendingSummary{
+				NumOfMessages: 5,
+				StartId:       streamid_1,
+				EndId:         streamid_5,
+				ConsumerMessages: api.CreateConsumerPendingMessagesResult([]interface{}{
+					api.ConsumerPendingMessages{ConsumerName: "consumer-1", MessageCount: 2},
+					api.ConsumerPendingMessages{ConsumerName: "consumer-2", MessageCount: 3},
+				}),
+			}
+
+			// expectedResult := XPendingSummary{
+			// 	NumOfMessages: int64(5),
+			// 	StartId:       streamid_1,
+			// 	EndId:         streamid_5,
+			// 	ConsumerMessages: CreateConsumerPendingMessagesResult(pendingMessages []interface{}
+
+			//     )
+			// 		{consumer1, "2"},
+			// 		{consumer2, "3"},
+			// 	}],
+			//}
+
+			fmt.Println("Actual Result", actualResult)
+			fmt.Println("Expected Result", expectedResult)
+			assert.True(suite.T(), reflect.DeepEqual(expectedResult, actualResult), "Expected and actual results do not match")
 		}
 
 		execCluster := func(client *api.GlideClusterClient) {
