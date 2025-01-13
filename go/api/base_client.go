@@ -1642,8 +1642,8 @@ func (client *baseClient) XLen(key string) (Result[int64], error) {
 //
 // Return value:
 //
-//	The score of the member. If `member` does not exist in the sorted set, null is returned.
-//	If `key` does not exist, null is returned.
+//	The score of the member. If `member` does not exist in the sorted set, nil is returned.
+//	If `key` does not exist, nil is returned.
 //
 // Example:
 //
