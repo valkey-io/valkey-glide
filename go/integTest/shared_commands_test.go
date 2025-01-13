@@ -4921,13 +4921,18 @@ func (suite *GlideTestSuite) Test_XDel() {
 
 		// Deletes one stream id, and ignores anything invalid:
 		xDelResult, err := client.XDel(key1, []string{streamId1, streamId3})
+		assert.NoError(t, err)
 		assert.Equal(t, xDelResult, int64(1))
+
 		xDelResult, err = client.XDel(key2, []string{streamId3})
+		assert.NoError(t, err)
 		assert.Equal(t, xDelResult, int64(0))
 
 		// Throws error: Key exists - but it is not a stream
 		setResult, err := client.Set(key2, "xdeltest")
+		assert.NoError(t, err)
 		assert.Equal(t, "OK", setResult.Value())
+
 		_, err = client.XDel(key2, []string{streamId3})
 		assert.NotNil(t, err)
 		assert.IsType(t, &api.RequestError{}, err)
