@@ -2220,13 +2220,9 @@ describe("GlideClusterClient", () => {
                             ),
                         );
 
-                    await client_for_config_set.customCommand([
-                        "CONFIG",
-                        "RESETSTAT",
-                    ]);
-
-                    await client_for_config_set.customCommand(
-                        ["CONFIG", "SET", "availability-zone", az],
+                    await client_for_config_set.configResetStat();
+                    await client_for_config_set.configSet(
+                        { "availability-zone": az },
                         { route: "allNodes" },
                     );
 
@@ -2328,8 +2324,8 @@ describe("GlideClusterClient", () => {
                             ),
                         );
 
-                    await client_for_config_set.customCommand(
-                        ["CONFIG", "SET", "availability-zone", ""],
+                    await client_for_config_set.configSet(
+                        { "availability-zone": "" },
                         { route: "allNodes" },
                     );
 
