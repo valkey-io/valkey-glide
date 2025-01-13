@@ -377,29 +377,5 @@ type SortedSetCommands interface {
 	// [valkey.io]: https://valkey.io/commands/zrevrank/
 	ZRevRankWithScore(key string, member string) (Result[int64], Result[float64], error)
 
-	// Returns the score of `member` in the sorted set stored at `key`.
-	//
-	// See [valkey.io] for details.
-	//
-	// Parameters:
-	//   key - The key of the sorted set.
-	//   member - The member whose score is to be retrieved.
-	//
-	// Return value:
-	//  The score of the member. If `member` does not exist in the sorted set, null is returned.
-	//  If `key` does not exist, null is returned.
-	//
-	// Example:
-	//	membersScores := map[string]float64{
-	//		"one":   1.0,
-	//		"two":   2.0,
-	//		"three": 3.0,
-	//	}
-	//
-	//	zAddResult, err := client.ZAdd("key1", membersScores)
-	//	zScoreResult, err := client.ZScore("key1", "one")
-	//	//fmt.Println(zScoreResult) // Value: 1.0
-	//
-	// [valkey.io]: https://valkey.io/commands/zscore/
 	ZScore(key string, member string) (float64, error)
 }
