@@ -2248,7 +2248,7 @@ describe("GlideClusterClient", () => {
                                 protocol,
                                 {
                                     requestTimeout: 3000,
-                                    readFrom: "AZAffinity" as ReadFrom,
+                                    readFrom: "AZAffinity",
                                     clientAz: az,
                                 },
                             ),
