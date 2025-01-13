@@ -270,7 +270,7 @@ func handleDoubleResponse(response *C.struct_CommandResponse) (float64, error) {
 func handleDoubleOrNullResponse(response *C.struct_CommandResponse) (Result[float64], error) {
 	defer C.free_command_response(response)
 
-	typeErr := checkResponseType(response, C.Float, false)
+	typeErr := checkResponseType(response, C.Float, true)
 	if typeErr != nil {
 		return CreateNilFloat64Result(), typeErr
 	}
