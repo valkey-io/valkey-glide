@@ -1630,3 +1630,11 @@ func (client *baseClient) XLen(key string) (Result[int64], error) {
 	}
 	return handleLongResponse(result)
 }
+
+func (client *baseClient) ZScore(key string, member string) (float64, error) {
+	result, err := client.executeCommand(C.ZScore, []string{key, member})
+	if err != nil {
+		return 0.0, err
+	}
+	return float64(result.float_value), nil
+}

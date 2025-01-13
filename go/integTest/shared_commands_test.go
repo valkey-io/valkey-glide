@@ -4889,3 +4889,43 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 		assert.IsType(t, &api.RequestError{}, err)
 	})
 }
+
+func (suite *GlideTestSuite) Test_ZScore() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.NewString()
+		key2 := uuid.NewString()
+		t := suite.T()
+
+		membersScores := map[string]float64{
+			"one":   1.0,
+			"two":   2.0,
+			"three": 3.0,
+		}
+
+		zAddResult, err := client.ZAdd(key1, membersScores)
+		assert.NoError(t, err)
+		assert.Equal(t, zAddResult.Value(), int64(3))
+
+		zScoreResult, err := client.ZScore(key1, "one")
+		assert.NoError(t, err)
+		assert.Equal(t, zScoreResult, float64(1.0))
+
+		zScoreResult, err = client.ZScore(key1, "non_existing_member")
+		assert.NoError(t, err)
+		assert.Equal(t, zScoreResult, float64(0))
+
+		zScoreResult, err = client.ZScore("non_existing_key", "non_existing_member")
+		assert.NoError(t, err)
+		assert.Equal(t, zScoreResult, float64(0))
+
+		// Key exists, but it is not a set
+		setResult, err := client.Set(key2, "bar")
+		assert.NoError(t, err)
+		assert.Equal(t, setResult.Value(), "OK")
+
+		_, err = client.ZScore(key2, "one")
+		assert.NotNil(t, err)
+		assert.IsType(t, &api.RequestError{}, err)
+
+	})
+}
