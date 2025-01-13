@@ -17,6 +17,7 @@
 * Go: Add `ZCARD` ([#2838](https://github.com/valkey-io/valkey-glide/pull/2838))
 * Java, Node, Python: Update documentation for CONFIG SET and CONFIG GET ([#2919](https://github.com/valkey-io/valkey-glide/pull/2919))
 * Go: Add `BZPopMin` ([#2849](https://github.com/valkey-io/valkey-glide/pull/2849))
+* Java: Add `RESP2` support ([#2383](https://github.com/valkey-io/valkey-glide/pull/2383))
 
 #### Breaking Changes
 
