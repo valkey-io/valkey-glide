@@ -5221,6 +5221,8 @@ func (suite *GlideTestSuite) TestXPending() {
 		// collapsed once the native commands are added in a subsequent release.
 
 		execStandalone := func(client *api.GlideClient) {
+
+			// 1. Arrange the data
 			key := uuid.New().String()
 			groupName := "group" + uuid.New().String()
 			zeroStreamId := "0"
@@ -5263,35 +5265,23 @@ func (suite *GlideTestSuite) TestXPending() {
 			resp, err = client.CustomCommand(command)
 			assert.Nil(suite.T(), err)
 
-			actualResult, err := client.XPending(key, groupName)
-			assert.Nil(suite.T(), err)
-
-			fmt.Println("Starting to build actual result")
 			expectedResult := api.XPendingSummary{
 				NumOfMessages: 5,
 				StartId:       streamid_1,
 				EndId:         streamid_5,
 				ConsumerMessages: api.CreateConsumerPendingMessagesResult([]interface{}{
-					api.ConsumerPendingMessages{ConsumerName: "consumer-1", MessageCount: 2},
-					api.ConsumerPendingMessages{ConsumerName: "consumer-2", MessageCount: 3},
+					api.ConsumerPendingMessage{ConsumerName: consumer1, MessageCount: 2},
+					api.ConsumerPendingMessage{ConsumerName: consumer2, MessageCount: 3},
 				}),
 			}
 
-			// expectedResult := XPendingSummary{
-			// 	NumOfMessages: int64(5),
-			// 	StartId:       streamid_1,
-			// 	EndId:         streamid_5,
-			// 	ConsumerMessages: CreateConsumerPendingMessagesResult(pendingMessages []interface{}
+			// 2. Act
+			actualResult, err := client.XPending(key, groupName)
 
-			//     )
-			// 		{consumer1, "2"},
-			// 		{consumer2, "3"},
-			// 	}],
-			//}
-
-			fmt.Println("Actual Result", actualResult)
-			fmt.Println("Expected Result", expectedResult)
+			// 3. Assert
+			assert.Nil(suite.T(), err)
 			assert.True(suite.T(), reflect.DeepEqual(expectedResult, actualResult), "Expected and actual results do not match")
+
 		}
 
 		execCluster := func(client *api.GlideClusterClient) {

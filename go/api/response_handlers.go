@@ -630,5 +630,4 @@ func handleXPendingSummaryResponse(response *C.struct_CommandResponse) (XPending
 	} else {
 		return XPendingSummary{NumOfMessages, StartId, EndId, CreateNilConsumerPendingMessagesResult()}, nil
 	}
-
 }

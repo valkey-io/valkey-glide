@@ -156,10 +156,10 @@ type XPendingSummary struct {
 	NumOfMessages    int64
 	StartId          Result[string]
 	EndId            Result[string]
-	ConsumerMessages Result[[]ConsumerPendingMessages]
+	ConsumerMessages Result[[]ConsumerPendingMessage]
 }
 
-type ConsumerPendingMessages struct {
+type ConsumerPendingMessage struct {
 	ConsumerName string
 	MessageCount int64
 }
@@ -179,35 +179,30 @@ func CreateNilXPendingSummary() XPendingSummary {
 	return XPendingSummary{0, CreateNilStringResult(), CreateNilStringResult(), CreateNilConsumerPendingMessagesResult()}
 }
 
-func CreateConsumerPendingMessagesResult(pendingMessages []interface{}) Result[[]ConsumerPendingMessages] {
-	consumerMessages := make([]ConsumerPendingMessages, len(pendingMessages))
+func CreateConsumerPendingMessagesResult(pendingMessages []interface{}) Result[[]ConsumerPendingMessage] {
+	consumerMessages := make([]ConsumerPendingMessage, len(pendingMessages))
 
 	for i, msg := range pendingMessages {
-		switch msg.(type) {
+		switch consumerMessage := msg.(type) {
 		case []interface{}:
-			if consumerMessage, ok := msg.([]interface{}); ok {
-				count, err := strconv.ParseInt(consumerMessage[1].(string), 10, 64)
-				if err == nil {
-					consumerMessages[i] = ConsumerPendingMessages{
-						ConsumerName: consumerMessage[0].(string),
-						MessageCount: count,
-					}
-				} else {
-					fmt.Println("Unable to parse message count: ", err)
-					return CreateNilConsumerPendingMessagesResult()
+			count, err := strconv.ParseInt(consumerMessage[1].(string), 10, 64)
+			if err == nil {
+				consumerMessages[i] = ConsumerPendingMessage{
+					ConsumerName: consumerMessage[0].(string),
+					MessageCount: count,
 				}
 			} else {
-				fmt.Println("Failed assertion to []interface{}")
 				return CreateNilConsumerPendingMessagesResult()
 			}
+		case ConsumerPendingMessage:
+			consumerMessages[i] = consumerMessage
 		default:
-			fmt.Sprintf("Type: %T", msg)
+			fmt.Printf("CreateConsumerPendingMessagesResult - Type: %T \n", consumerMessage)
 		}
-
 	}
-	return Result[[]ConsumerPendingMessages]{val: consumerMessages, isNil: false}
+	return Result[[]ConsumerPendingMessage]{val: consumerMessages, isNil: false}
 }
 
-func CreateNilConsumerPendingMessagesResult() Result[[]ConsumerPendingMessages] {
-	return Result[[]ConsumerPendingMessages]{val: make([]ConsumerPendingMessages, 0), isNil: true}
+func CreateNilConsumerPendingMessagesResult() Result[[]ConsumerPendingMessage] {
+	return Result[[]ConsumerPendingMessage]{val: make([]ConsumerPendingMessage, 0), isNil: true}
 }
