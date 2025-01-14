@@ -248,7 +248,7 @@ type SetCommands interface {
 	//
 	// Example:
 	//   result, err := client.SInterCardLimit([]string{"set1", "set2"}, 3)
-	//   // resul: 2
+	//   // result: 2
 	//   // Indicates that the intersection of "set1" and "set2" contains 2 elements (or at least 3 if the actual
 	//   // intersection is larger)
 	//
