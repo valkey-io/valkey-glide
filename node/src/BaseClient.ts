@@ -1473,7 +1473,8 @@ export class BaseClient {
      * @param value - The value to store with the given key.
      * @param options - (Optional) See {@link SetOptions} and {@link DecoderOption}.
      * @returns - If the value is successfully set, return OK.
-     * If value isn't set because of `onlyIfExists` or `onlyIfDoesNotExist` or `onlyIfEqual`conditions, return null.
+     * If `conditional` in `options` is not set, the value will be set regardless of prior value existence.
+     * If value isn't set because of `onlyIfExists` or `onlyIfDoesNotExist` or `onlyIfEqual` conditions, return `null`.
      * If `returnOldValue` is set, return the old value as a string.
      *
      * @example
