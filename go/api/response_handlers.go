@@ -256,7 +256,7 @@ func handleLongArrayResponse(response *C.struct_CommandResponse) ([]Result[int64
 	return slice, nil
 }
 
-func handleDoubleResponse(response *C.struct_CommandResponse) (float64, error) {
+func handleFloatResponse(response *C.struct_CommandResponse) (float64, error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Float, false)
@@ -267,7 +267,7 @@ func handleDoubleResponse(response *C.struct_CommandResponse) (float64, error) {
 	return float64(response.float_value), nil
 }
 
-func handleDoubleOrNullResponse(response *C.struct_CommandResponse) (Result[float64], error) {
+func handleFloatOrNilResponse(response *C.struct_CommandResponse) (Result[float64], error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Float, true)
@@ -306,7 +306,7 @@ func handleLongAndDoubleOrNullResponse(response *C.struct_CommandResponse) (Resu
 	return rank, score, nil
 }
 
-func handleBooleanResponse(response *C.struct_CommandResponse) (bool, error) {
+func handleBoolResponse(response *C.struct_CommandResponse) (bool, error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Bool, false)
@@ -317,7 +317,7 @@ func handleBooleanResponse(response *C.struct_CommandResponse) (bool, error) {
 	return bool(response.bool_value), nil
 }
 
-func handleBooleanArrayResponse(response *C.struct_CommandResponse) ([]bool, error) {
+func handleBoolArrayResponse(response *C.struct_CommandResponse) ([]bool, error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Array, false)

@@ -2,6 +2,12 @@
 
 package api
 
+// A value to return alongside with error in case if command failed
+var (
+	defaultFloatResponse float64
+	defaultBoolResponse  bool
+)
+
 type Result[T any] struct {
 	val   T
 	isNil bool
