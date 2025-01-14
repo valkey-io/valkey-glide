@@ -1818,3 +1818,89 @@ func (client *baseClient) ZScore(key string, member string) (Result[float64], er
 	}
 	return handleFloatOrNilResponse(result)
 }
+
+// Iterates incrementally over a sorted set.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	cursor - The cursor that points to the next iteration of results.
+//	         A value of `"0"` indicates the start of the search.
+//	         For Valkey 8.0 and above, negative cursors are treated like the initial cursor("0").
+//
+// Return value:
+//
+//	The first return value is the `cursor` for the next iteration of results. `"0"` will be the `cursor`
+//	   returned on the last iteration of the sorted set.
+//	The second return value is always an array of the subset of the sorted set held in `key`.
+//	The array is a flattened series of `string` pairs, where the value is at even indices and the score is at odd indices.
+//
+// Example:
+//
+//	// assume "key" contains a set
+//	resCursor, resCol, err := client.ZScan("key", "0")
+//	fmt.Println(resCursor.Value())
+//	fmt.Println(resCol.Value())
+//	for resCursor != "0" {
+//	  resCursor, resCol, err = client.ZScan("key", resCursor.Value())
+//	  fmt.Println("Cursor: ", resCursor.Value())
+//	  fmt.Println("Members: ", resCol.Value())
+//	}
+//
+// [valkey.io]: https://valkey.io/commands/zscan/
+func (client *baseClient) ZScan(key string, cursor string) (Result[string], []Result[string], error) {
+	result, err := client.executeCommand(C.ZScan, []string{key, cursor})
+	if err != nil {
+		return CreateNilStringResult(), nil, err
+	}
+	return handleScanResponse(result)
+}
+
+// Iterates incrementally over a sorted set.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	cursor - The cursor that points to the next iteration of results.
+//	options - The options for the command. See [options.ZScanOptions] for details.
+//
+// Return value:
+//
+//	The first return value is the `cursor` for the next iteration of results. `"0"` will be the `cursor`
+//	   returned on the last iteration of the sorted set.
+//	The second return value is always an array of the subset of the sorted set held in `key`.
+//	The array is a flattened series of `string` pairs, where the value is at even indices and the score is at odd indices.
+//	If `ZScanOptionsBuilder#noScores` is to `true`, the second return value will only contain the members without scores.
+//
+// Example:
+//
+//	resCursor, resCol, err := client.ZScanWithOptions("key", "0", options.NewBaseScanOptionsBuilder().SetMatch("*"))
+//	fmt.Println(resCursor.Value())
+//	fmt.Println(resCol.Value())
+//	for resCursor != "0" {
+//	  resCursor, resCol, err = client.ZScanWithOptions("key", resCursor.Value(), options.NewBaseScanOptionsBuilder().SetMatch("*"))
+//	  fmt.Println("Cursor: ", resCursor.Value())
+//	  fmt.Println("Members: ", resCol.Value())
+//	}
+//
+// [valkey.io]: https://valkey.io/commands/zscan/
+func (client *baseClient) ZScanWithOptions(
+	key string,
+	cursor string,
+	options *options.ZScanOptions,
+) (Result[string], []Result[string], error) {
+	optionArgs, err := options.ToArgs()
+	if err != nil {
+		return CreateNilStringResult(), nil, err
+	}
+
+	result, err := client.executeCommand(C.ZScan, append([]string{key, cursor}, optionArgs...))
+	if err != nil {
+		return CreateNilStringResult(), nil, err
+	}
+	return handleScanResponse(result)
+}
