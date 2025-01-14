@@ -271,6 +271,11 @@ async def transaction_test(
     args.append(OK)
     transaction.config_get(["timeout"])
     args.append({b"timeout": b"1000"})
+    if not await check_if_server_version_lt(glide_client, "7.0.0"):
+        transaction.config_set({"timeout": "2000", "cluster-node-timeout": "16000"})
+        args.append(OK)
+        transaction.config_get(["timeout", "cluster-node-timeout"])
+        args.append({b"timeout": b"2000", b"cluster-node-timeout": b"16000"})
 
     transaction.hset(key4, {key: value, key2: value2})
     args.append(2)
@@ -972,7 +977,7 @@ class TestTransaction:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_transaction_large_values(self, request, cluster_mode, protocol):
         glide_client = await create_client(
-            request, cluster_mode=cluster_mode, protocol=protocol, timeout=5000
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
         )
         length = 2**25  # 33mb
         key = "0" * length
@@ -1033,10 +1038,7 @@ class TestTransaction:
         assert result[5:13] == [2, 2, 2, [b"Bob", b"Alice"], 2, OK, None, 0]
         assert result[13:] == expected
 
-    @pytest.mark.filterwarnings(
-        action="ignore", message="The test <Function test_transaction_clear>"
-    )
-    def test_transaction_clear(self):
+    async def test_transaction_clear(self):
         transaction = Transaction()
         transaction.info()
         transaction.select(1)

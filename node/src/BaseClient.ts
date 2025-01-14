@@ -2,9 +2,9 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 import {
-    ClusterScanCursor,
+    DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS,
     DEFAULT_INFLIGHT_REQUESTS_LIMIT,
-    DEFAULT_TIMEOUT_IN_MILLISECONDS,
+    DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
     Script,
     StartSocketConnection,
     getStatistics,
@@ -605,17 +605,17 @@ export interface BaseClientConfiguration {
      * The duration in milliseconds that the client should wait for a request to complete.
      * This duration encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries.
      * If the specified timeout is exceeded for a pending request, it will result in a timeout error.
-     * If not set, a default value will be used.
+     * If not explicitly set, a default value of 250 milliseconds will be used.
      * Value must be an integer.
      */
     requestTimeout?: number;
     /**
-     * Represents the client's read from strategy.
+     * The client's read from strategy.
      * If not set, `Primary` will be used.
      */
     readFrom?: ReadFrom;
     /**
-     * Choose the serialization protocol to be used with the server.
+     * Serialization protocol to be used.
      * If not set, `RESP3` will be used.
      */
     protocol?: ProtocolVersion;
@@ -647,6 +647,33 @@ export interface BaseClientConfiguration {
      * ```
      */
     clientAz?: string;
+}
+
+/**
+ * Represents advanced configuration settings for a client, including connection-related options.
+ *
+ * @remarks
+ * The `AdvancedBaseClientConfiguration` interface defines advanced configuration settings for managing the client's connection behavior.
+ *
+ * ### Connection Timeout
+ *
+ * - **Connection Timeout**: The `connectionTimeout` property specifies the duration (in milliseconds) the client should wait for a connection to be established.
+ *
+ * @example
+ * ```typescript
+ * const config: AdvancedBaseClientConfiguration = {
+ *   connectionTimeout: 5000, // 5 seconds
+ * };
+ * ```
+ */
+export interface AdvancedBaseClientConfiguration {
+    /**
+     * The duration in milliseconds to wait for a TCP/TLS connection to complete.
+     * This applies both during initial client creation and any reconnections that may occur during request processing.
+     * **Note**: A high connection timeout may lead to prolonged blocking of the entire command pipeline.
+     * If not explicitly set, a default value of 250 milliseconds will be used.
+     */
+    connectionTimeout?: number;
 }
 
 /**
@@ -689,80 +716,6 @@ function getRequestErrorClass(
     return RequestError;
 }
 
-/**
- * @internal
- */
-function toProtobufRoute(
-    route: Routes | undefined,
-): command_request.Routes | undefined {
-    if (!route) {
-        return undefined;
-    }
-
-    if (route === "allPrimaries") {
-        return command_request.Routes.create({
-            simpleRoutes: command_request.SimpleRoutes.AllPrimaries,
-        });
-    } else if (route === "allNodes") {
-        return command_request.Routes.create({
-            simpleRoutes: command_request.SimpleRoutes.AllNodes,
-        });
-    } else if (route === "randomNode") {
-        return command_request.Routes.create({
-            simpleRoutes: command_request.SimpleRoutes.Random,
-        });
-    } else if (route.type === "primarySlotKey") {
-        return command_request.Routes.create({
-            slotKeyRoute: command_request.SlotKeyRoute.create({
-                slotType: command_request.SlotTypes.Primary,
-                slotKey: route.key,
-            }),
-        });
-    } else if (route.type === "replicaSlotKey") {
-        return command_request.Routes.create({
-            slotKeyRoute: command_request.SlotKeyRoute.create({
-                slotType: command_request.SlotTypes.Replica,
-                slotKey: route.key,
-            }),
-        });
-    } else if (route.type === "primarySlotId") {
-        return command_request.Routes.create({
-            slotKeyRoute: command_request.SlotIdRoute.create({
-                slotType: command_request.SlotTypes.Primary,
-                slotId: route.id,
-            }),
-        });
-    } else if (route.type === "replicaSlotId") {
-        return command_request.Routes.create({
-            slotKeyRoute: command_request.SlotIdRoute.create({
-                slotType: command_request.SlotTypes.Replica,
-                slotId: route.id,
-            }),
-        });
-    } else if (route.type === "routeByAddress") {
-        let port = route.port;
-        let host = route.host;
-
-        if (port === undefined) {
-            const split = host.split(":");
-
-            if (split.length !== 2) {
-                throw new RequestError(
-                    "No port provided, expected host to be formatted as `{hostname}:{port}`. Received " +
-                        host,
-                );
-            }
-
-            host = split[0];
-            port = Number(split[1]);
-        }
-
-        return command_request.Routes.create({
-            byAddressRoute: { host, port },
-        });
-    }
-}
-
 export interface PubSubMsg {
     message: GlideString;
     channel: GlideString;
@@ -782,10 +735,9 @@ export type WritePromiseOptions = RouteOption & DecoderOption;
  */
 export class BaseClient {
     private socket: net.Socket;
-    protected readonly promiseCallbackFunctions: [
-        PromiseFunction,
-        ErrorFunction,
-    ][] = [];
+    protected readonly promiseCallbackFunctions:
+        | [PromiseFunction, ErrorFunction, Decoder | undefined][]
+        | [PromiseFunction, ErrorFunction][] = [];
     private readonly availableCallbackSlots: number[] = [];
     private requestWriter = new BufferWriter();
     private writeInProgress = false;
@@ -880,13 +832,84 @@ export class BaseClient {
         this.remainingReadData = undefined;
     }
 
+    protected toProtobufRoute(
+        route: Routes | undefined,
+    ): command_request.Routes | undefined {
+        if (!route) {
+            return undefined;
+        }
+
+        if (route === "allPrimaries") {
+            return command_request.Routes.create({
+                simpleRoutes: command_request.SimpleRoutes.AllPrimaries,
+            });
+        } else if (route === "allNodes") {
+            return command_request.Routes.create({
+                simpleRoutes: command_request.SimpleRoutes.AllNodes,
+            });
+        } else if (route === "randomNode") {
+            return command_request.Routes.create({
+                simpleRoutes: command_request.SimpleRoutes.Random,
+            });
+        } else if (route.type === "primarySlotKey") {
+            return command_request.Routes.create({
+                slotKeyRoute: command_request.SlotKeyRoute.create({
+                    slotType: command_request.SlotTypes.Primary,
+                    slotKey: route.key,
+                }),
+            });
+        } else if (route.type === "replicaSlotKey") {
+            return command_request.Routes.create({
+                slotKeyRoute: command_request.SlotKeyRoute.create({
+                    slotType: command_request.SlotTypes.Replica,
+                    slotKey: route.key,
+                }),
+            });
+        } else if (route.type === "primarySlotId") {
+            return command_request.Routes.create({
+                slotKeyRoute: command_request.SlotIdRoute.create({
+                    slotType: command_request.SlotTypes.Primary,
+                    slotId: route.id,
+                }),
+            });
+        } else if (route.type === "replicaSlotId") {
+            return command_request.Routes.create({
+                slotKeyRoute: command_request.SlotIdRoute.create({
+                    slotType: command_request.SlotTypes.Replica,
+                    slotId: route.id,
+                }),
+            });
+        } else if (route.type === "routeByAddress") {
+            let port = route.port;
+            let host = route.host;
+
+            if (port === undefined) {
+                const split = host.split(":");
+
+                if (split.length !== 2) {
+                    throw new RequestError(
+                        "No port provided, expected host to be formatted as `{hostname}:{port}`. Received " +
+                            host,
+                    );
+                }
+
+                host = split[0];
+                port = Number(split[1]);
+            }
+
+            return command_request.Routes.create({
+                byAddressRoute: { host, port },
+            });
+        }
+    }
+
     processResponse(message: response.Response) {
         if (message.closingError != null) {
             this.close(message.closingError);
             return;
         }
 
-        const [resolve, reject] =
+        const [resolve, reject, decoder = this.defaultDecoder] =
             this.promiseCallbackFunctions[message.callbackIdx];
         this.availableCallbackSlots.push(message.callbackIdx);
 
@@ -908,7 +931,22 @@ export class BaseClient {
                 );
             }
 
-            resolve(pointer);
+            try {
+                resolve(
+                    valueFromSplitPointer(
+                        pointer.high!,
+                        pointer.low!,
+                        decoder === Decoder.String,
+                    ),
+                );
+            } catch (err: unknown) {
+                Logger.log("error", "Decoder", `Decoding error: '${err}'`);
+                reject(
+                    err instanceof ValkeyError
+                        ? err
+                        : new Error(`Decoding error: '${err}'`),
+                );
+            }
         } else if (message.constantResponse === response.ConstantResponse.OK) {
             resolve("OK");
         } else {
@@ -954,7 +992,7 @@ export class BaseClient {
         Logger.log("info", "Client lifetime", `construct client`);
         this.config = options;
         this.requestTimeout =
-            options?.requestTimeout ?? DEFAULT_TIMEOUT_IN_MILLISECONDS;
+            options?.requestTimeout ?? DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS;
         this.socket = socket;
         this.socket
             .on("data", (data) => this.handleReadData(data))
@@ -988,87 +1026,92 @@ export class BaseClient {
         });
     }
 
-    /**
-     * @internal
-     */
-    protected createWritePromise<T>(
-        command:
-            | command_request.Command
-            | command_request.Command[]
-            | command_request.ScriptInvocation
-            | command_request.ClusterScan
-            | command_request.UpdateConnectionPassword,
-        options: WritePromiseOptions = {},
-    ): Promise<T> {
-        const route = toProtobufRoute(options?.route);
-        const stringDecoder: boolean =
-            (options?.decoder ?? this.defaultDecoder) === Decoder.String;
-
+    protected ensureClientIsOpen() {
         if (this.isClosed) {
             throw new ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client.",
             );
         }
+    }
 
+    /**
+     * @internal
+     */
+    protected createWritePromise<T>(
+        command: command_request.Command | command_request.Command[],
+        options: WritePromiseOptions = {},
+    ): Promise<T> {
+        this.ensureClientIsOpen();
+
+        const route = this.toProtobufRoute(options?.route);
         return new Promise((resolve, reject) => {
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [
-                (resolveAns: T) => {
-                    try {
-                        if (resolveAns instanceof PointerResponse) {
-                            //   valueFromSplitPointer method is used to convert a pointer from a protobuf response into a TypeScript object.
-                            //   The protobuf response is received on a socket and the value in the response is a pointer to a Rust object.
-                            //   The pointer is a split pointer because JavaScript doesn't support `u64` and pointers in Rust can be `u64`,
-                            //   so we represent it with two`u32`(`high` and`low`).
-                            if (typeof resolveAns === "number") {
-                                resolveAns = valueFromSplitPointer(
-                                    0,
-                                    resolveAns,
-                                    stringDecoder,
-                                ) as T;
-                            } else {
-                                resolveAns = valueFromSplitPointer(
-                                    resolveAns.high!,
-                                    resolveAns.low!,
-                                    stringDecoder,
-                                ) as T;
-                            }
-                        }
-
-                        if (command instanceof command_request.ClusterScan) {
-                            const resolveAnsArray = resolveAns as [
-                                ClusterScanCursor,
-                                GlideString[],
-                            ];
-                            resolveAnsArray[0] = new ClusterScanCursor(
-                                resolveAnsArray[0].toString(),
-                            );
-                        }
-
-                        resolve(resolveAns);
-                    } catch (err) {
-                        Logger.log(
-                            "error",
-                            "Decoder",
-                            `Decoding error: '${err}'`,
-                        );
-                        reject(err);
-                    }
-                },
+                resolve,
                 reject,
+                options?.decoder,
             ];
             this.writeOrBufferCommandRequest(callbackIndex, command, route);
         });
     }
 
+    protected createUpdateConnectionPasswordPromise(
+        command: command_request.UpdateConnectionPassword,
+    ) {
+        this.ensureClientIsOpen();
+
+        return new Promise<GlideString>((resolve, reject) => {
+            const callbackIdx = this.getCallbackIndex();
+            this.promiseCallbackFunctions[callbackIdx] = [resolve, reject];
+            this.writeOrBufferRequest(
+                new command_request.CommandRequest({
+                    callbackIdx,
+                    updateConnectionPassword: command,
+                }),
+                (message: command_request.CommandRequest, writer: Writer) => {
+                    command_request.CommandRequest.encodeDelimited(
+                        message,
+                        writer,
+                    );
+                },
+            );
+        });
+    }
+
+    protected createScriptInvocationPromise<T = GlideString>(
+        command: command_request.ScriptInvocation,
+        options: {
+            keys?: GlideString[];
+            args?: GlideString[];
+        } & DecoderOption = {},
+    ) {
+        this.ensureClientIsOpen();
+
+        return new Promise<T>((resolve, reject) => {
+            const callbackIdx = this.getCallbackIndex();
+            this.promiseCallbackFunctions[callbackIdx] = [
+                resolve,
+                reject,
+                options?.decoder,
+            ];
+            this.writeOrBufferRequest(
+                new command_request.CommandRequest({
+                    callbackIdx,
+                    scriptInvocation: command,
+                }),
+                (message: command_request.CommandRequest, writer: Writer) => {
+                    command_request.CommandRequest.encodeDelimited(
+                        message,
+                        writer,
+                    );
+                },
+            );
+        });
+    }
+
     protected writeOrBufferCommandRequest(
         callbackIdx: number,
-        command:
-            | command_request.Command
-            | command_request.Command[]
-            | command_request.ScriptInvocation
-            | command_request.ClusterScan
-            | command_request.UpdateConnectionPassword,
+        command: command_request.Command | command_request.Command[],
         route?: command_request.Routes,
     ) {
         const message = Array.isArray(command)
@@ -1077,27 +1120,13 @@ export class BaseClient {
                   transaction: command_request.Transaction.create({
                       commands: command,
                   }),
+                  route,
               })
-            : command instanceof command_request.Command
-              ? command_request.CommandRequest.create({
-                    callbackIdx,
-                    singleCommand: command,
-                })
-              : command instanceof command_request.ClusterScan
-                ? command_request.CommandRequest.create({
-                      callbackIdx,
-                      clusterScan: command,
-                  })
-                : command instanceof command_request.UpdateConnectionPassword
-                  ? command_request.CommandRequest.create({
-                        callbackIdx,
-                        updateConnectionPassword: command,
-                    })
-                  : command_request.CommandRequest.create({
-                        callbackIdx,
-                        scriptInvocation: command,
-                    });
-        message.route = route;
+            : command_request.CommandRequest.create({
+                  callbackIdx,
+                  singleCommand: command,
+                  route,
+              });
 
         this.writeOrBufferRequest(
             message,
@@ -1107,7 +1136,7 @@ export class BaseClient {
         );
     }
 
-    private writeOrBufferRequest<TRequest>(
+    protected writeOrBufferRequest<TRequest>(
         message: TRequest,
         encodeDelimited: (message: TRequest, writer: Writer) => void,
     ) {
@@ -1449,7 +1478,8 @@ export class BaseClient {
      * @param value - The value to store with the given key.
      * @param options - (Optional) See {@link SetOptions} and {@link DecoderOption}.
      * @returns - If the value is successfully set, return OK.
-     * If value isn't set because of `onlyIfExists` or `onlyIfDoesNotExist` conditions, return null.
+     * If `conditional` in `options` is not set, the value will be set regardless of prior value existence.
+     * If value isn't set because of `onlyIfExists` or `onlyIfDoesNotExist` or `onlyIfEqual` conditions, return `null`.
      * If `returnOldValue` is set, return the old value as a string.
      *
      * @example
@@ -1469,6 +1499,13 @@ export class BaseClient {
      * // Example usage of get method to retrieve the value of a key
      * const result4 = await client.get("key");
      * console.log(result4); // Output: 'new_value' - Value wasn't modified back to being "value" because of "NX" flag.
+     *
+     * // Example usage of set method with conditional option IFEQ
+     * await client.set("key", "value we will compare to");
+     * const result5 = await client.set("key", "new_value", {conditionalSet: "onlyIfEqual", comparisonValue: "value we will compare to"});
+     * console.log(result5); // Output: 'OK' - Set "new_value" to "key" only if comparisonValue is equal to the current value of "key".
+     * const result6 = await client.set("key", "another_new_value", {conditionalSet: "onlyIfEqual", comparisonValue: "value we will compare to"});
+     * console.log(result6); // Output: `null` - Value wasn't set because the comparisonValue is not equal to the current value of "key". Value of "key" remains "new_value".
      * ```
      */
     public async set(
@@ -3824,7 +3861,7 @@ export class BaseClient {
             keys: options?.keys?.map(Buffer.from),
             args: options?.args?.map(Buffer.from),
         });
-        return this.createWritePromise(scriptInvocation, options);
+        return this.createScriptInvocationPromise(scriptInvocation, options);
     }
 
     /**
@@ -4419,7 +4456,6 @@ export class BaseClient {
      * @param key - The key of the sorted set.
      * @param rangeQuery - The range query object representing the type of range query to perform.
      * - For range queries by index (rank), use {@link RangeByIndex}.
-     * - For range queries by lexicographical order, use {@link RangeByLex}.
      * - For range queries by score, use {@link RangeByScore}.
      * @param options - (Optional) Additional parameters:
      * - (Optional) `reverse`: if `true`, reverses the sorted set, with index `0` as the element with the highest score.
@@ -4452,7 +4488,7 @@ export class BaseClient {
      */
     public async zrangeWithScores(
         key: GlideString,
-        rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
+        rangeQuery: RangeByScore | RangeByIndex,
         options?: { reverse?: boolean } & DecoderOption,
     ): Promise<SortedSetDataType> {
         return this.createWritePromise<GlideRecord<number>>(
@@ -7626,9 +7662,25 @@ export class BaseClient {
     /**
      * @internal
      */
+    protected configureAdvancedConfigurationBase(
+        options: AdvancedBaseClientConfiguration,
+        request: connection_request.IConnectionRequest,
+    ) {
+        request.connectionTimeout =
+            options.connectionTimeout ??
+            DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS;
+    }
+
+    /**
+     * @internal
+     */
     protected connectToServer(options: BaseClientConfiguration): Promise<void> {
         return new Promise((resolve, reject) => {
-            this.promiseCallbackFunctions[0] = [resolve, reject];
+            this.promiseCallbackFunctions[0] = [
+                resolve,
+                reject,
+                options?.defaultDecoder,
+            ];
 
             const message = connection_request.ConnectionRequest.create(
                 this.createClientRequest(options),
@@ -7755,7 +7807,7 @@ export class BaseClient {
                 immediateAuth,
             });
 
-        const response = await this.createWritePromise<GlideString>(
+        const response = await this.createUpdateConnectionPasswordPromise(
             updateConnectionPassword,
         );
 

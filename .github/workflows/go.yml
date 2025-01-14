@@ -99,21 +99,11 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
-            - name: Install tools for Go ${{ matrix.go }}
-              working-directory: ./go
-              run: make install-tools-go${{ matrix.go }}
-
-            - name: Set LD_LIBRARY_PATH
-              if: ${{ matrix.os == 'ubuntu-latest' }}
-              run: echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$GITHUB_WORKSPACE/go/target/release/deps/" >> $GITHUB_ENV
-
-            - name: Build client
-              working-directory: ./go
-              run: make build
-
-            - name: Run tests
-              working-directory: ./go
-              run: make test
+            - name: Install & build & test
+              working-directory: go
+              run: |
+                  make install-tools-go${{ matrix.go }} build
+                  make -k unit-test integ-test
 
             - uses: ./.github/workflows/test-benchmark
               with:
@@ -128,6 +118,7 @@ jobs:
                   path: |
                       utils/clusters/**
                       benchmarks/results/**
+                      go/reports/**
 
     lint:
         timeout-minutes: 10
@@ -215,8 +206,8 @@ jobs:
             - name: Install & build & test
               working-directory: go
               run: |
-                  LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$GITHUB_WORKSPACE/go/target/release/deps/
-                  make install-tools-go${{ matrix.go }} build test
+                  make install-tools-go${{ matrix.go }} build
+                  make -k unit-test integ-test
 
             - name: Upload test reports
               if: always()
@@ -227,3 +218,36 @@ jobs:
                   path: |
                       utils/clusters/**
                       benchmarks/results/**
+                      go/reports/**
+
+    test-modules:
+        if: (github.repository_owner == 'valkey-io' && github.event_name == 'workflow_dispatch') || github.event.pull_request.head.repo.owner.login == 'valkey-io'
+        environment: AWS_ACTIONS
+        name: Modules Tests
+        runs-on: [self-hosted, linux, ARM64]
+        timeout-minutes: 15
+        steps:
+            - name: Setup self-hosted runner access
+              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
+
+            - uses: actions/checkout@v4
+
+            - name: Set up Go
+              uses: actions/setup-go@v5
+              with:
+                  go-version: "1.20.0"
+                  cache-dependency-path: go/go.sum
+
+            - name: Build and test
+              working-directory: ./go
+              run: |
+                  make install-tools-go1.20.0 build modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
+
+            - name: Upload test reports
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: test-reports-modules
+                  path: |
+                      go/reports/**

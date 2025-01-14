@@ -230,6 +230,7 @@ const (
 	CountKeyword  string = "COUNT"  // Valkey API keyword used to extract specific number of matching indices from a list.
 	RankKeyword   string = "RANK"   // Valkey API keyword use to determine the rank of the match to return.
 	MaxLenKeyword string = "MAXLEN" // Valkey API keyword used to determine the maximum number of list items to compare.
+	MatchKeyword  string = "MATCH"  // Valkey API keyword used to indicate the match filter.
 )
 
 // A InsertPosition defines where to insert new elements into a list.

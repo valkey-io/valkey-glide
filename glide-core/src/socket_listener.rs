@@ -19,9 +19,10 @@ use redis::cluster_routing::{
     MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
 };
 use redis::cluster_routing::{ResponsePolicy, Routable};
-use redis::{Cmd, PushInfo, RedisError, ScanStateRC, Value};
+use redis::{ClusterScanArgs, Cmd, PushInfo, RedisError, ScanStateRC, Value};
 use std::cell::Cell;
 use std::collections::HashSet;
+use std::ptr::from_mut;
 use std::rc::Rc;
 use std::sync::RwLock;
 use std::{env, str};
@@ -191,8 +192,8 @@ async fn write_result(
             if value != Value::Nil {
                 // Since null values don't require any additional data, they can be sent without any extra effort.
                 // Move the value to the heap and leak it. The wrapper should use `Box::from_raw` to recreate the box, use the value, and drop the allocation.
-                let pointer = Box::leak(Box::new(value));
-                let raw_pointer = pointer as *mut redis::Value;
+                let reference = Box::leak(Box::new(value));
+                let raw_pointer = from_mut(reference);
                 Some(response::response::Value::RespPointer(raw_pointer as u64))
             } else {
                 None
@@ -302,10 +303,15 @@ async fn send_command(
     mut client: Client,
     routing: Option<RoutingInfo>,
 ) -> ClientUsageResult<Value> {
-    client
+    let child_span = cmd.span().map(|span| span.add_span("send_command"));
+    let res = client
         .send_command(&cmd, routing)
         .await
-        .map_err(|err| err.into())
+        .map_err(|err| err.into());
+    if let Some(child_span) = child_span {
+        child_span.end();
+    }
+    res
 }
 
 // Parse the cluster scan command parameters from protobuf and send the command to redis-rs.
@@ -321,30 +327,23 @@ async fn cluster_scan(cluster_scan: ClusterScan, mut client: Client) -> ClientUs
     } else {
         get_cluster_scan_cursor(cursor)?
     };
-
-    let match_pattern = cluster_scan.match_pattern.map(|pattern| pattern.into());
-    let count = cluster_scan.count.map(|count| count as usize);
-
-    let object_type = match cluster_scan.object_type {
-        Some(char_object_type) => match char_object_type.to_string().to_lowercase().as_str() {
-            STRING => Some(redis::ObjectType::String),
-            LIST => Some(redis::ObjectType::List),
-            SET => Some(redis::ObjectType::Set),
-            ZSET => Some(redis::ObjectType::ZSet),
-            HASH => Some(redis::ObjectType::Hash),
-            STREAM => Some(redis::ObjectType::Stream),
-            _ => {
-                return Err(ClientUsageError::Internal(format!(
-                    "Received invalid object type: {:?}",
-                    char_object_type
-                )))
-            }
-        },
-        None => None,
-    };
+    let mut cluster_scan_args_builder =
+        ClusterScanArgs::builder().allow_non_covered_slots(cluster_scan.allow_non_covered_slots);
+    if let Some(match_pattern) = cluster_scan.match_pattern {
+        cluster_scan_args_builder =
+            cluster_scan_args_builder.with_match_pattern::<Bytes>(match_pattern);
+    }
+    if let Some(count) = cluster_scan.count {
+        cluster_scan_args_builder = cluster_scan_args_builder.with_count(count as u32);
+    }
+    if let Some(object_type) = cluster_scan.object_type {
+        cluster_scan_args_builder =
+            cluster_scan_args_builder.with_object_type(object_type.to_string().into());
+    }
+    let cluster_scan_args = cluster_scan_args_builder.build();
 
     client
-        .cluster_scan(&cluster_scan_cursor, &match_pattern, count, object_type)
+        .cluster_scan(&cluster_scan_cursor, cluster_scan_args)
         .await
         .map_err(|err| err.into())
 }
@@ -641,8 +640,8 @@ async fn push_manager_loop(mut push_rx: mpsc::UnboundedReceiver<PushInfo>, write
                         kind: (push_msg.kind),
                         data: (push_msg.data),
                     };
-                    let pointer = Box::leak(Box::new(push_val));
-                    let raw_pointer = pointer as *mut redis::Value;
+                    let reference = Box::leak(Box::new(push_val));
+                    let raw_pointer = from_mut(reference);
                     Some(response::response::Value::RespPointer(raw_pointer as u64))
                 };
 
