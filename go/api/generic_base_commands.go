@@ -32,7 +32,7 @@ type GenericBaseCommands interface {
 	//	fmt.Println(result) // Output: 2
 	//
 	// [valkey.io]: https://valkey.io/commands/del/
-	Del(keys []string) (Result[int64], error)
+	Del(keys []string) (int64, error)
 
 	// Exists returns the number of keys that exist in the database
 	//
@@ -52,11 +52,10 @@ type GenericBaseCommands interface {
 	//
 	// Example:
 	// result, err := client.Exists([]string{"key1", "key2", "key3"})
-	// result.Value(): 2
-	// result.IsNil(): false
+	// result: 2
 	//
 	// [valkey.io]: https://valkey.io/commands/exists/
-	Exists(keys []string) (Result[int64], error)
+	Exists(keys []string) (int64, error)
 
 	// Expire sets a timeout on key. After the timeout has expired, the key will automatically be deleted
 	//
@@ -246,16 +245,15 @@ type GenericBaseCommands interface {
 	//
 	// Return value:
 	// The expiration Unix timestamp in seconds.
-	// -2 if key does not exist or -1 is key exists but has no associated expiration.
+	// `-2` if key does not exist or `-1` is key exists but has no associated expiration.
 	//
 	// Example:
 	//
 	// result, err := client.ExpireTime("key")
-	// result.Value(): 1732118030
-	// result.IsNil(): false
+	// result: 1732118030
 	//
 	// [valkey.io]: https://valkey.io/commands/expiretime/
-	ExpireTime(key string) (Result[int64], error)
+	ExpireTime(key string) (int64, error)
 
 	// PExpire Time returns the absolute Unix timestamp (since January 1, 1970) at which the given key
 	// will expire, in milliseconds.
@@ -265,16 +263,15 @@ type GenericBaseCommands interface {
 	//
 	// Return value:
 	// The expiration Unix timestamp in milliseconds.
-	// -2 if key does not exist or -1 is key exists but has no associated expiration.
+	// `-2` if key does not exist or `-1` is key exists but has no associated expiration.
 	//
 	// Example:
 	//
 	// result, err := client.PExpireTime("key")
-	// result.Value(): 33177117420000
-	// result.IsNil(): false
+	// result: 33177117420000
 	//
 	// [valkey.io]: https://valkey.io/commands/pexpiretime/
-	PExpireTime(key string) (Result[int64], error)
+	PExpireTime(key string) (int64, error)
 
 	// TTL returns the remaining time to live of key that has a timeout, in seconds.
 	//
@@ -283,16 +280,15 @@ type GenericBaseCommands interface {
 	//
 	// Return value:
 	// Returns TTL in seconds,
-	// -2 if key does not exist, or -1 if key exists but has no associated expiration.
+	// `-2` if key does not exist, or `-1` if key exists but has no associated expiration.
 	//
 	// Example:
 	//
 	// result, err := client.TTL("key")
-	// result.Value(): 3
-	// result.IsNil(): false
+	// result: 3
 	//
 	// [valkey.io]: https://valkey.io/commands/ttl/
-	TTL(key string) (Result[int64], error)
+	TTL(key string) (int64, error)
 
 	// PTTL returns the remaining time to live of key that has a timeout, in milliseconds.
 	//
@@ -301,16 +297,15 @@ type GenericBaseCommands interface {
 	//
 	// Return value:
 	// Returns TTL in milliseconds,
-	// -2 if key does not exist, or -1 if key exists but has no associated expiration.
+	// `-2` if key does not exist, or `-1` if key exists but has no associated expiration.
 	//
 	// Example:
 	//
 	// result, err := client.PTTL("key")
-	// result.Value(): 1000
-	// result.IsNil(): false
+	// result: 1000
 	//
 	// [valkey.io]: https://valkey.io/commands/pttl/
-	PTTL(key string) (Result[int64], error)
+	PTTL(key string) (int64, error)
 
 	// Unlink (delete) multiple keys from the database. A key is ignored if it does not exist.
 	// This command, similar to Del However, this command does not block the server
@@ -334,10 +329,10 @@ type GenericBaseCommands interface {
 	//	if err != nil {
 	//	    // handle error
 	//	}
-	//	fmt.Println(result.Value()) // Output: 3
+	//	fmt.Println(result) // Output: 3
 	//
 	// [valkey.io]: Https://valkey.io/commands/unlink/
-	Unlink(keys []string) (Result[int64], error)
+	Unlink(keys []string) (int64, error)
 
 	// Alters the last access time of a key(s). A key is ignored if it does not exist.
 	//
@@ -360,10 +355,10 @@ type GenericBaseCommands interface {
 	//	if err != nil {
 	//	    // handle error
 	//	}
-	//	fmt.Println(result.Value()) // Output: 3
+	//	fmt.Println(result) // Output: 3
 	//
 	// [valkey.io]: Https://valkey.io/commands/touch/
-	Touch(keys []string) (Result[int64], error)
+	Touch(keys []string) (int64, error)
 
 	// Type returns the string representation of the type of the value stored at key.
 	// The different types that can be returned are: string, list, set, zset, hash and stream.

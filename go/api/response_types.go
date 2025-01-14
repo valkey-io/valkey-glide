@@ -6,6 +6,7 @@ package api
 var (
 	defaultFloatResponse float64
 	defaultBoolResponse  bool
+	defaultIntResponse   int64
 )
 
 type Result[T any] struct {
