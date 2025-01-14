@@ -14,8 +14,10 @@ import (
 func checkResponseType(response *C.struct_CommandResponse, expectedType C.ResponseType, isNilable bool) error {
 	expectedTypeInt := uint32(expectedType)
 	expectedTypeStr := C.get_response_type_string(expectedTypeInt)
-
+	fmt.Println("expected -----", expectedTypeInt)
+	fmt.Println("resp----", response)
 	if !isNilable && response == nil {
+		fmt.Println("here---")
 		return &RequestError{
 			fmt.Sprintf(
 				"Unexpected return type from Valkey: got nil, expected %s",
@@ -25,6 +27,8 @@ func checkResponseType(response *C.struct_CommandResponse, expectedType C.Respon
 	}
 
 	if isNilable && (response == nil || response.response_type == uint32(C.Null)) {
+		fmt.Println("nil returned---")
+
 		return nil
 	}
 
@@ -258,7 +262,6 @@ func handleLongArrayResponse(response *C.struct_CommandResponse) ([]Result[int64
 
 func handleDoubleResponse(response *C.struct_CommandResponse) (Result[float64], error) {
 	defer C.free_command_response(response)
-
 	typeErr := checkResponseType(response, C.Float, false)
 	if typeErr != nil {
 		return CreateNilFloat64Result(), typeErr

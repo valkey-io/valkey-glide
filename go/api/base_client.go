@@ -1655,13 +1655,17 @@ func (client *baseClient) XLen(key string) (Result[int64], error) {
 //
 //	zAddResult, err := client.ZAdd("key1", membersScores)
 //	zScoreResult, err := client.ZScore("key1", "one")
-//	//fmt.Println(zScoreResult) // Value: 1.0
+//	//fmt.Println(zScoreResult.Value()) // Value: 1.0
 //
 // [valkey.io]: https://valkey.io/commands/zscore/
-func (client *baseClient) ZScore(key string, member string) (float64, error) {
+func (client *baseClient) ZScore(key string, member string) (Result[float64], error) {
 	result, err := client.executeCommand(C.ZScore, []string{key, member})
-	if err != nil {
-		return 0.0, err
+	if err != nil || result.response_type == uint32(C.Null) {
+		return CreateNilFloat64Result(), err
 	}
-	return float64(result.float_value), nil
+	typeErr := checkResponseType(result, C.Float, true)
+	if typeErr != nil {
+		return CreateNilFloat64Result(), typeErr
+	}
+	return CreateFloat64Result(float64(result.float_value)), nil
 }

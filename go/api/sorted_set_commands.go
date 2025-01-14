@@ -377,5 +377,5 @@ type SortedSetCommands interface {
 	// [valkey.io]: https://valkey.io/commands/zrevrank/
 	ZRevRankWithScore(key string, member string) (Result[int64], Result[float64], error)
 
-	ZScore(key string, member string) (float64, error)
+	ZScore(key string, member string) (Result[float64], error)
 }

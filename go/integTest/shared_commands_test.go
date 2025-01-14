@@ -4908,15 +4908,15 @@ func (suite *GlideTestSuite) Test_ZScore() {
 
 		zScoreResult, err := client.ZScore(key1, "one")
 		assert.NoError(t, err)
-		assert.Equal(t, zScoreResult, float64(1.0))
+		assert.Equal(t, zScoreResult.Value(), float64(1.0))
 
 		zScoreResult, err = client.ZScore(key1, "non_existing_member")
 		assert.NoError(t, err)
-		assert.Equal(t, zScoreResult, float64(0))
+		assert.True(t, zScoreResult.IsNil())
 
 		zScoreResult, err = client.ZScore("non_existing_key", "non_existing_member")
 		assert.NoError(t, err)
-		assert.Equal(t, zScoreResult, float64(0))
+		assert.True(t, zScoreResult.IsNil())
 
 		// Key exists, but it is not a set
 		setResult, err := client.Set(key2, "bar")
