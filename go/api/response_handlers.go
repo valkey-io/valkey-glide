@@ -211,18 +211,18 @@ func handleStringArrayOrNullResponse(response *C.struct_CommandResponse) ([]Resu
 	return slice, nil
 }
 
-func handleLongResponse(response *C.struct_CommandResponse) (Result[int64], error) {
+func handleIntResponse(response *C.struct_CommandResponse) (int64, error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Int, false)
 	if typeErr != nil {
-		return CreateNilInt64Result(), typeErr
+		return 0, typeErr
 	}
 
-	return CreateInt64Result(int64(response.int_value)), nil
+	return int64(response.int_value), nil
 }
 
-func handleLongOrNullResponse(response *C.struct_CommandResponse) (Result[int64], error) {
+func handleIntOrNilResponse(response *C.struct_CommandResponse) (Result[int64], error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Int, true)
@@ -237,7 +237,7 @@ func handleLongOrNullResponse(response *C.struct_CommandResponse) (Result[int64]
 	return CreateInt64Result(int64(response.int_value)), nil
 }
 
-func handleLongArrayResponse(response *C.struct_CommandResponse) ([]Result[int64], error) {
+func handleIntArrayResponse(response *C.struct_CommandResponse) ([]Result[int64], error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Array, false)
