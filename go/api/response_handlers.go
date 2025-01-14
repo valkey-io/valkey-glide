@@ -212,18 +212,18 @@ func handleStringArrayOrNullResponse(response *C.struct_CommandResponse) ([]Resu
 	return slice, nil
 }
 
-func handleLongResponse(response *C.struct_CommandResponse) (Result[int64], error) {
+func handleIntResponse(response *C.struct_CommandResponse) (int64, error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Int, false)
 	if typeErr != nil {
-		return CreateNilInt64Result(), typeErr
+		return 0, typeErr
 	}
 
-	return CreateInt64Result(int64(response.int_value)), nil
+	return int64(response.int_value), nil
 }
 
-func handleLongOrNullResponse(response *C.struct_CommandResponse) (Result[int64], error) {
+func handleIntOrNilResponse(response *C.struct_CommandResponse) (Result[int64], error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Int, true)
@@ -238,7 +238,7 @@ func handleLongOrNullResponse(response *C.struct_CommandResponse) (Result[int64]
 	return CreateInt64Result(int64(response.int_value)), nil
 }
 
-func handleLongArrayResponse(response *C.struct_CommandResponse) ([]Result[int64], error) {
+func handleIntArrayResponse(response *C.struct_CommandResponse) ([]Result[int64], error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Array, false)
@@ -257,14 +257,27 @@ func handleLongArrayResponse(response *C.struct_CommandResponse) ([]Result[int64
 	return slice, nil
 }
 
-func handleDoubleResponse(response *C.struct_CommandResponse) (Result[float64], error) {
+func handleFloatResponse(response *C.struct_CommandResponse) (float64, error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Float, false)
 	if typeErr != nil {
-		return CreateNilFloat64Result(), typeErr
+		return float64(0), typeErr
 	}
 
+	return float64(response.float_value), nil
+}
+
+func handleFloatOrNilResponse(response *C.struct_CommandResponse) (Result[float64], error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Float, true)
+	if typeErr != nil {
+		return CreateNilFloat64Result(), typeErr
+	}
+	if response.response_type == C.Null {
+		return CreateNilFloat64Result(), nil
+	}
 	return CreateFloat64Result(float64(response.float_value)), nil
 }
 
@@ -294,18 +307,18 @@ func handleLongAndDoubleOrNullResponse(response *C.struct_CommandResponse) (Resu
 	return rank, score, nil
 }
 
-func handleBooleanResponse(response *C.struct_CommandResponse) (Result[bool], error) {
+func handleBoolResponse(response *C.struct_CommandResponse) (bool, error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Bool, false)
 	if typeErr != nil {
-		return CreateNilBoolResult(), typeErr
+		return false, typeErr
 	}
 
-	return CreateBoolResult(bool(response.bool_value)), nil
+	return bool(response.bool_value), nil
 }
 
-func handleBooleanArrayResponse(response *C.struct_CommandResponse) ([]Result[bool], error) {
+func handleBoolArrayResponse(response *C.struct_CommandResponse) ([]bool, error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Array, false)
@@ -313,13 +326,13 @@ func handleBooleanArrayResponse(response *C.struct_CommandResponse) ([]Result[bo
 		return nil, typeErr
 	}
 
-	slice := make([]Result[bool], 0, response.array_value_len)
+	slice := make([]bool, 0, response.array_value_len)
 	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
 		err := checkResponseType(&v, C.Bool, false)
 		if err != nil {
 			return nil, err
 		}
-		slice = append(slice, CreateBoolResult(bool(v.bool_value)))
+		slice = append(slice, bool(v.bool_value))
 	}
 	return slice, nil
 }
