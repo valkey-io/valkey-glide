@@ -1332,6 +1332,129 @@ func (client *baseClient) XAddWithOptions(
 	return handleStringOrNullResponse(result)
 }
 
+// Reads entries from the given streams owned by a consumer group.
+//
+// Note:
+//
+//	When in cluster mode, all keys in `keysAndIds` must map to the same hash slot.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	 group - The consumer group name.
+//	 consumer - The group consumer.
+//		keysAndIds - A map of keys and entry IDs to read from.
+//
+// Return value:
+// A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
+// a key does not exist or does not contain requiested entries.
+//
+// For example:
+//
+//		result, err := client.XReadGroup({"stream1": "0-0", "stream2": "0-1", "stream3": "0-1"})
+//		err == nil: true
+//		result: map[string]map[string][][]string{
+//		  "stream1": {
+//	     "0-1": {{"field1", "value1"}},
+//	     "0-2": {{"field2", "value2"}, {"field2", "value3"}},
+//	   },
+//	   "stream2": {
+//	     "1526985676425-0": {{"name", "Virginia"}, {"surname", "Woolf"}},
+//	     "1526985685298-0": nil,                                               // entry was deleted
+//	   }
+//		  "stream3": {},                                                          // stream is empty
+//		}
+//
+// [valkey.io]: https://valkey.io/commands/xreadgroup/
+func (client *baseClient) XReadGroup(
+	group string,
+	consumer string,
+	keysAndIds map[string]string,
+) (map[string]map[string][][]string, error) {
+	return client.XReadGroupWithOptions(group, consumer, keysAndIds, options.NewXReadGroupOptions())
+}
+
+// Reads entries from the given streams owned by a consumer group.
+//
+// Note:
+//
+//	When in cluster mode, all keys in `keysAndIds` must map to the same hash slot.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	 group - The consumer group name.
+//	 consumer - The group consumer.
+//		keysAndIds - A map of keys and entry IDs to read from.
+//		options - Options detailing how to read the stream.
+//
+// Return value:
+// A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
+// a key does not exist or does not contain requiested entries.
+//
+// For example:
+//
+//		options := options.NewXReadGroupOptions().SetNoAck()
+//		result, err := client.XReadGroupWithOptions({"stream1": "0-0", "stream2": "0-1", "stream3": "0-1"}, options)
+//		err == nil: true
+//		result: map[string]map[string][][]string{
+//		  "stream1": {
+//	     "0-1": {{"field1", "value1"}},
+//	     "0-2": {{"field2", "value2"}, {"field2", "value3"}},
+//	   },
+//	   "stream2": {
+//	     "1526985676425-0": {{"name", "Virginia"}, {"surname", "Woolf"}},
+//	     "1526985685298-0": nil,                                               // entry was deleted
+//	   }
+//		  "stream3": {},                                                          // stream is empty
+//		}
+//
+// [valkey.io]: https://valkey.io/commands/xreadgroup/
+func (client *baseClient) XReadGroupWithOptions(
+	group string,
+	consumer string,
+	keysAndIds map[string]string,
+	options *options.XReadGroupOptions,
+) (map[string]map[string][][]string, error) {
+	args, err := createStreamCommandArgs([]string{"GROUP", group, consumer}, keysAndIds, options)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := client.executeCommand(C.XReadGroup, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleXReadGroupResponse(result)
+}
+
+// Combine `args` with `keysAndIds` and `options` into arguments for a stream command
+func createStreamCommandArgs(
+	args []string,
+	keysAndIds map[string]string,
+	options interface{ ToArgs() ([]string, error) },
+) ([]string, error) {
+	optionArgs, err := options.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, optionArgs...)
+	// Note: this loop iterates in an indeterminate order, but it is OK for that case
+	keys := make([]string, 0, len(keysAndIds))
+	values := make([]string, 0, len(keysAndIds))
+	for key := range keysAndIds {
+		keys = append(keys, key)
+		values = append(values, keysAndIds[key])
+	}
+	args = append(args, "STREAMS")
+	args = append(args, keys...)
+	args = append(args, values...)
+	return args, nil
+}
+
 func (client *baseClient) ZAdd(
 	key string,
 	membersScoreMap map[string]float64,

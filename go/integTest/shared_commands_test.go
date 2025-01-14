@@ -4186,6 +4186,147 @@ func (suite *GlideTestSuite) TestXAddWithOptions() {
 	})
 }
 
+// submit args with custom command API, check that no error returned.
+// returns a response or raises `errMsg` if failed to submit the command.
+func sendWithCustomCommand(suite *GlideTestSuite, client api.BaseClient, args []string, errMsg string) any {
+	var res any
+	var err error
+	switch c := client.(type) {
+	case api.GlideClient:
+		res, err = c.CustomCommand(args)
+	case api.GlideClusterClient:
+		res, err = c.CustomCommand(args)
+	default:
+		suite.FailNow(errMsg)
+	}
+	assert.NoError(suite.T(), err)
+	return res
+}
+
+func (suite *GlideTestSuite) TestXReadGroup() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{xreadgroup}-1-" + uuid.NewString()
+		key2 := "{xreadgroup}-2-" + uuid.NewString()
+		key3 := "{xreadgroup}-3-" + uuid.NewString()
+		group := uuid.NewString()
+		consumer := uuid.NewString()
+
+		sendWithCustomCommand(
+			suite,
+			client,
+			[]string{"xgroup", "create", key1, group, "0", "MKSTREAM"},
+			"Can't send XGROUP CREATE as a custom command",
+		)
+		sendWithCustomCommand(
+			suite,
+			client,
+			[]string{"xgroup", "createconsumer", key1, group, consumer},
+			"Can't send XGROUP CREATECONSUMER as a custom command",
+		)
+
+		entry1, err := client.XAdd(key1, [][]string{{"a", "b"}})
+		assert.NoError(suite.T(), err)
+		assert.False(suite.T(), entry1.IsNil())
+		entry2, err := client.XAdd(key1, [][]string{{"c", "d"}})
+		assert.NoError(suite.T(), err)
+		assert.False(suite.T(), entry2.IsNil())
+
+		// read the entire stream for the consumer and mark messages as pending
+		res, err := client.XReadGroup(group, consumer, map[string]string{key1: ">"})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), map[string]map[string][][]string{
+			key1: {
+				entry1.Value(): {{"a", "b"}},
+				entry2.Value(): {{"c", "d"}},
+			},
+		}, res)
+
+		// delete one of the entries
+		sendWithCustomCommand(suite, client, []string{"xdel", key1, entry1.Value()}, "Can't send XDEL as a custom command")
+
+		// now xreadgroup returns one empty entry and one non-empty entry
+		res, err = client.XReadGroup(group, consumer, map[string]string{key1: "0"})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), map[string]map[string][][]string{
+			key1: {
+				entry1.Value(): nil,
+				entry2.Value(): {{"c", "d"}},
+			},
+		}, res)
+
+		// try to read new messages only
+		res, err = client.XReadGroup(group, consumer, map[string]string{key1: ">"})
+		assert.NoError(suite.T(), err)
+		assert.Nil(suite.T(), res)
+
+		// add a message and read it with ">"
+		entry3, err := client.XAdd(key1, [][]string{{"e", "f"}})
+		assert.NoError(suite.T(), err)
+		assert.False(suite.T(), entry3.IsNil())
+		res, err = client.XReadGroup(group, consumer, map[string]string{key1: ">"})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), map[string]map[string][][]string{
+			key1: {
+				entry3.Value(): {{"e", "f"}},
+			},
+		}, res)
+
+		// add second key with a group and a consumer, but no messages
+		sendWithCustomCommand(
+			suite,
+			client,
+			[]string{"xgroup", "create", key2, group, "0", "MKSTREAM"},
+			"Can't send XGROUP CREATE as a custom command",
+		)
+		sendWithCustomCommand(
+			suite,
+			client,
+			[]string{"xgroup", "createconsumer", key2, group, consumer},
+			"Can't send XGROUP CREATECONSUMER as a custom command",
+		)
+
+		// read both keys
+		res, err = client.XReadGroup(group, consumer, map[string]string{key1: "0", key2: "0"})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), map[string]map[string][][]string{
+			key1: {
+				entry1.Value(): nil,
+				entry2.Value(): {{"c", "d"}},
+				entry3.Value(): {{"e", "f"}},
+			},
+			key2: {},
+		}, res)
+
+		// error cases:
+		// key does not exist
+		_, err = client.XReadGroup("_", "_", map[string]string{key3: "0"})
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+		// key is not a stream
+		suite.verifyOK(client.Set(key3, uuid.New().String()))
+		_, err = client.XReadGroup("_", "_", map[string]string{key3: "0"})
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+		del, err := client.Del([]string{key3})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), del.Value())
+		// group and consumer don't exist
+		xadd, err := client.XAdd(key3, [][]string{{"a", "b"}})
+		assert.NoError(suite.T(), err)
+		assert.NotNil(suite.T(), xadd)
+		_, err = client.XReadGroup("_", "_", map[string]string{key3: "0"})
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+		// consumer don't exist
+		sendWithCustomCommand(
+			suite,
+			client,
+			[]string{"xgroup", "create", key3, group, "0-0"},
+			"Can't send XGROUP CREATE as a custom command",
+		)
+		res, err = client.XReadGroup(group, "_", map[string]string{key3: "0"})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), map[string]map[string][][]string{key3: {}}, res)
+	})
+}
+
 func (suite *GlideTestSuite) TestZAddAndZAddIncr() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
