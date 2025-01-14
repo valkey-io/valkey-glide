@@ -561,6 +561,7 @@ func (node arrayConverter[T]) convert(data interface{}) (interface{}, error) {
 // TODO: convert sets
 
 func handleXReadResponse(response *C.struct_CommandResponse) (map[string]map[string][][]string, error) {
+	defer C.free_command_response(response)
 	data, err := parseMap(response)
 	if err != nil {
 		return nil, err
