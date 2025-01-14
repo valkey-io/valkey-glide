@@ -267,7 +267,7 @@ func (client *baseClient) Incr(key string) (int64, error) {
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) IncrBy(key string, amount int64) (int64, error) {
@@ -276,7 +276,7 @@ func (client *baseClient) IncrBy(key string, amount int64) (int64, error) {
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) IncrByFloat(key string, amount float64) (Result[float64], error) {
@@ -297,7 +297,7 @@ func (client *baseClient) Decr(key string) (int64, error) {
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) DecrBy(key string, amount int64) (int64, error) {
@@ -306,7 +306,7 @@ func (client *baseClient) DecrBy(key string, amount int64) (int64, error) {
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) Strlen(key string) (int64, error) {
@@ -315,7 +315,7 @@ func (client *baseClient) Strlen(key string) (int64, error) {
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) SetRange(key string, offset int, value string) (int64, error) {
@@ -324,7 +324,7 @@ func (client *baseClient) SetRange(key string, offset int, value string) (int64,
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) GetRange(key string, start int, end int) (Result[string], error) {
@@ -342,7 +342,7 @@ func (client *baseClient) Append(key string, value string) (int64, error) {
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) LCS(key1 string, key2 string) (Result[string], error) {
@@ -400,7 +400,7 @@ func (client *baseClient) HSet(key string, values map[string]string) (int64, err
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) HSetNX(key string, field string, value string) (Result[bool], error) {
@@ -418,7 +418,7 @@ func (client *baseClient) HDel(key string, fields []string) (int64, error) {
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) HLen(key string) (int64, error) {
@@ -427,7 +427,7 @@ func (client *baseClient) HLen(key string) (int64, error) {
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) HVals(key string) ([]Result[string], error) {
@@ -463,7 +463,7 @@ func (client *baseClient) HStrLen(key string, field string) (int64, error) {
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) HIncrBy(key string, field string, increment int64) (int64, error) {
@@ -472,7 +472,7 @@ func (client *baseClient) HIncrBy(key string, field string, increment int64) (in
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) HIncrByFloat(key string, field string, increment float64) (Result[float64], error) {
@@ -515,7 +515,7 @@ func (client *baseClient) LPush(key string, elements []string) (int64, error) {
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) LPop(key string) (Result[string], error) {
@@ -542,7 +542,7 @@ func (client *baseClient) LPos(key string, element string) (Result[int64], error
 		return CreateNilInt64Result(), err
 	}
 
-	return handleLongOrNullResponse(result)
+	return handleIntOrNilResponse(result)
 }
 
 func (client *baseClient) LPosWithOptions(key string, element string, options *LPosOptions) (Result[int64], error) {
@@ -551,7 +551,7 @@ func (client *baseClient) LPosWithOptions(key string, element string, options *L
 		return CreateNilInt64Result(), err
 	}
 
-	return handleLongOrNullResponse(result)
+	return handleIntOrNilResponse(result)
 }
 
 func (client *baseClient) LPosCount(key string, element string, count int64) ([]Result[int64], error) {
@@ -560,7 +560,7 @@ func (client *baseClient) LPosCount(key string, element string, count int64) ([]
 		return nil, err
 	}
 
-	return handleLongArrayResponse(result)
+	return handleIntArrayResponse(result)
 }
 
 func (client *baseClient) LPosCountWithOptions(
@@ -577,7 +577,7 @@ func (client *baseClient) LPosCountWithOptions(
 		return nil, err
 	}
 
-	return handleLongArrayResponse(result)
+	return handleIntArrayResponse(result)
 }
 
 func (client *baseClient) RPush(key string, elements []string) (int64, error) {
@@ -586,7 +586,7 @@ func (client *baseClient) RPush(key string, elements []string) (int64, error) {
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) SAdd(key string, members []string) (int64, error) {
@@ -595,7 +595,7 @@ func (client *baseClient) SAdd(key string, members []string) (int64, error) {
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) SRem(key string, members []string) (int64, error) {
@@ -604,7 +604,7 @@ func (client *baseClient) SRem(key string, members []string) (int64, error) {
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) SUnionStore(destination string, keys []string) (int64, error) {
@@ -613,7 +613,7 @@ func (client *baseClient) SUnionStore(destination string, keys []string) (int64,
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) SMembers(key string) (map[Result[string]]struct{}, error) {
@@ -631,7 +631,7 @@ func (client *baseClient) SCard(key string) (int64, error) {
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) SIsMember(key string, member string) (Result[bool], error) {
@@ -658,7 +658,7 @@ func (client *baseClient) SDiffStore(destination string, keys []string) (int64, 
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) SInter(keys []string) (map[Result[string]]struct{}, error) {
@@ -676,7 +676,7 @@ func (client *baseClient) SInterStore(destination string, keys []string) (int64,
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) SInterCard(keys []string) (int64, error) {
@@ -685,7 +685,7 @@ func (client *baseClient) SInterCard(keys []string) (int64, error) {
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) SInterCardLimit(keys []string, limit int64) (int64, error) {
@@ -696,7 +696,7 @@ func (client *baseClient) SInterCardLimit(keys []string, limit int64) (int64, er
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) SRandMember(key string) (Result[string], error) {
@@ -801,7 +801,7 @@ func (client *baseClient) LLen(key string) (int64, error) {
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) LRem(key string, count int64, element string) (int64, error) {
@@ -810,7 +810,7 @@ func (client *baseClient) LRem(key string, count int64, element string) (int64, 
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) RPop(key string) (Result[string], error) {
@@ -850,7 +850,7 @@ func (client *baseClient) LInsert(
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) BLPop(keys []string, timeoutSecs float64) ([]Result[string], error) {
@@ -877,7 +877,7 @@ func (client *baseClient) RPushX(key string, elements []string) (int64, error) {
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) LPushX(key string, elements []string) (int64, error) {
@@ -886,7 +886,7 @@ func (client *baseClient) LPushX(key string, elements []string) (int64, error) {
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) LMPop(keys []string, listDirection ListDirection) (map[Result[string]][]Result[string], error) {
@@ -1091,7 +1091,7 @@ func (client *baseClient) Del(keys []string) (int64, error) {
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) Exists(keys []string) (int64, error) {
@@ -1100,7 +1100,7 @@ func (client *baseClient) Exists(keys []string) (int64, error) {
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) Expire(key string, seconds int64) (Result[bool], error) {
@@ -1209,7 +1209,7 @@ func (client *baseClient) ExpireTime(key string) (int64, error) {
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) PExpireTime(key string) (int64, error) {
@@ -1218,7 +1218,7 @@ func (client *baseClient) PExpireTime(key string) (int64, error) {
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) TTL(key string) (int64, error) {
@@ -1227,7 +1227,7 @@ func (client *baseClient) TTL(key string) (int64, error) {
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) PTTL(key string) (int64, error) {
@@ -1236,7 +1236,7 @@ func (client *baseClient) PTTL(key string) (int64, error) {
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) PfAdd(key string, elements []string) (int64, error) {
@@ -1245,7 +1245,7 @@ func (client *baseClient) PfAdd(key string, elements []string) (int64, error) {
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) PfCount(keys []string) (int64, error) {
@@ -1254,7 +1254,7 @@ func (client *baseClient) PfCount(keys []string) (int64, error) {
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) Unlink(keys []string) (int64, error) {
@@ -1263,7 +1263,7 @@ func (client *baseClient) Unlink(keys []string) (int64, error) {
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) Type(key string) (Result[string], error) {
@@ -1280,7 +1280,7 @@ func (client *baseClient) Touch(keys []string) (int64, error) {
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) Rename(key string, newKey string) (Result[string], error) {
@@ -1344,7 +1344,7 @@ func (client *baseClient) ZAdd(
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) ZAddWithOptions(
@@ -1365,7 +1365,7 @@ func (client *baseClient) ZAddWithOptions(
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) zAddIncrBase(key string, opts *options.ZAddOptions) (Result[float64], error) {
@@ -1455,7 +1455,7 @@ func (client *baseClient) ZRem(key string, members []string) (int64, error) {
 	if err != nil {
 		return defaultIntResponse, err
 	}
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) ZCard(key string) (int64, error) {
@@ -1464,7 +1464,7 @@ func (client *baseClient) ZCard(key string) (int64, error) {
 		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) BZPopMin(keys []string, timeoutSecs float64) (Result[KeyWithMemberAndScore], error) {
@@ -1584,7 +1584,7 @@ func (client *baseClient) ZRank(key string, member string) (Result[int64], error
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}
-	return handleLongOrNullResponse(result)
+	return handleIntOrNilResponse(result)
 }
 
 func (client *baseClient) ZRankWithScore(key string, member string) (Result[int64], Result[float64], error) {
@@ -1600,7 +1600,7 @@ func (client *baseClient) ZRevRank(key string, member string) (Result[int64], er
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}
-	return handleLongOrNullResponse(result)
+	return handleIntOrNilResponse(result)
 }
 
 func (client *baseClient) ZRevRankWithScore(key string, member string) (Result[int64], Result[float64], error) {
@@ -1620,7 +1620,7 @@ func (client *baseClient) XTrim(key string, options *options.XTrimOptions) (int6
 	if err != nil {
 		return defaultIntResponse, err
 	}
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) XLen(key string) (int64, error) {
@@ -1628,5 +1628,5 @@ func (client *baseClient) XLen(key string) (int64, error) {
 	if err != nil {
 		return defaultIntResponse, err
 	}
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
