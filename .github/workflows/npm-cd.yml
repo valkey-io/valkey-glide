@@ -237,7 +237,6 @@ jobs:
               working-directory: ./node/npm/glide
               run: |
                   export pkg_name=valkey-glide
-
                   echo "The workflow is: ${{env.EVENT_NAME}}"
                   if ${{ env.EVENT_NAME == 'workflow_dispatch' }}; then
                     R_VERSION="${{ env.INPUT_VERSION }}"
@@ -253,6 +252,7 @@ jobs:
                   cat package.json
                   # Fix index.ts based on the scope variable
                   sed -i "s|@scope/|${scope}|g" index.ts
+                  npm install
               env:
                   NPM_SCOPE: ${{ vars.NPM_SCOPE }}
                   EVENT_NAME: ${{ github.event_name }}
