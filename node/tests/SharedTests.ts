@@ -1206,9 +1206,9 @@ export function runBaseTests(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `config get and config set with timeout parameter_%p`,
+        `config get and config set with multiple parameters_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
+            await runTest(async (client: BaseClient, cluster) => {
                 const prevTimeout = (await client.configGet([
                     "timeout",
                 ])) as Record<string, GlideString>;
@@ -1225,6 +1225,37 @@ export function runBaseTests(config: {
                         timeout: prevTimeout["timeout"],
                     }),
                 ).toEqual("OK");
+
+                if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                    const prevTimeout = (await client.configGet([
+                        "timeout",
+                    ])) as Record<string, GlideString>;
+                    const prevClusterNodeTimeout = (await client.configGet([
+                        "cluster-node-timeout",
+                    ])) as Record<string, GlideString>;
+                    expect(
+                        await client.configSet({
+                            timeout: "1000",
+                            "cluster-node-timeout": "16000",
+                        }),
+                    ).toEqual("OK");
+                    const currParameterValues = (await client.configGet([
+                        "timeout",
+                        "cluster-node-timeout",
+                    ])) as Record<string, GlideString>;
+                    expect(currParameterValues).toEqual({
+                        timeout: "1000",
+                        "cluster-node-timeout": "16000",
+                    });
+                    /// Revert to the previous configuration
+                    expect(
+                        await client.configSet({
+                            timeout: prevTimeout["timeout"],
+                            "cluster-node-timeout":
+                                prevClusterNodeTimeout["cluster-node-timeout"],
+                        }),
+                    ).toEqual("OK");
+                }
             }, protocol);
         },
         config.timeout,
