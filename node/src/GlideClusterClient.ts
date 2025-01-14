@@ -17,6 +17,7 @@ import {
     convertGlideRecordToRecord,
 } from "./BaseClient";
 import {
+    ClusterScanOptions,
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
@@ -24,7 +25,6 @@ import {
     FunctionStatsSingleResponse,
     InfoOptions,
     LolwutOptions,
-    ClusterScanOptions,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -943,6 +943,7 @@ export class GlideClusterClient extends BaseClient {
 
     /**
      * Reads the configuration parameters of the running server.
+     * Starting from server version 7, command supports multiple parameters.
      *
      * The command will be routed to a random node, unless `route` is provided.
      *
@@ -981,6 +982,7 @@ export class GlideClusterClient extends BaseClient {
 
     /**
      * Sets configuration parameters to the specified values.
+     * Starting from server version 7, command supports multiple parameters.
      *
      * The command will be routed to all nodes, unless `route` is provided.
      *
