@@ -160,7 +160,7 @@ func handleStringResponse(response *C.struct_CommandResponse) (string, error) {
 	return res.Value(), err
 }
 
-func handleStringOrNullResponse(response *C.struct_CommandResponse) (Result[string], error) {
+func handleStringOrNilResponse(response *C.struct_CommandResponse) (Result[string], error) {
 	defer C.free_command_response(response)
 
 	return convertCharArrayToString(response, true)
