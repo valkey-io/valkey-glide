@@ -128,17 +128,17 @@ export type SetOptions = (
     | {
           /**
            * `onlyIfDoesNotExist` - Only set the key if it does not already exist.
-           * Equivalent to `NX` in the Valkey API.
+           * `NX` in the Valkey API.
            *
            * `onlyIfExists` - Only set the key if it already exists.
-           * Equivalent to `EX` in the Valkey API.
+           * `EX` in the Valkey API.
            */
           conditionalSet?: "onlyIfExists" | "onlyIfDoesNotExist";
       }
     | {
           /**
-           * `onlyIfEqual` - Only set the key if the comparison value equals the key value.
-           * Equivalent to `IFEQ` in the Valkey API.
+           * `onlyIfEqual` - Only set the key if the comparison value equals the current value of key.
+           * `IFEQ` in the Valkey API.
            */
           conditionalSet: "onlyIfEqual";
           /**

@@ -1496,8 +1496,11 @@ export class BaseClient {
      * console.log(result4); // Output: 'new_value' - Value wasn't modified back to being "value" because of "NX" flag.
      *
      * // Example usage of set method with conditional option IFEQ
-     * const result5 = await client.set("key", "ifeq_value", {conditionalSet: "onlyIfEqual", comparisonValue: "new_value");
-     * console.log(result5); // Output: 'OK' - Set "ifeq_value" to "key" only if comparisonValue is equal to the value of "key".
+     * await client.set("key", "value we will compare to");
+     * const result5 = await client.set("key", "new_value", {conditionalSet: "onlyIfEqual", comparisonValue: "value we will compare to"});
+     * console.log(result5); // Output: 'OK' - Set "new_value" to "key" only if comparisonValue is equal to the current value of "key".
+     * const result6 = await client.set("key", "another_new_value", {conditionalSet: "onlyIfEqual", comparisonValue: "value we will compare to"});
+     * console.log(result6); // Output: `null` - Value wasn't set because the comparisonValue is not equal to the current value of "key". Value of "key" remains "new_value".
      * ```
      */
     public async set(

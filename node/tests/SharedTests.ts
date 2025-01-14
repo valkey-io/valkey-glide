@@ -8284,6 +8284,22 @@ export function runBaseTests(config: {
         expect(setResWithAllOptions).toEqual(initialValue);
         // newValue should be set as the key value
         expect(await client.get(key)).toEqual(newValue);
+
+        // fail command
+        const wrongValue = "wrong value";
+        const setResFailedWithAllOptions = await client.set(key, wrongValue, {
+            expiry: {
+                type: TimeUnit.UnixSeconds,
+                count: Math.floor(Date.now() / 1000) + 1,
+            },
+            conditionalSet: "onlyIfEqual",
+            comparisonValue: wrongValue,
+            returnOldValue: true,
+        });
+        // current value of key should be newValue
+        expect(setResFailedWithAllOptions).toEqual(newValue);
+        // key should not be set. it remains the same
+        expect(await client.get(key)).toEqual(newValue);
     }
 
     async function testSetWithAllCombination(
