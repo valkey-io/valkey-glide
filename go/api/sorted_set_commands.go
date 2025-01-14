@@ -80,7 +80,8 @@ type SortedSetCommands interface {
 	//   opts - The options for the command. See [ZAddOptions] for details.
 	//
 	// Return value:
-	//   Result[float64] - The new score of the member.
+	//   The new score of the member.
+	//   If there was a conflict with the options, the operation aborts and `nil` is returned.
 	//
 	// Example:
 	//   res, err := client.ZAddIncrWithOptions(key, "one", 1.0, options.NewZAddOptionsBuilder().SetChanged(true))
@@ -106,10 +107,10 @@ type SortedSetCommands interface {
 	//
 	// Example:
 	//   res, err := client.ZIncrBy("myzset", 2.0, "one")
-	//   fmt.Println(res.Value()) // Output: 2.0
+	//   fmt.Println(res) // Output: 2.0
 	//
 	// [valkey.io]: https://valkey.io/commands/zincrby/
-	ZIncrBy(key string, increment float64, member string) (Result[float64], error)
+	ZIncrBy(key string, increment float64, member string) (float64, error)
 
 	// Removes and returns the member with the lowest score from the sorted set
 	// stored at the specified `key`.

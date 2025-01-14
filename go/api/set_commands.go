@@ -95,7 +95,7 @@ type SetCommands interface {
 	//   member - The member to check for existence in the set.
 	//
 	// Return value:
-	//   A Result[bool] containing true if the member exists in the set, false otherwise.
+	//   A bool containing true if the member exists in the set, false otherwise.
 	//   If key doesn't exist, it is treated as an empty set and the method returns false.
 	//
 	// Example:
@@ -107,7 +107,7 @@ type SetCommands interface {
 	//   // Indicates that "nonExistingMember" does not exist in the set "mySet".
 	//
 	// [valkey.io]: https://valkey.io/commands/sismember/
-	SIsMember(key string, member string) (Result[bool], error)
+	SIsMember(key string, member string) (bool, error)
 
 	// SDiff computes the difference between the first set and all the successive sets in keys.
 	//
@@ -305,7 +305,7 @@ type SetCommands interface {
 	//   key - The key of the set.
 	//
 	// Return value:
-	//   A []Result[bool] containing whether each member is a member of the set stored at key.
+	//   A []bool containing whether each member is a member of the set stored at key.
 	//
 	// Example:
 	//	 client.SAdd("myKey", []string{"one", "two"})
@@ -318,7 +318,7 @@ type SetCommands interface {
 	//   // err: nil
 	//
 	// [valkey.io]: https://valkey.io/commands/smismember/
-	SMIsMember(key string, members []string) ([]Result[bool], error)
+	SMIsMember(key string, members []string) ([]bool, error)
 
 	// SUnionStore stores the members of the union of all given sets specified by `keys` into a new set at `destination`.
 	//
@@ -471,5 +471,5 @@ type SetCommands interface {
 	//   fmt.Println(moved.Value()) // Output: true
 	//
 	// [valkey.io]: https://valkey.io/commands/smove/
-	SMove(source string, destination string, member string) (Result[bool], error)
+	SMove(source string, destination string, member string) (bool, error)
 }
