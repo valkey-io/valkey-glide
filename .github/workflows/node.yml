@@ -223,7 +223,7 @@ jobs:
                   arch: ${{ matrix.host.ARCH }}
             - name: Run npm install in ./npm/glide package
               run: npm install
-              working-directory: ./npm/glide
+              working-directory: ./node/npm/glide
             - name: test
               run: npm test
               working-directory: ./node
