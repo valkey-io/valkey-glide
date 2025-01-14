@@ -3,7 +3,11 @@
 package api
 
 // A value to return alongside with error in case if command failed
-var defaultIntResponse int64
+var (
+	defaultFloatResponse float64
+	defaultBoolResponse  bool
+	defaultIntResponse   int64
+)
 
 type Result[T any] struct {
 	val   T
@@ -48,14 +52,6 @@ func CreateFloat64Result(floatVal float64) Result[float64] {
 
 func CreateNilFloat64Result() Result[float64] {
 	return Result[float64]{val: 0, isNil: true}
-}
-
-func CreateBoolResult(boolVal bool) Result[bool] {
-	return Result[bool]{val: boolVal, isNil: false}
-}
-
-func CreateNilBoolResult() Result[bool] {
-	return Result[bool]{val: false, isNil: true}
 }
 
 func CreateKeyWithMemberAndScoreResult(kmsVal KeyWithMemberAndScore) Result[KeyWithMemberAndScore] {
