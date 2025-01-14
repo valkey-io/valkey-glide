@@ -3,7 +3,6 @@
 package integTest
 
 import (
-	"fmt"
 	"math"
 	"reflect"
 	"strconv"
@@ -5232,38 +5231,38 @@ func (suite *GlideTestSuite) TestXPending() {
 			command := []string{"XGroup", "Create", key, groupName, zeroStreamId, "MKSTREAM"}
 
 			resp, err := client.CustomCommand(command)
-			assert.Nil(suite.T(), err)
+			assert.NoError(suite.T(), err)
 			assert.Equal(suite.T(), "OK", resp.(string))
 
 			command = []string{"XGroup", "CreateConsumer", key, groupName, consumer1}
 			resp, err = client.CustomCommand(command)
-			assert.Nil(suite.T(), err)
+			assert.NoError(suite.T(), err)
 			assert.True(suite.T(), resp.(bool))
 
 			command = []string{"XGroup", "CreateConsumer", key, groupName, consumer2}
 			resp, err = client.CustomCommand(command)
-			assert.Nil(suite.T(), err)
+			assert.NoError(suite.T(), err)
 			assert.True(suite.T(), resp.(bool))
 
 			streamid_1, err := client.XAdd(key, [][]string{{"field1", "value1"}})
-			assert.Nil(suite.T(), err)
+			assert.NoError(suite.T(), err)
 			_, err = client.XAdd(key, [][]string{{"field2", "value2"}})
-			assert.Nil(suite.T(), err)
+			assert.NoError(suite.T(), err)
 
 			command = []string{"XReadGroup", "GROUP", groupName, consumer1, "STREAMS", key, ">"}
 			resp, err = client.CustomCommand(command)
-			assert.Nil(suite.T(), err)
+			assert.NoError(suite.T(), err)
 
 			_, err = client.XAdd(key, [][]string{{"field3", "value3"}})
-			assert.Nil(suite.T(), err)
+			assert.NoError(suite.T(), err)
 			_, err = client.XAdd(key, [][]string{{"field4", "value4"}})
-			assert.Nil(suite.T(), err)
+			assert.NoError(suite.T(), err)
 			streamid_5, err := client.XAdd(key, [][]string{{"field5", "value5"}})
-			assert.Nil(suite.T(), err)
+			assert.NoError(suite.T(), err)
 
 			command = []string{"XReadGroup", "GROUP", groupName, consumer2, "STREAMS", key, ">"}
 			resp, err = client.CustomCommand(command)
-			assert.Nil(suite.T(), err)
+			assert.NoError(suite.T(), err)
 
 			expectedResult := api.XPendingSummary{
 				NumOfMessages: 5,
@@ -5279,7 +5278,7 @@ func (suite *GlideTestSuite) TestXPending() {
 			actualResult, err := client.XPending(key, groupName)
 
 			// 3. Assert
-			assert.Nil(suite.T(), err)
+			assert.NoError(suite.T(), err)
 			assert.True(suite.T(), reflect.DeepEqual(expectedResult, actualResult), "Expected and actual results do not match")
 
 		}

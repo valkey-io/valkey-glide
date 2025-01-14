@@ -183,6 +183,9 @@ func CreateConsumerPendingMessagesResult(pendingMessages []interface{}) Result[[
 	consumerMessages := make([]ConsumerPendingMessage, len(pendingMessages))
 
 	for i, msg := range pendingMessages {
+		// Because of how interfaces work in Go, we need to cast each pending message to either a slice or a struct
+		// this allows us to use the same function to parse the response from the server or to programatically create
+		// an expected response in tests.
 		switch consumerMessage := msg.(type) {
 		case []interface{}:
 			count, err := strconv.ParseInt(consumerMessage[1].(string), 10, 64)
@@ -197,7 +200,7 @@ func CreateConsumerPendingMessagesResult(pendingMessages []interface{}) Result[[
 		case ConsumerPendingMessage:
 			consumerMessages[i] = consumerMessage
 		default:
-			fmt.Printf("CreateConsumerPendingMessagesResult - Type: %T \n", consumerMessage)
+			fmt.Printf("CreateConsumerPendingMessagesResult - Unhandled Type: %T \n", consumerMessage)
 		}
 	}
 	return Result[[]ConsumerPendingMessage]{val: consumerMessages, isNil: false}

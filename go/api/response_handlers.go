@@ -631,3 +631,46 @@ func handleXPendingSummaryResponse(response *C.struct_CommandResponse) (XPending
 		return XPendingSummary{NumOfMessages, StartId, EndId, CreateNilConsumerPendingMessagesResult()}, nil
 	}
 }
+
+func handleXPendingDetailResponse(response *C.struct_CommandResponse) ([]XPendingDetail, error) {
+	// response should be [][]interface{}
+
+	defer C.free_command_response(response)
+
+	// TODO: Not sure if this is correct for a nill response
+	if response == nil || response.response_type == uint32(C.Null) {
+		return make([]XPendingDetail, 0), nil
+	}
+
+	typeErr := checkResponseType(response, C.Array, true)
+	if typeErr != nil {
+		return make([]XPendingDetail, 0), typeErr
+	}
+
+	// parse first level of array
+	slice, err := parseArray(response)
+	if err != nil {
+		return make([]XPendingDetail, 0), err
+	}
+
+	switch detail := slice.(type) {
+	case []interface{}:
+		fmt.Printf("Type of detail: %s\n", reflect.TypeOf(detail))
+		// pendingDetails := make([]XPendingDetail, 0, len(detail))
+		// pDetail := XPendingDetail{
+		//     Id:            detail[0].(string),
+		//     ConsumerName:  detail[1].(string),
+		//     IdleTime:      detail[2].(int64),
+		//     DeliveryCount: detail[3].(int64),
+		// }
+		// pendingDetails = append(pendingDetails, pDetail)
+
+	case []XPendingDetail:
+		fmt.Printf("Type of detail: %s\n", reflect.TypeOf(detail))
+
+	default:
+		fmt.Printf("Type of detail: %s\n", reflect.TypeOf(detail))
+	}
+
+	return make([]XPendingDetail, 0), nil
+}

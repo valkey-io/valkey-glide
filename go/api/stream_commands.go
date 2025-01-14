@@ -110,5 +110,5 @@ type StreamCommands interface {
 
 	XPending(key string, group string) (XPendingSummary, error)
 
-	// XPendingWithOptions(key string, group string, options *options.XPendingOptions) ([]XPendingDetail, error)
+	XPendingWithOptions(key string, group string, options *options.XPendingOptions) ([]XPendingDetail, error)
 }
