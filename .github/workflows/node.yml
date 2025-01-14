@@ -103,6 +103,10 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
+            - name: Run npm install in ./npm/glide package
+              run: npm install
+              working-directory: ./node/npm/glide
+
             - name: test
               run: npm test
               working-directory: ./node
@@ -221,9 +225,7 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
                   arch: ${{ matrix.host.ARCH }}
-            - name: Run npm install in ./npm/glide package
-              run: npm install
-              working-directory: ./node/npm/glide
+
             - name: test
               run: npm test
               working-directory: ./node
