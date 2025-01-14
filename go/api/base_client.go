@@ -1352,19 +1352,19 @@ func (client *baseClient) XAddWithOptions(
 //
 // For example:
 //
-//		result, err := client.XReadGroup({"stream1": "0-0", "stream2": "0-1", "stream3": "0-1"})
-//		err == nil: true
-//		result: map[string]map[string][][]string{
-//		  "stream1": {
-//	     "0-1": {{"field1", "value1"}},
-//	     "0-2": {{"field2", "value2"}, {"field2", "value3"}},
-//	   },
-//	   "stream2": {
-//	     "1526985676425-0": {{"name", "Virginia"}, {"surname", "Woolf"}},
-//	     "1526985685298-0": nil,                                               // entry was deleted
-//	   }
-//		  "stream3": {},                                                          // stream is empty
-//		}
+//	result, err := client.XReadGroup({"stream1": "0-0", "stream2": "0-1", "stream3": "0-1"})
+//	err == nil: true
+//	result: map[string]map[string][][]string{
+//	  "stream1": {
+//	    "0-1": {{"field1", "value1"}},
+//	    "0-2": {{"field2", "value2"}, {"field2", "value3"}},
+//	  },
+//	  "stream2": {
+//	    "1526985676425-0": {{"name", "Virginia"}, {"surname", "Woolf"}},
+//	    "1526985685298-0": nil,                                               // entry was deleted
+//	  },
+//	    "stream3": {},                                                        // stream is empty
+//	}
 //
 // [valkey.io]: https://valkey.io/commands/xreadgroup/
 func (client *baseClient) XReadGroup(
@@ -1396,20 +1396,20 @@ func (client *baseClient) XReadGroup(
 //
 // For example:
 //
-//		options := options.NewXReadGroupOptions().SetNoAck()
-//		result, err := client.XReadGroupWithOptions({"stream1": "0-0", "stream2": "0-1", "stream3": "0-1"}, options)
-//		err == nil: true
-//		result: map[string]map[string][][]string{
-//		  "stream1": {
-//	     "0-1": {{"field1", "value1"}},
-//	     "0-2": {{"field2", "value2"}, {"field2", "value3"}},
-//	   },
-//	   "stream2": {
-//	     "1526985676425-0": {{"name", "Virginia"}, {"surname", "Woolf"}},
-//	     "1526985685298-0": nil,                                               // entry was deleted
-//	   }
-//		  "stream3": {},                                                          // stream is empty
-//		}
+//	options := options.NewXReadGroupOptions().SetNoAck()
+//	result, err := client.XReadGroupWithOptions({"stream1": "0-0", "stream2": "0-1", "stream3": "0-1"}, options)
+//	err == nil: true
+//	result: map[string]map[string][][]string{
+//	  "stream1": {
+//	    "0-1": {{"field1", "value1"}},
+//	    "0-2": {{"field2", "value2"}, {"field2", "value3"}},
+//	  },
+//	  "stream2": {
+//	    "1526985676425-0": {{"name", "Virginia"}, {"surname", "Woolf"}},
+//	    "1526985685298-0": nil,                                               // entry was deleted
+//	  },
+//	    "stream3": {},                                                        // stream is empty
+//	}
 //
 // [valkey.io]: https://valkey.io/commands/xreadgroup/
 func (client *baseClient) XReadGroupWithOptions(
