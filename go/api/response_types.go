@@ -4,9 +4,10 @@ package api
 
 // A value to return alongside with error in case if command failed
 var (
-	defaultFloatResponse float64
-	defaultBoolResponse  bool
-	defaultIntResponse   int64
+	defaultFloatResponse  float64
+	defaultBoolResponse   bool
+	defaultIntResponse    int64
+	defaultStringResponse string
 )
 
 type Result[T any] struct {
