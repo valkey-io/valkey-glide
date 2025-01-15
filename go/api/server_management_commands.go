@@ -14,15 +14,14 @@ type ServerManagementCommands interface {
 	//	index - The index of the database to select.
 	//
 	// Return value:
-	//	A simple OK response.
+	//	A simple `"OK"` response.
 	//
 	// Example:
 	//	result, err := client.Select(2)
-	//	result.Value() : "OK"
-	//	result.IsNil() : false
+	//	result: "OK"
 	//
 	// [valkey.io]: https://valkey.io/commands/select/
-	Select(index int64) (Result[string], error)
+	Select(index int64) (string, error)
 
 	// Gets the values of configuration parameters.
 	//
@@ -54,12 +53,12 @@ type ServerManagementCommands interface {
 	//	parameters - A map consisting of configuration parameters and their respective values to set.
 	//
 	// Return value:
-	//	A api.Result[string] containing "OK" if all configurations have been successfully set. Otherwise, raises an error.
+	//	`"OK"` if all configurations have been successfully set. Otherwise, raises an error.
 	//
 	// For example:
 	//	result, err := client.ConfigSet(map[string]string{"timeout": "1000", "maxmemory": "1GB"})
-	//	result.Value(): "OK"
+	//	result: "OK"
 	//
 	// [valkey.io]: https://valkey.io/commands/config-set/
-	ConfigSet(parameters map[string]string) (Result[string], error)
+	ConfigSet(parameters map[string]string) (string, error)
 }
