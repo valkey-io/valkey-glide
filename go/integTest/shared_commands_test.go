@@ -5043,3 +5043,168 @@ func (suite *GlideTestSuite) Test_XDel() {
 		assert.IsType(t, &api.RequestError{}, err)
 	})
 }
+
+func (suite *GlideTestSuite) TestZScan() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.New().String()
+		initialCursor := "0"
+		defaultCount := 20
+
+		// Set up test data - use a large number of entries to force an iterative cursor
+		numberMap := make(map[string]float64)
+		numMembersResult := make([]api.Result[string], 50000)
+		charMembers := []string{"a", "b", "c", "d", "e"}
+		charMembersResult := []api.Result[string]{
+			api.CreateStringResult("a"),
+			api.CreateStringResult("b"),
+			api.CreateStringResult("c"),
+			api.CreateStringResult("d"),
+			api.CreateStringResult("e"),
+		}
+		for i := 0; i < 50000; i++ {
+			numberMap["member"+strconv.Itoa(i)] = float64(i)
+			numMembersResult[i] = api.CreateStringResult("member" + strconv.Itoa(i))
+		}
+		charMap := make(map[string]float64)
+		charMapValues := []api.Result[string]{}
+		for i, val := range charMembers {
+			charMap[val] = float64(i)
+			charMapValues = append(charMapValues, api.CreateStringResult(strconv.Itoa(i)))
+		}
+
+		// Empty set
+		resCursor, resCollection, err := client.ZScan(key1, initialCursor)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), initialCursor, resCursor.Value())
+		assert.Empty(suite.T(), resCollection)
+
+		// Negative cursor
+		if suite.serverVersion >= "8.0.0" {
+			_, _, err = client.ZScan(key1, "-1")
+			assert.NotNil(suite.T(), err)
+			assert.IsType(suite.T(), &api.RequestError{}, err)
+		} else {
+			resCursor, resCollection, err = client.ZScan(key1, "-1")
+			assert.NoError(suite.T(), err)
+			assert.Equal(suite.T(), initialCursor, resCursor.Value())
+			assert.Empty(suite.T(), resCollection)
+		}
+
+		// Result contains the whole set
+		res, err := client.ZAdd(key1, charMap)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(5), res)
+
+		resCursor, resCollection, err = client.ZScan(key1, initialCursor)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), initialCursor, resCursor.Value())
+		assert.Equal(suite.T(), len(charMap)*2, len(resCollection))
+
+		resultKeySet := make([]api.Result[string], 0, len(charMap))
+		resultValueSet := make([]api.Result[string], 0, len(charMap))
+
+		// Iterate through array taking pairs of items
+		for i := 0; i < len(resCollection); i += 2 {
+			resultKeySet = append(resultKeySet, resCollection[i])
+			resultValueSet = append(resultValueSet, resCollection[i+1])
+		}
+
+		// Verify all expected keys exist in result
+		assert.True(suite.T(), isSubset(charMembersResult, resultKeySet))
+
+		// Scores come back as integers converted to a string when the fraction is zero.
+		assert.True(suite.T(), isSubset(charMapValues, resultValueSet))
+
+		opts := options.NewZScanOptionsBuilder().SetMatch("a")
+		resCursor, resCollection, err = client.ZScanWithOptions(key1, initialCursor, opts)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), initialCursor, resCursor.Value())
+		assert.Equal(suite.T(), resCollection, []api.Result[string]{api.CreateStringResult("a"), api.CreateStringResult("0")})
+
+		// Result contains a subset of the key
+		res, err = client.ZAdd(key1, numberMap)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(50000), res)
+
+		resCursor, resCollection, err = client.ZScan(key1, "0")
+		assert.NoError(suite.T(), err)
+		resultCollection := resCollection
+		resKeys := []api.Result[string]{}
+
+		// 0 is returned for the cursor of the last iteration
+		for resCursor.Value() != "0" {
+			nextCursor, nextCol, err := client.ZScan(key1, resCursor.Value())
+			assert.NoError(suite.T(), err)
+			assert.NotEqual(suite.T(), nextCursor, resCursor)
+			assert.False(suite.T(), isSubset(resultCollection, nextCol))
+			resultCollection = append(resultCollection, nextCol...)
+			resCursor = nextCursor
+		}
+
+		for i := 0; i < len(resultCollection); i += 2 {
+			resKeys = append(resKeys, resultCollection[i])
+		}
+
+		assert.NotEmpty(suite.T(), resultCollection)
+		// Verify we got all keys and values
+		assert.True(suite.T(), isSubset(numMembersResult, resKeys))
+
+		// Test match pattern
+		opts = options.NewZScanOptionsBuilder().SetMatch("*")
+		resCursor, resCollection, err = client.ZScanWithOptions(key1, initialCursor, opts)
+		assert.NoError(suite.T(), err)
+		assert.NotEqual(suite.T(), initialCursor, resCursor.Value())
+		assert.GreaterOrEqual(suite.T(), len(resCollection), defaultCount)
+
+		// test count
+		opts = options.NewZScanOptionsBuilder().SetCount(20)
+		resCursor, resCollection, err = client.ZScanWithOptions(key1, initialCursor, opts)
+		assert.NoError(suite.T(), err)
+		assert.NotEqual(suite.T(), initialCursor, resCursor.Value())
+		assert.GreaterOrEqual(suite.T(), len(resCollection), 20)
+
+		// test count with match, returns a non-empty array
+		opts = options.NewZScanOptionsBuilder().SetMatch("1*").SetCount(20)
+		resCursor, resCollection, err = client.ZScanWithOptions(key1, initialCursor, opts)
+		assert.NoError(suite.T(), err)
+		assert.NotEqual(suite.T(), initialCursor, resCursor.Value())
+		assert.GreaterOrEqual(suite.T(), len(resCollection), 0)
+
+		// Test NoScores option for Redis 8.0.0+
+		if suite.serverVersion >= "8.0.0" {
+			opts = options.NewZScanOptionsBuilder().SetNoScores(true)
+			resCursor, resCollection, err = client.ZScanWithOptions(key1, initialCursor, opts)
+			assert.NoError(suite.T(), err)
+			cursor, err := strconv.ParseInt(resCursor.Value(), 10, 64)
+			assert.NoError(suite.T(), err)
+			assert.GreaterOrEqual(suite.T(), cursor, int64(0))
+
+			// Verify all fields start with "member"
+			for _, field := range resCollection {
+				assert.True(suite.T(), strings.HasPrefix(field.Value(), "member"))
+			}
+		}
+
+		// Test exceptions
+		// Non-set key
+		stringKey := uuid.New().String()
+		setRes, err := client.Set(stringKey, "test")
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "OK", setRes)
+
+		_, _, err = client.ZScan(stringKey, initialCursor)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		opts = options.NewZScanOptionsBuilder().SetMatch("test").SetCount(1)
+		_, _, err = client.ZScanWithOptions(stringKey, initialCursor, opts)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		// Negative count
+		opts = options.NewZScanOptionsBuilder().SetCount(-1)
+		_, _, err = client.ZScanWithOptions(key1, "-1", opts)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
