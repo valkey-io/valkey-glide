@@ -2101,7 +2101,6 @@ func (client *baseClient) ZScore(key string, member string) (Result[float64], er
 //	}
 //
 // [valkey.io]: https://valkey.io/commands/zscan/
-
 func (client *baseClient) ZScan(key string, cursor string) (Result[string], []Result[string], error) {
 	result, err := client.executeCommand(C.ZScan, []string{key, cursor})
 	if err != nil {

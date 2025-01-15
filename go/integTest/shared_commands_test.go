@@ -4169,8 +4169,8 @@ func (suite *GlideTestSuite) TestXAutoClaim() {
 		// 	},
 		// }, xreadgroup)
 
-		opts := options.NewXAutoClaimOptionsWithCount(1)                                      // struct{count int64}{count: 1}
-		xautoclaim, err := client.XAutoClaimWithOptions(key, group, consumer, 0, "0-0", opts) //&struct{count int64}{count: 1})
+		opts := options.NewXAutoClaimOptionsWithCount(1)
+		xautoclaim, err := client.XAutoClaimWithOptions(key, group, consumer, 0, "0-0", opts)
 		assert.NoError(suite.T(), err)
 		var deletedEntries []string
 		if suite.serverVersion >= "7.0.0" {
