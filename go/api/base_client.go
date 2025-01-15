@@ -1634,7 +1634,7 @@ func (client *baseClient) XLen(key string) (int64, error) {
 //
 // Return value:
 //
-//	int64 - The number of entries removed from the stream. This number may be less than the number
+//	The number of entries removed from the stream. This number may be less than the number
 //	of entries in `ids`, if the specified `ids` don't exist in the stream.
 //
 // For example:
@@ -1651,7 +1651,7 @@ func (client *baseClient) XLen(key string) (int64, error) {
 func (client *baseClient) XDel(key string, ids []string) (int64, error) {
 	result, err := client.executeCommand(C.XDel, append([]string{key}, ids...))
 	if err != nil {
-		return 0, err
+		return defaultIntResponse, err
 	}
-	return int64(result.int_value), nil
+	return handleIntResponse(result)
 }
