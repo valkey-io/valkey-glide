@@ -179,10 +179,10 @@ func toCStrings(args []string) ([]C.uintptr_t, []C.ulong) {
 	return cStrings, stringLengths
 }
 
-func (client *baseClient) Set(key string, value string) (Result[string], error) {
+func (client *baseClient) Set(key string, value string) (string, error) {
 	result, err := client.executeCommand(C.Set, []string{key, value})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return defaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -199,7 +199,7 @@ func (client *baseClient) SetWithOptions(key string, value string, options *SetO
 		return CreateNilStringResult(), err
 	}
 
-	return handleStringOrNullResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
 func (client *baseClient) Get(key string) (Result[string], error) {
@@ -208,7 +208,7 @@ func (client *baseClient) Get(key string) (Result[string], error) {
 		return CreateNilStringResult(), err
 	}
 
-	return handleStringOrNullResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
 func (client *baseClient) GetEx(key string) (Result[string], error) {
@@ -217,7 +217,7 @@ func (client *baseClient) GetEx(key string) (Result[string], error) {
 		return CreateNilStringResult(), err
 	}
 
-	return handleStringOrNullResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
 func (client *baseClient) GetExWithOptions(key string, options *GetExOptions) (Result[string], error) {
@@ -231,13 +231,13 @@ func (client *baseClient) GetExWithOptions(key string, options *GetExOptions) (R
 		return CreateNilStringResult(), err
 	}
 
-	return handleStringOrNullResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
-func (client *baseClient) MSet(keyValueMap map[string]string) (Result[string], error) {
+func (client *baseClient) MSet(keyValueMap map[string]string) (string, error) {
 	result, err := client.executeCommand(C.MSet, utils.MapToString(keyValueMap))
 	if err != nil {
-		return CreateNilStringResult(), err
+		return defaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -327,10 +327,10 @@ func (client *baseClient) SetRange(key string, offset int, value string) (int64,
 	return handleIntResponse(result)
 }
 
-func (client *baseClient) GetRange(key string, start int, end int) (Result[string], error) {
+func (client *baseClient) GetRange(key string, start int, end int) (string, error) {
 	result, err := client.executeCommand(C.GetRange, []string{key, strconv.Itoa(start), strconv.Itoa(end)})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return defaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -345,10 +345,10 @@ func (client *baseClient) Append(key string, value string) (int64, error) {
 	return handleIntResponse(result)
 }
 
-func (client *baseClient) LCS(key1 string, key2 string) (Result[string], error) {
+func (client *baseClient) LCS(key1 string, key2 string) (string, error) {
 	result, err := client.executeCommand(C.LCS, []string{key1, key2})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return defaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -364,7 +364,7 @@ func (client *baseClient) GetDel(key string) (Result[string], error) {
 		return CreateNilStringResult(), err
 	}
 
-	return handleStringOrNullResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
 func (client *baseClient) HGet(key string, field string) (Result[string], error) {
@@ -373,7 +373,7 @@ func (client *baseClient) HGet(key string, field string) (Result[string], error)
 		return CreateNilStringResult(), err
 	}
 
-	return handleStringOrNullResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
 func (client *baseClient) HGetAll(key string) (map[Result[string]]Result[string], error) {
@@ -524,7 +524,7 @@ func (client *baseClient) LPop(key string) (Result[string], error) {
 		return CreateNilStringResult(), err
 	}
 
-	return handleStringOrNullResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
 func (client *baseClient) LPopCount(key string, count int64) ([]Result[string], error) {
@@ -705,7 +705,7 @@ func (client *baseClient) SRandMember(key string) (Result[string], error) {
 		return CreateNilStringResult(), err
 	}
 
-	return handleStringResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
 func (client *baseClient) SPop(key string) (Result[string], error) {
@@ -714,7 +714,7 @@ func (client *baseClient) SPop(key string) (Result[string], error) {
 		return CreateNilStringResult(), err
 	}
 
-	return handleStringResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
 func (client *baseClient) SMIsMember(key string, members []string) ([]bool, error) {
@@ -783,13 +783,13 @@ func (client *baseClient) LIndex(key string, index int64) (Result[string], error
 		return CreateNilStringResult(), err
 	}
 
-	return handleStringOrNullResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
-func (client *baseClient) LTrim(key string, start int64, end int64) (Result[string], error) {
+func (client *baseClient) LTrim(key string, start int64, end int64) (string, error) {
 	result, err := client.executeCommand(C.LTrim, []string{key, utils.IntToString(start), utils.IntToString(end)})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return defaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -819,7 +819,7 @@ func (client *baseClient) RPop(key string) (Result[string], error) {
 		return CreateNilStringResult(), err
 	}
 
-	return handleStringOrNullResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
 func (client *baseClient) RPopCount(key string, count int64) ([]Result[string], error) {
@@ -998,10 +998,10 @@ func (client *baseClient) BLMPopCount(
 	return handleStringToStringArrayMapOrNullResponse(result)
 }
 
-func (client *baseClient) LSet(key string, index int64, element string) (Result[string], error) {
+func (client *baseClient) LSet(key string, index int64, element string) (string, error) {
 	result, err := client.executeCommand(C.LSet, []string{key, utils.IntToString(index), element})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return defaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -1027,7 +1027,7 @@ func (client *baseClient) LMove(
 		return CreateNilStringResult(), err
 	}
 
-	return handleStringOrNullResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
 func (client *baseClient) BLMove(
@@ -1054,20 +1054,16 @@ func (client *baseClient) BLMove(
 		return CreateNilStringResult(), err
 	}
 
-	return handleStringOrNullResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
 func (client *baseClient) Ping() (string, error) {
 	result, err := client.executeCommand(C.Ping, []string{})
 	if err != nil {
-		return "", err
+		return defaultStringResponse, err
 	}
 
-	response, err := handleStringResponse(result)
-	if err != nil {
-		return "", err
-	}
-	return response.Value(), nil
+	return handleStringResponse(result)
 }
 
 func (client *baseClient) PingWithMessage(message string) (string, error) {
@@ -1075,14 +1071,10 @@ func (client *baseClient) PingWithMessage(message string) (string, error) {
 
 	result, err := client.executeCommand(C.Ping, args)
 	if err != nil {
-		return "", err
+		return defaultStringResponse, err
 	}
 
-	response, err := handleStringResponse(result)
-	if err != nil {
-		return "", err
-	}
-	return response.Value(), nil
+	return handleStringResponse(result)
 }
 
 func (client *baseClient) Del(keys []string) (int64, error) {
@@ -1271,7 +1263,7 @@ func (client *baseClient) Type(key string) (Result[string], error) {
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	return handleStringOrNullResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
 func (client *baseClient) Touch(keys []string) (int64, error) {
@@ -1288,7 +1280,7 @@ func (client *baseClient) Rename(key string, newKey string) (Result[string], err
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	return handleStringOrNullResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
 func (client *baseClient) Renamenx(key string, newKey string) (bool, error) {
@@ -1329,7 +1321,7 @@ func (client *baseClient) XAddWithOptions(
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	return handleStringOrNullResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
 func (client *baseClient) ZAdd(
