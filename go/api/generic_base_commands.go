@@ -32,7 +32,7 @@ type GenericBaseCommands interface {
 	//	fmt.Println(result) // Output: 2
 	//
 	// [valkey.io]: https://valkey.io/commands/del/
-	Del(keys []string) (Result[int64], error)
+	Del(keys []string) (int64, error)
 
 	// Exists returns the number of keys that exist in the database
 	//
@@ -52,11 +52,10 @@ type GenericBaseCommands interface {
 	//
 	// Example:
 	// result, err := client.Exists([]string{"key1", "key2", "key3"})
-	// result.Value(): 2
-	// result.IsNil(): false
+	// result: 2
 	//
 	// [valkey.io]: https://valkey.io/commands/exists/
-	Exists(keys []string) (Result[int64], error)
+	Exists(keys []string) (int64, error)
 
 	// Expire sets a timeout on key. After the timeout has expired, the key will automatically be deleted
 	//
@@ -69,15 +68,15 @@ type GenericBaseCommands interface {
 	// seconds - Time in seconds for the key to expire
 	//
 	// Return value:
-	// A Result[bool] containing true is expiry is set.
+	//  `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
+	//  or operation skipped due to the provided arguments.
 	//
 	// Example:
 	// result, err := client.Expire("key", 1)
-	// result.Value(): true
-	// result.IsNil(): false
+	// result: true
 	//
 	// [valkey.io]: https://valkey.io/commands/expire/
-	Expire(key string, seconds int64) (Result[bool], error)
+	Expire(key string, seconds int64) (bool, error)
 
 	// Expire sets a timeout on key. After the timeout has expired, the key will automatically be deleted
 	//
@@ -91,15 +90,15 @@ type GenericBaseCommands interface {
 	// option - The option  to set expiry - NX, XX, GT, LT
 	//
 	// Return value:
-	// A Result[bool] containing true is expiry is set.
+	//  `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
+	//  or operation skipped due to the provided arguments.
 	//
 	// Example:
 	// result, err := client.Expire("key", 1, api.OnlyIfDoesNotExist)
-	// result.Value(): true
-	// result.IsNil(): false
+	// result: true
 	//
 	// [valkey.io]: https://valkey.io/commands/expire/
-	ExpireWithOptions(key string, seconds int64, expireCondition ExpireCondition) (Result[bool], error)
+	ExpireWithOptions(key string, seconds int64, expireCondition ExpireCondition) (bool, error)
 
 	// ExpireAt sets a timeout on key. It takes an absolute Unix timestamp (seconds since January 1, 1970) instead of
 	// specifying the number of seconds. A timestamp in the past will delete the key immediately. After the timeout has
@@ -115,15 +114,15 @@ type GenericBaseCommands interface {
 	// unixTimestampInSeconds - Absolute Unix timestamp
 	//
 	// Return value:
-	// A Result[bool] containing true is expiry is set.
+	//  `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
+	//  or operation skipped due to the provided arguments.
 	//
 	// Example:
 	// result, err := client.ExpireAt("key", time.Now().Unix())
-	// result.Value(): true
-	// result.IsNil(): false
+	// result: true
 	//
 	// [valkey.io]: https://valkey.io/commands/expireat/
-	ExpireAt(key string, unixTimestampInSeconds int64) (Result[bool], error)
+	ExpireAt(key string, unixTimestampInSeconds int64) (bool, error)
 
 	// ExpireAt sets a timeout on key. It takes an absolute Unix timestamp (seconds since January 1, 1970) instead of
 	// specifying the number of seconds. A timestamp in the past will delete the key immediately. After the timeout has
@@ -140,15 +139,15 @@ type GenericBaseCommands interface {
 	// option - The option  to set expiry - NX, XX, GT, LT
 	//
 	// Return value:
-	// A Result[bool] containing true is expiry is set.
+	//  `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
+	//  or operation skipped due to the provided arguments.
 	//
 	// Example:
 	// result, err := client.ExpireAt("key", time.Now().Unix(), api.OnlyIfDoesNotExist)
-	// result.Value(): true
-	// result.IsNil(): false
+	// result: true
 	//
 	// [valkey.io]: https://valkey.io/commands/expireat/
-	ExpireAtWithOptions(key string, unixTimestampInSeconds int64, expireCondition ExpireCondition) (Result[bool], error)
+	ExpireAtWithOptions(key string, unixTimestampInSeconds int64, expireCondition ExpireCondition) (bool, error)
 
 	// Sets a timeout on key in milliseconds. After the timeout has expired, the key will automatically be deleted.
 	// If key already has an existing expire set, the time to live is updated to the new value.
@@ -160,15 +159,15 @@ type GenericBaseCommands interface {
 	// milliseconds - The timeout in milliseconds.
 	//
 	// Return value:
-	// A Result[bool] containing true is expiry is set.
+	//  `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
+	//  or operation skipped due to the provided arguments.
 	//
 	// Example:
 	// result, err := client.PExpire("key", int64(5 * 1000))
-	// result.Value(): true
-	// result.IsNil(): false
+	// result: true
 	//
 	//  [valkey.io]: https://valkey.io/commands/pexpire/
-	PExpire(key string, milliseconds int64) (Result[bool], error)
+	PExpire(key string, milliseconds int64) (bool, error)
 
 	// Sets a timeout on key in milliseconds. After the timeout has expired, the key will automatically be deleted.
 	// If key already has an existing expire set, the time to live is updated to the new value.
@@ -181,15 +180,15 @@ type GenericBaseCommands interface {
 	// option - The option  to set expiry - NX, XX, GT, LT
 	//
 	// Return value:
-	// A Result[bool] containing true is expiry is set.
+	//  `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
+	//  or operation skipped due to the provided arguments.
 	//
 	// Example:
 	// result, err := client.PExpire("key", int64(5 * 1000), api.OnlyIfDoesNotExist)
-	// result.Value(): true
-	// result.IsNil(): false
+	// result: true
 	//
 	//	[valkey.io]: https://valkey.io/commands/pexpire/
-	PExpireWithOptions(key string, milliseconds int64, expireCondition ExpireCondition) (Result[bool], error)
+	PExpireWithOptions(key string, milliseconds int64, expireCondition ExpireCondition) (bool, error)
 
 	// Sets a timeout on key. It takes an absolute Unix timestamp (milliseconds since
 	// January 1, 1970) instead of specifying the number of milliseconds.
@@ -204,15 +203,15 @@ type GenericBaseCommands interface {
 	// unixMilliseconds - The timeout in an absolute Unix timestamp.
 	//
 	// Return value:
-	// A Result[bool] containing true is expiry is set.
+	//  `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
+	//  or operation skipped due to the provided arguments.
 	//
 	// Example:
 	// result, err := client.PExpire("key", time.Now().Unix()*1000)
-	// result.Value(): true
-	// result.IsNil(): false
+	// result: true
 	//
 	//	[valkey.io]: https://valkey.io/commands/pexpireat/
-	PExpireAt(key string, unixTimestampInMilliSeconds int64) (Result[bool], error)
+	PExpireAt(key string, unixTimestampInMilliSeconds int64) (bool, error)
 
 	// Sets a timeout on key. It takes an absolute Unix timestamp (milliseconds since
 	// January 1, 1970) instead of specifying the number of milliseconds.
@@ -228,15 +227,15 @@ type GenericBaseCommands interface {
 	// option - The option  to set expiry - NX, XX, GT, LT
 	//
 	// Return value:
-	// A Result[bool] containing true is expiry is set.
+	//  `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
+	//  or operation skipped due to the provided arguments.
 	//
 	// Example:
 	// result, err := client.PExpire("key", time.Now().Unix()*1000, api.OnlyIfDoesNotExist)
-	// result.Value(): true
-	// result.IsNil(): false
+	// result: true
 	//
 	//	[valkey.io]: https://valkey.io/commands/pexpireat/
-	PExpireAtWithOptions(key string, unixTimestampInMilliSeconds int64, expireCondition ExpireCondition) (Result[bool], error)
+	PExpireAtWithOptions(key string, unixTimestampInMilliSeconds int64, expireCondition ExpireCondition) (bool, error)
 
 	// Expire Time returns the absolute Unix timestamp (since January 1, 1970) at which the given key
 	// will expire, in seconds.
@@ -246,16 +245,15 @@ type GenericBaseCommands interface {
 	//
 	// Return value:
 	// The expiration Unix timestamp in seconds.
-	// -2 if key does not exist or -1 is key exists but has no associated expiration.
+	// `-2` if key does not exist or `-1` is key exists but has no associated expiration.
 	//
 	// Example:
 	//
 	// result, err := client.ExpireTime("key")
-	// result.Value(): 1732118030
-	// result.IsNil(): false
+	// result: 1732118030
 	//
 	// [valkey.io]: https://valkey.io/commands/expiretime/
-	ExpireTime(key string) (Result[int64], error)
+	ExpireTime(key string) (int64, error)
 
 	// PExpire Time returns the absolute Unix timestamp (since January 1, 1970) at which the given key
 	// will expire, in milliseconds.
@@ -265,16 +263,15 @@ type GenericBaseCommands interface {
 	//
 	// Return value:
 	// The expiration Unix timestamp in milliseconds.
-	// -2 if key does not exist or -1 is key exists but has no associated expiration.
+	// `-2` if key does not exist or `-1` is key exists but has no associated expiration.
 	//
 	// Example:
 	//
 	// result, err := client.PExpireTime("key")
-	// result.Value(): 33177117420000
-	// result.IsNil(): false
+	// result: 33177117420000
 	//
 	// [valkey.io]: https://valkey.io/commands/pexpiretime/
-	PExpireTime(key string) (Result[int64], error)
+	PExpireTime(key string) (int64, error)
 
 	// TTL returns the remaining time to live of key that has a timeout, in seconds.
 	//
@@ -283,16 +280,15 @@ type GenericBaseCommands interface {
 	//
 	// Return value:
 	// Returns TTL in seconds,
-	// -2 if key does not exist, or -1 if key exists but has no associated expiration.
+	// `-2` if key does not exist, or `-1` if key exists but has no associated expiration.
 	//
 	// Example:
 	//
 	// result, err := client.TTL("key")
-	// result.Value(): 3
-	// result.IsNil(): false
+	// result: 3
 	//
 	// [valkey.io]: https://valkey.io/commands/ttl/
-	TTL(key string) (Result[int64], error)
+	TTL(key string) (int64, error)
 
 	// PTTL returns the remaining time to live of key that has a timeout, in milliseconds.
 	//
@@ -301,16 +297,15 @@ type GenericBaseCommands interface {
 	//
 	// Return value:
 	// Returns TTL in milliseconds,
-	// -2 if key does not exist, or -1 if key exists but has no associated expiration.
+	// `-2` if key does not exist, or `-1` if key exists but has no associated expiration.
 	//
 	// Example:
 	//
 	// result, err := client.PTTL("key")
-	// result.Value(): 1000
-	// result.IsNil(): false
+	// result: 1000
 	//
 	// [valkey.io]: https://valkey.io/commands/pttl/
-	PTTL(key string) (Result[int64], error)
+	PTTL(key string) (int64, error)
 
 	// Unlink (delete) multiple keys from the database. A key is ignored if it does not exist.
 	// This command, similar to Del However, this command does not block the server
@@ -334,10 +329,10 @@ type GenericBaseCommands interface {
 	//	if err != nil {
 	//	    // handle error
 	//	}
-	//	fmt.Println(result.Value()) // Output: 3
+	//	fmt.Println(result) // Output: 3
 	//
 	// [valkey.io]: Https://valkey.io/commands/unlink/
-	Unlink(keys []string) (Result[int64], error)
+	Unlink(keys []string) (int64, error)
 
 	// Alters the last access time of a key(s). A key is ignored if it does not exist.
 	//
@@ -360,10 +355,10 @@ type GenericBaseCommands interface {
 	//	if err != nil {
 	//	    // handle error
 	//	}
-	//	fmt.Println(result.Value()) // Output: 3
+	//	fmt.Println(result) // Output: 3
 	//
 	// [valkey.io]: Https://valkey.io/commands/touch/
-	Touch(keys []string) (Result[int64], error)
+	Touch(keys []string) (int64, error)
 
 	// Type returns the string representation of the type of the value stored at key.
 	// The different types that can be returned are: string, list, set, zset, hash and stream.
@@ -398,7 +393,7 @@ type GenericBaseCommands interface {
 	// If the key was successfully renamed, return "OK". If key does not exist, an error is thrown.
 	//
 	// Example:
-	//  result, err := client.Rename([]string{"key","newkey"})
+	//  result, err := client.Rename([]string{"key", "newkey"})
 	//	if err != nil {
 	//	    // handle error
 	//	}
@@ -417,17 +412,17 @@ type GenericBaseCommands interface {
 	//  newKey The new name of the key.
 	//
 	// Return value:
-	// true if key was renamed to newKey, false if newKey already exists.
+	//  `true` if k`ey was renamed to `newKey`, `false` if `newKey` already exists.
 	//
 	// Example:
-	//  result, err := client.Renamenx([]string{"key","newkey"})
+	//  result, err := client.Renamenx([]string{"key", "newkey"})
 	//	if err != nil {
 	//	    // handle error
 	//	}
-	//	fmt.Println(result.Value()) // Output: OK
+	//	fmt.Println(result) // Output: true
 	//
 	// [valkey.io]: https://valkey.io/commands/renamenx/
-	Renamenx(key string, newKey string) (Result[bool], error)
+	Renamenx(key string, newKey string) (bool, error)
 
 	// Removes the existing timeout on key, turning the key from volatile
 	// (a key with an expire set) to persistent (a key that will never expire as no timeout is associated).
@@ -436,15 +431,15 @@ type GenericBaseCommands interface {
 	//  key - The key to remove the existing timeout on.
 	//
 	// Return value:
-	//  false if key does not exist or does not have an associated timeout, true if the timeout has been removed.
+	//  `false` if key does not exist or does not have an associated timeout, `true` if the timeout has been removed.
 	//
 	// Example:
 	//  result, err := client.Persist([]string{"key"})
 	//	if err != nil {
 	//	    // handle error
 	//	}
-	//	fmt.Println(result.Value()) // Output: true
+	//	fmt.Println(result) // Output: true
 	//
 	// [valkey.io]: https://valkey.io/commands/persist/
-	Persist(key string) (Result[bool], error)
+	Persist(key string) (bool, error)
 }
