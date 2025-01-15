@@ -179,10 +179,10 @@ func toCStrings(args []string) ([]C.uintptr_t, []C.ulong) {
 	return cStrings, stringLengths
 }
 
-func (client *baseClient) Set(key string, value string) (Result[string], error) {
+func (client *baseClient) Set(key string, value string) (string, error) {
 	result, err := client.executeCommand(C.Set, []string{key, value})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return defaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -199,7 +199,7 @@ func (client *baseClient) SetWithOptions(key string, value string, options *SetO
 		return CreateNilStringResult(), err
 	}
 
-	return handleStringOrNullResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
 func (client *baseClient) Get(key string) (Result[string], error) {
@@ -208,7 +208,7 @@ func (client *baseClient) Get(key string) (Result[string], error) {
 		return CreateNilStringResult(), err
 	}
 
-	return handleStringOrNullResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
 func (client *baseClient) GetEx(key string) (Result[string], error) {
@@ -217,7 +217,7 @@ func (client *baseClient) GetEx(key string) (Result[string], error) {
 		return CreateNilStringResult(), err
 	}
 
-	return handleStringOrNullResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
 func (client *baseClient) GetExWithOptions(key string, options *GetExOptions) (Result[string], error) {
@@ -231,25 +231,25 @@ func (client *baseClient) GetExWithOptions(key string, options *GetExOptions) (R
 		return CreateNilStringResult(), err
 	}
 
-	return handleStringOrNullResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
-func (client *baseClient) MSet(keyValueMap map[string]string) (Result[string], error) {
+func (client *baseClient) MSet(keyValueMap map[string]string) (string, error) {
 	result, err := client.executeCommand(C.MSet, utils.MapToString(keyValueMap))
 	if err != nil {
-		return CreateNilStringResult(), err
+		return defaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
 }
 
-func (client *baseClient) MSetNX(keyValueMap map[string]string) (Result[bool], error) {
+func (client *baseClient) MSetNX(keyValueMap map[string]string) (bool, error) {
 	result, err := client.executeCommand(C.MSetNX, utils.MapToString(keyValueMap))
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return defaultBoolResponse, err
 	}
 
-	return handleBooleanResponse(result)
+	return handleBoolResponse(result)
 }
 
 func (client *baseClient) MGet(keys []string) ([]Result[string], error) {
@@ -261,94 +261,94 @@ func (client *baseClient) MGet(keys []string) ([]Result[string], error) {
 	return handleStringArrayResponse(result)
 }
 
-func (client *baseClient) Incr(key string) (Result[int64], error) {
+func (client *baseClient) Incr(key string) (int64, error) {
 	result, err := client.executeCommand(C.Incr, []string{key})
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
-func (client *baseClient) IncrBy(key string, amount int64) (Result[int64], error) {
+func (client *baseClient) IncrBy(key string, amount int64) (int64, error) {
 	result, err := client.executeCommand(C.IncrBy, []string{key, utils.IntToString(amount)})
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
-func (client *baseClient) IncrByFloat(key string, amount float64) (Result[float64], error) {
+func (client *baseClient) IncrByFloat(key string, amount float64) (float64, error) {
 	result, err := client.executeCommand(
 		C.IncrByFloat,
 		[]string{key, utils.FloatToString(amount)},
 	)
 	if err != nil {
-		return CreateNilFloat64Result(), err
+		return defaultFloatResponse, err
 	}
 
-	return handleDoubleResponse(result)
+	return handleFloatResponse(result)
 }
 
-func (client *baseClient) Decr(key string) (Result[int64], error) {
+func (client *baseClient) Decr(key string) (int64, error) {
 	result, err := client.executeCommand(C.Decr, []string{key})
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
-func (client *baseClient) DecrBy(key string, amount int64) (Result[int64], error) {
+func (client *baseClient) DecrBy(key string, amount int64) (int64, error) {
 	result, err := client.executeCommand(C.DecrBy, []string{key, utils.IntToString(amount)})
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
-func (client *baseClient) Strlen(key string) (Result[int64], error) {
+func (client *baseClient) Strlen(key string) (int64, error) {
 	result, err := client.executeCommand(C.Strlen, []string{key})
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
-func (client *baseClient) SetRange(key string, offset int, value string) (Result[int64], error) {
+func (client *baseClient) SetRange(key string, offset int, value string) (int64, error) {
 	result, err := client.executeCommand(C.SetRange, []string{key, strconv.Itoa(offset), value})
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
-func (client *baseClient) GetRange(key string, start int, end int) (Result[string], error) {
+func (client *baseClient) GetRange(key string, start int, end int) (string, error) {
 	result, err := client.executeCommand(C.GetRange, []string{key, strconv.Itoa(start), strconv.Itoa(end)})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return defaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
 }
 
-func (client *baseClient) Append(key string, value string) (Result[int64], error) {
+func (client *baseClient) Append(key string, value string) (int64, error) {
 	result, err := client.executeCommand(C.Append, []string{key, value})
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
-func (client *baseClient) LCS(key1 string, key2 string) (Result[string], error) {
+func (client *baseClient) LCS(key1 string, key2 string) (string, error) {
 	result, err := client.executeCommand(C.LCS, []string{key1, key2})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return defaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -364,7 +364,7 @@ func (client *baseClient) GetDel(key string) (Result[string], error) {
 		return CreateNilStringResult(), err
 	}
 
-	return handleStringOrNullResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
 func (client *baseClient) HGet(key string, field string) (Result[string], error) {
@@ -373,7 +373,7 @@ func (client *baseClient) HGet(key string, field string) (Result[string], error)
 		return CreateNilStringResult(), err
 	}
 
-	return handleStringOrNullResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
 func (client *baseClient) HGetAll(key string) (map[Result[string]]Result[string], error) {
@@ -394,40 +394,40 @@ func (client *baseClient) HMGet(key string, fields []string) ([]Result[string], 
 	return handleStringArrayResponse(result)
 }
 
-func (client *baseClient) HSet(key string, values map[string]string) (Result[int64], error) {
+func (client *baseClient) HSet(key string, values map[string]string) (int64, error) {
 	result, err := client.executeCommand(C.HSet, utils.ConvertMapToKeyValueStringArray(key, values))
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
-func (client *baseClient) HSetNX(key string, field string, value string) (Result[bool], error) {
+func (client *baseClient) HSetNX(key string, field string, value string) (bool, error) {
 	result, err := client.executeCommand(C.HSetNX, []string{key, field, value})
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return defaultBoolResponse, err
 	}
 
-	return handleBooleanResponse(result)
+	return handleBoolResponse(result)
 }
 
-func (client *baseClient) HDel(key string, fields []string) (Result[int64], error) {
+func (client *baseClient) HDel(key string, fields []string) (int64, error) {
 	result, err := client.executeCommand(C.HDel, append([]string{key}, fields...))
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
-func (client *baseClient) HLen(key string) (Result[int64], error) {
+func (client *baseClient) HLen(key string) (int64, error) {
 	result, err := client.executeCommand(C.HLen, []string{key})
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) HVals(key string) ([]Result[string], error) {
@@ -439,13 +439,13 @@ func (client *baseClient) HVals(key string) ([]Result[string], error) {
 	return handleStringArrayResponse(result)
 }
 
-func (client *baseClient) HExists(key string, field string) (Result[bool], error) {
+func (client *baseClient) HExists(key string, field string) (bool, error) {
 	result, err := client.executeCommand(C.HExists, []string{key, field})
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return defaultBoolResponse, err
 	}
 
-	return handleBooleanResponse(result)
+	return handleBoolResponse(result)
 }
 
 func (client *baseClient) HKeys(key string) ([]Result[string], error) {
@@ -457,31 +457,31 @@ func (client *baseClient) HKeys(key string) ([]Result[string], error) {
 	return handleStringArrayResponse(result)
 }
 
-func (client *baseClient) HStrLen(key string, field string) (Result[int64], error) {
+func (client *baseClient) HStrLen(key string, field string) (int64, error) {
 	result, err := client.executeCommand(C.HStrlen, []string{key, field})
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
-func (client *baseClient) HIncrBy(key string, field string, increment int64) (Result[int64], error) {
+func (client *baseClient) HIncrBy(key string, field string, increment int64) (int64, error) {
 	result, err := client.executeCommand(C.HIncrBy, []string{key, field, utils.IntToString(increment)})
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
-func (client *baseClient) HIncrByFloat(key string, field string, increment float64) (Result[float64], error) {
+func (client *baseClient) HIncrByFloat(key string, field string, increment float64) (float64, error) {
 	result, err := client.executeCommand(C.HIncrByFloat, []string{key, field, utils.FloatToString(increment)})
 	if err != nil {
-		return CreateNilFloat64Result(), err
+		return defaultFloatResponse, err
 	}
 
-	return handleDoubleResponse(result)
+	return handleFloatResponse(result)
 }
 
 func (client *baseClient) HScan(key string, cursor string) (Result[string], []Result[string], error) {
@@ -509,13 +509,13 @@ func (client *baseClient) HScanWithOptions(
 	return handleScanResponse(result)
 }
 
-func (client *baseClient) LPush(key string, elements []string) (Result[int64], error) {
+func (client *baseClient) LPush(key string, elements []string) (int64, error) {
 	result, err := client.executeCommand(C.LPush, append([]string{key}, elements...))
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) LPop(key string) (Result[string], error) {
@@ -524,7 +524,7 @@ func (client *baseClient) LPop(key string) (Result[string], error) {
 		return CreateNilStringResult(), err
 	}
 
-	return handleStringOrNullResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
 func (client *baseClient) LPopCount(key string, count int64) ([]Result[string], error) {
@@ -542,7 +542,7 @@ func (client *baseClient) LPos(key string, element string) (Result[int64], error
 		return CreateNilInt64Result(), err
 	}
 
-	return handleLongOrNullResponse(result)
+	return handleIntOrNilResponse(result)
 }
 
 func (client *baseClient) LPosWithOptions(key string, element string, options *LPosOptions) (Result[int64], error) {
@@ -551,7 +551,7 @@ func (client *baseClient) LPosWithOptions(key string, element string, options *L
 		return CreateNilInt64Result(), err
 	}
 
-	return handleLongOrNullResponse(result)
+	return handleIntOrNilResponse(result)
 }
 
 func (client *baseClient) LPosCount(key string, element string, count int64) ([]Result[int64], error) {
@@ -560,7 +560,7 @@ func (client *baseClient) LPosCount(key string, element string, count int64) ([]
 		return nil, err
 	}
 
-	return handleLongArrayResponse(result)
+	return handleIntArrayResponse(result)
 }
 
 func (client *baseClient) LPosCountWithOptions(
@@ -577,43 +577,43 @@ func (client *baseClient) LPosCountWithOptions(
 		return nil, err
 	}
 
-	return handleLongArrayResponse(result)
+	return handleIntArrayResponse(result)
 }
 
-func (client *baseClient) RPush(key string, elements []string) (Result[int64], error) {
+func (client *baseClient) RPush(key string, elements []string) (int64, error) {
 	result, err := client.executeCommand(C.RPush, append([]string{key}, elements...))
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
-func (client *baseClient) SAdd(key string, members []string) (Result[int64], error) {
+func (client *baseClient) SAdd(key string, members []string) (int64, error) {
 	result, err := client.executeCommand(C.SAdd, append([]string{key}, members...))
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
-func (client *baseClient) SRem(key string, members []string) (Result[int64], error) {
+func (client *baseClient) SRem(key string, members []string) (int64, error) {
 	result, err := client.executeCommand(C.SRem, append([]string{key}, members...))
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
-func (client *baseClient) SUnionStore(destination string, keys []string) (Result[int64], error) {
+func (client *baseClient) SUnionStore(destination string, keys []string) (int64, error) {
 	result, err := client.executeCommand(C.SUnionStore, append([]string{destination}, keys...))
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) SMembers(key string) (map[Result[string]]struct{}, error) {
@@ -625,22 +625,22 @@ func (client *baseClient) SMembers(key string) (map[Result[string]]struct{}, err
 	return handleStringSetResponse(result)
 }
 
-func (client *baseClient) SCard(key string) (Result[int64], error) {
+func (client *baseClient) SCard(key string) (int64, error) {
 	result, err := client.executeCommand(C.SCard, []string{key})
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
-func (client *baseClient) SIsMember(key string, member string) (Result[bool], error) {
+func (client *baseClient) SIsMember(key string, member string) (bool, error) {
 	result, err := client.executeCommand(C.SIsMember, []string{key, member})
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return defaultBoolResponse, err
 	}
 
-	return handleBooleanResponse(result)
+	return handleBoolResponse(result)
 }
 
 func (client *baseClient) SDiff(keys []string) (map[Result[string]]struct{}, error) {
@@ -652,13 +652,13 @@ func (client *baseClient) SDiff(keys []string) (map[Result[string]]struct{}, err
 	return handleStringSetResponse(result)
 }
 
-func (client *baseClient) SDiffStore(destination string, keys []string) (Result[int64], error) {
+func (client *baseClient) SDiffStore(destination string, keys []string) (int64, error) {
 	result, err := client.executeCommand(C.SDiffStore, append([]string{destination}, keys...))
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) SInter(keys []string) (map[Result[string]]struct{}, error) {
@@ -670,33 +670,33 @@ func (client *baseClient) SInter(keys []string) (map[Result[string]]struct{}, er
 	return handleStringSetResponse(result)
 }
 
-func (client *baseClient) SInterStore(destination string, keys []string) (Result[int64], error) {
+func (client *baseClient) SInterStore(destination string, keys []string) (int64, error) {
 	result, err := client.executeCommand(C.SInterStore, append([]string{destination}, keys...))
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
-func (client *baseClient) SInterCard(keys []string) (Result[int64], error) {
+func (client *baseClient) SInterCard(keys []string) (int64, error) {
 	result, err := client.executeCommand(C.SInterCard, append([]string{strconv.Itoa(len(keys))}, keys...))
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
-func (client *baseClient) SInterCardLimit(keys []string, limit int64) (Result[int64], error) {
+func (client *baseClient) SInterCardLimit(keys []string, limit int64) (int64, error) {
 	args := utils.Concat([]string{utils.IntToString(int64(len(keys)))}, keys, []string{"LIMIT", utils.IntToString(limit)})
 
 	result, err := client.executeCommand(C.SInterCard, args)
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) SRandMember(key string) (Result[string], error) {
@@ -705,7 +705,7 @@ func (client *baseClient) SRandMember(key string) (Result[string], error) {
 		return CreateNilStringResult(), err
 	}
 
-	return handleStringResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
 func (client *baseClient) SPop(key string) (Result[string], error) {
@@ -714,16 +714,16 @@ func (client *baseClient) SPop(key string) (Result[string], error) {
 		return CreateNilStringResult(), err
 	}
 
-	return handleStringResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
-func (client *baseClient) SMIsMember(key string, members []string) ([]Result[bool], error) {
+func (client *baseClient) SMIsMember(key string, members []string) ([]bool, error) {
 	result, err := client.executeCommand(C.SMIsMember, append([]string{key}, members...))
 	if err != nil {
 		return nil, err
 	}
 
-	return handleBooleanArrayResponse(result)
+	return handleBoolArrayResponse(result)
 }
 
 func (client *baseClient) SUnion(keys []string) (map[Result[string]]struct{}, error) {
@@ -760,12 +760,12 @@ func (client *baseClient) SScanWithOptions(
 	return handleScanResponse(result)
 }
 
-func (client *baseClient) SMove(source string, destination string, member string) (Result[bool], error) {
+func (client *baseClient) SMove(source string, destination string, member string) (bool, error) {
 	result, err := client.executeCommand(C.SMove, []string{source, destination, member})
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return defaultBoolResponse, err
 	}
-	return handleBooleanResponse(result)
+	return handleBoolResponse(result)
 }
 
 func (client *baseClient) LRange(key string, start int64, end int64) ([]Result[string], error) {
@@ -783,34 +783,34 @@ func (client *baseClient) LIndex(key string, index int64) (Result[string], error
 		return CreateNilStringResult(), err
 	}
 
-	return handleStringOrNullResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
-func (client *baseClient) LTrim(key string, start int64, end int64) (Result[string], error) {
+func (client *baseClient) LTrim(key string, start int64, end int64) (string, error) {
 	result, err := client.executeCommand(C.LTrim, []string{key, utils.IntToString(start), utils.IntToString(end)})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return defaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
 }
 
-func (client *baseClient) LLen(key string) (Result[int64], error) {
+func (client *baseClient) LLen(key string) (int64, error) {
 	result, err := client.executeCommand(C.LLen, []string{key})
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
-func (client *baseClient) LRem(key string, count int64, element string) (Result[int64], error) {
+func (client *baseClient) LRem(key string, count int64, element string) (int64, error) {
 	result, err := client.executeCommand(C.LRem, []string{key, utils.IntToString(count), element})
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) RPop(key string) (Result[string], error) {
@@ -819,7 +819,7 @@ func (client *baseClient) RPop(key string) (Result[string], error) {
 		return CreateNilStringResult(), err
 	}
 
-	return handleStringOrNullResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
 func (client *baseClient) RPopCount(key string, count int64) ([]Result[string], error) {
@@ -836,10 +836,10 @@ func (client *baseClient) LInsert(
 	insertPosition InsertPosition,
 	pivot string,
 	element string,
-) (Result[int64], error) {
+) (int64, error) {
 	insertPositionStr, err := insertPosition.toString()
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
 	result, err := client.executeCommand(
@@ -847,10 +847,10 @@ func (client *baseClient) LInsert(
 		[]string{key, insertPositionStr, pivot, element},
 	)
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) BLPop(keys []string, timeoutSecs float64) ([]Result[string], error) {
@@ -871,22 +871,22 @@ func (client *baseClient) BRPop(keys []string, timeoutSecs float64) ([]Result[st
 	return handleStringArrayOrNullResponse(result)
 }
 
-func (client *baseClient) RPushX(key string, elements []string) (Result[int64], error) {
+func (client *baseClient) RPushX(key string, elements []string) (int64, error) {
 	result, err := client.executeCommand(C.RPushX, append([]string{key}, elements...))
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
-func (client *baseClient) LPushX(key string, elements []string) (Result[int64], error) {
+func (client *baseClient) LPushX(key string, elements []string) (int64, error) {
 	result, err := client.executeCommand(C.LPushX, append([]string{key}, elements...))
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) LMPop(keys []string, listDirection ListDirection) (map[Result[string]][]Result[string], error) {
@@ -998,10 +998,10 @@ func (client *baseClient) BLMPopCount(
 	return handleStringToStringArrayMapOrNullResponse(result)
 }
 
-func (client *baseClient) LSet(key string, index int64, element string) (Result[string], error) {
+func (client *baseClient) LSet(key string, index int64, element string) (string, error) {
 	result, err := client.executeCommand(C.LSet, []string{key, utils.IntToString(index), element})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return defaultStringResponse, err
 	}
 
 	return handleStringResponse(result)
@@ -1027,7 +1027,7 @@ func (client *baseClient) LMove(
 		return CreateNilStringResult(), err
 	}
 
-	return handleStringOrNullResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
 func (client *baseClient) BLMove(
@@ -1054,20 +1054,16 @@ func (client *baseClient) BLMove(
 		return CreateNilStringResult(), err
 	}
 
-	return handleStringOrNullResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
 func (client *baseClient) Ping() (string, error) {
 	result, err := client.executeCommand(C.Ping, []string{})
 	if err != nil {
-		return "", err
+		return defaultStringResponse, err
 	}
 
-	response, err := handleStringResponse(result)
-	if err != nil {
-		return "", err
-	}
-	return response.Value(), nil
+	return handleStringResponse(result)
 }
 
 func (client *baseClient) PingWithMessage(message string) (string, error) {
@@ -1075,195 +1071,191 @@ func (client *baseClient) PingWithMessage(message string) (string, error) {
 
 	result, err := client.executeCommand(C.Ping, args)
 	if err != nil {
-		return "", err
+		return defaultStringResponse, err
 	}
 
-	response, err := handleStringResponse(result)
-	if err != nil {
-		return "", err
-	}
-	return response.Value(), nil
+	return handleStringResponse(result)
 }
 
-func (client *baseClient) Del(keys []string) (Result[int64], error) {
+func (client *baseClient) Del(keys []string) (int64, error) {
 	result, err := client.executeCommand(C.Del, keys)
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
-func (client *baseClient) Exists(keys []string) (Result[int64], error) {
+func (client *baseClient) Exists(keys []string) (int64, error) {
 	result, err := client.executeCommand(C.Exists, keys)
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
-func (client *baseClient) Expire(key string, seconds int64) (Result[bool], error) {
+func (client *baseClient) Expire(key string, seconds int64) (bool, error) {
 	result, err := client.executeCommand(C.Expire, []string{key, utils.IntToString(seconds)})
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return defaultBoolResponse, err
 	}
 
-	return handleBooleanResponse(result)
+	return handleBoolResponse(result)
 }
 
-func (client *baseClient) ExpireWithOptions(key string, seconds int64, expireCondition ExpireCondition) (Result[bool], error) {
+func (client *baseClient) ExpireWithOptions(key string, seconds int64, expireCondition ExpireCondition) (bool, error) {
 	expireConditionStr, err := expireCondition.toString()
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return defaultBoolResponse, err
 	}
 	result, err := client.executeCommand(C.Expire, []string{key, utils.IntToString(seconds), expireConditionStr})
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return defaultBoolResponse, err
 	}
-	return handleBooleanResponse(result)
+	return handleBoolResponse(result)
 }
 
-func (client *baseClient) ExpireAt(key string, unixTimestampInSeconds int64) (Result[bool], error) {
+func (client *baseClient) ExpireAt(key string, unixTimestampInSeconds int64) (bool, error) {
 	result, err := client.executeCommand(C.ExpireAt, []string{key, utils.IntToString(unixTimestampInSeconds)})
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return defaultBoolResponse, err
 	}
 
-	return handleBooleanResponse(result)
+	return handleBoolResponse(result)
 }
 
 func (client *baseClient) ExpireAtWithOptions(
 	key string,
 	unixTimestampInSeconds int64,
 	expireCondition ExpireCondition,
-) (Result[bool], error) {
+) (bool, error) {
 	expireConditionStr, err := expireCondition.toString()
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return defaultBoolResponse, err
 	}
 	result, err := client.executeCommand(
 		C.ExpireAt,
 		[]string{key, utils.IntToString(unixTimestampInSeconds), expireConditionStr},
 	)
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return defaultBoolResponse, err
 	}
-	return handleBooleanResponse(result)
+	return handleBoolResponse(result)
 }
 
-func (client *baseClient) PExpire(key string, milliseconds int64) (Result[bool], error) {
+func (client *baseClient) PExpire(key string, milliseconds int64) (bool, error) {
 	result, err := client.executeCommand(C.PExpire, []string{key, utils.IntToString(milliseconds)})
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return defaultBoolResponse, err
 	}
-	return handleBooleanResponse(result)
+	return handleBoolResponse(result)
 }
 
 func (client *baseClient) PExpireWithOptions(
 	key string,
 	milliseconds int64,
 	expireCondition ExpireCondition,
-) (Result[bool], error) {
+) (bool, error) {
 	expireConditionStr, err := expireCondition.toString()
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return defaultBoolResponse, err
 	}
 	result, err := client.executeCommand(C.PExpire, []string{key, utils.IntToString(milliseconds), expireConditionStr})
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return defaultBoolResponse, err
 	}
-	return handleBooleanResponse(result)
+	return handleBoolResponse(result)
 }
 
-func (client *baseClient) PExpireAt(key string, unixTimestampInMilliSeconds int64) (Result[bool], error) {
+func (client *baseClient) PExpireAt(key string, unixTimestampInMilliSeconds int64) (bool, error) {
 	result, err := client.executeCommand(C.PExpireAt, []string{key, utils.IntToString(unixTimestampInMilliSeconds)})
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return defaultBoolResponse, err
 	}
-	return handleBooleanResponse(result)
+	return handleBoolResponse(result)
 }
 
 func (client *baseClient) PExpireAtWithOptions(
 	key string,
 	unixTimestampInMilliSeconds int64,
 	expireCondition ExpireCondition,
-) (Result[bool], error) {
+) (bool, error) {
 	expireConditionStr, err := expireCondition.toString()
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return defaultBoolResponse, err
 	}
 	result, err := client.executeCommand(
 		C.PExpireAt,
 		[]string{key, utils.IntToString(unixTimestampInMilliSeconds), expireConditionStr},
 	)
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return defaultBoolResponse, err
 	}
-	return handleBooleanResponse(result)
+	return handleBoolResponse(result)
 }
 
-func (client *baseClient) ExpireTime(key string) (Result[int64], error) {
+func (client *baseClient) ExpireTime(key string) (int64, error) {
 	result, err := client.executeCommand(C.ExpireTime, []string{key})
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
-func (client *baseClient) PExpireTime(key string) (Result[int64], error) {
+func (client *baseClient) PExpireTime(key string) (int64, error) {
 	result, err := client.executeCommand(C.PExpireTime, []string{key})
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
-func (client *baseClient) TTL(key string) (Result[int64], error) {
+func (client *baseClient) TTL(key string) (int64, error) {
 	result, err := client.executeCommand(C.TTL, []string{key})
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
-func (client *baseClient) PTTL(key string) (Result[int64], error) {
+func (client *baseClient) PTTL(key string) (int64, error) {
 	result, err := client.executeCommand(C.PTTL, []string{key})
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
-func (client *baseClient) PfAdd(key string, elements []string) (Result[int64], error) {
+func (client *baseClient) PfAdd(key string, elements []string) (int64, error) {
 	result, err := client.executeCommand(C.PfAdd, append([]string{key}, elements...))
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
-func (client *baseClient) PfCount(keys []string) (Result[int64], error) {
+func (client *baseClient) PfCount(keys []string) (int64, error) {
 	result, err := client.executeCommand(C.PfCount, keys)
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
-func (client *baseClient) Unlink(keys []string) (Result[int64], error) {
+func (client *baseClient) Unlink(keys []string) (int64, error) {
 	result, err := client.executeCommand(C.Unlink, keys)
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) Type(key string) (Result[string], error) {
@@ -1271,16 +1263,16 @@ func (client *baseClient) Type(key string) (Result[string], error) {
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	return handleStringOrNullResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
-func (client *baseClient) Touch(keys []string) (Result[int64], error) {
+func (client *baseClient) Touch(keys []string) (int64, error) {
 	result, err := client.executeCommand(C.Touch, keys)
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) Rename(key string, newKey string) (Result[string], error) {
@@ -1288,15 +1280,15 @@ func (client *baseClient) Rename(key string, newKey string) (Result[string], err
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	return handleStringOrNullResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
-func (client *baseClient) Renamenx(key string, newKey string) (Result[bool], error) {
+func (client *baseClient) Renamenx(key string, newKey string) (bool, error) {
 	result, err := client.executeCommand(C.RenameNX, []string{key, newKey})
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return defaultBoolResponse, err
 	}
-	return handleBooleanResponse(result)
+	return handleBoolResponse(result)
 }
 
 func (client *baseClient) XAdd(key string, values [][]string) (Result[string], error) {
@@ -1329,32 +1321,32 @@ func (client *baseClient) XAddWithOptions(
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	return handleStringOrNullResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
 func (client *baseClient) ZAdd(
 	key string,
 	membersScoreMap map[string]float64,
-) (Result[int64], error) {
+) (int64, error) {
 	result, err := client.executeCommand(
 		C.ZAdd,
 		append([]string{key}, utils.ConvertMapToValueKeyStringArray(membersScoreMap)...),
 	)
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) ZAddWithOptions(
 	key string,
 	membersScoreMap map[string]float64,
 	opts *options.ZAddOptions,
-) (Result[int64], error) {
+) (int64, error) {
 	optionArgs, err := opts.ToArgs()
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 	commandArgs := append([]string{key}, optionArgs...)
 	result, err := client.executeCommand(
@@ -1362,10 +1354,10 @@ func (client *baseClient) ZAddWithOptions(
 		append(commandArgs, utils.ConvertMapToValueKeyStringArray(membersScoreMap)...),
 	)
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) zAddIncrBase(key string, opts *options.ZAddOptions) (Result[float64], error) {
@@ -1379,7 +1371,7 @@ func (client *baseClient) zAddIncrBase(key string, opts *options.ZAddOptions) (R
 		return CreateNilFloat64Result(), err
 	}
 
-	return handleDoubleResponse(result)
+	return handleFloatOrNilResponse(result)
 }
 
 func (client *baseClient) ZAddIncr(
@@ -1409,13 +1401,13 @@ func (client *baseClient) ZAddIncrWithOptions(
 	return client.zAddIncrBase(key, incrOpts)
 }
 
-func (client *baseClient) ZIncrBy(key string, increment float64, member string) (Result[float64], error) {
+func (client *baseClient) ZIncrBy(key string, increment float64, member string) (float64, error) {
 	result, err := client.executeCommand(C.ZIncrBy, []string{key, utils.FloatToString(increment), member})
 	if err != nil {
-		return CreateNilFloat64Result(), err
+		return defaultFloatResponse, err
 	}
 
-	return handleDoubleResponse(result)
+	return handleFloatResponse(result)
 }
 
 func (client *baseClient) ZPopMin(key string) (map[Result[string]]Result[float64], error) {
@@ -1450,21 +1442,21 @@ func (client *baseClient) ZPopMaxWithCount(key string, count int64) (map[Result[
 	return handleStringDoubleMapResponse(result)
 }
 
-func (client *baseClient) ZRem(key string, members []string) (Result[int64], error) {
+func (client *baseClient) ZRem(key string, members []string) (int64, error) {
 	result, err := client.executeCommand(C.ZRem, append([]string{key}, members...))
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
-func (client *baseClient) ZCard(key string) (Result[int64], error) {
+func (client *baseClient) ZCard(key string) (int64, error) {
 	result, err := client.executeCommand(C.ZCard, []string{key})
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) BZPopMin(keys []string, timeoutSecs float64) (Result[KeyWithMemberAndScore], error) {
@@ -1571,12 +1563,12 @@ func (client *baseClient) ZRangeWithScores(
 	return handleStringDoubleMapResponse(result)
 }
 
-func (client *baseClient) Persist(key string) (Result[bool], error) {
+func (client *baseClient) Persist(key string) (bool, error) {
 	result, err := client.executeCommand(C.Persist, []string{key})
 	if err != nil {
-		return CreateNilBoolResult(), err
+		return defaultBoolResponse, err
 	}
-	return handleBooleanResponse(result)
+	return handleBoolResponse(result)
 }
 
 func (client *baseClient) ZCount(key string, rangeOptions *options.ZCountRange) (Result[int64], error) {
@@ -1592,7 +1584,7 @@ func (client *baseClient) ZRank(key string, member string) (Result[int64], error
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}
-	return handleLongOrNullResponse(result)
+	return handleIntOrNilResponse(result)
 }
 
 func (client *baseClient) ZRankWithScore(key string, member string) (Result[int64], Result[float64], error) {
@@ -1608,7 +1600,7 @@ func (client *baseClient) ZRevRank(key string, member string) (Result[int64], er
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}
-	return handleLongOrNullResponse(result)
+	return handleIntOrNilResponse(result)
 }
 
 func (client *baseClient) ZRevRankWithScore(key string, member string) (Result[int64], Result[float64], error) {
@@ -1619,22 +1611,22 @@ func (client *baseClient) ZRevRankWithScore(key string, member string) (Result[i
 	return handleLongAndDoubleOrNullResponse(result)
 }
 
-func (client *baseClient) XTrim(key string, options *options.XTrimOptions) (Result[int64], error) {
+func (client *baseClient) XTrim(key string, options *options.XTrimOptions) (int64, error) {
 	xTrimArgs, err := options.ToArgs()
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
 	result, err := client.executeCommand(C.XTrim, append([]string{key}, xTrimArgs...))
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
 
-func (client *baseClient) XLen(key string) (Result[int64], error) {
+func (client *baseClient) XLen(key string) (int64, error) {
 	result, err := client.executeCommand(C.XLen, []string{key})
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
-	return handleLongResponse(result)
+	return handleIntResponse(result)
 }
