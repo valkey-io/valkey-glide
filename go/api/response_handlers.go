@@ -15,6 +15,7 @@ import (
 func checkResponseType(response *C.struct_CommandResponse, expectedType C.ResponseType, isNilable bool) error {
 	expectedTypeInt := uint32(expectedType)
 	expectedTypeStr := C.get_response_type_string(expectedTypeInt)
+
 	if !isNilable && response == nil {
 		return &RequestError{
 			fmt.Sprintf(
@@ -259,6 +260,7 @@ func handleIntArrayResponse(response *C.struct_CommandResponse) ([]Result[int64]
 
 func handleFloatResponse(response *C.struct_CommandResponse) (float64, error) {
 	defer C.free_command_response(response)
+
 	typeErr := checkResponseType(response, C.Float, false)
 	if typeErr != nil {
 		return float64(0), typeErr

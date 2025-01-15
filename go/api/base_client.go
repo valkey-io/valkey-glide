@@ -1795,8 +1795,8 @@ func (client *baseClient) XDel(key string, ids []string) (int64, error) {
 //
 // Return value:
 //
-//	The score of the member. If `member` does not exist in the sorted set, nil is returned.
-//	If `key` does not exist, nil is returned.
+//	The score of the member. If `member` does not exist in the sorted set, `nil` is returned.
+//	If `key` does not exist, `nil` is returned.
 //
 // Example:
 //
@@ -1813,12 +1813,8 @@ func (client *baseClient) XDel(key string, ids []string) (int64, error) {
 // [valkey.io]: https://valkey.io/commands/zscore/
 func (client *baseClient) ZScore(key string, member string) (Result[float64], error) {
 	result, err := client.executeCommand(C.ZScore, []string{key, member})
-	if err != nil || result.response_type == uint32(C.Null) {
+	if err != nil {
 		return CreateNilFloat64Result(), err
 	}
-	typeErr := checkResponseType(result, C.Float, true)
-	if typeErr != nil {
-		return CreateNilFloat64Result(), typeErr
-	}
-	return CreateFloat64Result(float64(result.float_value)), nil
+	return handleFloatOrNilResponse(result)
 }

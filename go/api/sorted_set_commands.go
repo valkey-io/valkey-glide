@@ -379,7 +379,6 @@ type SortedSetCommands interface {
 	ZRevRankWithScore(key string, member string) (Result[int64], Result[float64], error)
 
 	ZScore(key string, member string) (Result[float64], error)
-  
-	ZCount(key string, rangeOptions *options.ZCountRange) (int64, error)
 
+	ZCount(key string, rangeOptions *options.ZCountRange) (int64, error)
 }
