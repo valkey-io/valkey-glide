@@ -381,4 +381,8 @@ type SortedSetCommands interface {
 	ZScore(key string, member string) (Result[float64], error)
 
 	ZCount(key string, rangeOptions *options.ZCountRange) (int64, error)
+
+	ZScan(key string, cursor string) (Result[string], []Result[string], error)
+
+	ZScanWithOptions(key string, cursor string, options *options.ZScanOptions) (Result[string], []Result[string], error)
 }
