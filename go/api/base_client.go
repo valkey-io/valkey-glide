@@ -1882,7 +1882,8 @@ func (client *baseClient) ZScan(key string, cursor string) (Result[string], []Re
 //	fmt.Println(resCursor.Value())
 //	fmt.Println(resCol.Value())
 //	for resCursor != "0" {
-//	  resCursor, resCol, err = client.ZScanWithOptions("key", resCursor.Value(), options.NewBaseScanOptionsBuilder().SetMatch("*"))
+//	  resCursor, resCol, err = client.ZScanWithOptions("key", resCursor.Value(),
+//		options.NewBaseScanOptionsBuilder().SetMatch("*"))
 //	  fmt.Println("Cursor: ", resCursor.Value())
 //	  fmt.Println("Members: ", resCol.Value())
 //	}
