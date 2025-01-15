@@ -4877,5 +4877,54 @@ func (suite *GlideTestSuite) TestZCount() {
 		_, err = client.ZCount(key2, zCountRange)
 		assert.NotNil(t, err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
+  })
+}
+
+func (suite *GlideTestSuite) Test_XDel() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.NewString()
+		key2 := uuid.NewString()
+		streamId1 := "0-1"
+		streamId2 := "0-2"
+		streamId3 := "0-3"
+		t := suite.T()
+
+		xAddResult, err := client.XAddWithOptions(
+			key1,
+			[][]string{{"f1", "foo1"}, {"f2", "bar2"}},
+			options.NewXAddOptions().SetId(streamId1),
+		)
+		assert.NoError(t, err)
+		assert.Equal(t, xAddResult.Value(), streamId1)
+
+		xAddResult, err = client.XAddWithOptions(
+			key1,
+			[][]string{{"f1", "foo1"}, {"f2", "bar2"}},
+			options.NewXAddOptions().SetId(streamId2),
+		)
+		assert.NoError(t, err)
+		assert.Equal(t, xAddResult.Value(), streamId2)
+
+		xLenResult, err := client.XLen(key1)
+		assert.NoError(t, err)
+		assert.Equal(t, xLenResult, int64(2))
+
+		// Deletes one stream id, and ignores anything invalid:
+		xDelResult, err := client.XDel(key1, []string{streamId1, streamId3})
+		assert.NoError(t, err)
+		assert.Equal(t, xDelResult, int64(1))
+
+		xDelResult, err = client.XDel(key2, []string{streamId3})
+		assert.NoError(t, err)
+		assert.Equal(t, xDelResult, int64(0))
+
+		// Throws error: Key exists - but it is not a stream
+		setResult, err := client.Set(key2, "xdeltest")
+		assert.NoError(t, err)
+		assert.Equal(t, "OK", setResult)
+
+		_, err = client.XDel(key2, []string{streamId3})
+		assert.NotNil(t, err)
+		assert.IsType(t, &api.RequestError{}, err)
 	})
 }
