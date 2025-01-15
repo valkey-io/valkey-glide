@@ -8,6 +8,7 @@ import "C"
 
 import (
 	"fmt"
+	"reflect"
 	"unsafe"
 )
 
@@ -495,4 +496,108 @@ func convertToResultStringArray(input []interface{}) ([]Result[string], error) {
 		result[i] = CreateStringResult(str)
 	}
 	return result, nil
+}
+
+// get type of T
+func getType[T any]() reflect.Type {
+	var zero [0]T
+	return reflect.TypeOf(zero).Elem()
+}
+
+// convert (typecast) untyped response into a typed value
+// for example, an arbitrary array `[]interface{}` into `[]string`
+type responseConverter interface {
+	convert(data interface{}) (interface{}, error)
+}
+
+// convert maps, T - type of the value, key is string
+type mapConverter[T any] struct {
+	next responseConverter
+}
+
+func (node mapConverter[T]) convert(data interface{}) (interface{}, error) {
+	result := make(map[string]T)
+
+	for key, value := range data.(map[string]interface{}) {
+		if node.next == nil {
+			valueT, ok := value.(T)
+			if !ok {
+				return nil, &RequestError{fmt.Sprintf("Unexpected type received: %T, expected: %v", value, getType[T]())}
+			}
+			result[key] = valueT
+		} else {
+			val, err := node.next.convert(value)
+			if err != nil {
+				return nil, err
+			}
+			valueT, ok := val.(T)
+			if !ok {
+				return nil, &RequestError{fmt.Sprintf("Unexpected type received: %T, expected: %v", valueT, getType[T]())}
+			}
+			result[key] = valueT
+		}
+	}
+
+	return result, nil
+}
+
+// convert arrays, T - type of the value
+type arrayConverter[T any] struct {
+	next responseConverter
+}
+
+func (node arrayConverter[T]) convert(data interface{}) (interface{}, error) {
+	arrData := data.([]interface{})
+	result := make([]T, 0, len(arrData))
+	for _, value := range arrData {
+		if node.next == nil {
+			valueT, ok := value.(T)
+			if !ok {
+				return nil, &RequestError{fmt.Sprintf("Unexpected type received: %T, expected: %v", value, getType[T]())}
+			}
+			result = append(result, valueT)
+		} else {
+			val, err := node.next.convert(value)
+			if err != nil {
+				return nil, err
+			}
+			valueT, ok := val.(T)
+			if !ok {
+				return nil, &RequestError{fmt.Sprintf("Unexpected type received: %T, expected: %v", valueT, getType[T]())}
+			}
+			result = append(result, valueT)
+		}
+	}
+
+	return result, nil
+}
+
+// TODO: convert sets
+
+func handleXReadResponse(response *C.struct_CommandResponse) (map[string]map[string][][]string, error) {
+	defer C.free_command_response(response)
+	data, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+	if data == nil {
+		return nil, nil
+	}
+
+	converters := mapConverter[map[string][][]string]{
+		mapConverter[[][]string]{
+			arrayConverter[[]string]{
+				arrayConverter[string]{},
+			},
+		},
+	}
+
+	res, err := converters.convert(data)
+	if err != nil {
+		return nil, err
+	}
+	if result, ok := res.(map[string]map[string][][]string); ok {
+		return result, nil
+	}
+	return nil, &RequestError{fmt.Sprintf("unexpected type received: %T", res)}
 }

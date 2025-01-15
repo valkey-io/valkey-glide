@@ -1324,6 +1324,91 @@ func (client *baseClient) XAddWithOptions(
 	return handleStringOrNilResponse(result)
 }
 
+// Reads entries from the given streams.
+//
+// Note:
+//
+//	When in cluster mode, all keys in `keysAndIds` must map to the same hash slot.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	keysAndIds - A map of keys and entry IDs to read from.
+//
+// Return value:
+// A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
+// a key does not exist or does not contain requiested entries.
+//
+// For example:
+//
+//	result, err := client.XRead({"stream1": "0-0", "stream2": "0-1"})
+//	err == nil: true
+//	result: map[string]map[string][][]string{
+//	  "stream1": {"0-1": {{"field1", "value1"}}, "0-2": {{"field2", "value2"}, {"field2", "value3"}}},
+//	  "stream2": {},
+//	}
+//
+// [valkey.io]: https://valkey.io/commands/xread/
+func (client *baseClient) XRead(keysAndIds map[string]string) (map[string]map[string][][]string, error) {
+	return client.XReadWithOptions(keysAndIds, options.NewXReadOptions())
+}
+
+// Reads entries from the given streams.
+//
+// Note:
+//
+//	When in cluster mode, all keys in `keysAndIds` must map to the same hash slot.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	keysAndIds - A map of keys and entry IDs to read from.
+//	options - Options detailing how to read the stream.
+//
+// Return value:
+// A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
+// a key does not exist or does not contain requiested entries.
+//
+// For example:
+//
+//	options := options.NewXReadOptions().SetBlock(100500)
+//	result, err := client.XReadWithOptions({"stream1": "0-0", "stream2": "0-1"}, options)
+//	err == nil: true
+//	result: map[string]map[string][][]string{
+//	  "stream1": {"0-1": {{"field1", "value1"}}, "0-2": {{"field2", "value2"}, {"field2", "value3"}}},
+//	  "stream2": {},
+//	}
+//
+// [valkey.io]: https://valkey.io/commands/xread/
+func (client *baseClient) XReadWithOptions(
+	keysAndIds map[string]string,
+	options *options.XReadOptions,
+) (map[string]map[string][][]string, error) {
+	args := make([]string, 0, 5+2*len(keysAndIds))
+	optionArgs, _ := options.ToArgs()
+	args = append(args, optionArgs...)
+
+	// Note: this loop iterates in an indeterminate order, but it is OK for that case
+	keys := make([]string, 0, len(keysAndIds))
+	values := make([]string, 0, len(keysAndIds))
+	for key := range keysAndIds {
+		keys = append(keys, key)
+		values = append(values, keysAndIds[key])
+	}
+	args = append(args, "STREAMS")
+	args = append(args, keys...)
+	args = append(args, values...)
+
+	result, err := client.executeCommand(C.XRead, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleXReadResponse(result)
+}
+
 func (client *baseClient) ZAdd(
 	key string,
 	membersScoreMap map[string]float64,
