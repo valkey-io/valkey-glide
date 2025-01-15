@@ -101,4 +101,6 @@ type StreamCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/xlen/
 	XLen(key string) (int64, error)
+
+	XDel(key string, ids []string) (int64, error)
 }
