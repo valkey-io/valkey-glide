@@ -61,10 +61,11 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfExists_overwrite() {
 		suite.verifyOK(client.Set(key, initialValue))
 
 		opts := api.NewSetOptionsBuilder().SetConditionalSet(api.OnlyIfExists)
-		suite.verifyOK(client.SetWithOptions(key, anotherValue, opts))
+		result, err := client.SetWithOptions(key, anotherValue, opts)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "OK", result.Value())
 
-		result, err := client.Get(key)
-
+		result, err = client.Get(key)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), anotherValue, result.Value())
 	})
@@ -85,10 +86,11 @@ func (suite *GlideTestSuite) TestSetWithOptions_OnlyIfDoesNotExist_missingKey() 
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		opts := api.NewSetOptionsBuilder().SetConditionalSet(api.OnlyIfDoesNotExist)
-		suite.verifyOK(client.SetWithOptions(key, anotherValue, opts))
+		result, err := client.SetWithOptions(key, anotherValue, opts)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "OK", result.Value())
 
-		result, err := client.Get(key)
-
+		result, err = client.Get(key)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), anotherValue, result.Value())
 	})
@@ -116,15 +118,18 @@ func (suite *GlideTestSuite) TestSetWithOptions_KeepExistingExpiry() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		opts := api.NewSetOptionsBuilder().SetExpiry(api.NewExpiryBuilder().SetType(api.Milliseconds).SetCount(uint64(2000)))
-		suite.verifyOK(client.SetWithOptions(key, initialValue, opts))
+		result, err := client.SetWithOptions(key, initialValue, opts)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "OK", result.Value())
 
-		result, err := client.Get(key)
-
+		result, err = client.Get(key)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), initialValue, result.Value())
 
 		opts = api.NewSetOptionsBuilder().SetExpiry(api.NewExpiryBuilder().SetType(api.KeepExisting))
-		suite.verifyOK(client.SetWithOptions(key, anotherValue, opts))
+		result, err = client.SetWithOptions(key, anotherValue, opts)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "OK", result.Value())
 
 		result, err = client.Get(key)
 
@@ -143,18 +148,20 @@ func (suite *GlideTestSuite) TestSetWithOptions_UpdateExistingExpiry() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		opts := api.NewSetOptionsBuilder().SetExpiry(api.NewExpiryBuilder().SetType(api.Milliseconds).SetCount(uint64(100500)))
-		suite.verifyOK(client.SetWithOptions(key, initialValue, opts))
+		result, err := client.SetWithOptions(key, initialValue, opts)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "OK", result.Value())
 
-		result, err := client.Get(key)
-
+		result, err = client.Get(key)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), initialValue, result.Value())
 
 		opts = api.NewSetOptionsBuilder().SetExpiry(api.NewExpiryBuilder().SetType(api.Milliseconds).SetCount(uint64(2000)))
-		suite.verifyOK(client.SetWithOptions(key, anotherValue, opts))
+		result, err = client.SetWithOptions(key, anotherValue, opts)
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), "OK", result.Value())
 
 		result, err = client.Get(key)
-
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), anotherValue, result.Value())
 
@@ -276,7 +283,7 @@ func (suite *GlideTestSuite) TestMSetNXAndMGet_nonExistingKey_valuesSet() {
 		}
 		res, err := client.MSetNX(keyValueMap)
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), res.Value())
+		assert.True(suite.T(), res)
 		keys := []string{key1, key2, key3}
 		stringValue := api.CreateStringResult(value)
 		values := []api.Result[string]{stringValue, stringValue, stringValue}
@@ -302,7 +309,7 @@ func (suite *GlideTestSuite) TestMSetNXAndMGet_existingKey_valuesNotUpdated() {
 		}
 		res, err := client.MSetNX(keyValueMap)
 		assert.Nil(suite.T(), err)
-		assert.False(suite.T(), res.Value())
+		assert.False(suite.T(), res)
 		keys := []string{key1, key2, key3}
 		oldResult := api.CreateStringResult(oldValue)
 		nullResult := api.CreateNilStringResult()
@@ -321,15 +328,15 @@ func (suite *GlideTestSuite) TestIncrCommands_existingKey() {
 
 		res1, err := client.Incr(key)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(11), res1.Value())
+		assert.Equal(suite.T(), int64(11), res1)
 
 		res2, err := client.IncrBy(key, 10)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(21), res2.Value())
+		assert.Equal(suite.T(), int64(21), res2)
 
 		res3, err := client.IncrByFloat(key, float64(10.1))
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), float64(31.1), res3.Value())
+		assert.Equal(suite.T(), float64(31.1), res3)
 	})
 }
 
@@ -338,17 +345,17 @@ func (suite *GlideTestSuite) TestIncrCommands_nonExistingKey() {
 		key1 := uuid.New().String()
 		res1, err := client.Incr(key1)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), res1.Value())
+		assert.Equal(suite.T(), int64(1), res1)
 
 		key2 := uuid.New().String()
 		res2, err := client.IncrBy(key2, 10)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(10), res2.Value())
+		assert.Equal(suite.T(), int64(10), res2)
 
 		key3 := uuid.New().String()
 		res3, err := client.IncrByFloat(key3, float64(10.1))
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), float64(10.1), res3.Value())
+		assert.Equal(suite.T(), float64(10.1), res3)
 	})
 }
 
@@ -358,17 +365,17 @@ func (suite *GlideTestSuite) TestIncrCommands_TypeError() {
 		suite.verifyOK(client.Set(key, "stringValue"))
 
 		res1, err := client.Incr(key)
-		assert.Equal(suite.T(), int64(0), res1.Value())
+		assert.Equal(suite.T(), int64(0), res1)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 
 		res2, err := client.IncrBy(key, 10)
-		assert.Equal(suite.T(), int64(0), res2.Value())
+		assert.Equal(suite.T(), int64(0), res2)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 
 		res3, err := client.IncrByFloat(key, float64(10.1))
-		assert.Equal(suite.T(), float64(0), res3.Value())
+		assert.Equal(suite.T(), float64(0), res3)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
@@ -381,11 +388,11 @@ func (suite *GlideTestSuite) TestDecrCommands_existingKey() {
 
 		res1, err := client.Decr(key)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(9), res1.Value())
+		assert.Equal(suite.T(), int64(9), res1)
 
 		res2, err := client.DecrBy(key, 10)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(-1), res2.Value())
+		assert.Equal(suite.T(), int64(-1), res2)
 	})
 }
 
@@ -394,12 +401,12 @@ func (suite *GlideTestSuite) TestDecrCommands_nonExistingKey() {
 		key1 := uuid.New().String()
 		res1, err := client.Decr(key1)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(-1), res1.Value())
+		assert.Equal(suite.T(), int64(-1), res1)
 
 		key2 := uuid.New().String()
 		res2, err := client.DecrBy(key2, 10)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(-10), res2.Value())
+		assert.Equal(suite.T(), int64(-10), res2)
 	})
 }
 
@@ -411,7 +418,7 @@ func (suite *GlideTestSuite) TestStrlen_existingKey() {
 
 		res, err := client.Strlen(key)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(len(value)), res.Value())
+		assert.Equal(suite.T(), int64(len(value)), res)
 	})
 }
 
@@ -420,7 +427,7 @@ func (suite *GlideTestSuite) TestStrlen_nonExistingKey() {
 		key := uuid.New().String()
 		res, err := client.Strlen(key)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res.Value())
+		assert.Equal(suite.T(), int64(0), res)
 	})
 }
 
@@ -429,24 +436,24 @@ func (suite *GlideTestSuite) TestSetRange_existingAndNonExistingKeys() {
 		key := uuid.New().String()
 		res, err := client.SetRange(key, 0, "Dummy string")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(12), res.Value())
+		assert.Equal(suite.T(), int64(12), res)
 
 		res, err = client.SetRange(key, 6, "values")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(12), res.Value())
+		assert.Equal(suite.T(), int64(12), res)
 		res1, err := client.Get(key)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "Dummy values", res1.Value())
 
 		res, err = client.SetRange(key, 15, "test")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(19), res.Value())
+		assert.Equal(suite.T(), int64(19), res)
 		res1, err = client.Get(key)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "Dummy values\x00\x00\x00test", res1.Value())
 
 		res, err = client.SetRange(key, math.MaxInt32, "test")
-		assert.Equal(suite.T(), int64(0), res.Value())
+		assert.Equal(suite.T(), int64(0), res)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
@@ -458,18 +465,18 @@ func (suite *GlideTestSuite) TestSetRange_existingAndNonExistingKeys_binaryStrin
 		key := uuid.New().String()
 		res, err := client.SetRange(key, 0, nonUtf8String)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(14), res.Value())
+		assert.Equal(suite.T(), int64(14), res)
 
 		res, err = client.SetRange(key, 6, "values ")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(14), res.Value())
+		assert.Equal(suite.T(), int64(14), res)
 		res1, err := client.Get(key)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "Dummy values g", res1.Value())
 
 		res, err = client.SetRange(key, 15, "test")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(19), res.Value())
+		assert.Equal(suite.T(), int64(19), res)
 		res1, err = client.Get(key)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "Dummy values g\x00test", res1.Value())
@@ -483,24 +490,24 @@ func (suite *GlideTestSuite) TestGetRange_existingAndNonExistingKeys() {
 
 		res, err := client.GetRange(key, 0, 4)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), "Dummy", res.Value())
+		assert.Equal(suite.T(), "Dummy", res)
 
 		res, err = client.GetRange(key, -6, -1)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), "string", res.Value())
+		assert.Equal(suite.T(), "string", res)
 
 		res, err = client.GetRange(key, -1, -6)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), "", res.Value())
+		assert.Equal(suite.T(), "", res)
 
 		res, err = client.GetRange(key, 15, 16)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), "", res.Value())
+		assert.Equal(suite.T(), "", res)
 
 		nonExistingKey := uuid.New().String()
 		res, err = client.GetRange(nonExistingKey, 0, 5)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), "", res.Value())
+		assert.Equal(suite.T(), "", res)
 	})
 }
 
@@ -512,7 +519,7 @@ func (suite *GlideTestSuite) TestGetRange_binaryString() {
 
 		res, err := client.GetRange(key, 4, 6)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), "y \xFF", res.Value())
+		assert.Equal(suite.T(), "y \xFF", res)
 	})
 }
 
@@ -524,14 +531,14 @@ func (suite *GlideTestSuite) TestAppend_existingAndNonExistingKeys() {
 
 		res, err := client.Append(key, value1)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(len(value1)), res.Value())
+		assert.Equal(suite.T(), int64(len(value1)), res)
 		res1, err := client.Get(key)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), value1, res1.Value())
 
 		res, err = client.Append(key, value2)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(len(value1)+len(value2)), res.Value())
+		assert.Equal(suite.T(), int64(len(value1)+len(value2)), res)
 		res1, err = client.Get(key)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), value1+value2, res1.Value())
@@ -547,14 +554,14 @@ func (suite *GlideTestSuite) TestLCS_existingAndNonExistingKeys() {
 
 		res, err := client.LCS(key1, key2)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), "", res.Value())
+		assert.Equal(suite.T(), "", res)
 
 		suite.verifyOK(client.Set(key1, "Dummy string"))
 		suite.verifyOK(client.Set(key2, "Dummy value"))
 
 		res, err = client.LCS(key1, key2)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), "Dummy ", res.Value())
+		assert.Equal(suite.T(), "Dummy ", res)
 	})
 }
 
@@ -619,11 +626,11 @@ func (suite *GlideTestSuite) TestHSet_WithExistingKey() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1.Value())
+		assert.Equal(suite.T(), int64(2), res1)
 
 		res2, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res2.Value())
+		assert.Equal(suite.T(), int64(0), res2)
 	})
 }
 
@@ -637,7 +644,7 @@ func (suite *GlideTestSuite) TestHSet_byteString() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1.Value())
+		assert.Equal(suite.T(), int64(2), res1)
 
 		res2, err := client.HGetAll(key)
 		key1 := api.CreateStringResult(string([]byte{0xFF, 0x00, 0xAA}))
@@ -660,16 +667,16 @@ func (suite *GlideTestSuite) TestHSet_WithAddNewField() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1.Value())
+		assert.Equal(suite.T(), int64(2), res1)
 
 		res2, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res2.Value())
+		assert.Equal(suite.T(), int64(0), res2)
 
 		fields["field3"] = "value3"
 		res3, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), res3.Value())
+		assert.Equal(suite.T(), int64(1), res3)
 	})
 }
 
@@ -680,7 +687,7 @@ func (suite *GlideTestSuite) TestHGet_WithExistingKey() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1.Value())
+		assert.Equal(suite.T(), int64(2), res1)
 
 		res2, err := client.HGet(key, "field1")
 		assert.Nil(suite.T(), err)
@@ -705,7 +712,7 @@ func (suite *GlideTestSuite) TestHGet_WithNotExistingField() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1.Value())
+		assert.Equal(suite.T(), int64(2), res1)
 
 		res2, err := client.HGet(key, "foo")
 		assert.Nil(suite.T(), err)
@@ -720,7 +727,7 @@ func (suite *GlideTestSuite) TestHGetAll_WithExistingKey() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1.Value())
+		assert.Equal(suite.T(), int64(2), res1)
 
 		field1 := api.CreateStringResult("field1")
 		value1 := api.CreateStringResult("value1")
@@ -750,7 +757,7 @@ func (suite *GlideTestSuite) TestHMGet() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1.Value())
+		assert.Equal(suite.T(), int64(2), res1)
 
 		res2, err := client.HMGet(key, []string{"field1", "field2", "field3"})
 		value1 := api.CreateStringResult("value1")
@@ -779,7 +786,7 @@ func (suite *GlideTestSuite) TestHMGet_WithNotExistingField() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1.Value())
+		assert.Equal(suite.T(), int64(2), res1)
 
 		res2, err := client.HMGet(key, []string{"field3", "field4"})
 		nullValue := api.CreateNilStringResult()
@@ -795,11 +802,11 @@ func (suite *GlideTestSuite) TestHSetNX_WithExistingKey() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1.Value())
+		assert.Equal(suite.T(), int64(2), res1)
 
 		res2, err := client.HSetNX(key, "field1", "value1")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), false, res2.Value())
+		assert.False(suite.T(), res2)
 	})
 }
 
@@ -809,7 +816,7 @@ func (suite *GlideTestSuite) TestHSetNX_WithNotExistingKey() {
 
 		res1, err := client.HSetNX(key, "field1", "value1")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), true, res1.Value())
+		assert.True(suite.T(), res1)
 
 		res2, err := client.HGetAll(key)
 		field1 := api.CreateStringResult("field1")
@@ -826,11 +833,11 @@ func (suite *GlideTestSuite) TestHSetNX_WithExistingField() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1.Value())
+		assert.Equal(suite.T(), int64(2), res1)
 
 		res2, err := client.HSetNX(key, "field1", "value1")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), false, res2.Value())
+		assert.False(suite.T(), res2)
 	})
 }
 
@@ -841,11 +848,11 @@ func (suite *GlideTestSuite) TestHDel() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1.Value())
+		assert.Equal(suite.T(), int64(2), res1)
 
 		res2, err := client.HDel(key, []string{"field1", "field2"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res2.Value())
+		assert.Equal(suite.T(), int64(2), res2)
 
 		res3, err := client.HGetAll(key)
 		assert.Nil(suite.T(), err)
@@ -853,7 +860,7 @@ func (suite *GlideTestSuite) TestHDel() {
 
 		res4, err := client.HDel(key, []string{"field1", "field2"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res4.Value())
+		assert.Equal(suite.T(), int64(0), res4)
 	})
 }
 
@@ -862,7 +869,7 @@ func (suite *GlideTestSuite) TestHDel_WithNotExistingKey() {
 		key := uuid.NewString()
 		res, err := client.HDel(key, []string{"field1", "field2"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res.Value())
+		assert.Equal(suite.T(), int64(0), res)
 	})
 }
 
@@ -873,11 +880,11 @@ func (suite *GlideTestSuite) TestHDel_WithNotExistingField() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1.Value())
+		assert.Equal(suite.T(), int64(2), res1)
 
 		res2, err := client.HDel(key, []string{"field3", "field4"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res2.Value())
+		assert.Equal(suite.T(), int64(0), res2)
 	})
 }
 
@@ -888,11 +895,11 @@ func (suite *GlideTestSuite) TestHLen() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1.Value())
+		assert.Equal(suite.T(), int64(2), res1)
 
 		res2, err := client.HLen(key)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res2.Value())
+		assert.Equal(suite.T(), int64(2), res2)
 	})
 }
 
@@ -902,7 +909,7 @@ func (suite *GlideTestSuite) TestHLen_WithNotExistingKey() {
 		res, err := client.HLen(key)
 
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res.Value())
+		assert.Equal(suite.T(), int64(0), res)
 	})
 }
 
@@ -913,7 +920,7 @@ func (suite *GlideTestSuite) TestHVals_WithExistingKey() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1.Value())
+		assert.Equal(suite.T(), int64(2), res1)
 
 		res2, err := client.HVals(key)
 		value1 := api.CreateStringResult("value1")
@@ -941,11 +948,11 @@ func (suite *GlideTestSuite) TestHExists_WithExistingKey() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1.Value())
+		assert.Equal(suite.T(), int64(2), res1)
 
 		res2, err := client.HExists(key, "field1")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), true, res2.Value())
+		assert.True(suite.T(), res2)
 	})
 }
 
@@ -955,7 +962,7 @@ func (suite *GlideTestSuite) TestHExists_WithNotExistingKey() {
 
 		res, err := client.HExists(key, "field1")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), false, res.Value())
+		assert.False(suite.T(), res)
 	})
 }
 
@@ -966,11 +973,11 @@ func (suite *GlideTestSuite) TestHExists_WithNotExistingField() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1.Value())
+		assert.Equal(suite.T(), int64(2), res1)
 
 		res2, err := client.HExists(key, "field3")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), false, res2.Value())
+		assert.False(suite.T(), res2)
 	})
 }
 
@@ -981,7 +988,7 @@ func (suite *GlideTestSuite) TestHKeys_WithExistingKey() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1.Value())
+		assert.Equal(suite.T(), int64(2), res1)
 
 		res2, err := client.HKeys(key)
 		field1 := api.CreateStringResult("field1")
@@ -1009,11 +1016,11 @@ func (suite *GlideTestSuite) TestHStrLen_WithExistingKey() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1.Value())
+		assert.Equal(suite.T(), int64(2), res1)
 
 		res2, err := client.HStrLen(key, "field1")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(6), res2.Value())
+		assert.Equal(suite.T(), int64(6), res2)
 	})
 }
 
@@ -1023,7 +1030,7 @@ func (suite *GlideTestSuite) TestHStrLen_WithNotExistingKey() {
 
 		res, err := client.HStrLen(key, "field1")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res.Value())
+		assert.Equal(suite.T(), int64(0), res)
 	})
 }
 
@@ -1034,11 +1041,11 @@ func (suite *GlideTestSuite) TestHStrLen_WithNotExistingField() {
 
 		res1, err := client.HSet(key, fields)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1.Value())
+		assert.Equal(suite.T(), int64(2), res1)
 
 		res2, err := client.HStrLen(key, "field3")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res2.Value())
+		assert.Equal(suite.T(), int64(0), res2)
 	})
 }
 
@@ -1050,11 +1057,11 @@ func (suite *GlideTestSuite) TestHIncrBy_WithExistingField() {
 
 		hsetResult, err := client.HSet(key, fieldValueMap)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), hsetResult.Value())
+		assert.Equal(suite.T(), int64(1), hsetResult)
 
 		hincrByResult, hincrByErr := client.HIncrBy(key, field, 1)
 		assert.Nil(suite.T(), hincrByErr)
-		assert.Equal(suite.T(), int64(11), hincrByResult.Value())
+		assert.Equal(suite.T(), int64(11), hincrByResult)
 	})
 }
 
@@ -1067,11 +1074,11 @@ func (suite *GlideTestSuite) TestHIncrBy_WithNonExistingField() {
 
 		hsetResult, err := client.HSet(key, fieldValueMap)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), hsetResult.Value())
+		assert.Equal(suite.T(), int64(1), hsetResult)
 
 		hincrByResult, hincrByErr := client.HIncrBy(key, field, 2)
 		assert.Nil(suite.T(), hincrByErr)
-		assert.Equal(suite.T(), int64(2), hincrByResult.Value())
+		assert.Equal(suite.T(), int64(2), hincrByResult)
 	})
 }
 
@@ -1083,11 +1090,11 @@ func (suite *GlideTestSuite) TestHIncrByFloat_WithExistingField() {
 
 		hsetResult, err := client.HSet(key, fieldValueMap)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), hsetResult.Value())
+		assert.Equal(suite.T(), int64(1), hsetResult)
 
 		hincrByFloatResult, hincrByFloatErr := client.HIncrByFloat(key, field, 1.5)
 		assert.Nil(suite.T(), hincrByFloatErr)
-		assert.Equal(suite.T(), float64(11.5), hincrByFloatResult.Value())
+		assert.Equal(suite.T(), float64(11.5), hincrByFloatResult)
 	})
 }
 
@@ -1100,11 +1107,11 @@ func (suite *GlideTestSuite) TestHIncrByFloat_WithNonExistingField() {
 
 		hsetResult, err := client.HSet(key, fieldValueMap)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), hsetResult.Value())
+		assert.Equal(suite.T(), int64(1), hsetResult)
 
 		hincrByFloatResult, hincrByFloatErr := client.HIncrByFloat(key, field, 1.5)
 		assert.Nil(suite.T(), hincrByFloatErr)
-		assert.Equal(suite.T(), float64(1.5), hincrByFloatResult.Value())
+		assert.Equal(suite.T(), float64(1.5), hincrByFloatResult)
 	})
 }
 
@@ -1148,7 +1155,7 @@ func (suite *GlideTestSuite) TestHScan() {
 
 		// Result contains the whole set
 		hsetResult, _ := client.HSet(key1, charMap)
-		assert.Equal(t, int64(len(charMembers)), hsetResult.Value())
+		assert.Equal(t, int64(len(charMembers)), hsetResult)
 
 		resCursor, resCollection, _ = client.HScan(key1, initialCursor)
 		assert.Equal(t, initialCursor, resCursor.Value())
@@ -1183,7 +1190,7 @@ func (suite *GlideTestSuite) TestHScan() {
 		}
 
 		hsetResult, _ = client.HSet(key1, combinedMap)
-		assert.Equal(t, int64(len(numberMap)), hsetResult.Value())
+		assert.Equal(t, int64(len(numberMap)), hsetResult)
 		resultCursor := "0"
 		secondResultAllKeys := make([]api.Result[string], 0)
 		secondResultAllValues := make([]api.Result[string], 0)
@@ -1260,8 +1267,7 @@ func (suite *GlideTestSuite) TestHScan() {
 		}
 
 		// Check if Non-hash key throws an error.
-		setResult, _ := client.Set(key2, "test")
-		assert.Equal(t, setResult.Value(), "OK")
+		suite.verifyOK(client.Set(key2, "test"))
 		_, _, err = client.HScan(key2, initialCursor)
 		assert.NotEmpty(t, err)
 
@@ -1284,7 +1290,7 @@ func (suite *GlideTestSuite) TestLPushLPop_WithExistingKey() {
 
 		res1, err := client.LPush(key, list)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(4), res1.Value())
+		assert.Equal(suite.T(), int64(4), res1)
 
 		res2, err := client.LPop(key)
 		assert.Nil(suite.T(), err)
@@ -1317,7 +1323,7 @@ func (suite *GlideTestSuite) TestLPushLPop_typeError() {
 		suite.verifyOK(client.Set(key, "value"))
 
 		res1, err := client.LPush(key, []string{"value1"})
-		assert.Equal(suite.T(), api.CreateNilInt64Result(), res1)
+		assert.Equal(suite.T(), int64(0), res1)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 
@@ -1333,7 +1339,7 @@ func (suite *GlideTestSuite) TestLPos_withAndWithoutOptions() {
 		key := uuid.NewString()
 		res1, err := client.RPush(key, []string{"a", "a", "b", "c", "a", "b"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(6), res1.Value())
+		assert.Equal(suite.T(), int64(6), res1)
 
 		res2, err := client.LPos(key, "a")
 		assert.Nil(suite.T(), err)
@@ -1403,7 +1409,7 @@ func (suite *GlideTestSuite) TestLPosCount() {
 		key := uuid.NewString()
 
 		res1, err := client.RPush(key, []string{"a", "a", "b", "c", "a", "b"})
-		assert.Equal(suite.T(), int64(6), res1.Value())
+		assert.Equal(suite.T(), int64(6), res1)
 		assert.Nil(suite.T(), err)
 
 		res2, err := client.LPosCount(key, "a", int64(2))
@@ -1444,7 +1450,7 @@ func (suite *GlideTestSuite) TestLPosCount_withOptions() {
 		key := uuid.NewString()
 
 		res1, err := client.RPush(key, []string{"a", "a", "b", "c", "a", "b"})
-		assert.Equal(suite.T(), int64(6), res1.Value())
+		assert.Equal(suite.T(), int64(6), res1)
 		assert.Nil(suite.T(), err)
 
 		res2, err := client.LPosCountWithOptions(key, "a", int64(0), api.NewLPosOptionsBuilder().SetRank(1))
@@ -1477,13 +1483,13 @@ func (suite *GlideTestSuite) TestRPush() {
 
 		res1, err := client.RPush(key, list)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(4), res1.Value())
+		assert.Equal(suite.T(), int64(4), res1)
 
 		key2 := uuid.NewString()
 		suite.verifyOK(client.Set(key2, "value"))
 
 		res2, err := client.RPush(key2, []string{"value1"})
-		assert.Equal(suite.T(), api.CreateNilInt64Result(), res2)
+		assert.Equal(suite.T(), int64(0), res2)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
@@ -1496,8 +1502,7 @@ func (suite *GlideTestSuite) TestSAdd() {
 
 		res, err := client.SAdd(key, members)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res.Value())
-		assert.False(suite.T(), res.IsNil())
+		assert.Equal(suite.T(), int64(2), res)
 	})
 }
 
@@ -1508,13 +1513,11 @@ func (suite *GlideTestSuite) TestSAdd_WithExistingKey() {
 
 		res1, err := client.SAdd(key, members)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1.Value())
-		assert.False(suite.T(), res1.IsNil())
+		assert.Equal(suite.T(), int64(2), res1)
 
 		res2, err := client.SAdd(key, members)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res2.Value())
-		assert.False(suite.T(), res2.IsNil())
+		assert.Equal(suite.T(), int64(0), res2)
 	})
 }
 
@@ -1525,13 +1528,11 @@ func (suite *GlideTestSuite) TestSRem() {
 
 		res1, err := client.SAdd(key, members)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(3), res1.Value())
-		assert.False(suite.T(), res1.IsNil())
+		assert.Equal(suite.T(), int64(3), res1)
 
 		res2, err := client.SRem(key, []string{"member1", "member2"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res2.Value())
-		assert.False(suite.T(), res2.IsNil())
+		assert.Equal(suite.T(), int64(2), res2)
 	})
 }
 
@@ -1542,13 +1543,11 @@ func (suite *GlideTestSuite) TestSRem_WithExistingKey() {
 
 		res1, err := client.SAdd(key, members)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1.Value())
-		assert.False(suite.T(), res1.IsNil())
+		assert.Equal(suite.T(), int64(2), res1)
 
 		res2, err := client.SRem(key, []string{"member3", "member4"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res2.Value())
-		assert.False(suite.T(), res2.IsNil())
+		assert.Equal(suite.T(), int64(0), res2)
 	})
 }
 
@@ -1558,8 +1557,7 @@ func (suite *GlideTestSuite) TestSRem_WithNotExistingKey() {
 
 		res2, err := client.SRem(key, []string{"member1", "member2"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res2.Value())
-		assert.False(suite.T(), res2.IsNil())
+		assert.Equal(suite.T(), int64(0), res2)
 	})
 }
 
@@ -1570,13 +1568,11 @@ func (suite *GlideTestSuite) TestSRem_WithExistingKeyAndDifferentMembers() {
 
 		res1, err := client.SAdd(key, members)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(3), res1.Value())
-		assert.False(suite.T(), res1.IsNil())
+		assert.Equal(suite.T(), int64(3), res1)
 
 		res2, err := client.SRem(key, []string{"member1", "member3", "member4"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res2.Value())
-		assert.False(suite.T(), res2.IsNil())
+		assert.Equal(suite.T(), int64(2), res2)
 	})
 }
 
@@ -1612,20 +1608,20 @@ func (suite *GlideTestSuite) TestSUnionStore() {
 
 		res1, err := client.SAdd(key1, memberArray1)
 		assert.NoError(t, err)
-		assert.Equal(t, int64(3), res1.Value())
+		assert.Equal(t, int64(3), res1)
 
 		res2, err := client.SAdd(key2, memberArray2)
 		assert.NoError(t, err)
-		assert.Equal(t, int64(3), res2.Value())
+		assert.Equal(t, int64(3), res2)
 
 		res3, err := client.SAdd(key3, memberArray3)
 		assert.NoError(t, err)
-		assert.Equal(t, int64(3), res3.Value())
+		assert.Equal(t, int64(3), res3)
 
 		// store union in new key
 		res4, err := client.SUnionStore(key4, []string{key1, key2})
 		assert.NoError(t, err)
-		assert.Equal(t, int64(5), res4.Value())
+		assert.Equal(t, int64(5), res4)
 
 		res5, err := client.SMembers(key4)
 		assert.NoError(t, err)
@@ -1635,7 +1631,7 @@ func (suite *GlideTestSuite) TestSUnionStore() {
 		// overwrite existing set
 		res6, err := client.SUnionStore(key1, []string{key4, key2})
 		assert.NoError(t, err)
-		assert.Equal(t, int64(5), res6.Value())
+		assert.Equal(t, int64(5), res6)
 
 		res7, err := client.SMembers(key1)
 		assert.NoError(t, err)
@@ -1645,7 +1641,7 @@ func (suite *GlideTestSuite) TestSUnionStore() {
 		// overwrite one of the source keys
 		res8, err := client.SUnionStore(key2, []string{key4, key2})
 		assert.NoError(t, err)
-		assert.Equal(t, int64(5), res8.Value())
+		assert.Equal(t, int64(5), res8)
 
 		res9, err := client.SMembers(key2)
 		assert.NoError(t, err)
@@ -1655,7 +1651,7 @@ func (suite *GlideTestSuite) TestSUnionStore() {
 		// union with non-existing key
 		res10, err := client.SUnionStore(key2, []string{nonExistingKey})
 		assert.NoError(t, err)
-		assert.Equal(t, int64(0), res10.Value())
+		assert.Equal(t, int64(0), res10)
 
 		// check that the key is now empty
 		members1, err := client.SMembers(key2)
@@ -1664,7 +1660,7 @@ func (suite *GlideTestSuite) TestSUnionStore() {
 
 		// invalid argument - key list must not be empty
 		res11, err := client.SUnionStore(key4, []string{})
-		assert.Equal(suite.T(), int64(0), res11.Value())
+		assert.Equal(suite.T(), int64(0), res11)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 
@@ -1673,14 +1669,14 @@ func (suite *GlideTestSuite) TestSUnionStore() {
 		assert.NoError(t, err)
 
 		res12, err := client.SUnionStore(key4, []string{stringKey, key1})
-		assert.Equal(suite.T(), int64(0), res12.Value())
+		assert.Equal(suite.T(), int64(0), res12)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 
 		// overwrite destination when destination is not a set
 		res13, err := client.SUnionStore(stringKey, []string{key1, key3})
 		assert.NoError(t, err)
-		assert.Equal(t, int64(7), res13.Value())
+		assert.Equal(t, int64(7), res13)
 
 		// check that the key is now empty
 		res14, err := client.SMembers(stringKey)
@@ -1697,8 +1693,7 @@ func (suite *GlideTestSuite) TestSMembers() {
 
 		res1, err := client.SAdd(key, members)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(3), res1.Value())
-		assert.False(suite.T(), res1.IsNil())
+		assert.Equal(suite.T(), int64(3), res1)
 
 		res2, err := client.SMembers(key)
 		assert.Nil(suite.T(), err)
@@ -1723,13 +1718,11 @@ func (suite *GlideTestSuite) TestSCard() {
 
 		res1, err := client.SAdd(key, members)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(3), res1.Value())
-		assert.False(suite.T(), res1.IsNil())
+		assert.Equal(suite.T(), int64(3), res1)
 
 		res2, err := client.SCard(key)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(3), res2.Value())
-		assert.False(suite.T(), res2.IsNil())
+		assert.Equal(suite.T(), int64(3), res2)
 	})
 }
 
@@ -1739,8 +1732,7 @@ func (suite *GlideTestSuite) TestSCard_WithNotExistingKey() {
 
 		res, err := client.SCard(key)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res.Value())
-		assert.False(suite.T(), res.IsNil())
+		assert.Equal(suite.T(), int64(0), res)
 	})
 }
 
@@ -1751,12 +1743,11 @@ func (suite *GlideTestSuite) TestSIsMember() {
 
 		res1, err := client.SAdd(key, members)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(3), res1.Value())
+		assert.Equal(suite.T(), int64(3), res1)
 
 		res2, err := client.SIsMember(key, "member2")
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), res2.Value())
-		assert.False(suite.T(), res2.IsNil())
+		assert.True(suite.T(), res2)
 	})
 }
 
@@ -1766,8 +1757,7 @@ func (suite *GlideTestSuite) TestSIsMember_WithNotExistingKey() {
 
 		res, err := client.SIsMember(key, "member2")
 		assert.Nil(suite.T(), err)
-		assert.False(suite.T(), res.Value())
-		assert.False(suite.T(), res.IsNil())
+		assert.False(suite.T(), res)
 	})
 }
 
@@ -1778,13 +1768,11 @@ func (suite *GlideTestSuite) TestSIsMember_WithNotExistingMember() {
 
 		res1, err := client.SAdd(key, members)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(3), res1.Value())
-		assert.False(suite.T(), res1.IsNil())
+		assert.Equal(suite.T(), int64(3), res1)
 
 		res2, err := client.SIsMember(key, "nonExistingMember")
 		assert.Nil(suite.T(), err)
-		assert.False(suite.T(), res2.Value())
-		assert.False(suite.T(), res2.IsNil())
+		assert.False(suite.T(), res2)
 	})
 }
 
@@ -1795,13 +1783,11 @@ func (suite *GlideTestSuite) TestSDiff() {
 
 		res1, err := client.SAdd(key1, []string{"a", "b", "c", "d"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(4), res1.Value())
-		assert.False(suite.T(), res1.IsNil())
+		assert.Equal(suite.T(), int64(4), res1)
 
 		res2, err := client.SAdd(key2, []string{"c", "d", "e"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(3), res2.Value())
-		assert.False(suite.T(), res2.IsNil())
+		assert.Equal(suite.T(), int64(3), res2)
 
 		result, err := client.SDiff([]string{key1, key2})
 		assert.Nil(suite.T(), err)
@@ -1829,8 +1815,7 @@ func (suite *GlideTestSuite) TestSDiff_WithSingleKeyExist() {
 
 		res1, err := client.SAdd(key1, []string{"a", "b", "c"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(3), res1.Value())
-		assert.False(suite.T(), res1.IsNil())
+		assert.Equal(suite.T(), int64(3), res1)
 
 		res2, err := client.SDiff([]string{key1, key2})
 		assert.Nil(suite.T(), err)
@@ -1849,18 +1834,15 @@ func (suite *GlideTestSuite) TestSDiffStore() {
 
 		res1, err := client.SAdd(key1, []string{"a", "b", "c"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(3), res1.Value())
-		assert.False(suite.T(), res1.IsNil())
+		assert.Equal(suite.T(), int64(3), res1)
 
 		res2, err := client.SAdd(key2, []string{"c", "d", "e"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(3), res2.Value())
-		assert.False(suite.T(), res2.IsNil())
+		assert.Equal(suite.T(), int64(3), res2)
 
 		res3, err := client.SDiffStore(key3, []string{key1, key2})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res3.Value())
-		assert.False(suite.T(), res3.IsNil())
+		assert.Equal(suite.T(), int64(2), res3)
 
 		members, err := client.SMembers(key3)
 		assert.Nil(suite.T(), err)
@@ -1878,8 +1860,7 @@ func (suite *GlideTestSuite) TestSDiffStore_WithNotExistingKeys() {
 
 		res, err := client.SDiffStore(key3, []string{key1, key2})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res.Value())
-		assert.False(suite.T(), res.IsNil())
+		assert.Equal(suite.T(), int64(0), res)
 
 		members, err := client.SMembers(key3)
 		assert.Nil(suite.T(), err)
@@ -1894,13 +1875,11 @@ func (suite *GlideTestSuite) TestSinter() {
 
 		res1, err := client.SAdd(key1, []string{"a", "b", "c", "d"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(4), res1.Value())
-		assert.False(suite.T(), res1.IsNil())
+		assert.Equal(suite.T(), int64(4), res1)
 
 		res2, err := client.SAdd(key2, []string{"c", "d", "e"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(3), res2.Value())
-		assert.False(suite.T(), res2.IsNil())
+		assert.Equal(suite.T(), int64(3), res2)
 
 		members, err := client.SInter([]string{key1, key2})
 		assert.Nil(suite.T(), err)
@@ -1934,16 +1913,16 @@ func (suite *GlideTestSuite) TestSinterStore() {
 
 		res1, err := client.SAdd(key1, memberArray1)
 		assert.NoError(t, err)
-		assert.Equal(t, int64(3), res1.Value())
+		assert.Equal(t, int64(3), res1)
 
 		res2, err := client.SAdd(key2, memberArray2)
 		assert.NoError(t, err)
-		assert.Equal(t, int64(3), res2.Value())
+		assert.Equal(t, int64(3), res2)
 
 		// store in new key
 		res3, err := client.SInterStore(key3, []string{key1, key2})
 		assert.NoError(t, err)
-		assert.Equal(t, int64(1), res3.Value())
+		assert.Equal(t, int64(1), res3)
 
 		res4, err := client.SMembers(key3)
 		assert.NoError(t, err)
@@ -1955,7 +1934,7 @@ func (suite *GlideTestSuite) TestSinterStore() {
 		// overwrite existing set, which is also a source set
 		res5, err := client.SInterStore(key2, []string{key1, key2})
 		assert.NoError(t, err)
-		assert.Equal(t, int64(1), res5.Value())
+		assert.Equal(t, int64(1), res5)
 
 		res6, err := client.SMembers(key2)
 		assert.NoError(t, err)
@@ -1967,7 +1946,7 @@ func (suite *GlideTestSuite) TestSinterStore() {
 		// source set is the same as the existing set
 		res7, err := client.SInterStore(key1, []string{key2})
 		assert.NoError(t, err)
-		assert.Equal(t, int64(1), res7.Value())
+		assert.Equal(t, int64(1), res7)
 
 		res8, err := client.SMembers(key2)
 		assert.NoError(t, err)
@@ -1979,7 +1958,7 @@ func (suite *GlideTestSuite) TestSinterStore() {
 		// intersection with non-existing key
 		res9, err := client.SInterStore(key1, []string{key2, nonExistingKey})
 		assert.NoError(t, err)
-		assert.Equal(t, int64(0), res9.Value())
+		assert.Equal(t, int64(0), res9)
 
 		// check that the key is now empty
 		members1, err := client.SMembers(key1)
@@ -1988,7 +1967,7 @@ func (suite *GlideTestSuite) TestSinterStore() {
 
 		// invalid argument - key list must not be empty
 		res10, err := client.SInterStore(key3, []string{})
-		assert.Equal(suite.T(), int64(0), res10.Value())
+		assert.Equal(suite.T(), int64(0), res10)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 
@@ -1997,14 +1976,14 @@ func (suite *GlideTestSuite) TestSinterStore() {
 		assert.NoError(t, err)
 
 		res11, err := client.SInterStore(key3, []string{stringKey})
-		assert.Equal(suite.T(), int64(0), res11.Value())
+		assert.Equal(suite.T(), int64(0), res11)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 
 		// overwrite the non-set key
 		res12, err := client.SInterStore(stringKey, []string{key2})
 		assert.NoError(t, err)
-		assert.Equal(t, int64(1), res12.Value())
+		assert.Equal(t, int64(1), res12)
 
 		// check that the key is now empty
 		res13, err := client.SMembers(stringKey)
@@ -2025,23 +2004,19 @@ func (suite *GlideTestSuite) TestSInterCard() {
 
 		res1, err := client.SAdd(key1, []string{"one", "two", "three", "four"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(4), res1.Value())
-		assert.False(suite.T(), res1.IsNil())
+		assert.Equal(suite.T(), int64(4), res1)
 
 		result1, err := client.SInterCard([]string{key1, key2})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), result1.Value())
-		assert.False(suite.T(), result1.IsNil())
+		assert.Equal(suite.T(), int64(0), result1)
 
 		res2, err := client.SAdd(key2, []string{"two", "three", "four", "five"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(4), res2.Value())
-		assert.False(suite.T(), res2.IsNil())
+		assert.Equal(suite.T(), int64(4), res2)
 
 		result2, err := client.SInterCard([]string{key1, key2})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(3), result2.Value())
-		assert.False(suite.T(), result2.IsNil())
+		assert.Equal(suite.T(), int64(3), result2)
 	})
 }
 
@@ -2054,23 +2029,19 @@ func (suite *GlideTestSuite) TestSInterCardLimit() {
 
 		res1, err := client.SAdd(key1, []string{"one", "two", "three", "four"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(4), res1.Value())
-		assert.False(suite.T(), res1.IsNil())
+		assert.Equal(suite.T(), int64(4), res1)
 
 		res2, err := client.SAdd(key2, []string{"two", "three", "four", "five"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(4), res2.Value())
-		assert.False(suite.T(), res2.IsNil())
+		assert.Equal(suite.T(), int64(4), res2)
 
 		result1, err := client.SInterCardLimit([]string{key1, key2}, 2)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), result1.Value())
-		assert.False(suite.T(), result1.IsNil())
+		assert.Equal(suite.T(), int64(2), result1)
 
 		result2, err := client.SInterCardLimit([]string{key1, key2}, 4)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(3), result2.Value())
-		assert.False(suite.T(), result2.IsNil())
+		assert.Equal(suite.T(), int64(3), result2)
 	})
 }
 
@@ -2080,8 +2051,7 @@ func (suite *GlideTestSuite) TestSRandMember() {
 
 		res, err := client.SAdd(key, []string{"one"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), res.Value())
-		assert.False(suite.T(), res.IsNil())
+		assert.Equal(suite.T(), int64(1), res)
 
 		member, err := client.SRandMember(key)
 		assert.Nil(suite.T(), err)
@@ -2097,8 +2067,7 @@ func (suite *GlideTestSuite) TestSPop() {
 
 		res, err := client.SAdd(key, members)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(3), res.Value())
-		assert.False(suite.T(), res.IsNil())
+		assert.Equal(suite.T(), int64(3), res)
 
 		popMember, err := client.SPop(key)
 		assert.Nil(suite.T(), err)
@@ -2118,8 +2087,7 @@ func (suite *GlideTestSuite) TestSPop_LastMember() {
 
 		res1, err := client.SAdd(key, []string{"lastValue"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), res1.Value())
-		assert.False(suite.T(), res1.IsNil())
+		assert.Equal(suite.T(), int64(1), res1)
 
 		popMember, err := client.SPop(key)
 		assert.Nil(suite.T(), err)
@@ -2140,22 +2108,15 @@ func (suite *GlideTestSuite) TestSMIsMember() {
 
 		res1, err1 := client.SAdd(key1, []string{"one", "two"})
 		assert.Nil(suite.T(), err1)
-		assert.Equal(suite.T(), int64(2), res1.Value())
-		assert.False(suite.T(), res1.IsNil())
+		assert.Equal(suite.T(), int64(2), res1)
 
 		res2, err2 := client.SMIsMember(key1, []string{"two", "three"})
 		assert.Nil(suite.T(), err2)
-		assert.Equal(
-			suite.T(),
-			[]api.Result[bool]{
-				api.CreateBoolResult(true),
-				api.CreateBoolResult(false),
-			},
-			res2)
+		assert.Equal(suite.T(), []bool{true, false}, res2)
 
 		res3, err3 := client.SMIsMember(nonExistingKey, []string{"two"})
 		assert.Nil(suite.T(), err3)
-		assert.Equal(suite.T(), []api.Result[bool]{api.CreateBoolResult(false)}, res3)
+		assert.Equal(suite.T(), []bool{false}, res3)
 
 		// invalid argument - member list must not be empty
 		_, err4 := client.SMIsMember(key1, []string{})
@@ -2163,9 +2124,7 @@ func (suite *GlideTestSuite) TestSMIsMember() {
 		assert.IsType(suite.T(), &api.RequestError{}, err4)
 
 		// source key exists, but it is not a set
-		setRes, setErr := client.Set(stringKey, "value")
-		assert.Nil(suite.T(), setErr)
-		assert.Equal(suite.T(), "OK", setRes.Value())
+		suite.verifyOK(client.Set(stringKey, "value"))
 		_, err5 := client.SMIsMember(stringKey, []string{"two"})
 		assert.NotNil(suite.T(), err5)
 		assert.IsType(suite.T(), &api.RequestError{}, err5)
@@ -2195,13 +2154,11 @@ func (suite *GlideTestSuite) TestSUnion() {
 
 		res1, err := client.SAdd(key1, memberList1)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(3), res1.Value())
-		assert.False(suite.T(), res1.IsNil())
+		assert.Equal(suite.T(), int64(3), res1)
 
 		res2, err := client.SAdd(key2, memberList2)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(4), res2.Value())
-		assert.False(suite.T(), res2.IsNil())
+		assert.Equal(suite.T(), int64(4), res2)
 
 		res3, err := client.SUnion([]string{key1, key2})
 		assert.Nil(suite.T(), err)
@@ -2241,16 +2198,16 @@ func (suite *GlideTestSuite) TestSMove() {
 
 		res1, err := client.SAdd(key1, memberArray1)
 		assert.NoError(t, err)
-		assert.Equal(t, int64(3), res1.Value())
+		assert.Equal(t, int64(3), res1)
 
 		res2, err := client.SAdd(key2, memberArray2)
 		assert.NoError(t, err)
-		assert.Equal(t, int64(2), res2.Value())
+		assert.Equal(t, int64(2), res2)
 
 		// move an element
 		res3, err := client.SMove(key1, key2, "1")
 		assert.NoError(t, err)
-		assert.True(t, res3.Value())
+		assert.True(t, res3)
 
 		res4, err := client.SMembers(key1)
 		assert.NoError(t, err)
@@ -2272,7 +2229,7 @@ func (suite *GlideTestSuite) TestSMove() {
 		// moved element already exists in the destination set
 		res6, err := client.SMove(key2, key1, "2")
 		assert.NoError(t, err)
-		assert.True(t, res6.Value())
+		assert.True(t, res6)
 
 		res7, err := client.SMembers(key1)
 		assert.NoError(t, err)
@@ -2293,7 +2250,7 @@ func (suite *GlideTestSuite) TestSMove() {
 		// attempt to move from a non-existing key
 		res9, err := client.SMove(nonExistingKey, key1, "4")
 		assert.NoError(t, err)
-		assert.False(t, res9.Value())
+		assert.False(t, res9)
 
 		res10, err := client.SMembers(key1)
 		assert.NoError(t, err)
@@ -2306,7 +2263,7 @@ func (suite *GlideTestSuite) TestSMove() {
 		// move to a new set
 		res11, err := client.SMove(key1, key3, "2")
 		assert.NoError(t, err)
-		assert.True(t, res11.Value())
+		assert.True(t, res11)
 
 		res12, err := client.SMembers(key1)
 		assert.NoError(t, err)
@@ -2321,7 +2278,7 @@ func (suite *GlideTestSuite) TestSMove() {
 		// attempt to move a missing element
 		res14, err := client.SMove(key1, key3, "42")
 		assert.NoError(t, err)
-		assert.False(t, res14.Value())
+		assert.False(t, res14)
 
 		res12, err = client.SMembers(key1)
 		assert.NoError(t, err)
@@ -2336,7 +2293,7 @@ func (suite *GlideTestSuite) TestSMove() {
 		// moving missing element to missing key
 		res15, err := client.SMove(key1, nonExistingKey, "42")
 		assert.NoError(t, err)
-		assert.False(t, res15.Value())
+		assert.False(t, res15)
 
 		res12, err = client.SMembers(key1)
 		assert.NoError(t, err)
@@ -2399,7 +2356,7 @@ func (suite *GlideTestSuite) TestSScan() {
 		// result contains the whole set
 		res, err := client.SAdd(key1, charMembers)
 		assert.NoError(t, err)
-		assert.Equal(t, int64(len(charMembers)), res.Value())
+		assert.Equal(t, int64(len(charMembers)), res)
 		resCursor, resCollection, err = client.SScan(key1, initialCursor)
 		assert.NoError(t, err)
 		assert.Equal(t, initialCursor, resCursor.Value())
@@ -2415,7 +2372,7 @@ func (suite *GlideTestSuite) TestSScan() {
 		// result contains a subset of the key
 		res, err = client.SAdd(key1, numMembers)
 		assert.NoError(t, err)
-		assert.Equal(t, int64(50000), res.Value())
+		assert.Equal(t, int64(50000), res)
 		resCursor, resCollection, err = client.SScan(key1, "0")
 		assert.NoError(t, err)
 		resultCollection := resCollection
@@ -2472,7 +2429,7 @@ func (suite *GlideTestSuite) TestLRange() {
 
 		res1, err := client.LPush(key, list)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(4), res1.Value())
+		assert.Equal(suite.T(), int64(4), res1)
 
 		resultList := []api.Result[string]{
 			api.CreateStringResult("value1"),
@@ -2505,17 +2462,17 @@ func (suite *GlideTestSuite) TestLIndex() {
 
 		res1, err := client.LPush(key, list)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(4), res1.Value())
+		assert.Equal(suite.T(), int64(4), res1)
 
 		res2, err := client.LIndex(key, int64(0))
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "value1", res2.Value())
-		assert.Equal(suite.T(), false, res2.IsNil())
+		assert.False(suite.T(), res2.IsNil())
 
 		res3, err := client.LIndex(key, int64(-1))
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "value4", res3.Value())
-		assert.Equal(suite.T(), false, res3.IsNil())
+		assert.False(suite.T(), res3.IsNil())
 
 		res4, err := client.LIndex("non_existing_key", int64(0))
 		assert.Nil(suite.T(), err)
@@ -2538,7 +2495,7 @@ func (suite *GlideTestSuite) TestLTrim() {
 
 		res1, err := client.LPush(key, list)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(4), res1.Value())
+		assert.Equal(suite.T(), int64(4), res1)
 
 		suite.verifyOK(client.LTrim(key, int64(0), int64(1)))
 
@@ -2569,23 +2526,21 @@ func (suite *GlideTestSuite) TestLLen() {
 
 		res1, err := client.LPush(key, list)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(4), res1.Value())
+		assert.Equal(suite.T(), int64(4), res1)
 
 		res2, err := client.LLen(key)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(4), res2.Value())
-		assert.Equal(suite.T(), false, res2.IsNil())
+		assert.Equal(suite.T(), int64(4), res2)
 
 		res3, err := client.LLen("non_existing_key")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res3.Value())
-		assert.Equal(suite.T(), false, res3.IsNil())
+		assert.Equal(suite.T(), int64(0), res3)
 
 		key2 := uuid.NewString()
 		suite.verifyOK(client.Set(key2, "value"))
 
 		res4, err := client.LLen(key2)
-		assert.Equal(suite.T(), api.CreateNilInt64Result(), res4)
+		assert.Equal(suite.T(), int64(0), res4)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
@@ -2598,12 +2553,11 @@ func (suite *GlideTestSuite) TestLRem() {
 
 		res1, err := client.LPush(key, list)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(5), res1.Value())
+		assert.Equal(suite.T(), int64(5), res1)
 
 		res2, err := client.LRem(key, 2, "value1")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res2.Value())
-		assert.Equal(suite.T(), false, res2.IsNil())
+		assert.Equal(suite.T(), int64(2), res2)
 		res3, err := client.LRange(key, int64(0), int64(-1))
 		assert.Nil(suite.T(), err)
 		assert.Equal(
@@ -2618,24 +2572,21 @@ func (suite *GlideTestSuite) TestLRem() {
 
 		res4, err := client.LRem(key, -1, "value2")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), res4.Value())
-		assert.Equal(suite.T(), false, res4.IsNil())
+		assert.Equal(suite.T(), int64(1), res4)
 		res5, err := client.LRange(key, int64(0), int64(-1))
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), []api.Result[string]{api.CreateStringResult("value2"), api.CreateStringResult("value1")}, res5)
 
 		res6, err := client.LRem(key, 0, "value2")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), res6.Value())
-		assert.Equal(suite.T(), false, res6.IsNil())
+		assert.Equal(suite.T(), int64(1), res6)
 		res7, err := client.LRange(key, int64(0), int64(-1))
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), []api.Result[string]{api.CreateStringResult("value1")}, res7)
 
 		res8, err := client.LRem("non_existing_key", 0, "value")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res8.Value())
-		assert.Equal(suite.T(), false, res8.IsNil())
+		assert.Equal(suite.T(), int64(0), res8)
 	})
 }
 
@@ -2646,12 +2597,12 @@ func (suite *GlideTestSuite) TestRPopAndRPopCount() {
 
 		res1, err := client.RPush(key, list)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(4), res1.Value())
+		assert.Equal(suite.T(), int64(4), res1)
 
 		res2, err := client.RPop(key)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), "value4", res2.Value())
-		assert.Equal(suite.T(), false, res2.IsNil())
+		assert.False(suite.T(), res2.IsNil())
 
 		res3, err := client.RPopCount(key, int64(2))
 		assert.Nil(suite.T(), err)
@@ -2687,17 +2638,15 @@ func (suite *GlideTestSuite) TestLInsert() {
 
 		res1, err := client.RPush(key, list)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(4), res1.Value())
+		assert.Equal(suite.T(), int64(4), res1)
 
 		res2, err := client.LInsert(key, api.Before, "value2", "value1.5")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(5), res2.Value())
-		assert.Equal(suite.T(), false, res2.IsNil())
+		assert.Equal(suite.T(), int64(5), res2)
 
 		res3, err := client.LInsert(key, api.After, "value3", "value3.5")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(6), res3.Value())
-		assert.Equal(suite.T(), false, res3.IsNil())
+		assert.Equal(suite.T(), int64(6), res3)
 
 		res4, err := client.LRange(key, int64(0), int64(-1))
 		assert.Nil(suite.T(), err)
@@ -2716,19 +2665,17 @@ func (suite *GlideTestSuite) TestLInsert() {
 
 		res5, err := client.LInsert("non_existing_key", api.Before, "pivot", "elem")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res5.Value())
-		assert.Equal(suite.T(), false, res5.IsNil())
+		assert.Equal(suite.T(), int64(0), res5)
 
 		res6, err := client.LInsert(key, api.Before, "value5", "value6")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(-1), res6.Value())
-		assert.Equal(suite.T(), false, res6.IsNil())
+		assert.Equal(suite.T(), int64(-1), res6)
 
 		key2 := uuid.NewString()
 		suite.verifyOK(client.Set(key2, "value"))
 
 		res7, err := client.LInsert(key2, api.Before, "value5", "value6")
-		assert.Equal(suite.T(), api.CreateNilInt64Result(), res7)
+		assert.Equal(suite.T(), int64(0), res7)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
@@ -2741,7 +2688,7 @@ func (suite *GlideTestSuite) TestBLPop() {
 
 		res1, err := client.LPush(listKey1, []string{"value1", "value2"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1.Value())
+		assert.Equal(suite.T(), int64(2), res1)
 
 		res2, err := client.BLPop([]string{listKey1, listKey2}, float64(0.5))
 		assert.Nil(suite.T(), err)
@@ -2768,7 +2715,7 @@ func (suite *GlideTestSuite) TestBRPop() {
 
 		res1, err := client.LPush(listKey1, []string{"value1", "value2"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res1.Value())
+		assert.Equal(suite.T(), int64(2), res1)
 
 		res2, err := client.BRPop([]string{listKey1, listKey2}, float64(0.5))
 		assert.Nil(suite.T(), err)
@@ -2796,11 +2743,11 @@ func (suite *GlideTestSuite) TestRPushX() {
 
 		res1, err := client.RPush(key1, []string{"value1"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), res1.Value())
+		assert.Equal(suite.T(), int64(1), res1)
 
 		res2, err := client.RPushX(key1, []string{"value2", "value3", "value4"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(4), res2.Value())
+		assert.Equal(suite.T(), int64(4), res2)
 
 		res3, err := client.LRange(key1, int64(0), int64(-1))
 		assert.Nil(suite.T(), err)
@@ -2817,8 +2764,7 @@ func (suite *GlideTestSuite) TestRPushX() {
 
 		res4, err := client.RPushX(key2, []string{"value1"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res4.Value())
-		assert.Equal(suite.T(), false, res4.IsNil())
+		assert.Equal(suite.T(), int64(0), res4)
 
 		res5, err := client.LRange(key2, int64(0), int64(-1))
 		assert.Nil(suite.T(), err)
@@ -2827,12 +2773,12 @@ func (suite *GlideTestSuite) TestRPushX() {
 		suite.verifyOK(client.Set(key3, "value"))
 
 		res6, err := client.RPushX(key3, []string{"value1"})
-		assert.Equal(suite.T(), api.CreateNilInt64Result(), res6)
+		assert.Equal(suite.T(), int64(0), res6)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 
 		res7, err := client.RPushX(key2, []string{})
-		assert.Equal(suite.T(), api.CreateNilInt64Result(), res7)
+		assert.Equal(suite.T(), int64(0), res7)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
@@ -2846,11 +2792,11 @@ func (suite *GlideTestSuite) TestLPushX() {
 
 		res1, err := client.LPush(key1, []string{"value1"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), res1.Value())
+		assert.Equal(suite.T(), int64(1), res1)
 
 		res2, err := client.LPushX(key1, []string{"value2", "value3", "value4"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(4), res2.Value())
+		assert.Equal(suite.T(), int64(4), res2)
 
 		res3, err := client.LRange(key1, int64(0), int64(-1))
 		assert.Nil(suite.T(), err)
@@ -2867,8 +2813,7 @@ func (suite *GlideTestSuite) TestLPushX() {
 
 		res4, err := client.LPushX(key2, []string{"value1"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res4.Value())
-		assert.Equal(suite.T(), false, res4.IsNil())
+		assert.Equal(suite.T(), int64(0), res4)
 
 		res5, err := client.LRange(key2, int64(0), int64(-1))
 		assert.Nil(suite.T(), err)
@@ -2877,12 +2822,12 @@ func (suite *GlideTestSuite) TestLPushX() {
 		suite.verifyOK(client.Set(key3, "value"))
 
 		res6, err := client.LPushX(key3, []string{"value1"})
-		assert.Equal(suite.T(), api.CreateNilInt64Result(), res6)
+		assert.Equal(suite.T(), int64(0), res6)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 
 		res7, err := client.LPushX(key2, []string{})
-		assert.Equal(suite.T(), api.CreateNilInt64Result(), res7)
+		assert.Equal(suite.T(), int64(0), res7)
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
@@ -2907,10 +2852,10 @@ func (suite *GlideTestSuite) TestLMPopAndLMPopCount() {
 
 		res3, err := client.LPush(key1, []string{"one", "two", "three", "four", "five"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(5), res3.Value())
+		assert.Equal(suite.T(), int64(5), res3)
 		res4, err := client.LPush(key2, []string{"one", "two", "three", "four", "five"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(5), res4.Value())
+		assert.Equal(suite.T(), int64(5), res4)
 
 		res5, err := client.LMPop([]string{key1}, api.Left)
 		assert.Nil(suite.T(), err)
@@ -2963,10 +2908,10 @@ func (suite *GlideTestSuite) TestBLMPopAndBLMPopCount() {
 
 		res3, err := client.LPush(key1, []string{"one", "two", "three", "four", "five"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(5), res3.Value())
+		assert.Equal(suite.T(), int64(5), res3)
 		res4, err := client.LPush(key2, []string{"one", "two", "three", "four", "five"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(5), res4.Value())
+		assert.Equal(suite.T(), int64(5), res4)
 
 		res5, err := client.BLMPop([]string{key1}, api.Left, float64(0.1))
 		assert.Nil(suite.T(), err)
@@ -3000,23 +2945,19 @@ func (suite *GlideTestSuite) TestLSet() {
 		key := uuid.NewString()
 		nonExistentKey := uuid.NewString()
 
-		res1, err := client.LSet(nonExistentKey, int64(0), "zero")
-		assert.Equal(suite.T(), api.CreateNilStringResult(), res1)
+		_, err := client.LSet(nonExistentKey, int64(0), "zero")
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 
 		res2, err := client.LPush(key, []string{"four", "three", "two", "one"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(4), res2.Value())
+		assert.Equal(suite.T(), int64(4), res2)
 
-		res3, err := client.LSet(key, int64(10), "zero")
-		assert.Equal(suite.T(), api.CreateNilStringResult(), res3)
+		_, err = client.LSet(key, int64(10), "zero")
 		assert.NotNil(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 
-		res4, err := client.LSet(key, int64(0), "zero")
-		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), "OK", res4.Value())
+		suite.verifyOK(client.LSet(key, int64(0), "zero"))
 
 		res5, err := client.LRange(key, int64(0), int64(-1))
 		assert.Nil(suite.T(), err)
@@ -3031,9 +2972,7 @@ func (suite *GlideTestSuite) TestLSet() {
 			res5,
 		)
 
-		res6, err := client.LSet(key, int64(-1), "zero")
-		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), "OK", res6.Value())
+		suite.verifyOK(client.LSet(key, int64(-1), "zero"))
 
 		res7, err := client.LRange(key, int64(0), int64(-1))
 		assert.Nil(suite.T(), err)
@@ -3066,7 +3005,7 @@ func (suite *GlideTestSuite) TestLMove() {
 
 		res2, err := client.LPush(key1, []string{"four", "three", "two", "one"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(4), res2.Value())
+		assert.Equal(suite.T(), int64(4), res2)
 
 		// only source exists, only source elements gets popped, creates a list at nonExistingKey
 		res3, err := client.LMove(key1, nonExistentKey, api.Right, api.Left)
@@ -3104,7 +3043,7 @@ func (suite *GlideTestSuite) TestLMove() {
 		// normal use case, "three" gets popped and added to the left of destination
 		res7, err := client.LPush(key2, []string{"six", "five", "four"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(3), res7.Value())
+		assert.Equal(suite.T(), int64(3), res7)
 
 		res8, err := client.LMove(key1, key2, api.Right, api.Left)
 		assert.Equal(suite.T(), "three", res8.Value())
@@ -3159,12 +3098,12 @@ func (suite *GlideTestSuite) TestExists() {
 		suite.verifyOK(client.Set(key, initialValue))
 		result, err := client.Exists([]string{key})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), result.Value(), "The key should exist")
+		assert.Equal(suite.T(), int64(1), result, "The key should exist")
 
 		// Test 2: Check if a non-existent key returns 0
 		result, err = client.Exists([]string{"nonExistentKey"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), result.Value(), "The non-existent key should not exist")
+		assert.Equal(suite.T(), int64(0), result, "The non-existent key should not exist")
 
 		// Test 3: Multiple keys, some exist, some do not
 		existingKey := uuid.New().String()
@@ -3173,7 +3112,7 @@ func (suite *GlideTestSuite) TestExists() {
 		suite.verifyOK(client.Set(testKey, value))
 		result, err = client.Exists([]string{testKey, existingKey, "anotherNonExistentKey"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), result.Value(), "Two keys should exist")
+		assert.Equal(suite.T(), int64(2), result, "Two keys should exist")
 	})
 }
 
@@ -3186,7 +3125,7 @@ func (suite *GlideTestSuite) TestExpire() {
 
 		result, err := client.Expire(key, 1)
 		assert.Nil(suite.T(), err, "Expected no error from Expire command")
-		assert.True(suite.T(), result.Value(), "Expire command should return true when expiry is set")
+		assert.True(suite.T(), result, "Expire command should return true when expiry is set")
 
 		time.Sleep(1500 * time.Millisecond)
 
@@ -3202,7 +3141,7 @@ func (suite *GlideTestSuite) TestExpire_KeyDoesNotExist() {
 		// Trying to set an expiry on a non-existent key
 		result, err := client.Expire(key, 1)
 		assert.Nil(suite.T(), err)
-		assert.False(suite.T(), result.Value())
+		assert.False(suite.T(), result)
 	})
 }
 
@@ -3216,7 +3155,7 @@ func (suite *GlideTestSuite) TestExpireWithOptions_HasNoExpiry() {
 
 		result, err := client.ExpireWithOptions(key, 2, api.HasNoExpiry)
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), result.Value())
+		assert.True(suite.T(), result)
 
 		time.Sleep(2500 * time.Millisecond)
 
@@ -3226,7 +3165,7 @@ func (suite *GlideTestSuite) TestExpireWithOptions_HasNoExpiry() {
 
 		result, err = client.ExpireWithOptions(key, 1, api.HasNoExpiry)
 		assert.Nil(suite.T(), err)
-		assert.False(suite.T(), result.Value())
+		assert.False(suite.T(), result)
 	})
 }
 
@@ -3240,18 +3179,18 @@ func (suite *GlideTestSuite) TestExpireWithOptions_HasExistingExpiry() {
 
 		resexp, err := client.ExpireWithOptions(key, 20, api.HasNoExpiry)
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resexp.Value())
+		assert.True(suite.T(), resexp)
 
 		resultExpire, err := client.ExpireWithOptions(key, 1, api.HasExistingExpiry)
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultExpire.Value())
+		assert.True(suite.T(), resultExpire)
 
 		time.Sleep(2 * time.Second)
 
 		resultExpireTest, err := client.Exists([]string{key})
 		assert.Nil(suite.T(), err)
 
-		assert.Equal(suite.T(), int64(0), resultExpireTest.Value())
+		assert.Equal(suite.T(), int64(0), resultExpireTest)
 	})
 }
 
@@ -3264,15 +3203,15 @@ func (suite *GlideTestSuite) TestExpireWithOptions_NewExpiryGreaterThanCurrent()
 
 		resultExpire, err := client.ExpireWithOptions(key, 2, api.HasNoExpiry)
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultExpire.Value())
+		assert.True(suite.T(), resultExpire)
 
 		resultExpire, err = client.ExpireWithOptions(key, 5, api.NewExpiryGreaterThanCurrent)
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultExpire.Value())
+		assert.True(suite.T(), resultExpire)
 		time.Sleep(6 * time.Second)
 		resultExpireTest, err := client.Exists([]string{key})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), resultExpireTest.Value())
+		assert.Equal(suite.T(), int64(0), resultExpireTest)
 	})
 }
 
@@ -3286,22 +3225,22 @@ func (suite *GlideTestSuite) TestExpireWithOptions_NewExpiryLessThanCurrent() {
 
 		resultExpire, err := client.ExpireWithOptions(key, 10, api.HasNoExpiry)
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultExpire.Value())
+		assert.True(suite.T(), resultExpire)
 
 		resultExpire, err = client.ExpireWithOptions(key, 5, api.NewExpiryLessThanCurrent)
 		assert.Nil(suite.T(), err)
 
-		assert.True(suite.T(), resultExpire.Value())
+		assert.True(suite.T(), resultExpire)
 
 		resultExpire, err = client.ExpireWithOptions(key, 15, api.NewExpiryGreaterThanCurrent)
 		assert.Nil(suite.T(), err)
 
-		assert.True(suite.T(), resultExpire.Value())
+		assert.True(suite.T(), resultExpire)
 
 		time.Sleep(16 * time.Second)
 		resultExpireTest, err := client.Exists([]string{key})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), resultExpireTest.Value())
+		assert.Equal(suite.T(), int64(0), resultExpireTest)
 	})
 }
 
@@ -3310,21 +3249,19 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_HasNoExpiry() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		value := uuid.New().String()
-		resultSet, err := client.Set(key, value)
-		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultSet.Value() != "")
+		suite.verifyOK(client.Set(key, value))
 
 		futureTimestamp := time.Now().Add(10 * time.Second).Unix()
 
 		resultExpire, err := client.ExpireAtWithOptions(key, futureTimestamp, api.HasNoExpiry)
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultExpire.Value())
+		assert.True(suite.T(), resultExpire)
 		resultExpireAt, err := client.ExpireAt(key, futureTimestamp)
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultExpireAt.Value())
+		assert.True(suite.T(), resultExpireAt)
 		resultExpireWithOptions, err := client.ExpireAtWithOptions(key, futureTimestamp+10, api.HasNoExpiry)
 		assert.Nil(suite.T(), err)
-		assert.False(suite.T(), resultExpireWithOptions.Value())
+		assert.False(suite.T(), resultExpireWithOptions)
 	})
 }
 
@@ -3333,18 +3270,16 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_HasExistingExpiry() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		value := uuid.New().String()
-		resultSet, err := client.Set(key, value)
-		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultSet.Value() != "")
+		suite.verifyOK(client.Set(key, value))
 
 		futureTimestamp := time.Now().Add(10 * time.Second).Unix()
 		resultExpireAt, err := client.ExpireAt(key, futureTimestamp)
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultExpireAt.Value())
+		assert.True(suite.T(), resultExpireAt)
 
 		resultExpireWithOptions, err := client.ExpireAtWithOptions(key, futureTimestamp+10, api.HasExistingExpiry)
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultExpireWithOptions.Value())
+		assert.True(suite.T(), resultExpireWithOptions)
 	})
 }
 
@@ -3354,19 +3289,17 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_NewExpiryGreaterThanCurrent
 		key := uuid.New().String()
 		value := uuid.New().String()
 
-		resultSet, err := client.Set(key, value)
-		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultSet.Value() != "")
+		suite.verifyOK(client.Set(key, value))
 
 		futureTimestamp := time.Now().Add(10 * time.Second).Unix()
 		resultExpireAt, err := client.ExpireAt(key, futureTimestamp)
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultExpireAt.Value())
+		assert.True(suite.T(), resultExpireAt)
 
 		newFutureTimestamp := time.Now().Add(20 * time.Second).Unix()
 		resultExpireWithOptions, err := client.ExpireAtWithOptions(key, newFutureTimestamp, api.NewExpiryGreaterThanCurrent)
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultExpireWithOptions.Value())
+		assert.True(suite.T(), resultExpireWithOptions)
 	})
 }
 
@@ -3376,25 +3309,23 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_NewExpiryLessThanCurrent() 
 		key := uuid.New().String()
 		value := uuid.New().String()
 
-		resultSet, err := client.Set(key, value)
-		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultSet.Value() != "")
+		suite.verifyOK(client.Set(key, value))
 
 		futureTimestamp := time.Now().Add(10 * time.Second).Unix()
 		resultExpireAt, err := client.ExpireAt(key, futureTimestamp)
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultExpireAt.Value())
+		assert.True(suite.T(), resultExpireAt)
 
 		newFutureTimestamp := time.Now().Add(5 * time.Second).Unix()
 		resultExpireWithOptions, err := client.ExpireAtWithOptions(key, newFutureTimestamp, api.NewExpiryLessThanCurrent)
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultExpireWithOptions.Value())
+		assert.True(suite.T(), resultExpireWithOptions)
 
 		time.Sleep(5 * time.Second)
 		resultExpireAtTest, err := client.Exists([]string{key})
 		assert.Nil(suite.T(), err)
 
-		assert.Equal(suite.T(), int64(0), resultExpireAtTest.Value())
+		assert.Equal(suite.T(), int64(0), resultExpireAtTest)
 	})
 }
 
@@ -3403,18 +3334,16 @@ func (suite *GlideTestSuite) TestPExpire() {
 		key := uuid.New().String()
 		value := uuid.New().String()
 
-		resultSet, err := client.Set(key, value)
-		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultSet.Value() != "")
+		suite.verifyOK(client.Set(key, value))
 
 		resultExpire, err := client.PExpire(key, 500)
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultExpire.Value())
+		assert.True(suite.T(), resultExpire)
 
 		time.Sleep(600 * time.Millisecond)
 		resultExpireCheck, err := client.Exists([]string{key})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), resultExpireCheck.Value())
+		assert.Equal(suite.T(), int64(0), resultExpireCheck)
 	})
 }
 
@@ -3424,25 +3353,23 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_HasExistingExpiry() {
 		key := uuid.New().String()
 		value := uuid.New().String()
 
-		resultSet, err := client.Set(key, value)
-		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultSet.Value() != "")
+		suite.verifyOK(client.Set(key, value))
 
 		initialExpire := 500
 		resultExpire, err := client.PExpire(key, int64(initialExpire))
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultExpire.Value())
+		assert.True(suite.T(), resultExpire)
 
 		newExpire := 1000
 
 		resultExpireWithOptions, err := client.PExpireWithOptions(key, int64(newExpire), api.HasExistingExpiry)
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultExpireWithOptions.Value())
+		assert.True(suite.T(), resultExpireWithOptions)
 
 		time.Sleep(1100 * time.Millisecond)
 		resultExist, err := client.Exists([]string{key})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), resultExist.Value())
+		assert.Equal(suite.T(), int64(0), resultExist)
 	})
 }
 
@@ -3452,20 +3379,18 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_HasNoExpiry() {
 		key := uuid.New().String()
 		value := uuid.New().String()
 
-		resultSet, err := client.Set(key, value)
-		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultSet.Value() != "")
+		suite.verifyOK(client.Set(key, value))
 
 		newExpire := 500
 
 		resultExpireWithOptions, err := client.PExpireWithOptions(key, int64(newExpire), api.HasNoExpiry)
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultExpireWithOptions.Value())
+		assert.True(suite.T(), resultExpireWithOptions)
 
 		time.Sleep(600 * time.Millisecond)
 		resultExist, err := client.Exists([]string{key})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), resultExist.Value())
+		assert.Equal(suite.T(), int64(0), resultExist)
 	})
 }
 
@@ -3475,25 +3400,23 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_NewExpiryGreaterThanCurrent(
 		key := uuid.New().String()
 		value := uuid.New().String()
 
-		resultSet, err := client.Set(key, value)
-		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultSet.Value() != "")
+		suite.verifyOK(client.Set(key, value))
 
 		initialExpire := 500
 		resultExpire, err := client.PExpire(key, int64(initialExpire))
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultExpire.Value())
+		assert.True(suite.T(), resultExpire)
 
 		newExpire := 1000
 
 		resultExpireWithOptions, err := client.PExpireWithOptions(key, int64(newExpire), api.NewExpiryGreaterThanCurrent)
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultExpireWithOptions.Value())
+		assert.True(suite.T(), resultExpireWithOptions)
 
 		time.Sleep(1100 * time.Millisecond)
 		resultExist, err := client.Exists([]string{key})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), resultExist.Value())
+		assert.Equal(suite.T(), int64(0), resultExist)
 	})
 }
 
@@ -3503,25 +3426,23 @@ func (suite *GlideTestSuite) TestPExpireWithOptions_NewExpiryLessThanCurrent() {
 		key := uuid.New().String()
 		value := uuid.New().String()
 
-		resultSet, err := client.Set(key, value)
-		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultSet.Value() != "")
+		suite.verifyOK(client.Set(key, value))
 
 		initialExpire := 500
 		resultExpire, err := client.PExpire(key, int64(initialExpire))
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultExpire.Value())
+		assert.True(suite.T(), resultExpire)
 
 		newExpire := 200
 
 		resultExpireWithOptions, err := client.PExpireWithOptions(key, int64(newExpire), api.NewExpiryLessThanCurrent)
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultExpireWithOptions.Value())
+		assert.True(suite.T(), resultExpireWithOptions)
 
 		time.Sleep(600 * time.Millisecond)
 		resultExist, err := client.Exists([]string{key})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), resultExist.Value())
+		assert.Equal(suite.T(), int64(0), resultExist)
 	})
 }
 
@@ -3529,21 +3450,19 @@ func (suite *GlideTestSuite) TestPExpireAt() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		value := uuid.New().String()
-		resultSet, err := client.Set(key, value)
-		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultSet.Value() != "")
+		suite.verifyOK(client.Set(key, value))
 
 		expireAfterMilliseconds := time.Now().Unix() * 1000
 		resultPExpireAt, err := client.PExpireAt(key, expireAfterMilliseconds)
 		assert.Nil(suite.T(), err)
 
-		assert.True(suite.T(), resultPExpireAt.Value())
+		assert.True(suite.T(), resultPExpireAt)
 
 		time.Sleep(6 * time.Second)
 
 		resultpExists, err := client.Exists([]string{key})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), resultpExists.Value())
+		assert.Equal(suite.T(), int64(0), resultpExists)
 	})
 }
 
@@ -3559,12 +3478,12 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_HasNoExpiry() {
 		result, err := client.PExpireAtWithOptions(key, timestamp, api.HasNoExpiry)
 
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), result.Value())
+		assert.True(suite.T(), result)
 
 		time.Sleep(2 * time.Second)
 		resultExist, err := client.Exists([]string{key})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), resultExist.Value())
+		assert.Equal(suite.T(), int64(0), resultExist)
 	})
 }
 
@@ -3578,17 +3497,17 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_HasExistingExpiry() {
 		initialExpire := 500
 		resultExpire, err := client.PExpire(key, int64(initialExpire))
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultExpire.Value())
+		assert.True(suite.T(), resultExpire)
 		newExpire := time.Now().Unix()*1000 + 1000
 
 		resultExpireWithOptions, err := client.PExpireAtWithOptions(key, newExpire, api.HasExistingExpiry)
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultExpireWithOptions.Value())
+		assert.True(suite.T(), resultExpireWithOptions)
 
 		time.Sleep(1100 * time.Millisecond)
 		resultExist, err := client.Exists([]string{key})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), resultExist.Value())
+		assert.Equal(suite.T(), int64(0), resultExist)
 	})
 }
 
@@ -3603,18 +3522,18 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_NewExpiryGreaterThanCurren
 		initialExpire := time.Now().UnixMilli() + 1000
 		resultExpire, err := client.PExpireAt(key, initialExpire)
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultExpire.Value())
+		assert.True(suite.T(), resultExpire)
 
 		newExpire := time.Now().UnixMilli() + 2000
 
 		resultExpireWithOptions, err := client.PExpireAtWithOptions(key, newExpire, api.NewExpiryGreaterThanCurrent)
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultExpireWithOptions.Value())
+		assert.True(suite.T(), resultExpireWithOptions)
 
 		time.Sleep(2100 * time.Millisecond)
 		resultExist, err := client.Exists([]string{key})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), resultExist.Value())
+		assert.Equal(suite.T(), int64(0), resultExist)
 	})
 }
 
@@ -3629,19 +3548,19 @@ func (suite *GlideTestSuite) TestPExpireAtWithOptions_NewExpiryLessThanCurrent()
 		initialExpire := 1000
 		resultExpire, err := client.PExpire(key, int64(initialExpire))
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultExpire.Value())
+		assert.True(suite.T(), resultExpire)
 
 		newExpire := time.Now().Unix()*1000 + 500
 
 		resultExpireWithOptions, err := client.PExpireAtWithOptions(key, newExpire, api.NewExpiryLessThanCurrent)
 		assert.Nil(suite.T(), err)
 
-		assert.True(suite.T(), resultExpireWithOptions.Value())
+		assert.True(suite.T(), resultExpireWithOptions)
 
 		time.Sleep(1100 * time.Millisecond)
 		resultExist, err := client.Exists([]string{key})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), resultExist.Value())
+		assert.Equal(suite.T(), int64(0), resultExist)
 	})
 }
 
@@ -3660,11 +3579,11 @@ func (suite *GlideTestSuite) TestExpireTime() {
 		expireTime := time.Now().Unix() + 3
 		resultExpAt, err := client.ExpireAt(key, expireTime)
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultExpAt.Value())
+		assert.True(suite.T(), resultExpAt)
 
 		resexptime, err := client.ExpireTime(key)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), expireTime, resexptime.Value())
+		assert.Equal(suite.T(), expireTime, resexptime)
 
 		time.Sleep(4 * time.Second)
 
@@ -3682,7 +3601,7 @@ func (suite *GlideTestSuite) TestExpireTime_KeyDoesNotExist() {
 		// Call ExpireTime on a key that doesn't exist
 		expiryResult, err := client.ExpireTime(key)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(-2), expiryResult.Value())
+		assert.Equal(suite.T(), int64(-2), expiryResult)
 	})
 }
 
@@ -3701,11 +3620,11 @@ func (suite *GlideTestSuite) TestPExpireTime() {
 		pexpireTime := time.Now().UnixMilli() + 3000
 		resultExpAt, err := client.PExpireAt(key, pexpireTime)
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultExpAt.Value())
+		assert.True(suite.T(), resultExpAt)
 
 		respexptime, err := client.PExpireTime(key)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), pexpireTime, respexptime.Value())
+		assert.Equal(suite.T(), pexpireTime, respexptime)
 
 		time.Sleep(4 * time.Second)
 
@@ -3726,19 +3645,19 @@ func (suite *GlideTestSuite) Test_ZCard() {
 		t := suite.T()
 		res1, err := client.ZAdd(key, membersScores)
 		assert.Nil(t, err)
-		assert.Equal(t, int64(3), res1.Value())
+		assert.Equal(t, int64(3), res1)
 
 		res2, err := client.ZCard(key)
 		assert.Nil(t, err)
-		assert.Equal(t, int64(3), res2.Value())
+		assert.Equal(t, int64(3), res2)
 
 		res3, err := client.ZRem(key, []string{"one"})
 		assert.Nil(t, err)
-		assert.Equal(t, int64(1), res3.Value())
+		assert.Equal(t, int64(1), res3)
 
 		res4, err := client.ZCard(key)
 		assert.Nil(t, err)
-		assert.Equal(t, int64(2), res4.Value())
+		assert.Equal(t, int64(2), res4)
 	})
 }
 
@@ -3750,7 +3669,7 @@ func (suite *GlideTestSuite) TestPExpireTime_KeyDoesNotExist() {
 		// Call ExpireTime on a key that doesn't exist
 		expiryResult, err := client.PExpireTime(key)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(-2), expiryResult.Value())
+		assert.Equal(suite.T(), int64(-2), expiryResult)
 	})
 }
 
@@ -3762,10 +3681,10 @@ func (suite *GlideTestSuite) TestTTL_WithValidKey() {
 
 		resExpire, err := client.Expire(key, 1)
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resExpire.Value())
+		assert.True(suite.T(), resExpire)
 		resTTL, err := client.TTL(key)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), resTTL.Value(), int64(1))
+		assert.Equal(suite.T(), int64(1), resTTL)
 	})
 }
 
@@ -3777,13 +3696,13 @@ func (suite *GlideTestSuite) TestTTL_WithExpiredKey() {
 
 		resExpire, err := client.Expire(key, 1)
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resExpire.Value())
+		assert.True(suite.T(), resExpire)
 
 		time.Sleep(2 * time.Second)
 
 		resTTL, err := client.TTL(key)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(-2), resTTL.Value())
+		assert.Equal(suite.T(), int64(-2), resTTL)
 	})
 }
 
@@ -3795,11 +3714,11 @@ func (suite *GlideTestSuite) TestPTTL_WithValidKey() {
 
 		resExpire, err := client.Expire(key, 1)
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resExpire.Value())
+		assert.True(suite.T(), resExpire)
 
 		resPTTL, err := client.PTTL(key)
 		assert.Nil(suite.T(), err)
-		assert.Greater(suite.T(), resPTTL.Value(), int64(900))
+		assert.Greater(suite.T(), resPTTL, int64(900))
 	})
 }
 
@@ -3811,13 +3730,13 @@ func (suite *GlideTestSuite) TestPTTL_WithExpiredKey() {
 
 		resExpire, err := client.Expire(key, 1)
 		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resExpire.Value())
+		assert.True(suite.T(), resExpire)
 
 		time.Sleep(2 * time.Second)
 
 		resPTTL, err := client.PTTL(key)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(-2), resPTTL.Value())
+		assert.Equal(suite.T(), resPTTL, int64(-2))
 	})
 }
 
@@ -3826,7 +3745,7 @@ func (suite *GlideTestSuite) TestPfAdd_SuccessfulAddition() {
 		key := uuid.New().String()
 		res, err := client.PfAdd(key, []string{"a", "b", "c", "d", "e"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), res.Value())
+		assert.Equal(suite.T(), int64(1), res)
 	})
 }
 
@@ -3837,25 +3756,25 @@ func (suite *GlideTestSuite) TestPfAdd_DuplicateElements() {
 		// case : Add elements and add same elements again
 		res, err := client.PfAdd(key, []string{"a", "b", "c", "d", "e"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), res.Value())
+		assert.Equal(suite.T(), int64(1), res)
 
 		res2, err := client.PfAdd(key, []string{"a", "b", "c", "d", "e"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res2.Value())
+		assert.Equal(suite.T(), int64(0), res2)
 
 		// case : (mixed elements) add new elements with 1 duplicate elements
 		res1, err := client.PfAdd(key, []string{"f", "g", "h"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), res1.Value())
+		assert.Equal(suite.T(), int64(1), res1)
 
 		res2, err = client.PfAdd(key, []string{"i", "j", "g"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), res2.Value())
+		assert.Equal(suite.T(), int64(1), res2)
 
 		// case : add empty array(no elements to the HyperLogLog)
 		res, err = client.PfAdd(key, []string{})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res.Value())
+		assert.Equal(suite.T(), int64(0), res)
 	})
 }
 
@@ -3864,11 +3783,11 @@ func (suite *GlideTestSuite) TestPfCount_SingleKey() {
 		key := uuid.New().String()
 		res, err := client.PfAdd(key, []string{"i", "j", "g"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), res.Value())
+		assert.Equal(suite.T(), int64(1), res)
 
 		resCount, err := client.PfCount([]string{key})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(3), resCount.Value())
+		assert.Equal(suite.T(), int64(3), resCount)
 	})
 }
 
@@ -3879,15 +3798,15 @@ func (suite *GlideTestSuite) TestPfCount_MultipleKeys() {
 
 		res, err := client.PfAdd(key1, []string{"a", "b", "c"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), res.Value())
+		assert.Equal(suite.T(), int64(1), res)
 
 		res, err = client.PfAdd(key2, []string{"c", "d", "e"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), res.Value())
+		assert.Equal(suite.T(), int64(1), res)
 
 		resCount, err := client.PfCount([]string{key1, key2})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(5), resCount.Value())
+		assert.Equal(suite.T(), int64(5), resCount)
 	})
 }
 
@@ -3898,7 +3817,7 @@ func (suite *GlideTestSuite) TestPfCount_NoExistingKeys() {
 
 		resCount, err := client.PfCount([]string{key1, key2})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), resCount.Value())
+		assert.Equal(suite.T(), int64(0), resCount)
 	})
 }
 
@@ -3918,7 +3837,7 @@ func (suite *GlideTestSuite) TestBLMove() {
 
 		res2, err := client.LPush(key1, []string{"four", "three", "two", "one"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(4), res2.Value())
+		assert.Equal(suite.T(), int64(4), res2)
 
 		// only source exists, only source elements gets popped, creates a list at nonExistingKey
 		res3, err := client.BLMove(key1, nonExistentKey, api.Right, api.Left, float64(0.1))
@@ -3956,7 +3875,7 @@ func (suite *GlideTestSuite) TestBLMove() {
 		// normal use case, "three" gets popped and added to the left of destination
 		res7, err := client.LPush(key2, []string{"six", "five", "four"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(3), res7.Value())
+		assert.Equal(suite.T(), int64(3), res7)
 
 		res8, err := client.BLMove(key1, key2, api.Right, api.Left, float64(0.1))
 		assert.Equal(suite.T(), "three", res8.Value())
@@ -4016,7 +3935,7 @@ func (suite *GlideTestSuite) TestDel_MultipleKeys() {
 		deletedCount, err := client.Del([]string{key1, key2, key3})
 
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(3), deletedCount.Value())
+		assert.Equal(suite.T(), int64(3), deletedCount)
 
 		result1, err1 := client.Get(key1)
 		result2, err2 := client.Get(key2)
@@ -4045,7 +3964,7 @@ func (suite *GlideTestSuite) TestType() {
 		// Test 2: Check if the value is list
 		key1 := "{keylist}-1" + uuid.NewString()
 		resultLPush, err := client.LPush(key1, []string{"one", "two", "three"})
-		assert.Equal(suite.T(), int64(3), resultLPush.Value())
+		assert.Equal(suite.T(), int64(3), resultLPush)
 		assert.Nil(suite.T(), err)
 		resultType, err := client.Type(key1)
 		assert.Nil(suite.T(), err)
@@ -4062,12 +3981,12 @@ func (suite *GlideTestSuite) TestTouch() {
 		suite.verifyOK(client.Set(keyName1, "anotherValue"))
 		result, err := client.Touch([]string{keyName, keyName1})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), result.Value(), "The touch should be 2")
+		assert.Equal(suite.T(), int64(2), result, "The touch should be 2")
 
 		// Test 2: Check if an touch invalid key
 		resultInvalidKey, err := client.Touch([]string{"invalidKey", "invalidKey1"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), resultInvalidKey.Value(), "The touch should be 0")
+		assert.Equal(suite.T(), int64(0), resultInvalidKey, "The touch should be 0")
 	})
 }
 
@@ -4080,12 +3999,12 @@ func (suite *GlideTestSuite) TestUnlink() {
 		suite.verifyOK(client.Set(keyName1, "anotherValue"))
 		resultValidKey, err := client.Unlink([]string{keyName, keyName1})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), resultValidKey.Value(), "The unlink should be 2")
+		assert.Equal(suite.T(), int64(2), resultValidKey, "The unlink should be 2")
 
 		// Test 2: Check if an unlink for invalid key
 		resultInvalidKey, err := client.Unlink([]string{"invalidKey2", "invalidKey3"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), resultInvalidKey.Value(), "The unlink should be 0")
+		assert.Equal(suite.T(), int64(0), resultInvalidKey, "The unlink should be 0")
 	})
 }
 
@@ -4115,7 +4034,7 @@ func (suite *GlideTestSuite) TestRenamenx() {
 		suite.verifyOK(client.Set(key, initialValue))
 		res1, err := client.Renamenx(key, key2)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), true, res1.Value())
+		assert.True(suite.T(), res1)
 
 		// Test 2 Check if the renamenx command return false if newKey already exists.
 		key3 := "{keyName}" + uuid.NewString()
@@ -4124,7 +4043,7 @@ func (suite *GlideTestSuite) TestRenamenx() {
 		suite.verifyOK(client.Set(key4, initialValue))
 		res2, err := client.Renamenx(key3, key4)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), false, res2.Value())
+		assert.False(suite.T(), res2)
 	})
 }
 
@@ -4202,7 +4121,7 @@ func (suite *GlideTestSuite) TestZAddAndZAddIncr() {
 
 		res, err := client.ZAdd(key, membersScoreMap)
 		assert.Nil(t, err)
-		assert.Equal(t, int64(3), res.Value())
+		assert.Equal(t, int64(3), res)
 
 		resIncr, err := client.ZAddIncr(key, "one", float64(2))
 		assert.Nil(t, err)
@@ -4228,14 +4147,14 @@ func (suite *GlideTestSuite) TestZAddAndZAddIncr() {
 
 		res, err = client.ZAddWithOptions(key3, membersScoreMap, onlyIfExistsOpts)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res.Value())
+		assert.Equal(suite.T(), int64(0), res)
 
 		res, err = client.ZAddWithOptions(key3, membersScoreMap, onlyIfDoesNotExistOpts)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(3), res.Value())
+		assert.Equal(suite.T(), int64(3), res)
 
 		resIncr, err = client.ZAddIncrWithOptions(key3, "one", 5, onlyIfDoesNotExistOpts)
-		assert.NotNil(suite.T(), err)
+		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resIncr.IsNil())
 
 		resIncr, err = client.ZAddIncrWithOptions(key3, "one", 5, onlyIfExistsOpts)
@@ -4251,7 +4170,7 @@ func (suite *GlideTestSuite) TestZAddAndZAddIncr() {
 
 		res, err = client.ZAdd(key4, membersScoreMap2)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(3), res.Value())
+		assert.Equal(suite.T(), int64(3), res)
 
 		membersScoreMap2["one"] = 10.0
 
@@ -4262,18 +4181,18 @@ func (suite *GlideTestSuite) TestZAddAndZAddIncr() {
 
 		res, err = client.ZAddWithOptions(key4, membersScoreMap2, gtOptsChanged)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), res.Value())
+		assert.Equal(suite.T(), int64(1), res)
 
 		res, err = client.ZAddWithOptions(key4, membersScoreMap2, ltOptsChanged)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), res.Value())
+		assert.Equal(suite.T(), int64(0), res)
 
 		resIncr, err = client.ZAddIncrWithOptions(key4, "one", -3, ltOpts)
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), float64(7), resIncr.Value())
 
 		resIncr, err = client.ZAddIncrWithOptions(key4, "one", -3, gtOpts)
-		assert.NotNil(suite.T(), err)
+		assert.Nil(suite.T(), err)
 		assert.True(suite.T(), resIncr.IsNil())
 	})
 }
@@ -4286,22 +4205,22 @@ func (suite *GlideTestSuite) TestZincrBy() {
 		// key does not exist
 		res1, err := client.ZIncrBy(key1, 2.5, "value1")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), 2.5, res1.Value())
+		assert.Equal(suite.T(), 2.5, res1)
 
 		// key exists, but value doesn't
 		res2, err := client.ZIncrBy(key1, -3.3, "value2")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), -3.3, res2.Value())
+		assert.Equal(suite.T(), -3.3, res2)
 
 		// updating existing value in existing key
 		res3, err := client.ZIncrBy(key1, 1.0, "value1")
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), 3.5, res3.Value())
+		assert.Equal(suite.T(), 3.5, res3)
 
 		// Key exists, but it is not a sorted set
 		res4, err := client.SAdd(key2, []string{"one", "two"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res4.Value())
+		assert.Equal(suite.T(), int64(2), res4)
 
 		_, err = client.ZIncrBy(key2, 0.5, "_")
 		assert.NotNil(suite.T(), err)
@@ -4318,12 +4237,12 @@ func (suite *GlideTestSuite) TestBZPopMin() {
 		// Add elements to key1
 		zaddResult1, err := client.ZAdd(key1, map[string]float64{"a": 1.0, "b": 1.5})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), zaddResult1.Value())
+		assert.Equal(suite.T(), int64(2), zaddResult1)
 
 		// Add elements to key2
 		zaddResult2, err := client.ZAdd(key2, map[string]float64{"c": 2.0})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), zaddResult2.Value())
+		assert.Equal(suite.T(), int64(1), zaddResult2)
 
 		// Pop minimum element from key1 and key2
 		bzpopminResult1, err := client.BZPopMin([]string{key1, key2}, float64(.5))
@@ -4341,9 +4260,7 @@ func (suite *GlideTestSuite) TestBZPopMin() {
 		assert.Equal(suite.T(), api.KeyWithMemberAndScore{Key: key2, Member: "c", Score: 2.0}, bzpopminResult3.Value())
 
 		// Set key3 to a non-sorted set value
-		setResult, err := client.Set(key3, "value")
-		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), "OK", setResult.Value())
+		suite.verifyOK(client.Set(key3, "value"))
 
 		// Attempt to pop from key3 which is not a sorted set
 		_, err = client.BZPopMin([]string{key3}, float64(.5))
@@ -4365,7 +4282,7 @@ func (suite *GlideTestSuite) TestZPopMin() {
 
 		res, err := client.ZAdd(key1, memberScoreMap)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(3), res.Value())
+		assert.Equal(suite.T(), int64(3), res)
 
 		res2, err := client.ZPopMin(key1)
 		assert.Nil(suite.T(), err)
@@ -4399,7 +4316,7 @@ func (suite *GlideTestSuite) TestZPopMax() {
 		}
 		res, err := client.ZAdd(key1, memberScoreMap)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(3), res.Value())
+		assert.Equal(suite.T(), int64(3), res)
 
 		res2, err := client.ZPopMax(key1)
 		assert.Nil(suite.T(), err)
@@ -4432,7 +4349,7 @@ func (suite *GlideTestSuite) TestZRem() {
 		}
 		res, err := client.ZAdd(key, memberScoreMap)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(3), res.Value())
+		assert.Equal(suite.T(), int64(3), res)
 
 		// no members to remove
 		_, err = client.ZRem(key, []string{})
@@ -4441,12 +4358,12 @@ func (suite *GlideTestSuite) TestZRem() {
 
 		res, err = client.ZRem(key, []string{"one"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), res.Value())
+		assert.Equal(suite.T(), int64(1), res)
 
 		// TODO: run ZCard there
 		res, err = client.ZRem(key, []string{"one", "two", "three"})
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), res.Value())
+		assert.Equal(suite.T(), int64(2), res)
 
 		// non sorted set key
 		_, err = client.Set(key, "test")
@@ -4703,23 +4620,23 @@ func (suite *GlideTestSuite) TestPersist() {
 		suite.verifyOK(client.Set(keyName, initialValue))
 		resultExpire, err := client.Expire(keyName, 300)
 		assert.Nil(t, err)
-		assert.True(t, resultExpire.Value())
+		assert.True(t, resultExpire)
 		resultPersist, err := client.Persist(keyName)
 		assert.Nil(t, err)
-		assert.True(t, resultPersist.Value())
+		assert.True(t, resultPersist)
 
 		// Test 2: Check if persist command return false if key that doesnt have associated timeout.
 		keyNoExp := "{keyName}" + uuid.NewString()
 		suite.verifyOK(client.Set(keyNoExp, initialValue))
 		resultPersistNoExp, err := client.Persist(keyNoExp)
 		assert.Nil(t, err)
-		assert.False(t, resultPersistNoExp.Value())
+		assert.False(t, resultPersistNoExp)
 
 		// Test 3: Check if persist command return false if key not exist.
 		keyInvalid := "{invalidkey_forPersistTest}" + uuid.NewString()
 		resultInvalidKey, err := client.Persist(keyInvalid)
 		assert.Nil(t, err)
-		assert.False(t, resultInvalidKey.Value())
+		assert.False(t, resultInvalidKey)
 	})
 }
 
@@ -4748,9 +4665,7 @@ func (suite *GlideTestSuite) TestZRank() {
 		assert.True(suite.T(), res3.IsNil())
 
 		// key exists, but it is not a set
-		setRes, err := client.Set(stringKey, "value")
-		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), "OK", setRes.Value())
+		suite.verifyOK(client.Set(stringKey, "value"))
 
 		_, err = client.ZRank(stringKey, "value")
 		assert.NotNil(suite.T(), err)
@@ -4783,9 +4698,7 @@ func (suite *GlideTestSuite) TestZRevRank() {
 		assert.True(suite.T(), res3.IsNil())
 
 		// key exists, but it is not a set
-		setRes, err := client.Set(stringKey, "value")
-		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), "OK", setRes.Value())
+		suite.verifyOK(client.Set(stringKey, "value"))
 
 		_, err = client.ZRevRank(stringKey, "value")
 		assert.NotNil(suite.T(), err)
@@ -4825,7 +4738,7 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 
 		xLenResult, err := client.XLen(key1)
 		assert.NoError(t, err)
-		assert.Equal(t, xLenResult.Value(), int64(2))
+		assert.Equal(t, int64(2), xLenResult)
 
 		// Trim the first entry.
 		xAddResult, err = client.XAddWithOptions(
@@ -4840,7 +4753,7 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 		id := xAddResult.Value()
 		xLenResult, err = client.XLen(key1)
 		assert.NoError(t, err)
-		assert.Equal(t, xLenResult.Value(), int64(2))
+		assert.Equal(t, int64(2), xLenResult)
 
 		// Trim the second entry.
 		xAddResult, err = client.XAddWithOptions(
@@ -4854,7 +4767,7 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 		assert.NotNil(t, xAddResult.Value())
 		xLenResult, err = client.XLen(key1)
 		assert.NoError(t, err)
-		assert.Equal(t, xLenResult.Value(), int64(2))
+		assert.Equal(t, int64(2), xLenResult)
 
 		// Test xtrim to remove 1 element
 		xTrimResult, err := client.XTrim(
@@ -4862,10 +4775,10 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 			options.NewXTrimOptionsWithMaxLen(1).SetExactTrimming(),
 		)
 		assert.NoError(t, err)
-		assert.Equal(t, xTrimResult.Value(), int64(1))
+		assert.Equal(t, int64(1), xTrimResult)
 		xLenResult, err = client.XLen(key1)
 		assert.NoError(t, err)
-		assert.Equal(t, xLenResult.Value(), int64(1))
+		assert.Equal(t, int64(1), xLenResult)
 
 		// Key does not exist - returns 0
 		xTrimResult, err = client.XTrim(
@@ -4873,15 +4786,13 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 			options.NewXTrimOptionsWithMaxLen(1).SetExactTrimming(),
 		)
 		assert.NoError(t, err)
-		assert.Equal(t, xTrimResult.Value(), int64(0))
+		assert.Equal(t, int64(0), xTrimResult)
 		xLenResult, err = client.XLen(key2)
 		assert.NoError(t, err)
-		assert.Equal(t, xLenResult.Value(), int64(0))
+		assert.Equal(t, int64(0), xLenResult)
 
 		// Throw Exception: Key exists - but it is not a stream
-		setResult, err := client.Set(key2, "xtrimtest")
-		assert.NoError(t, err)
-		assert.Equal(t, setResult.Value(), "OK")
+		suite.verifyOK(client.Set(key2, "xtrimtest"))
 		_, err = client.XTrim(key2, options.NewXTrimOptionsWithMinId("0-1"))
 		assert.NotNil(t, err)
 		assert.IsType(t, &api.RequestError{}, err)
