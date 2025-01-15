@@ -4105,6 +4105,82 @@ func (suite *GlideTestSuite) TestXAddWithOptions() {
 	})
 }
 
+func (suite *GlideTestSuite) TestXRead() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := "{xread}" + uuid.NewString()
+		key2 := "{xread}" + uuid.NewString()
+		key3 := "{xread}" + uuid.NewString()
+
+		// key does not exist
+		read, err := client.XRead(map[string]string{key1: "0-0"})
+		assert.Nil(suite.T(), err)
+		assert.Nil(suite.T(), read)
+
+		res, err := client.XAddWithOptions(
+			key1,
+			[][]string{{"k1_field1", "k1_value1"}, {"k1_field1", "k1_value2"}},
+			options.NewXAddOptions().SetId("0-1"),
+		)
+		assert.Nil(suite.T(), err)
+		assert.False(suite.T(), res.IsNil())
+
+		res, err = client.XAddWithOptions(key2, [][]string{{"k2_field1", "k2_value1"}}, options.NewXAddOptions().SetId("2-0"))
+		assert.Nil(suite.T(), err)
+		assert.False(suite.T(), res.IsNil())
+
+		// reading ID which does not exist yet
+		read, err = client.XRead(map[string]string{key1: "100-500"})
+		assert.Nil(suite.T(), err)
+		assert.Nil(suite.T(), read)
+
+		read, err = client.XRead(map[string]string{key1: "0-0", key2: "0-0"})
+		assert.Nil(suite.T(), err)
+		assert.Equal(suite.T(), map[string]map[string][][]string{
+			key1: {
+				"0-1": {{"k1_field1", "k1_value1"}, {"k1_field1", "k1_value2"}},
+			},
+			key2: {
+				"2-0": {{"k2_field1", "k2_value1"}},
+			},
+		}, read)
+
+		// Key exists, but it is not a stream
+		client.Set(key3, "xread")
+		_, err = client.XRead(map[string]string{key1: "0-0", key3: "0-0"})
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		// ensure that commands doesn't time out even if timeout > request timeout
+		var testClient api.BaseClient
+		if _, ok := client.(api.GlideClient); ok {
+			testClient = suite.client(api.NewGlideClientConfiguration().
+				WithAddress(&suite.standaloneHosts[0]).
+				WithUseTLS(suite.tls))
+		} else {
+			testClient = suite.clusterClient(api.NewGlideClusterClientConfiguration().
+				WithAddress(&suite.clusterHosts[0]).
+				WithUseTLS(suite.tls))
+		}
+		read, err = testClient.XReadWithOptions(map[string]string{key1: "0-1"}, options.NewXReadOptions().SetBlock(1000))
+		assert.Nil(suite.T(), err)
+		assert.Nil(suite.T(), read)
+
+		// with 0 timeout (no timeout) should never time out,
+		// but we wrap the test with timeout to avoid test failing or stuck forever
+		finished := make(chan bool)
+		go func() {
+			testClient.XReadWithOptions(map[string]string{key1: "0-1"}, options.NewXReadOptions().SetBlock(0))
+			finished <- true
+		}()
+		select {
+		case <-finished:
+			assert.Fail(suite.T(), "Infinite block finished")
+		case <-time.After(3 * time.Second):
+		}
+		testClient.Close()
+	})
+}
+
 func (suite *GlideTestSuite) TestZAddAndZAddIncr() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
