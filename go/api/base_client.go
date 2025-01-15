@@ -1622,3 +1622,36 @@ func (client *baseClient) XLen(key string) (int64, error) {
 	}
 	return handleIntResponse(result)
 }
+
+// Removes the specified entries by id from a stream, and returns the number of entries deleted.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the stream.
+//	ids - An array of entry ids.
+//
+// Return value:
+//
+//	The number of entries removed from the stream. This number may be less than the number
+//	of entries in `ids`, if the specified `ids` don't exist in the stream.
+//
+// For example:
+//
+//	 xAddResult, err := client.XAddWithOptions(
+//		"key1",
+//	 	[][]string{{"f1", "foo1"}, {"f2", "bar2"}},
+//		options.NewXAddOptions().SetId(streamId1),
+//	 )
+//	 xDelResult, err := client.XDel("key1", []string{streamId1, streamId3})
+//	 fmt.Println(xDelResult) // Output: 1
+//
+// [valkey.io]: https://valkey.io/commands/xdel/
+func (client *baseClient) XDel(key string, ids []string) (int64, error) {
+	result, err := client.executeCommand(C.XDel, append([]string{key}, ids...))
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
