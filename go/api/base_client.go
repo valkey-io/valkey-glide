@@ -1419,9 +1419,9 @@ func (client *baseClient) XReadWithOptions(
 //
 // Parameters:
 //
-//		 group - The consumer group name.
-//		 consumer - The group consumer.
-//	  keysAndIds - A map of keys and entry IDs to read from.
+//	group - The consumer group name.
+//	consumer - The group consumer.
+//	keysAndIds - A map of keys and entry IDs to read from.
 //
 // Return value:
 // A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
