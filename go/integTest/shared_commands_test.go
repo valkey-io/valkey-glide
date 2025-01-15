@@ -1139,7 +1139,7 @@ func (suite *GlideTestSuite) TestHScan() {
 		// Check for empty set.
 		resCursor, resCollection, err := client.HScan(key1, initialCursor)
 		assert.NoError(t, err)
-		assert.Equal(t, initialCursor, resCursor.Value())
+		assert.Equal(t, initialCursor, resCursor)
 		assert.Empty(t, resCollection)
 
 		// Negative cursor check.
@@ -1148,7 +1148,7 @@ func (suite *GlideTestSuite) TestHScan() {
 			assert.NotEmpty(t, err)
 		} else {
 			resCursor, resCollection, _ = client.HScan(key1, "-1")
-			assert.Equal(t, initialCursor, resCursor.Value())
+			assert.Equal(t, initialCursor, resCursor)
 			assert.Empty(t, resCollection)
 		}
 
@@ -1157,27 +1157,27 @@ func (suite *GlideTestSuite) TestHScan() {
 		assert.Equal(t, int64(len(charMembers)), hsetResult)
 
 		resCursor, resCollection, _ = client.HScan(key1, initialCursor)
-		assert.Equal(t, initialCursor, resCursor.Value())
+		assert.Equal(t, initialCursor, resCursor)
 		// Length includes the score which is twice the map size
 		assert.Equal(t, len(charMap)*2, len(resCollection))
 
-		resultKeys := make([]api.Result[string], 0)
-		resultValues := make([]api.Result[string], 0)
+		resultKeys := make([]string, 0)
+		resultValues := make([]string, 0)
 
 		for i := 0; i < len(resCollection); i += 2 {
 			resultKeys = append(resultKeys, resCollection[i])
 			resultValues = append(resultValues, resCollection[i+1])
 		}
-		keysList, valuesList := convertMapKeysAndValuesToResultList(charMap)
+		keysList, valuesList := convertMapKeysAndValuesToLists(charMap)
 		assert.True(t, isSubset(resultKeys, keysList) && isSubset(keysList, resultKeys))
 		assert.True(t, isSubset(resultValues, valuesList) && isSubset(valuesList, resultValues))
 
 		opts := options.NewHashScanOptionsBuilder().SetMatch("a")
 		resCursor, resCollection, _ = client.HScanWithOptions(key1, initialCursor, opts)
-		assert.Equal(t, initialCursor, resCursor.Value())
+		assert.Equal(t, initialCursor, resCursor)
 		assert.Equal(t, len(resCollection), 2)
-		assert.Equal(t, resCollection[0].Value(), "a")
-		assert.Equal(t, resCollection[1].Value(), "0")
+		assert.Equal(t, resCollection[0], "a")
+		assert.Equal(t, resCollection[1], "0")
 
 		// Result contains a subset of the key
 		combinedMap := make(map[string]string)
@@ -1191,12 +1191,12 @@ func (suite *GlideTestSuite) TestHScan() {
 		hsetResult, _ = client.HSet(key1, combinedMap)
 		assert.Equal(t, int64(len(numberMap)), hsetResult)
 		resultCursor := "0"
-		secondResultAllKeys := make([]api.Result[string], 0)
-		secondResultAllValues := make([]api.Result[string], 0)
+		secondResultAllKeys := make([]string, 0)
+		secondResultAllValues := make([]string, 0)
 		isFirstLoop := true
 		for {
 			resCursor, resCollection, _ = client.HScan(key1, resultCursor)
-			resultCursor = resCursor.Value()
+			resultCursor = resCursor
 			for i := 0; i < len(resCollection); i += 2 {
 				secondResultAllKeys = append(secondResultAllKeys, resCollection[i])
 				secondResultAllValues = append(secondResultAllValues, resCollection[i+1])
@@ -1211,7 +1211,7 @@ func (suite *GlideTestSuite) TestHScan() {
 			// Scan with result cursor to get the next set of data.
 			newResultCursor, secondResult, _ := client.HScan(key1, resultCursor)
 			assert.NotEqual(t, resultCursor, newResultCursor)
-			resultCursor = newResultCursor.Value()
+			resultCursor = newResultCursor
 			assert.False(t, reflect.DeepEqual(secondResult, resCollection))
 			for i := 0; i < len(secondResult); i += 2 {
 				secondResultAllKeys = append(secondResultAllKeys, secondResult[i])
@@ -1223,41 +1223,41 @@ func (suite *GlideTestSuite) TestHScan() {
 				break
 			}
 		}
-		numberKeysList, numberValuesList := convertMapKeysAndValuesToResultList(numberMap)
+		numberKeysList, numberValuesList := convertMapKeysAndValuesToLists(numberMap)
 		assert.True(t, isSubset(numberKeysList, secondResultAllKeys))
 		assert.True(t, isSubset(numberValuesList, secondResultAllValues))
 
 		// Test match pattern
 		opts = options.NewHashScanOptionsBuilder().SetMatch("*")
 		resCursor, resCollection, _ = client.HScanWithOptions(key1, initialCursor, opts)
-		resCursorInt, _ := strconv.Atoi(resCursor.Value())
+		resCursorInt, _ := strconv.Atoi(resCursor)
 		assert.True(t, resCursorInt >= 0)
 		assert.True(t, int(len(resCollection)) >= defaultCount)
 
 		// Test count
 		opts = options.NewHashScanOptionsBuilder().SetCount(int64(20))
 		resCursor, resCollection, _ = client.HScanWithOptions(key1, initialCursor, opts)
-		resCursorInt, _ = strconv.Atoi(resCursor.Value())
+		resCursorInt, _ = strconv.Atoi(resCursor)
 		assert.True(t, resCursorInt >= 0)
 		assert.True(t, len(resCollection) >= 20)
 
 		// Test count with match returns a non-empty list
 		opts = options.NewHashScanOptionsBuilder().SetMatch("1*").SetCount(int64(20))
 		resCursor, resCollection, _ = client.HScanWithOptions(key1, initialCursor, opts)
-		resCursorInt, _ = strconv.Atoi(resCursor.Value())
+		resCursorInt, _ = strconv.Atoi(resCursor)
 		assert.True(t, resCursorInt >= 0)
 		assert.True(t, len(resCollection) >= 0)
 
 		if suite.serverVersion >= "8.0.0" {
 			opts = options.NewHashScanOptionsBuilder().SetNoValue(true)
 			resCursor, resCollection, _ = client.HScanWithOptions(key1, initialCursor, opts)
-			resCursorInt, _ = strconv.Atoi(resCursor.Value())
+			resCursorInt, _ = strconv.Atoi(resCursor)
 			assert.True(t, resCursorInt >= 0)
 
 			// Check if all fields don't start with "num"
 			containsElementsWithNumKeyword := false
 			for i := 0; i < len(resCollection); i++ {
-				if strings.Contains(resCollection[i].Value(), "num") {
+				if strings.Contains(resCollection[i], "num") {
 					containsElementsWithNumKeyword = true
 					break
 				}
@@ -2317,34 +2317,27 @@ func (suite *GlideTestSuite) TestSScan() {
 		defaultCount := 10
 		// use large dataset to force an iterative cursor.
 		numMembers := make([]string, 50000)
-		numMembersResult := make([]api.Result[string], 50000)
+		numMembersResult := make([]string, 50000)
 		charMembers := []string{"a", "b", "c", "d", "e"}
-		charMembersResult := []api.Result[string]{
-			api.CreateStringResult("a"),
-			api.CreateStringResult("b"),
-			api.CreateStringResult("c"),
-			api.CreateStringResult("d"),
-			api.CreateStringResult("e"),
-		}
 		t := suite.T()
 
 		// populate the dataset slice
 		for i := 0; i < 50000; i++ {
 			numMembers[i] = strconv.Itoa(i)
-			numMembersResult[i] = api.CreateStringResult(strconv.Itoa(i))
+			numMembersResult[i] = strconv.Itoa(i)
 		}
 
 		// empty set
 		resCursor, resCollection, err := client.SScan(key1, initialCursor)
 		assert.NoError(t, err)
-		assert.Equal(t, initialCursor, resCursor.Value())
+		assert.Equal(t, initialCursor, resCursor)
 		assert.Empty(t, resCollection)
 
 		// negative cursor
 		if suite.serverVersion < "8.0.0" {
 			resCursor, resCollection, err = client.SScan(key1, "-1")
 			assert.NoError(t, err)
-			assert.Equal(t, initialCursor, resCursor.Value())
+			assert.Equal(t, initialCursor, resCursor)
 			assert.Empty(t, resCollection)
 		} else {
 			_, _, err = client.SScan(key1, "-1")
@@ -2358,15 +2351,15 @@ func (suite *GlideTestSuite) TestSScan() {
 		assert.Equal(t, int64(len(charMembers)), res)
 		resCursor, resCollection, err = client.SScan(key1, initialCursor)
 		assert.NoError(t, err)
-		assert.Equal(t, initialCursor, resCursor.Value())
+		assert.Equal(t, initialCursor, resCursor)
 		assert.Equal(t, len(charMembers), len(resCollection))
-		assert.True(t, isSubset(resCollection, charMembersResult))
+		assert.True(t, isSubset(resCollection, charMembers))
 
 		opts := options.NewBaseScanOptionsBuilder().SetMatch("a")
 		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
-		assert.Equal(t, initialCursor, resCursor.Value())
-		assert.True(t, isSubset(resCollection, []api.Result[string]{api.CreateStringResult("a")}))
+		assert.Equal(t, initialCursor, resCursor)
+		assert.True(t, isSubset(resCollection, []string{"a"}))
 
 		// result contains a subset of the key
 		res, err = client.SAdd(key1, numMembers)
@@ -2377,8 +2370,8 @@ func (suite *GlideTestSuite) TestSScan() {
 		resultCollection := resCollection
 
 		// 0 is returned for the cursor of the last iteration
-		for resCursor.Value() != "0" {
-			nextCursor, nextCol, err := client.SScan(key1, resCursor.Value())
+		for resCursor != "0" {
+			nextCursor, nextCol, err := client.SScan(key1, resCursor)
 			assert.NoError(t, err)
 			assert.NotEqual(t, nextCursor, resCursor)
 			assert.False(t, isSubset(resultCollection, nextCol))
@@ -2387,27 +2380,27 @@ func (suite *GlideTestSuite) TestSScan() {
 		}
 		assert.NotEmpty(t, resultCollection)
 		assert.True(t, isSubset(numMembersResult, resultCollection))
-		assert.True(t, isSubset(charMembersResult, resultCollection))
+		assert.True(t, isSubset(charMembers, resultCollection))
 
 		// test match pattern
 		opts = options.NewBaseScanOptionsBuilder().SetMatch("*")
 		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
-		assert.NotEqual(t, initialCursor, resCursor.Value())
+		assert.NotEqual(t, initialCursor, resCursor)
 		assert.GreaterOrEqual(t, len(resCollection), defaultCount)
 
 		// test count
 		opts = options.NewBaseScanOptionsBuilder().SetCount(20)
 		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
-		assert.NotEqual(t, initialCursor, resCursor.Value())
+		assert.NotEqual(t, initialCursor, resCursor)
 		assert.GreaterOrEqual(t, len(resCollection), 20)
 
 		// test count with match, returns a non-empty array
 		opts = options.NewBaseScanOptionsBuilder().SetMatch("1*").SetCount(20)
 		resCursor, resCollection, err = client.SScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(t, err)
-		assert.NotEqual(t, initialCursor, resCursor.Value())
+		assert.NotEqual(t, initialCursor, resCursor)
 		assert.GreaterOrEqual(t, len(resCollection), 0)
 
 		// exceptions
@@ -5309,30 +5302,23 @@ func (suite *GlideTestSuite) TestZScan() {
 
 		// Set up test data - use a large number of entries to force an iterative cursor
 		numberMap := make(map[string]float64)
-		numMembersResult := make([]api.Result[string], 50000)
+		numMembers := make([]string, 50000)
 		charMembers := []string{"a", "b", "c", "d", "e"}
-		charMembersResult := []api.Result[string]{
-			api.CreateStringResult("a"),
-			api.CreateStringResult("b"),
-			api.CreateStringResult("c"),
-			api.CreateStringResult("d"),
-			api.CreateStringResult("e"),
-		}
 		for i := 0; i < 50000; i++ {
 			numberMap["member"+strconv.Itoa(i)] = float64(i)
-			numMembersResult[i] = api.CreateStringResult("member" + strconv.Itoa(i))
+			numMembers[i] = "member" + strconv.Itoa(i)
 		}
 		charMap := make(map[string]float64)
-		charMapValues := []api.Result[string]{}
+		charMapValues := []string{}
 		for i, val := range charMembers {
 			charMap[val] = float64(i)
-			charMapValues = append(charMapValues, api.CreateStringResult(strconv.Itoa(i)))
+			charMapValues = append(charMapValues, strconv.Itoa(i))
 		}
 
 		// Empty set
 		resCursor, resCollection, err := client.ZScan(key1, initialCursor)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), initialCursor, resCursor.Value())
+		assert.Equal(suite.T(), initialCursor, resCursor)
 		assert.Empty(suite.T(), resCollection)
 
 		// Negative cursor
@@ -5343,7 +5329,7 @@ func (suite *GlideTestSuite) TestZScan() {
 		} else {
 			resCursor, resCollection, err = client.ZScan(key1, "-1")
 			assert.NoError(suite.T(), err)
-			assert.Equal(suite.T(), initialCursor, resCursor.Value())
+			assert.Equal(suite.T(), initialCursor, resCursor)
 			assert.Empty(suite.T(), resCollection)
 		}
 
@@ -5354,11 +5340,11 @@ func (suite *GlideTestSuite) TestZScan() {
 
 		resCursor, resCollection, err = client.ZScan(key1, initialCursor)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), initialCursor, resCursor.Value())
+		assert.Equal(suite.T(), initialCursor, resCursor)
 		assert.Equal(suite.T(), len(charMap)*2, len(resCollection))
 
-		resultKeySet := make([]api.Result[string], 0, len(charMap))
-		resultValueSet := make([]api.Result[string], 0, len(charMap))
+		resultKeySet := make([]string, 0, len(charMap))
+		resultValueSet := make([]string, 0, len(charMap))
 
 		// Iterate through array taking pairs of items
 		for i := 0; i < len(resCollection); i += 2 {
@@ -5367,7 +5353,7 @@ func (suite *GlideTestSuite) TestZScan() {
 		}
 
 		// Verify all expected keys exist in result
-		assert.True(suite.T(), isSubset(charMembersResult, resultKeySet))
+		assert.True(suite.T(), isSubset(charMembers, resultKeySet))
 
 		// Scores come back as integers converted to a string when the fraction is zero.
 		assert.True(suite.T(), isSubset(charMapValues, resultValueSet))
@@ -5375,8 +5361,8 @@ func (suite *GlideTestSuite) TestZScan() {
 		opts := options.NewZScanOptionsBuilder().SetMatch("a")
 		resCursor, resCollection, err = client.ZScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), initialCursor, resCursor.Value())
-		assert.Equal(suite.T(), resCollection, []api.Result[string]{api.CreateStringResult("a"), api.CreateStringResult("0")})
+		assert.Equal(suite.T(), initialCursor, resCursor)
+		assert.Equal(suite.T(), resCollection, []string{"a", "0"})
 
 		// Result contains a subset of the key
 		res, err = client.ZAdd(key1, numberMap)
@@ -5386,11 +5372,11 @@ func (suite *GlideTestSuite) TestZScan() {
 		resCursor, resCollection, err = client.ZScan(key1, "0")
 		assert.NoError(suite.T(), err)
 		resultCollection := resCollection
-		resKeys := []api.Result[string]{}
+		resKeys := []string{}
 
 		// 0 is returned for the cursor of the last iteration
-		for resCursor.Value() != "0" {
-			nextCursor, nextCol, err := client.ZScan(key1, resCursor.Value())
+		for resCursor != "0" {
+			nextCursor, nextCol, err := client.ZScan(key1, resCursor)
 			assert.NoError(suite.T(), err)
 			assert.NotEqual(suite.T(), nextCursor, resCursor)
 			assert.False(suite.T(), isSubset(resultCollection, nextCol))
@@ -5404,27 +5390,27 @@ func (suite *GlideTestSuite) TestZScan() {
 
 		assert.NotEmpty(suite.T(), resultCollection)
 		// Verify we got all keys and values
-		assert.True(suite.T(), isSubset(numMembersResult, resKeys))
+		assert.True(suite.T(), isSubset(numMembers, resKeys))
 
 		// Test match pattern
 		opts = options.NewZScanOptionsBuilder().SetMatch("*")
 		resCursor, resCollection, err = client.ZScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(suite.T(), err)
-		assert.NotEqual(suite.T(), initialCursor, resCursor.Value())
+		assert.NotEqual(suite.T(), initialCursor, resCursor)
 		assert.GreaterOrEqual(suite.T(), len(resCollection), defaultCount)
 
 		// test count
 		opts = options.NewZScanOptionsBuilder().SetCount(20)
 		resCursor, resCollection, err = client.ZScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(suite.T(), err)
-		assert.NotEqual(suite.T(), initialCursor, resCursor.Value())
+		assert.NotEqual(suite.T(), initialCursor, resCursor)
 		assert.GreaterOrEqual(suite.T(), len(resCollection), 20)
 
 		// test count with match, returns a non-empty array
 		opts = options.NewZScanOptionsBuilder().SetMatch("1*").SetCount(20)
 		resCursor, resCollection, err = client.ZScanWithOptions(key1, initialCursor, opts)
 		assert.NoError(suite.T(), err)
-		assert.NotEqual(suite.T(), initialCursor, resCursor.Value())
+		assert.NotEqual(suite.T(), initialCursor, resCursor)
 		assert.GreaterOrEqual(suite.T(), len(resCollection), 0)
 
 		// Test NoScores option for Redis 8.0.0+
@@ -5432,13 +5418,13 @@ func (suite *GlideTestSuite) TestZScan() {
 			opts = options.NewZScanOptionsBuilder().SetNoScores(true)
 			resCursor, resCollection, err = client.ZScanWithOptions(key1, initialCursor, opts)
 			assert.NoError(suite.T(), err)
-			cursor, err := strconv.ParseInt(resCursor.Value(), 10, 64)
+			cursor, err := strconv.ParseInt(resCursor, 10, 64)
 			assert.NoError(suite.T(), err)
 			assert.GreaterOrEqual(suite.T(), cursor, int64(0))
 
 			// Verify all fields start with "member"
 			for _, field := range resCollection {
-				assert.True(suite.T(), strings.HasPrefix(field.Value(), "member"))
+				assert.True(suite.T(), strings.HasPrefix(field, "member"))
 			}
 		}
 

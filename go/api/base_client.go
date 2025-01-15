@@ -484,27 +484,83 @@ func (client *baseClient) HIncrByFloat(key string, field string, increment float
 	return handleFloatResponse(result)
 }
 
-func (client *baseClient) HScan(key string, cursor string) (Result[string], []Result[string], error) {
+// Iterates fields of Hash types and their associated values. This definition of HSCAN command does not include the
+// optional arguments of the command.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the hash.
+//	cursor - The cursor that points to the next iteration of results. A value of "0" indicates the start of the search.
+//
+// Return value:
+//
+//		An array of the cursor and the subset of the hash held by `key`. The first element is always the `cursor`
+//	 for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the subset.
+//	 The second element is always an array of the subset of the set held in `key`. The array in the
+//	 second element is always a flattened series of String pairs, where the key is at even indices
+//	 and the value is at odd indices.
+//
+// Example:
+//
+//	 // Assume key contains a hash {{"a": "1"}, {"b", "2"}}
+//		resCursor, resCollection, err = client.HScan(key, initialCursor)
+//	 // resCursor = {0 false}
+//	 // resCollection = [{a false} {1 false} {b false} {2 false}]
+//
+// [valkey.io]: https://valkey.io/commands/hscan/
+func (client *baseClient) HScan(key string, cursor string) (string, []string, error) {
 	result, err := client.executeCommand(C.HScan, []string{key, cursor})
 	if err != nil {
-		return CreateNilStringResult(), nil, err
+		return "", nil, err
 	}
 	return handleScanResponse(result)
 }
 
+// Iterates fields of Hash types and their associated values. This definition of HSCAN includes optional arguments of the
+// command.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//		key - The key of the hash.
+//		cursor - The cursor that points to the next iteration of results. A value of "0" indicates the start of the search.
+//	 options - The [api.HashScanOptions].
+//
+// Return value:
+//
+//	An array of the cursor and the subset of the hash held by `key`. The first element is always the `cursor`
+//	for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the subset.
+//	The second element is always an array of the subset of the set held in `key`. The array in the
+//	second element is always a flattened series of String pairs, where the key is at even indices
+//	and the value is at odd indices.
+//
+// Example:
+//
+//	 // Assume key contains a hash {{"a": "1"}, {"b", "2"}}
+//		opts := options.NewHashScanOptionsBuilder().SetMatch("a")
+//		resCursor, resCollection, err = client.HScan(key, initialCursor, opts)
+//	 // resCursor = {0 false}
+//	 // resCollection = [{a false} {1 false}]
+//	 // The resCollection only contains the hash map entry that matches with the match option provided with the command
+//	 // input.
+//
+// [valkey.io]: https://valkey.io/commands/hscan/
 func (client *baseClient) HScanWithOptions(
 	key string,
 	cursor string,
 	options *options.HashScanOptions,
-) (Result[string], []Result[string], error) {
+) (string, []string, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return CreateNilStringResult(), nil, err
+		return "", nil, err
 	}
 
 	result, err := client.executeCommand(C.HScan, append([]string{key, cursor}, optionArgs...))
 	if err != nil {
-		return CreateNilStringResult(), nil, err
+		return "", nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -735,27 +791,107 @@ func (client *baseClient) SUnion(keys []string) (map[Result[string]]struct{}, er
 	return handleStringSetResponse(result)
 }
 
-func (client *baseClient) SScan(key string, cursor string) (Result[string], []Result[string], error) {
+// Iterates incrementally over a set.
+//
+// Note: When in cluster mode, all keys must map to the same hash slot.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the set.
+//	cursor - The cursor that points to the next iteration of results.
+//	         A value of `"0"` indicates the start of the search.
+//	         For Valkey 8.0 and above, negative cursors are treated like the initial cursor("0").
+//
+// Return value:
+//
+//	An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and
+//	for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the set.
+//	The second element is always an array of the subset of the set held in `key`.
+//
+// Example:
+//
+//		 // assume "key" contains a set
+//		 resCursor, resCol, err := client.sscan("key", "0")
+//	  fmt.Println("Cursor: ", resCursor)
+//	  fmt.Println("Members: ", resCol)
+//	  for resCursor != "0" {
+//		 	resCursor, resCol, err = client.sscan("key", "0")
+//	  	fmt.Println("Cursor: ", resCursor)
+//	  	fmt.Println("Members: ", resCol)
+//	  }
+//	  // Output:
+//		 // Cursor:  48
+//	  // Members:  ['3', '118', '120', '86', '76', '13', '61', '111', '55', '45']
+//	  // Cursor:  24
+//	  // Members:  ['38', '109', '11', '119', '34', '24', '40', '57', '20', '17']
+//	  // Cursor:  0
+//	  // Members:  ['47', '122', '1', '53', '10', '14', '80']
+//
+// [valkey.io]: https://valkey.io/commands/sscan/
+func (client *baseClient) SScan(key string, cursor string) (string, []string, error) {
 	result, err := client.executeCommand(C.SScan, []string{key, cursor})
 	if err != nil {
-		return CreateNilStringResult(), nil, err
+		return "", nil, err
 	}
 	return handleScanResponse(result)
 }
 
+// Iterates incrementally over a set.
+//
+// Note: When in cluster mode, all keys must map to the same hash slot.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the set.
+//	cursor - The cursor that points to the next iteration of results.
+//	         A value of `"0"` indicates the start of the search.
+//	         For Valkey 8.0 and above, negative cursors are treated like the initial cursor("0").
+//	options - [options.BaseScanOptions]
+//
+// Return value:
+//
+//	An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and
+//	for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the set.
+//	The second element is always an array of the subset of the set held in `key`.
+//
+// Example:
+//
+//		 // assume "key" contains a set
+//	  resCursor resCol, err := client.sscan("key", "0", opts)
+//	  fmt.Println("Cursor: ", resCursor)
+//	  fmt.Println("Members: ", resCol)
+//	  for resCursor != "0" {
+//	  	opts := options.NewBaseScanOptionsBuilder().SetMatch("*")
+//		 	resCursor, resCol, err = client.sscan("key", "0", opts)
+//	  	fmt.Println("Cursor: ", resCursor)
+//	  	fmt.Println("Members: ", resCol)
+//	  }
+//	  // Output:
+//		 // Cursor:  48
+//	  // Members:  ['3', '118', '120', '86', '76', '13', '61', '111', '55', '45']
+//	  // Cursor:  24
+//	  // Members:  ['38', '109', '11', '119', '34', '24', '40', '57', '20', '17']
+//	  // Cursor:  0
+//	  // Members:  ['47', '122', '1', '53', '10', '14', '80']
+//
+// [valkey.io]: https://valkey.io/commands/sscan/
 func (client *baseClient) SScanWithOptions(
 	key string,
 	cursor string,
 	options *options.BaseScanOptions,
-) (Result[string], []Result[string], error) {
+) (string, []string, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return CreateNilStringResult(), nil, err
+		return "", nil, err
 	}
 
 	result, err := client.executeCommand(C.SScan, append([]string{key, cursor}, optionArgs...))
 	if err != nil {
-		return CreateNilStringResult(), nil, err
+		return "", nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -2215,19 +2351,19 @@ func (client *baseClient) ZScore(key string, member string) (Result[float64], er
 //
 //	// assume "key" contains a set
 //	resCursor, resCol, err := client.ZScan("key", "0")
-//	fmt.Println(resCursor.Value())
-//	fmt.Println(resCol.Value())
+//	fmt.Println(resCursor)
+//	fmt.Println(resCol)
 //	for resCursor != "0" {
-//	  resCursor, resCol, err = client.ZScan("key", resCursor.Value())
-//	  fmt.Println("Cursor: ", resCursor.Value())
-//	  fmt.Println("Members: ", resCol.Value())
+//	  resCursor, resCol, err = client.ZScan("key", resCursor)
+//	  fmt.Println("Cursor: ", resCursor)
+//	  fmt.Println("Members: ", resCol)
 //	}
 //
 // [valkey.io]: https://valkey.io/commands/zscan/
-func (client *baseClient) ZScan(key string, cursor string) (Result[string], []Result[string], error) {
+func (client *baseClient) ZScan(key string, cursor string) (string, []string, error) {
 	result, err := client.executeCommand(C.ZScan, []string{key, cursor})
 	if err != nil {
-		return CreateNilStringResult(), nil, err
+		return "", nil, err
 	}
 	return handleScanResponse(result)
 }
@@ -2253,13 +2389,13 @@ func (client *baseClient) ZScan(key string, cursor string) (Result[string], []Re
 // Example:
 //
 //	resCursor, resCol, err := client.ZScanWithOptions("key", "0", options.NewBaseScanOptionsBuilder().SetMatch("*"))
-//	fmt.Println(resCursor.Value())
-//	fmt.Println(resCol.Value())
+//	fmt.Println(resCursor)
+//	fmt.Println(resCol)
 //	for resCursor != "0" {
-//	  resCursor, resCol, err = client.ZScanWithOptions("key", resCursor.Value(),
+//	  resCursor, resCol, err = client.ZScanWithOptions("key", resCursor,
 //		options.NewBaseScanOptionsBuilder().SetMatch("*"))
-//	  fmt.Println("Cursor: ", resCursor.Value())
-//	  fmt.Println("Members: ", resCol.Value())
+//	  fmt.Println("Cursor: ", resCursor)
+//	  fmt.Println("Members: ", resCol)
 //	}
 //
 // [valkey.io]: https://valkey.io/commands/zscan/
@@ -2267,15 +2403,15 @@ func (client *baseClient) ZScanWithOptions(
 	key string,
 	cursor string,
 	options *options.ZScanOptions,
-) (Result[string], []Result[string], error) {
+) (string, []string, error) {
 	optionArgs, err := options.ToArgs()
 	if err != nil {
-		return CreateNilStringResult(), nil, err
+		return "", nil, err
 	}
 
 	result, err := client.executeCommand(C.ZScan, append([]string{key, cursor}, optionArgs...))
 	if err != nil {
-		return CreateNilStringResult(), nil, err
+		return "", nil, err
 	}
 	return handleScanResponse(result)
 }
