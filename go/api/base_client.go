@@ -1419,9 +1419,9 @@ func (client *baseClient) XReadWithOptions(
 //
 // Parameters:
 //
-//	 group - The consumer group name.
-//	 consumer - The group consumer.
-//		keysAndIds - A map of keys and entry IDs to read from.
+//		 group - The consumer group name.
+//		 consumer - The group consumer.
+//	  keysAndIds - A map of keys and entry IDs to read from.
 //
 // Return value:
 // A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
@@ -1440,7 +1440,7 @@ func (client *baseClient) XReadWithOptions(
 //	    "1526985676425-0": {{"name", "Virginia"}, {"surname", "Woolf"}},
 //	    "1526985685298-0": nil,                                               // entry was deleted
 //	  },
-//	    "stream3": {},                                                        // stream is empty
+//	  "stream3": {},                                                          // stream is empty
 //	}
 //
 // [valkey.io]: https://valkey.io/commands/xreadgroup/
@@ -1462,10 +1462,10 @@ func (client *baseClient) XReadGroup(
 //
 // Parameters:
 //
-//	 group - The consumer group name.
-//	 consumer - The group consumer.
-//		keysAndIds - A map of keys and entry IDs to read from.
-//		options - Options detailing how to read the stream.
+//	group - The consumer group name.
+//	consumer - The group consumer.
+//	keysAndIds - A map of keys and entry IDs to read from.
+//	options - Options detailing how to read the stream.
 //
 // Return value:
 // A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
@@ -1485,7 +1485,7 @@ func (client *baseClient) XReadGroup(
 //	    "1526985676425-0": {{"name", "Virginia"}, {"surname", "Woolf"}},
 //	    "1526985685298-0": nil,                                               // entry was deleted
 //	  },
-//	    "stream3": {},                                                        // stream is empty
+//	  "stream3": {},                                                          // stream is empty
 //	}
 //
 // [valkey.io]: https://valkey.io/commands/xreadgroup/
