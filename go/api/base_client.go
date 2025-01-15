@@ -1645,7 +1645,7 @@ func (client *baseClient) XLen(key string) (int64, error) {
 //			options.NewXAddOptions().SetId(streamId1),
 //	 )
 //	 xDelResult, err := client.XDel("key1", []string{streamId1, streamId3})
-//	 fmt.Println(xDelResult.Value()) // Output: 1
+//	 fmt.Println(xDelResult) // Output: 1
 //
 // [valkey.io]: https://valkey.io/commands/xdel/
 func (client *baseClient) XDel(key string, ids []string) (int64, error) {
