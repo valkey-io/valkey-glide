@@ -1596,8 +1596,8 @@ func (client *baseClient) Persist(key string) (bool, error) {
 //		 	options.NewInfiniteScoreBoundary(options.PositiveInfinity),
 //		)
 //	 zCountResult, err := client.ZCount(key1, zCountRange)
-//	 if err!= nil {
-//	    // Print err
+//	 if err != nil {
+//	    // Handle err
 //	 }
 //	 fmt.Println(zCountResult) // Output: 3
 //
