@@ -1580,7 +1580,7 @@ func (client *baseClient) Persist(key string) (bool, error) {
 //	 key - The key of the set.
 //	 rangeOptions - Contains `min` and `max` score. `min` contains the minimum score to count from.
 //	 	`max` contains the maximum score to count up to. Can be positive/negative infinity, or
-//			specific score and inclusivity.
+//		specific score and inclusivity.
 //
 // Return value:
 //
