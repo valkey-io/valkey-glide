@@ -1965,11 +1965,17 @@ func (client *baseClient) XPending(key string, group string) (XPendingSummary, e
 //	result, err := client.XPending("myStream", "myGroup")
 //
 // [valkey.io]: https://valkey.io/commands/xpending/
-func (client *baseClient) XPendingWithOptions(key string, group string, opts *options.XPendingOptions) ([]XPendingDetail, error) {
-	result, err := client.executeCommand(C.XPending, []string{key, group})
+func (client *baseClient) XPendingWithOptions(
+	key string,
+	group string,
+	opts *options.XPendingOptions,
+) ([]XPendingDetail, error) {
+	optionArgs, _ := opts.ToArgs()
+	args := append([]string{key, group}, optionArgs...)
+
+	result, err := client.executeCommand(C.XPending, args)
 	if err != nil {
 		return nil, err
 	}
-
 	return handleXPendingDetailResponse(result)
 }

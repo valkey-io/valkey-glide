@@ -2,7 +2,9 @@
 
 package options
 
-import "strconv"
+import (
+	"strconv"
+)
 
 // Optional arguments to `XAdd` in [StreamCommands]
 type XPendingOptions struct {
@@ -14,8 +16,12 @@ type XPendingOptions struct {
 }
 
 // Create new empty `XPendingOptions`
-func NewXPendingOptions() *XPendingOptions {
-	return &XPendingOptions{}
+func NewXPendingOptions(start string, end string, count int64) *XPendingOptions {
+	options := &XPendingOptions{}
+	options.start = start
+	options.end = end
+	options.count = count
+	return options
 }
 
 func (xpo *XPendingOptions) SetMinIdleTime(minIdleTime int64) *XPendingOptions {
@@ -23,10 +29,8 @@ func (xpo *XPendingOptions) SetMinIdleTime(minIdleTime int64) *XPendingOptions {
 	return xpo
 }
 
-func (xpo *XPendingOptions) SetRange(start string, end string, count int64) *XPendingOptions {
-	xpo.start = start
-	xpo.end = end
-	xpo.count = count
+func (xpo *XPendingOptions) SetConsumer(consumer string) *XPendingOptions {
+	xpo.consumer = consumer
 	return xpo
 }
 
@@ -35,13 +39,13 @@ func (xpo *XPendingOptions) ToArgs() ([]string, error) {
 
 	if xpo.minIdleTime > 0 {
 		args = append(args, "IDLE")
-		args = append(args, "MINIDLETIME")
+		args = append(args, strconv.FormatInt(xpo.minIdleTime, 10))
 	}
-	if xpo.start != "" && xpo.end != "" && xpo.count > 0 {
-		args = append(args, xpo.start)
-		args = append(args, xpo.end)
-		args = append(args, strconv.FormatInt(xpo.count, 10))
-	}
+
+	args = append(args, xpo.start)
+	args = append(args, xpo.end)
+	args = append(args, strconv.FormatInt(xpo.count, 10))
+
 	if xpo.consumer != "" {
 		args = append(args, xpo.consumer)
 	}

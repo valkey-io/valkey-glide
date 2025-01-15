@@ -621,8 +621,17 @@ func handleXPendingSummaryResponse(response *C.struct_CommandResponse) (XPending
 
 	arr := slice.([]interface{})
 	NumOfMessages := arr[0].(int64)
-	StartId := CreateStringResult(arr[1].(string))
-	EndId := CreateStringResult(arr[2].(string))
+	var StartId, EndId Result[string]
+	if arr[1] == nil {
+		StartId = CreateNilStringResult()
+	} else {
+		StartId = CreateStringResult(arr[1].(string))
+	}
+	if arr[2] == nil {
+		EndId = CreateNilStringResult()
+	} else {
+		EndId = CreateStringResult(arr[2].(string))
+	}
 
 	if res, ok := arr[3].([]interface{}); ok {
 		ConsumerPendingMessages := CreateConsumerPendingMessagesResult(res)
@@ -649,28 +658,31 @@ func handleXPendingDetailResponse(response *C.struct_CommandResponse) ([]XPendin
 
 	// parse first level of array
 	slice, err := parseArray(response)
+	arr := slice.([]interface{})
+
 	if err != nil {
 		return make([]XPendingDetail, 0), err
 	}
 
-	switch detail := slice.(type) {
-	case []interface{}:
-		fmt.Printf("Type of detail: %s\n", reflect.TypeOf(detail))
-		// pendingDetails := make([]XPendingDetail, 0, len(detail))
-		// pDetail := XPendingDetail{
-		//     Id:            detail[0].(string),
-		//     ConsumerName:  detail[1].(string),
-		//     IdleTime:      detail[2].(int64),
-		//     DeliveryCount: detail[3].(int64),
-		// }
-		// pendingDetails = append(pendingDetails, pDetail)
+	pendingDetails := make([]XPendingDetail, 0, len(arr))
 
-	case []XPendingDetail:
-		fmt.Printf("Type of detail: %s\n", reflect.TypeOf(detail))
+	for _, message := range arr {
+		switch detail := message.(type) {
+		case []interface{}:
+			pDetail := XPendingDetail{
+				Id:            detail[0].(string),
+				ConsumerName:  detail[1].(string),
+				IdleTime:      detail[2].(int64),
+				DeliveryCount: detail[3].(int64),
+			}
+			pendingDetails = append(pendingDetails, pDetail)
 
-	default:
-		fmt.Printf("Type of detail: %s\n", reflect.TypeOf(detail))
+		case XPendingDetail:
+			pendingDetails = append(pendingDetails, detail)
+		default:
+			fmt.Printf("handleXPendingDetailResponse - unhandled type: %s\n", reflect.TypeOf(detail))
+		}
 	}
 
-	return make([]XPendingDetail, 0), nil
+	return pendingDetails, nil
 }
