@@ -600,6 +600,8 @@ func (node arrayConverter[T]) convert(data interface{}) (interface{}, error) {
 	return result, nil
 }
 
+// TODO: convert sets
+
 func handleXAutoClaimResponse(response *C.struct_CommandResponse) (*XAutoClaimResponse, error) {
 	defer C.free_command_response(response)
 	typeErr := checkResponseType(response, C.Array, false)
@@ -692,4 +694,38 @@ func handleXAutoClaimJustIdResponse(response *C.struct_CommandResponse) (*XAutoC
 		}
 	}
 	return &XAutoClaimJustIdResponse{arr[0].(string), claimedEntries, deletedMessages}, nil
+}
+
+func handleXReadResponse(response *C.struct_CommandResponse) (map[string]map[string][][]string, error) {
+	defer C.free_command_response(response)
+	data, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+	if data == nil {
+		return nil, nil
+	}
+
+	converters := mapConverter[map[string][][]string]{
+		mapConverter[[][]string]{
+			arrayConverter[[]string]{
+				arrayConverter[string]{
+					nil,
+					false,
+				},
+				false,
+			},
+			false,
+		},
+		false,
+	}
+
+	res, err := converters.convert(data)
+	if err != nil {
+		return nil, err
+	}
+	if result, ok := res.(map[string]map[string][][]string); ok {
+		return result, nil
+	}
+	return nil, &RequestError{fmt.Sprintf("unexpected type received: %T", res)}
 }

@@ -129,4 +129,10 @@ type StreamCommands interface {
 		start string,
 		options *options.XAutoClaimOptions,
 	) (*XAutoClaimJustIdResponse, error)
+
+	XRead(keysAndIds map[string]string) (map[string]map[string][][]string, error)
+
+	XReadWithOptions(keysAndIds map[string]string, options *options.XReadOptions) (map[string]map[string][][]string, error)
+
+	XDel(key string, ids []string) (int64, error)
 }
