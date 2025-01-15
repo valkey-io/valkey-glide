@@ -29,6 +29,11 @@ public final class SetOptions {
      */
     private final ConditionalSet conditionalSet;
 
+      /**
+     * Value to compare when <code>IFEQ comparison-value</code> is set.
+     */
+    private final String comparisonValue;
+
     /**
      * Set command to return the old string stored at <code>key</code>, or <code>null</code> if <code>
      * key</code> did not exist. An error is returned and <code>SET</code> aborted if the value stored
@@ -49,7 +54,13 @@ public final class SetOptions {
          * Only set the key if it does not already exist. Equivalent to <code>NX</code> in the Valkey
          * API.
          */
-        ONLY_IF_DOES_NOT_EXIST("NX");
+        ONLY_IF_DOES_NOT_EXIST("NX"),
+        /** 
+         * Only set the key if the current value equals the provided comparison value.
+         * Equivalent to <code>IFEQ comparison-value</code> in the Valkey API.
+         */
+        ONLY_IF_EQUAL("IFEQ");
+
 
         private final String valkeyApi;
     }
@@ -151,6 +162,12 @@ public final class SetOptions {
         List<String> optionArgs = new ArrayList<>();
         if (conditionalSet != null) {
             optionArgs.add(conditionalSet.valkeyApi);
+        }
+
+        // Add comparison value if ONLY_IF_EQUAL is selected
+        if (conditionalSet == ConditionalSet.ONLY_IF_EQUAL) {
+            assert comparisonValue != null : "comparisonValue must be set for ONLY_IF_EQUAL condition.";
+            optionArgs.add(comparisonValue);
         }
 
         if (returnOldValue) {
