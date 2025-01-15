@@ -4105,6 +4105,143 @@ func (suite *GlideTestSuite) TestXAddWithOptions() {
 	})
 }
 
+// submit args with custom command API, check that no error returned.
+// returns a response or raises `errMsg` if failed to submit the command.
+func sendWithCustomCommand(suite *GlideTestSuite, client api.BaseClient, args []string, errMsg string) any {
+	var res any
+	var err error
+	switch c := client.(type) {
+	case api.GlideClient:
+		res, err = c.CustomCommand(args)
+	case api.GlideClusterClient:
+		res, err = c.CustomCommand(args)
+	default:
+		suite.FailNow(errMsg)
+	}
+	assert.NoError(suite.T(), err)
+	return res
+}
+
+func (suite *GlideTestSuite) TestXAutoClaim() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		group := uuid.NewString()
+		consumer := uuid.NewString()
+
+		sendWithCustomCommand(
+			suite,
+			client,
+			[]string{"xgroup", "create", key, group, "0", "MKSTREAM"},
+			"Can't send XGROUP CREATE as a custom command",
+		)
+		sendWithCustomCommand(
+			suite,
+			client,
+			[]string{"xgroup", "createconsumer", key, group, consumer},
+			"Can't send XGROUP CREATECONSUMER as a custom command",
+		)
+
+		xadd, err := client.XAddWithOptions(
+			key,
+			[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
+			options.NewXAddOptions().SetId("0-1"),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "0-1", xadd.Value())
+		xadd, err = client.XAddWithOptions(
+			key,
+			[][]string{{"entry2_field1", "entry2_value1"}},
+			options.NewXAddOptions().SetId("0-2"),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "0-2", xadd.Value())
+
+		sendWithCustomCommand(
+			suite,
+			client,
+			[]string{"XREADGROUP", "GROUP", group, consumer, "STREAMS", key, ">"},
+			"Can't send XREADGROUP as a custom command",
+		)
+		// assert.Equal(suite.T(), map[string]map[string][][]string{
+		// 	key: {
+		// 		"0-1": {{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
+		// 		"0-2": {{"entry2_field1", "entry2_value1"}},
+		// 	},
+		// }, xreadgroup)
+
+		opts := options.NewXAutoClaimOptionsWithCount(1)                                      // struct{count int64}{count: 1}
+		xautoclaim, err := client.XAutoClaimWithOptions(key, group, consumer, 0, "0-0", opts) //&struct{count int64}{count: 1})
+		assert.NoError(suite.T(), err)
+		var deletedEntries []string
+		if suite.serverVersion >= "7.0.0" {
+			deletedEntries = []string{}
+		}
+		assert.Equal(
+			suite.T(),
+			&api.XAutoClaimResponse{
+				NextEntry: "0-2",
+				ClaimedEntries: map[string][][]string{
+					"0-1": {{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
+				},
+				DeletedMessages: deletedEntries,
+			},
+			xautoclaim,
+		)
+
+		justId, err := client.XAutoClaimJustId(key, group, consumer, 0, "0-0")
+		assert.NoError(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			&api.XAutoClaimJustIdResponse{
+				NextEntry:       "0-0",
+				ClaimedEntries:  []string{"0-1", "0-2"},
+				DeletedMessages: deletedEntries,
+			},
+			justId,
+		)
+
+		// add one more entry
+		xadd, err = client.XAddWithOptions(
+			key,
+			[][]string{{"entry3_field1", "entry3_value1"}},
+			options.NewXAddOptions().SetId("0-3"),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "0-3", xadd.Value())
+
+		// incorrect IDs - response is empty
+		xautoclaim, err = client.XAutoClaim(key, group, consumer, 0, "5-0")
+		assert.NoError(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			&api.XAutoClaimResponse{
+				NextEntry:       "0-0",
+				ClaimedEntries:  map[string][][]string{},
+				DeletedMessages: deletedEntries,
+			},
+			xautoclaim,
+		)
+
+		justId, err = client.XAutoClaimJustId(key, group, consumer, 0, "5-0")
+		assert.NoError(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			&api.XAutoClaimJustIdResponse{
+				NextEntry:       "0-0",
+				ClaimedEntries:  []string{},
+				DeletedMessages: deletedEntries,
+			},
+			justId,
+		)
+
+		// key exists, but it is not a stream
+		key2 := uuid.New().String()
+		suite.verifyOK(client.Set(key2, key2))
+		_, err = client.XAutoClaim(key2, "_", "_", 0, "_")
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
 func (suite *GlideTestSuite) TestZAddAndZAddIncr() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
