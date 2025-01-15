@@ -1783,3 +1783,38 @@ func (client *baseClient) XDel(key string, ids []string) (int64, error) {
 	}
 	return handleIntResponse(result)
 }
+
+// Returns the score of `member` in the sorted set stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	member - The member whose score is to be retrieved.
+//
+// Return value:
+//
+//	The score of the member. If `member` does not exist in the sorted set, `nil` is returned.
+//	If `key` does not exist, `nil` is returned.
+//
+// Example:
+//
+//	membersScores := map[string]float64{
+//		"one":   1.0,
+//		"two":   2.0,
+//		"three": 3.0,
+//	}
+//
+//	zAddResult, err := client.ZAdd("key1", membersScores)
+//	zScoreResult, err := client.ZScore("key1", "one")
+//	//fmt.Println(zScoreResult.Value()) // Value: 1.0
+//
+// [valkey.io]: https://valkey.io/commands/zscore/
+func (client *baseClient) ZScore(key string, member string) (Result[float64], error) {
+	result, err := client.executeCommand(C.ZScore, []string{key, member})
+	if err != nil {
+		return CreateNilFloat64Result(), err
+	}
+	return handleFloatOrNilResponse(result)
+}
