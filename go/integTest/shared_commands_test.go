@@ -4877,7 +4877,7 @@ func (suite *GlideTestSuite) TestZCount() {
 		_, err = client.ZCount(key2, zCountRange)
 		assert.NotNil(t, err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
-  })
+	})
 }
 
 func (suite *GlideTestSuite) Test_XDel() {
