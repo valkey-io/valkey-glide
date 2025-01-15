@@ -4801,6 +4801,85 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 	})
 }
 
+func (suite *GlideTestSuite) TestZCount() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.NewString()
+		key2 := uuid.NewString()
+		membersScores := map[string]float64{
+			"one":   1.0,
+			"two":   2.0,
+			"three": 3.0,
+		}
+		t := suite.T()
+		res1, err := client.ZAdd(key1, membersScores)
+		assert.Nil(t, err)
+		assert.Equal(t, int64(3), res1)
+
+		// In range negative to positive infinity.
+		zCountRange := options.NewZCountRangeBuilder(
+			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
+			options.NewInfiniteScoreBoundary(options.PositiveInfinity),
+		)
+		zCountResult, err := client.ZCount(key1, zCountRange)
+		assert.Nil(t, err)
+		assert.Equal(t, int64(3), zCountResult)
+		zCountRange = options.NewZCountRangeBuilder(
+			options.NewInclusiveScoreBoundary(math.Inf(-1)),
+			options.NewInclusiveScoreBoundary(math.Inf(+1)),
+		)
+		zCountResult, err = client.ZCount(key1, zCountRange)
+		assert.Nil(t, err)
+		assert.Equal(t, int64(3), zCountResult)
+
+		// In range 1 (exclusive) to 3 (inclusive)
+		zCountRange = options.NewZCountRangeBuilder(
+			options.NewScoreBoundary(1, false),
+			options.NewScoreBoundary(3, true),
+		)
+		zCountResult, err = client.ZCount(key1, zCountRange)
+		assert.Nil(t, err)
+		assert.Equal(t, int64(2), zCountResult)
+
+		// In range negative infinity to 3 (inclusive)
+		zCountRange = options.NewZCountRangeBuilder(
+			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
+			options.NewScoreBoundary(3, true),
+		)
+		zCountResult, err = client.ZCount(key1, zCountRange)
+		assert.Nil(t, err)
+		assert.Equal(t, int64(3), zCountResult)
+
+		// Incorrect range start > end
+		zCountRange = options.NewZCountRangeBuilder(
+			options.NewInfiniteScoreBoundary(options.PositiveInfinity),
+			options.NewInclusiveScoreBoundary(3),
+		)
+		zCountResult, err = client.ZCount(key1, zCountRange)
+		assert.Nil(t, err)
+		assert.Equal(t, int64(0), zCountResult)
+
+		// Non-existing key
+		zCountRange = options.NewZCountRangeBuilder(
+			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
+			options.NewInfiniteScoreBoundary(options.PositiveInfinity),
+		)
+		zCountResult, err = client.ZCount("non_existing_key", zCountRange)
+		assert.Nil(t, err)
+		assert.Equal(t, int64(0), zCountResult)
+
+		// Key exists, but it is not a set
+		setResult, _ := client.Set(key2, "value")
+		assert.Equal(t, setResult, "OK")
+		zCountRange = options.NewZCountRangeBuilder(
+			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
+			options.NewInfiniteScoreBoundary(options.PositiveInfinity),
+		)
+		_, err = client.ZCount(key2, zCountRange)
+		assert.NotNil(t, err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
 func (suite *GlideTestSuite) Test_XDel() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key1 := uuid.NewString()

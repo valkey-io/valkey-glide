@@ -1571,6 +1571,49 @@ func (client *baseClient) Persist(key string) (bool, error) {
 	return handleBoolResponse(result)
 }
 
+// Returns the number of members in the sorted set stored at `key` with scores between `min` and `max` score.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	 key - The key of the set.
+//	 rangeOptions - Contains `min` and `max` score. `min` contains the minimum score to count from.
+//	 	`max` contains the maximum score to count up to. Can be positive/negative infinity, or
+//		specific score and inclusivity.
+//
+// Return value:
+//
+//	The number of members in the specified score range.
+//
+// Example:
+//
+//	 key1 := uuid.NewString()
+//	 membersScores := map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0 }
+//	 zAddResult, err := client.ZAdd(key1, membersScores)
+//	 zCountRange := options.NewZCountRangeBuilder(
+//			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
+//		 	options.NewInfiniteScoreBoundary(options.PositiveInfinity),
+//		)
+//	 zCountResult, err := client.ZCount(key1, zCountRange)
+//	 if err != nil {
+//	    // Handle err
+//	 }
+//	 fmt.Println(zCountResult) // Output: 3
+//
+// [valkey.io]: https://valkey.io/commands/zcount/
+func (client *baseClient) ZCount(key string, rangeOptions *options.ZCountRange) (int64, error) {
+	zCountRangeArgs, err := rangeOptions.ToArgs()
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	result, err := client.executeCommand(C.ZCount, append([]string{key}, zCountRangeArgs...))
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
 func (client *baseClient) ZRank(key string, member string) (Result[int64], error) {
 	result, err := client.executeCommand(C.ZRank, []string{key, member})
 	if err != nil {
