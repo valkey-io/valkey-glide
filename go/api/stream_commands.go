@@ -24,4 +24,8 @@ type StreamCommands interface {
 	XReadWithOptions(keysAndIds map[string]string, options *options.XReadOptions) (map[string]map[string][][]string, error)
 
 	XDel(key string, ids []string) (int64, error)
+
+	XPending(key string, group string) (XPendingSummary, error)
+
+	XPendingWithOptions(key string, group string, options *options.XPendingOptions) ([]XPendingDetail, error)
 }
