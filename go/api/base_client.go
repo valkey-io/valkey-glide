@@ -1927,15 +1927,15 @@ func (client *baseClient) ZScanWithOptions(
 //
 // Example
 //
-//	 result, err := client.XPending("myStream", "myGroup")
-//	 if err != nil {
-//	   return err
-//		}
-//		fmt.Println("Number of pending messages: ", result.NumOfMessages)
-//		fmt.Println("Start and End ID of messages: ", result.StartId, result.EndId)
-//		for _, consumer := range result.ConsumerMessages {
-//		  fmt.Printf("Consumer messages:  %s: $v\n", consumer.ConsumerName, consumer.MessageCount)
-//		}
+//	result, err := client.XPending("myStream", "myGroup")
+//	if err != nil {
+//	  return err
+//	}
+//	fmt.Println("Number of pending messages: ", result.NumOfMessages)
+//	fmt.Println("Start and End ID of messages: ", result.StartId, result.EndId)
+//	for _, consumer := range result.ConsumerMessages {
+//	  fmt.Printf("Consumer messages:  %s: $v\n", consumer.ConsumerName, consumer.MessageCount)
+//	}
 //
 // [valkey.io]: https://valkey.io/commands/xpending/
 func (client *baseClient) XPending(key string, group string) (XPendingSummary, error) {
@@ -1970,18 +1970,18 @@ func (client *baseClient) XPending(key string, group string) (XPendingSummary, e
 //
 // Example
 //
-//	  detailResult, err := client.XPendingWithOptions(key, groupName, options.NewXPendingOptions("-", "+", 10))
-//			if err != nil {
-//		   return err
-//		 }
-//		 fmt.Println("=========================")
-//		 for _, detail := range detailResult {
-//		   fmt.Println(detail.Id)
-//		   fmt.Println(detail.ConsumerName)
-//		   fmt.Println(detail.IdleTime)
-//		   fmt.Println(detail.DeliveryCount)
-//		   fmt.Println("=========================")
-//		 }
+//	detailResult, err := client.XPendingWithOptions(key, groupName, options.NewXPendingOptions("-", "+", 10))
+//	if err != nil {
+//	  return err
+//	}
+//	fmt.Println("=========================")
+//	for _, detail := range detailResult {
+//	  fmt.Println(detail.Id)
+//	  fmt.Println(detail.ConsumerName)
+//	  fmt.Println(detail.IdleTime)
+//	  fmt.Println(detail.DeliveryCount)
+//	  fmt.Println("=========================")
+//	}
 //
 // [valkey.io]: https://valkey.io/commands/xpending/
 func (client *baseClient) XPendingWithOptions(

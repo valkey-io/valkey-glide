@@ -159,7 +159,7 @@ type XPendingOptions struct {
 	consumer    string
 }
 
-// Create new empty `XPendingOptions`
+// Create new empty `XPendingOptions`. The `start`, `end` and `count` arguments are required.
 func NewXPendingOptions(start string, end string, count int64) *XPendingOptions {
 	options := &XPendingOptions{}
 	options.start = start
@@ -181,6 +181,7 @@ func (xpo *XPendingOptions) SetConsumer(consumer string) *XPendingOptions {
 func (xpo *XPendingOptions) ToArgs() ([]string, error) {
 	args := []string{}
 
+	// if minIdleTime is set, we need to add an `IDLE` argument along with the minIdleTime
 	if xpo.minIdleTime > 0 {
 		args = append(args, "IDLE")
 		args = append(args, utils.IntToString(xpo.minIdleTime))
