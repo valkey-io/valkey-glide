@@ -5271,18 +5271,18 @@ func (suite *GlideTestSuite) TestWait() {
 		assert.True(suite.T(), resultInt64.Value() >= 2)
 
 		// Test 2: Invalid numberOfReplicas (0)
-		resultInt64, err = client.Wait(0, 2000)
+		_, err = client.Wait(0, 2000)
 
 		// Assert error and message for invalid number of replicas
 		assert.NotNil(suite.T(), err)
-		assert.Equal(suite.T(), "Number of Replicas should be greater than 0", err.Error())
+		assert.Equal(suite.T(), "number of replicas should be greater than 0", err.Error())
 
 		// Test 3: Invalid timeout (negative)
-		resultInt64, err = client.Wait(2, -1)
+		_, err = client.Wait(2, -1)
 
 		// Assert error and message for invalid timeout
 		assert.NotNil(suite.T(), err)
-		assert.Equal(suite.T(), "Timeout cannot be lesser than 0", err.Error())
+		assert.Equal(suite.T(), "timeout cannot be lesser than 0", err.Error())
 	})
 }
 
