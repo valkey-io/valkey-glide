@@ -74,7 +74,7 @@ jobs:
               with:
                   repository: "oss-review-toolkit/ort"
                   path: "./ort"
-                  ref: "44.0.0"
+                  ref: "26.0.0"
                   submodules: recursive
 
             - name: Install Rust toolchain
