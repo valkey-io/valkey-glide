@@ -1575,16 +1575,16 @@ func (client *baseClient) BZPopMin(keys []string, timeoutSecs float64) (Result[K
 //
 // Example:
 //
-//		// Retrieve all members of a sorted set in ascending order
-//		result, err := client.ZRange("my_sorted_set", options.NewRangeByIndexQuery(0, -1))
+//	// Retrieve all members of a sorted set in ascending order
+//	result, err := client.ZRange("my_sorted_set", options.NewRangeByIndexQuery(0, -1))
 //
-//		// Retrieve members within a score range in descending order
-//	 query := options.NewRangeByScoreQuery(
-//	     options.NewScoreBoundary(3, false),
-//	     options.NewInfiniteScoreBoundary(options.NegativeInfinity)).
-//	   SetReverse()
-//		result, err := client.ZRange("my_sorted_set", query)
-//		// `result` contains members which have scores within the range of negative infinity to 3, in descending order
+//	// Retrieve members within a score range in descending order
+//	query := options.NewRangeByScoreQuery(
+//	    options.NewScoreBoundary(3, false),
+//	    options.NewInfiniteScoreBoundary(options.NegativeInfinity)).
+//	  SetReverse()
+//	result, err := client.ZRange("my_sorted_set", query)
+//	// `result` contains members which have scores within the range of negative infinity to 3, in descending order
 //
 // [valkey.io]: https://valkey.io/commands/zrange/
 func (client *baseClient) ZRange(key string, rangeQuery options.ZRangeQuery) ([]string, error) {
@@ -1618,16 +1618,16 @@ func (client *baseClient) ZRange(key string, rangeQuery options.ZRangeQuery) ([]
 //
 // Example:
 //
-//		// Retrieve all members of a sorted set in ascending order
-//		result, err := client.ZRangeWithScores("my_sorted_set", options.NewRangeByIndexQuery(0, -1))
+//	// Retrieve all members of a sorted set in ascending order
+//	result, err := client.ZRangeWithScores("my_sorted_set", options.NewRangeByIndexQuery(0, -1))
 //
-//		// Retrieve members within a score range in descending order
-//	 query := options.NewRangeByScoreQuery(
-//	     options.NewScoreBoundary(3, false),
-//	     options.NewInfiniteScoreBoundary(options.NegativeInfinity)).
-//	   SetReverse()
-//		result, err := client.ZRangeWithScores("my_sorted_set", query)
-//		// `result` contains members with scores within the range of negative infinity to 3, in descending order
+//	// Retrieve members within a score range in descending order
+//	query := options.NewRangeByScoreQuery(
+//	    options.NewScoreBoundary(3, false),
+//	    options.NewInfiniteScoreBoundary(options.NegativeInfinity)).
+//	  SetReverse()
+//	result, err := client.ZRangeWithScores("my_sorted_set", query)
+//	// `result` contains members with scores within the range of negative infinity to 3, in descending order
 //
 // [valkey.io]: https://valkey.io/commands/zrange/
 func (client *baseClient) ZRangeWithScores(
