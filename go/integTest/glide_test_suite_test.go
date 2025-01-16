@@ -13,9 +13,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jamesx-improving/valkey-glide/go/api"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"github.com/valkey-io/valkey-glide/go/glide/api"
 	"github.com/valkey-io/valkey-glide/go/glide/api/config"
 )
 

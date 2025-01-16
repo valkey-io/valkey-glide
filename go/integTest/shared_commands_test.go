@@ -11,10 +11,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jamesx-improving/valkey-glide/go/api"
+	"github.com/jamesx-improving/valkey-glide/go/api/options"
 	"github.com/stretchr/testify/assert"
-	"github.com/valkey-io/valkey-glide/go/glide/api"
 	"github.com/valkey-io/valkey-glide/go/glide/api/errors"
-	"github.com/valkey-io/valkey-glide/go/glide/api/options"
 )
 
 const (
