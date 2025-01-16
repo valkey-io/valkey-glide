@@ -5219,7 +5219,7 @@ func (suite *GlideTestSuite) TestXPending() {
 		// each use of CustomCommand would make the tests difficult to read and maintain. These tests can be
 		// collapsed once the native commands are added in a subsequent release.
 
-		execStandalone := func(client *api.GlideClient) {
+		execStandalone := func(client api.GlideClient) {
 			// 1. Arrange the data
 			key := uuid.New().String()
 			groupName := "group" + uuid.New().String()
@@ -5297,7 +5297,7 @@ func (suite *GlideTestSuite) TestXPending() {
 			//
 		}
 
-		execCluster := func(client *api.GlideClusterClient) {
+		execCluster := func(client api.GlideClusterClient) {
 			// 1. Arrange the data
 			key := uuid.New().String()
 			groupName := "group" + uuid.New().String()
@@ -5381,9 +5381,9 @@ func (suite *GlideTestSuite) TestXPending() {
 		// this is only needed in order to be able to use custom commands.
 		// Once the native commands are added, this logic will be refactored.
 		switch c := client.(type) {
-		case *api.GlideClient:
+		case api.GlideClient:
 			execStandalone(c)
-		case *api.GlideClusterClient:
+		case api.GlideClusterClient:
 			execCluster(c)
 		}
 	})
@@ -5399,7 +5399,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 		// each use of CustomCommand would make the tests difficult to read and maintain. These tests can be
 		// collapsed once the native commands are added in a subsequent release.
 
-		execStandalone := func(client *api.GlideClient) {
+		execStandalone := func(client api.GlideClient) {
 			// 1. Arrange the data
 			key := uuid.New().String()
 			missingKey := uuid.New().String()
@@ -5553,7 +5553,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 
 		}
 
-		execCluster := func(client *api.GlideClusterClient) {
+		execCluster := func(client api.GlideClusterClient) {
 			// 1. Arrange the data
 			key := uuid.New().String()
 			missingKey := uuid.New().String()
@@ -5713,9 +5713,9 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 		// this is only needed in order to be able to use custom commands.
 		// Once the native commands are added, this logic will be refactored.
 		switch c := client.(type) {
-		case *api.GlideClient:
+		case api.GlideClient:
 			execStandalone(c)
-		case *api.GlideClusterClient:
+		case api.GlideClusterClient:
 			execCluster(c)
 		}
 	})
