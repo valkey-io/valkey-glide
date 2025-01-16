@@ -5550,7 +5550,6 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			assert.Error(suite.T(), err)
 			assert.IsType(suite.T(), &api.RequestError{}, err)
 			assert.True(suite.T(), strings.Contains(err.Error(), "WRONGTYPE"))
-
 		}
 
 		execCluster := func(client api.GlideClusterClient) {
@@ -5704,7 +5703,6 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			assert.Error(suite.T(), err)
 			assert.IsType(suite.T(), &api.RequestError{}, err)
 			assert.True(suite.T(), strings.Contains(err.Error(), "WRONGTYPE"))
-
 		}
 
 		assert.Equal(suite.T(), "OK", "OK")
