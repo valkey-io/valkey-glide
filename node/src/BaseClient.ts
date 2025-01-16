@@ -647,6 +647,17 @@ export interface BaseClientConfiguration {
      * ```
      */
     clientAz?: string;
+    /**
+     * Configs for OpenTelemetry if exits.
+     */
+    openTelemetryConfigs?: {
+        collectorEndPoint: string;
+        /**
+         * The duration in milliseconds the data will export to the collector.
+         * If interval isn't supplied, 500 will be used
+         */
+        spanFlushInterval?: number;
+    }
 }
 
 /**
