@@ -46,14 +46,10 @@ type HashCommands interface {
 	//
 	// For example:
 	//  fieldValueMap, err := client.HGetAll("my_hash")
-	//  // field1 equals api.CreateStringResult("field1")
-	//  // value1 equals api.CreateStringResult("value1")
-	//  // field2 equals api.CreateStringResult("field2")
-	//  // value2 equals api.CreateStringResult("value2")
-	//  // fieldValueMap equals map[api.Result[string]]api.Result[string]{field1: value1, field2: value2}
+	//  // fieldValueMap equals map[string]string{field1: value1, field2: value2}
 	//
 	// [valkey.io]: https://valkey.io/commands/hgetall/
-	HGetAll(key string) (map[Result[string]]Result[string], error)
+	HGetAll(key string) (map[string]string, error)
 
 	// HMGet returns the values associated with the specified fields in the hash stored at key.
 	//
