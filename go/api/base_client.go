@@ -1924,7 +1924,7 @@ func (client *baseClient) RestoreWithOptions(key string, ttl int64,
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	return handleStringOrNullResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
 func (client *baseClient) Dump(key string) (Result[string], error) {
@@ -1932,7 +1932,7 @@ func (client *baseClient) Dump(key string) (Result[string], error) {
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	return handleStringOrNullResponse(result)
+	return handleStringOrNilResponse(result)
 }
 
 func (client *baseClient) ObjectEncoding(key string) (Result[string], error) {
@@ -1940,5 +1940,5 @@ func (client *baseClient) ObjectEncoding(key string) (Result[string], error) {
 	if err != nil {
 		return CreateNilStringResult(), err
 	}
-	return handleStringOrNullResponse(result)
+	return handleStringOrNilResponse(result)
 }
