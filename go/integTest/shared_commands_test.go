@@ -5249,7 +5249,7 @@ func (suite *GlideTestSuite) TestXPending() {
 			assert.NoError(suite.T(), err)
 
 			command = []string{"XReadGroup", "GROUP", groupName, consumer1, "STREAMS", key, ">"}
-			resp, err = client.CustomCommand(command)
+			_, err = client.CustomCommand(command)
 			assert.NoError(suite.T(), err)
 
 			_, err = client.XAdd(key, [][]string{{"field3", "value3"}})
