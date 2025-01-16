@@ -5220,7 +5220,7 @@ func (suite *GlideTestSuite) TestObjectIdleTime() {
 		keyValueMap := map[string]string{
 			"maxmemory-policy": "noeviction",
 		}
-		assert.verifyOK(defaultClient.ConfigSet(keyValueMap))
+		suite.verifyOK(defaultClient.ConfigSet(keyValueMap))
 		resultGet, err := defaultClient.Get(key)
 		assert.Nil(t, err)
 		assert.Equal(t, value, resultGet.Value())
