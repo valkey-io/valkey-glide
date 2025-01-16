@@ -1925,10 +1925,10 @@ func (client *baseClient) GetBit(key string, offset int64) (Result[int64], error
 
 func (client *baseClient) Wait(numberOfReplicas int64, timeout int64) (Result[int64], error) {
 	if numberOfReplicas <= 0 {
-		return CreateNilInt64Result(), fmt.Errorf("Number of Replicas should be greater than 0")
+		return CreateNilInt64Result(), fmt.Errorf("number of replicas should be greater than 0")
 	}
 	if timeout < 0 {
-		return CreateNilInt64Result(), fmt.Errorf("Timeout cannot be lesser than 0")
+		return CreateNilInt64Result(), fmt.Errorf("timeout cannot be lesser than 0")
 	}
 	result, err := client.executeCommand(C.Wait, []string{utils.IntToString(numberOfReplicas), utils.IntToString(timeout)})
 	if err != nil {
