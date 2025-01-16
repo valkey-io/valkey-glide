@@ -1931,7 +1931,6 @@ func (client *baseClient) ObjectFreq(key string) (Result[int64], error) {
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}
-
 	return handleLongResponse(result)
 }
 
@@ -1959,7 +1958,6 @@ func (client *baseClient) ObjectIdleTime(key string) (Result[int64], error) {
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}
-
 	return handleLongResponse(result)
 }
 
@@ -1988,6 +1986,5 @@ func (client *baseClient) ObjectRefCount(key string) (Result[int64], error) {
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}
-
 	return handleLongResponse(result)
 }
