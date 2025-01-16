@@ -49,6 +49,7 @@ struct BuilderParams {
     response_timeout: Option<Duration>,
     protocol: ProtocolVersion,
     pubsub_subscriptions: Option<PubSubSubscriptionInfo>,
+    // open_telemetry_configs: Option<GlideOpenTelemetry>,
 }
 
 #[derive(Clone)]
