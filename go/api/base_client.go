@@ -1931,7 +1931,7 @@ func (client *baseClient) ObjectFreq(key string) (Result[int64], error) {
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}
-	return handleLongAndDoubleOrNullResponse(result)
+	return handleIntOrNilResponse(result)
 }
 
 // Returns the logarithmic access frequency counter of a Valkey object stored at key.
@@ -1958,7 +1958,7 @@ func (client *baseClient) ObjectIdleTime(key string) (Result[int64], error) {
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}
-	return handleLongAndDoubleOrNullResponse(result)
+	return handleIntOrNilResponse(result)
 }
 
 // Returns the reference count of the object stored at key.
@@ -1986,5 +1986,5 @@ func (client *baseClient) ObjectRefCount(key string) (Result[int64], error) {
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}
-	return handleLongAndDoubleOrNullResponse(result)
+	return handleIntOrNilResponse(result)
 }
