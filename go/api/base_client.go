@@ -1905,3 +1905,11 @@ func (client *baseClient) ZScanWithOptions(
 	}
 	return handleScanResponse(result)
 }
+
+func (client *baseClient) Time() ([]Result[string], error) {
+	result, err := client.executeCommand(C.Time, []string{})
+	if err != nil {
+		return nil, err
+	}
+	return handleStringArrayResponse(result)
+}

@@ -61,4 +61,18 @@ type ServerManagementCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/config-set/
 	ConfigSet(parameters map[string]string) (string, error)
+
+	// Returns the server time.
+	//
+	// Return value:
+	// The current server time as a String array with two elements:
+	// A UNIX TIME and the amount of microseconds already elapsed in the current second.
+	// The returned array is in a [UNIX TIME, Microseconds already elapsed] format.
+	//
+	// For example:
+	//	result, err := client.Time()
+	//	result: [{1737051660 false} {994688 false}]
+	//
+	// [valkey.io]: https://valkey.io/commands/time/
+	Time() ([]Result[string], error)
 }

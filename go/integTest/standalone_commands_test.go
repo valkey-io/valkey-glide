@@ -4,6 +4,7 @@ package integTest
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
@@ -272,4 +273,39 @@ func (suite *GlideTestSuite) TestSelect_SwitchBetweenDatabases() {
 	result, err = client.Get(key2)
 	assert.Nil(suite.T(), err)
 	assert.Equal(suite.T(), value2, result.Value())
+}
+
+func (suite *GlideTestSuite) TestTime_Success() {
+	client := suite.defaultClient()
+
+	results, err := client.Time()
+	assert.Nil(suite.T(), err)
+	assert.Len(suite.T(), results, 2)
+
+	timestamp := results[0].Value()
+	microseconds := results[1].Value()
+
+	// Validate Unix timestamp
+	if _, err := strconv.ParseInt(timestamp, 10, 64); err != nil {
+		suite.T().Fatalf("Expected a valid Unix timestamp but got %s", timestamp)
+	}
+
+	// Validate microseconds
+	microsecondsInt, err := strconv.ParseInt(microseconds, 10, 64)
+	if err != nil || microsecondsInt < 0 || microsecondsInt >= 1000000 {
+		suite.T().Fatalf("Expected a valid microseconds value between 0 and 999999 but got %s", microseconds)
+	}
+}
+
+func (suite *GlideTestSuite) TestTime_Error() {
+	client := suite.defaultClient()
+
+	// Disconnect the client or simulate an error condition
+	client.Close()
+
+	results, err := client.Time()
+
+	assert.NotNil(suite.T(), err)
+	assert.Nil(suite.T(), results)
+	assert.IsType(suite.T(), &api.ClosingError{}, err)
 }
