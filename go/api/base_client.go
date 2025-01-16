@@ -1324,6 +1324,91 @@ func (client *baseClient) XAddWithOptions(
 	return handleStringOrNilResponse(result)
 }
 
+// Reads entries from the given streams.
+//
+// Note:
+//
+//	When in cluster mode, all keys in `keysAndIds` must map to the same hash slot.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	keysAndIds - A map of keys and entry IDs to read from.
+//
+// Return value:
+// A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
+// a key does not exist or does not contain requiested entries.
+//
+// For example:
+//
+//	result, err := client.XRead({"stream1": "0-0", "stream2": "0-1"})
+//	err == nil: true
+//	result: map[string]map[string][][]string{
+//	  "stream1": {"0-1": {{"field1", "value1"}}, "0-2": {{"field2", "value2"}, {"field2", "value3"}}},
+//	  "stream2": {},
+//	}
+//
+// [valkey.io]: https://valkey.io/commands/xread/
+func (client *baseClient) XRead(keysAndIds map[string]string) (map[string]map[string][][]string, error) {
+	return client.XReadWithOptions(keysAndIds, options.NewXReadOptions())
+}
+
+// Reads entries from the given streams.
+//
+// Note:
+//
+//	When in cluster mode, all keys in `keysAndIds` must map to the same hash slot.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	keysAndIds - A map of keys and entry IDs to read from.
+//	options - Options detailing how to read the stream.
+//
+// Return value:
+// A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
+// a key does not exist or does not contain requiested entries.
+//
+// For example:
+//
+//	options := options.NewXReadOptions().SetBlock(100500)
+//	result, err := client.XReadWithOptions({"stream1": "0-0", "stream2": "0-1"}, options)
+//	err == nil: true
+//	result: map[string]map[string][][]string{
+//	  "stream1": {"0-1": {{"field1", "value1"}}, "0-2": {{"field2", "value2"}, {"field2", "value3"}}},
+//	  "stream2": {},
+//	}
+//
+// [valkey.io]: https://valkey.io/commands/xread/
+func (client *baseClient) XReadWithOptions(
+	keysAndIds map[string]string,
+	options *options.XReadOptions,
+) (map[string]map[string][][]string, error) {
+	args := make([]string, 0, 5+2*len(keysAndIds))
+	optionArgs, _ := options.ToArgs()
+	args = append(args, optionArgs...)
+
+	// Note: this loop iterates in an indeterminate order, but it is OK for that case
+	keys := make([]string, 0, len(keysAndIds))
+	values := make([]string, 0, len(keysAndIds))
+	for key := range keysAndIds {
+		keys = append(keys, key)
+		values = append(values, keysAndIds[key])
+	}
+	args = append(args, "STREAMS")
+	args = append(args, keys...)
+	args = append(args, values...)
+
+	result, err := client.executeCommand(C.XRead, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleXReadResponse(result)
+}
+
 func (client *baseClient) ZAdd(
 	key string,
 	membersScoreMap map[string]float64,
@@ -1571,6 +1656,49 @@ func (client *baseClient) Persist(key string) (bool, error) {
 	return handleBoolResponse(result)
 }
 
+// Returns the number of members in the sorted set stored at `key` with scores between `min` and `max` score.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	 key - The key of the set.
+//	 rangeOptions - Contains `min` and `max` score. `min` contains the minimum score to count from.
+//	 	`max` contains the maximum score to count up to. Can be positive/negative infinity, or
+//		specific score and inclusivity.
+//
+// Return value:
+//
+//	The number of members in the specified score range.
+//
+// Example:
+//
+//	 key1 := uuid.NewString()
+//	 membersScores := map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0 }
+//	 zAddResult, err := client.ZAdd(key1, membersScores)
+//	 zCountRange := options.NewZCountRangeBuilder(
+//			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
+//		 	options.NewInfiniteScoreBoundary(options.PositiveInfinity),
+//		)
+//	 zCountResult, err := client.ZCount(key1, zCountRange)
+//	 if err != nil {
+//	    // Handle err
+//	 }
+//	 fmt.Println(zCountResult) // Output: 3
+//
+// [valkey.io]: https://valkey.io/commands/zcount/
+func (client *baseClient) ZCount(key string, rangeOptions *options.ZCountRange) (int64, error) {
+	zCountRangeArgs, err := rangeOptions.ToArgs()
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	result, err := client.executeCommand(C.ZCount, append([]string{key}, zCountRangeArgs...))
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
 func (client *baseClient) ZRank(key string, member string) (Result[int64], error) {
 	result, err := client.executeCommand(C.ZRank, []string{key, member})
 	if err != nil {
@@ -1621,4 +1749,159 @@ func (client *baseClient) XLen(key string) (int64, error) {
 		return defaultIntResponse, err
 	}
 	return handleIntResponse(result)
+}
+
+// Removes the specified entries by id from a stream, and returns the number of entries deleted.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the stream.
+//	ids - An array of entry ids.
+//
+// Return value:
+//
+//	The number of entries removed from the stream. This number may be less than the number
+//	of entries in `ids`, if the specified `ids` don't exist in the stream.
+//
+// For example:
+//
+//	 xAddResult, err := client.XAddWithOptions(
+//		"key1",
+//	 	[][]string{{"f1", "foo1"}, {"f2", "bar2"}},
+//		options.NewXAddOptions().SetId(streamId1),
+//	 )
+//	 xDelResult, err := client.XDel("key1", []string{streamId1, streamId3})
+//	 fmt.Println(xDelResult) // Output: 1
+//
+// [valkey.io]: https://valkey.io/commands/xdel/
+func (client *baseClient) XDel(key string, ids []string) (int64, error) {
+	result, err := client.executeCommand(C.XDel, append([]string{key}, ids...))
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
+// Returns the score of `member` in the sorted set stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	member - The member whose score is to be retrieved.
+//
+// Return value:
+//
+//	The score of the member. If `member` does not exist in the sorted set, `nil` is returned.
+//	If `key` does not exist, `nil` is returned.
+//
+// Example:
+//
+//	membersScores := map[string]float64{
+//		"one":   1.0,
+//		"two":   2.0,
+//		"three": 3.0,
+//	}
+//
+//	zAddResult, err := client.ZAdd("key1", membersScores)
+//	zScoreResult, err := client.ZScore("key1", "one")
+//	//fmt.Println(zScoreResult.Value()) // Value: 1.0
+//
+// [valkey.io]: https://valkey.io/commands/zscore/
+func (client *baseClient) ZScore(key string, member string) (Result[float64], error) {
+	result, err := client.executeCommand(C.ZScore, []string{key, member})
+	if err != nil {
+		return CreateNilFloat64Result(), err
+	}
+	return handleFloatOrNilResponse(result)
+}
+
+// Iterates incrementally over a sorted set.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	cursor - The cursor that points to the next iteration of results.
+//	         A value of `"0"` indicates the start of the search.
+//	         For Valkey 8.0 and above, negative cursors are treated like the initial cursor("0").
+//
+// Return value:
+//
+//	The first return value is the `cursor` for the next iteration of results. `"0"` will be the `cursor`
+//	   returned on the last iteration of the sorted set.
+//	The second return value is always an array of the subset of the sorted set held in `key`.
+//	The array is a flattened series of `string` pairs, where the value is at even indices and the score is at odd indices.
+//
+// Example:
+//
+//	// assume "key" contains a set
+//	resCursor, resCol, err := client.ZScan("key", "0")
+//	fmt.Println(resCursor.Value())
+//	fmt.Println(resCol.Value())
+//	for resCursor != "0" {
+//	  resCursor, resCol, err = client.ZScan("key", resCursor.Value())
+//	  fmt.Println("Cursor: ", resCursor.Value())
+//	  fmt.Println("Members: ", resCol.Value())
+//	}
+//
+// [valkey.io]: https://valkey.io/commands/zscan/
+func (client *baseClient) ZScan(key string, cursor string) (Result[string], []Result[string], error) {
+	result, err := client.executeCommand(C.ZScan, []string{key, cursor})
+	if err != nil {
+		return CreateNilStringResult(), nil, err
+	}
+	return handleScanResponse(result)
+}
+
+// Iterates incrementally over a sorted set.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	cursor - The cursor that points to the next iteration of results.
+//	options - The options for the command. See [options.ZScanOptions] for details.
+//
+// Return value:
+//
+//	The first return value is the `cursor` for the next iteration of results. `"0"` will be the `cursor`
+//	   returned on the last iteration of the sorted set.
+//	The second return value is always an array of the subset of the sorted set held in `key`.
+//	The array is a flattened series of `string` pairs, where the value is at even indices and the score is at odd indices.
+//	If `ZScanOptionsBuilder#noScores` is to `true`, the second return value will only contain the members without scores.
+//
+// Example:
+//
+//	resCursor, resCol, err := client.ZScanWithOptions("key", "0", options.NewBaseScanOptionsBuilder().SetMatch("*"))
+//	fmt.Println(resCursor.Value())
+//	fmt.Println(resCol.Value())
+//	for resCursor != "0" {
+//	  resCursor, resCol, err = client.ZScanWithOptions("key", resCursor.Value(),
+//		options.NewBaseScanOptionsBuilder().SetMatch("*"))
+//	  fmt.Println("Cursor: ", resCursor.Value())
+//	  fmt.Println("Members: ", resCol.Value())
+//	}
+//
+// [valkey.io]: https://valkey.io/commands/zscan/
+func (client *baseClient) ZScanWithOptions(
+	key string,
+	cursor string,
+	options *options.ZScanOptions,
+) (Result[string], []Result[string], error) {
+	optionArgs, err := options.ToArgs()
+	if err != nil {
+		return CreateNilStringResult(), nil, err
+	}
+
+	result, err := client.executeCommand(C.ZScan, append([]string{key, cursor}, optionArgs...))
+	if err != nil {
+		return CreateNilStringResult(), nil, err
+	}
+	return handleScanResponse(result)
 }
