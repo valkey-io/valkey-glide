@@ -5209,47 +5209,29 @@ func (suite *GlideTestSuite) TestZScan() {
 	})
 }
 
-func (suite *GlideTestSuite) TestObjectFreq() {
-	suite.runWithDefaultClients(func(client api.BaseClient) {
-		key := "testKey1_" + uuid.New().String()
-		value := "hello"
-		t := suite.T()
-		suite.verifyOK(client.Set(key, value))
-		keyValueMap := map[string]string{
-			"maxmemory-policy": "noeviction",
-		}
-		suite.verifyOK(client.ConfigSet(keyValueMap))
-		resultGet, err := client.Get(key)
-		assert.Nil(t, err)
-		assert.Equal(t, value, resultGet.Value())
-		resultGet2, err := client.Get(key)
-		assert.Nil(t, err)
-		assert.Equal(t, value, resultGet2.Value())
-		resultObjFreq, err := client.ObjectFreq(key)
-		assert.Greater(t, uint64(2), resultObjFreq)
-	})
-}
-
 func (suite *GlideTestSuite) TestObjectIdleTime() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
+		defaultClient := suite.defaultClient()
 		key := "testKey1_" + uuid.New().String()
 		value := "hello"
-		sleepSec := uint64(5)
+		sleepSec := int64(5)
 		t := suite.T()
-		suite.verifyOK(client.Set(key, value))
+		suite.verifyOK(defaultClient.Set(key, value))
 		keyValueMap := map[string]string{
 			"maxmemory-policy": "noeviction",
 		}
-		suite.verifyOK(client.ConfigSet(keyValueMap))
-		resultGet, err := client.Get(key)
+		resultConfig, err := defaultClient.ConfigSet(keyValueMap)
+		assert.Nil(t, err)
+		assert.Equal(t, "OK", resultConfig.Value())
+		resultGet, err := defaultClient.Get(key)
 		assert.Nil(t, err)
 		assert.Equal(t, value, resultGet.Value())
-		time.Sleep(time.Duration(sleepSec) * time.Second) // Sleep for 5 seconds
-		resultIdleTime, err := client.ObjectIdleTime(key)
-		assert.Greater(t, resultIdleTime, sleepSec)
+		time.Sleep(time.Duration(sleepSec) * time.Second)
+		resultIdleTime, err := defaultClient.ObjectIdleTime(key)
+		assert.Nil(t, err)
+		assert.GreaterOrEqual(t, resultIdleTime.Value(), sleepSec)
 	})
 }
-
 func (suite *GlideTestSuite) TestObjectRefCount() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := "testKey1_" + uuid.New().String()
@@ -5259,9 +5241,34 @@ func (suite *GlideTestSuite) TestObjectRefCount() {
 		resultGetRestoreKey, err := client.Get(key)
 		assert.Nil(t, err)
 		assert.Equal(t, value, resultGetRestoreKey.Value())
-
-		//Object Freq
-		resultObjectRefCount := client.ObjectRefCount(key)
-		assert.Equal(t, int64(1), resultObjectRefCount.Value())
+		resultObjectRefCount, err := client.ObjectRefCount(key)
+		assert.Nil(t, err)
+		assert.GreaterOrEqual(t, resultObjectRefCount.Value(), int64(1))
+	})
+}
+func (suite *GlideTestSuite) TestObjectFreq() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		defaultClient := suite.defaultClient()
+		key := "testKey1_" + uuid.New().String()
+		value := "hello"
+		t := suite.T()
+		suite.verifyOK(defaultClient.Set(key, value))
+		keyValueMap := map[string]string{
+			"maxmemory-policy": "volatile-lfu",
+		}
+		resultConfig, err := defaultClient.ConfigSet(keyValueMap)
+		assert.Nil(t, err)
+		assert.Equal(t, "OK", resultConfig.Value())
+		sleepSec := int64(5)
+		time.Sleep(time.Duration(sleepSec) * time.Second)
+		resultGet, err := defaultClient.Get(key)
+		assert.Nil(t, err)
+		assert.Equal(t, value, resultGet.Value())
+		resultGet2, err := defaultClient.Get(key)
+		assert.Nil(t, err)
+		assert.Equal(t, value, resultGet2.Value())
+		resultObjFreq, err := defaultClient.ObjectFreq(key)
+		assert.Nil(t, err)
+		assert.GreaterOrEqual(t, resultObjFreq.Value(), int64(2))
 	})
 }

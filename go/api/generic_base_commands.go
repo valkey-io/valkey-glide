@@ -471,14 +471,14 @@ type GenericBaseCommands interface {
 	//  If key exists, returns the idle time in seconds. Otherwise, returns null.
 	//
 	// Example:
-	//  result, err := client.ObjectIdle(key)
+	//  result, err := client.ObjectIdleTime(key)
 	//	if err != nil {
 	//	    // handle error
 	//	}
 	//	fmt.Println(result.Value()) // Output: 1
 	//
 	// [valkey.io]: https://valkey.io/commands/object-idletime/
-	ObjectIdle(key string) (Result[int64], error)
+	ObjectIdleTime(key string) (Result[int64], error)
 
 	// Returns the reference count of the object stored at key.
 	//

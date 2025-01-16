@@ -1915,7 +1915,7 @@ func (client *baseClient) ObjectFreq(key string) (Result[int64], error) {
 	return handleLongResponse(result)
 }
 
-func (client *baseClient) ObjectIdle(key string) (Result[int64], error) {
+func (client *baseClient) ObjectIdleTime(key string) (Result[int64], error) {
 	result, err := client.executeCommand(C.ObjectIdleTime, []string{key})
 	if err != nil {
 		return CreateNilInt64Result(), err
