@@ -1925,7 +1925,7 @@ func (client *baseClient) ZScanWithOptions(
 //	  ConsumerName: The name of the consumer.
 //	  MessageCount: The number of pending messages for this consumer.
 //
-// @example
+// Example
 //
 //	 result, err := client.XPending("myStream", "myGroup")
 //	 if err != nil {
@@ -1968,7 +1968,7 @@ func (client *baseClient) XPending(key string, group string) (XPendingSummary, e
 //	IdleTime - The time in milliseconds since the last time the message was delivered to the consumer.
 //	DeliveryCount - The number of times this message was delivered.
 //
-// @example
+// Example
 //
 //	  detailResult, err := client.XPendingWithOptions(key, groupName, options.NewXPendingOptions("-", "+", 10))
 //			if err != nil {
