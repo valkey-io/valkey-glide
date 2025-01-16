@@ -1803,7 +1803,7 @@ func (client *baseClient) XAutoClaim(
 	consumer string,
 	minIdleTime int64,
 	start string,
-) (*XAutoClaimResponse, error) {
+) (XAutoClaimResponse, error) {
 	return client.XAutoClaimWithOptions(key, group, consumer, minIdleTime, start, nil)
 }
 
@@ -1862,18 +1862,18 @@ func (client *baseClient) XAutoClaimWithOptions(
 	minIdleTime int64,
 	start string,
 	options *options.XAutoClaimOptions,
-) (*XAutoClaimResponse, error) {
+) (XAutoClaimResponse, error) {
 	args := []string{key, group, consumer, utils.IntToString(minIdleTime), start}
 	if options != nil {
 		optArgs, err := options.ToArgs()
 		if err != nil {
-			return nil, err
+			return XAutoClaimResponse{}, err
 		}
 		args = append(args, optArgs...)
 	}
 	result, err := client.executeCommand(C.XAutoClaim, args)
 	if err != nil {
-		return nil, err
+		return XAutoClaimResponse{}, err
 	}
 	return handleXAutoClaimResponse(result)
 }
@@ -1928,7 +1928,7 @@ func (client *baseClient) XAutoClaimJustId(
 	consumer string,
 	minIdleTime int64,
 	start string,
-) (*XAutoClaimJustIdResponse, error) {
+) (XAutoClaimJustIdResponse, error) {
 	return client.XAutoClaimJustIdWithOptions(key, group, consumer, minIdleTime, start, nil)
 }
 
@@ -1985,19 +1985,19 @@ func (client *baseClient) XAutoClaimJustIdWithOptions(
 	minIdleTime int64,
 	start string,
 	options *options.XAutoClaimOptions,
-) (*XAutoClaimJustIdResponse, error) {
+) (XAutoClaimJustIdResponse, error) {
 	args := []string{key, group, consumer, utils.IntToString(minIdleTime), start}
 	if options != nil {
 		optArgs, err := options.ToArgs()
 		if err != nil {
-			return nil, err
+			return XAutoClaimJustIdResponse{}, err
 		}
 		args = append(args, optArgs...)
 	}
 	args = append(args, "JUSTID")
 	result, err := client.executeCommand(C.XAutoClaim, args)
 	if err != nil {
-		return nil, err
+		return XAutoClaimJustIdResponse{}, err
 	}
 	return handleXAutoClaimJustIdResponse(result)
 }

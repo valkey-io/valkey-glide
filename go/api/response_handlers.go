@@ -602,20 +602,21 @@ func (node arrayConverter[T]) convert(data interface{}) (interface{}, error) {
 
 // TODO: convert sets
 
-func handleXAutoClaimResponse(response *C.struct_CommandResponse) (*XAutoClaimResponse, error) {
+func handleXAutoClaimResponse(response *C.struct_CommandResponse) (XAutoClaimResponse, error) {
 	defer C.free_command_response(response)
+	var null XAutoClaimResponse // default response
 	typeErr := checkResponseType(response, C.Array, false)
 	if typeErr != nil {
-		return nil, typeErr
+		return null, typeErr
 	}
 	slice, err := parseArray(response)
 	if err != nil {
-		return nil, err
+		return null, err
 	}
 	arr := slice.([]interface{})
 	len := len(arr)
 	if len < 2 || len > 3 {
-		return nil, &RequestError{fmt.Sprintf("Unexpected response array length: %d", len)}
+		return null, &RequestError{fmt.Sprintf("Unexpected response array length: %d", len)}
 	}
 	converted, err := mapConverter[[][]string]{
 		arrayConverter[[]string]{
@@ -628,11 +629,11 @@ func handleXAutoClaimResponse(response *C.struct_CommandResponse) (*XAutoClaimRe
 		false,
 	}.convert(arr[1])
 	if err != nil {
-		return nil, err
+		return null, err
 	}
 	claimedEntries, ok := converted.(map[string][][]string)
 	if !ok {
-		return nil, &RequestError{fmt.Sprintf("unexpected type of second element: %T", converted)}
+		return null, &RequestError{fmt.Sprintf("unexpected type of second element: %T", converted)}
 	}
 	var deletedMessages []string
 	deletedMessages = nil
@@ -642,41 +643,42 @@ func handleXAutoClaimResponse(response *C.struct_CommandResponse) (*XAutoClaimRe
 			false,
 		}.convert(arr[2])
 		if err != nil {
-			return nil, err
+			return null, err
 		}
 		deletedMessages, ok = converted.([]string)
 		if !ok {
-			return nil, &RequestError{fmt.Sprintf("unexpected type of third element: %T", converted)}
+			return null, &RequestError{fmt.Sprintf("unexpected type of third element: %T", converted)}
 		}
 	}
-	return &XAutoClaimResponse{arr[0].(string), claimedEntries, deletedMessages}, nil
+	return XAutoClaimResponse{arr[0].(string), claimedEntries, deletedMessages}, nil
 }
 
-func handleXAutoClaimJustIdResponse(response *C.struct_CommandResponse) (*XAutoClaimJustIdResponse, error) {
+func handleXAutoClaimJustIdResponse(response *C.struct_CommandResponse) (XAutoClaimJustIdResponse, error) {
 	defer C.free_command_response(response)
+	var null XAutoClaimJustIdResponse // default response
 	typeErr := checkResponseType(response, C.Array, false)
 	if typeErr != nil {
-		return nil, typeErr
+		return null, typeErr
 	}
 	slice, err := parseArray(response)
 	if err != nil {
-		return nil, err
+		return null, err
 	}
 	arr := slice.([]interface{})
 	len := len(arr)
 	if len < 2 || len > 3 {
-		return nil, &RequestError{fmt.Sprintf("Unexpected response array length: %d", len)}
+		return null, &RequestError{fmt.Sprintf("Unexpected response array length: %d", len)}
 	}
 	converted, err := arrayConverter[string]{
 		nil,
 		false,
 	}.convert(arr[1])
 	if err != nil {
-		return nil, err
+		return null, err
 	}
 	claimedEntries, ok := converted.([]string)
 	if !ok {
-		return nil, &RequestError{fmt.Sprintf("unexpected type of second element: %T", converted)}
+		return null, &RequestError{fmt.Sprintf("unexpected type of second element: %T", converted)}
 	}
 	var deletedMessages []string
 	deletedMessages = nil
@@ -686,14 +688,14 @@ func handleXAutoClaimJustIdResponse(response *C.struct_CommandResponse) (*XAutoC
 			false,
 		}.convert(arr[2])
 		if err != nil {
-			return nil, err
+			return null, err
 		}
 		deletedMessages, ok = converted.([]string)
 		if !ok {
-			return nil, &RequestError{fmt.Sprintf("unexpected type of third element: %T", converted)}
+			return null, &RequestError{fmt.Sprintf("unexpected type of third element: %T", converted)}
 		}
 	}
-	return &XAutoClaimJustIdResponse{arr[0].(string), claimedEntries, deletedMessages}, nil
+	return XAutoClaimJustIdResponse{arr[0].(string), claimedEntries, deletedMessages}, nil
 }
 
 func handleXReadResponse(response *C.struct_CommandResponse) (map[string]map[string][][]string, error) {

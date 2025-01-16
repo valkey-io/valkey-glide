@@ -4178,7 +4178,7 @@ func (suite *GlideTestSuite) TestXAutoClaim() {
 		}
 		assert.Equal(
 			suite.T(),
-			&api.XAutoClaimResponse{
+			api.XAutoClaimResponse{
 				NextEntry: "0-2",
 				ClaimedEntries: map[string][][]string{
 					"0-1": {{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
@@ -4192,7 +4192,7 @@ func (suite *GlideTestSuite) TestXAutoClaim() {
 		assert.NoError(suite.T(), err)
 		assert.Equal(
 			suite.T(),
-			&api.XAutoClaimJustIdResponse{
+			api.XAutoClaimJustIdResponse{
 				NextEntry:       "0-0",
 				ClaimedEntries:  []string{"0-1", "0-2"},
 				DeletedMessages: deletedEntries,
@@ -4214,7 +4214,7 @@ func (suite *GlideTestSuite) TestXAutoClaim() {
 		assert.NoError(suite.T(), err)
 		assert.Equal(
 			suite.T(),
-			&api.XAutoClaimResponse{
+			api.XAutoClaimResponse{
 				NextEntry:       "0-0",
 				ClaimedEntries:  map[string][][]string{},
 				DeletedMessages: deletedEntries,
@@ -4226,7 +4226,7 @@ func (suite *GlideTestSuite) TestXAutoClaim() {
 		assert.NoError(suite.T(), err)
 		assert.Equal(
 			suite.T(),
-			&api.XAutoClaimJustIdResponse{
+			api.XAutoClaimJustIdResponse{
 				NextEntry:       "0-0",
 				ClaimedEntries:  []string{},
 				DeletedMessages: deletedEntries,
