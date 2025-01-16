@@ -59,7 +59,7 @@ type StreamCommands interface {
 	//  options - Stream trim options
 	//
 	// Return value:
-	//  Result[int64] - The number of entries deleted from the stream.
+	//  The number of entries deleted from the stream.
 	//
 	// For example:
 	//  xAddResult, err = client.XAddWithOptions(
@@ -73,10 +73,10 @@ type StreamCommands interface {
 	//		"key1",
 	//		options.NewXTrimOptionsWithMaxLen(1).SetExactTrimming(),
 	//  )
-	//  fmt.Println(xTrimResult.Value()) // Output: 1
+	//  fmt.Println(xTrimResult) // Output: 1
 	//
 	// [valkey.io]: https://valkey.io/commands/xtrim/
-	XTrim(key string, options *options.XTrimOptions) (Result[int64], error)
+	XTrim(key string, options *options.XTrimOptions) (int64, error)
 
 	// Returns the number of entries in the stream stored at `key`.
 	//
@@ -86,7 +86,7 @@ type StreamCommands interface {
 	//  key - The key of the stream.
 	//
 	// Return value:
-	//  Result[int64] - The number of entries in the stream. If `key` does not exist, return 0.
+	//  The number of entries in the stream. If `key` does not exist, return 0.
 	//
 	// For example:
 	//	xAddResult, err = client.XAddWithOptions(
@@ -97,8 +97,14 @@ type StreamCommands interface {
 	//		),
 	//	)
 	//	xLenResult, err = client.XLen("key1")
-	//  fmt.Println(xLenResult.Value()) // Output: 2
+	//  fmt.Println(xLenResult) // Output: 2
 	//
 	// [valkey.io]: https://valkey.io/commands/xlen/
-	XLen(key string) (Result[int64], error)
+	XLen(key string) (int64, error)
+
+	XRead(keysAndIds map[string]string) (map[string]map[string][][]string, error)
+
+	XReadWithOptions(keysAndIds map[string]string, options *options.XReadOptions) (map[string]map[string][][]string, error)
+
+	XDel(key string, ids []string) (int64, error)
 }
