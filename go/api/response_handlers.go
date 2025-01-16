@@ -9,6 +9,7 @@ import "C"
 import (
 	"fmt"
 	"reflect"
+	"strconv"
 	"unsafe"
 )
 
@@ -633,11 +634,22 @@ func handleXPendingSummaryResponse(response *C.struct_CommandResponse) (XPending
 		EndId = CreateStringResult(arr[2].(string))
 	}
 
-	if res, ok := arr[3].([]interface{}); ok {
-		ConsumerPendingMessages := CreateConsumerPendingMessagesResult(res)
+	if pendingMessages, ok := arr[3].([]interface{}); ok {
+		var ConsumerPendingMessages []ConsumerPendingMessage
+		for _, msg := range pendingMessages {
+			consumerMessage := msg.([]interface{})
+			count, err := strconv.ParseInt(consumerMessage[1].(string), 10, 64)
+			if err == nil {
+				ConsumerPendingMessages = append(ConsumerPendingMessages, ConsumerPendingMessage{
+					ConsumerName: consumerMessage[0].(string),
+					MessageCount: count,
+				})
+
+			}
+		}
 		return XPendingSummary{NumOfMessages, StartId, EndId, ConsumerPendingMessages}, nil
 	} else {
-		return XPendingSummary{NumOfMessages, StartId, EndId, CreateNilConsumerPendingMessagesResult()}, nil
+		return XPendingSummary{NumOfMessages, StartId, EndId, make([]ConsumerPendingMessage, 0)}, nil
 	}
 }
 

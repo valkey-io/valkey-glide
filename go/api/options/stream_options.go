@@ -149,3 +149,50 @@ func (xro *XReadOptions) ToArgs() ([]string, error) {
 	}
 	return args, nil
 }
+
+// Optional arguments for `XPending` in [StreamCommands]
+type XPendingOptions struct {
+	minIdleTime int64
+	start       string
+	end         string
+	count       int64
+	consumer    string
+}
+
+// Create new empty `XPendingOptions`
+func NewXPendingOptions(start string, end string, count int64) *XPendingOptions {
+	options := &XPendingOptions{}
+	options.start = start
+	options.end = end
+	options.count = count
+	return options
+}
+
+func (xpo *XPendingOptions) SetMinIdleTime(minIdleTime int64) *XPendingOptions {
+	xpo.minIdleTime = minIdleTime
+	return xpo
+}
+
+func (xpo *XPendingOptions) SetConsumer(consumer string) *XPendingOptions {
+	xpo.consumer = consumer
+	return xpo
+}
+
+func (xpo *XPendingOptions) ToArgs() ([]string, error) {
+	args := []string{}
+
+	if xpo.minIdleTime > 0 {
+		args = append(args, "IDLE")
+		args = append(args, utils.IntToString(xpo.minIdleTime))
+	}
+
+	args = append(args, xpo.start)
+	args = append(args, xpo.end)
+	args = append(args, utils.IntToString(xpo.count))
+
+	if xpo.consumer != "" {
+		args = append(args, xpo.consumer)
+	}
+
+	return args, nil
+}

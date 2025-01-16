@@ -2,11 +2,6 @@
 
 package api
 
-import (
-	"fmt"
-	"strconv"
-)
-
 // A value to return alongside with error in case if command failed
 var (
 	defaultFloatResponse  float64
@@ -156,7 +151,7 @@ type XPendingSummary struct {
 	NumOfMessages    int64
 	StartId          Result[string]
 	EndId            Result[string]
-	ConsumerMessages Result[[]ConsumerPendingMessage]
+	ConsumerMessages []ConsumerPendingMessage
 }
 
 type ConsumerPendingMessage struct {
@@ -172,40 +167,9 @@ type XPendingDetail struct {
 }
 
 func CreateXPendingSummary() *XPendingSummary {
-	return &XPendingSummary{0, CreateNilStringResult(), CreateNilStringResult(), CreateNilConsumerPendingMessagesResult()}
+	return &XPendingSummary{0, CreateNilStringResult(), CreateNilStringResult(), make([]ConsumerPendingMessage, 0)}
 }
 
 func CreateNilXPendingSummary() XPendingSummary {
-	return XPendingSummary{0, CreateNilStringResult(), CreateNilStringResult(), CreateNilConsumerPendingMessagesResult()}
-}
-
-func CreateConsumerPendingMessagesResult(pendingMessages []interface{}) Result[[]ConsumerPendingMessage] {
-	consumerMessages := make([]ConsumerPendingMessage, len(pendingMessages))
-
-	for i, msg := range pendingMessages {
-		// Because of how interfaces work in Go, we need to cast each pending message to either a slice or a struct
-		// this allows us to use the same function to parse the response from the server or to programatically create
-		// an expected response in tests.
-		switch consumerMessage := msg.(type) {
-		case []interface{}:
-			count, err := strconv.ParseInt(consumerMessage[1].(string), 10, 64)
-			if err == nil {
-				consumerMessages[i] = ConsumerPendingMessage{
-					ConsumerName: consumerMessage[0].(string),
-					MessageCount: count,
-				}
-			} else {
-				return CreateNilConsumerPendingMessagesResult()
-			}
-		case ConsumerPendingMessage:
-			consumerMessages[i] = consumerMessage
-		default:
-			fmt.Printf("CreateConsumerPendingMessagesResult - Unhandled Type: %T \n", consumerMessage)
-		}
-	}
-	return Result[[]ConsumerPendingMessage]{val: consumerMessages, isNil: false}
-}
-
-func CreateNilConsumerPendingMessagesResult() Result[[]ConsumerPendingMessage] {
-	return Result[[]ConsumerPendingMessage]{val: make([]ConsumerPendingMessage, 0), isNil: true}
+	return XPendingSummary{0, CreateNilStringResult(), CreateNilStringResult(), make([]ConsumerPendingMessage, 0)}
 }

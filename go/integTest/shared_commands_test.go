@@ -5267,10 +5267,10 @@ func (suite *GlideTestSuite) TestXPending() {
 				NumOfMessages: 5,
 				StartId:       streamid_1,
 				EndId:         streamid_5,
-				ConsumerMessages: api.CreateConsumerPendingMessagesResult([]interface{}{
-					api.ConsumerPendingMessage{ConsumerName: consumer1, MessageCount: 2},
-					api.ConsumerPendingMessage{ConsumerName: consumer2, MessageCount: 3},
-				}),
+				ConsumerMessages: []api.ConsumerPendingMessage{
+					{ConsumerName: consumer1, MessageCount: 2},
+					{ConsumerName: consumer2, MessageCount: 3},
+				},
 			}
 
 			// 2. Act
@@ -5345,10 +5345,10 @@ func (suite *GlideTestSuite) TestXPending() {
 				NumOfMessages: 5,
 				StartId:       streamid_1,
 				EndId:         streamid_5,
-				ConsumerMessages: api.CreateConsumerPendingMessagesResult([]interface{}{
-					api.ConsumerPendingMessage{ConsumerName: consumer1, MessageCount: 2},
-					api.ConsumerPendingMessage{ConsumerName: consumer2, MessageCount: 3},
-				}),
+				ConsumerMessages: []api.ConsumerPendingMessage{
+					{ConsumerName: consumer1, MessageCount: 2},
+					{ConsumerName: consumer2, MessageCount: 3},
+				},
 			}
 
 			// 2. Act
