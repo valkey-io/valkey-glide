@@ -688,10 +688,22 @@ export interface BaseClientConfiguration {
  *
  * - **Connection Timeout**: The `connectionTimeout` property specifies the duration (in milliseconds) the client should wait for a connection to be established.
  *
+ * ### OpenTelemetry
+ *
+ * - **openTelemetryConfig**: Use the `openTelemetryConfig` property to specify the endpoint of the collector to export the measurments.
+ *   - **Traces Collector EndPoint**: Set `tracesCollectorEndPoint` to specify the endpoint path of the collector to export the traces measurments.
+ *   - **Metrics Collector EndPoint**: Set `metricsCollectorEndPoint` to specify the endpoint path of the collector to export the metrics data.
+ *   - **Span Flush Interval Ms**: Set `spanFlushIntervalMs` to specify the duration in milliseconds the data will be exported to the collector. If interval is not specified, 500 will be used.
+ *
  * @example
  * ```typescript
  * const config: AdvancedBaseClientConfiguration = {
  *   connectionTimeout: 5000, // 5 seconds
+ *   openTelemetryConfig: {
+ *      tracesCollectorEndPoint: 'https://127.0.0.1/v1/traces',
+ *      metricsCollectorEndPoint: 'https://127.0.0.1/v1/metrics',
+ *      spanFlushIntervalMs: 500,
+ *   },
  * };
  * ```
  */
@@ -703,6 +715,24 @@ export interface AdvancedBaseClientConfiguration {
      * If not explicitly set, a default value of 250 milliseconds will be used.
      */
     connectionTimeout?: number;
+    /**
+     * Configartion for OpenTelemetry if exits.
+     */
+    openTelemetryConfig?: {
+        /**
+         * The client collector address to export the traces measurments.
+         */
+        tracesCollectorEndPoint: string;
+        /**
+         * The client collector address to export the metrics.
+         */
+        metricsCollectorEndPoint: string;
+        /**
+         * The duration in milliseconds the data will exported to the collector.
+         * If interval is not specified, 500 will be used.
+         */
+        spanFlushIntervalMs?: number;
+    };
 }
 
 /**
@@ -7730,6 +7760,7 @@ export class BaseClient {
         request.connectionTimeout =
             options.connectionTimeout ??
             DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS;
+        request.opentelemetryConfig = options.openTelemetryConfig;
     }
 
     /**
