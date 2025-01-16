@@ -449,7 +449,7 @@ type GenericBaseCommands interface {
 	//
 	// Parameters:
 	//  numberOfReplicas - The number of replicas to reach.
-	//  timeout - The timeout value specified in milliseconds. A value of 0 will
+	//  timeout - The timeout value specified in milliseconds. A value of `0` will
 	//  block indefinitely.
 	//
 	// Return value:

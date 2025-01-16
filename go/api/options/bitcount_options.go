@@ -3,8 +3,6 @@
 package options
 
 import (
-	"fmt"
-
 	"github.com/valkey-io/valkey-glide/go/glide/utils"
 )
 
@@ -22,6 +20,10 @@ type BitCountOptions struct {
 	BitMapIndexType BitmapIndexType
 }
 
+func NewBitCountOptionsBuilder() *BitCountOptions {
+	return &BitCountOptions{}
+}
+
 // SetStart defines start byte to calculate bitcount in bitcount command.
 func (options *BitCountOptions) SetStart(start int64) *BitCountOptions {
 	options.Start = &start
@@ -29,26 +31,15 @@ func (options *BitCountOptions) SetStart(start int64) *BitCountOptions {
 }
 
 // SetEnd defines start byte to calculate bitcount in bitcount command.
-func (options *BitCountOptions) SetEnd(end int64) (*BitCountOptions, error) {
-	if options.Start == nil {
-		return options, fmt.Errorf("End value cannot be set without start value, use SetStart()")
-	}
+func (options *BitCountOptions) SetEnd(end int64) *BitCountOptions {
 	options.End = &end
-	return options, nil
+	return options
 }
 
 // SetBitmapIndexType to specify start and end are in BYTE or BIT
-func (options *BitCountOptions) SetBitmapIndexType(bitMapIndexType BitmapIndexType) (*BitCountOptions, error) {
-	if options.Start == nil || options.End == nil {
-		return options, fmt.Errorf(
-			"SetBitmapIndexType value cannot be set without start and end values, use SetStart() and SetEnd()",
-		)
-	}
-	if bitMapIndexType != BIT && bitMapIndexType != BYTE {
-		return options, fmt.Errorf("Invalid argument: BIT and BYTE are the only allowed values")
-	}
+func (options *BitCountOptions) SetBitmapIndexType(bitMapIndexType BitmapIndexType) *BitCountOptions {
 	options.BitMapIndexType = bitMapIndexType
-	return options, nil
+	return options
 }
 
 // ToArgs converts the options to a list of arguments.
@@ -61,7 +52,9 @@ func (opts *BitCountOptions) ToArgs() ([]string, error) {
 		if opts.End != nil {
 			args = append(args, utils.IntToString(*opts.End))
 			if opts.BitMapIndexType != "" {
-				args = append(args, string(opts.BitMapIndexType))
+				if opts.BitMapIndexType == BIT || opts.BitMapIndexType == BYTE {
+					args = append(args, string(opts.BitMapIndexType))
+				}
 			}
 		}
 	}

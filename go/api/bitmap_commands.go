@@ -11,7 +11,7 @@ import "github.com/valkey-io/valkey-glide/go/glide/api/options"
 // [valkey.io]: https://valkey.io/commands/#bitmap
 type BitmapCommands interface {
 	// Sets or clears the bit at offset in the string value stored at key.
-	// The offset is a zero-based index, with `0`` being the first element of
+	// The offset is a zero-based index, with `0` being the first element of
 	// the list, `1` being the next element, and so on. The offset must be
 	// less than `2^32` and greater than or equal to `0` If a key is
 	// non-existent then the bit at offset is set to value and the preceding
@@ -26,7 +26,7 @@ type BitmapCommands interface {
 	//  The bit value that was previously stored at offset.
 	//
 	// Example:
-	//  result, err := client.SetBit("key",1 , 1)
+	//  result, err := client.SetBit("key", 1, 1)
 	//  result.Value(): 1
 	//  result.IsNil(): false
 	//
@@ -45,7 +45,7 @@ type BitmapCommands interface {
 	// offset exceeds the length of the string.
 	//
 	// Example:
-	//  result, err := client.GetBit("key1",1,1)
+	//  result, err := client.GetBit("key1", 1, 1)
 	//  result.Value(): 1
 	//  result.IsNil(): false
 	//
@@ -78,8 +78,8 @@ type BitmapCommands interface {
 	// Parameters:
 	//  key - The key for the string to count the set bits of.
 	//  options - Start is the starting offset and end is the ending offset. BitmapIndexType
-	//  is The index offset type. Could be either {@link BitmapIndexType#BIT} or
-	//  {@link BitmapIndexType#BYTE}.
+	//  is The index offset type. Could be either BitmapIndexType.BIT or
+	//  BitmapIndexType.BYTE
 	//
 	// Return value:
 	// The number of set bits in the string interval specified by start, end, and options.

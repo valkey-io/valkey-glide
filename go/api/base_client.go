@@ -1629,7 +1629,7 @@ func (client *baseClient) SetBit(key string, offset int64, value int64) (Result[
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}
-	return handleLongResponse(result)
+	return handleIntOrNilResponse(result)
 }
 
 func (client *baseClient) GetBit(key string, offset int64) (Result[int64], error) {
@@ -1637,7 +1637,7 @@ func (client *baseClient) GetBit(key string, offset int64) (Result[int64], error
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}
-	return handleLongResponse(result)
+	return handleIntOrNilResponse(result)
 }
 
 func (client *baseClient) Wait(numberOfReplicas int64, timeout int64) (Result[int64], error) {
@@ -1651,7 +1651,7 @@ func (client *baseClient) Wait(numberOfReplicas int64, timeout int64) (Result[in
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}
-	return handleLongResponse(result)
+	return handleIntOrNilResponse(result)
 }
 
 func (client *baseClient) BitCount(key string) (Result[int64], error) {
@@ -1659,7 +1659,7 @@ func (client *baseClient) BitCount(key string) (Result[int64], error) {
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}
-	return handleLongResponse(result)
+	return handleIntOrNilResponse(result)
 }
 
 func (client *baseClient) BitCountWithOptions(key string, opts *options.BitCountOptions) (Result[int64], error) {
@@ -1672,5 +1672,5 @@ func (client *baseClient) BitCountWithOptions(key string, opts *options.BitCount
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}
-	return handleLongResponse(result)
+	return handleIntOrNilResponse(result)
 }

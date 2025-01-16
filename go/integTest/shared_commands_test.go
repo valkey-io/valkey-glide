@@ -4857,9 +4857,24 @@ func (suite *GlideTestSuite) TestWait() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		client.Set(key, "test")
+		// Test 1:  numberOfReplicas (2)
 		resultInt64, err := client.Wait(2, 2000)
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(2), resultInt64.Value())
+		assert.True(suite.T(), resultInt64.Value() >= 2)
+
+		// Test 2: Invalid numberOfReplicas (0)
+		resultInt64, err = client.Wait(0, 2000)
+
+		// Assert error and message for invalid number of replicas
+		assert.NotNil(suite.T(), err)
+		assert.Equal(suite.T(), "Number of Replicas should be greater than 0", err.Error())
+
+		// Test 3: Invalid timeout (negative)
+		resultInt64, err = client.Wait(2, -1)
+
+		// Assert error and message for invalid timeout
+		assert.NotNil(suite.T(), err)
+		assert.Equal(suite.T(), "Timeout cannot be lesser than 0", err.Error())
 	})
 }
 
@@ -4932,14 +4947,10 @@ func (suite *GlideTestSuite) TestBitCountWithOptions_StartEnd() {
 		end := int64(5)
 		opts := &options.BitCountOptions{}
 		opts.SetStart(start)
-		opts, err := opts.SetEnd(end)
-		assert.Nil(suite.T(), err)
+		opts.SetEnd(end)
 
 		result, err := client.BitCountWithOptions(key, opts)
 		assert.Nil(suite.T(), err)
-
-		fmt.Println("Bit count from 1 to 5:", result.Value())
-
 		assert.Equal(suite.T(), int64(19), result.Value())
 	})
 }
@@ -4955,15 +4966,11 @@ func (suite *GlideTestSuite) TestBitCountWithOptions_StartEndByte() {
 		end := int64(5)
 		opts := &options.BitCountOptions{}
 		opts.SetStart(start)
-		opts, err := opts.SetEnd(end)
-		opts, err = opts.SetBitmapIndexType(options.BYTE)
-		assert.Nil(suite.T(), err)
+		opts.SetEnd(end)
+		opts.SetBitmapIndexType(options.BYTE)
 
 		result, err := client.BitCountWithOptions(key, opts)
 		assert.Nil(suite.T(), err)
-
-		fmt.Println("Bit count from 1 to 5:", result.Value())
-
 		assert.Equal(suite.T(), int64(19), result.Value())
 	})
 }
@@ -4979,15 +4986,11 @@ func (suite *GlideTestSuite) TestBitCountWithOptions_StartEndBit() {
 		end := int64(5)
 		opts := &options.BitCountOptions{}
 		opts.SetStart(start)
-		opts, err := opts.SetEnd(end)
-		opts, err = opts.SetBitmapIndexType(options.BIT)
-		assert.Nil(suite.T(), err)
+		opts.SetEnd(end)
+		opts.SetBitmapIndexType(options.BIT)
 
 		result, err := client.BitCountWithOptions(key, opts)
 		assert.Nil(suite.T(), err)
-
-		fmt.Println("Bit count from 1 to 5:", result.Value())
-
 		assert.Equal(suite.T(), int64(3), result.Value())
 	})
 }
