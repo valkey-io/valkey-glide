@@ -5364,6 +5364,7 @@ func (suite *GlideTestSuite) TestBitCountWithOptions_StartEnd() {
 }
 
 func (suite *GlideTestSuite) TestBitCountWithOptions_StartEndByte() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		value := "TestBitCountWithOptions_StartEnd"
@@ -5384,6 +5385,7 @@ func (suite *GlideTestSuite) TestBitCountWithOptions_StartEndByte() {
 }
 
 func (suite *GlideTestSuite) TestBitCountWithOptions_StartEndBit() {
+	suite.SkipIfServerVersionLowerThanBy("7.0.0")
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
 		value := "TestBitCountWithOptions_StartEnd"
