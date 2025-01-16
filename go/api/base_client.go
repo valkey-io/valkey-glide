@@ -1945,7 +1945,7 @@ func (client *baseClient) SortStore(key string, destination string) (Result[int6
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}
-	return handleLongResponse(result)
+	return handleIntOrNilResponse(result)
 }
 
 func (client *baseClient) SortStoreWithOptions(
@@ -1958,5 +1958,5 @@ func (client *baseClient) SortStoreWithOptions(
 	if err != nil {
 		return CreateNilInt64Result(), err
 	}
-	return handleLongResponse(result)
+	return handleIntOrNilResponse(result)
 }
