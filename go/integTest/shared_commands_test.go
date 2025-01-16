@@ -5232,6 +5232,7 @@ func (suite *GlideTestSuite) TestObjectIdleTime() {
 		assert.GreaterOrEqual(t, resultIdleTime.Value(), sleepSec)
 	})
 }
+
 func (suite *GlideTestSuite) TestObjectRefCount() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := "testKey1_" + uuid.New().String()
@@ -5246,6 +5247,7 @@ func (suite *GlideTestSuite) TestObjectRefCount() {
 		assert.GreaterOrEqual(t, resultObjectRefCount.Value(), int64(1))
 	})
 }
+
 func (suite *GlideTestSuite) TestObjectFreq() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		defaultClient := suite.defaultClient()
