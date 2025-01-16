@@ -5256,7 +5256,7 @@ func (suite *GlideTestSuite) TestObjectFreq() {
 		keyValueMap := map[string]string{
 			"maxmemory-policy": "volatile-lfu",
 		}
-		assert.verifyOK(defaultClient.ConfigSet(keyValueMap))
+		suite.verifyOK(defaultClient.ConfigSet(keyValueMap))
 		sleepSec := int64(5)
 		time.Sleep(time.Duration(sleepSec) * time.Second)
 		resultGet, err := defaultClient.Get(key)
