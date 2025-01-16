@@ -367,17 +367,17 @@ type GenericBaseCommands interface {
 	//  key - string
 	//
 	// Return value:
-	//  If the key exists, the type of the stored value is returned. Otherwise, a none" string is returned.
+	//  If the key exists, the type of the stored value is returned. Otherwise, a "none" string is returned.
 	//
 	// Example:
 	//	result, err := client.Type([]string{"key"})
 	//	if err != nil {
 	//	    // handle error
 	//	}
-	//	fmt.Println(result.Value()) // Output: string
+	//	fmt.Println(result) // Output: string
 	//
 	// [valkey.io]: Https://valkey.io/commands/type/
-	Type(key string) (Result[string], error)
+	Type(key string) (string, error)
 
 	// Renames key to new key.
 	//  If new Key already exists it is overwritten.
@@ -397,10 +397,10 @@ type GenericBaseCommands interface {
 	//	if err != nil {
 	//	    // handle error
 	//	}
-	//	fmt.Println(result.Value()) // Output: OK
+	//	fmt.Println(result) // Output: OK
 	//
 	// [valkey.io]: https://valkey.io/commands/rename/
-	Rename(key string, newKey string) (Result[string], error)
+	Rename(key string, newKey string) (string, error)
 
 	// Renames key to newkey if newKey does not yet exist.
 	//

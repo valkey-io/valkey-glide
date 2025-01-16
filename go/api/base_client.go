@@ -258,7 +258,7 @@ func (client *baseClient) MGet(keys []string) ([]Result[string], error) {
 		return nil, err
 	}
 
-	return handleStringArrayResponse(result)
+	return handleStringOrNilArrayResponse(result)
 }
 
 func (client *baseClient) Incr(key string) (int64, error) {
@@ -391,7 +391,7 @@ func (client *baseClient) HMGet(key string, fields []string) ([]Result[string], 
 		return nil, err
 	}
 
-	return handleStringArrayResponse(result)
+	return handleStringOrNilArrayResponse(result)
 }
 
 func (client *baseClient) HSet(key string, values map[string]string) (int64, error) {
@@ -430,7 +430,7 @@ func (client *baseClient) HLen(key string) (int64, error) {
 	return handleIntResponse(result)
 }
 
-func (client *baseClient) HVals(key string) ([]Result[string], error) {
+func (client *baseClient) HVals(key string) ([]string, error) {
 	result, err := client.executeCommand(C.HVals, []string{key})
 	if err != nil {
 		return nil, err
@@ -448,7 +448,7 @@ func (client *baseClient) HExists(key string, field string) (bool, error) {
 	return handleBoolResponse(result)
 }
 
-func (client *baseClient) HKeys(key string) ([]Result[string], error) {
+func (client *baseClient) HKeys(key string) ([]string, error) {
 	result, err := client.executeCommand(C.HKeys, []string{key})
 	if err != nil {
 		return nil, err
@@ -527,13 +527,13 @@ func (client *baseClient) LPop(key string) (Result[string], error) {
 	return handleStringOrNilResponse(result)
 }
 
-func (client *baseClient) LPopCount(key string, count int64) ([]Result[string], error) {
+func (client *baseClient) LPopCount(key string, count int64) ([]string, error) {
 	result, err := client.executeCommand(C.LPop, []string{key, utils.IntToString(count)})
 	if err != nil {
 		return nil, err
 	}
 
-	return handleStringArrayOrNullResponse(result)
+	return handleStringArrayOrNilResponse(result)
 }
 
 func (client *baseClient) LPos(key string, element string) (Result[int64], error) {
@@ -554,7 +554,7 @@ func (client *baseClient) LPosWithOptions(key string, element string, options *L
 	return handleIntOrNilResponse(result)
 }
 
-func (client *baseClient) LPosCount(key string, element string, count int64) ([]Result[int64], error) {
+func (client *baseClient) LPosCount(key string, element string, count int64) ([]int64, error) {
 	result, err := client.executeCommand(C.LPos, []string{key, element, CountKeyword, utils.IntToString(count)})
 	if err != nil {
 		return nil, err
@@ -568,7 +568,7 @@ func (client *baseClient) LPosCountWithOptions(
 	element string,
 	count int64,
 	options *LPosOptions,
-) ([]Result[int64], error) {
+) ([]int64, error) {
 	result, err := client.executeCommand(
 		C.LPos,
 		append([]string{key, element, CountKeyword, utils.IntToString(count)}, options.toArgs()...),
@@ -768,7 +768,7 @@ func (client *baseClient) SMove(source string, destination string, member string
 	return handleBoolResponse(result)
 }
 
-func (client *baseClient) LRange(key string, start int64, end int64) ([]Result[string], error) {
+func (client *baseClient) LRange(key string, start int64, end int64) ([]string, error) {
 	result, err := client.executeCommand(C.LRange, []string{key, utils.IntToString(start), utils.IntToString(end)})
 	if err != nil {
 		return nil, err
@@ -822,13 +822,13 @@ func (client *baseClient) RPop(key string) (Result[string], error) {
 	return handleStringOrNilResponse(result)
 }
 
-func (client *baseClient) RPopCount(key string, count int64) ([]Result[string], error) {
+func (client *baseClient) RPopCount(key string, count int64) ([]string, error) {
 	result, err := client.executeCommand(C.RPop, []string{key, utils.IntToString(count)})
 	if err != nil {
 		return nil, err
 	}
 
-	return handleStringArrayOrNullResponse(result)
+	return handleStringArrayOrNilResponse(result)
 }
 
 func (client *baseClient) LInsert(
@@ -853,22 +853,22 @@ func (client *baseClient) LInsert(
 	return handleIntResponse(result)
 }
 
-func (client *baseClient) BLPop(keys []string, timeoutSecs float64) ([]Result[string], error) {
+func (client *baseClient) BLPop(keys []string, timeoutSecs float64) ([]string, error) {
 	result, err := client.executeCommand(C.BLPop, append(keys, utils.FloatToString(timeoutSecs)))
 	if err != nil {
 		return nil, err
 	}
 
-	return handleStringArrayOrNullResponse(result)
+	return handleStringArrayOrNilResponse(result)
 }
 
-func (client *baseClient) BRPop(keys []string, timeoutSecs float64) ([]Result[string], error) {
+func (client *baseClient) BRPop(keys []string, timeoutSecs float64) ([]string, error) {
 	result, err := client.executeCommand(C.BRPop, append(keys, utils.FloatToString(timeoutSecs)))
 	if err != nil {
 		return nil, err
 	}
 
-	return handleStringArrayOrNullResponse(result)
+	return handleStringArrayOrNilResponse(result)
 }
 
 func (client *baseClient) RPushX(key string, elements []string) (int64, error) {
@@ -1258,12 +1258,12 @@ func (client *baseClient) Unlink(keys []string) (int64, error) {
 	return handleIntResponse(result)
 }
 
-func (client *baseClient) Type(key string) (Result[string], error) {
+func (client *baseClient) Type(key string) (string, error) {
 	result, err := client.executeCommand(C.Type, []string{key})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return defaultStringResponse, err
 	}
-	return handleStringOrNilResponse(result)
+	return handleStringResponse(result)
 }
 
 func (client *baseClient) Touch(keys []string) (int64, error) {
@@ -1275,12 +1275,12 @@ func (client *baseClient) Touch(keys []string) (int64, error) {
 	return handleIntResponse(result)
 }
 
-func (client *baseClient) Rename(key string, newKey string) (Result[string], error) {
+func (client *baseClient) Rename(key string, newKey string) (string, error) {
 	result, err := client.executeCommand(C.Rename, []string{key, newKey})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return defaultStringResponse, err
 	}
-	return handleStringOrNilResponse(result)
+	return handleStringResponse(result)
 }
 
 func (client *baseClient) Renamenx(key string, newKey string) (bool, error) {
@@ -1575,20 +1575,19 @@ func (client *baseClient) BZPopMin(keys []string, timeoutSecs float64) (Result[K
 //
 // Example:
 //
-//	// Retrieve all members of a sorted set in ascending order
-//	result, err := client.ZRange("my_sorted_set", options.NewRangeByIndexQuery(0, -1))
+//		// Retrieve all members of a sorted set in ascending order
+//		result, err := client.ZRange("my_sorted_set", options.NewRangeByIndexQuery(0, -1))
 //
-//	// Retrieve members within a score range in descending order
-//
-// query := options.NewRangeByScoreQuery(options.NewScoreBoundary(3, false),
-// options.NewInfiniteScoreBoundary(options.NegativeInfinity)).
-//
-//	  .SetReverse()
-//	result, err := client.ZRange("my_sorted_set", query)
-//	// `result` contains members which have scores within the range of negative infinity to 3, in descending order
+//		// Retrieve members within a score range in descending order
+//	 query := options.NewRangeByScoreQuery(
+//	     options.NewScoreBoundary(3, false),
+//	     options.NewInfiniteScoreBoundary(options.NegativeInfinity)).
+//	   SetReverse()
+//		result, err := client.ZRange("my_sorted_set", query)
+//		// `result` contains members which have scores within the range of negative infinity to 3, in descending order
 //
 // [valkey.io]: https://valkey.io/commands/zrange/
-func (client *baseClient) ZRange(key string, rangeQuery options.ZRangeQuery) ([]Result[string], error) {
+func (client *baseClient) ZRange(key string, rangeQuery options.ZRangeQuery) ([]string, error) {
 	args := make([]string, 0, 10)
 	args = append(args, key)
 	args = append(args, rangeQuery.ToArgs()...)
@@ -1619,17 +1618,16 @@ func (client *baseClient) ZRange(key string, rangeQuery options.ZRangeQuery) ([]
 //
 // Example:
 //
-//	// Retrieve all members of a sorted set in ascending order
-//	result, err := client.ZRangeWithScores("my_sorted_set", options.NewRangeByIndexQuery(0, -1))
+//		// Retrieve all members of a sorted set in ascending order
+//		result, err := client.ZRangeWithScores("my_sorted_set", options.NewRangeByIndexQuery(0, -1))
 //
-//	// Retrieve members within a score range in descending order
-//
-// query := options.NewRangeByScoreQuery(options.NewScoreBoundary(3, false),
-// options.NewInfiniteScoreBoundary(options.NegativeInfinity)).
-//
-//	  SetReverse()
-//	result, err := client.ZRangeWithScores("my_sorted_set", query)
-//	// `result` contains members with scores within the range of negative infinity to 3, in descending order
+//		// Retrieve members within a score range in descending order
+//	 query := options.NewRangeByScoreQuery(
+//	     options.NewScoreBoundary(3, false),
+//	     options.NewInfiniteScoreBoundary(options.NegativeInfinity)).
+//	   SetReverse()
+//		result, err := client.ZRangeWithScores("my_sorted_set", query)
+//		// `result` contains members with scores within the range of negative infinity to 3, in descending order
 //
 // [valkey.io]: https://valkey.io/commands/zrange/
 func (client *baseClient) ZRangeWithScores(
