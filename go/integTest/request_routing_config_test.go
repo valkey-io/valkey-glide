@@ -5,9 +5,9 @@ package integTest
 import (
 	"testing"
 
+	"github.com/jamesx-improving/valkey-glide/go/protobuf"
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/glide/api/config"
-	"github.com/valkey-io/valkey-glide/go/glide/protobuf"
 )
 
 func TestSimpleNodeRoute(t *testing.T) {

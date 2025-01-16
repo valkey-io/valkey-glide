@@ -3,7 +3,7 @@
 package options
 
 import (
-	"github.com/valkey-io/valkey-glide/go/glide/utils"
+	"github.com/jamesx-improving/valkey-glide/go/utils"
 )
 
 // Query for `ZRange` in [SortedSetCommands]
