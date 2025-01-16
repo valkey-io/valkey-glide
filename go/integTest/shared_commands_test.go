@@ -5293,8 +5293,6 @@ func (suite *GlideTestSuite) TestXPending() {
 			assert.Equal(suite.T(), len(detailResult), 2)
 			assert.Equal(suite.T(), streamid_1.Value(), detailResult[0].Id)
 			assert.Equal(suite.T(), streamid_2.Value(), detailResult[1].Id)
-
-			//
 		}
 
 		execCluster := func(client api.GlideClusterClient) {

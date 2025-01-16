@@ -168,11 +168,17 @@ func NewXPendingOptions(start string, end string, count int64) *XPendingOptions 
 	return options
 }
 
+// SetMinIdleTime sets the minimum idle time for the XPendingOptions.
+// minIdleTime is the amount of time (in milliseconds) that a message must be idle to be considered.
+// It returns the updated XPendingOptions.
 func (xpo *XPendingOptions) SetMinIdleTime(minIdleTime int64) *XPendingOptions {
 	xpo.minIdleTime = minIdleTime
 	return xpo
 }
 
+// SetConsumer sets the consumer for the XPendingOptions.
+// consumer is the name of the consumer to filter the pending messages.
+// It returns the updated XPendingOptions.
 func (xpo *XPendingOptions) SetConsumer(consumer string) *XPendingOptions {
 	xpo.consumer = consumer
 	return xpo

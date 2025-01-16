@@ -1961,10 +1961,7 @@ func (client *baseClient) XPending(key string, group string) (XPendingSummary, e
 // A slice of XPendingDetail structs, where each detail struct includes the following fields:
 //
 //	Id - The ID of the pending message.
-//	ConsumerName - The name of the consumer that fetched the message and has still to acknowledge it. We call it the current
-//
-// owner of the message.
-//
+//	ConsumerName - The name of the consumer that fetched the message and has still to acknowledge it.
 //	IdleTime - The time in milliseconds since the last time the message was delivered to the consumer.
 //	DeliveryCount - The number of times this message was delivered.
 //

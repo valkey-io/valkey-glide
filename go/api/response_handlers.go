@@ -606,10 +606,6 @@ func handleXReadResponse(response *C.struct_CommandResponse) (map[string]map[str
 func handleXPendingSummaryResponse(response *C.struct_CommandResponse) (XPendingSummary, error) {
 	defer C.free_command_response(response)
 
-	if response == nil || response.response_type == uint32(C.Null) {
-		return CreateNilXPendingSummary(), nil
-	}
-
 	typeErr := checkResponseType(response, C.Array, true)
 	if typeErr != nil {
 		return CreateNilXPendingSummary(), typeErr

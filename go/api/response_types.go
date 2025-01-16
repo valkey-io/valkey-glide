@@ -190,10 +190,6 @@ type XPendingDetail struct {
 	DeliveryCount int64
 }
 
-func CreateXPendingSummary() *XPendingSummary {
-	return &XPendingSummary{0, CreateNilStringResult(), CreateNilStringResult(), make([]ConsumerPendingMessage, 0)}
-}
-
 func CreateNilXPendingSummary() XPendingSummary {
 	return XPendingSummary{0, CreateNilStringResult(), CreateNilStringResult(), make([]ConsumerPendingMessage, 0)}
 }
