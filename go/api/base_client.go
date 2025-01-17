@@ -2033,10 +2033,23 @@ func (client *baseClient) ObjectEncoding(key string) (Result[string], error) {
 	return handleStringOrNilResponse(result)
 }
 
-func (client *baseClient) Time() ([]Result[string], error) {
+// Returns the server time.
+//
+// Return value:
+// The current server time as a String array with two elements:
+// A UNIX TIME and the amount of microseconds already elapsed in the current second.
+// The returned array is in a [UNIX TIME, Microseconds already elapsed] format.
+//
+// For example:
+//
+//	result, err := client.Time()
+//	result: [{1737051660} {994688}]
+//
+// [valkey.io]: https://valkey.io/commands/time/
+func (client *baseClient) Time() ([]string, error) {
 	result, err := client.executeCommand(C.Time, []string{})
 	if err != nil {
 		return nil, err
 	}
-	return handleStringArrayResponse(result)
+	return handleRawStringArrayResponse(result)
 }

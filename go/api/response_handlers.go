@@ -693,3 +693,29 @@ func handleXPendingDetailResponse(response *C.struct_CommandResponse) ([]XPendin
 
 	return pendingDetails, nil
 }
+
+func handleRawStringArrayResponse(response *C.struct_CommandResponse) ([]string, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Array, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	slice := make([]string, 0, response.array_value_len)
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		err := checkResponseType(&v, C.String, false)
+		if err != nil {
+			return nil, err
+		}
+
+		if v.string_value == nil {
+			return nil, &RequestError{"Unexpected nil string in array"}
+		}
+
+		byteSlice := C.GoBytes(unsafe.Pointer(v.string_value), C.int(int64(v.string_value_len)))
+		slice = append(slice, string(byteSlice))
+	}
+
+	return slice, nil
+}
