@@ -4949,6 +4949,257 @@ func (client *Command) XLen(key string) (int64, error) {
 	return handleIntResponse(result)
 }
 
+// Transfers ownership of pending stream entries that match the specified criteria.
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	key - The key of the stream.
+//	group - The consumer group name.
+//	consumer - The group consumer.
+//	minIdleTime - The minimum idle time for the message to be claimed.
+//	start - Filters the claimed entries to those that have an ID equal or greater than the specified value.
+//
+// Return value:
+//
+//	An object containing the following elements:
+//	  - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
+//	    equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
+//	    the entire stream was scanned.
+//	  - A map of the claimed entries.
+//	  - If you are using Valkey 7.0.0 or above, the response will also include an array containing
+//	    the message IDs that were in the Pending Entries List but no longer exist in the stream.
+//	    These IDs are deleted from the Pending Entries List.
+//
+// Example:
+//
+//	result, err := client.XAutoClaim("myStream", "myGroup", "myConsumer", 42, "0-0")
+//	result:
+//	// &{
+//	//     "1609338788321-0"               // value to be used as `start` argument for the next `xautoclaim` call
+//	//     map[
+//	//         "1609338752495-0": [        // claimed entries
+//	//             ["field 1", "value 1"]
+//	//             ["field 2", "value 2"]
+//	//         ]
+//	//     ]
+//	//     [
+//	//         "1594324506465-0",          // array of IDs of deleted messages,
+//	//         "1594568784150-0"           // included in the response only on valkey 7.0.0 and above
+//	//     ]
+//	// }
+//
+// [valkey.io]: https://valkey.io/commands/xautoclaim/
+func (client *baseClient) XAutoClaim(
+	key string,
+	group string,
+	consumer string,
+	minIdleTime int64,
+	start string,
+) (XAutoClaimResponse, error) {
+	return client.XAutoClaimWithOptions(key, group, consumer, minIdleTime, start, nil)
+}
+
+// Transfers ownership of pending stream entries that match the specified criteria.
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	key - The key of the stream.
+//	group - The consumer group name.
+//	consumer - The group consumer.
+//	minIdleTime - The minimum idle time for the message to be claimed.
+//	start - Filters the claimed entries to those that have an ID equal or greater than the specified value.
+//	options - Options detailing how to read the stream.
+//
+// Return value:
+//
+//	An object containing the following elements:
+//	  - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
+//	    equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
+//	    the entire stream was scanned.
+//	  - A map of the claimed entries.
+//	  - If you are using Valkey 7.0.0 or above, the response will also include an array containing
+//	    the message IDs that were in the Pending Entries List but no longer exist in the stream.
+//	    These IDs are deleted from the Pending Entries List.
+//
+// Example:
+//
+//	opts := options.NewXAutoClaimOptionsWithCount(1)
+//	result, err := client.XAutoClaimWithOptions("myStream", "myGroup", "myConsumer", 42, "0-0", opts)
+//	result:
+//	// &{
+//	//     "1609338788321-0"               // value to be used as `start` argument for the next `xautoclaim` call
+//	//     map[
+//	//         "1609338752495-0": [        // claimed entries
+//	//             ["field 1", "value 1"]
+//	//             ["field 2", "value 2"]
+//	//         ]
+//	//     ]
+//	//     [
+//	//         "1594324506465-0",          // array of IDs of deleted messages,
+//	//         "1594568784150-0"           // included in the response only on valkey 7.0.0 and above
+//	//     ]
+//	// }
+//
+// [valkey.io]: https://valkey.io/commands/xautoclaim/
+func (client *baseClient) XAutoClaimWithOptions(
+	key string,
+	group string,
+	consumer string,
+	minIdleTime int64,
+	start string,
+	options *options.XAutoClaimOptions,
+) (XAutoClaimResponse, error) {
+	args := []string{key, group, consumer, utils.IntToString(minIdleTime), start}
+	if options != nil {
+		optArgs, err := options.ToArgs()
+		if err != nil {
+			return XAutoClaimResponse{}, err
+		}
+		args = append(args, optArgs...)
+	}
+	result, err := client.executeCommand(C.XAutoClaim, args)
+	if err != nil {
+		return XAutoClaimResponse{}, err
+	}
+	return handleXAutoClaimResponse(result)
+}
+
+// Transfers ownership of pending stream entries that match the specified criteria.
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	key - The key of the stream.
+//	group - The consumer group name.
+//	consumer - The group consumer.
+//	minIdleTime - The minimum idle time for the message to be claimed.
+//	start - Filters the claimed entries to those that have an ID equal or greater than the specified value.
+//
+// Return value:
+//
+//	An object containing the following elements:
+//	  - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
+//	    equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
+//	    the entire stream was scanned.
+//	  - An array of IDs for the claimed entries.
+//	  - If you are using Valkey 7.0.0 or above, the response will also include an array containing
+//	    the message IDs that were in the Pending Entries List but no longer exist in the stream.
+//	    These IDs are deleted from the Pending Entries List.
+//
+// Example:
+//
+//	result, err := client.XAutoClaimJustId("myStream", "myGroup", "myConsumer", 42, "0-0")
+//	result:
+//	// &{
+//	//     "1609338788321-0"               // value to be used as `start` argument for the next `xautoclaim` call
+//	//     [
+//	//         "1609338752495-0",          // claimed entries
+//	//         "1609338752495-1"
+//	//     ]
+//	//     [
+//	//         "1594324506465-0",          // array of IDs of deleted messages,
+//	//         "1594568784150-0"           // included in the response only on valkey 7.0.0 and above
+//	//     ]
+//	// }
+//
+// [valkey.io]: https://valkey.io/commands/xautoclaim/
+func (client *baseClient) XAutoClaimJustId(
+	key string,
+	group string,
+	consumer string,
+	minIdleTime int64,
+	start string,
+) (XAutoClaimJustIdResponse, error) {
+	return client.XAutoClaimJustIdWithOptions(key, group, consumer, minIdleTime, start, nil)
+}
+
+// Transfers ownership of pending stream entries that match the specified criteria.
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	key - The key of the stream.
+//	group - The consumer group name.
+//	consumer - The group consumer.
+//	minIdleTime - The minimum idle time for the message to be claimed.
+//	start - Filters the claimed entries to those that have an ID equal or greater than the specified value.
+//	options - Options detailing how to read the stream.
+//
+// Return value:
+//
+//	An object containing the following elements:
+//	  - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
+//	    equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
+//	    the entire stream was scanned.
+//	  - An array of IDs for the claimed entries.
+//	  - If you are using Valkey 7.0.0 or above, the response will also include an array containing
+//	    the message IDs that were in the Pending Entries List but no longer exist in the stream.
+//	    These IDs are deleted from the Pending Entries List.
+//
+// Example:
+//
+//	opts := options.NewXAutoClaimOptionsWithCount(1)
+//	result, err := client.XAutoClaimJustIdWithOptions("myStream", "myGroup", "myConsumer", 42, "0-0", opts)
+//	result:
+//	// &{
+//	//     "1609338788321-0"               // value to be used as `start` argument for the next `xautoclaim` call
+//	//     [
+//	//         "1609338752495-0",          // claimed entries
+//	//         "1609338752495-1"
+//	//     ]
+//	//     [
+//	//         "1594324506465-0",          // array of IDs of deleted messages,
+//	//         "1594568784150-0"           // included in the response only on valkey 7.0.0 and above
+//	//     ]
+//	// }
+//
+// [valkey.io]: https://valkey.io/commands/xautoclaim/
+func (client *baseClient) XAutoClaimJustIdWithOptions(
+	key string,
+	group string,
+	consumer string,
+	minIdleTime int64,
+	start string,
+	options *options.XAutoClaimOptions,
+) (XAutoClaimJustIdResponse, error) {
+	args := []string{key, group, consumer, utils.IntToString(minIdleTime), start}
+	if options != nil {
+		optArgs, err := options.ToArgs()
+		if err != nil {
+			return XAutoClaimJustIdResponse{}, err
+		}
+		args = append(args, optArgs...)
+	}
+	args = append(args, "JUSTID")
+	result, err := client.executeCommand(C.XAutoClaim, args)
+	if err != nil {
+		return XAutoClaimJustIdResponse{}, err
+	}
+	return handleXAutoClaimJustIdResponse(result)
+}
+
 // Removes the specified entries by id from a stream, and returns the number of entries deleted.
 //
 // See [valkey.io] for details.

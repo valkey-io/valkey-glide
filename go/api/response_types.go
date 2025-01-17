@@ -23,6 +23,20 @@ type KeyWithMemberAndScore struct {
 	Score  float64
 }
 
+// Response type of [XAutoClaim] command.
+type XAutoClaimResponse struct {
+	NextEntry       string
+	ClaimedEntries  map[string][][]string
+	DeletedMessages []string
+}
+
+// Response type of [XAutoClaimJustId] command.
+type XAutoClaimJustIdResponse struct {
+	NextEntry       string
+	ClaimedEntries  []string
+	DeletedMessages []string
+}
+
 func (result Result[T]) IsNil() bool {
 	return result.isNil
 }

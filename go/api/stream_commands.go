@@ -19,6 +19,34 @@ type StreamCommands interface {
 
 	XLen(key string) (int64, error)
 
+	XAutoClaim(key string, group string, consumer string, minIdleTime int64, start string) (XAutoClaimResponse, error)
+
+	XAutoClaimWithOptions(
+		key string,
+		group string,
+		consumer string,
+		minIdleTime int64,
+		start string,
+		options *options.XAutoClaimOptions,
+	) (XAutoClaimResponse, error)
+
+	XAutoClaimJustId(
+		key string,
+		group string,
+		consumer string,
+		minIdleTime int64,
+		start string,
+	) (XAutoClaimJustIdResponse, error)
+
+	XAutoClaimJustIdWithOptions(
+		key string,
+		group string,
+		consumer string,
+		minIdleTime int64,
+		start string,
+		options *options.XAutoClaimOptions,
+	) (XAutoClaimJustIdResponse, error)
+
 	XReadGroup(group string, consumer string, keysAndIds map[string]string) (map[string]map[string][][]string, error)
 
 	XReadGroupWithOptions(
