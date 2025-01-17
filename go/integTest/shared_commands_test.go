@@ -6716,6 +6716,54 @@ func (suite *GlideTestSuite) TestXGroupCreateConsumer() {
 		zeroStreamId := "0"
 		consumerName := "consumer-" + uuid.New().String()
 
-		client.XGroupCreate(key, groupName, zeroStreamId, "MKSTREAM")
+		sendWithCustomCommand(
+			suite,
+			client,
+			[]string{"xgroup", "create", key, groupName, zeroStreamId, "MKSTREAM"},
+			"Can't send XGROUP CREATE as a custom command",
+		)
+		respBool, err := client.XGroupCreateConsumer(key, groupName, consumerName)
+		assert.NoError(suite.T(), err)
+		assert.True(suite.T(), respBool)
+
+		// create a consumer for a group that doesn't exist should result in a NOGROUP error
+		_, err = client.XGroupCreateConsumer(key, "non-existent-group", consumerName)
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+		assert.True(suite.T(), strings.Contains(err.Error(), "NOGROUP"))
+
+		// create consumer that already exists should return false
+		respBool, err = client.XGroupCreateConsumer(key, groupName, consumerName)
+		assert.NoError(suite.T(), err)
+		assert.False(suite.T(), respBool)
+
+		// Delete a consumer that hasn't been created should return 0
+		respInt64, err := client.XGroupDelConsumer(key, groupName, "non-existent-consumer")
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), respInt64)
+
+		// Add two stream entries
+		streamId1, err := client.XAdd(key, [][]string{{"field1", "value1"}})
+		assert.NoError(suite.T(), err)
+		streamId2, err := client.XAdd(key, [][]string{{"field2", "value2"}})
+		assert.NoError(suite.T(), err)
+
+		// read the stream for the consumer and mark messages as pending
+		command := []string{"XReadGroup", "GROUP", groupName, consumerName, "STREAMS", key, ">"}
+		sendWithCustomCommand(suite, client, command, "Can't send XREADGROUP as a custom command")
+
+		// delete one of the streams using XDel
+		respInt64, err = client.XDel(key, []string{streamId1.Value()})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), respInt64)
+
+		// xreadgroup should return one empty stream and one non-empty stream
+		command = []string{"XReadGroup", "GROUP", groupName, consumerName, "STREAMS", key, zeroStreamId}
+		sendWithCustomCommand(suite, client, command, "Can't send XREADGROUP as a custom command")
+
+		// xack that streamid1 and streamid2 have been processed
+		command = []string{"XAck", key, groupName, streamId1.Value(), streamId2.Value()}
+		sendWithCustomCommand(suite, client, command, "Can't send XACK as a custom command")
+
 	})
 }
