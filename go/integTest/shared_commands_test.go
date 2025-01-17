@@ -6708,3 +6708,14 @@ func (suite *GlideTestSuite) TestSortStoreWithOptions_ByPattern() {
 		assert.Equal(suite.T(), resultList, sortedValues)
 	})
 }
+
+func (suite *GlideTestSuite) TestXGroupCreateConsumer() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.New().String()
+		groupName := "group" + uuid.New().String()
+		zeroStreamId := "0"
+		consumerName := "consumer-" + uuid.New().String()
+
+		client.XGroupCreate(key, groupName, zeroStreamId, "MKSTREAM")
+	})
+}

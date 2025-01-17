@@ -2870,3 +2870,29 @@ func (client *baseClient) SortStoreWithOptions(
 	}
 	return handleIntOrNilResponse(result)
 }
+
+func (client *baseClient) XGroupCreateConsumer(
+	key string,
+	group string,
+	consumer string,
+) (bool, error) {
+	result, err := client.executeCommand(C.XGroupCreateConsumer, []string{key, group, consumer})
+	if err != nil {
+		return false, err
+	}
+	return handleBoolResponse(result)
+
+}
+
+func (client *baseClient) XGroupDelConsumer(
+	key string,
+	group string,
+	consumer string,
+) (int64, error) {
+	result, err := client.executeCommand(C.XGroupDelConsumer, []string{key, group, consumer})
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+
+}
