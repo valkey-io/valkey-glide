@@ -6331,7 +6331,6 @@ func (suite *GlideTestSuite) TestEcho() {
 	})
 }
 
-func (suite *GlideTestSuite) TestZRemRangeByRank() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key1 := uuid.New().String()
 		stringKey := uuid.New().String()
@@ -6709,9 +6708,10 @@ func (suite *GlideTestSuite) TestSortStoreWithOptions_ByPattern() {
 	})
 }
 
-func (suite *GlideTestSuite) TestXGroupCreateConsumer() {
+func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
+		stringKey := uuid.New().String()
 		groupName := "group" + uuid.New().String()
 		zeroStreamId := "0"
 		consumerName := "consumer-" + uuid.New().String()
@@ -6749,7 +6749,9 @@ func (suite *GlideTestSuite) TestXGroupCreateConsumer() {
 		assert.NoError(suite.T(), err)
 
 		// read the stream for the consumer and mark messages as pending
-		expectedGroup := map[string]map[string][][]string{key: {streamId1.Value(): {{"field1", "value1"}}, streamId2.Value(): {{"field12", "value2"}}}}
+		expectedGroup := map[string]map[string][][]string{
+			key: {streamId1.Value(): {{"field1", "value1"}}, streamId2.Value(): {{"field2", "value2"}}},
+		}
 		actualGroup, err := client.XReadGroup(groupName, consumerName, map[string]string{key: ">"})
 		assert.NoError(suite.T(), err)
 		assert.True(suite.T(), reflect.DeepEqual(expectedGroup, actualGroup),
@@ -6764,9 +6766,12 @@ func (suite *GlideTestSuite) TestXGroupCreateConsumer() {
 		// xreadgroup should return one empty stream and one non-empty stream
 		resp, err := client.XReadGroup(groupName, consumerName, map[string]string{key: zeroStreamId})
 		assert.NoError(suite.T(), err)
-		assert.Equal(suite.T(), 2, len(resp))
+		assert.Equal(suite.T(), 2, len(resp[key]))
 		assert.Nil(suite.T(), resp[key][streamId1.Value()])
-		assert.Equal(suite.T(), [][]string{{"field2", "value2"}}, resp[key][streamId2.Value()])
+		assert.True(suite.T(), reflect.DeepEqual([][]string{{"field2", "value2"}}, resp[key][streamId2.Value()]))
+
+		fmt.Printf("resp: %v\n", resp)
+		fmt.Printf("resp: %v\n", resp[key][streamId2.Value()])
 
 		// add a new stream entry
 		streamId3, err := client.XAdd(key, [][]string{{"field3", "value3"}})
@@ -6777,9 +6782,40 @@ func (suite *GlideTestSuite) TestXGroupCreateConsumer() {
 		command := []string{"XAck", key, groupName, streamId1.Value(), streamId2.Value()}
 		sendWithCustomCommand(suite, client, command, "Can't send XACK as a custom command")
 
+		// Delete the consumer group and expect 0 pending messages
+		respInt64, err = client.XGroupDelConsumer(key, groupName, consumerName)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), respInt64)
+
+		// TODO: Use XAck when it is added to the Go client
+		// xack streamid_1, and streamid_2 already received returns 0L
+		command = []string{"XAck", key, groupName, streamId1.Value(), streamId2.Value()}
+		sendWithCustomCommand(suite, client, command, "Can't send XACK as a custom command")
+
+		// Consume the last message with the previously deleted consumer (creates the consumer anew)
+		resp, err = client.XReadGroup(groupName, consumerName, map[string]string{key: ">"})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), 1, len(resp[key]))
+
+		// TODO: Use XAck when it is added to the Go client
+		// Use non existent group, so xack streamid_3 returns 0
+		command = []string{"XAck", key, "non-existent-group", streamId3.Value()}
+		sendWithCustomCommand(suite, client, command, "Can't send XACK as a custom command")
+
 		// Delete the consumer group and expect 1 pending message
 		respInt64, err = client.XGroupDelConsumer(key, groupName, consumerName)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(1), respInt64)
+
+		// Set a string key, and expect an error when you try to create or delete a consumer group
+		_, err = client.Set(stringKey, "test")
+		assert.NoError(suite.T(), err)
+		respBool, err = client.XGroupCreateConsumer(stringKey, groupName, consumerName)
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		respInt64, err = client.XGroupDelConsumer(stringKey, groupName, consumerName)
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
 }
