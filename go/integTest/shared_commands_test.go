@@ -4122,6 +4122,122 @@ func sendWithCustomCommand(suite *GlideTestSuite, client api.BaseClient, args []
 	return res
 }
 
+func (suite *GlideTestSuite) TestXAutoClaim() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		group := uuid.NewString()
+		consumer := uuid.NewString()
+
+		sendWithCustomCommand(
+			suite,
+			client,
+			[]string{"xgroup", "create", key, group, "0", "MKSTREAM"},
+			"Can't send XGROUP CREATE as a custom command",
+		)
+		sendWithCustomCommand(
+			suite,
+			client,
+			[]string{"xgroup", "createconsumer", key, group, consumer},
+			"Can't send XGROUP CREATECONSUMER as a custom command",
+		)
+
+		xadd, err := client.XAddWithOptions(
+			key,
+			[][]string{{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
+			options.NewXAddOptions().SetId("0-1"),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "0-1", xadd.Value())
+		xadd, err = client.XAddWithOptions(
+			key,
+			[][]string{{"entry2_field1", "entry2_value1"}},
+			options.NewXAddOptions().SetId("0-2"),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "0-2", xadd.Value())
+
+		xreadgroup, err := client.XReadGroup(group, consumer, map[string]string{key: ">"})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), map[string]map[string][][]string{
+			key: {
+				"0-1": {{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
+				"0-2": {{"entry2_field1", "entry2_value1"}},
+			},
+		}, xreadgroup)
+
+		opts := options.NewXAutoClaimOptionsWithCount(1)
+		xautoclaim, err := client.XAutoClaimWithOptions(key, group, consumer, 0, "0-0", opts)
+		assert.NoError(suite.T(), err)
+		var deletedEntries []string
+		if suite.serverVersion >= "7.0.0" {
+			deletedEntries = []string{}
+		}
+		assert.Equal(
+			suite.T(),
+			api.XAutoClaimResponse{
+				NextEntry: "0-2",
+				ClaimedEntries: map[string][][]string{
+					"0-1": {{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
+				},
+				DeletedMessages: deletedEntries,
+			},
+			xautoclaim,
+		)
+
+		justId, err := client.XAutoClaimJustId(key, group, consumer, 0, "0-0")
+		assert.NoError(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			api.XAutoClaimJustIdResponse{
+				NextEntry:       "0-0",
+				ClaimedEntries:  []string{"0-1", "0-2"},
+				DeletedMessages: deletedEntries,
+			},
+			justId,
+		)
+
+		// add one more entry
+		xadd, err = client.XAddWithOptions(
+			key,
+			[][]string{{"entry3_field1", "entry3_value1"}},
+			options.NewXAddOptions().SetId("0-3"),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "0-3", xadd.Value())
+
+		// incorrect IDs - response is empty
+		xautoclaim, err = client.XAutoClaim(key, group, consumer, 0, "5-0")
+		assert.NoError(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			api.XAutoClaimResponse{
+				NextEntry:       "0-0",
+				ClaimedEntries:  map[string][][]string{},
+				DeletedMessages: deletedEntries,
+			},
+			xautoclaim,
+		)
+
+		justId, err = client.XAutoClaimJustId(key, group, consumer, 0, "5-0")
+		assert.NoError(suite.T(), err)
+		assert.Equal(
+			suite.T(),
+			api.XAutoClaimJustIdResponse{
+				NextEntry:       "0-0",
+				ClaimedEntries:  []string{},
+				DeletedMessages: deletedEntries,
+			},
+			justId,
+		)
+
+		// key exists, but it is not a stream
+		key2 := uuid.New().String()
+		suite.verifyOK(client.Set(key2, key2))
+		_, err = client.XAutoClaim(key2, "_", "_", 0, "_")
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
 func (suite *GlideTestSuite) TestXReadGroup() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key1 := "{xreadgroup}-1-" + uuid.NewString()
@@ -5477,8 +5593,7 @@ func (suite *GlideTestSuite) TestXPending() {
 			streamid_2, err := client.XAdd(key, [][]string{{"field2", "value2"}})
 			assert.NoError(suite.T(), err)
 
-			command = []string{"XReadGroup", "GROUP", groupName, consumer1, "STREAMS", key, ">"}
-			_, err = client.CustomCommand(command)
+			_, err = client.XReadGroup(groupName, consumer1, map[string]string{key: ">"})
 			assert.NoError(suite.T(), err)
 
 			_, err = client.XAdd(key, [][]string{{"field3", "value3"}})
@@ -5488,8 +5603,7 @@ func (suite *GlideTestSuite) TestXPending() {
 			streamid_5, err := client.XAdd(key, [][]string{{"field5", "value5"}})
 			assert.NoError(suite.T(), err)
 
-			command = []string{"XReadGroup", "GROUP", groupName, consumer2, "STREAMS", key, ">"}
-			_, err = client.CustomCommand(command)
+			_, err = client.XReadGroup(groupName, consumer2, map[string]string{key: ">"})
 			assert.NoError(suite.T(), err)
 
 			expectedSummary := api.XPendingSummary{
@@ -5553,8 +5667,7 @@ func (suite *GlideTestSuite) TestXPending() {
 			streamid_2, err := client.XAdd(key, [][]string{{"field2", "value2"}})
 			assert.NoError(suite.T(), err)
 
-			command = []string{"XReadGroup", "GROUP", groupName, consumer1, "STREAMS", key, ">"}
-			_, err = client.CustomCommand(command)
+			_, err = client.XReadGroup(groupName, consumer1, map[string]string{key: ">"})
 			assert.NoError(suite.T(), err)
 
 			_, err = client.XAdd(key, [][]string{{"field3", "value3"}})
@@ -5564,8 +5677,7 @@ func (suite *GlideTestSuite) TestXPending() {
 			streamid_5, err := client.XAdd(key, [][]string{{"field5", "value5"}})
 			assert.NoError(suite.T(), err)
 
-			command = []string{"XReadGroup", "GROUP", groupName, consumer2, "STREAMS", key, ">"}
-			_, err = client.CustomCommand(command)
+			_, err = client.XReadGroup(groupName, consumer2, map[string]string{key: ">"})
 			assert.NoError(suite.T(), err)
 
 			expectedSummary := api.XPendingSummary{
@@ -5662,8 +5774,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			assert.Equal(suite.T(), 0, len(detailResult))
 
 			// read the entire stream for the consumer and mark messages as pending
-			command = []string{"XReadGroup", "GROUP", groupName, consumer1, "STREAMS", key, ">"}
-			_, err = client.CustomCommand(command)
+			_, err = client.XReadGroup(groupName, consumer1, map[string]string{key: ">"})
 			assert.NoError(suite.T(), err)
 
 			// sanity check - expect some results:
@@ -5815,8 +5926,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			assert.Equal(suite.T(), 0, len(detailResult))
 
 			// read the entire stream for the consumer and mark messages as pending
-			command = []string{"XReadGroup", "GROUP", groupName, consumer1, "STREAMS", key, ">"}
-			_, err = client.CustomCommand(command)
+			_, err = client.XReadGroup(groupName, consumer1, map[string]string{key: ">"})
 			assert.NoError(suite.T(), err)
 
 			// sanity check - expect some results:
@@ -6062,5 +6172,164 @@ func (suite *GlideTestSuite) TestEcho() {
 		resultEcho, err := client.Echo(value)
 		assert.Nil(t, err)
 		assert.Equal(t, value, resultEcho.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestZRemRangeByRank() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.New().String()
+		stringKey := uuid.New().String()
+		membersScores := map[string]float64{
+			"one":   1.0,
+			"two":   2.0,
+			"three": 3.0,
+		}
+		zAddResult, err := client.ZAdd(key1, membersScores)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), zAddResult)
+
+		// Incorrect range start > stop
+		zRemRangeByRankResult, err := client.ZRemRangeByRank(key1, 2, 1)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), zRemRangeByRankResult)
+
+		// Remove first two members
+		zRemRangeByRankResult, err = client.ZRemRangeByRank(key1, 0, 1)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), zRemRangeByRankResult)
+
+		// Remove all members
+		zRemRangeByRankResult, err = client.ZRemRangeByRank(key1, 0, 10)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), zRemRangeByRankResult)
+
+		zRangeWithScoresResult, err := client.ZRangeWithScores(key1, options.NewRangeByIndexQuery(0, -1))
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), 0, len(zRangeWithScoresResult))
+
+		// Non-existing key
+		zRemRangeByRankResult, err = client.ZRemRangeByRank("non_existing_key", 0, 10)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), zRemRangeByRankResult)
+
+		// Key exists, but it is not a set
+		setResult, err := client.Set(stringKey, "test")
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "OK", setResult)
+
+		_, err = client.ZRemRangeByRank(stringKey, 0, 10)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestZRemRangeByLex() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.New().String()
+		stringKey := uuid.New().String()
+
+		// Add members to the set
+		zAddResult, err := client.ZAdd(key1, map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), zAddResult)
+
+		// min > max
+		zRemRangeByLexResult, err := client.ZRemRangeByLex(
+			key1,
+			*options.NewRangeByLexQuery(options.NewLexBoundary("d", false), options.NewLexBoundary("a", false)),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), zRemRangeByLexResult)
+
+		// Remove members with lexicographical range
+		zRemRangeByLexResult, err = client.ZRemRangeByLex(
+			key1,
+			*options.NewRangeByLexQuery(options.NewLexBoundary("a", false), options.NewLexBoundary("c", true)),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), zRemRangeByLexResult)
+
+		zRemRangeByLexResult, err = client.ZRemRangeByLex(
+			key1,
+			*options.NewRangeByLexQuery(options.NewLexBoundary("d", true), options.NewInfiniteLexBoundary(options.PositiveInfinity)),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), zRemRangeByLexResult)
+
+		// Non-existing key
+		zRemRangeByLexResult, err = client.ZRemRangeByLex(
+			"non_existing_key",
+			*options.NewRangeByLexQuery(options.NewLexBoundary("a", false), options.NewLexBoundary("c", false)),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), zRemRangeByLexResult)
+
+		// Key exists, but it is not a set
+		setResult, err := client.Set(stringKey, "test")
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "OK", setResult)
+
+		_, err = client.ZRemRangeByLex(
+			stringKey,
+			*options.NewRangeByLexQuery(options.NewLexBoundary("a", false), options.NewLexBoundary("c", false)),
+		)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestZRemRangeByScore() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.New().String()
+		stringKey := uuid.New().String()
+
+		// Add members to the set
+		zAddResult, err := client.ZAdd(key1, map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0, "four": 4.0})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), zAddResult)
+
+		// min > max
+		zRemRangeByScoreResult, err := client.ZRemRangeByScore(
+			key1,
+			*options.NewRangeByScoreQuery(options.NewScoreBoundary(2.0, false), options.NewScoreBoundary(1.0, false)),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), zRemRangeByScoreResult)
+
+		// Remove members with score range
+		zRemRangeByScoreResult, err = client.ZRemRangeByScore(
+			key1,
+			*options.NewRangeByScoreQuery(options.NewScoreBoundary(1.0, false), options.NewScoreBoundary(3.0, true)),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), zRemRangeByScoreResult)
+
+		// Remove all members
+		zRemRangeByScoreResult, err = client.ZRemRangeByScore(
+			key1,
+			*options.NewRangeByScoreQuery(options.NewScoreBoundary(1.0, false), options.NewScoreBoundary(10.0, true)),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), zRemRangeByScoreResult)
+
+		// Non-existing key
+		zRemRangeByScoreResult, err = client.ZRemRangeByScore(
+			"non_existing_key",
+			*options.NewRangeByScoreQuery(options.NewScoreBoundary(1.0, false), options.NewScoreBoundary(10.0, true)),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), zRemRangeByScoreResult)
+
+		// Key exists, but it is not a set
+		setResult, err := client.Set(stringKey, "test")
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "OK", setResult)
+
+		_, err = client.ZRemRangeByScore(
+			stringKey,
+			*options.NewRangeByScoreQuery(options.NewScoreBoundary(1.0, false), options.NewScoreBoundary(10.0, true)),
+		)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
 }

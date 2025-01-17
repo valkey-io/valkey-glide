@@ -1874,6 +1874,257 @@ func (client *baseClient) XLen(key string) (int64, error) {
 	return handleIntResponse(result)
 }
 
+// Transfers ownership of pending stream entries that match the specified criteria.
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	key - The key of the stream.
+//	group - The consumer group name.
+//	consumer - The group consumer.
+//	minIdleTime - The minimum idle time for the message to be claimed.
+//	start - Filters the claimed entries to those that have an ID equal or greater than the specified value.
+//
+// Return value:
+//
+//	An object containing the following elements:
+//	  - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
+//	    equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
+//	    the entire stream was scanned.
+//	  - A map of the claimed entries.
+//	  - If you are using Valkey 7.0.0 or above, the response will also include an array containing
+//	    the message IDs that were in the Pending Entries List but no longer exist in the stream.
+//	    These IDs are deleted from the Pending Entries List.
+//
+// Example:
+//
+//	result, err := client.XAutoClaim("myStream", "myGroup", "myConsumer", 42, "0-0")
+//	result:
+//	// &{
+//	//     "1609338788321-0"               // value to be used as `start` argument for the next `xautoclaim` call
+//	//     map[
+//	//         "1609338752495-0": [        // claimed entries
+//	//             ["field 1", "value 1"]
+//	//             ["field 2", "value 2"]
+//	//         ]
+//	//     ]
+//	//     [
+//	//         "1594324506465-0",          // array of IDs of deleted messages,
+//	//         "1594568784150-0"           // included in the response only on valkey 7.0.0 and above
+//	//     ]
+//	// }
+//
+// [valkey.io]: https://valkey.io/commands/xautoclaim/
+func (client *baseClient) XAutoClaim(
+	key string,
+	group string,
+	consumer string,
+	minIdleTime int64,
+	start string,
+) (XAutoClaimResponse, error) {
+	return client.XAutoClaimWithOptions(key, group, consumer, minIdleTime, start, nil)
+}
+
+// Transfers ownership of pending stream entries that match the specified criteria.
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	key - The key of the stream.
+//	group - The consumer group name.
+//	consumer - The group consumer.
+//	minIdleTime - The minimum idle time for the message to be claimed.
+//	start - Filters the claimed entries to those that have an ID equal or greater than the specified value.
+//	options - Options detailing how to read the stream.
+//
+// Return value:
+//
+//	An object containing the following elements:
+//	  - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
+//	    equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
+//	    the entire stream was scanned.
+//	  - A map of the claimed entries.
+//	  - If you are using Valkey 7.0.0 or above, the response will also include an array containing
+//	    the message IDs that were in the Pending Entries List but no longer exist in the stream.
+//	    These IDs are deleted from the Pending Entries List.
+//
+// Example:
+//
+//	opts := options.NewXAutoClaimOptionsWithCount(1)
+//	result, err := client.XAutoClaimWithOptions("myStream", "myGroup", "myConsumer", 42, "0-0", opts)
+//	result:
+//	// &{
+//	//     "1609338788321-0"               // value to be used as `start` argument for the next `xautoclaim` call
+//	//     map[
+//	//         "1609338752495-0": [        // claimed entries
+//	//             ["field 1", "value 1"]
+//	//             ["field 2", "value 2"]
+//	//         ]
+//	//     ]
+//	//     [
+//	//         "1594324506465-0",          // array of IDs of deleted messages,
+//	//         "1594568784150-0"           // included in the response only on valkey 7.0.0 and above
+//	//     ]
+//	// }
+//
+// [valkey.io]: https://valkey.io/commands/xautoclaim/
+func (client *baseClient) XAutoClaimWithOptions(
+	key string,
+	group string,
+	consumer string,
+	minIdleTime int64,
+	start string,
+	options *options.XAutoClaimOptions,
+) (XAutoClaimResponse, error) {
+	args := []string{key, group, consumer, utils.IntToString(minIdleTime), start}
+	if options != nil {
+		optArgs, err := options.ToArgs()
+		if err != nil {
+			return XAutoClaimResponse{}, err
+		}
+		args = append(args, optArgs...)
+	}
+	result, err := client.executeCommand(C.XAutoClaim, args)
+	if err != nil {
+		return XAutoClaimResponse{}, err
+	}
+	return handleXAutoClaimResponse(result)
+}
+
+// Transfers ownership of pending stream entries that match the specified criteria.
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	key - The key of the stream.
+//	group - The consumer group name.
+//	consumer - The group consumer.
+//	minIdleTime - The minimum idle time for the message to be claimed.
+//	start - Filters the claimed entries to those that have an ID equal or greater than the specified value.
+//
+// Return value:
+//
+//	An object containing the following elements:
+//	  - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
+//	    equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
+//	    the entire stream was scanned.
+//	  - An array of IDs for the claimed entries.
+//	  - If you are using Valkey 7.0.0 or above, the response will also include an array containing
+//	    the message IDs that were in the Pending Entries List but no longer exist in the stream.
+//	    These IDs are deleted from the Pending Entries List.
+//
+// Example:
+//
+//	result, err := client.XAutoClaimJustId("myStream", "myGroup", "myConsumer", 42, "0-0")
+//	result:
+//	// &{
+//	//     "1609338788321-0"               // value to be used as `start` argument for the next `xautoclaim` call
+//	//     [
+//	//         "1609338752495-0",          // claimed entries
+//	//         "1609338752495-1"
+//	//     ]
+//	//     [
+//	//         "1594324506465-0",          // array of IDs of deleted messages,
+//	//         "1594568784150-0"           // included in the response only on valkey 7.0.0 and above
+//	//     ]
+//	// }
+//
+// [valkey.io]: https://valkey.io/commands/xautoclaim/
+func (client *baseClient) XAutoClaimJustId(
+	key string,
+	group string,
+	consumer string,
+	minIdleTime int64,
+	start string,
+) (XAutoClaimJustIdResponse, error) {
+	return client.XAutoClaimJustIdWithOptions(key, group, consumer, minIdleTime, start, nil)
+}
+
+// Transfers ownership of pending stream entries that match the specified criteria.
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for more details.
+//
+// Parameters:
+//
+//	key - The key of the stream.
+//	group - The consumer group name.
+//	consumer - The group consumer.
+//	minIdleTime - The minimum idle time for the message to be claimed.
+//	start - Filters the claimed entries to those that have an ID equal or greater than the specified value.
+//	options - Options detailing how to read the stream.
+//
+// Return value:
+//
+//	An object containing the following elements:
+//	  - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
+//	    equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
+//	    the entire stream was scanned.
+//	  - An array of IDs for the claimed entries.
+//	  - If you are using Valkey 7.0.0 or above, the response will also include an array containing
+//	    the message IDs that were in the Pending Entries List but no longer exist in the stream.
+//	    These IDs are deleted from the Pending Entries List.
+//
+// Example:
+//
+//	opts := options.NewXAutoClaimOptionsWithCount(1)
+//	result, err := client.XAutoClaimJustIdWithOptions("myStream", "myGroup", "myConsumer", 42, "0-0", opts)
+//	result:
+//	// &{
+//	//     "1609338788321-0"               // value to be used as `start` argument for the next `xautoclaim` call
+//	//     [
+//	//         "1609338752495-0",          // claimed entries
+//	//         "1609338752495-1"
+//	//     ]
+//	//     [
+//	//         "1594324506465-0",          // array of IDs of deleted messages,
+//	//         "1594568784150-0"           // included in the response only on valkey 7.0.0 and above
+//	//     ]
+//	// }
+//
+// [valkey.io]: https://valkey.io/commands/xautoclaim/
+func (client *baseClient) XAutoClaimJustIdWithOptions(
+	key string,
+	group string,
+	consumer string,
+	minIdleTime int64,
+	start string,
+	options *options.XAutoClaimOptions,
+) (XAutoClaimJustIdResponse, error) {
+	args := []string{key, group, consumer, utils.IntToString(minIdleTime), start}
+	if options != nil {
+		optArgs, err := options.ToArgs()
+		if err != nil {
+			return XAutoClaimJustIdResponse{}, err
+		}
+		args = append(args, optArgs...)
+	}
+	args = append(args, "JUSTID")
+	result, err := client.executeCommand(C.XAutoClaim, args)
+	if err != nil {
+		return XAutoClaimJustIdResponse{}, err
+	}
+	return handleXAutoClaimJustIdResponse(result)
+}
+
 // Removes the specified entries by id from a stream, and returns the number of entries deleted.
 //
 // See [valkey.io] for details.
@@ -2241,4 +2492,99 @@ func (client *baseClient) XGroupSetIdWithOptions(
 		return defaultStringResponse, err
 	}
 	return handleStringResponse(result)
+}
+
+// Removes all elements in the sorted set stored at `key` with a lexicographical order
+// between `rangeQuery.Start` and `rangeQuery.End`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	rangeQuery - The range query object representing the minimum and maximum bound of the lexicographical range.
+//	  can be an implementation of [options.LexBoundary].
+//
+// Return value:
+//
+//	The number of members removed from the sorted set.
+//	If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
+//	If `rangeQuery.Start` is greater than `rangeQuery.End`, `0` is returned.
+//
+// Example:
+//
+//	zRemRangeByLexResult, err := client.ZRemRangeByLex("key1", options.NewRangeByLexQuery("a", "b"))
+//	fmt.Println(zRemRangeByLexResult) // Output: 1
+//
+// [valkey.io]: https://valkey.io/commands/zremrangebylex/
+func (client *baseClient) ZRemRangeByLex(key string, rangeQuery options.RangeByLex) (int64, error) {
+	result, err := client.executeCommand(
+		C.ZRemRangeByLex, append([]string{key}, rangeQuery.ToArgsRemRange()...))
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
+// Removes all elements in the sorted set stored at `key` with a rank between `start` and `stop`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	start - The start rank.
+//	stop - The stop rank.
+//
+// Return value:
+//
+//	The number of members removed from the sorted set.
+//	If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
+//	If `start` is greater than `stop`, `0` is returned.
+//
+// Example:
+//
+//	zRemRangeByRankResult, err := client.ZRemRangeByRank("key1", 0, 1)
+//	fmt.Println(zRemRangeByRankResult) // Output: 1
+//
+// [valkey.io]: https://valkey.io/commands/zremrangebyrank/
+func (client *baseClient) ZRemRangeByRank(key string, start int64, stop int64) (int64, error) {
+	result, err := client.executeCommand(C.ZRemRangeByRank, []string{key, utils.IntToString(start), utils.IntToString(stop)})
+	if err != nil {
+		return 0, err
+	}
+	return handleIntResponse(result)
+}
+
+// Removes all elements in the sorted set stored at `key` with a score between `rangeQuery.Start` and `rangeQuery.End`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	rangeQuery - The range query object representing the minimum and maximum bound of the score range.
+//	  can be an implementation of [options.RangeByScore].
+//
+// Return value:
+//
+//	The number of members removed from the sorted set.
+//	If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
+//	If `rangeQuery.Start` is greater than `rangeQuery.End`, `0` is returned.
+//
+// Example:
+//
+//	zRemRangeByScoreResult, err := client.ZRemRangeByScore("key1", options.NewRangeByScoreBuilder(
+//		options.NewInfiniteScoreBoundary(options.NegativeInfinity),
+//		options.NewInfiniteScoreBoundary(options.PositiveInfinity),
+//	))
+//	fmt.Println(zRemRangeByScoreResult) // Output: 1
+//
+// [valkey.io]: https://valkey.io/commands/zremrangebyscore/
+func (client *baseClient) ZRemRangeByScore(key string, rangeQuery options.RangeByScore) (int64, error) {
+	result, err := client.executeCommand(C.ZRemRangeByScore, append([]string{key}, rangeQuery.ToArgsRemRange()...))
+	if err != nil {
+		return 0, err
+	}
+	return handleIntResponse(result)
 }
