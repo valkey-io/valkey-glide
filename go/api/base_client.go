@@ -2032,3 +2032,31 @@ func (client *baseClient) ObjectEncoding(key string) (Result[string], error) {
 	}
 	return handleStringOrNilResponse(result)
 }
+
+// Echo the provided message back.
+// The command will be routed a random node.
+//
+// Parameters:
+//
+//	message - The provided message.
+//
+// Return value:
+//
+//	The provided message
+//
+// For example:
+//
+//	 result, err := client.Echo("Hello World")
+//		if err != nil {
+//		    // handle error
+//		}
+//		fmt.Println(result.Value()) // Output: Hello World
+//
+// [valkey.io]: https://valkey.io/commands/echo/
+func (client *baseClient) Echo(message string) (Result[string], error) {
+	result, err := client.executeCommand(C.Echo, []string{message})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNilResponse(result)
+}
