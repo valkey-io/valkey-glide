@@ -4156,18 +4156,14 @@ func (suite *GlideTestSuite) TestXAutoClaim() {
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "0-2", xadd.Value())
 
-		sendWithCustomCommand(
-			suite,
-			client,
-			[]string{"XREADGROUP", "GROUP", group, consumer, "STREAMS", key, ">"},
-			"Can't send XREADGROUP as a custom command",
-		)
-		// assert.Equal(suite.T(), map[string]map[string][][]string{
-		// 	key: {
-		// 		"0-1": {{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
-		// 		"0-2": {{"entry2_field1", "entry2_value1"}},
-		// 	},
-		// }, xreadgroup)
+		xreadgroup, err := client.XReadGroup(group, consumer, map[string]string{key: ">"})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), map[string]map[string][][]string{
+			key: {
+				"0-1": {{"entry1_field1", "entry1_value1"}, {"entry1_field2", "entry1_value2"}},
+				"0-2": {{"entry2_field1", "entry2_value1"}},
+			},
+		}, xreadgroup)
 
 		opts := options.NewXAutoClaimOptionsWithCount(1)
 		xautoclaim, err := client.XAutoClaimWithOptions(key, group, consumer, 0, "0-0", opts)
@@ -5509,8 +5505,7 @@ func (suite *GlideTestSuite) TestXPending() {
 			streamid_2, err := client.XAdd(key, [][]string{{"field2", "value2"}})
 			assert.NoError(suite.T(), err)
 
-			command = []string{"XReadGroup", "GROUP", groupName, consumer1, "STREAMS", key, ">"}
-			_, err = client.CustomCommand(command)
+			_, err = client.XReadGroup(groupName, consumer1, map[string]string{key: ">"})
 			assert.NoError(suite.T(), err)
 
 			_, err = client.XAdd(key, [][]string{{"field3", "value3"}})
@@ -5520,8 +5515,7 @@ func (suite *GlideTestSuite) TestXPending() {
 			streamid_5, err := client.XAdd(key, [][]string{{"field5", "value5"}})
 			assert.NoError(suite.T(), err)
 
-			command = []string{"XReadGroup", "GROUP", groupName, consumer2, "STREAMS", key, ">"}
-			_, err = client.CustomCommand(command)
+			_, err = client.XReadGroup(groupName, consumer2, map[string]string{key: ">"})
 			assert.NoError(suite.T(), err)
 
 			expectedSummary := api.XPendingSummary{
@@ -5585,8 +5579,7 @@ func (suite *GlideTestSuite) TestXPending() {
 			streamid_2, err := client.XAdd(key, [][]string{{"field2", "value2"}})
 			assert.NoError(suite.T(), err)
 
-			command = []string{"XReadGroup", "GROUP", groupName, consumer1, "STREAMS", key, ">"}
-			_, err = client.CustomCommand(command)
+			_, err = client.XReadGroup(groupName, consumer1, map[string]string{key: ">"})
 			assert.NoError(suite.T(), err)
 
 			_, err = client.XAdd(key, [][]string{{"field3", "value3"}})
@@ -5596,8 +5589,7 @@ func (suite *GlideTestSuite) TestXPending() {
 			streamid_5, err := client.XAdd(key, [][]string{{"field5", "value5"}})
 			assert.NoError(suite.T(), err)
 
-			command = []string{"XReadGroup", "GROUP", groupName, consumer2, "STREAMS", key, ">"}
-			_, err = client.CustomCommand(command)
+			_, err = client.XReadGroup(groupName, consumer2, map[string]string{key: ">"})
 			assert.NoError(suite.T(), err)
 
 			expectedSummary := api.XPendingSummary{
@@ -5694,8 +5686,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			assert.Equal(suite.T(), 0, len(detailResult))
 
 			// read the entire stream for the consumer and mark messages as pending
-			command = []string{"XReadGroup", "GROUP", groupName, consumer1, "STREAMS", key, ">"}
-			_, err = client.CustomCommand(command)
+			_, err = client.XReadGroup(groupName, consumer1, map[string]string{key: ">"})
 			assert.NoError(suite.T(), err)
 
 			// sanity check - expect some results:
@@ -5847,8 +5838,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			assert.Equal(suite.T(), 0, len(detailResult))
 
 			// read the entire stream for the consumer and mark messages as pending
-			command = []string{"XReadGroup", "GROUP", groupName, consumer1, "STREAMS", key, ">"}
-			_, err = client.CustomCommand(command)
+			_, err = client.XReadGroup(groupName, consumer1, map[string]string{key: ">"})
 			assert.NoError(suite.T(), err)
 
 			// sanity check - expect some results:

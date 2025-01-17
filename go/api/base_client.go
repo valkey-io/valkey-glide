@@ -1892,7 +1892,7 @@ func (client *baseClient) XLen(key string) (int64, error) {
 //
 // Return value:
 //
-//		An object containing the following elements:
+//	An object containing the following elements:
 //	  - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
 //	    equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
 //	    the entire stream was scanned.
@@ -1949,7 +1949,7 @@ func (client *baseClient) XAutoClaim(
 //
 // Return value:
 //
-//		An object containing the following elements:
+//	An object containing the following elements:
 //	  - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
 //	    equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
 //	    the entire stream was scanned.
@@ -2019,7 +2019,7 @@ func (client *baseClient) XAutoClaimWithOptions(
 //
 // Return value:
 //
-//		An object containing the following elements:
+//	An object containing the following elements:
 //	  - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
 //	    equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
 //	    the entire stream was scanned.
@@ -2074,7 +2074,7 @@ func (client *baseClient) XAutoClaimJustId(
 //
 // Return value:
 //
-//		An object containing the following elements:
+//	An object containing the following elements:
 //	  - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
 //	    equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
 //	    the entire stream was scanned.
