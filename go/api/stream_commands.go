@@ -102,6 +102,15 @@ type StreamCommands interface {
 	// [valkey.io]: https://valkey.io/commands/xlen/
 	XLen(key string) (int64, error)
 
+	XReadGroup(group string, consumer string, keysAndIds map[string]string) (map[string]map[string][][]string, error)
+
+	XReadGroupWithOptions(
+		group string,
+		consumer string,
+		keysAndIds map[string]string,
+		options *options.XReadGroupOptions,
+	) (map[string]map[string][][]string, error)
+
 	XRead(keysAndIds map[string]string) (map[string]map[string][][]string, error)
 
 	XReadWithOptions(keysAndIds map[string]string, options *options.XReadOptions) (map[string]map[string][][]string, error)
