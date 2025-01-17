@@ -5716,3 +5716,46 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 		}
 	})
 }
+
+// TODO add XGroupDestroy tests there
+func (suite *GlideTestSuite) TestXGroupCreate_XGroupDestroy() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+		group1 := uuid.NewString()
+		group2 := uuid.NewString()
+		id := "0-1"
+
+		// Stream not created results in error
+		_, err := client.XGroupCreate(key, group1, id)
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		// Stream with option to create creates stream & Group
+		opts := options.NewXGroupCreateOptions().SetMakeStream()
+		suite.verifyOK(client.XGroupCreateWithOptions(key, group1, id, opts))
+
+		// ...and again results in BUSYGROUP error, because group names must be unique
+		_, err = client.XGroupCreate(key, group1, id)
+		assert.ErrorContains(suite.T(), err, "BUSYGROUP")
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+
+		// TODO add XGroupDestroy tests there
+
+		// ENTRIESREAD option was added in valkey 7.0.0
+		opts = options.NewXGroupCreateOptions().SetEntriesRead(100)
+		if suite.serverVersion >= "7.0.0" {
+			suite.verifyOK(client.XGroupCreateWithOptions(key, group2, id, opts))
+		} else {
+			_, err = client.XGroupCreateWithOptions(key, group2, id, opts)
+			assert.Error(suite.T(), err)
+			assert.IsType(suite.T(), &api.RequestError{}, err)
+		}
+
+		// key is not a stream
+		key = uuid.NewString()
+		suite.verifyOK(client.Set(key, id))
+		_, err = client.XGroupCreate(key, group1, id)
+		assert.Error(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}

@@ -1995,3 +1995,64 @@ func (client *baseClient) XPendingWithOptions(
 	}
 	return handleXPendingDetailResponse(result)
 }
+
+// Creates a new consumer group uniquely identified by `groupname` for the stream stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the stream.
+//	group - The newly created consumer group name.
+//	id - Stream entry ID that specifies the last delivered entry in the stream from the new
+//	    group’s perspective. The special ID `"$"` can be used to specify the last entry in the stream.
+//
+// Return value:
+//
+//	`"OK"`.
+//
+// Example:
+//
+//	client.XGroupCreate("mystream", "mygroup", "0-0")
+//
+// [valkey.io]: https://valkey.io/commands/xgroup-create/
+func (client *baseClient) XGroupCreate(key string, group string, id string) (string, error) {
+	return client.XGroupCreateWithOptions(key, group, id, options.NewXGroupCreateOptions())
+}
+
+// Creates a new consumer group uniquely identified by `groupname` for the stream stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the stream.
+//	group - The newly created consumer group name.
+//	id - Stream entry ID that specifies the last delivered entry in the stream from the new
+//	    group's perspective. The special ID `"$"` can be used to specify the last entry in the stream.
+//	opts - The options for the command. See [options.XGroupCreateOptions] for details.
+//
+// Return value:
+//
+//	`"OK"`.
+//
+// Example:
+//
+//	opts := options.NewXGroupCreateOptions().SetMakeStream()
+//	client.XGroupCreateWithOptions("mystream", "mygroup", "0-0", opts)
+//
+// [valkey.io]: https://valkey.io/commands/xgroup-create/
+func (client *baseClient) XGroupCreateWithOptions(
+	key string,
+	group string,
+	id string,
+	opts *options.XGroupCreateOptions,
+) (string, error) {
+	optionArgs, _ := opts.ToArgs()
+	args := append([]string{key, group, id}, optionArgs...)
+	result, err := client.executeCommand(C.XGroupCreate, args)
+	if err != nil {
+		return defaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
