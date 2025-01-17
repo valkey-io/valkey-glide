@@ -120,4 +120,8 @@ type StreamCommands interface {
 	XPending(key string, group string) (XPendingSummary, error)
 
 	XPendingWithOptions(key string, group string, options *options.XPendingOptions) ([]XPendingDetail, error)
+
+	XGroupSetId(key string, group string, id string) (string, error)
+
+	XGroupSetIdWithOptions(key string, group string, id string, opts *options.XGroupSetIdOptions) (string, error)
 }
