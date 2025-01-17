@@ -1409,6 +1409,129 @@ func (client *baseClient) XReadWithOptions(
 	return handleXReadResponse(result)
 }
 
+// Reads entries from the given streams owned by a consumer group.
+//
+// Note:
+//
+//	When in cluster mode, all keys in `keysAndIds` must map to the same hash slot.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	group - The consumer group name.
+//	consumer - The group consumer.
+//	keysAndIds - A map of keys and entry IDs to read from.
+//
+// Return value:
+// A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
+// a key does not exist or does not contain requiested entries.
+//
+// For example:
+//
+//	result, err := client.XReadGroup({"stream1": "0-0", "stream2": "0-1", "stream3": "0-1"})
+//	err == nil: true
+//	result: map[string]map[string][][]string{
+//	  "stream1": {
+//	    "0-1": {{"field1", "value1"}},
+//	    "0-2": {{"field2", "value2"}, {"field2", "value3"}},
+//	  },
+//	  "stream2": {
+//	    "1526985676425-0": {{"name", "Virginia"}, {"surname", "Woolf"}},
+//	    "1526985685298-0": nil,                                               // entry was deleted
+//	  },
+//	  "stream3": {},                                                          // stream is empty
+//	}
+//
+// [valkey.io]: https://valkey.io/commands/xreadgroup/
+func (client *baseClient) XReadGroup(
+	group string,
+	consumer string,
+	keysAndIds map[string]string,
+) (map[string]map[string][][]string, error) {
+	return client.XReadGroupWithOptions(group, consumer, keysAndIds, options.NewXReadGroupOptions())
+}
+
+// Reads entries from the given streams owned by a consumer group.
+//
+// Note:
+//
+//	When in cluster mode, all keys in `keysAndIds` must map to the same hash slot.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	group - The consumer group name.
+//	consumer - The group consumer.
+//	keysAndIds - A map of keys and entry IDs to read from.
+//	options - Options detailing how to read the stream.
+//
+// Return value:
+// A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
+// a key does not exist or does not contain requiested entries.
+//
+// For example:
+//
+//	options := options.NewXReadGroupOptions().SetNoAck()
+//	result, err := client.XReadGroupWithOptions({"stream1": "0-0", "stream2": "0-1", "stream3": "0-1"}, options)
+//	err == nil: true
+//	result: map[string]map[string][][]string{
+//	  "stream1": {
+//	    "0-1": {{"field1", "value1"}},
+//	    "0-2": {{"field2", "value2"}, {"field2", "value3"}},
+//	  },
+//	  "stream2": {
+//	    "1526985676425-0": {{"name", "Virginia"}, {"surname", "Woolf"}},
+//	    "1526985685298-0": nil,                                               // entry was deleted
+//	  },
+//	  "stream3": {},                                                          // stream is empty
+//	}
+//
+// [valkey.io]: https://valkey.io/commands/xreadgroup/
+func (client *baseClient) XReadGroupWithOptions(
+	group string,
+	consumer string,
+	keysAndIds map[string]string,
+	options *options.XReadGroupOptions,
+) (map[string]map[string][][]string, error) {
+	args, err := createStreamCommandArgs([]string{"GROUP", group, consumer}, keysAndIds, options)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := client.executeCommand(C.XReadGroup, args)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleXReadGroupResponse(result)
+}
+
+// Combine `args` with `keysAndIds` and `options` into arguments for a stream command
+func createStreamCommandArgs(
+	args []string,
+	keysAndIds map[string]string,
+	options interface{ ToArgs() ([]string, error) },
+) ([]string, error) {
+	optionArgs, err := options.ToArgs()
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, optionArgs...)
+	// Note: this loop iterates in an indeterminate order, but it is OK for that case
+	keys := make([]string, 0, len(keysAndIds))
+	values := make([]string, 0, len(keysAndIds))
+	for key := range keysAndIds {
+		keys = append(keys, key)
+		values = append(values, keysAndIds[key])
+	}
+	args = append(args, "STREAMS")
+	args = append(args, keys...)
+	args = append(args, values...)
+	return args, nil
+}
+
 func (client *baseClient) ZAdd(
 	key string,
 	membersScoreMap map[string]float64,
@@ -2155,4 +2278,159 @@ func (client *baseClient) ZScanWithOptions(
 		return CreateNilStringResult(), nil, err
 	}
 	return handleScanResponse(result)
+}
+
+// Returns stream message summary information for pending messages matching a stream and group.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the stream.
+//	group - The consumer group name.
+//
+// Return value:
+// An XPendingSummary struct that includes a summary with the following fields:
+//
+//	NumOfMessages: The total number of pending messages for this consumer group.
+//	StartId: The smallest ID among the pending messages or nil if no pending messages exist.
+//	EndId: The greatest ID among the pending messages or nil if no pending messages exists.
+//	GroupConsumers: An array of ConsumerPendingMessages with the following fields:
+//	  ConsumerName: The name of the consumer.
+//	  MessageCount: The number of pending messages for this consumer.
+//
+// Example
+//
+//	result, err := client.XPending("myStream", "myGroup")
+//	if err != nil {
+//	  return err
+//	}
+//	fmt.Println("Number of pending messages: ", result.NumOfMessages)
+//	fmt.Println("Start and End ID of messages: ", result.StartId, result.EndId)
+//	for _, consumer := range result.ConsumerMessages {
+//	  fmt.Printf("Consumer messages:  %s: $v\n", consumer.ConsumerName, consumer.MessageCount)
+//	}
+//
+// [valkey.io]: https://valkey.io/commands/xpending/
+func (client *baseClient) XPending(key string, group string) (XPendingSummary, error) {
+	result, err := client.executeCommand(C.XPending, []string{key, group})
+	if err != nil {
+		return XPendingSummary{}, err
+	}
+
+	return handleXPendingSummaryResponse(result)
+}
+
+// Returns stream message summary information for pending messages matching a given range of IDs.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the stream.
+//	group - The consumer group name.
+//	opts - The options for the command. See [options.XPendingOptions] for details.
+//
+// Return value:
+// A slice of XPendingDetail structs, where each detail struct includes the following fields:
+//
+//	Id - The ID of the pending message.
+//	ConsumerName - The name of the consumer that fetched the message and has still to acknowledge it.
+//	IdleTime - The time in milliseconds since the last time the message was delivered to the consumer.
+//	DeliveryCount - The number of times this message was delivered.
+//
+// Example
+//
+//	detailResult, err := client.XPendingWithOptions(key, groupName, options.NewXPendingOptions("-", "+", 10))
+//	if err != nil {
+//	  return err
+//	}
+//	fmt.Println("=========================")
+//	for _, detail := range detailResult {
+//	  fmt.Println(detail.Id)
+//	  fmt.Println(detail.ConsumerName)
+//	  fmt.Println(detail.IdleTime)
+//	  fmt.Println(detail.DeliveryCount)
+//	  fmt.Println("=========================")
+//	}
+//
+// [valkey.io]: https://valkey.io/commands/xpending/
+func (client *baseClient) XPendingWithOptions(
+	key string,
+	group string,
+	opts *options.XPendingOptions,
+) ([]XPendingDetail, error) {
+	optionArgs, _ := opts.ToArgs()
+	args := append([]string{key, group}, optionArgs...)
+
+	result, err := client.executeCommand(C.XPending, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleXPendingDetailResponse(result)
+}
+
+func (client *baseClient) Restore(key string, ttl int64, value string) (Result[string], error) {
+	return client.RestoreWithOptions(key, ttl, value, NewRestoreOptionsBuilder())
+}
+
+func (client *baseClient) RestoreWithOptions(key string, ttl int64,
+	value string, options *RestoreOptions,
+) (Result[string], error) {
+	optionArgs, err := options.toArgs()
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	result, err := client.executeCommand(C.Restore, append([]string{
+		key,
+		utils.IntToString(ttl), value,
+	}, optionArgs...))
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNilResponse(result)
+}
+
+func (client *baseClient) Dump(key string) (Result[string], error) {
+	result, err := client.executeCommand(C.Dump, []string{key})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNilResponse(result)
+}
+
+func (client *baseClient) ObjectEncoding(key string) (Result[string], error) {
+	result, err := client.executeCommand(C.ObjectEncoding, []string{key})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNilResponse(result)
+}
+
+// Echo the provided message back.
+// The command will be routed a random node.
+//
+// Parameters:
+//
+//	message - The provided message.
+//
+// Return value:
+//
+//	The provided message
+//
+// For example:
+//
+//	 result, err := client.Echo("Hello World")
+//		if err != nil {
+//		    // handle error
+//		}
+//		fmt.Println(result.Value()) // Output: Hello World
+//
+// [valkey.io]: https://valkey.io/commands/echo/
+func (client *baseClient) Echo(message string) (Result[string], error) {
+	result, err := client.executeCommand(C.Echo, []string{message})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNilResponse(result)
 }

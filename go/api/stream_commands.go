@@ -130,9 +130,22 @@ type StreamCommands interface {
 		options *options.XAutoClaimOptions,
 	) (XAutoClaimJustIdResponse, error)
 
+	XReadGroup(group string, consumer string, keysAndIds map[string]string) (map[string]map[string][][]string, error)
+
+	XReadGroupWithOptions(
+		group string,
+		consumer string,
+		keysAndIds map[string]string,
+		options *options.XReadGroupOptions,
+	) (map[string]map[string][][]string, error)
+
 	XRead(keysAndIds map[string]string) (map[string]map[string][][]string, error)
 
 	XReadWithOptions(keysAndIds map[string]string, options *options.XReadOptions) (map[string]map[string][][]string, error)
 
 	XDel(key string, ids []string) (int64, error)
+
+	XPending(key string, group string) (XPendingSummary, error)
+
+	XPendingWithOptions(key string, group string, options *options.XPendingOptions) ([]XPendingDetail, error)
 }
