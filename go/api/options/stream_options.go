@@ -192,7 +192,7 @@ func (xrgo *XReadGroupOptions) ToArgs() ([]string, error) {
 	if xrgo.noAck {
 		args = append(args, "NOACK")
 	}
-  return args, nil
+	return args, nil
 }
 
 // Optional arguments for `XPending` in [StreamCommands]
