@@ -9,6 +9,7 @@ import "C"
 import (
 	"fmt"
 	"reflect"
+	"strconv"
 	"unsafe"
 )
 
@@ -668,4 +669,95 @@ func handleXReadGroupResponse(response *C.struct_CommandResponse) (map[string]ma
 		return result, nil
 	}
 	return nil, &RequestError{fmt.Sprintf("unexpected type received: %T", res)}
+}
+
+func handleXPendingSummaryResponse(response *C.struct_CommandResponse) (XPendingSummary, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Array, true)
+	if typeErr != nil {
+		return CreateNilXPendingSummary(), typeErr
+	}
+
+	slice, err := parseArray(response)
+	if err != nil {
+		return CreateNilXPendingSummary(), err
+	}
+
+	arr := slice.([]interface{})
+	NumOfMessages := arr[0].(int64)
+	var StartId, EndId Result[string]
+	if arr[1] == nil {
+		StartId = CreateNilStringResult()
+	} else {
+		StartId = CreateStringResult(arr[1].(string))
+	}
+	if arr[2] == nil {
+		EndId = CreateNilStringResult()
+	} else {
+		EndId = CreateStringResult(arr[2].(string))
+	}
+
+	if pendingMessages, ok := arr[3].([]interface{}); ok {
+		var ConsumerPendingMessages []ConsumerPendingMessage
+		for _, msg := range pendingMessages {
+			consumerMessage := msg.([]interface{})
+			count, err := strconv.ParseInt(consumerMessage[1].(string), 10, 64)
+			if err == nil {
+				ConsumerPendingMessages = append(ConsumerPendingMessages, ConsumerPendingMessage{
+					ConsumerName: consumerMessage[0].(string),
+					MessageCount: count,
+				})
+			}
+		}
+		return XPendingSummary{NumOfMessages, StartId, EndId, ConsumerPendingMessages}, nil
+	} else {
+		return XPendingSummary{NumOfMessages, StartId, EndId, make([]ConsumerPendingMessage, 0)}, nil
+	}
+}
+
+func handleXPendingDetailResponse(response *C.struct_CommandResponse) ([]XPendingDetail, error) {
+	// response should be [][]interface{}
+
+	defer C.free_command_response(response)
+
+	// TODO: Not sure if this is correct for a nill response
+	if response == nil || response.response_type == uint32(C.Null) {
+		return make([]XPendingDetail, 0), nil
+	}
+
+	typeErr := checkResponseType(response, C.Array, true)
+	if typeErr != nil {
+		return make([]XPendingDetail, 0), typeErr
+	}
+
+	// parse first level of array
+	slice, err := parseArray(response)
+	arr := slice.([]interface{})
+
+	if err != nil {
+		return make([]XPendingDetail, 0), err
+	}
+
+	pendingDetails := make([]XPendingDetail, 0, len(arr))
+
+	for _, message := range arr {
+		switch detail := message.(type) {
+		case []interface{}:
+			pDetail := XPendingDetail{
+				Id:            detail[0].(string),
+				ConsumerName:  detail[1].(string),
+				IdleTime:      detail[2].(int64),
+				DeliveryCount: detail[3].(int64),
+			}
+			pendingDetails = append(pendingDetails, pDetail)
+
+		case XPendingDetail:
+			pendingDetails = append(pendingDetails, detail)
+		default:
+			fmt.Printf("handleXPendingDetailResponse - unhandled type: %s\n", reflect.TypeOf(detail))
+		}
+	}
+
+	return pendingDetails, nil
 }

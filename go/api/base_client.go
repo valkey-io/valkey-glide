@@ -1906,3 +1906,280 @@ func (client *baseClient) XDel(key string, ids []string) (int64, error) {
 	}
 	return handleIntResponse(result)
 }
+
+// Returns the score of `member` in the sorted set stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	member - The member whose score is to be retrieved.
+//
+// Return value:
+//
+//	The score of the member. If `member` does not exist in the sorted set, `nil` is returned.
+//	If `key` does not exist, `nil` is returned.
+//
+// Example:
+//
+//	membersScores := map[string]float64{
+//		"one":   1.0,
+//		"two":   2.0,
+//		"three": 3.0,
+//	}
+//
+//	zAddResult, err := client.ZAdd("key1", membersScores)
+//	zScoreResult, err := client.ZScore("key1", "one")
+//	//fmt.Println(zScoreResult.Value()) // Value: 1.0
+//
+// [valkey.io]: https://valkey.io/commands/zscore/
+func (client *baseClient) ZScore(key string, member string) (Result[float64], error) {
+	result, err := client.executeCommand(C.ZScore, []string{key, member})
+	if err != nil {
+		return CreateNilFloat64Result(), err
+	}
+	return handleFloatOrNilResponse(result)
+}
+
+// Iterates incrementally over a sorted set.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	cursor - The cursor that points to the next iteration of results.
+//	         A value of `"0"` indicates the start of the search.
+//	         For Valkey 8.0 and above, negative cursors are treated like the initial cursor("0").
+//
+// Return value:
+//
+//	The first return value is the `cursor` for the next iteration of results. `"0"` will be the `cursor`
+//	   returned on the last iteration of the sorted set.
+//	The second return value is always an array of the subset of the sorted set held in `key`.
+//	The array is a flattened series of `string` pairs, where the value is at even indices and the score is at odd indices.
+//
+// Example:
+//
+//	// assume "key" contains a set
+//	resCursor, resCol, err := client.ZScan("key", "0")
+//	fmt.Println(resCursor.Value())
+//	fmt.Println(resCol.Value())
+//	for resCursor != "0" {
+//	  resCursor, resCol, err = client.ZScan("key", resCursor.Value())
+//	  fmt.Println("Cursor: ", resCursor.Value())
+//	  fmt.Println("Members: ", resCol.Value())
+//	}
+//
+// [valkey.io]: https://valkey.io/commands/zscan/
+func (client *baseClient) ZScan(key string, cursor string) (Result[string], []Result[string], error) {
+	result, err := client.executeCommand(C.ZScan, []string{key, cursor})
+	if err != nil {
+		return CreateNilStringResult(), nil, err
+	}
+	return handleScanResponse(result)
+}
+
+// Iterates incrementally over a sorted set.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	cursor - The cursor that points to the next iteration of results.
+//	options - The options for the command. See [options.ZScanOptions] for details.
+//
+// Return value:
+//
+//	The first return value is the `cursor` for the next iteration of results. `"0"` will be the `cursor`
+//	   returned on the last iteration of the sorted set.
+//	The second return value is always an array of the subset of the sorted set held in `key`.
+//	The array is a flattened series of `string` pairs, where the value is at even indices and the score is at odd indices.
+//	If `ZScanOptionsBuilder#noScores` is to `true`, the second return value will only contain the members without scores.
+//
+// Example:
+//
+//	resCursor, resCol, err := client.ZScanWithOptions("key", "0", options.NewBaseScanOptionsBuilder().SetMatch("*"))
+//	fmt.Println(resCursor.Value())
+//	fmt.Println(resCol.Value())
+//	for resCursor != "0" {
+//	  resCursor, resCol, err = client.ZScanWithOptions("key", resCursor.Value(),
+//		options.NewBaseScanOptionsBuilder().SetMatch("*"))
+//	  fmt.Println("Cursor: ", resCursor.Value())
+//	  fmt.Println("Members: ", resCol.Value())
+//	}
+//
+// [valkey.io]: https://valkey.io/commands/zscan/
+func (client *baseClient) ZScanWithOptions(
+	key string,
+	cursor string,
+	options *options.ZScanOptions,
+) (Result[string], []Result[string], error) {
+	optionArgs, err := options.ToArgs()
+	if err != nil {
+		return CreateNilStringResult(), nil, err
+	}
+
+	result, err := client.executeCommand(C.ZScan, append([]string{key, cursor}, optionArgs...))
+	if err != nil {
+		return CreateNilStringResult(), nil, err
+	}
+	return handleScanResponse(result)
+}
+
+// Returns stream message summary information for pending messages matching a stream and group.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the stream.
+//	group - The consumer group name.
+//
+// Return value:
+// An XPendingSummary struct that includes a summary with the following fields:
+//
+//	NumOfMessages: The total number of pending messages for this consumer group.
+//	StartId: The smallest ID among the pending messages or nil if no pending messages exist.
+//	EndId: The greatest ID among the pending messages or nil if no pending messages exists.
+//	GroupConsumers: An array of ConsumerPendingMessages with the following fields:
+//	  ConsumerName: The name of the consumer.
+//	  MessageCount: The number of pending messages for this consumer.
+//
+// Example
+//
+//	result, err := client.XPending("myStream", "myGroup")
+//	if err != nil {
+//	  return err
+//	}
+//	fmt.Println("Number of pending messages: ", result.NumOfMessages)
+//	fmt.Println("Start and End ID of messages: ", result.StartId, result.EndId)
+//	for _, consumer := range result.ConsumerMessages {
+//	  fmt.Printf("Consumer messages:  %s: $v\n", consumer.ConsumerName, consumer.MessageCount)
+//	}
+//
+// [valkey.io]: https://valkey.io/commands/xpending/
+func (client *baseClient) XPending(key string, group string) (XPendingSummary, error) {
+	result, err := client.executeCommand(C.XPending, []string{key, group})
+	if err != nil {
+		return XPendingSummary{}, err
+	}
+
+	return handleXPendingSummaryResponse(result)
+}
+
+// Returns stream message summary information for pending messages matching a given range of IDs.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the stream.
+//	group - The consumer group name.
+//	opts - The options for the command. See [options.XPendingOptions] for details.
+//
+// Return value:
+// A slice of XPendingDetail structs, where each detail struct includes the following fields:
+//
+//	Id - The ID of the pending message.
+//	ConsumerName - The name of the consumer that fetched the message and has still to acknowledge it.
+//	IdleTime - The time in milliseconds since the last time the message was delivered to the consumer.
+//	DeliveryCount - The number of times this message was delivered.
+//
+// Example
+//
+//	detailResult, err := client.XPendingWithOptions(key, groupName, options.NewXPendingOptions("-", "+", 10))
+//	if err != nil {
+//	  return err
+//	}
+//	fmt.Println("=========================")
+//	for _, detail := range detailResult {
+//	  fmt.Println(detail.Id)
+//	  fmt.Println(detail.ConsumerName)
+//	  fmt.Println(detail.IdleTime)
+//	  fmt.Println(detail.DeliveryCount)
+//	  fmt.Println("=========================")
+//	}
+//
+// [valkey.io]: https://valkey.io/commands/xpending/
+func (client *baseClient) XPendingWithOptions(
+	key string,
+	group string,
+	opts *options.XPendingOptions,
+) ([]XPendingDetail, error) {
+	optionArgs, _ := opts.ToArgs()
+	args := append([]string{key, group}, optionArgs...)
+
+	result, err := client.executeCommand(C.XPending, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleXPendingDetailResponse(result)
+}
+
+func (client *baseClient) Restore(key string, ttl int64, value string) (Result[string], error) {
+	return client.RestoreWithOptions(key, ttl, value, NewRestoreOptionsBuilder())
+}
+
+func (client *baseClient) RestoreWithOptions(key string, ttl int64,
+	value string, options *RestoreOptions,
+) (Result[string], error) {
+	optionArgs, err := options.toArgs()
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	result, err := client.executeCommand(C.Restore, append([]string{
+		key,
+		utils.IntToString(ttl), value,
+	}, optionArgs...))
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNilResponse(result)
+}
+
+func (client *baseClient) Dump(key string) (Result[string], error) {
+	result, err := client.executeCommand(C.Dump, []string{key})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNilResponse(result)
+}
+
+func (client *baseClient) ObjectEncoding(key string) (Result[string], error) {
+	result, err := client.executeCommand(C.ObjectEncoding, []string{key})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNilResponse(result)
+}
+
+// Echo the provided message back.
+// The command will be routed a random node.
+//
+// Parameters:
+//
+//	message - The provided message.
+//
+// Return value:
+//
+//	The provided message
+//
+// For example:
+//
+//	 result, err := client.Echo("Hello World")
+//		if err != nil {
+//		    // handle error
+//		}
+//		fmt.Println(result.Value()) // Output: Hello World
+//
+// [valkey.io]: https://valkey.io/commands/echo/
+func (client *baseClient) Echo(message string) (Result[string], error) {
+	result, err := client.executeCommand(C.Echo, []string{message})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNilResponse(result)
+}
