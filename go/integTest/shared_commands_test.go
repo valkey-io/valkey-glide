@@ -5213,13 +5213,13 @@ func (suite *GlideTestSuite) TestZScan() {
 func (suite *GlideTestSuite) TestSetBit_SetSingleBit() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
-		var resultInt64 api.Result[int64]
+		var resultInt64 int64
 		resultInt64, err := client.SetBit(key, 7, 1)
-		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), resultInt64.Value())
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), resultInt64)
 
 		result, err := client.Get(key)
-		assert.Nil(suite.T(), err)
+		assert.NoError(suite.T(), err)
 		assert.Contains(suite.T(), result.Value(), "\x01")
 	})
 }
@@ -5227,32 +5227,32 @@ func (suite *GlideTestSuite) TestSetBit_SetSingleBit() {
 func (suite *GlideTestSuite) TestSetBit_SetAndCheckPreviousBit() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
-		var resultInt64 api.Result[int64]
+		var resultInt64 int64
 		resultInt64, err := client.SetBit(key, 7, 1)
-		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), resultInt64.Value())
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), resultInt64)
 
 		resultInt64, err = client.SetBit(key, 7, 0)
-		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(1), resultInt64.Value())
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), resultInt64)
 	})
 }
 
 func (suite *GlideTestSuite) TestSetBit_SetMultipleBits() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key := uuid.New().String()
-		var resultInt64 api.Result[int64]
+		var resultInt64 int64
 
 		resultInt64, err := client.SetBit(key, 3, 1)
-		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), resultInt64.Value())
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), resultInt64)
 
 		resultInt64, err = client.SetBit(key, 5, 1)
-		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), resultInt64.Value())
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), resultInt64)
 
 		result, err := client.Get(key)
-		assert.Nil(suite.T(), err)
+		assert.NoError(suite.T(), err)
 		value := result.Value()
 
 		binaryString := fmt.Sprintf("%08b", value[0])
@@ -5267,8 +5267,8 @@ func (suite *GlideTestSuite) TestWait() {
 		client.Set(key, "test")
 		// Test 1:  numberOfReplicas (2)
 		resultInt64, err := client.Wait(2, 2000)
-		assert.Nil(suite.T(), err)
-		assert.True(suite.T(), resultInt64.Value() >= 2)
+		assert.NoError(suite.T(), err)
+		assert.True(suite.T(), resultInt64 >= 2)
 
 		// Test 2: Invalid numberOfReplicas (0)
 		_, err = client.Wait(0, 2000)
@@ -5295,8 +5295,8 @@ func (suite *GlideTestSuite) TestGetBit_ExistingKey_ValidOffset() {
 		client.SetBit(key, offset, value)
 
 		result, err := client.GetBit(key, offset)
-		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), value, result.Value())
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), value, result)
 	})
 }
 
@@ -5306,8 +5306,8 @@ func (suite *GlideTestSuite) TestGetBit_NonExistentKey() {
 		offset := int64(10)
 
 		result, err := client.GetBit(key, offset)
-		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), result.Value())
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), result)
 	})
 }
 
@@ -5329,8 +5329,8 @@ func (suite *GlideTestSuite) TestBitCount_ExistingKey() {
 		}
 
 		result, err := client.BitCount(key)
-		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(8), result.Value())
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(8), result)
 	})
 }
 
@@ -5339,8 +5339,8 @@ func (suite *GlideTestSuite) TestBitCount_ZeroBits() {
 		key := uuid.New().String()
 
 		result, err := client.BitCount(key)
-		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), result.Value())
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), result)
 	})
 }
 
@@ -5358,8 +5358,8 @@ func (suite *GlideTestSuite) TestBitCountWithOptions_StartEnd() {
 		opts.SetEnd(end)
 
 		result, err := client.BitCountWithOptions(key, opts)
-		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(19), result.Value())
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(19), result)
 	})
 }
 
@@ -5379,8 +5379,8 @@ func (suite *GlideTestSuite) TestBitCountWithOptions_StartEndByte() {
 		opts.SetBitmapIndexType(options.BYTE)
 
 		result, err := client.BitCountWithOptions(key, opts)
-		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(19), result.Value())
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(19), result)
 	})
 }
 
@@ -5400,7 +5400,7 @@ func (suite *GlideTestSuite) TestBitCountWithOptions_StartEndBit() {
 		opts.SetBitmapIndexType(options.BIT)
 
 		result, err := client.BitCountWithOptions(key, opts)
-		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(3), result.Value())
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), result)
 	})
 }

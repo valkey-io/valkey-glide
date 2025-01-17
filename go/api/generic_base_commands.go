@@ -443,25 +443,5 @@ type GenericBaseCommands interface {
 	// [valkey.io]: https://valkey.io/commands/persist/
 	Persist(key string) (bool, error)
 
-	// Wait blocks the current client until all the previous write commands are successfully
-	// transferred and acknowledged by at least the specified number of replicas or if the timeout is reached,
-	// whichever is earlier
-	//
-	// Parameters:
-	//  numberOfReplicas - The number of replicas to reach.
-	//  timeout - The timeout value specified in milliseconds. A value of `0` will
-	//  block indefinitely.
-	//
-	// Return value:
-	// The number of replicas reached by all the writes performed in the context of the current connection.
-	//
-	// Example:
-	//  result, err := client.Wait(1, 1000)
-	//	if err != nil {
-	//	    // handle error
-	//	}
-	//	fmt.Println(result.Value()) // Output: 1 // if cluster has 2 replicasets
-	//
-	// [valkey.io]: https://valkey.io/commands/wait/
-	Wait(numberOfReplicas int64, timeout int64) (Result[int64], error)
+	Wait(numberOfReplicas int64, timeout int64) (int64, error)
 }
