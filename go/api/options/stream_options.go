@@ -116,6 +116,20 @@ func (xTrimOptions *XTrimOptions) ToArgs() ([]string, error) {
 	return args, nil
 }
 
+// Optional arguments for `XAutoClaim` in [StreamCommands]
+type XAutoClaimOptions struct {
+	count int64
+}
+
+// Option to trim the stream according to minimum ID.
+func NewXAutoClaimOptionsWithCount(count int64) *XAutoClaimOptions {
+	return &XAutoClaimOptions{count}
+}
+
+func (xacp *XAutoClaimOptions) ToArgs() ([]string, error) {
+	return []string{"COUNT", utils.IntToString(xacp.count)}, nil
+}
+
 // Optional arguments for `XRead` in [StreamCommands]
 type XReadOptions struct {
 	count, block int64
