@@ -496,18 +496,18 @@ func (client *baseClient) HIncrByFloat(key string, field string, increment float
 //
 // Return value:
 //
-//		An array of the cursor and the subset of the hash held by `key`. The first element is always the `cursor`
-//	 for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the subset.
-//	 The second element is always an array of the subset of the set held in `key`. The array in the
-//	 second element is always a flattened series of String pairs, where the key is at even indices
-//	 and the value is at odd indices.
+//	An array of the cursor and the subset of the hash held by `key`. The first element is always the `cursor`
+//	for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the subset.
+//	The second element is always an array of the subset of the set held in `key`. The array in the
+//	second element is always a flattened series of String pairs, where the key is at even indices
+//	and the value is at odd indices.
 //
 // Example:
 //
-//	 // Assume key contains a hash {{"a": "1"}, {"b", "2"}}
-//		resCursor, resCollection, err = client.HScan(key, initialCursor)
-//	 // resCursor = {0 false}
-//	 // resCollection = [{a false} {1 false} {b false} {2 false}]
+//	// Assume key contains a hash {{"a": "1"}, {"b", "2"}}
+//	resCursor, resCollection, err = client.HScan(key, initialCursor)
+//	resCursor = {0 false}
+//	resCollection = [{a false} {1 false} {b false} {2 false}]
 //
 // [valkey.io]: https://valkey.io/commands/hscan/
 func (client *baseClient) HScan(key string, cursor string) (string, []string, error) {
@@ -812,22 +812,22 @@ func (client *baseClient) SUnion(keys []string) (map[Result[string]]struct{}, er
 //
 // Example:
 //
-//		 // assume "key" contains a set
-//		 resCursor, resCol, err := client.sscan("key", "0")
-//	  fmt.Println("Cursor: ", resCursor)
-//	  fmt.Println("Members: ", resCol)
-//	  for resCursor != "0" {
-//		 	resCursor, resCol, err = client.sscan("key", "0")
-//	  	fmt.Println("Cursor: ", resCursor)
-//	  	fmt.Println("Members: ", resCol)
-//	  }
-//	  // Output:
-//		 // Cursor:  48
-//	  // Members:  ['3', '118', '120', '86', '76', '13', '61', '111', '55', '45']
-//	  // Cursor:  24
-//	  // Members:  ['38', '109', '11', '119', '34', '24', '40', '57', '20', '17']
-//	  // Cursor:  0
-//	  // Members:  ['47', '122', '1', '53', '10', '14', '80']
+//	// assume "key" contains a set
+//	resCursor, resCol, err := client.sscan("key", "0")
+//	fmt.Println("Cursor: ", resCursor)
+//	fmt.Println("Members: ", resCol)
+//	for resCursor != "0" {
+//		resCursor, resCol, err = client.sscan("key", "0")
+//		fmt.Println("Cursor: ", resCursor)
+//	 	fmt.Println("Members: ", resCol)
+//	}
+//	// Output:
+//	// Cursor:  48
+//	// Members:  ['3', '118', '120', '86', '76', '13', '61', '111', '55', '45']
+//	// Cursor:  24
+//	// Members:  ['38', '109', '11', '119', '34', '24', '40', '57', '20', '17']
+//	// Cursor:  0
+//	// Members:  ['47', '122', '1', '53', '10', '14', '80']
 //
 // [valkey.io]: https://valkey.io/commands/sscan/
 func (client *baseClient) SScan(key string, cursor string) (string, []string, error) {
@@ -860,23 +860,23 @@ func (client *baseClient) SScan(key string, cursor string) (string, []string, er
 //
 // Example:
 //
-//		 // assume "key" contains a set
-//	  resCursor resCol, err := client.sscan("key", "0", opts)
-//	  fmt.Println("Cursor: ", resCursor)
-//	  fmt.Println("Members: ", resCol)
-//	  for resCursor != "0" {
-//	  	opts := options.NewBaseScanOptionsBuilder().SetMatch("*")
-//		 	resCursor, resCol, err = client.sscan("key", "0", opts)
-//	  	fmt.Println("Cursor: ", resCursor)
-//	  	fmt.Println("Members: ", resCol)
-//	  }
-//	  // Output:
-//		 // Cursor:  48
-//	  // Members:  ['3', '118', '120', '86', '76', '13', '61', '111', '55', '45']
-//	  // Cursor:  24
-//	  // Members:  ['38', '109', '11', '119', '34', '24', '40', '57', '20', '17']
-//	  // Cursor:  0
-//	  // Members:  ['47', '122', '1', '53', '10', '14', '80']
+//	// assume "key" contains a set
+//	resCursor, resCol, err := client.sscan("key", "0", opts)
+//	fmt.Println("Cursor: ", resCursor)
+//	fmt.Println("Members: ", resCol)
+//	for resCursor != "0" {
+//		opts := options.NewBaseScanOptionsBuilder().SetMatch("*")
+//		resCursor, resCol, err = client.sscan("key", "0", opts)
+//		fmt.Println("Cursor: ", resCursor)
+//		fmt.Println("Members: ", resCol)
+//	}
+//	// Output:
+//	// Cursor:  48
+//	// Members:  ['3', '118', '120', '86', '76', '13', '61', '111', '55', '45']
+//	// Cursor:  24
+//	// Members:  ['38', '109', '11', '119', '34', '24', '40', '57', '20', '17']
+//	// Cursor:  0
+//	// Members:  ['47', '122', '1', '53', '10', '14', '80']
 //
 // [valkey.io]: https://valkey.io/commands/sscan/
 func (client *baseClient) SScanWithOptions(
