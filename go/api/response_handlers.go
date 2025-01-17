@@ -513,17 +513,25 @@ type responseConverter interface {
 
 // convert maps, T - type of the value, key is string
 type mapConverter[T any] struct {
-	next responseConverter
+	next     responseConverter
+	canBeNil bool
 }
 
 func (node mapConverter[T]) convert(data interface{}) (interface{}, error) {
+	if data == nil {
+		if node.canBeNil {
+			return nil, nil
+		} else {
+			return nil, &RequestError{fmt.Sprintf("Unexpected type received: nil, expected: map[string]%v", getType[T]())}
+		}
+	}
 	result := make(map[string]T)
 
 	for key, value := range data.(map[string]interface{}) {
 		if node.next == nil {
 			valueT, ok := value.(T)
 			if !ok {
-				return nil, &RequestError{fmt.Sprintf("Unexpected type received: %T, expected: %v", value, getType[T]())}
+				return nil, &RequestError{fmt.Sprintf("Unexpected type of map element: %T, expected: %v", value, getType[T]())}
 			}
 			result[key] = valueT
 		} else {
@@ -531,9 +539,14 @@ func (node mapConverter[T]) convert(data interface{}) (interface{}, error) {
 			if err != nil {
 				return nil, err
 			}
+			if val == nil {
+				var null T
+				result[key] = null
+				continue
+			}
 			valueT, ok := val.(T)
 			if !ok {
-				return nil, &RequestError{fmt.Sprintf("Unexpected type received: %T, expected: %v", valueT, getType[T]())}
+				return nil, &RequestError{fmt.Sprintf("Unexpected type of map element: %T, expected: %v", val, getType[T]())}
 			}
 			result[key] = valueT
 		}
@@ -544,17 +557,27 @@ func (node mapConverter[T]) convert(data interface{}) (interface{}, error) {
 
 // convert arrays, T - type of the value
 type arrayConverter[T any] struct {
-	next responseConverter
+	next     responseConverter
+	canBeNil bool
 }
 
 func (node arrayConverter[T]) convert(data interface{}) (interface{}, error) {
+	if data == nil {
+		if node.canBeNil {
+			return nil, nil
+		} else {
+			return nil, &RequestError{fmt.Sprintf("Unexpected type received: nil, expected: []%v", getType[T]())}
+		}
+	}
 	arrData := data.([]interface{})
 	result := make([]T, 0, len(arrData))
 	for _, value := range arrData {
 		if node.next == nil {
 			valueT, ok := value.(T)
 			if !ok {
-				return nil, &RequestError{fmt.Sprintf("Unexpected type received: %T, expected: %v", value, getType[T]())}
+				return nil, &RequestError{
+					fmt.Sprintf("Unexpected type of array element: %T, expected: %v", value, getType[T]()),
+				}
 			}
 			result = append(result, valueT)
 		} else {
@@ -562,9 +585,14 @@ func (node arrayConverter[T]) convert(data interface{}) (interface{}, error) {
 			if err != nil {
 				return nil, err
 			}
+			if val == nil {
+				var null T
+				result = append(result, null)
+				continue
+			}
 			valueT, ok := val.(T)
 			if !ok {
-				return nil, &RequestError{fmt.Sprintf("Unexpected type received: %T, expected: %v", valueT, getType[T]())}
+				return nil, &RequestError{fmt.Sprintf("Unexpected type of array element: %T, expected: %v", val, getType[T]())}
 			}
 			result = append(result, valueT)
 		}
@@ -588,9 +616,49 @@ func handleXReadResponse(response *C.struct_CommandResponse) (map[string]map[str
 	converters := mapConverter[map[string][][]string]{
 		mapConverter[[][]string]{
 			arrayConverter[[]string]{
-				arrayConverter[string]{},
+				arrayConverter[string]{
+					nil,
+					false,
+				},
+				false,
 			},
+			false,
 		},
+		false,
+	}
+
+	res, err := converters.convert(data)
+	if err != nil {
+		return nil, err
+	}
+	if result, ok := res.(map[string]map[string][][]string); ok {
+		return result, nil
+	}
+	return nil, &RequestError{fmt.Sprintf("unexpected type received: %T", res)}
+}
+
+func handleXReadGroupResponse(response *C.struct_CommandResponse) (map[string]map[string][][]string, error) {
+	defer C.free_command_response(response)
+	data, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+	if data == nil {
+		return nil, nil
+	}
+
+	converters := mapConverter[map[string][][]string]{
+		mapConverter[[][]string]{
+			arrayConverter[[]string]{
+				arrayConverter[string]{
+					nil,
+					false,
+				},
+				true,
+			},
+			false,
+		},
+		false,
 	}
 
 	res, err := converters.convert(data)
