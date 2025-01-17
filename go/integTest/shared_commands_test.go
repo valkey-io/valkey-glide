@@ -5976,3 +5976,162 @@ func (suite *GlideTestSuite) TestEcho() {
 		assert.Equal(t, value, resultEcho.Value())
 	})
 }
+
+func (suite *GlideTestSuite) TestZRemRangeByRank() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.New().String()
+		stringKey := uuid.New().String()
+		membersScores := map[string]float64{
+			"one":   1.0,
+			"two":   2.0,
+			"three": 3.0,
+		}
+		zAddResult, err := client.ZAdd(key1, membersScores)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), zAddResult)
+
+		// Incorrect range start > stop
+		zRemRangeByRankResult, err := client.ZRemRangeByRank(key1, 2, 1)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), zRemRangeByRankResult)
+
+		// Remove first two members
+		zRemRangeByRankResult, err = client.ZRemRangeByRank(key1, 0, 1)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), zRemRangeByRankResult)
+
+		// Remove all members
+		zRemRangeByRankResult, err = client.ZRemRangeByRank(key1, 0, 10)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), zRemRangeByRankResult)
+
+		zRangeWithScoresResult, err := client.ZRangeWithScores(key1, options.NewRangeByIndexQuery(0, -1))
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), 0, len(zRangeWithScoresResult))
+
+		// Non-existing key
+		zRemRangeByRankResult, err = client.ZRemRangeByRank("non_existing_key", 0, 10)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), zRemRangeByRankResult)
+
+		// Key exists, but it is not a set
+		setResult, err := client.Set(stringKey, "test")
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "OK", setResult)
+
+		_, err = client.ZRemRangeByRank(stringKey, 0, 10)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestZRemRangeByLex() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.New().String()
+		stringKey := uuid.New().String()
+
+		// Add members to the set
+		zAddResult, err := client.ZAdd(key1, map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), zAddResult)
+
+		// min > max
+		zRemRangeByLexResult, err := client.ZRemRangeByLex(
+			key1,
+			*options.NewRangeByLexQuery(options.NewLexBoundary("d", false), options.NewLexBoundary("a", false)),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), zRemRangeByLexResult)
+
+		// Remove members with lexicographical range
+		zRemRangeByLexResult, err = client.ZRemRangeByLex(
+			key1,
+			*options.NewRangeByLexQuery(options.NewLexBoundary("a", false), options.NewLexBoundary("c", true)),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), zRemRangeByLexResult)
+
+		zRemRangeByLexResult, err = client.ZRemRangeByLex(
+			key1,
+			*options.NewRangeByLexQuery(options.NewLexBoundary("d", true), options.NewInfiniteLexBoundary(options.PositiveInfinity)),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), zRemRangeByLexResult)
+
+		// Non-existing key
+		zRemRangeByLexResult, err = client.ZRemRangeByLex(
+			"non_existing_key",
+			*options.NewRangeByLexQuery(options.NewLexBoundary("a", false), options.NewLexBoundary("c", false)),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), zRemRangeByLexResult)
+
+		// Key exists, but it is not a set
+		setResult, err := client.Set(stringKey, "test")
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "OK", setResult)
+
+		_, err = client.ZRemRangeByLex(
+			stringKey,
+			*options.NewRangeByLexQuery(options.NewLexBoundary("a", false), options.NewLexBoundary("c", false)),
+		)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestZRemRangeByScore() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key1 := uuid.New().String()
+		stringKey := uuid.New().String()
+
+		// Add members to the set
+		zAddResult, err := client.ZAdd(key1, map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0, "four": 4.0})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(4), zAddResult)
+
+		// min > max
+		zRemRangeByScoreResult, err := client.ZRemRangeByScore(
+			key1,
+			*options.NewRangeByScoreQuery(options.NewScoreBoundary(2.0, false), options.NewScoreBoundary(1.0, false)),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), zRemRangeByScoreResult)
+
+		// Remove members with score range
+		zRemRangeByScoreResult, err = client.ZRemRangeByScore(
+			key1,
+			*options.NewRangeByScoreQuery(options.NewScoreBoundary(1.0, false), options.NewScoreBoundary(3.0, true)),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), zRemRangeByScoreResult)
+
+		// Remove all members
+		zRemRangeByScoreResult, err = client.ZRemRangeByScore(
+			key1,
+			*options.NewRangeByScoreQuery(options.NewScoreBoundary(1.0, false), options.NewScoreBoundary(10.0, true)),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), zRemRangeByScoreResult)
+
+		// Non-existing key
+		zRemRangeByScoreResult, err = client.ZRemRangeByScore(
+			"non_existing_key",
+			*options.NewRangeByScoreQuery(options.NewScoreBoundary(1.0, false), options.NewScoreBoundary(10.0, true)),
+		)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(0), zRemRangeByScoreResult)
+
+		// Key exists, but it is not a set
+		setResult, err := client.Set(stringKey, "test")
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "OK", setResult)
+
+		_, err = client.ZRemRangeByScore(
+			stringKey,
+			*options.NewRangeByScoreQuery(options.NewScoreBoundary(1.0, false), options.NewScoreBoundary(10.0, true)),
+		)
+		assert.NotNil(suite.T(), err)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
