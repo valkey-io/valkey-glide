@@ -6749,8 +6749,12 @@ func (suite *GlideTestSuite) TestXGroupCreateConsumer() {
 		assert.NoError(suite.T(), err)
 
 		// read the stream for the consumer and mark messages as pending
-		command := []string{"XReadGroup", "GROUP", groupName, consumerName, "STREAMS", key, ">"}
-		sendWithCustomCommand(suite, client, command, "Can't send XREADGROUP as a custom command")
+		expectedGroup := map[string]map[string][][]string{key: {streamId1.Value(): {{"field1", "value1"}}, streamId2.Value(): {{"field12", "value2"}}}}
+		actualGroup, err := client.XReadGroup(groupName, consumerName, map[string]string{key: ">"})
+		assert.NoError(suite.T(), err)
+		assert.True(suite.T(), reflect.DeepEqual(expectedGroup, actualGroup),
+			"Expected and actual results do not match",
+		)
 
 		// delete one of the streams using XDel
 		respInt64, err = client.XDel(key, []string{streamId1.Value()})
@@ -6758,12 +6762,24 @@ func (suite *GlideTestSuite) TestXGroupCreateConsumer() {
 		assert.Equal(suite.T(), int64(1), respInt64)
 
 		// xreadgroup should return one empty stream and one non-empty stream
-		command = []string{"XReadGroup", "GROUP", groupName, consumerName, "STREAMS", key, zeroStreamId}
-		sendWithCustomCommand(suite, client, command, "Can't send XREADGROUP as a custom command")
+		resp, err := client.XReadGroup(groupName, consumerName, map[string]string{key: zeroStreamId})
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), 2, len(resp))
+		assert.Nil(suite.T(), resp[key][streamId1.Value()])
+		assert.Equal(suite.T(), [][]string{{"field2", "value2"}}, resp[key][streamId2.Value()])
+
+		// add a new stream entry
+		streamId3, err := client.XAdd(key, [][]string{{"field3", "value3"}})
+		assert.NoError(suite.T(), err)
+		assert.NotNil(suite.T(), streamId3)
 
 		// xack that streamid1 and streamid2 have been processed
-		command = []string{"XAck", key, groupName, streamId1.Value(), streamId2.Value()}
+		command := []string{"XAck", key, groupName, streamId1.Value(), streamId2.Value()}
 		sendWithCustomCommand(suite, client, command, "Can't send XACK as a custom command")
 
+		// Delete the consumer group and expect 1 pending message
+		respInt64, err = client.XGroupDelConsumer(key, groupName, consumerName)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(1), respInt64)
 	})
 }
