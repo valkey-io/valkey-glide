@@ -5209,6 +5209,514 @@ func (suite *GlideTestSuite) TestZScan() {
 	})
 }
 
+func (suite *GlideTestSuite) TestXPending() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		// TODO: Update tests when XGroupCreate, XGroupCreateConsumer, XReadGroup, XClaim, XClaimJustId and XAck are added to
+		// the Go client.
+		//
+		// This test splits out the cluster and standalone tests into their own functions because we are forced to use
+		// CustomCommands for many stream commands which are not included in the preview Go client. Using a type switch for
+		// each use of CustomCommand would make the tests difficult to read and maintain. These tests can be
+		// collapsed once the native commands are added in a subsequent release.
+
+		execStandalone := func(client api.GlideClient) {
+			// 1. Arrange the data
+			key := uuid.New().String()
+			groupName := "group" + uuid.New().String()
+			zeroStreamId := "0"
+			consumer1 := "consumer-1-" + uuid.New().String()
+			consumer2 := "consumer-2-" + uuid.New().String()
+
+			command := []string{"XGroup", "Create", key, groupName, zeroStreamId, "MKSTREAM"}
+
+			resp, err := client.CustomCommand(command)
+			assert.NoError(suite.T(), err)
+			assert.Equal(suite.T(), "OK", resp.(string))
+
+			command = []string{"XGroup", "CreateConsumer", key, groupName, consumer1}
+			resp, err = client.CustomCommand(command)
+			assert.NoError(suite.T(), err)
+			assert.True(suite.T(), resp.(bool))
+
+			command = []string{"XGroup", "CreateConsumer", key, groupName, consumer2}
+			resp, err = client.CustomCommand(command)
+			assert.NoError(suite.T(), err)
+			assert.True(suite.T(), resp.(bool))
+
+			streamid_1, err := client.XAdd(key, [][]string{{"field1", "value1"}})
+			assert.NoError(suite.T(), err)
+			streamid_2, err := client.XAdd(key, [][]string{{"field2", "value2"}})
+			assert.NoError(suite.T(), err)
+
+			command = []string{"XReadGroup", "GROUP", groupName, consumer1, "STREAMS", key, ">"}
+			_, err = client.CustomCommand(command)
+			assert.NoError(suite.T(), err)
+
+			_, err = client.XAdd(key, [][]string{{"field3", "value3"}})
+			assert.NoError(suite.T(), err)
+			_, err = client.XAdd(key, [][]string{{"field4", "value4"}})
+			assert.NoError(suite.T(), err)
+			streamid_5, err := client.XAdd(key, [][]string{{"field5", "value5"}})
+			assert.NoError(suite.T(), err)
+
+			command = []string{"XReadGroup", "GROUP", groupName, consumer2, "STREAMS", key, ">"}
+			_, err = client.CustomCommand(command)
+			assert.NoError(suite.T(), err)
+
+			expectedSummary := api.XPendingSummary{
+				NumOfMessages: 5,
+				StartId:       streamid_1,
+				EndId:         streamid_5,
+				ConsumerMessages: []api.ConsumerPendingMessage{
+					{ConsumerName: consumer1, MessageCount: 2},
+					{ConsumerName: consumer2, MessageCount: 3},
+				},
+			}
+
+			// 2. Act
+			summaryResult, err := client.XPending(key, groupName)
+
+			// 3a. Assert that we get 5 messages in total, 2 for consumer1 and 3 for consumer2
+			assert.NoError(suite.T(), err)
+			assert.True(
+				suite.T(),
+				reflect.DeepEqual(expectedSummary, summaryResult),
+				"Expected and actual results do not match",
+			)
+
+			// 3b. Assert that we get 2 details for consumer1 that includes
+			detailResult, _ := client.XPendingWithOptions(
+				key,
+				groupName,
+				options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
+			)
+			assert.Equal(suite.T(), len(detailResult), 2)
+			assert.Equal(suite.T(), streamid_1.Value(), detailResult[0].Id)
+			assert.Equal(suite.T(), streamid_2.Value(), detailResult[1].Id)
+		}
+
+		execCluster := func(client api.GlideClusterClient) {
+			// 1. Arrange the data
+			key := uuid.New().String()
+			groupName := "group" + uuid.New().String()
+			zeroStreamId := "0"
+			consumer1 := "consumer-1-" + uuid.New().String()
+			consumer2 := "consumer-2-" + uuid.New().String()
+
+			command := []string{"XGroup", "Create", key, groupName, zeroStreamId, "MKSTREAM"}
+
+			resp, err := client.CustomCommand(command)
+			assert.NoError(suite.T(), err)
+			assert.Equal(suite.T(), "OK", resp.Value().(string))
+
+			command = []string{"XGroup", "CreateConsumer", key, groupName, consumer1}
+			resp, err = client.CustomCommand(command)
+			assert.NoError(suite.T(), err)
+			assert.True(suite.T(), resp.Value().(bool))
+
+			command = []string{"XGroup", "CreateConsumer", key, groupName, consumer2}
+			resp, err = client.CustomCommand(command)
+			assert.NoError(suite.T(), err)
+			assert.True(suite.T(), resp.Value().(bool))
+
+			streamid_1, err := client.XAdd(key, [][]string{{"field1", "value1"}})
+			assert.NoError(suite.T(), err)
+			streamid_2, err := client.XAdd(key, [][]string{{"field2", "value2"}})
+			assert.NoError(suite.T(), err)
+
+			command = []string{"XReadGroup", "GROUP", groupName, consumer1, "STREAMS", key, ">"}
+			_, err = client.CustomCommand(command)
+			assert.NoError(suite.T(), err)
+
+			_, err = client.XAdd(key, [][]string{{"field3", "value3"}})
+			assert.NoError(suite.T(), err)
+			_, err = client.XAdd(key, [][]string{{"field4", "value4"}})
+			assert.NoError(suite.T(), err)
+			streamid_5, err := client.XAdd(key, [][]string{{"field5", "value5"}})
+			assert.NoError(suite.T(), err)
+
+			command = []string{"XReadGroup", "GROUP", groupName, consumer2, "STREAMS", key, ">"}
+			_, err = client.CustomCommand(command)
+			assert.NoError(suite.T(), err)
+
+			expectedSummary := api.XPendingSummary{
+				NumOfMessages: 5,
+				StartId:       streamid_1,
+				EndId:         streamid_5,
+				ConsumerMessages: []api.ConsumerPendingMessage{
+					{ConsumerName: consumer1, MessageCount: 2},
+					{ConsumerName: consumer2, MessageCount: 3},
+				},
+			}
+
+			// 2. Act
+			summaryResult, err := client.XPending(key, groupName)
+
+			// 3a. Assert that we get 5 messages in total, 2 for consumer1 and 3 for consumer2
+			assert.NoError(suite.T(), err)
+			assert.True(
+				suite.T(),
+				reflect.DeepEqual(expectedSummary, summaryResult),
+				"Expected and actual results do not match",
+			)
+
+			// 3b. Assert that we get 2 details for consumer1 that includes
+			detailResult, _ := client.XPendingWithOptions(
+				key,
+				groupName,
+				options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
+			)
+			assert.Equal(suite.T(), len(detailResult), 2)
+			assert.Equal(suite.T(), streamid_1.Value(), detailResult[0].Id)
+			assert.Equal(suite.T(), streamid_2.Value(), detailResult[1].Id)
+
+			//
+		}
+
+		assert.Equal(suite.T(), "OK", "OK")
+
+		// create group and consumer for the group
+		// this is only needed in order to be able to use custom commands.
+		// Once the native commands are added, this logic will be refactored.
+		switch c := client.(type) {
+		case api.GlideClient:
+			execStandalone(c)
+		case api.GlideClusterClient:
+			execCluster(c)
+		}
+	})
+}
+
+func (suite *GlideTestSuite) TestXPendingFailures() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		// TODO: Update tests when XGroupCreate, XGroupCreateConsumer, XReadGroup, XClaim, XClaimJustId and XAck are added to
+		// the Go client.
+		//
+		// This test splits out the cluster and standalone tests into their own functions because we are forced to use
+		// CustomCommands for many stream commands which are not included in the preview Go client. Using a type switch for
+		// each use of CustomCommand would make the tests difficult to read and maintain. These tests can be
+		// collapsed once the native commands are added in a subsequent release.
+
+		execStandalone := func(client api.GlideClient) {
+			// 1. Arrange the data
+			key := uuid.New().String()
+			missingKey := uuid.New().String()
+			nonStreamKey := uuid.New().String()
+			groupName := "group" + uuid.New().String()
+			zeroStreamId := "0"
+			consumer1 := "consumer-1-" + uuid.New().String()
+			invalidConsumer := "invalid-consumer-" + uuid.New().String()
+
+			command := []string{"XGroup", "Create", key, groupName, zeroStreamId, "MKSTREAM"}
+
+			resp, err := client.CustomCommand(command)
+			assert.NoError(suite.T(), err)
+			assert.Equal(suite.T(), "OK", resp.(string))
+
+			command = []string{"XGroup", "CreateConsumer", key, groupName, consumer1}
+			resp, err = client.CustomCommand(command)
+			assert.NoError(suite.T(), err)
+			assert.True(suite.T(), resp.(bool))
+
+			_, err = client.XAdd(key, [][]string{{"field1", "value1"}})
+			assert.NoError(suite.T(), err)
+			_, err = client.XAdd(key, [][]string{{"field2", "value2"}})
+			assert.NoError(suite.T(), err)
+
+			// no pending messages yet...
+			summaryResult, err := client.XPending(key, groupName)
+			assert.NoError(suite.T(), err)
+			assert.Equal(suite.T(), int64(0), summaryResult.NumOfMessages)
+
+			detailResult, err := client.XPendingWithOptions(key, groupName, options.NewXPendingOptions("-", "+", 10))
+			assert.NoError(suite.T(), err)
+			assert.Equal(suite.T(), 0, len(detailResult))
+
+			// read the entire stream for the consumer and mark messages as pending
+			command = []string{"XReadGroup", "GROUP", groupName, consumer1, "STREAMS", key, ">"}
+			_, err = client.CustomCommand(command)
+			assert.NoError(suite.T(), err)
+
+			// sanity check - expect some results:
+			summaryResult, err = client.XPending(key, groupName)
+			assert.NoError(suite.T(), err)
+			assert.True(suite.T(), summaryResult.NumOfMessages > 0)
+
+			detailResult, err = client.XPendingWithOptions(
+				key,
+				groupName,
+				options.NewXPendingOptions("-", "+", 1).SetConsumer(consumer1),
+			)
+			assert.NoError(suite.T(), err)
+			assert.True(suite.T(), len(detailResult) > 0)
+
+			// returns empty if + before -
+			detailResult, err = client.XPendingWithOptions(
+				key,
+				groupName,
+				options.NewXPendingOptions("+", "-", 10).SetConsumer(consumer1),
+			)
+			assert.NoError(suite.T(), err)
+			assert.Equal(suite.T(), 0, len(detailResult))
+
+			// min idletime of 100 seconds shouldn't produce any results
+			detailResult, err = client.XPendingWithOptions(
+				key,
+				groupName,
+				options.NewXPendingOptions("-", "+", 10).SetMinIdleTime(100000),
+			)
+			assert.NoError(suite.T(), err)
+			assert.Equal(suite.T(), 0, len(detailResult))
+
+			// invalid consumer - no results
+			detailResult, err = client.XPendingWithOptions(
+				key,
+				groupName,
+				options.NewXPendingOptions("-", "+", 10).SetConsumer(invalidConsumer),
+			)
+			assert.NoError(suite.T(), err)
+			assert.Equal(suite.T(), 0, len(detailResult))
+
+			// Return an error when range bound is not a valid ID
+			_, err = client.XPendingWithOptions(
+				key,
+				groupName,
+				options.NewXPendingOptions("invalid-id", "+", 10),
+			)
+			assert.Error(suite.T(), err)
+			assert.IsType(suite.T(), &api.RequestError{}, err)
+
+			_, err = client.XPendingWithOptions(
+				key,
+				groupName,
+				options.NewXPendingOptions("-", "invalid-id", 10),
+			)
+			assert.Error(suite.T(), err)
+			assert.IsType(suite.T(), &api.RequestError{}, err)
+
+			// invalid count should return no results
+			detailResult, err = client.XPendingWithOptions(
+				key,
+				groupName,
+				options.NewXPendingOptions("-", "+", -1),
+			)
+			assert.NoError(suite.T(), err)
+			assert.Equal(suite.T(), 0, len(detailResult))
+
+			// Return an error when an invalid group is provided
+			_, err = client.XPending(
+				key,
+				"invalid-group",
+			)
+			assert.Error(suite.T(), err)
+			assert.IsType(suite.T(), &api.RequestError{}, err)
+			assert.True(suite.T(), strings.Contains(err.Error(), "NOGROUP"))
+
+			// non-existent key throws a RequestError (NOGROUP)
+			_, err = client.XPending(
+				missingKey,
+				groupName,
+			)
+			assert.Error(suite.T(), err)
+			assert.IsType(suite.T(), &api.RequestError{}, err)
+			assert.True(suite.T(), strings.Contains(err.Error(), "NOGROUP"))
+
+			_, err = client.XPendingWithOptions(
+				missingKey,
+				groupName,
+				options.NewXPendingOptions("-", "+", 10),
+			)
+			assert.Error(suite.T(), err)
+			assert.IsType(suite.T(), &api.RequestError{}, err)
+			assert.True(suite.T(), strings.Contains(err.Error(), "NOGROUP"))
+
+			// Key exists, but it is not a stream
+			_, _ = client.Set(nonStreamKey, "bar")
+			_, err = client.XPending(
+				nonStreamKey,
+				groupName,
+			)
+			assert.Error(suite.T(), err)
+			assert.IsType(suite.T(), &api.RequestError{}, err)
+			assert.True(suite.T(), strings.Contains(err.Error(), "WRONGTYPE"))
+
+			_, err = client.XPendingWithOptions(
+				nonStreamKey,
+				groupName,
+				options.NewXPendingOptions("-", "+", 10),
+			)
+			assert.Error(suite.T(), err)
+			assert.IsType(suite.T(), &api.RequestError{}, err)
+			assert.True(suite.T(), strings.Contains(err.Error(), "WRONGTYPE"))
+		}
+
+		execCluster := func(client api.GlideClusterClient) {
+			// 1. Arrange the data
+			key := uuid.New().String()
+			missingKey := uuid.New().String()
+			nonStreamKey := uuid.New().String()
+			groupName := "group" + uuid.New().String()
+			zeroStreamId := "0"
+			consumer1 := "consumer-1-" + uuid.New().String()
+			invalidConsumer := "invalid-consumer-" + uuid.New().String()
+
+			command := []string{"XGroup", "Create", key, groupName, zeroStreamId, "MKSTREAM"}
+
+			resp, err := client.CustomCommand(command)
+			assert.NoError(suite.T(), err)
+			assert.Equal(suite.T(), "OK", resp.Value().(string))
+
+			command = []string{"XGroup", "CreateConsumer", key, groupName, consumer1}
+			resp, err = client.CustomCommand(command)
+			assert.NoError(suite.T(), err)
+			assert.True(suite.T(), resp.Value().(bool))
+
+			_, err = client.XAdd(key, [][]string{{"field1", "value1"}})
+			assert.NoError(suite.T(), err)
+			_, err = client.XAdd(key, [][]string{{"field2", "value2"}})
+			assert.NoError(suite.T(), err)
+
+			// no pending messages yet...
+			summaryResult, err := client.XPending(key, groupName)
+			assert.NoError(suite.T(), err)
+			assert.Equal(suite.T(), int64(0), summaryResult.NumOfMessages)
+
+			detailResult, err := client.XPendingWithOptions(key, groupName, options.NewXPendingOptions("-", "+", 10))
+			assert.NoError(suite.T(), err)
+			assert.Equal(suite.T(), 0, len(detailResult))
+
+			// read the entire stream for the consumer and mark messages as pending
+			command = []string{"XReadGroup", "GROUP", groupName, consumer1, "STREAMS", key, ">"}
+			_, err = client.CustomCommand(command)
+			assert.NoError(suite.T(), err)
+
+			// sanity check - expect some results:
+			summaryResult, err = client.XPending(key, groupName)
+			assert.NoError(suite.T(), err)
+			assert.True(suite.T(), summaryResult.NumOfMessages > 0)
+
+			detailResult, err = client.XPendingWithOptions(
+				key,
+				groupName,
+				options.NewXPendingOptions("-", "+", 1).SetConsumer(consumer1),
+			)
+			assert.NoError(suite.T(), err)
+			assert.True(suite.T(), len(detailResult) > 0)
+
+			// returns empty if + before -
+			detailResult, err = client.XPendingWithOptions(
+				key,
+				groupName,
+				options.NewXPendingOptions("+", "-", 10).SetConsumer(consumer1),
+			)
+			assert.NoError(suite.T(), err)
+			assert.Equal(suite.T(), 0, len(detailResult))
+
+			// min idletime of 100 seconds shouldn't produce any results
+			detailResult, err = client.XPendingWithOptions(
+				key,
+				groupName,
+				options.NewXPendingOptions("-", "+", 10).SetMinIdleTime(100000),
+			)
+			assert.NoError(suite.T(), err)
+			assert.Equal(suite.T(), 0, len(detailResult))
+
+			// invalid consumer - no results
+			detailResult, err = client.XPendingWithOptions(
+				key,
+				groupName,
+				options.NewXPendingOptions("-", "+", 10).SetConsumer(invalidConsumer),
+			)
+			assert.NoError(suite.T(), err)
+			assert.Equal(suite.T(), 0, len(detailResult))
+
+			// Return an error when range bound is not a valid ID
+			_, err = client.XPendingWithOptions(
+				key,
+				groupName,
+				options.NewXPendingOptions("invalid-id", "+", 10),
+			)
+			assert.Error(suite.T(), err)
+			assert.IsType(suite.T(), &api.RequestError{}, err)
+
+			_, err = client.XPendingWithOptions(
+				key,
+				groupName,
+				options.NewXPendingOptions("-", "invalid-id", 10),
+			)
+			assert.Error(suite.T(), err)
+			assert.IsType(suite.T(), &api.RequestError{}, err)
+
+			// invalid count should return no results
+			detailResult, err = client.XPendingWithOptions(
+				key,
+				groupName,
+				options.NewXPendingOptions("-", "+", -1),
+			)
+			assert.NoError(suite.T(), err)
+			assert.Equal(suite.T(), 0, len(detailResult))
+
+			// Return an error when an invalid group is provided
+			_, err = client.XPending(
+				key,
+				"invalid-group",
+			)
+			assert.Error(suite.T(), err)
+			assert.IsType(suite.T(), &api.RequestError{}, err)
+			assert.True(suite.T(), strings.Contains(err.Error(), "NOGROUP"))
+
+			// non-existent key throws a RequestError (NOGROUP)
+			_, err = client.XPending(
+				missingKey,
+				groupName,
+			)
+			assert.Error(suite.T(), err)
+			assert.IsType(suite.T(), &api.RequestError{}, err)
+			assert.True(suite.T(), strings.Contains(err.Error(), "NOGROUP"))
+
+			_, err = client.XPendingWithOptions(
+				missingKey,
+				groupName,
+				options.NewXPendingOptions("-", "+", 10),
+			)
+			assert.Error(suite.T(), err)
+			assert.IsType(suite.T(), &api.RequestError{}, err)
+			assert.True(suite.T(), strings.Contains(err.Error(), "NOGROUP"))
+
+			// Key exists, but it is not a stream
+			_, _ = client.Set(nonStreamKey, "bar")
+			_, err = client.XPending(
+				nonStreamKey,
+				groupName,
+			)
+			assert.Error(suite.T(), err)
+			assert.IsType(suite.T(), &api.RequestError{}, err)
+			assert.True(suite.T(), strings.Contains(err.Error(), "WRONGTYPE"))
+
+			_, err = client.XPendingWithOptions(
+				nonStreamKey,
+				groupName,
+				options.NewXPendingOptions("-", "+", 10),
+			)
+			assert.Error(suite.T(), err)
+			assert.IsType(suite.T(), &api.RequestError{}, err)
+			assert.True(suite.T(), strings.Contains(err.Error(), "WRONGTYPE"))
+		}
+
+		assert.Equal(suite.T(), "OK", "OK")
+
+		// create group and consumer for the group
+		// this is only needed in order to be able to use custom commands.
+		// Once the native commands are added, this logic will be refactored.
+		switch c := client.(type) {
+		case api.GlideClient:
+			execStandalone(c)
+		case api.GlideClusterClient:
+			execCluster(c)
+		}
+	})
+}
+
 func (suite *GlideTestSuite) TestObjectIdleTime() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		defaultClient := suite.defaultClient()
