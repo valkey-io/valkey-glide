@@ -1906,6 +1906,133 @@ func (client *baseClient) ZScanWithOptions(
 	return handleScanResponse(result)
 }
 
+// Returns stream message summary information for pending messages matching a stream and group.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the stream.
+//	group - The consumer group name.
+//
+// Return value:
+// An XPendingSummary struct that includes a summary with the following fields:
+//
+//	NumOfMessages: The total number of pending messages for this consumer group.
+//	StartId: The smallest ID among the pending messages or nil if no pending messages exist.
+//	EndId: The greatest ID among the pending messages or nil if no pending messages exists.
+//	GroupConsumers: An array of ConsumerPendingMessages with the following fields:
+//	  ConsumerName: The name of the consumer.
+//	  MessageCount: The number of pending messages for this consumer.
+//
+// Example
+//
+//	result, err := client.XPending("myStream", "myGroup")
+//	if err != nil {
+//	  return err
+//	}
+//	fmt.Println("Number of pending messages: ", result.NumOfMessages)
+//	fmt.Println("Start and End ID of messages: ", result.StartId, result.EndId)
+//	for _, consumer := range result.ConsumerMessages {
+//	  fmt.Printf("Consumer messages:  %s: $v\n", consumer.ConsumerName, consumer.MessageCount)
+//	}
+//
+// [valkey.io]: https://valkey.io/commands/xpending/
+func (client *baseClient) XPending(key string, group string) (XPendingSummary, error) {
+	result, err := client.executeCommand(C.XPending, []string{key, group})
+	if err != nil {
+		return XPendingSummary{}, err
+	}
+
+	return handleXPendingSummaryResponse(result)
+}
+
+// Returns stream message summary information for pending messages matching a given range of IDs.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the stream.
+//	group - The consumer group name.
+//	opts - The options for the command. See [options.XPendingOptions] for details.
+//
+// Return value:
+// A slice of XPendingDetail structs, where each detail struct includes the following fields:
+//
+//	Id - The ID of the pending message.
+//	ConsumerName - The name of the consumer that fetched the message and has still to acknowledge it.
+//	IdleTime - The time in milliseconds since the last time the message was delivered to the consumer.
+//	DeliveryCount - The number of times this message was delivered.
+//
+// Example
+//
+//	detailResult, err := client.XPendingWithOptions(key, groupName, options.NewXPendingOptions("-", "+", 10))
+//	if err != nil {
+//	  return err
+//	}
+//	fmt.Println("=========================")
+//	for _, detail := range detailResult {
+//	  fmt.Println(detail.Id)
+//	  fmt.Println(detail.ConsumerName)
+//	  fmt.Println(detail.IdleTime)
+//	  fmt.Println(detail.DeliveryCount)
+//	  fmt.Println("=========================")
+//	}
+//
+// [valkey.io]: https://valkey.io/commands/xpending/
+func (client *baseClient) XPendingWithOptions(
+	key string,
+	group string,
+	opts *options.XPendingOptions,
+) ([]XPendingDetail, error) {
+	optionArgs, _ := opts.ToArgs()
+	args := append([]string{key, group}, optionArgs...)
+
+	result, err := client.executeCommand(C.XPending, args)
+	if err != nil {
+		return nil, err
+	}
+	return handleXPendingDetailResponse(result)
+}
+
+func (client *baseClient) Restore(key string, ttl int64, value string) (Result[string], error) {
+	return client.RestoreWithOptions(key, ttl, value, NewRestoreOptionsBuilder())
+}
+
+func (client *baseClient) RestoreWithOptions(key string, ttl int64,
+	value string, options *RestoreOptions,
+) (Result[string], error) {
+	optionArgs, err := options.toArgs()
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	result, err := client.executeCommand(C.Restore, append([]string{
+		key,
+		utils.IntToString(ttl), value,
+	}, optionArgs...))
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNilResponse(result)
+}
+
+func (client *baseClient) Dump(key string) (Result[string], error) {
+	result, err := client.executeCommand(C.Dump, []string{key})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNilResponse(result)
+}
+
+func (client *baseClient) ObjectEncoding(key string) (Result[string], error) {
+	result, err := client.executeCommand(C.ObjectEncoding, []string{key})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNilResponse(result)
+}
+
 func (client *baseClient) Time() ([]Result[string], error) {
 	result, err := client.executeCommand(C.Time, []string{})
 	if err != nil {
