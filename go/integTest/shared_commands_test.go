@@ -5407,14 +5407,12 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			consumer1 := "consumer-1-" + uuid.New().String()
 			invalidConsumer := "invalid-consumer-" + uuid.New().String()
 
-			command := []string{"XGroup", "Create", key, groupName, zeroStreamId, "MKSTREAM"}
+			suite.verifyOK(
+				client.XGroupCreateWithOptions(key, groupName, zeroStreamId, options.NewXGroupCreateOptions().SetMakeStream()),
+			)
 
+			command := []string{"XGroup", "CreateConsumer", key, groupName, consumer1}
 			resp, err := client.CustomCommand(command)
-			assert.NoError(suite.T(), err)
-			assert.Equal(suite.T(), "OK", resp.(string))
-
-			command = []string{"XGroup", "CreateConsumer", key, groupName, consumer1}
-			resp, err = client.CustomCommand(command)
 			assert.NoError(suite.T(), err)
 			assert.True(suite.T(), resp.(bool))
 
@@ -5560,14 +5558,12 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			consumer1 := "consumer-1-" + uuid.New().String()
 			invalidConsumer := "invalid-consumer-" + uuid.New().String()
 
-			command := []string{"XGroup", "Create", key, groupName, zeroStreamId, "MKSTREAM"}
+			suite.verifyOK(
+				client.XGroupCreateWithOptions(key, groupName, zeroStreamId, options.NewXGroupCreateOptions().SetMakeStream()),
+			)
 
+			command := []string{"XGroup", "CreateConsumer", key, groupName, consumer1}
 			resp, err := client.CustomCommand(command)
-			assert.NoError(suite.T(), err)
-			assert.Equal(suite.T(), "OK", resp.Value().(string))
-
-			command = []string{"XGroup", "CreateConsumer", key, groupName, consumer1}
-			resp, err = client.CustomCommand(command)
 			assert.NoError(suite.T(), err)
 			assert.True(suite.T(), resp.Value().(bool))
 
