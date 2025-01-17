@@ -1996,7 +1996,7 @@ func (client *baseClient) XPendingWithOptions(
 	return handleXPendingDetailResponse(result)
 }
 
-// Creates a new consumer group uniquely identified by `groupname` for the stream stored at `key`.
+// Creates a new consumer group uniquely identified by `group` for the stream stored at `key`.
 //
 // See [valkey.io] for details.
 //
@@ -2020,7 +2020,7 @@ func (client *baseClient) XGroupCreate(key string, group string, id string) (str
 	return client.XGroupCreateWithOptions(key, group, id, options.NewXGroupCreateOptions())
 }
 
-// Creates a new consumer group uniquely identified by `groupname` for the stream stored at `key`.
+// Creates a new consumer group uniquely identified by `group` for the stream stored at `key`.
 //
 // See [valkey.io] for details.
 //
@@ -2055,4 +2055,30 @@ func (client *baseClient) XGroupCreateWithOptions(
 		return defaultStringResponse, err
 	}
 	return handleStringResponse(result)
+}
+
+// Destroys the consumer group `group` for the stream stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the stream.
+//	group - The consumer group name to delete.
+//
+// Return value:
+//
+//	`true` if the consumer group is destroyed. Otherwise, `false`.
+//
+// Example:
+//
+//	client.XGroupDestroy("mystream", "mygroup")
+//
+// [valkey.io]: https://valkey.io/commands/xgroup-destroy/
+func (client *baseClient) XGroupDestroy(key string, group string) (bool, error) {
+	result, err := client.executeCommand(C.XGroupDestroy, []string{key, group})
+	if err != nil {
+		return defaultBoolResponse, err
+	}
+	return handleBoolResponse(result)
 }
