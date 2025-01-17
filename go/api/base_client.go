@@ -2005,15 +2005,15 @@ func (client *baseClient) XPendingWithOptions(
 // Return value:
 //
 //	If key exists, returns the logarithmic access frequency counter of the
-//	object stored at key as a long. Otherwise, returns null.
+//	object stored at key as a long. Otherwise, returns `nil`.
 //
 // Example:
 //
-//	 result, err := client.ObjectFreq(key)
-//		if err != nil {
-//		    // handle error
-//		}
-//		fmt.Println(result.Value()) // Output: 1
+//	result, err := client.ObjectFreq(key)
+//	if err != nil {
+//		// handle error
+//	}
+//	fmt.Println(result.Value()) // Output: 1
 //
 // [valkey.io]: https://valkey.io/commands/object-freq/
 func (client *baseClient) ObjectFreq(key string) (Result[int64], error) {
@@ -2032,15 +2032,15 @@ func (client *baseClient) ObjectFreq(key string) (Result[int64], error) {
 //
 // Return value:
 //
-//	If key exists, returns the idle time in seconds. Otherwise, returns null.
+//	If key exists, returns the idle time in seconds. Otherwise, returns `nil`.
 //
 // Example:
 //
-//	 result, err := client.ObjectIdleTime(key)
-//		if err != nil {
-//		    // handle error
-//		}
-//		fmt.Println(result.Value()) // Output: 1
+//	result, err := client.ObjectIdleTime(key)
+//	if err != nil {
+//		// handle error
+//	}
+//	fmt.Println(result.Value()) // Output: 1
 //
 // [valkey.io]: https://valkey.io/commands/object-idletime/
 func (client *baseClient) ObjectIdleTime(key string) (Result[int64], error) {
@@ -2059,16 +2059,16 @@ func (client *baseClient) ObjectIdleTime(key string) (Result[int64], error) {
 //
 // Return value:
 //
-//	 If key exists, returns the reference count of the object stored at key
-//		as a long. Otherwise, returns null.
+//	If key exists, returns the reference count of the object stored at key.
+//	Otherwise, returns `nil`.
 //
 // Example:
 //
-//	 result, err := client.ObjectRefCount(key)
-//		if err != nil {
-//		    // handle error
-//		}
-//		fmt.Println(result.Value()) // Output: 1
+//	result, err := client.ObjectRefCount(key)
+//	if err != nil {
+//	  // handle error
+//	}
+//	fmt.Println(result.Value()) // Output: 1
 //
 // [valkey.io]: https://valkey.io/commands/object-refcount/
 func (client *baseClient) ObjectRefCount(key string) (Result[int64], error) {
