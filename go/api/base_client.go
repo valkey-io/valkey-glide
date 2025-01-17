@@ -5258,3 +5258,98 @@ func (client *baseClient) Echo(message string) (Result[string], error) {
 	}
 	return handleStringOrNilResponse(result)
 }
+
+// Removes all elements in the sorted set stored at `key` with a lexicographical order
+// between `rangeQuery.Start` and `rangeQuery.End`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	rangeQuery - The range query object representing the minimum and maximum bound of the lexicographical range.
+//	  can be an implementation of [options.LexBoundary].
+//
+// Return value:
+//
+//	The number of members removed from the sorted set.
+//	If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
+//	If `rangeQuery.Start` is greater than `rangeQuery.End`, `0` is returned.
+//
+// Example:
+//
+//	zRemRangeByLexResult, err := client.ZRemRangeByLex("key1", options.NewRangeByLexQuery("a", "b"))
+//	fmt.Println(zRemRangeByLexResult) // Output: 1
+//
+// [valkey.io]: https://valkey.io/commands/zremrangebylex/
+func (client *baseClient) ZRemRangeByLex(key string, rangeQuery options.RangeByLex) (int64, error) {
+	result, err := client.executeCommand(
+		C.ZRemRangeByLex, append([]string{key}, rangeQuery.ToArgsRemRange()...))
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
+}
+
+// Removes all elements in the sorted set stored at `key` with a rank between `start` and `stop`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	start - The start rank.
+//	stop - The stop rank.
+//
+// Return value:
+//
+//	The number of members removed from the sorted set.
+//	If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
+//	If `start` is greater than `stop`, `0` is returned.
+//
+// Example:
+//
+//	zRemRangeByRankResult, err := client.ZRemRangeByRank("key1", 0, 1)
+//	fmt.Println(zRemRangeByRankResult) // Output: 1
+//
+// [valkey.io]: https://valkey.io/commands/zremrangebyrank/
+func (client *baseClient) ZRemRangeByRank(key string, start int64, stop int64) (int64, error) {
+	result, err := client.executeCommand(C.ZRemRangeByRank, []string{key, utils.IntToString(start), utils.IntToString(stop)})
+	if err != nil {
+		return 0, err
+	}
+	return handleIntResponse(result)
+}
+
+// Removes all elements in the sorted set stored at `key` with a score between `rangeQuery.Start` and `rangeQuery.End`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the sorted set.
+//	rangeQuery - The range query object representing the minimum and maximum bound of the score range.
+//	  can be an implementation of [options.RangeByScore].
+//
+// Return value:
+//
+//	The number of members removed from the sorted set.
+//	If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
+//	If `rangeQuery.Start` is greater than `rangeQuery.End`, `0` is returned.
+//
+// Example:
+//
+//	zRemRangeByScoreResult, err := client.ZRemRangeByScore("key1", options.NewRangeByScoreBuilder(
+//		options.NewInfiniteScoreBoundary(options.NegativeInfinity),
+//		options.NewInfiniteScoreBoundary(options.PositiveInfinity),
+//	))
+//	fmt.Println(zRemRangeByScoreResult) // Output: 1
+//
+// [valkey.io]: https://valkey.io/commands/zremrangebyscore/
+func (client *baseClient) ZRemRangeByScore(key string, rangeQuery options.RangeByScore) (int64, error) {
+	result, err := client.executeCommand(C.ZRemRangeByScore, append([]string{key}, rangeQuery.ToArgsRemRange()...))
+	if err != nil {
+		return 0, err
+	}
+	return handleIntResponse(result)
+}
