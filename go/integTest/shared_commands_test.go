@@ -5728,7 +5728,8 @@ func (suite *GlideTestSuite) TestObjectIdleTime() {
 		keyValueMap := map[string]string{
 			"maxmemory-policy": "noeviction",
 		}
-		resultConfig, err := defaultClient.ConfigGet("maxmemory-policy")
+		suite.verifyOK(defaultClient.ConfigSet(keyValueMap))
+		resultConfig, err := defaultClient.ConfigGet([]string{"maxmemory-policy"})
 		assert.Nil(t, err, "Failed to get configuration")
 		assert.Equal(t, "noeviction", resultConfig, "Configuration mismatch for maxmemory-policy")
 		resultGet, err := defaultClient.Get(key)
@@ -5766,7 +5767,8 @@ func (suite *GlideTestSuite) TestObjectFreq() {
 		keyValueMap := map[string]string{
 			"maxmemory-policy": "volatile-lfu",
 		}
-		resultConfig, err := defaultClient.ConfigGet("maxmemory-policy")
+		suite.verifyOK(defaultClient.ConfigSet(keyValueMap))
+		resultConfig, err := defaultClient.ConfigGet([]string{"maxmemory-policy"})
 		assert.Nil(t, err, "Failed to get configuration")
 		assert.Equal(t, "volatile-lfu", resultConfig, "Configuration mismatch for maxmemory-policy")
 		sleepSec := int64(5)
