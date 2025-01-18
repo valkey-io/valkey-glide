@@ -3,6 +3,7 @@
 package integTest
 
 import (
+	"fmt"
 	"math"
 	"reflect"
 	"strconv"
@@ -6331,6 +6332,7 @@ func (suite *GlideTestSuite) TestEcho() {
 	})
 }
 
+func (suite *GlideTestSuite) TestZRemRangeByRank() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		key1 := uuid.New().String()
 		stringKey := uuid.New().String()
@@ -6810,11 +6812,11 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 		// Set a string key, and expect an error when you try to create or delete a consumer group
 		_, err = client.Set(stringKey, "test")
 		assert.NoError(suite.T(), err)
-		respBool, err = client.XGroupCreateConsumer(stringKey, groupName, consumerName)
+		_, err = client.XGroupCreateConsumer(stringKey, groupName, consumerName)
 		assert.Error(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 
-		respInt64, err = client.XGroupDelConsumer(stringKey, groupName, consumerName)
+		_, err = client.XGroupDelConsumer(stringKey, groupName, consumerName)
 		assert.Error(suite.T(), err)
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
