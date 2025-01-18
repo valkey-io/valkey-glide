@@ -10,7 +10,6 @@ import "github.com/valkey-io/valkey-glide/go/glide/api/options"
 //
 // [valkey.io]: https://valkey.io/commands/#set
 type SetCommands interface {
-
 	SAdd(key string, members []string) (int64, error)
 
 	SRem(key string, members []string) (int64, error)
@@ -43,9 +42,9 @@ type SetCommands interface {
 
 	SUnion(keys []string) (map[Result[string]]struct{}, error)
 
-	SScan(key string, cursor string) (Result[string], []Result[string], error)
+	SScan(key string, cursor string) (string, []string, error)
 
-	SScanWithOptions(key string, cursor string, options *options.BaseScanOptions) (Result[string], []Result[string], error)
+	SScanWithOptions(key string, cursor string, options *options.BaseScanOptions) (string, []string, error)
 
 	SMove(source string, destination string, member string) (bool, error)
 }

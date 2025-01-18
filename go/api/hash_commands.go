@@ -10,7 +10,6 @@ import "github.com/valkey-io/valkey-glide/go/glide/api/options"
 //
 // [valkey.io]: https://valkey.io/commands/#hash
 type HashCommands interface {
-
 	HGet(key string, field string) (Result[string], error)
 
 	HGetAll(key string) (map[Result[string]]Result[string], error)
@@ -37,7 +36,7 @@ type HashCommands interface {
 
 	HIncrByFloat(key string, field string, increment float64) (float64, error)
 
-	HScan(key string, cursor string) (Result[string], []Result[string], error)
+	HScan(key string, cursor string) (string, []string, error)
 
-	HScanWithOptions(key string, cursor string, options *options.HashScanOptions) (Result[string], []Result[string], error)
+	HScanWithOptions(key string, cursor string, options *options.HashScanOptions) (string, []string, error)
 }
