@@ -382,9 +382,9 @@ type SortedSetCommands interface {
 
 	ZCount(key string, rangeOptions *options.ZCountRange) (int64, error)
 
-	ZScan(key string, cursor string) (Result[string], []Result[string], error)
+	ZScan(key string, cursor string) (string, []string, error)
 
-	ZScanWithOptions(key string, cursor string, options *options.ZScanOptions) (Result[string], []Result[string], error)
+	ZScanWithOptions(key string, cursor string, options *options.ZScanOptions) (string, []string, error)
 
 	ZRemRangeByLex(key string, rangeQuery options.RangeByLex) (int64, error)
 
