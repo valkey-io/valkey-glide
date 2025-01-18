@@ -2,8 +2,6 @@
 
 package integTest
 
-import "github.com/valkey-io/valkey-glide/go/glide/api"
-
 // check if sliceA is a subset of sliceB
 func isSubset[T comparable](sliceA []T, sliceB []T) bool {
 	setB := make(map[T]struct{})
