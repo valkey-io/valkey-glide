@@ -343,4 +343,10 @@ type HashCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/hscan/
 	HScanWithOptions(key string, cursor string, options *options.HashScanOptions) (Result[string], []Result[string], error)
+
+	HRandField(key string) (Result[string], error)
+
+	HRandFieldWithCount(key string, count int64) ([]string, error)
+
+	HRandFieldWithCountWithValues(key string, count int64) ([][]string, error)
 }

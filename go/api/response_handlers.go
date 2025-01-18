@@ -191,6 +191,33 @@ func handleStringArrayResponse(response *C.struct_CommandResponse) ([]Result[str
 	return convertStringArray(response)
 }
 
+func handle2DStringArrayResponse(response *C.struct_CommandResponse) ([][]string, error) {
+	defer C.free_command_response(response)
+	typeErr := checkResponseType(response, C.Array, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+	array, err := parseArray(response)
+	if err != nil {
+		return nil, err
+	}
+	converted, err := arrayConverter[[]string]{
+		arrayConverter[string]{
+			nil,
+			false,
+		},
+		false,
+	}.convert(array)
+	if err != nil {
+		return nil, err
+	}
+	res, ok := converted.([][]string)
+	if !ok {
+		return nil, &RequestError{fmt.Sprintf("unexpected type: %T", converted)}
+	}
+	return res, nil
+}
+
 func handleStringArrayOrNullResponse(response *C.struct_CommandResponse) ([]Result[string], error) {
 	defer C.free_command_response(response)
 

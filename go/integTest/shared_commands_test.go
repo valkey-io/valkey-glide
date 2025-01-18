@@ -1282,6 +1282,77 @@ func (suite *GlideTestSuite) TestHScan() {
 	})
 }
 
+func (suite *GlideTestSuite) TestHRandField() {
+	suite.SkipIfServerVersionLowerThanBy("6.2.0")
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := uuid.NewString()
+
+		// key does not exist
+		res, err := client.HRandField(key)
+		assert.NoError(suite.T(), err)
+		assert.True(suite.T(), res.IsNil())
+		resc, err := client.HRandFieldWithCount(key, 5)
+		assert.NoError(suite.T(), err)
+		assert.Empty(suite.T(), resc)
+		rescv, err := client.HRandFieldWithCountWithValues(key, 5)
+		assert.NoError(suite.T(), err)
+		assert.Empty(suite.T(), rescv)
+
+		data := map[string]string{"f1": "v1", "f2": "v2", "f3": "v3"}
+		hset, err := client.HSet(key, data)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), hset)
+
+		fields := make([]string, 0, len(data))
+		for k := range data {
+			fields = append(fields, k)
+		}
+		res, err = client.HRandField(key)
+		assert.NoError(suite.T(), err)
+		assert.Contains(suite.T(), fields, res.Value())
+
+		// With Count - positive count
+		resc, err = client.HRandFieldWithCount(key, 5)
+		assert.NoError(suite.T(), err)
+		assert.ElementsMatch(suite.T(), fields, resc)
+
+		// With Count - negative count
+		resc, err = client.HRandFieldWithCount(key, -5)
+		assert.NoError(suite.T(), err)
+		assert.Len(suite.T(), resc, 5)
+		for _, field := range resc {
+			assert.Contains(suite.T(), fields, field)
+		}
+
+		// With values - positive count
+		rescv, err = client.HRandFieldWithCountWithValues(key, 5)
+		assert.NoError(suite.T(), err)
+		resvMap := make(map[string]string)
+		for _, pair := range rescv {
+			resvMap[pair[0]] = pair[1]
+		}
+		assert.Equal(suite.T(), data, resvMap)
+
+		// With values - negative count
+		rescv, err = client.HRandFieldWithCountWithValues(key, -5)
+		assert.NoError(suite.T(), err)
+		assert.Len(suite.T(), resc, 5)
+		for _, pair := range rescv {
+			assert.Contains(suite.T(), fields, pair[0])
+		}
+
+		// key exists but holds non hash type value
+		key = uuid.NewString()
+		suite.verifyOK(client.Set(key, "HRandField"))
+		_, err = client.HRandField(key)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+		_, err = client.HRandFieldWithCount(key, 42)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+		_, err = client.HRandFieldWithCountWithValues(key, 42)
+		assert.IsType(suite.T(), &api.RequestError{}, err)
+	})
+}
+
 func (suite *GlideTestSuite) TestLPushLPop_WithExistingKey() {
 	suite.runWithDefaultClients(func(client api.BaseClient) {
 		list := []string{"value4", "value3", "value2", "value1"}

@@ -509,6 +509,112 @@ func (client *baseClient) HScanWithOptions(
 	return handleScanResponse(result)
 }
 
+// Returns a random field name from the hash value stored at `key`.
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the hash.
+//
+// Return value:
+//
+//	A random field name from the hash stored at `key`, or `nil` when
+//	  the key does not exist.
+//
+// Example:
+//
+//	field, err := client.HRandField("my_hash")
+//
+// [valkey.io]: https://valkey.io/commands/hexists/
+func (client *baseClient) HRandField(key string) (Result[string], error) {
+	result, err := client.executeCommand(C.HRandField, []string{key})
+	if err != nil {
+		return CreateNilStringResult(), err
+	}
+	return handleStringOrNilResponse(result)
+}
+
+// Retrieves up to `count` random field names from the hash value stored at `key`.
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the hash.
+//	count - The number of field names to return.
+//	  If `count` is positive, returns unique elements. If negative, allows for duplicates.
+//
+// Return value:
+//
+//	An array of random field names from the hash stored at `key`,
+//	   or an empty array when the key does not exist.
+//
+// Example:
+//
+//	fields, err := client.HRandFieldWithCount("my_hash", -5)
+//
+// [valkey.io]: https://valkey.io/commands/hexists/
+func (client *baseClient) HRandFieldWithCount(key string, count int64) ([]string, error) {
+	result, err := client.executeCommand(C.HRandField, []string{key, utils.IntToString(count)})
+	if err != nil {
+		return nil, err
+	}
+	// TODO remove that after merging with https://github.com/valkey-io/valkey-glide/pull/2965
+	data, err := handleStringArrayResponse(result)
+	var res []string
+	for _, val := range data {
+		res = append(res, val.Value())
+	}
+	return res, err
+}
+
+// Retrieves up to `count` random field names along with their values from the hash
+// value stored at `key`.
+//
+// Since:
+//
+//	Valkey 6.2.0 and above.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the hash.
+//	count - The number of field names to return.
+//	  If `count` is positive, returns unique elements. If negative, allows for duplicates.
+//
+// Return value:
+//
+//	A 2D `array` of `[field, value]` arrays, where `field` is a random
+//	  field name from the hash and `value` is the associated value of the field name.
+//	  If the hash does not exist or is empty, the response will be an empty array.
+//
+// Example:
+//
+//	fieldsAndValues, err := client.HRandFieldWithCountWithValues("my_hash", -5)
+//	for _, pair := range fieldsAndValues {
+//		field := pair[0]
+//		value := pair[1]
+//	}
+//
+// [valkey.io]: https://valkey.io/commands/hexists/
+func (client *baseClient) HRandFieldWithCountWithValues(key string, count int64) ([][]string, error) {
+	result, err := client.executeCommand(C.HRandField, []string{key, utils.IntToString(count), "WITHVALUES"})
+	if err != nil {
+		return nil, err
+	}
+	return handle2DStringArrayResponse(result)
+}
+
 func (client *baseClient) LPush(key string, elements []string) (int64, error) {
 	result, err := client.executeCommand(C.LPush, append([]string{key}, elements...))
 	if err != nil {
