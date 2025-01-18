@@ -2881,7 +2881,6 @@ func (client *baseClient) XGroupCreateConsumer(
 		return false, err
 	}
 	return handleBoolResponse(result)
-
 }
 
 // XGroupCreateConsumer creates a consumer named `consumer` in the consumer group `group` for the
