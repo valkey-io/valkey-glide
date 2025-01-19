@@ -29,9 +29,7 @@ public final class SetOptions {
      */
     private final ConditionalSet conditionalSet;
 
-      /**
-     * Value to compare when <code>IFEQ comparison-value</code> is set.
-     */
+    /** Value to compare when <code>IFEQ comparison-value</code> is set. */
     private final String comparisonValue;
 
     /**
@@ -55,12 +53,11 @@ public final class SetOptions {
          * API.
          */
         ONLY_IF_DOES_NOT_EXIST("NX"),
-        /** 
-         * Only set the key if the current value equals the provided comparison value.
-         * Equivalent to <code>IFEQ comparison-value</code> in the Valkey API.
+        /**
+         * Only set the key if the current value equals the provided comparison value. Equivalent to
+         * <code>IFEQ comparison-value</code> in the Valkey API.
          */
         ONLY_IF_EQUAL("IFEQ");
-
 
         private final String valkeyApi;
     }
