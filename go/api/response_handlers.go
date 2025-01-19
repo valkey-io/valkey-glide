@@ -881,3 +881,41 @@ func handleRawStringArrayResponse(response *C.struct_CommandResponse) ([]string,
 
 	return slice, nil
 }
+
+func handleRawStringArrayMapResponse(response *C.struct_CommandResponse) (map[string][]string, error) {
+	defer C.free_command_response(response)
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	result := make(map[string][]string)
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		key, err := convertCharArrayToString(v.map_key, true)
+		if err != nil {
+			return nil, err
+		}
+
+		err = checkResponseType(v.map_value, C.Array, false)
+		if err != nil {
+			return nil, err
+		}
+
+		timeStrings := make([]string, 0, v.map_value.array_value_len)
+		for _, strVal := range unsafe.Slice(v.map_value.array_value, v.map_value.array_value_len) {
+			err := checkResponseType(&strVal, C.String, false)
+			if err != nil {
+				return nil, err
+			}
+			if strVal.string_value == nil {
+				return nil, &RequestError{"Unexpected nil string in array"}
+			}
+			byteSlice := C.GoBytes(unsafe.Pointer(strVal.string_value), C.int(int64(strVal.string_value_len)))
+			timeStrings = append(timeStrings, string(byteSlice))
+		}
+
+		result[key.Value()] = timeStrings
+	}
+
+	return result, nil
+}
