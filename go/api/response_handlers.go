@@ -168,7 +168,8 @@ func handleStringOrNilResponse(response *C.struct_CommandResponse) (Result[strin
 	return convertCharArrayToString(response, true)
 }
 
-func convertStringArray(response *C.struct_CommandResponse) ([]Result[string], error) {
+// Fix after merging with https://github.com/valkey-io/valkey-glide/pull/2964
+func convertStringOrNilArray(response *C.struct_CommandResponse) ([]Result[string], error) {
 	typeErr := checkResponseType(response, C.Array, false)
 	if typeErr != nil {
 		return nil, typeErr
@@ -185,33 +186,44 @@ func convertStringArray(response *C.struct_CommandResponse) ([]Result[string], e
 	return slice, nil
 }
 
-func handleStringArrayResponse(response *C.struct_CommandResponse) ([]Result[string], error) {
-	defer C.free_command_response(response)
-
-	return convertStringArray(response)
-}
-
-func handleStringArrayOrNullResponse(response *C.struct_CommandResponse) ([]Result[string], error) {
-	defer C.free_command_response(response)
-
-	typeErr := checkResponseType(response, C.Array, true)
+// array could be nillable, but strings - aren't
+func convertStringArray(response *C.struct_CommandResponse, isNilable bool) ([]string, error) {
+	typeErr := checkResponseType(response, C.Array, isNilable)
 	if typeErr != nil {
 		return nil, typeErr
 	}
 
-	if response.response_type == C.Null {
+	if isNilable && response.array_value == nil {
 		return nil, nil
 	}
 
-	slice := make([]Result[string], 0, response.array_value_len)
+	slice := make([]string, 0, response.array_value_len)
 	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
-		res, err := convertCharArrayToString(&v, true)
+		res, err := convertCharArrayToString(&v, false)
 		if err != nil {
 			return nil, err
 		}
-		slice = append(slice, res)
+		slice = append(slice, res.Value())
 	}
 	return slice, nil
+}
+
+func handleStringOrNilArrayResponse(response *C.struct_CommandResponse) ([]Result[string], error) {
+	defer C.free_command_response(response)
+
+	return convertStringOrNilArray(response)
+}
+
+func handleStringArrayResponse(response *C.struct_CommandResponse) ([]string, error) {
+	defer C.free_command_response(response)
+
+	return convertStringArray(response, false)
+}
+
+func handleStringArrayOrNilResponse(response *C.struct_CommandResponse) ([]string, error) {
+	defer C.free_command_response(response)
+
+	return convertStringArray(response, true)
 }
 
 func handleIntResponse(response *C.struct_CommandResponse) (int64, error) {
@@ -240,7 +252,7 @@ func handleIntOrNilResponse(response *C.struct_CommandResponse) (Result[int64], 
 	return CreateInt64Result(int64(response.int_value)), nil
 }
 
-func handleIntArrayResponse(response *C.struct_CommandResponse) ([]Result[int64], error) {
+func handleIntArrayResponse(response *C.struct_CommandResponse) ([]int64, error) {
 	defer C.free_command_response(response)
 
 	typeErr := checkResponseType(response, C.Array, false)
@@ -248,13 +260,13 @@ func handleIntArrayResponse(response *C.struct_CommandResponse) ([]Result[int64]
 		return nil, typeErr
 	}
 
-	slice := make([]Result[int64], 0, response.array_value_len)
+	slice := make([]int64, 0, response.array_value_len)
 	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
 		err := checkResponseType(&v, C.Int, false)
 		if err != nil {
 			return nil, err
 		}
-		slice = append(slice, CreateInt64Result(int64(v.int_value)))
+		slice = append(slice, int64(v.int_value))
 	}
 	return slice, nil
 }
@@ -407,7 +419,7 @@ func handleStringToStringArrayMapOrNullResponse(
 		if err != nil {
 			return nil, err
 		}
-		value, err := convertStringArray(v.map_value)
+		value, err := convertStringOrNilArray(v.map_value)
 		if err != nil {
 			return nil, err
 		}
