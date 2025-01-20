@@ -12,7 +12,6 @@ import (
 //
 // [valkey.io]: https://valkey.io/commands/#sorted-set
 type SortedSetCommands interface {
-
 	ZAdd(key string, membersScoreMap map[string]float64) (int64, error)
 
 	ZAddWithOptions(key string, membersScoreMap map[string]float64, opts *options.ZAddOptions) (int64, error)
@@ -23,13 +22,13 @@ type SortedSetCommands interface {
 
 	ZIncrBy(key string, increment float64, member string) (float64, error)
 
-	ZPopMin(key string) (map[Result[string]]Result[float64], error)
+	ZPopMin(key string) (map[string]float64, error)
 
-	ZPopMinWithCount(key string, count int64) (map[Result[string]]Result[float64], error)
+	ZPopMinWithCount(key string, count int64) (map[string]float64, error)
 
-	ZPopMax(key string) (map[Result[string]]Result[float64], error)
+	ZPopMax(key string) (map[string]float64, error)
 
-	ZPopMaxWithCount(key string, count int64) (map[Result[string]]Result[float64], error)
+	ZPopMaxWithCount(key string, count int64) (map[string]float64, error)
 
 	ZRem(key string, members []string) (int64, error)
 
@@ -39,7 +38,7 @@ type SortedSetCommands interface {
 
 	ZRange(key string, rangeQuery options.ZRangeQuery) ([]string, error)
 
-	ZRangeWithScores(key string, rangeQuery options.ZRangeQueryWithScores) (map[Result[string]]Result[float64], error)
+	ZRangeWithScores(key string, rangeQuery options.ZRangeQueryWithScores) (map[string]float64, error)
 
 	ZRank(key string, member string) (Result[int64], error)
 

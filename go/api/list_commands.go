@@ -48,18 +48,18 @@ type ListCommands interface {
 
 	LPushX(key string, elements []string) (int64, error)
 
-	LMPop(keys []string, listDirection ListDirection) (map[Result[string]][]Result[string], error)
+	LMPop(keys []string, listDirection ListDirection) (map[string][]string, error)
 
-	LMPopCount(keys []string, listDirection ListDirection, count int64) (map[Result[string]][]Result[string], error)
+	LMPopCount(keys []string, listDirection ListDirection, count int64) (map[string][]string, error)
 
-	BLMPop(keys []string, listDirection ListDirection, timeoutSecs float64) (map[Result[string]][]Result[string], error)
+	BLMPop(keys []string, listDirection ListDirection, timeoutSecs float64) (map[string][]string, error)
 
 	BLMPopCount(
 		keys []string,
 		listDirection ListDirection,
 		count int64,
 		timeoutSecs float64,
-	) (map[Result[string]][]Result[string], error)
+	) (map[string][]string, error)
 
 	LSet(key string, index int64, element string) (string, error)
 

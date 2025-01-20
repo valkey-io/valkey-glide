@@ -51,7 +51,7 @@ func (client *glideClient) ConfigSet(parameters map[string]string) (string, erro
 	return handleStringResponse(result)
 }
 
-func (client *glideClient) ConfigGet(args []string) (map[Result[string]]Result[string], error) {
+func (client *glideClient) ConfigGet(args []string) (map[string]string, error) {
 	res, err := client.executeCommand(C.ConfigGet, args)
 	if err != nil {
 		return nil, err

@@ -14,17 +14,17 @@ type SetCommands interface {
 
 	SRem(key string, members []string) (int64, error)
 
-	SMembers(key string) (map[Result[string]]struct{}, error)
+	SMembers(key string) (map[string]struct{}, error)
 
 	SCard(key string) (int64, error)
 
 	SIsMember(key string, member string) (bool, error)
 
-	SDiff(keys []string) (map[Result[string]]struct{}, error)
+	SDiff(keys []string) (map[string]struct{}, error)
 
 	SDiffStore(destination string, keys []string) (int64, error)
 
-	SInter(keys []string) (map[Result[string]]struct{}, error)
+	SInter(keys []string) (map[string]struct{}, error)
 
 	SInterStore(destination string, keys []string) (int64, error)
 
@@ -40,7 +40,7 @@ type SetCommands interface {
 
 	SUnionStore(destination string, keys []string) (int64, error)
 
-	SUnion(keys []string) (map[Result[string]]struct{}, error)
+	SUnion(keys []string) (map[string]struct{}, error)
 
 	SScan(key string, cursor string) (string, []string, error)
 

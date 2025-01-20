@@ -12,7 +12,7 @@ import "github.com/valkey-io/valkey-glide/go/glide/api/options"
 type HashCommands interface {
 	HGet(key string, field string) (Result[string], error)
 
-	HGetAll(key string) (map[Result[string]]Result[string], error)
+	HGetAll(key string) (map[string]string, error)
 
 	HMGet(key string, fields []string) ([]Result[string], error)
 

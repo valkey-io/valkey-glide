@@ -869,14 +869,10 @@ func (client *Command) HGet(key string, field string) (Result[string], error) {
 // For example:
 //
 //	fieldValueMap, err := client.HGetAll("my_hash")
-//	// field1 equals api.CreateStringResult("field1")
-//	// value1 equals api.CreateStringResult("value1")
-//	// field2 equals api.CreateStringResult("field2")
-//	// value2 equals api.CreateStringResult("value2")
-//	// fieldValueMap equals map[api.Result[string]]api.Result[string]{field1: value1, field2: value2}
+//	// fieldValueMap equals map[string]string{field1: value1, field2: value2}
 //
 // [valkey.io]: https://valkey.io/commands/hgetall/
-func (client *Command) HGetAll(key string) (map[Result[string]]Result[string], error) {
+func (client *baseClient) HGetAll(key string) (map[string]string, error) {
 	result, err := client.executeCommand(C.HGetAll, []string{key})
 	if err != nil {
 		return nil, err
@@ -1670,21 +1666,17 @@ func (client *Command) SUnionStore(destination string, keys []string) (int64, er
 //
 // Return value:
 //
-//	A map[Result[string]]struct{} containing all members of the set.
-//	Returns an empty map if key does not exist.
+//	A `map[string]struct{}` containing all members of the set.
+//	Returns an empty collection if key does not exist.
 //
 // For example:
 //
 //	// Assume set "my_set" contains: "member1", "member2"
 //	result, err := client.SMembers("my_set")
-//	// result equals:
-//	// map[Result[string]]struct{}{
-//	//   api.CreateStringResult("member1"): {},
-//	//   api.CreateStringResult("member2"): {}
-//	// }
+//	// result: map[string]struct{}{ "member1": {}, "member2": {} }
 //
 // [valkey.io]: https://valkey.io/commands/smembers/
-func (client *Command) SMembers(key string) (map[Result[string]]struct{}, error) {
+func (client *baseClient) SMembers(key string) (map[string]struct{}, error) {
 	result, err := client.executeCommand(C.SMembers, []string{key})
 	if err != nil {
 		return nil, err
@@ -1765,20 +1757,17 @@ func (client *Command) SIsMember(key string, member string) (bool, error) {
 //
 // Return value:
 //
-//	A map[Result[string]]struct{} representing the difference between the sets.
+//	A `map[string]struct{}` representing the difference between the sets.
 //	If a key does not exist, it is treated as an empty set.
 //
 // Example:
 //
 //	result, err := client.SDiff([]string{"set1", "set2"})
-//	// result might contain:
-//	// map[Result[string]]struct{}{
-//	//   api.CreateStringResult("element"): {},
-//	// }
+//	// result: map[string]struct{}{ "element": {} }
 //	// Indicates that "element" is present in "set1", but missing in "set2"
 //
 // [valkey.io]: https://valkey.io/commands/sdiff/
-func (client *Command) SDiff(keys []string) (map[Result[string]]struct{}, error) {
+func (client *baseClient) SDiff(keys []string) (map[string]struct{}, error) {
 	result, err := client.executeCommand(C.SDiff, keys)
 	if err != nil {
 		return nil, err
@@ -1831,20 +1820,17 @@ func (client *Command) SDiffStore(destination string, keys []string) (int64, err
 //
 // Return value:
 //
-//	A map[Result[string]]struct{} containing members which are present in all given sets.
-//	If one or more sets do not exist, an empty map will be returned.
+//	A `map[string]struct{}` containing members which are present in all given sets.
+//	If one or more sets do not exist, an empty collection will be returned.
 //
 // Example:
 //
 //	result, err := client.SInter([]string{"set1", "set2"})
-//	// result might contain:
-//	// map[Result[string]]struct{}{
-//	//   api.CreateStringResult("element"): {},
-//	// }
+//	// result: map[string]struct{}{ "element": {} }
 //	// Indicates that "element" is present in both "set1" and "set2"
 //
 // [valkey.io]: https://valkey.io/commands/sinter/
-func (client *Command) SInter(keys []string) (map[Result[string]]struct{}, error) {
+func (client *baseClient) SInter(keys []string) (map[string]struct{}, error) {
 	result, err := client.executeCommand(C.SInter, keys)
 	if err != nil {
 		return nil, err
@@ -2069,8 +2055,8 @@ func (client *Command) SMIsMember(key string, members []string) ([]bool, error) 
 //
 // Return value:
 //
-//	A map[Result[string]]struct{} of members which are present in at least one of the given sets.
-//	If none of the sets exist, an empty map will be returned.
+//	A `map[string]struct{}` of members which are present in at least one of the given sets.
+//	If none of the sets exist, an empty collection will be returned.
 //
 // Example:
 //
@@ -2083,15 +2069,15 @@ func (client *Command) SMIsMember(key string, members []string) ([]bool, error) 
 //	// result.IsNil(): false
 //
 //	result3, err := client.SUnion([]string {"my_set1", "my_set2"})
-//	// result3.Value(): "{'member1', 'member2', 'member3'}"
+//	// result3: "{'member1', 'member2', 'member3'}"
 //	// err: nil
 //
 //	result4, err := client.SUnion([]string {"my_set1", "non_existing_set"})
-//	// result4.Value(): "{'member1', 'member2'}"
+//	// result4: "{'member1', 'member2'}"
 //	// err: nil
 //
 // [valkey.io]: https://valkey.io/commands/sunion/
-func (client *Command) SUnion(keys []string) (map[Result[string]]struct{}, error) {
+func (client *baseClient) SUnion(keys []string) (map[string]struct{}, error) {
 	result, err := client.executeCommand(C.SUnion, keys)
 	if err != nil {
 		return nil, err
@@ -2670,10 +2656,10 @@ func (client *Command) LPushX(key string, elements []string) (int64, error) {
 //
 //	result, err := client.LPush("my_list", []string{"one", "two", "three"})
 //	result, err := client.LMPop([]string{"my_list"}, api.Left)
-//	result[api.CreateStringResult("my_list")] = []api.Result[string]{api.CreateStringResult("three")}
+//	result["my_list"] = []string{"three"}
 //
 // [valkey.io]: https://valkey.io/commands/lmpop/
-func (client *Command) LMPop(keys []string, listDirection ListDirection) (map[Result[string]][]Result[string], error) {
+func (client *baseClient) LMPop(keys []string, listDirection ListDirection) (map[string][]string, error) {
 	listDirectionStr, err := listDirection.toString()
 	if err != nil {
 		return nil, err
@@ -2694,7 +2680,7 @@ func (client *Command) LMPop(keys []string, listDirection ListDirection) (map[Re
 		return nil, err
 	}
 
-	return handleStringToStringArrayMapOrNullResponse(result)
+	return handleStringToStringArrayMapOrNilResponse(result)
 }
 
 // Pops one or more elements from the first non-empty list from the provided keys.
@@ -2719,14 +2705,14 @@ func (client *Command) LMPop(keys []string, listDirection ListDirection) (map[Re
 //
 //	result, err := client.LPush("my_list", []string{"one", "two", "three"})
 //	result, err := client.LMPopCount([]string{"my_list"}, api.Left, int64(1))
-//	result[api.CreateStringResult("my_list")] = []api.Result[string]{api.CreateStringResult("three")}
+//	result["my_list"] = []string{"three"}
 //
 // [valkey.io]: https://valkey.io/commands/lmpop/
 func (client *Command) LMPopCount(
 	keys []string,
 	listDirection ListDirection,
 	count int64,
-) (map[Result[string]][]Result[string], error) {
+) (map[string][]string, error) {
 	listDirectionStr, err := listDirection.toString()
 	if err != nil {
 		return nil, err
@@ -2747,7 +2733,7 @@ func (client *Command) LMPopCount(
 		return nil, err
 	}
 
-	return handleStringToStringArrayMapOrNullResponse(result)
+	return handleStringToStringArrayMapOrNilResponse(result)
 }
 
 // Blocks the connection until it pops one element from the first non-empty list from the provided keys. BLMPop is the
@@ -2779,7 +2765,7 @@ func (client *Command) LMPopCount(
 //
 //	result, err := client.LPush("my_list", []string{"one", "two", "three"})
 //	result, err := client.BLMPop([]string{"my_list"}, api.Left, float64(0.1))
-//	result[api.CreateStringResult("my_list")] = []api.Result[string]{api.CreateStringResult("three")}
+//	result["my_list"] = []string{"three"}
 //
 // [valkey.io]: https://valkey.io/commands/blmpop/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
@@ -2787,7 +2773,7 @@ func (client *Command) BLMPop(
 	keys []string,
 	listDirection ListDirection,
 	timeoutSecs float64,
-) (map[Result[string]][]Result[string], error) {
+) (map[string][]string, error) {
 	listDirectionStr, err := listDirection.toString()
 	if err != nil {
 		return nil, err
@@ -2808,7 +2794,7 @@ func (client *Command) BLMPop(
 		return nil, err
 	}
 
-	return handleStringToStringArrayMapOrNullResponse(result)
+	return handleStringToStringArrayMapOrNilResponse(result)
 }
 
 // Blocks the connection until it pops one or more elements from the first non-empty list from the provided keys.
@@ -2842,7 +2828,7 @@ func (client *Command) BLMPop(
 //
 //	result, err: client.LPush("my_list", []string{"one", "two", "three"})
 //	result, err := client.BLMPopCount([]string{"my_list"}, api.Left, int64(1), float64(0.1))
-//	result[api.CreateStringResult("my_list")] = []api.Result[string]{api.CreateStringResult("three")}
+//	result["my_list"] = []string{"three"}
 //
 // [valkey.io]: https://valkey.io/commands/blmpop/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
@@ -2851,7 +2837,7 @@ func (client *Command) BLMPopCount(
 	listDirection ListDirection,
 	count int64,
 	timeoutSecs float64,
-) (map[Result[string]][]Result[string], error) {
+) (map[string][]string, error) {
 	listDirectionStr, err := listDirection.toString()
 	if err != nil {
 		return nil, err
@@ -2872,7 +2858,7 @@ func (client *Command) BLMPopCount(
 		return nil, err
 	}
 
-	return handleStringToStringArrayMapOrNullResponse(result)
+	return handleStringToStringArrayMapOrNilResponse(result)
 }
 
 // Sets the list element at index to element.
@@ -4358,10 +4344,10 @@ func (client *Command) ZIncrBy(key string, increment float64, member string) (fl
 // Example:
 //
 //	res, err := client.zpopmin("mySortedSet")
-//	fmt.Println(res.Value()) // Output: map["member1":5.0]
+//	fmt.Println(res) // Output: map["member1": 5.0]
 //
 // [valkey.io]: https://valkey.io/commands/zpopmin/
-func (client *Command) ZPopMin(key string) (map[Result[string]]Result[float64], error) {
+func (client *baseClient) ZPopMin(key string) (map[string]float64, error) {
 	result, err := client.executeCommand(C.ZPopMin, []string{key})
 	if err != nil {
 		return nil, err
@@ -4388,10 +4374,10 @@ func (client *Command) ZPopMin(key string) (map[Result[string]]Result[float64], 
 // Example:
 //
 //	res, err := client.ZPopMinWithCount("mySortedSet", 2)
-//	fmt.Println(res.Value()) // Output: map["member1":5.0, "member2":6.0]
+//	fmt.Println(res) // Output: map["member1": 5.0, "member2": 6.0]
 //
 // [valkey.io]: https://valkey.io/commands/zpopmin/
-func (client *Command) ZPopMinWithCount(key string, count int64) (map[Result[string]]Result[float64], error) {
+func (client *baseClient) ZPopMinWithCount(key string, count int64) (map[string]float64, error) {
 	result, err := client.executeCommand(C.ZPopMin, []string{key, utils.IntToString(count)})
 	if err != nil {
 		return nil, err
@@ -4417,10 +4403,10 @@ func (client *Command) ZPopMinWithCount(key string, count int64) (map[Result[str
 // Example:
 //
 //	res, err := client.zpopmax("mySortedSet")
-//	fmt.Println(res.Value()) // Output: map["member2":8.0]
+//	fmt.Println(res) // Output: map["member2": 8.0]
 //
 // [valkey.io]: https://valkey.io/commands/zpopmin/
-func (client *Command) ZPopMax(key string) (map[Result[string]]Result[float64], error) {
+func (client *baseClient) ZPopMax(key string) (map[string]float64, error) {
 	result, err := client.executeCommand(C.ZPopMax, []string{key})
 	if err != nil {
 		return nil, err
@@ -4447,10 +4433,10 @@ func (client *Command) ZPopMax(key string) (map[Result[string]]Result[float64], 
 // Example:
 //
 //	res, err := client.ZPopMaxWithCount("mySortedSet", 2)
-//	fmt.Println(res.Value()) // Output: map["member1":5.0, "member2":6.0]
+//	fmt.Println(res) // Output: map["member1": 5.0, "member2": 6.0]
 //
 // [valkey.io]: https://valkey.io/commands/zpopmin/
-func (client *Command) ZPopMaxWithCount(key string, count int64) (map[Result[string]]Result[float64], error) {
+func (client *baseClient) ZPopMaxWithCount(key string, count int64) (map[string]float64, error) {
 	result, err := client.executeCommand(C.ZPopMax, []string{key, utils.IntToString(count)})
 	if err != nil {
 		return nil, err
@@ -4638,7 +4624,7 @@ func (client *baseClient) ZRange(key string, rangeQuery options.ZRangeQuery) ([]
 func (client *Command) ZRangeWithScores(
 	key string,
 	rangeQuery options.ZRangeQueryWithScores,
-) (map[Result[string]]Result[float64], error) {
+) (map[string]float64, error) {
 	args := make([]string, 0, 10)
 	args = append(args, key)
 	args = append(args, rangeQuery.ToArgs()...)
