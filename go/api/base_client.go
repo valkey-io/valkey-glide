@@ -2072,7 +2072,10 @@ func (client *baseClient) XGroupCreateWithOptions(
 //
 // Example:
 //
-//	client.XGroupDestroy("mystream", "mygroup")
+//	ok, err := client.XGroupDestroy("mystream", "mygroup")
+//	if !ok || err != nil {
+//		// handle errors
+//	}
 //
 // [valkey.io]: https://valkey.io/commands/xgroup-destroy/
 func (client *baseClient) XGroupDestroy(key string, group string) (bool, error) {
