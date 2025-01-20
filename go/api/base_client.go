@@ -258,7 +258,7 @@ func (client *baseClient) MGet(keys []string) ([]Result[string], error) {
 		return nil, err
 	}
 
-	return handleStringArrayResponse(result)
+	return handleStringOrNilArrayResponse(result)
 }
 
 func (client *baseClient) Incr(key string) (int64, error) {
@@ -391,7 +391,7 @@ func (client *baseClient) HMGet(key string, fields []string) ([]Result[string], 
 		return nil, err
 	}
 
-	return handleStringArrayResponse(result)
+	return handleStringOrNilArrayResponse(result)
 }
 
 func (client *baseClient) HSet(key string, values map[string]string) (int64, error) {
@@ -430,7 +430,7 @@ func (client *baseClient) HLen(key string) (int64, error) {
 	return handleIntResponse(result)
 }
 
-func (client *baseClient) HVals(key string) ([]Result[string], error) {
+func (client *baseClient) HVals(key string) ([]string, error) {
 	result, err := client.executeCommand(C.HVals, []string{key})
 	if err != nil {
 		return nil, err
@@ -448,7 +448,7 @@ func (client *baseClient) HExists(key string, field string) (bool, error) {
 	return handleBoolResponse(result)
 }
 
-func (client *baseClient) HKeys(key string) ([]Result[string], error) {
+func (client *baseClient) HKeys(key string) ([]string, error) {
 	result, err := client.executeCommand(C.HKeys, []string{key})
 	if err != nil {
 		return nil, err
@@ -583,13 +583,13 @@ func (client *baseClient) LPop(key string) (Result[string], error) {
 	return handleStringOrNilResponse(result)
 }
 
-func (client *baseClient) LPopCount(key string, count int64) ([]Result[string], error) {
+func (client *baseClient) LPopCount(key string, count int64) ([]string, error) {
 	result, err := client.executeCommand(C.LPop, []string{key, utils.IntToString(count)})
 	if err != nil {
 		return nil, err
 	}
 
-	return handleStringArrayOrNullResponse(result)
+	return handleStringArrayOrNilResponse(result)
 }
 
 func (client *baseClient) LPos(key string, element string) (Result[int64], error) {
@@ -610,7 +610,7 @@ func (client *baseClient) LPosWithOptions(key string, element string, options *L
 	return handleIntOrNilResponse(result)
 }
 
-func (client *baseClient) LPosCount(key string, element string, count int64) ([]Result[int64], error) {
+func (client *baseClient) LPosCount(key string, element string, count int64) ([]int64, error) {
 	result, err := client.executeCommand(C.LPos, []string{key, element, CountKeyword, utils.IntToString(count)})
 	if err != nil {
 		return nil, err
@@ -624,7 +624,7 @@ func (client *baseClient) LPosCountWithOptions(
 	element string,
 	count int64,
 	options *LPosOptions,
-) ([]Result[int64], error) {
+) ([]int64, error) {
 	result, err := client.executeCommand(
 		C.LPos,
 		append([]string{key, element, CountKeyword, utils.IntToString(count)}, options.toArgs()...),
@@ -904,7 +904,7 @@ func (client *baseClient) SMove(source string, destination string, member string
 	return handleBoolResponse(result)
 }
 
-func (client *baseClient) LRange(key string, start int64, end int64) ([]Result[string], error) {
+func (client *baseClient) LRange(key string, start int64, end int64) ([]string, error) {
 	result, err := client.executeCommand(C.LRange, []string{key, utils.IntToString(start), utils.IntToString(end)})
 	if err != nil {
 		return nil, err
@@ -958,13 +958,13 @@ func (client *baseClient) RPop(key string) (Result[string], error) {
 	return handleStringOrNilResponse(result)
 }
 
-func (client *baseClient) RPopCount(key string, count int64) ([]Result[string], error) {
+func (client *baseClient) RPopCount(key string, count int64) ([]string, error) {
 	result, err := client.executeCommand(C.RPop, []string{key, utils.IntToString(count)})
 	if err != nil {
 		return nil, err
 	}
 
-	return handleStringArrayOrNullResponse(result)
+	return handleStringArrayOrNilResponse(result)
 }
 
 func (client *baseClient) LInsert(
@@ -989,22 +989,22 @@ func (client *baseClient) LInsert(
 	return handleIntResponse(result)
 }
 
-func (client *baseClient) BLPop(keys []string, timeoutSecs float64) ([]Result[string], error) {
+func (client *baseClient) BLPop(keys []string, timeoutSecs float64) ([]string, error) {
 	result, err := client.executeCommand(C.BLPop, append(keys, utils.FloatToString(timeoutSecs)))
 	if err != nil {
 		return nil, err
 	}
 
-	return handleStringArrayOrNullResponse(result)
+	return handleStringArrayOrNilResponse(result)
 }
 
-func (client *baseClient) BRPop(keys []string, timeoutSecs float64) ([]Result[string], error) {
+func (client *baseClient) BRPop(keys []string, timeoutSecs float64) ([]string, error) {
 	result, err := client.executeCommand(C.BRPop, append(keys, utils.FloatToString(timeoutSecs)))
 	if err != nil {
 		return nil, err
 	}
 
-	return handleStringArrayOrNullResponse(result)
+	return handleStringArrayOrNilResponse(result)
 }
 
 func (client *baseClient) RPushX(key string, elements []string) (int64, error) {
@@ -1394,12 +1394,12 @@ func (client *baseClient) Unlink(keys []string) (int64, error) {
 	return handleIntResponse(result)
 }
 
-func (client *baseClient) Type(key string) (Result[string], error) {
+func (client *baseClient) Type(key string) (string, error) {
 	result, err := client.executeCommand(C.Type, []string{key})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return defaultStringResponse, err
 	}
-	return handleStringOrNilResponse(result)
+	return handleStringResponse(result)
 }
 
 func (client *baseClient) Touch(keys []string) (int64, error) {
@@ -1411,12 +1411,12 @@ func (client *baseClient) Touch(keys []string) (int64, error) {
 	return handleIntResponse(result)
 }
 
-func (client *baseClient) Rename(key string, newKey string) (Result[string], error) {
+func (client *baseClient) Rename(key string, newKey string) (string, error) {
 	result, err := client.executeCommand(C.Rename, []string{key, newKey})
 	if err != nil {
-		return CreateNilStringResult(), err
+		return defaultStringResponse, err
 	}
-	return handleStringOrNilResponse(result)
+	return handleStringResponse(result)
 }
 
 func (client *baseClient) Renamenx(key string, newKey string) (bool, error) {
@@ -1838,16 +1838,15 @@ func (client *baseClient) BZPopMin(keys []string, timeoutSecs float64) (Result[K
 //	result, err := client.ZRange("my_sorted_set", options.NewRangeByIndexQuery(0, -1))
 //
 //	// Retrieve members within a score range in descending order
-//
-// query := options.NewRangeByScoreQuery(options.NewScoreBoundary(3, false),
-// options.NewInfiniteScoreBoundary(options.NegativeInfinity)).
-//
-//	  .SetReverse()
+//	query := options.NewRangeByScoreQuery(
+//	    options.NewScoreBoundary(3, false),
+//	    options.NewInfiniteScoreBoundary(options.NegativeInfinity)).
+//	  SetReverse()
 //	result, err := client.ZRange("my_sorted_set", query)
 //	// `result` contains members which have scores within the range of negative infinity to 3, in descending order
 //
 // [valkey.io]: https://valkey.io/commands/zrange/
-func (client *baseClient) ZRange(key string, rangeQuery options.ZRangeQuery) ([]Result[string], error) {
+func (client *baseClient) ZRange(key string, rangeQuery options.ZRangeQuery) ([]string, error) {
 	args := make([]string, 0, 10)
 	args = append(args, key)
 	args = append(args, rangeQuery.ToArgs()...)
@@ -1882,10 +1881,9 @@ func (client *baseClient) ZRange(key string, rangeQuery options.ZRangeQuery) ([]
 //	result, err := client.ZRangeWithScores("my_sorted_set", options.NewRangeByIndexQuery(0, -1))
 //
 //	// Retrieve members within a score range in descending order
-//
-// query := options.NewRangeByScoreQuery(options.NewScoreBoundary(3, false),
-// options.NewInfiniteScoreBoundary(options.NegativeInfinity)).
-//
+//	query := options.NewRangeByScoreQuery(
+//	    options.NewScoreBoundary(3, false),
+//	    options.NewInfiniteScoreBoundary(options.NegativeInfinity)).
 //	  SetReverse()
 //	result, err := client.ZRangeWithScores("my_sorted_set", query)
 //	// `result` contains members with scores within the range of negative infinity to 3, in descending order
@@ -2821,7 +2819,7 @@ func (client *baseClient) Sort(key string) ([]Result[string], error) {
 	if err != nil {
 		return nil, err
 	}
-	return handleStringArrayResponse(result)
+	return handleStringOrNilArrayResponse(result)
 }
 
 func (client *baseClient) SortWithOptions(key string, options *options.SortOptions) ([]Result[string], error) {
@@ -2830,7 +2828,7 @@ func (client *baseClient) SortWithOptions(key string, options *options.SortOptio
 	if err != nil {
 		return nil, err
 	}
-	return handleStringArrayResponse(result)
+	return handleStringOrNilArrayResponse(result)
 }
 
 func (client *baseClient) SortReadOnly(key string) ([]Result[string], error) {
@@ -2838,7 +2836,7 @@ func (client *baseClient) SortReadOnly(key string) ([]Result[string], error) {
 	if err != nil {
 		return nil, err
 	}
-	return handleStringArrayResponse(result)
+	return handleStringOrNilArrayResponse(result)
 }
 
 func (client *baseClient) SortReadOnlyWithOptions(key string, options *options.SortOptions) ([]Result[string], error) {
@@ -2847,28 +2845,98 @@ func (client *baseClient) SortReadOnlyWithOptions(key string, options *options.S
 	if err != nil {
 		return nil, err
 	}
-	return handleStringArrayResponse(result)
+	return handleStringOrNilArrayResponse(result)
 }
 
-func (client *baseClient) SortStore(key string, destination string) (Result[int64], error) {
+func (client *baseClient) SortStore(key string, destination string) (int64, error) {
 	result, err := client.executeCommand(C.Sort, []string{key, "STORE", destination})
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
-	return handleIntOrNilResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) SortStoreWithOptions(
 	key string,
 	destination string,
 	options *options.SortOptions,
-) (Result[int64], error) {
+) (int64, error) {
 	optionArgs := options.ToArgs()
 	result, err := client.executeCommand(C.Sort, append([]string{key, "STORE", destination}, optionArgs...))
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
-	return handleIntOrNilResponse(result)
+	return handleIntResponse(result)
+}
+
+// XGroupCreateConsumer creates a consumer named `consumer` in the consumer group `group` for the
+// stream stored at `key`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the stream.
+//	group - The consumer group name.
+//	consumer - The newly created consumer.
+//
+// Return value:
+//
+//	Returns `true` if the consumer is created. Otherwise, returns `false`.
+//
+// Example:
+//
+//	//Creates the consumer "myconsumer" in consumer group "mygroup"
+//	success, err := client.xgroupCreateConsumer("mystream", "mygroup", "myconsumer")
+//	if err == nil && success {
+//	 fmt.Println("Consumer created")
+//	}
+//
+// [valkey.io]: https://valkey.io/commands/xgroup-createconsumer/
+func (client *baseClient) XGroupCreateConsumer(
+	key string,
+	group string,
+	consumer string,
+) (bool, error) {
+	result, err := client.executeCommand(C.XGroupCreateConsumer, []string{key, group, consumer})
+	if err != nil {
+		return false, err
+	}
+	return handleBoolResponse(result)
+}
+
+// XGroupDelConsumer deletes a consumer named `consumer` in the consumer group `group`.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	key - The key of the stream.
+//	group - The consumer group name.
+//	consumer - The consumer to delete.
+//
+// Returns the number of pending messages the `consumer` had before it was deleted.
+//
+// Example:
+//
+//	// Deletes the consumer "myconsumer" in consumer group "mygroup"
+//	pendingMsgCount, err := client.XGroupDelConsumer("mystream", "mygroup", "myconsumer")
+//	if err != nil {
+//	    // handle error
+//	}
+//	fmt.Printf("Consumer 'myconsumer' had %d pending messages unclaimed.\n", pendingMsgCount)
+//
+// [valkey.io]: https://valkey.io/commands/xgroup-delconsumer/
+func (client *baseClient) XGroupDelConsumer(
+	key string,
+	group string,
+	consumer string,
+) (int64, error) {
+	result, err := client.executeCommand(C.XGroupDelConsumer, []string{key, group, consumer})
+	if err != nil {
+		return defaultIntResponse, err
+	}
+	return handleIntResponse(result)
 }
 
 // Copies the value stored at the source to the destination key if the
