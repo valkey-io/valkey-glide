@@ -34,4 +34,6 @@ type GenericClusterCommands interface {
 	//
 	// [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
 	CustomCommand(args []string) (ClusterValue[interface{}], error)
+
+	CustomCommandWithRoute(args []string, route route) (ClusterValue[interface{}], error)
 }
