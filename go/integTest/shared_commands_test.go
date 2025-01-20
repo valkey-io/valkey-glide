@@ -3,7 +3,6 @@
 package integTest
 
 import (
-	"fmt"
 	"math"
 	"reflect"
 	"strconv"
@@ -6774,9 +6773,6 @@ func (suite *GlideTestSuite) TestXGroupStreamCommands() {
 				streamId2.Value(): {{"field2", "value2"}},
 			},
 		}, resp)
-
-		fmt.Printf("resp: %v\n", resp)
-		fmt.Printf("resp: %v\n", resp[key][streamId2.Value()])
 
 		// add a new stream entry
 		streamId3, err := client.XAdd(key, [][]string{{"field3", "value3"}})
