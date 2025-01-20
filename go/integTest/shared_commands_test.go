@@ -6231,3 +6231,77 @@ func (suite *GlideTestSuite) TestZRemRangeByScore() {
 		assert.IsType(suite.T(), &api.RequestError{}, err)
 	})
 }
+
+func (suite *GlideTestSuite) TestObjectIdleTime() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		defaultClient := suite.defaultClient()
+		key := "testKey1_" + uuid.New().String()
+		value := "hello"
+		sleepSec := int64(5)
+		t := suite.T()
+		suite.verifyOK(defaultClient.Set(key, value))
+		keyValueMap := map[string]string{
+			"maxmemory-policy": "noeviction",
+		}
+		suite.verifyOK(defaultClient.ConfigSet(keyValueMap))
+		key1 := api.CreateStringResult("maxmemory-policy")
+		value1 := api.CreateStringResult("noeviction")
+		resultConfigMap := map[api.Result[string]]api.Result[string]{key1: value1}
+		resultConfig, err := defaultClient.ConfigGet([]string{"maxmemory-policy"})
+		assert.Nil(t, err, "Failed to get configuration")
+		assert.Equal(t, resultConfigMap, resultConfig, "Configuration mismatch for maxmemory-policy")
+		resultGet, err := defaultClient.Get(key)
+		assert.Nil(t, err)
+		assert.Equal(t, value, resultGet.Value())
+		time.Sleep(time.Duration(sleepSec) * time.Second)
+		resultIdleTime, err := defaultClient.ObjectIdleTime(key)
+		assert.Nil(t, err)
+		assert.GreaterOrEqual(t, resultIdleTime.Value(), sleepSec)
+	})
+}
+
+func (suite *GlideTestSuite) TestObjectRefCount() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := "testKey1_" + uuid.New().String()
+		value := "hello"
+		t := suite.T()
+		suite.verifyOK(client.Set(key, value))
+		resultGetRestoreKey, err := client.Get(key)
+		assert.Nil(t, err)
+		assert.Equal(t, value, resultGetRestoreKey.Value())
+		resultObjectRefCount, err := client.ObjectRefCount(key)
+		assert.Nil(t, err)
+		assert.GreaterOrEqual(t, resultObjectRefCount.Value(), int64(1))
+	})
+}
+
+func (suite *GlideTestSuite) TestObjectFreq() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		defaultClient := suite.defaultClient()
+		key := "testKey1_" + uuid.New().String()
+		value := "hello"
+		t := suite.T()
+		suite.verifyOK(defaultClient.Set(key, value))
+		keyValueMap := map[string]string{
+			"maxmemory-policy": "volatile-lfu",
+		}
+		suite.verifyOK(defaultClient.ConfigSet(keyValueMap))
+		key1 := api.CreateStringResult("maxmemory-policy")
+		value1 := api.CreateStringResult("volatile-lfu")
+		resultConfigMap := map[api.Result[string]]api.Result[string]{key1: value1}
+		resultConfig, err := defaultClient.ConfigGet([]string{"maxmemory-policy"})
+		assert.Nil(t, err, "Failed to get configuration")
+		assert.Equal(t, resultConfigMap, resultConfig, "Configuration mismatch for maxmemory-policy")
+		sleepSec := int64(5)
+		time.Sleep(time.Duration(sleepSec) * time.Second)
+		resultGet, err := defaultClient.Get(key)
+		assert.Nil(t, err)
+		assert.Equal(t, value, resultGet.Value())
+		resultGet2, err := defaultClient.Get(key)
+		assert.Nil(t, err)
+		assert.Equal(t, value, resultGet2.Value())
+		resultObjFreq, err := defaultClient.ObjectFreq(key)
+		assert.Nil(t, err)
+		assert.GreaterOrEqual(t, resultObjFreq.Value(), int64(2))
+	})
+}
