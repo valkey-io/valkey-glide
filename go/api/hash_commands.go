@@ -168,17 +168,14 @@ type HashCommands interface {
 	//  key - The key of the hash.
 	//
 	// Return value:
-	//  A slice of Result[string]s containing all the values in the hash, or an empty slice when key does not exist.
+	//  A slice containing all the values in the hash, or an empty slice when key does not exist.
 	//
 	// For example:
 	//  values, err := client.HVals("myHash")
-	//  // value1 equals api.CreateStringResult("value1")
-	//  // value2 equals api.CreateStringResult("value2")
-	//  // value3 equals api.CreateStringResult("value3")
-	//  // values equals []api.Result[string]{value1, value2, value3}
+	//  values: []string{"value1", "value2", "value3"}
 	//
 	// [valkey.io]: https://valkey.io/commands/hvals/
-	HVals(key string) ([]Result[string], error)
+	HVals(key string) ([]string, error)
 
 	// HExists returns if field is an existing field in the hash stored at key.
 	//
@@ -211,16 +208,14 @@ type HashCommands interface {
 	//  key - The key of the hash.
 	//
 	// Return value:
-	//  A slice of Result[string]s containing all the field names in the hash, or an empty slice when key does not exist.
+	//  A slice containing all the field names in the hash, or an empty slice when key does not exist.
 	//
 	// For example:
 	//  names, err := client.HKeys("my_hash")
-	//  // field1 equals api.CreateStringResult("field_1")
-	//  // field2 equals api.CreateStringResult("field_2")
-	//  // names equals []api.Result[string]{field1, field2}
+	//  names: []string{"field1", "field2"}
 	//
 	// [valkey.io]: https://valkey.io/commands/hkeys/
-	HKeys(key string) ([]Result[string], error)
+	HKeys(key string) ([]string, error)
 
 	// HStrLen returns the string length of the value associated with field in the hash stored at key.
 	// If the key or the field do not exist, 0 is returned.
@@ -286,57 +281,7 @@ type HashCommands interface {
 	// [valkey.io]: https://valkey.io/commands/hincrbyfloat/
 	HIncrByFloat(key string, field string, increment float64) (float64, error)
 
-	// Iterates fields of Hash types and their associated values. This definition of HSCAN command does not include the
-	// optional arguments of the command.
-	//
-	// See [valkey.io] for details.
-	//
-	// Parameters:
-	// 	key - The key of the hash.
-	// 	cursor - The cursor that points to the next iteration of results. A value of "0" indicates the start of the search.
-	//
-	// Return value:
-	//	An array of the cursor and the subset of the hash held by `key`. The first element is always the `cursor`
-	//  for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the subset.
-	//  The second element is always an array of the subset of the set held in `key`. The array in the
-	//  second element is always a flattened series of String pairs, where the key is at even indices
-	//  and the value is at odd indices.
-	//
-	// Example:
-	//  // Assume key contains a hash {{"a": "1"}, {"b", "2"}}
-	//	resCursor, resCollection, err = client.HScan(key, initialCursor)
-	//  // resCursor = {0 false}
-	//  // resCollection = [{a false} {1 false} {b false} {2 false}]
-	//
-	// [valkey.io]: https://valkey.io/commands/hscan/
-	HScan(key string, cursor string) (Result[string], []Result[string], error)
+	HScan(key string, cursor string) (string, []string, error)
 
-	// Iterates fields of Hash types and their associated values. This definition of HSCAN includes optional arguments of the
-	// command.
-	//
-	// See [valkey.io] for details.
-	//
-	// Parameters:
-	// 	key - The key of the hash.
-	// 	cursor - The cursor that points to the next iteration of results. A value of "0" indicates the start of the search.
-	//  options - The [api.HashScanOptions].
-	//
-	// Return value:
-	//  An array of the cursor and the subset of the hash held by `key`. The first element is always the `cursor`
-	//  for the next iteration of results. The `cursor` will be `"0"` on the last iteration of the subset.
-	//  The second element is always an array of the subset of the set held in `key`. The array in the
-	//  second element is always a flattened series of String pairs, where the key is at even indices
-	//  and the value is at odd indices.
-	//
-	// Example:
-	//  // Assume key contains a hash {{"a": "1"}, {"b", "2"}}
-	//	opts := options.NewHashScanOptionsBuilder().SetMatch("a")
-	//	resCursor, resCollection, err = client.HScan(key, initialCursor, opts)
-	//  // resCursor = {0 false}
-	//  // resCollection = [{a false} {1 false}]
-	//  // The resCollection only contains the hash map entry that matches with the match option provided with the command
-	//  // input.
-	//
-	// [valkey.io]: https://valkey.io/commands/hscan/
-	HScanWithOptions(key string, cursor string, options *options.HashScanOptions) (Result[string], []Result[string], error)
+	HScanWithOptions(key string, cursor string, options *options.HashScanOptions) (string, []string, error)
 }
