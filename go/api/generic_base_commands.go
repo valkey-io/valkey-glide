@@ -530,6 +530,12 @@ type GenericBaseCommands interface {
 	// [valkey.io]: https://valkey.io/commands/dump/
 	Dump(key string) (Result[string], error)
 
+	ObjectFreq(key string) (Result[int64], error)
+
+	ObjectIdleTime(key string) (Result[int64], error)
+
+	ObjectRefCount(key string) (Result[int64], error)
+
 	// Sorts the elements in the list, set, or sorted set at key and returns the result.
 	// The sort command can be used to sort elements based on different criteria and apply
 	// transformations on sorted elements.
