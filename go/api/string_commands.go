@@ -8,7 +8,6 @@ package api
 //
 // [valkey.io]: https://valkey.io/commands/#string
 type StringCommands interface {
-
 	Set(key string, value string) (string, error)
 
 	SetWithOptions(key string, value string, options *SetOptions) (Result[string], error)

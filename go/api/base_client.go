@@ -65,9 +65,6 @@ type baseClient struct {
 	coreClient unsafe.Pointer
 }
 
-// This is a type which allows for pkgsite to identify functions for documentation.
-type Command = baseClient
-
 // Creates a connection by invoking the `create_client` function from Rust library via FFI.
 // Passes the pointers to callback functions which will be invoked when the command succeeds or fails.
 // Once the connection is established, this function invokes `free_connection_response` exposed by rust library to free the
@@ -201,7 +198,7 @@ func toCStrings(args []string) ([]C.uintptr_t, []C.ulong) {
 //	result: "OK"
 //
 // [valkey.io]: https://valkey.io/commands/set/
-func (client *Command) Set(key string, value string) (string, error) {
+func (client *baseClient) Set(key string, value string) (string, error) {
 	result, err := client.executeCommand(C.Set, []string{key, value})
 	if err != nil {
 		return defaultStringResponse, err
@@ -242,7 +239,7 @@ func (client *Command) Set(key string, value string) (string, error) {
 //	 result.IsNil(): false
 //
 // [valkey.io]: https://valkey.io/commands/set/
-func (client *Command) SetWithOptions(key string, value string, options *SetOptions) (Result[string], error) {
+func (client *baseClient) SetWithOptions(key string, value string, options *SetOptions) (Result[string], error) {
 	optionArgs, err := options.toArgs()
 	if err != nil {
 		return CreateNilStringResult(), err
@@ -279,7 +276,7 @@ func (client *Command) SetWithOptions(key string, value string, options *SetOpti
 //     result.IsNil(): true
 //
 // [valkey.io]: https://valkey.io/commands/get/
-func (client *Command) Get(key string) (Result[string], error) {
+func (client *baseClient) Get(key string) (Result[string], error) {
 	result, err := client.executeCommand(C.Get, []string{key})
 	if err != nil {
 		return CreateNilStringResult(), err
@@ -311,7 +308,7 @@ func (client *Command) Get(key string) (Result[string], error) {
 //     result.IsNil(): true
 //
 // [valkey.io]: https://valkey.io/commands/getex/
-func (client *Command) GetEx(key string) (Result[string], error) {
+func (client *baseClient) GetEx(key string) (Result[string], error) {
 	result, err := client.executeCommand(C.GetEx, []string{key})
 	if err != nil {
 		return CreateNilStringResult(), err
@@ -345,7 +342,7 @@ func (client *Command) GetEx(key string) (Result[string], error) {
 //	 result.IsNil(): false
 //
 // [valkey.io]: https://valkey.io/commands/getex/
-func (client *Command) GetExWithOptions(key string, options *GetExOptions) (Result[string], error) {
+func (client *baseClient) GetExWithOptions(key string, options *GetExOptions) (Result[string], error) {
 	optionArgs, err := options.toArgs()
 	if err != nil {
 		return CreateNilStringResult(), err
@@ -384,7 +381,7 @@ func (client *Command) GetExWithOptions(key string, options *GetExOptions) (Resu
 //	result: "OK"
 //
 // [valkey.io]: https://valkey.io/commands/mset/
-func (client *Command) MSet(keyValueMap map[string]string) (string, error) {
+func (client *baseClient) MSet(keyValueMap map[string]string) (string, error) {
 	result, err := client.executeCommand(C.MSet, utils.MapToString(keyValueMap))
 	if err != nil {
 		return defaultStringResponse, err
@@ -415,15 +412,13 @@ func (client *Command) MSet(keyValueMap map[string]string) (string, error) {
 //
 // For example:
 //  1. result, err := client.MSetNX(map[string]string{"key1": "value1", "key2": "value2"})
-//     result.Value(): true
-//     result.IsNil(): false
+//     result: true
 //  2. key3: initialValue
 //     result, err := client.MSetNX(map[string]string{"key3": "value3", "key4": "value4"})
-//     result.Value(): false
-//     result.IsNil(): false
+//     result: false
 //
 // [valkey.io]: https://valkey.io/commands/msetnx/
-func (client *Command) MSetNX(keyValueMap map[string]string) (bool, error) {
+func (client *baseClient) MSetNX(keyValueMap map[string]string) (bool, error) {
 	result, err := client.executeCommand(C.MSetNX, utils.MapToString(keyValueMap))
 	if err != nil {
 		return defaultBoolResponse, err
@@ -463,7 +458,7 @@ func (client *Command) MSetNX(keyValueMap map[string]string) (bool, error) {
 //	         }
 //
 // [valkey.io]: https://valkey.io/commands/mget/
-func (client *Command) MGet(keys []string) ([]Result[string], error) {
+func (client *baseClient) MGet(keys []string) ([]Result[string], error) {
 	result, err := client.executeCommand(C.MGet, keys)
 	if err != nil {
 		return nil, err
@@ -491,7 +486,7 @@ func (client *Command) MGet(keys []string) ([]Result[string], error) {
 //	result: 2
 //
 // [valkey.io]: https://valkey.io/commands/incr/
-func (client *Command) Incr(key string) (int64, error) {
+func (client *baseClient) Incr(key string) (int64, error) {
 	result, err := client.executeCommand(C.Incr, []string{key})
 	if err != nil {
 		return defaultIntResponse, err
@@ -520,7 +515,7 @@ func (client *Command) Incr(key string) (int64, error) {
 //	result: 3
 //
 // [valkey.io]: https://valkey.io/commands/incrby/
-func (client *Command) IncrBy(key string, amount int64) (int64, error) {
+func (client *baseClient) IncrBy(key string, amount int64) (int64, error) {
 	result, err := client.executeCommand(C.IncrBy, []string{key, utils.IntToString(amount)})
 	if err != nil {
 		return defaultIntResponse, err
@@ -551,7 +546,7 @@ func (client *Command) IncrBy(key string, amount int64) (int64, error) {
 //	result: 1.5
 //
 // [valkey.io]: https://valkey.io/commands/incrbyfloat/
-func (client *Command) IncrByFloat(key string, amount float64) (float64, error) {
+func (client *baseClient) IncrByFloat(key string, amount float64) (float64, error) {
 	result, err := client.executeCommand(
 		C.IncrByFloat,
 		[]string{key, utils.FloatToString(amount)},
@@ -582,7 +577,7 @@ func (client *Command) IncrByFloat(key string, amount float64) (float64, error) 
 //	result: 0
 //
 // [valkey.io]: https://valkey.io/commands/decr/
-func (client *Command) Decr(key string) (int64, error) {
+func (client *baseClient) Decr(key string) (int64, error) {
 	result, err := client.executeCommand(C.Decr, []string{key})
 	if err != nil {
 		return defaultIntResponse, err
@@ -611,7 +606,7 @@ func (client *Command) Decr(key string) (int64, error) {
 //	result: -1
 //
 // [valkey.io]: https://valkey.io/commands/decrby/
-func (client *Command) DecrBy(key string, amount int64) (int64, error) {
+func (client *baseClient) DecrBy(key string, amount int64) (int64, error) {
 	result, err := client.executeCommand(C.DecrBy, []string{key, utils.IntToString(amount)})
 	if err != nil {
 		return defaultIntResponse, err
@@ -640,7 +635,7 @@ func (client *Command) DecrBy(key string, amount int64) (int64, error) {
 //	result: 5
 //
 // [valkey.io]: https://valkey.io/commands/strlen/
-func (client *Command) Strlen(key string) (int64, error) {
+func (client *baseClient) Strlen(key string) (int64, error) {
 	result, err := client.executeCommand(C.Strlen, []string{key})
 	if err != nil {
 		return defaultIntResponse, err
@@ -676,7 +671,7 @@ func (client *Command) Strlen(key string) (int64, error) {
 //     result.Value(): �a� // (becomes an invalid UTF-8 string)
 //
 // [valkey.io]: https://valkey.io/commands/setrange/
-func (client *Command) SetRange(key string, offset int, value string) (int64, error) {
+func (client *baseClient) SetRange(key string, offset int, value string) (int64, error) {
 	result, err := client.executeCommand(C.SetRange, []string{key, strconv.Itoa(offset), value})
 	if err != nil {
 		return defaultIntResponse, err
@@ -713,7 +708,7 @@ func (client *Command) SetRange(key string, offset int, value string) (int64, er
 //     result: "�" (returns an invalid UTF-8 string)
 //
 // [valkey.io]: https://valkey.io/commands/getrange/
-func (client *Command) GetRange(key string, start int, end int) (string, error) {
+func (client *baseClient) GetRange(key string, start int, end int) (string, error) {
 	result, err := client.executeCommand(C.GetRange, []string{key, strconv.Itoa(start), strconv.Itoa(end)})
 	if err != nil {
 		return defaultStringResponse, err
@@ -742,7 +737,7 @@ func (client *Command) GetRange(key string, start int, end int) (string, error) 
 //	result: 5
 //
 // [valkey.io]: https://valkey.io/commands/append/
-func (client *Command) Append(key string, value string) (int64, error) {
+func (client *baseClient) Append(key string, value string) (int64, error) {
 	result, err := client.executeCommand(C.Append, []string{key, value})
 	if err != nil {
 		return defaultIntResponse, err
@@ -783,7 +778,7 @@ func (client *Command) Append(key string, value string) (int64, error) {
 //	result: "fo"
 //
 // [valkey.io]: https://valkey.io/commands/lcs/
-func (client *Command) LCS(key1 string, key2 string) (string, error) {
+func (client *baseClient) LCS(key1 string, key2 string) (string, error) {
 	result, err := client.executeCommand(C.LCS, []string{key1, key2})
 	if err != nil {
 		return defaultStringResponse, err
@@ -808,7 +803,7 @@ func (client *Command) LCS(key1 string, key2 string) (string, error) {
 //	result, err := client.GetDel("key")
 //
 // [valkey.io]: https://valkey.io/commands/getdel/
-func (client *Command) GetDel(key string) (Result[string], error) {
+func (client *baseClient) GetDel(key string) (Result[string], error) {
 	if key == "" {
 		return CreateNilStringResult(), errors.New("key is required")
 	}
@@ -845,7 +840,7 @@ func (client *Command) GetDel(key string) (Result[string], error) {
 //	// payload equals api.CreateNilStringResult()
 //
 // [valkey.io]: https://valkey.io/commands/hget/
-func (client *Command) HGet(key string, field string) (Result[string], error) {
+func (client *baseClient) HGet(key string, field string) (Result[string], error) {
 	result, err := client.executeCommand(C.HGet, []string{key, field})
 	if err != nil {
 		return CreateNilStringResult(), err
@@ -907,7 +902,7 @@ func (client *baseClient) HGetAll(key string) (map[string]string, error) {
 //	// values equals []api.Result[string]{value1, value2}
 //
 // [valkey.io]: https://valkey.io/commands/hmget/
-func (client *Command) HMGet(key string, fields []string) ([]Result[string], error) {
+func (client *baseClient) HMGet(key string, fields []string) ([]Result[string], error) {
 	result, err := client.executeCommand(C.HMGet, append([]string{key}, fields...))
 	if err != nil {
 		return nil, err
@@ -937,7 +932,7 @@ func (client *Command) HMGet(key string, fields []string) ([]Result[string], err
 //	// num: 2
 //
 // [valkey.io]: https://valkey.io/commands/hset/
-func (client *Command) HSet(key string, values map[string]string) (int64, error) {
+func (client *baseClient) HSet(key string, values map[string]string) (int64, error) {
 	result, err := client.executeCommand(C.HSet, utils.ConvertMapToKeyValueStringArray(key, values))
 	if err != nil {
 		return defaultIntResponse, err
@@ -973,7 +968,7 @@ func (client *Command) HSet(key string, values map[string]string) (int64, error)
 //	// payload2.IsNil(): false
 //
 // [valkey.io]: https://valkey.io/commands/hsetnx/
-func (client *Command) HSetNX(key string, field string, value string) (bool, error) {
+func (client *baseClient) HSetNX(key string, field string, value string) (bool, error) {
 	result, err := client.executeCommand(C.HSetNX, []string{key, field, value})
 	if err != nil {
 		return defaultBoolResponse, err
@@ -1002,7 +997,7 @@ func (client *Command) HSetNX(key string, field string, value string) (bool, err
 //	// num: 2
 //
 // [valkey.io]: https://valkey.io/commands/hdel/
-func (client *Command) HDel(key string, fields []string) (int64, error) {
+func (client *baseClient) HDel(key string, fields []string) (int64, error) {
 	result, err := client.executeCommand(C.HDel, append([]string{key}, fields...))
 	if err != nil {
 		return defaultIntResponse, err
@@ -1032,7 +1027,7 @@ func (client *Command) HDel(key string, fields []string) (int64, error) {
 //	// num: 0
 //
 // [valkey.io]: https://valkey.io/commands/hlen/
-func (client *Command) HLen(key string) (int64, error) {
+func (client *baseClient) HLen(key string) (int64, error) {
 	result, err := client.executeCommand(C.HLen, []string{key})
 	if err != nil {
 		return defaultIntResponse, err
@@ -1092,7 +1087,7 @@ func (client *baseClient) HVals(key string) ([]string, error) {
 //	// exists.IsNil(): false
 //
 // [valkey.io]: https://valkey.io/commands/hexists/
-func (client *Command) HExists(key string, field string) (bool, error) {
+func (client *baseClient) HExists(key string, field string) (bool, error) {
 	result, err := client.executeCommand(C.HExists, []string{key, field})
 	if err != nil {
 		return defaultBoolResponse, err
@@ -1149,7 +1144,7 @@ func (client *baseClient) HKeys(key string) ([]string, error) {
 //	// strlen.IsNil(): false
 //
 // [valkey.io]: https://valkey.io/commands/hstrlen/
-func (client *Command) HStrLen(key string, field string) (int64, error) {
+func (client *baseClient) HStrLen(key string, field string) (int64, error) {
 	result, err := client.executeCommand(C.HStrlen, []string{key, field})
 	if err != nil {
 		return defaultIntResponse, err
@@ -1181,7 +1176,7 @@ func (client *Command) HStrLen(key string, field string) (int64, error) {
 //	// hincrByResult: 11
 //
 // [valkey.io]: https://valkey.io/commands/hincrby/
-func (client *Command) HIncrBy(key string, field string, increment int64) (int64, error) {
+func (client *baseClient) HIncrBy(key string, field string, increment int64) (int64, error) {
 	result, err := client.executeCommand(C.HIncrBy, []string{key, field, utils.IntToString(increment)})
 	if err != nil {
 		return defaultIntResponse, err
@@ -1213,7 +1208,7 @@ func (client *Command) HIncrBy(key string, field string, increment int64) (int64
 //	// hincrByFloatResult: 11.5
 //
 // [valkey.io]: https://valkey.io/commands/hincrbyfloat/
-func (client *Command) HIncrByFloat(key string, field string, increment float64) (float64, error) {
+func (client *baseClient) HIncrByFloat(key string, field string, increment float64) (float64, error) {
 	result, err := client.executeCommand(C.HIncrByFloat, []string{key, field, utils.FloatToString(increment)})
 	if err != nil {
 		return defaultFloatResponse, err
@@ -1324,7 +1319,7 @@ func (client *baseClient) HScanWithOptions(
 //	result: 2
 //
 // [valkey.io]: https://valkey.io/commands/lpush/
-func (client *Command) LPush(key string, elements []string) (int64, error) {
+func (client *baseClient) LPush(key string, elements []string) (int64, error) {
 	result, err := client.executeCommand(C.LPush, append([]string{key}, elements...))
 	if err != nil {
 		return defaultIntResponse, err
@@ -1357,7 +1352,7 @@ func (client *Command) LPush(key string, elements []string) (int64, error) {
 //     result.IsNil(); true
 //
 // [valkey.io]: https://valkey.io/commands/lpop/
-func (client *Command) LPop(key string) (Result[string], error) {
+func (client *baseClient) LPop(key string) (Result[string], error) {
 	result, err := client.executeCommand(C.LPop, []string{key})
 	if err != nil {
 		return CreateNilStringResult(), err
@@ -1418,7 +1413,7 @@ func (client *baseClient) LPopCount(key string, count int64) ([]string, error) {
 //	position.IsNil(): false
 //
 // [valkey.io]: https://valkey.io/commands/lpos/
-func (client *Command) LPos(key string, element string) (Result[int64], error) {
+func (client *baseClient) LPos(key string, element string) (Result[int64], error) {
 	result, err := client.executeCommand(C.LPos, []string{key, element})
 	if err != nil {
 		return CreateNilInt64Result(), err
@@ -1451,7 +1446,7 @@ func (client *Command) LPos(key string, element string) (Result[int64], error) {
 //     result.Value(): 4
 //
 // [valkey.io]: https://valkey.io/commands/lpos/
-func (client *Command) LPosWithOptions(key string, element string, options *LPosOptions) (Result[int64], error) {
+func (client *baseClient) LPosWithOptions(key string, element string, options *LPosOptions) (Result[int64], error) {
 	result, err := client.executeCommand(C.LPos, append([]string{key, element}, options.toArgs()...))
 	if err != nil {
 		return CreateNilInt64Result(), err
@@ -1520,7 +1515,7 @@ func (client *baseClient) LPosCount(key string, element string, count int64) ([]
 //     result: []int64{ 5, 6 }
 //
 // [valkey.io]: https://valkey.io/commands/lpos/
-func (client *Command) LPosCountWithOptions(
+func (client *baseClient) LPosCountWithOptions(
 	key string,
 	element string,
 	count int64,
@@ -1558,7 +1553,7 @@ func (client *Command) LPosCountWithOptions(
 //	result: 7
 //
 // [valkey.io]: https://valkey.io/commands/rpush/
-func (client *Command) RPush(key string, elements []string) (int64, error) {
+func (client *baseClient) RPush(key string, elements []string) (int64, error) {
 	result, err := client.executeCommand(C.RPush, append([]string{key}, elements...))
 	if err != nil {
 		return defaultIntResponse, err
@@ -1586,7 +1581,7 @@ func (client *Command) RPush(key string, elements []string) (int64, error) {
 //	// result: 2
 //
 // [valkey.io]: https://valkey.io/commands/sadd/
-func (client *Command) SAdd(key string, members []string) (int64, error) {
+func (client *baseClient) SAdd(key string, members []string) (int64, error) {
 	result, err := client.executeCommand(C.SAdd, append([]string{key}, members...))
 	if err != nil {
 		return defaultIntResponse, err
@@ -1614,7 +1609,7 @@ func (client *Command) SAdd(key string, members []string) (int64, error) {
 //	// result: 2
 //
 // [valkey.io]: https://valkey.io/commands/srem/
-func (client *Command) SRem(key string, members []string) (int64, error) {
+func (client *baseClient) SRem(key string, members []string) (int64, error) {
 	result, err := client.executeCommand(C.SRem, append([]string{key}, members...))
 	if err != nil {
 		return defaultIntResponse, err
@@ -1647,7 +1642,7 @@ func (client *Command) SRem(key string, members []string) (int64, error) {
 //	// Output: 2 - Two elements were stored at "my_set", and those elements are the union of "set1" and "set2".
 //
 // [valkey.io]: https://valkey.io/commands/sunionstore/
-func (client *Command) SUnionStore(destination string, keys []string) (int64, error) {
+func (client *baseClient) SUnionStore(destination string, keys []string) (int64, error) {
 	result, err := client.executeCommand(C.SUnionStore, append([]string{destination}, keys...))
 	if err != nil {
 		return defaultIntResponse, err
@@ -1703,7 +1698,7 @@ func (client *baseClient) SMembers(key string) (map[string]struct{}, error) {
 //	// result: 3
 //
 // [valkey.io]: https://valkey.io/commands/scard/
-func (client *Command) SCard(key string) (int64, error) {
+func (client *baseClient) SCard(key string) (int64, error) {
 	result, err := client.executeCommand(C.SCard, []string{key})
 	if err != nil {
 		return defaultIntResponse, err
@@ -1736,7 +1731,7 @@ func (client *Command) SCard(key string) (int64, error) {
 //	// Indicates that "nonExistingMember" does not exist in the set "mySet".
 //
 // [valkey.io]: https://valkey.io/commands/sismember/
-func (client *Command) SIsMember(key string, member string) (bool, error) {
+func (client *baseClient) SIsMember(key string, member string) (bool, error) {
 	result, err := client.executeCommand(C.SIsMember, []string{key, member})
 	if err != nil {
 		return defaultBoolResponse, err
@@ -1799,7 +1794,7 @@ func (client *baseClient) SDiff(keys []string) (map[string]struct{}, error) {
 //	// Indicates that the resulting set "mySet" contains 5 elements
 //
 // [valkey.io]: https://valkey.io/commands/sdiffstore/
-func (client *Command) SDiffStore(destination string, keys []string) (int64, error) {
+func (client *baseClient) SDiffStore(destination string, keys []string) (int64, error) {
 	result, err := client.executeCommand(C.SDiffStore, append([]string{destination}, keys...))
 	if err != nil {
 		return defaultIntResponse, err
@@ -1863,7 +1858,7 @@ func (client *baseClient) SInter(keys []string) (map[string]struct{}, error) {
 //	// Output: 2 - Two elements were stored at "my_set", and those elements are the intersection of "set1" and "set2".
 //
 // [valkey.io]: https://valkey.io/commands/sinterstore/
-func (client *Command) SInterStore(destination string, keys []string) (int64, error) {
+func (client *baseClient) SInterStore(destination string, keys []string) (int64, error) {
 	result, err := client.executeCommand(C.SInterStore, append([]string{destination}, keys...))
 	if err != nil {
 		return defaultIntResponse, err
@@ -1899,7 +1894,7 @@ func (client *Command) SInterStore(destination string, keys []string) (int64, er
 //	// result: 0
 //
 // [valkey.io]: https://valkey.io/commands/sintercard/
-func (client *Command) SInterCard(keys []string) (int64, error) {
+func (client *baseClient) SInterCard(keys []string) (int64, error) {
 	result, err := client.executeCommand(C.SInterCard, append([]string{strconv.Itoa(len(keys))}, keys...))
 	if err != nil {
 		return defaultIntResponse, err
@@ -1937,7 +1932,7 @@ func (client *Command) SInterCard(keys []string) (int64, error) {
 //	// intersection is larger)
 //
 // [valkey.io]: https://valkey.io/commands/sintercard/
-func (client *Command) SInterCardLimit(keys []string, limit int64) (int64, error) {
+func (client *baseClient) SInterCardLimit(keys []string, limit int64) (int64, error) {
 	args := utils.Concat([]string{utils.IntToString(int64(len(keys)))}, keys, []string{"LIMIT", utils.IntToString(limit)})
 
 	result, err := client.executeCommand(C.SInterCard, args)
@@ -1969,7 +1964,7 @@ func (client *Command) SInterCardLimit(keys []string, limit int64) (int64, error
 //	// err: nil
 //
 // [valkey.io]: https://valkey.io/commands/srandmember/
-func (client *Command) SRandMember(key string) (Result[string], error) {
+func (client *baseClient) SRandMember(key string) (Result[string], error) {
 	result, err := client.executeCommand(C.SRandMember, []string{key})
 	if err != nil {
 		return CreateNilStringResult(), err
@@ -2001,7 +1996,7 @@ func (client *Command) SRandMember(key string) (Result[string], error) {
 //	// err: nil
 //
 // [valkey.io]: https://valkey.io/commands/spop/
-func (client *Command) SPop(key string) (Result[string], error) {
+func (client *baseClient) SPop(key string) (Result[string], error) {
 	result, err := client.executeCommand(C.SPop, []string{key})
 	if err != nil {
 		return CreateNilStringResult(), err
@@ -2034,7 +2029,7 @@ func (client *Command) SPop(key string) (Result[string], error) {
 //	// err: nil
 //
 // [valkey.io]: https://valkey.io/commands/smismember/
-func (client *Command) SMIsMember(key string, members []string) ([]bool, error) {
+func (client *baseClient) SMIsMember(key string, members []string) ([]bool, error) {
 	result, err := client.executeCommand(C.SMIsMember, append([]string{key}, members...))
 	if err != nil {
 		return nil, err
@@ -2214,7 +2209,7 @@ func (client *baseClient) SScanWithOptions(
 //	fmt.Println(moved.Value()) // Output: true
 //
 // [valkey.io]: https://valkey.io/commands/smove/
-func (client *Command) SMove(source string, destination string, member string) (bool, error) {
+func (client *baseClient) SMove(source string, destination string, member string) (bool, error) {
 	result, err := client.executeCommand(C.SMove, []string{source, destination, member})
 	if err != nil {
 		return defaultBoolResponse, err
@@ -2286,7 +2281,7 @@ func (client *baseClient) LRange(key string, start int64, end int64) ([]string, 
 //     result.IsNil(): false
 //
 // [valkey.io]: https://valkey.io/commands/lindex/
-func (client *Command) LIndex(key string, index int64) (Result[string], error) {
+func (client *baseClient) LIndex(key string, index int64) (Result[string], error) {
 	result, err := client.executeCommand(C.LIndex, []string{key, utils.IntToString(index)})
 	if err != nil {
 		return CreateNilStringResult(), err
@@ -2322,7 +2317,7 @@ func (client *Command) LIndex(key string, index int64) (Result[string], error) {
 //	result: "OK"
 //
 // [valkey.io]: https://valkey.io/commands/ltrim/
-func (client *Command) LTrim(key string, start int64, end int64) (string, error) {
+func (client *baseClient) LTrim(key string, start int64, end int64) (string, error) {
 	result, err := client.executeCommand(C.LTrim, []string{key, utils.IntToString(start), utils.IntToString(end)})
 	if err != nil {
 		return defaultStringResponse, err
@@ -2350,7 +2345,7 @@ func (client *Command) LTrim(key string, start int64, end int64) (string, error)
 //	result: 3 // Indicates that there are 3 elements in the list.
 //
 // [valkey.io]: https://valkey.io/commands/llen/
-func (client *Command) LLen(key string) (int64, error) {
+func (client *baseClient) LLen(key string) (int64, error) {
 	result, err := client.executeCommand(C.LLen, []string{key})
 	if err != nil {
 		return defaultIntResponse, err
@@ -2384,7 +2379,7 @@ func (client *Command) LLen(key string) (int64, error) {
 //	result: 2
 //
 // [valkey.io]: https://valkey.io/commands/lrem/
-func (client *Command) LRem(key string, count int64, element string) (int64, error) {
+func (client *baseClient) LRem(key string, count int64, element string) (int64, error) {
 	result, err := client.executeCommand(C.LRem, []string{key, utils.IntToString(count), element})
 	if err != nil {
 		return defaultIntResponse, err
@@ -2416,7 +2411,7 @@ func (client *Command) LRem(key string, count int64, element string) (int64, err
 //     result.IsNil(): true
 //
 // [valkey.io]: https://valkey.io/commands/rpop/
-func (client *Command) RPop(key string) (Result[string], error) {
+func (client *baseClient) RPop(key string) (Result[string], error) {
 	result, err := client.executeCommand(C.RPop, []string{key})
 	if err != nil {
 		return CreateNilStringResult(), err
@@ -2479,7 +2474,7 @@ func (client *baseClient) RPopCount(key string, count int64) ([]string, error) {
 //	result: 3
 //
 // [valkey.io]: https://valkey.io/commands/linsert/
-func (client *Command) LInsert(
+func (client *baseClient) LInsert(
 	key string,
 	insertPosition InsertPosition,
 	pivot string,
@@ -2596,7 +2591,7 @@ func (client *baseClient) BRPop(keys []string, timeoutSecs float64) ([]string, e
 //	result: 4
 //
 // [valkey.io]: https://valkey.io/commands/rpushx/
-func (client *Command) RPushX(key string, elements []string) (int64, error) {
+func (client *baseClient) RPushX(key string, elements []string) (int64, error) {
 	result, err := client.executeCommand(C.RPushX, append([]string{key}, elements...))
 	if err != nil {
 		return defaultIntResponse, err
@@ -2626,7 +2621,7 @@ func (client *Command) RPushX(key string, elements []string) (int64, error) {
 //	result: 4
 //
 // [valkey.io]: https://valkey.io/commands/rpushx/
-func (client *Command) LPushX(key string, elements []string) (int64, error) {
+func (client *baseClient) LPushX(key string, elements []string) (int64, error) {
 	result, err := client.executeCommand(C.LPushX, append([]string{key}, elements...))
 	if err != nil {
 		return defaultIntResponse, err
@@ -2708,7 +2703,7 @@ func (client *baseClient) LMPop(keys []string, listDirection ListDirection) (map
 //	result["my_list"] = []string{"three"}
 //
 // [valkey.io]: https://valkey.io/commands/lmpop/
-func (client *Command) LMPopCount(
+func (client *baseClient) LMPopCount(
 	keys []string,
 	listDirection ListDirection,
 	count int64,
@@ -2769,7 +2764,7 @@ func (client *Command) LMPopCount(
 //
 // [valkey.io]: https://valkey.io/commands/blmpop/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
-func (client *Command) BLMPop(
+func (client *baseClient) BLMPop(
 	keys []string,
 	listDirection ListDirection,
 	timeoutSecs float64,
@@ -2832,7 +2827,7 @@ func (client *Command) BLMPop(
 //
 // [valkey.io]: https://valkey.io/commands/blmpop/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
-func (client *Command) BLMPopCount(
+func (client *baseClient) BLMPopCount(
 	keys []string,
 	listDirection ListDirection,
 	count int64,
@@ -2884,7 +2879,7 @@ func (client *Command) BLMPopCount(
 //	result: "OK"
 //
 // [valkey.io]: https://valkey.io/commands/lset/
-func (client *Command) LSet(key string, index int64, element string) (string, error) {
+func (client *baseClient) LSet(key string, index int64, element string) (string, error) {
 	result, err := client.executeCommand(C.LSet, []string{key, utils.IntToString(index), element})
 	if err != nil {
 		return defaultStringResponse, err
@@ -2921,7 +2916,7 @@ func (client *Command) LSet(key string, index int64, element string) (string, er
 //	updatedList2: []string{ "one", "three", "four" }
 //
 // [valkey.io]: https://valkey.io/commands/lmove/
-func (client *Command) LMove(
+func (client *baseClient) LMove(
 	source string,
 	destination string,
 	whereFrom ListDirection,
@@ -2984,7 +2979,7 @@ func (client *Command) LMove(
 //
 // [valkey.io]: https://valkey.io/commands/blmove/
 // [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
-func (client *Command) BLMove(
+func (client *baseClient) BLMove(
 	source string,
 	destination string,
 	whereFrom ListDirection,
@@ -3022,7 +3017,7 @@ func (client *Command) BLMove(
 //	result, err := client.Ping()
 //
 // [valkey.io]: https://valkey.io/commands/ping/
-func (client *Command) Ping() (string, error) {
+func (client *baseClient) Ping() (string, error) {
 	result, err := client.executeCommand(C.Ping, []string{})
 	if err != nil {
 		return defaultStringResponse, err
@@ -3046,7 +3041,7 @@ func (client *Command) Ping() (string, error) {
 //	result, err := client.PingWithMessage("Hello")
 //
 // [valkey.io]: https://valkey.io/commands/ping/
-func (client *Command) PingWithMessage(message string) (string, error) {
+func (client *baseClient) PingWithMessage(message string) (string, error) {
 	args := []string{message}
 
 	result, err := client.executeCommand(C.Ping, args)
@@ -3085,7 +3080,7 @@ func (client *Command) PingWithMessage(message string) (string, error) {
 //	fmt.Println(result) // Output: 2
 //
 // [valkey.io]: https://valkey.io/commands/del/
-func (client *Command) Del(keys []string) (int64, error) {
+func (client *baseClient) Del(keys []string) (int64, error) {
 	result, err := client.executeCommand(C.Del, keys)
 	if err != nil {
 		return defaultIntResponse, err
@@ -3116,7 +3111,7 @@ func (client *Command) Del(keys []string) (int64, error) {
 // result: 2
 //
 // [valkey.io]: https://valkey.io/commands/exists/
-func (client *Command) Exists(keys []string) (int64, error) {
+func (client *baseClient) Exists(keys []string) (int64, error) {
 	result, err := client.executeCommand(C.Exists, keys)
 	if err != nil {
 		return defaultIntResponse, err
@@ -3145,7 +3140,7 @@ func (client *Command) Exists(keys []string) (int64, error) {
 // result: true
 //
 // [valkey.io]: https://valkey.io/commands/expire/
-func (client *Command) Expire(key string, seconds int64) (bool, error) {
+func (client *baseClient) Expire(key string, seconds int64) (bool, error) {
 	result, err := client.executeCommand(C.Expire, []string{key, utils.IntToString(seconds)})
 	if err != nil {
 		return defaultBoolResponse, err
@@ -3175,7 +3170,7 @@ func (client *Command) Expire(key string, seconds int64) (bool, error) {
 // result: true
 //
 // [valkey.io]: https://valkey.io/commands/expire/
-func (client *Command) ExpireWithOptions(key string, seconds int64, expireCondition ExpireCondition) (bool, error) {
+func (client *baseClient) ExpireWithOptions(key string, seconds int64, expireCondition ExpireCondition) (bool, error) {
 	expireConditionStr, err := expireCondition.toString()
 	if err != nil {
 		return defaultBoolResponse, err
@@ -3210,7 +3205,7 @@ func (client *Command) ExpireWithOptions(key string, seconds int64, expireCondit
 // result: true
 //
 // [valkey.io]: https://valkey.io/commands/expireat/
-func (client *Command) ExpireAt(key string, unixTimestampInSeconds int64) (bool, error) {
+func (client *baseClient) ExpireAt(key string, unixTimestampInSeconds int64) (bool, error) {
 	result, err := client.executeCommand(C.ExpireAt, []string{key, utils.IntToString(unixTimestampInSeconds)})
 	if err != nil {
 		return defaultBoolResponse, err
@@ -3243,7 +3238,7 @@ func (client *Command) ExpireAt(key string, unixTimestampInSeconds int64) (bool,
 // result: true
 //
 // [valkey.io]: https://valkey.io/commands/expireat/
-func (client *Command) ExpireAtWithOptions(
+func (client *baseClient) ExpireAtWithOptions(
 	key string,
 	unixTimestampInSeconds int64,
 	expireCondition ExpireCondition,
@@ -3281,7 +3276,7 @@ func (client *Command) ExpireAtWithOptions(
 // result: true
 //
 //	[valkey.io]: https://valkey.io/commands/pexpire/
-func (client *Command) PExpire(key string, milliseconds int64) (bool, error) {
+func (client *baseClient) PExpire(key string, milliseconds int64) (bool, error) {
 	result, err := client.executeCommand(C.PExpire, []string{key, utils.IntToString(milliseconds)})
 	if err != nil {
 		return defaultBoolResponse, err
@@ -3309,7 +3304,7 @@ func (client *Command) PExpire(key string, milliseconds int64) (bool, error) {
 // result: true
 //
 //	[valkey.io]: https://valkey.io/commands/pexpire/
-func (client *Command) PExpireWithOptions(
+func (client *baseClient) PExpireWithOptions(
 	key string,
 	milliseconds int64,
 	expireCondition ExpireCondition,
@@ -3347,7 +3342,7 @@ func (client *Command) PExpireWithOptions(
 // result: true
 //
 //	[valkey.io]: https://valkey.io/commands/pexpireat/
-func (client *Command) PExpireAt(key string, unixTimestampInMilliSeconds int64) (bool, error) {
+func (client *baseClient) PExpireAt(key string, unixTimestampInMilliSeconds int64) (bool, error) {
 	result, err := client.executeCommand(C.PExpireAt, []string{key, utils.IntToString(unixTimestampInMilliSeconds)})
 	if err != nil {
 		return defaultBoolResponse, err
@@ -3378,7 +3373,7 @@ func (client *Command) PExpireAt(key string, unixTimestampInMilliSeconds int64) 
 // result: true
 //
 //	[valkey.io]: https://valkey.io/commands/pexpireat/
-func (client *Command) PExpireAtWithOptions(
+func (client *baseClient) PExpireAtWithOptions(
 	key string,
 	unixTimestampInMilliSeconds int64,
 	expireCondition ExpireCondition,
@@ -3413,7 +3408,7 @@ func (client *Command) PExpireAtWithOptions(
 // result: 1732118030
 //
 // [valkey.io]: https://valkey.io/commands/expiretime/
-func (client *Command) ExpireTime(key string) (int64, error) {
+func (client *baseClient) ExpireTime(key string) (int64, error) {
 	result, err := client.executeCommand(C.ExpireTime, []string{key})
 	if err != nil {
 		return defaultIntResponse, err
@@ -3438,7 +3433,7 @@ func (client *Command) ExpireTime(key string) (int64, error) {
 // result: 33177117420000
 //
 // [valkey.io]: https://valkey.io/commands/pexpiretime/
-func (client *Command) PExpireTime(key string) (int64, error) {
+func (client *baseClient) PExpireTime(key string) (int64, error) {
 	result, err := client.executeCommand(C.PExpireTime, []string{key})
 	if err != nil {
 		return defaultIntResponse, err
@@ -3462,7 +3457,7 @@ func (client *Command) PExpireTime(key string) (int64, error) {
 // result: 3
 //
 // [valkey.io]: https://valkey.io/commands/ttl/
-func (client *Command) TTL(key string) (int64, error) {
+func (client *baseClient) TTL(key string) (int64, error) {
 	result, err := client.executeCommand(C.TTL, []string{key})
 	if err != nil {
 		return defaultIntResponse, err
@@ -3486,7 +3481,7 @@ func (client *Command) TTL(key string) (int64, error) {
 // result: 1000
 //
 // [valkey.io]: https://valkey.io/commands/pttl/
-func (client *Command) PTTL(key string) (int64, error) {
+func (client *baseClient) PTTL(key string) (int64, error) {
 	result, err := client.executeCommand(C.PTTL, []string{key})
 	if err != nil {
 		return defaultIntResponse, err
@@ -3516,7 +3511,7 @@ func (client *Command) PTTL(key string) (int64, error) {
 //	result: 1
 //
 // [valkey.io]: https://valkey.io/commands/pfadd/
-func (client *Command) PfAdd(key string, elements []string) (int64, error) {
+func (client *baseClient) PfAdd(key string, elements []string) (int64, error) {
 	result, err := client.executeCommand(C.PfAdd, append([]string{key}, elements...))
 	if err != nil {
 		return defaultIntResponse, err
@@ -3552,7 +3547,7 @@ func (client *Command) PfAdd(key string, elements []string) (int64, error) {
 //	result: 5
 //
 // [valkey.io]: https://valkey.io/commands/pfcount/
-func (client *Command) PfCount(keys []string) (int64, error) {
+func (client *baseClient) PfCount(keys []string) (int64, error) {
 	result, err := client.executeCommand(C.PfCount, keys)
 	if err != nil {
 		return defaultIntResponse, err
@@ -3590,7 +3585,7 @@ func (client *Command) PfCount(keys []string) (int64, error) {
 //	fmt.Println(result) // Output: 3
 //
 // [valkey.io]: Https://valkey.io/commands/unlink/
-func (client *Command) Unlink(keys []string) (int64, error) {
+func (client *baseClient) Unlink(keys []string) (int64, error) {
 	result, err := client.executeCommand(C.Unlink, keys)
 	if err != nil {
 		return defaultIntResponse, err
@@ -3655,7 +3650,7 @@ func (client *baseClient) Type(key string) (string, error) {
 //	fmt.Println(result) // Output: 3
 //
 // [valkey.io]: Https://valkey.io/commands/touch/
-func (client *Command) Touch(keys []string) (int64, error) {
+func (client *baseClient) Touch(keys []string) (int64, error) {
 	result, err := client.executeCommand(C.Touch, keys)
 	if err != nil {
 		return defaultIntResponse, err
@@ -3721,7 +3716,7 @@ func (client *baseClient) Rename(key string, newKey string) (string, error) {
 //	fmt.Println(result) // Output: true
 //
 // [valkey.io]: https://valkey.io/commands/renamenx/
-func (client *Command) Renamenx(key string, newKey string) (bool, error) {
+func (client *baseClient) Renamenx(key string, newKey string) (bool, error) {
 	result, err := client.executeCommand(C.RenameNX, []string{key, newKey})
 	if err != nil {
 		return defaultBoolResponse, err
@@ -3749,7 +3744,7 @@ func (client *Command) Renamenx(key string, newKey string) (bool, error) {
 //	result.Value(): "1526919030474-55"
 //
 // [valkey.io]: https://valkey.io/commands/xadd/
-func (client *Command) XAdd(key string, values [][]string) (Result[string], error) {
+func (client *baseClient) XAdd(key string, values [][]string) (Result[string], error) {
 	return client.XAddWithOptions(key, values, options.NewXAddOptions())
 }
 
@@ -3775,7 +3770,7 @@ func (client *Command) XAdd(key string, values [][]string) (Result[string], erro
 //	result.Value(): "100-500"
 //
 // [valkey.io]: https://valkey.io/commands/xadd/
-func (client *Command) XAddWithOptions(
+func (client *baseClient) XAddWithOptions(
 	key string,
 	values [][]string,
 	options *options.XAddOptions,
@@ -3830,7 +3825,7 @@ func (client *Command) XAddWithOptions(
 //	}
 //
 // [valkey.io]: https://valkey.io/commands/xread/
-func (client *Command) XRead(keysAndIds map[string]string) (map[string]map[string][][]string, error) {
+func (client *baseClient) XRead(keysAndIds map[string]string) (map[string]map[string][][]string, error) {
 	return client.XReadWithOptions(keysAndIds, options.NewXReadOptions())
 }
 
@@ -3862,7 +3857,7 @@ func (client *Command) XRead(keysAndIds map[string]string) (map[string]map[strin
 //	}
 //
 // [valkey.io]: https://valkey.io/commands/xread/
-func (client *Command) XReadWithOptions(
+func (client *baseClient) XReadWithOptions(
 	keysAndIds map[string]string,
 	options *options.XReadOptions,
 ) (map[string]map[string][][]string, error) {
@@ -4012,129 +4007,6 @@ func createStreamCommandArgs(
 	return args, nil
 }
 
-// Reads entries from the given streams owned by a consumer group.
-//
-// Note:
-//
-//	When in cluster mode, all keys in `keysAndIds` must map to the same hash slot.
-//
-// See [valkey.io] for details.
-//
-// Parameters:
-//
-//	group - The consumer group name.
-//	consumer - The group consumer.
-//	keysAndIds - A map of keys and entry IDs to read from.
-//
-// Return value:
-// A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
-// a key does not exist or does not contain requiested entries.
-//
-// For example:
-//
-//	result, err := client.XReadGroup({"stream1": "0-0", "stream2": "0-1", "stream3": "0-1"})
-//	err == nil: true
-//	result: map[string]map[string][][]string{
-//	  "stream1": {
-//	    "0-1": {{"field1", "value1"}},
-//	    "0-2": {{"field2", "value2"}, {"field2", "value3"}},
-//	  },
-//	  "stream2": {
-//	    "1526985676425-0": {{"name", "Virginia"}, {"surname", "Woolf"}},
-//	    "1526985685298-0": nil,                                               // entry was deleted
-//	  },
-//	  "stream3": {},                                                          // stream is empty
-//	}
-//
-// [valkey.io]: https://valkey.io/commands/xreadgroup/
-func (client *baseClient) XReadGroup(
-	group string,
-	consumer string,
-	keysAndIds map[string]string,
-) (map[string]map[string][][]string, error) {
-	return client.XReadGroupWithOptions(group, consumer, keysAndIds, options.NewXReadGroupOptions())
-}
-
-// Reads entries from the given streams owned by a consumer group.
-//
-// Note:
-//
-//	When in cluster mode, all keys in `keysAndIds` must map to the same hash slot.
-//
-// See [valkey.io] for details.
-//
-// Parameters:
-//
-//	group - The consumer group name.
-//	consumer - The group consumer.
-//	keysAndIds - A map of keys and entry IDs to read from.
-//	options - Options detailing how to read the stream.
-//
-// Return value:
-// A `map[string]map[string][][]string` of stream keys to a map of stream entry IDs mapped to an array entries or `nil` if
-// a key does not exist or does not contain requiested entries.
-//
-// For example:
-//
-//	options := options.NewXReadGroupOptions().SetNoAck()
-//	result, err := client.XReadGroupWithOptions({"stream1": "0-0", "stream2": "0-1", "stream3": "0-1"}, options)
-//	err == nil: true
-//	result: map[string]map[string][][]string{
-//	  "stream1": {
-//	    "0-1": {{"field1", "value1"}},
-//	    "0-2": {{"field2", "value2"}, {"field2", "value3"}},
-//	  },
-//	  "stream2": {
-//	    "1526985676425-0": {{"name", "Virginia"}, {"surname", "Woolf"}},
-//	    "1526985685298-0": nil,                                               // entry was deleted
-//	  },
-//	  "stream3": {},                                                          // stream is empty
-//	}
-//
-// [valkey.io]: https://valkey.io/commands/xreadgroup/
-func (client *baseClient) XReadGroupWithOptions(
-	group string,
-	consumer string,
-	keysAndIds map[string]string,
-	options *options.XReadGroupOptions,
-) (map[string]map[string][][]string, error) {
-	args, err := createStreamCommandArgs([]string{"GROUP", group, consumer}, keysAndIds, options)
-	if err != nil {
-		return nil, err
-	}
-
-	result, err := client.executeCommand(C.XReadGroup, args)
-	if err != nil {
-		return nil, err
-	}
-
-	return handleXReadGroupResponse(result)
-}
-
-// Combine `args` with `keysAndIds` and `options` into arguments for a stream command
-func createStreamCommandArgs(
-	args []string,
-	keysAndIds map[string]string,
-	options interface{ ToArgs() ([]string, error) },
-) ([]string, error) {
-	optionArgs, err := options.ToArgs()
-	if err != nil {
-		return nil, err
-	}
-	args = append(args, optionArgs...)
-	// Note: this loop iterates in an indeterminate order, but it is OK for that case
-	keys := make([]string, 0, len(keysAndIds))
-	values := make([]string, 0, len(keysAndIds))
-	for key := range keysAndIds {
-		keys = append(keys, key)
-		values = append(values, keysAndIds[key])
-	}
-	args = append(args, "STREAMS")
-	args = append(args, keys...)
-	args = append(args, values...)
-	return args, nil
-}
-
 // Adds one or more members to a sorted set, or updates their scores. Creates the key if it doesn't exist.
 //
 // See [valkey.io] for details.
@@ -4154,7 +4026,7 @@ func createStreamCommandArgs(
 //	fmt.Println(res) // Output: 3
 //
 // [valkey.io]: https://valkey.io/commands/zadd/
-func (client *Command) ZAdd(
+func (client *baseClient) ZAdd(
 	key string,
 	membersScoreMap map[string]float64,
 ) (int64, error) {
@@ -4190,7 +4062,7 @@ func (client *Command) ZAdd(
 //	fmt.Println(res) // Output: 3
 //
 // [valkey.io]: https://valkey.io/commands/zadd/
-func (client *Command) ZAddWithOptions(
+func (client *baseClient) ZAddWithOptions(
 	key string,
 	membersScoreMap map[string]float64,
 	opts *options.ZAddOptions,
@@ -4245,7 +4117,7 @@ func (client *baseClient) zAddIncrBase(key string, opts *options.ZAddOptions) (R
 //	fmt.Println(res.Value()) // Output: 1.0
 //
 // [valkey.io]: https://valkey.io/commands/zadd/
-func (client *Command) ZAddIncr(
+func (client *baseClient) ZAddIncr(
 	key string,
 	member string,
 	increment float64,
@@ -4280,7 +4152,7 @@ func (client *Command) ZAddIncr(
 //	fmt.Println(res.Value()) // Output: 1.0
 //
 // [valkey.io]: https://valkey.io/commands/zadd/
-func (client *Command) ZAddIncrWithOptions(
+func (client *baseClient) ZAddIncrWithOptions(
 	key string,
 	member string,
 	increment float64,
@@ -4317,7 +4189,7 @@ func (client *Command) ZAddIncrWithOptions(
 //	fmt.Println(res) // Output: 2.0
 //
 // [valkey.io]: https://valkey.io/commands/zincrby/
-func (client *Command) ZIncrBy(key string, increment float64, member string) (float64, error) {
+func (client *baseClient) ZIncrBy(key string, increment float64, member string) (float64, error) {
 	result, err := client.executeCommand(C.ZIncrBy, []string{key, utils.FloatToString(increment), member})
 	if err != nil {
 		return defaultFloatResponse, err
@@ -4465,7 +4337,7 @@ func (client *baseClient) ZPopMaxWithCount(key string, count int64) (map[string]
 //	fmt.Println(res) // Output: 2
 //
 // [valkey.io]: https://valkey.io/commands/zrem/
-func (client *Command) ZRem(key string, members []string) (int64, error) {
+func (client *baseClient) ZRem(key string, members []string) (int64, error) {
 	result, err := client.executeCommand(C.ZRem, append([]string{key}, members...))
 	if err != nil {
 		return defaultIntResponse, err
@@ -4494,7 +4366,7 @@ func (client *Command) ZRem(key string, members []string) (int64, error) {
 //	result: 1 // There is 1 item in the set
 //
 // [valkey.io]: https://valkey.io/commands/zcard/
-func (client *Command) ZCard(key string) (int64, error) {
+func (client *baseClient) ZCard(key string) (int64, error) {
 	result, err := client.executeCommand(C.ZCard, []string{key})
 	if err != nil {
 		return defaultIntResponse, err
@@ -4535,7 +4407,7 @@ func (client *Command) ZCard(key string) (int64, error) {
 // [valkey.io]: https://valkey.io/commands/bzpopmin/
 //
 // [blocking commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
-func (client *Command) BZPopMin(keys []string, timeoutSecs float64) (Result[KeyWithMemberAndScore], error) {
+func (client *baseClient) BZPopMin(keys []string, timeoutSecs float64) (Result[KeyWithMemberAndScore], error) {
 	result, err := client.executeCommand(C.BZPopMin, append(keys, utils.FloatToString(timeoutSecs)))
 	if err != nil {
 		return CreateNilKeyWithMemberAndScoreResult(), err
@@ -4621,7 +4493,7 @@ func (client *baseClient) ZRange(key string, rangeQuery options.ZRangeQuery) ([]
 //	// `result` contains members with scores within the range of negative infinity to 3, in descending order
 //
 // [valkey.io]: https://valkey.io/commands/zrange/
-func (client *Command) ZRangeWithScores(
+func (client *baseClient) ZRangeWithScores(
 	key string,
 	rangeQuery options.ZRangeQueryWithScores,
 ) (map[string]float64, error) {
@@ -4657,7 +4529,7 @@ func (client *Command) ZRangeWithScores(
 //	fmt.Println(result) // Output: true
 //
 // [valkey.io]: https://valkey.io/commands/persist/
-func (client *Command) Persist(key string) (bool, error) {
+func (client *baseClient) Persist(key string) (bool, error) {
 	result, err := client.executeCommand(C.Persist, []string{key})
 	if err != nil {
 		return defaultBoolResponse, err
@@ -4696,7 +4568,7 @@ func (client *Command) Persist(key string) (bool, error) {
 //	 fmt.Println(zCountResult) // Output: 3
 //
 // [valkey.io]: https://valkey.io/commands/zcount/
-func (client *Command) ZCount(key string, rangeOptions *options.ZCountRange) (int64, error) {
+func (client *baseClient) ZCount(key string, rangeOptions *options.ZCountRange) (int64, error) {
 	zCountRangeArgs, err := rangeOptions.ToArgs()
 	if err != nil {
 		return defaultIntResponse, err
@@ -4736,7 +4608,7 @@ func (client *Command) ZCount(key string, rangeOptions *options.ZCountRange) (in
 //	}
 //
 // [valkey.io]: https://valkey.io/commands/zrank/
-func (client *Command) ZRank(key string, member string) (Result[int64], error) {
+func (client *baseClient) ZRank(key string, member string) (Result[int64], error) {
 	result, err := client.executeCommand(C.ZRank, []string{key, member})
 	if err != nil {
 		return CreateNilInt64Result(), err
@@ -4772,7 +4644,7 @@ func (client *Command) ZRank(key string, member string) (Result[int64], error) {
 //	}
 //
 // [valkey.io]: https://valkey.io/commands/zrank/
-func (client *Command) ZRankWithScore(key string, member string) (Result[int64], Result[float64], error) {
+func (client *baseClient) ZRankWithScore(key string, member string) (Result[int64], Result[float64], error) {
 	result, err := client.executeCommand(C.ZRank, []string{key, member, options.WithScore})
 	if err != nil {
 		return CreateNilInt64Result(), CreateNilFloat64Result(), err
@@ -4809,7 +4681,7 @@ func (client *Command) ZRankWithScore(key string, member string) (Result[int64],
 //	}
 //
 // [valkey.io]: https://valkey.io/commands/zrevrank/
-func (client *Command) ZRevRank(key string, member string) (Result[int64], error) {
+func (client *baseClient) ZRevRank(key string, member string) (Result[int64], error) {
 	result, err := client.executeCommand(C.ZRevRank, []string{key, member})
 	if err != nil {
 		return CreateNilInt64Result(), err
@@ -4846,7 +4718,7 @@ func (client *Command) ZRevRank(key string, member string) (Result[int64], error
 //	}
 //
 // [valkey.io]: https://valkey.io/commands/zrevrank/
-func (client *Command) ZRevRankWithScore(key string, member string) (Result[int64], Result[float64], error) {
+func (client *baseClient) ZRevRankWithScore(key string, member string) (Result[int64], Result[float64], error) {
 	result, err := client.executeCommand(C.ZRevRank, []string{key, member, options.WithScore})
 	if err != nil {
 		return CreateNilInt64Result(), CreateNilFloat64Result(), err
@@ -4883,7 +4755,7 @@ func (client *Command) ZRevRankWithScore(key string, member string) (Result[int6
 //	 fmt.Println(xTrimResult) // Output: 1
 //
 // [valkey.io]: https://valkey.io/commands/xtrim/
-func (client *Command) XTrim(key string, options *options.XTrimOptions) (int64, error) {
+func (client *baseClient) XTrim(key string, options *options.XTrimOptions) (int64, error) {
 	xTrimArgs, err := options.ToArgs()
 	if err != nil {
 		return defaultIntResponse, err
@@ -4920,7 +4792,7 @@ func (client *Command) XTrim(key string, options *options.XTrimOptions) (int64, 
 //	 fmt.Println(xLenResult) // Output: 2
 //
 // [valkey.io]: https://valkey.io/commands/xlen/
-func (client *Command) XLen(key string) (int64, error) {
+func (client *baseClient) XLen(key string) (int64, error) {
 	result, err := client.executeCommand(C.XLen, []string{key})
 	if err != nil {
 		return defaultIntResponse, err
@@ -5204,7 +5076,7 @@ func (client *baseClient) XAutoClaimJustIdWithOptions(
 //	 fmt.Println(xDelResult) // Output: 1
 //
 // [valkey.io]: https://valkey.io/commands/xdel/
-func (client *Command) XDel(key string, ids []string) (int64, error) {
+func (client *baseClient) XDel(key string, ids []string) (int64, error) {
 	result, err := client.executeCommand(C.XDel, append([]string{key}, ids...))
 	if err != nil {
 		return defaultIntResponse, err
@@ -5631,11 +5503,11 @@ func (client *baseClient) ObjectEncoding(key string) (Result[string], error) {
 //
 // For example:
 //
-//	result, err := client.Echo("Hello World")
-//	if err != nil {
-//	    // handle error
-//	}
-//	fmt.Println(result.Value()) // Output: Hello World
+//	 result, err := client.Echo("Hello World")
+//		if err != nil {
+//		    // handle error
+//		}
+//		fmt.Println(result.Value()) // Output: Hello World
 //
 // [valkey.io]: https://valkey.io/commands/echo/
 func (client *baseClient) Echo(message string) (Result[string], error) {

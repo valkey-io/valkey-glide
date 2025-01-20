@@ -10,7 +10,6 @@ import "github.com/valkey-io/valkey-glide/go/glide/api/options"
 //
 // [valkey.io]: https://valkey.io/commands/#stream
 type StreamCommands interface {
-
 	XAdd(key string, values [][]string) (Result[string], error)
 
 	XAddWithOptions(key string, values [][]string, options *options.XAddOptions) (Result[string], error)

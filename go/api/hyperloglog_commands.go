@@ -8,7 +8,6 @@ package api
 //
 // [valkey.io]: https://valkey.io/commands/#hyperloglog
 type HyperLogLogCommands interface {
-
 	PfAdd(key string, elements []string) (int64, error)
 
 	PfCount(keys []string) (int64, error)
