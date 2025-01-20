@@ -2871,18 +2871,6 @@ func (client *baseClient) SortStoreWithOptions(
 	return handleIntOrNilResponse(result)
 }
 
-func (client *baseClient) XGroupCreateConsumer(
-	key string,
-	group string,
-	consumer string,
-) (bool, error) {
-	result, err := client.executeCommand(C.XGroupCreateConsumer, []string{key, group, consumer})
-	if err != nil {
-		return false, err
-	}
-	return handleBoolResponse(result)
-}
-
 // XGroupCreateConsumer creates a consumer named `consumer` in the consumer group `group` for the
 // stream stored at `key`.
 //
@@ -2907,6 +2895,18 @@ func (client *baseClient) XGroupCreateConsumer(
 //	}
 //
 // [valkey.io]: https://valkey.io/commands/xgroup-createconsumer/
+func (client *baseClient) XGroupCreateConsumer(
+	key string,
+	group string,
+	consumer string,
+) (bool, error) {
+	result, err := client.executeCommand(C.XGroupCreateConsumer, []string{key, group, consumer})
+	if err != nil {
+		return false, err
+	}
+	return handleBoolResponse(result)
+}
+
 // XGroupDelConsumer deletes a consumer named `consumer` in the consumer group `group`.
 //
 // See [valkey.io] for details.
