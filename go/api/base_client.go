@@ -2890,9 +2890,9 @@ func (client *baseClient) XGroupCreateConsumer(
 //
 // Parameters:
 //
-//	key: The key of the stream.
-//	group: The consumer group name.
-//	consumer: The newly created consumer.
+//	key - The key of the stream.
+//	group - The consumer group name.
+//	consumer - The newly created consumer.
 //
 // Return value:
 //
