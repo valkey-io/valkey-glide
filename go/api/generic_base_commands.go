@@ -613,11 +613,10 @@ type GenericBaseCommands interface {
 	// Example:
 	//
 	// result, err := client.SortStore("key","destkey")
-	// result.Value(): 1
-	// result.IsNil(): false
+	// result: 1
 	//
 	// [valkey.io]: https://valkey.io/commands/sort/
-	SortStore(key string, destination string) (Result[int64], error)
+	SortStore(key string, destination string) (int64, error)
 
 	// Sorts the elements in the list, set, or sorted set at key and stores the result in
 	// destination. The sort command can be used to sort elements based on
@@ -648,11 +647,10 @@ type GenericBaseCommands interface {
 	//
 	// options := api.NewSortOptions().SetByPattern("weight_*").SetIsAlpha(false).AddGetPattern("object_*").AddGetPattern("#")
 	// result, err := client.SortStore("key","destkey",options)
-	// result.Value(): 1
-	// result.IsNil(): false
+	// result: 1
 	//
 	// [valkey.io]: https://valkey.io/commands/sort/
-	SortStoreWithOptions(key string, destination string, sortOptions *options.SortOptions) (Result[int64], error)
+	SortStoreWithOptions(key string, destination string, sortOptions *options.SortOptions) (int64, error)
 
 	// Sorts the elements in the list, set, or sorted set at key and returns the result.
 	// The sortReadOnly command can be used to sort elements based on different criteria and apply

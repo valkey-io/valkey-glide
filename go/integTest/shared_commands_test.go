@@ -3776,18 +3776,11 @@ func (suite *GlideTestSuite) TestSortStore_BasicSorting() {
 
 		assert.Nil(suite.T(), err)
 		assert.NotNil(suite.T(), result)
-		assert.Equal(suite.T(), int64(5), result.Value())
+		assert.Equal(suite.T(), int64(5), result)
 
 		sortedValues, err := client.LRange(sortedKey, 0, -1)
-		resultList := []api.Result[string]{
-			api.CreateStringResult("1"),
-			api.CreateStringResult("2"),
-			api.CreateStringResult("4"),
-			api.CreateStringResult("5"),
-			api.CreateStringResult("10"),
-		}
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), resultList, sortedValues)
+		assert.Equal(suite.T(), []string{"1", "2", "4", "5", "10"}, sortedValues)
 	})
 }
 
@@ -3796,7 +3789,7 @@ func (suite *GlideTestSuite) TestSortStore_ErrorHandling() {
 		result, err := client.SortStore("{listKey}nonExistingKey", "{listKey}mydestinationKey")
 
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), int64(0), result.Value())
+		assert.Equal(suite.T(), int64(0), result)
 	})
 }
 
@@ -3811,18 +3804,11 @@ func (suite *GlideTestSuite) TestSortStoreWithOptions_DescendingOrder() {
 
 		assert.Nil(suite.T(), err)
 		assert.NotNil(suite.T(), result)
-		assert.Equal(suite.T(), int64(5), result.Value())
+		assert.Equal(suite.T(), int64(5), result)
 
 		sortedValues, err := client.LRange(sortedKey, 0, -1)
-		resultList := []api.Result[string]{
-			api.CreateStringResult("50"),
-			api.CreateStringResult("40"),
-			api.CreateStringResult("30"),
-			api.CreateStringResult("20"),
-			api.CreateStringResult("10"),
-		}
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), resultList, sortedValues)
+		assert.Equal(suite.T(), []string{"50", "40", "30", "20", "10"}, sortedValues)
 	})
 }
 
@@ -3837,16 +3823,10 @@ func (suite *GlideTestSuite) TestSortStoreWithOptions_AlphaSorting() {
 
 		assert.Nil(suite.T(), err)
 		assert.NotNil(suite.T(), result)
-		assert.Equal(suite.T(), int64(5), result.Value())
+		assert.Equal(suite.T(), int64(5), result)
 
 		sortedValues, err := client.LRange(sortedKey, 0, -1)
-		resultList := []api.Result[string]{
-			api.CreateStringResult("apple"),
-			api.CreateStringResult("banana"),
-			api.CreateStringResult("cherry"),
-			api.CreateStringResult("date"),
-			api.CreateStringResult("elderberry"),
-		}
+		resultList := []string{"apple", "banana", "cherry", "date", "elderberry"}
 		assert.Nil(suite.T(), err)
 		assert.Equal(suite.T(), resultList, sortedValues)
 	})
@@ -3863,16 +3843,11 @@ func (suite *GlideTestSuite) TestSortStoreWithOptions_Limit() {
 
 		assert.Nil(suite.T(), err)
 		assert.NotNil(suite.T(), result)
-		assert.Equal(suite.T(), int64(3), result.Value())
+		assert.Equal(suite.T(), int64(3), result)
 
 		sortedValues, err := client.LRange(sortedKey, 0, -1)
-		resultList := []api.Result[string]{
-			api.CreateStringResult("20"),
-			api.CreateStringResult("30"),
-			api.CreateStringResult("40"),
-		}
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), resultList, sortedValues)
+		assert.Equal(suite.T(), []string{"20", "30", "40"}, sortedValues)
 	})
 }
 
@@ -6513,17 +6488,10 @@ func (suite *GlideTestSuite) TestSortStoreWithOptions_ByPattern() {
 
 		assert.Nil(suite.T(), err)
 		assert.NotNil(suite.T(), result)
-		assert.Equal(suite.T(), int64(5), result.Value())
+		assert.Equal(suite.T(), int64(5), result)
 
 		sortedValues, err := client.LRange(sortedKey, 0, -1)
-		resultList := []api.Result[string]{
-			api.CreateStringResult("d"),
-			api.CreateStringResult("b"),
-			api.CreateStringResult("c"),
-			api.CreateStringResult("e"),
-			api.CreateStringResult("a"),
-		}
 		assert.Nil(suite.T(), err)
-		assert.Equal(suite.T(), resultList, sortedValues)
+		assert.Equal(suite.T(), []string{"d", "b", "c", "e", "a"}, sortedValues)
 	})
 }

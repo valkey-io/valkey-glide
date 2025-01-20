@@ -2819,7 +2819,7 @@ func (client *baseClient) Sort(key string) ([]Result[string], error) {
 	if err != nil {
 		return nil, err
 	}
-	return handleStringArrayResponse(result)
+	return handleStringOrNilArrayResponse(result)
 }
 
 func (client *baseClient) SortWithOptions(key string, options *options.SortOptions) ([]Result[string], error) {
@@ -2828,7 +2828,7 @@ func (client *baseClient) SortWithOptions(key string, options *options.SortOptio
 	if err != nil {
 		return nil, err
 	}
-	return handleStringArrayResponse(result)
+	return handleStringOrNilArrayResponse(result)
 }
 
 func (client *baseClient) SortReadOnly(key string) ([]Result[string], error) {
@@ -2836,7 +2836,7 @@ func (client *baseClient) SortReadOnly(key string) ([]Result[string], error) {
 	if err != nil {
 		return nil, err
 	}
-	return handleStringArrayResponse(result)
+	return handleStringOrNilArrayResponse(result)
 }
 
 func (client *baseClient) SortReadOnlyWithOptions(key string, options *options.SortOptions) ([]Result[string], error) {
@@ -2845,26 +2845,26 @@ func (client *baseClient) SortReadOnlyWithOptions(key string, options *options.S
 	if err != nil {
 		return nil, err
 	}
-	return handleStringArrayResponse(result)
+	return handleStringOrNilArrayResponse(result)
 }
 
-func (client *baseClient) SortStore(key string, destination string) (Result[int64], error) {
+func (client *baseClient) SortStore(key string, destination string) (int64, error) {
 	result, err := client.executeCommand(C.Sort, []string{key, "STORE", destination})
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
-	return handleIntOrNilResponse(result)
+	return handleIntResponse(result)
 }
 
 func (client *baseClient) SortStoreWithOptions(
 	key string,
 	destination string,
 	options *options.SortOptions,
-) (Result[int64], error) {
+) (int64, error) {
 	optionArgs := options.ToArgs()
 	result, err := client.executeCommand(C.Sort, append([]string{key, "STORE", destination}, optionArgs...))
 	if err != nil {
-		return CreateNilInt64Result(), err
+		return defaultIntResponse, err
 	}
-	return handleIntOrNilResponse(result)
+	return handleIntResponse(result)
 }
