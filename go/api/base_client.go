@@ -2523,7 +2523,10 @@ func (client *baseClient) XPendingWithOptions(
 //
 // Example:
 //
-//	client.XGroupCreate("mystream", "mygroup", "0-0")
+//	ok, err := client.XGroupCreate("mystream", "mygroup", "0-0")
+//	if ok != "OK" || err != nil {
+//		// handle error
+//	}
 //
 // [valkey.io]: https://valkey.io/commands/xgroup-create/
 func (client *baseClient) XGroupCreate(key string, group string, id string) (string, error) {
@@ -2549,7 +2552,10 @@ func (client *baseClient) XGroupCreate(key string, group string, id string) (str
 // Example:
 //
 //	opts := options.NewXGroupCreateOptions().SetMakeStream()
-//	client.XGroupCreateWithOptions("mystream", "mygroup", "0-0", opts)
+//	ok, err := client.XGroupCreateWithOptions("mystream", "mygroup", "0-0", opts)
+//	if ok != "OK" || err != nil {
+//		// handle error
+//	}
 //
 // [valkey.io]: https://valkey.io/commands/xgroup-create/
 func (client *baseClient) XGroupCreateWithOptions(
@@ -2567,7 +2573,6 @@ func (client *baseClient) XGroupCreateWithOptions(
 	return handleStringResponse(result)
 }
 
-// Destroys the consumer group `group` for the stream stored at `key`.
 func (client *baseClient) Restore(key string, ttl int64, value string) (Result[string], error) {
 	return client.RestoreWithOptions(key, ttl, value, NewRestoreOptionsBuilder())
 }
@@ -2633,8 +2638,7 @@ func (client *baseClient) Echo(message string) (Result[string], error) {
 	return handleStringOrNilResponse(result)
 }
 
-// Removes all elements in the sorted set stored at `key` with a lexicographical order
-// between `rangeQuery.Start` and `rangeQuery.End`.
+// Destroys the consumer group `group` for the stream stored at `key`.
 //
 // See [valkey.io] for details.
 //
