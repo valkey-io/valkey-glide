@@ -491,10 +491,10 @@ type ListCommands interface {
 	// For example:
 	//  result, err := client.LPush("my_list", []string{"one", "two", "three"})
 	//  result, err := client.LMPop([]string{"my_list"}, api.Left)
-	//  result[api.CreateStringResult("my_list")] = []api.Result[string]{api.CreateStringResult("three")}
+	//  result["my_list"] = []string{"three"}
 	//
 	// [valkey.io]: https://valkey.io/commands/lmpop/
-	LMPop(keys []string, listDirection ListDirection) (map[Result[string]][]Result[string], error)
+	LMPop(keys []string, listDirection ListDirection) (map[string][]string, error)
 
 	// Pops one or more elements from the first non-empty list from the provided keys.
 	//
@@ -514,10 +514,10 @@ type ListCommands interface {
 	// For example:
 	//  result, err := client.LPush("my_list", []string{"one", "two", "three"})
 	//  result, err := client.LMPopCount([]string{"my_list"}, api.Left, int64(1))
-	//  result[api.CreateStringResult("my_list")] = []api.Result[string]{api.CreateStringResult("three")}
+	//  result["my_list"] = []string{"three"}
 	//
 	// [valkey.io]: https://valkey.io/commands/lmpop/
-	LMPopCount(keys []string, listDirection ListDirection, count int64) (map[Result[string]][]Result[string], error)
+	LMPopCount(keys []string, listDirection ListDirection, count int64) (map[string][]string, error)
 
 	// Blocks the connection until it pops one element from the first non-empty list from the provided keys. BLMPop is the
 	// blocking variant of [api.LMPop].
@@ -544,11 +544,11 @@ type ListCommands interface {
 	// For example:
 	//  result, err := client.LPush("my_list", []string{"one", "two", "three"})
 	//  result, err := client.BLMPop([]string{"my_list"}, api.Left, float64(0.1))
-	//  result[api.CreateStringResult("my_list")] = []api.Result[string]{api.CreateStringResult("three")}
+	//  result["my_list"] = []string{"three"}
 	//
 	// [valkey.io]: https://valkey.io/commands/blmpop/
 	// [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
-	BLMPop(keys []string, listDirection ListDirection, timeoutSecs float64) (map[Result[string]][]Result[string], error)
+	BLMPop(keys []string, listDirection ListDirection, timeoutSecs float64) (map[string][]string, error)
 
 	// Blocks the connection until it pops one or more elements from the first non-empty list from the provided keys.
 	// BLMPopCount is the blocking variant of [api.LMPopCount].
@@ -576,7 +576,7 @@ type ListCommands interface {
 	// For example:
 	//  result, err: client.LPush("my_list", []string{"one", "two", "three"})
 	//  result, err := client.BLMPopCount([]string{"my_list"}, api.Left, int64(1), float64(0.1))
-	//  result[api.CreateStringResult("my_list")] = []api.Result[string]{api.CreateStringResult("three")}
+	//  result["my_list"] = []string{"three"}
 	//
 	// [valkey.io]: https://valkey.io/commands/blmpop/
 	// [Blocking Commands]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
@@ -585,7 +585,7 @@ type ListCommands interface {
 		listDirection ListDirection,
 		count int64,
 		timeoutSecs float64,
-	) (map[Result[string]][]Result[string], error)
+	) (map[string][]string, error)
 
 	// Sets the list element at index to element.
 	// The index is zero-based, so 0 means the first element,1 the second element and so on. Negative indices can be used to
