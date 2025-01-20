@@ -2665,3 +2665,86 @@ func (client *baseClient) ZRemRangeByScore(key string, rangeQuery options.RangeB
 	}
 	return handleIntResponse(result)
 }
+
+// Returns the logarithmic access frequency counter of a Valkey object stored at key.
+//
+// Parameters:
+//
+//	key - The key of the object to get the logarithmic access frequency counter of.
+//
+// Return value:
+//
+//	If key exists, returns the logarithmic access frequency counter of the
+//	object stored at key as a long. Otherwise, returns `nil`.
+//
+// Example:
+//
+//	result, err := client.ObjectFreq(key)
+//	if err != nil {
+//		// handle error
+//	}
+//	fmt.Println(result.Value()) // Output: 1
+//
+// [valkey.io]: https://valkey.io/commands/object-freq/
+func (client *baseClient) ObjectFreq(key string) (Result[int64], error) {
+	result, err := client.executeCommand(C.ObjectFreq, []string{key})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+	return handleIntOrNilResponse(result)
+}
+
+// Returns the logarithmic access frequency counter of a Valkey object stored at key.
+//
+// Parameters:
+//
+//	key - The key of the object to get the logarithmic access frequency counter of.
+//
+// Return value:
+//
+//	If key exists, returns the idle time in seconds. Otherwise, returns `nil`.
+//
+// Example:
+//
+//	result, err := client.ObjectIdleTime(key)
+//	if err != nil {
+//		// handle error
+//	}
+//	fmt.Println(result.Value()) // Output: 1
+//
+// [valkey.io]: https://valkey.io/commands/object-idletime/
+func (client *baseClient) ObjectIdleTime(key string) (Result[int64], error) {
+	result, err := client.executeCommand(C.ObjectIdleTime, []string{key})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+	return handleIntOrNilResponse(result)
+}
+
+// Returns the reference count of the object stored at key.
+//
+// Parameters:
+//
+//	key - The key of the object to get the reference count of.
+//
+// Return value:
+//
+//	If key exists, returns the reference count of the object stored at key.
+//	Otherwise, returns `nil`.
+//
+// Example:
+//
+//	result, err := client.ObjectRefCount(key)
+//	if err != nil {
+//	  // handle error
+//	}
+//	fmt.Println(result.Value()) // Output: 1
+//
+// [valkey.io]: https://valkey.io/commands/object-refcount/
+func (client *baseClient) ObjectRefCount(key string) (Result[int64], error) {
+	result, err := client.executeCommand(C.ObjectRefCount, []string{key})
+	if err != nil {
+		return CreateNilInt64Result(), err
+	}
+	return handleIntOrNilResponse(result)
+}
