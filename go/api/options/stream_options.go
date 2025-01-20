@@ -116,6 +116,20 @@ func (xTrimOptions *XTrimOptions) ToArgs() ([]string, error) {
 	return args, nil
 }
 
+// Optional arguments for `XAutoClaim` in [StreamCommands]
+type XAutoClaimOptions struct {
+	count int64
+}
+
+// Option to trim the stream according to minimum ID.
+func NewXAutoClaimOptionsWithCount(count int64) *XAutoClaimOptions {
+	return &XAutoClaimOptions{count}
+}
+
+func (xacp *XAutoClaimOptions) ToArgs() ([]string, error) {
+	return []string{"COUNT", utils.IntToString(xacp.count)}, nil
+}
+
 // Optional arguments for `XRead` in [StreamCommands]
 type XReadOptions struct {
 	count, block int64
@@ -146,6 +160,51 @@ func (xro *XReadOptions) ToArgs() ([]string, error) {
 	}
 	if xro.block >= 0 {
 		args = append(args, "BLOCK", utils.IntToString(xro.block))
+	}
+	return args, nil
+}
+
+// Optional arguments for `XReadGroup` in [StreamCommands]
+type XReadGroupOptions struct {
+	count, block int64
+	noAck        bool
+}
+
+// Create new empty `XReadOptions`
+func NewXReadGroupOptions() *XReadGroupOptions {
+	return &XReadGroupOptions{-1, -1, false}
+}
+
+// The maximal number of elements requested. Equivalent to `COUNT` in the Valkey API.
+func (xrgo *XReadGroupOptions) SetCount(count int64) *XReadGroupOptions {
+	xrgo.count = count
+	return xrgo
+}
+
+// If set, the request will be blocked for the set amount of milliseconds or until the server has
+// the required number of entries. A value of `0` will block indefinitely. Equivalent to `BLOCK` in the Valkey API.
+func (xrgo *XReadGroupOptions) SetBlock(block int64) *XReadGroupOptions {
+	xrgo.block = block
+	return xrgo
+}
+
+// If set, messages are not added to the Pending Entries List (PEL). This is equivalent to
+// acknowledging the message when it is read.
+func (xrgo *XReadGroupOptions) SetNoAck() *XReadGroupOptions {
+	xrgo.noAck = true
+	return xrgo
+}
+
+func (xrgo *XReadGroupOptions) ToArgs() ([]string, error) {
+	args := []string{}
+	if xrgo.count >= 0 {
+		args = append(args, "COUNT", utils.IntToString(xrgo.count))
+	}
+	if xrgo.block >= 0 {
+		args = append(args, "BLOCK", utils.IntToString(xrgo.block))
+	}
+	if xrgo.noAck {
+		args = append(args, "NOACK")
 	}
 	return args, nil
 }
