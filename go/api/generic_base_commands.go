@@ -133,4 +133,10 @@ type GenericBaseCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/dump/
 	Dump(key string) (Result[string], error)
+
+	ObjectFreq(key string) (Result[int64], error)
+
+	ObjectIdleTime(key string) (Result[int64], error)
+
+	ObjectRefCount(key string) (Result[int64], error)
 }
