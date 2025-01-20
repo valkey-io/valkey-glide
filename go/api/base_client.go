@@ -530,7 +530,7 @@ func (client *baseClient) HScanWithOptions(
 //
 //	field, err := client.HRandField("my_hash")
 //
-// [valkey.io]: https://valkey.io/commands/hexists/
+// [valkey.io]: https://valkey.io/commands/hrandfield/
 func (client *baseClient) HRandField(key string) (Result[string], error) {
 	result, err := client.executeCommand(C.HRandField, []string{key})
 	if err != nil {
@@ -562,7 +562,7 @@ func (client *baseClient) HRandField(key string) (Result[string], error) {
 //
 //	fields, err := client.HRandFieldWithCount("my_hash", -5)
 //
-// [valkey.io]: https://valkey.io/commands/hexists/
+// [valkey.io]: https://valkey.io/commands/hrandfield/
 func (client *baseClient) HRandFieldWithCount(key string, count int64) ([]string, error) {
 	result, err := client.executeCommand(C.HRandField, []string{key, utils.IntToString(count)})
 	if err != nil {
@@ -606,9 +606,9 @@ func (client *baseClient) HRandFieldWithCount(key string, count int64) ([]string
 //		value := pair[1]
 //	}
 //
-// [valkey.io]: https://valkey.io/commands/hexists/
+// [valkey.io]: https://valkey.io/commands/hrandfield/
 func (client *baseClient) HRandFieldWithCountWithValues(key string, count int64) ([][]string, error) {
-	result, err := client.executeCommand(C.HRandField, []string{key, utils.IntToString(count), "WITHVALUES"})
+	result, err := client.executeCommand(C.HRandField, []string{key, utils.IntToString(count), options.WithValues})
 	if err != nil {
 		return nil, err
 	}
