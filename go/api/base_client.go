@@ -197,8 +197,8 @@ func toCStrings(args []string) ([]C.uintptr_t, []C.ulong) {
 //
 // For example:
 //
-//		result, err := client.Set("key", "value")
-//	 result: "OK"
+//	result, err := client.Set("key", "value")
+//	result: "OK"
 //
 // [valkey.io]: https://valkey.io/commands/set/
 func (client *Command) Set(key string, value string) (string, error) {
@@ -380,8 +380,8 @@ func (client *Command) GetExWithOptions(key string, options *GetExOptions) (Resu
 //
 // For example:
 //
-//		result, err := client.MSet(map[string]string{"key1": "value1", "key2": "value2"})
-//	 result: "OK"
+//	result, err := client.MSet(map[string]string{"key1": "value1", "key2": "value2"})
+//	result: "OK"
 //
 // [valkey.io]: https://valkey.io/commands/mset/
 func (client *Command) MSet(keyValueMap map[string]string) (string, error) {
@@ -454,13 +454,13 @@ func (client *Command) MSetNX(keyValueMap map[string]string) (bool, error) {
 //
 // For example:
 //
-//	 key1: value1, key2: value2
-//		result, err := client.MGet([]string{"key1", "key2", "key3"})
-//	 result : {
-//	            api.CreateStringResult("value1),
-//	            api.CreateStringResult("value2"),
-//	            api.CreateNilStringResult()
-//	          }
+//	key1: value1, key2: value2
+//	result, err := client.MGet([]string{"key1", "key2", "key3"})
+//	result : {
+//	           api.CreateStringResult("value1),
+//	           api.CreateStringResult("value2"),
+//	           api.CreateNilStringResult()
+//	         }
 //
 // [valkey.io]: https://valkey.io/commands/mget/
 func (client *Command) MGet(keys []string) ([]Result[string], error) {
@@ -1176,9 +1176,9 @@ func (client *Command) HStrLen(key string, field string) (int64, error) {
 //
 // Example:
 //
-//	 _, err := client.HSet("key", map[string]string{"field": "10"})
-//	 hincrByResult, err := client.HIncrBy("key", "field", 1)
-//		// hincrByResult: 11
+//	_, err := client.HSet("key", map[string]string{"field": "10"})
+//	hincrByResult, err := client.HIncrBy("key", "field", 1)
+//	// hincrByResult: 11
 //
 // [valkey.io]: https://valkey.io/commands/hincrby/
 func (client *Command) HIncrBy(key string, field string, increment int64) (int64, error) {
@@ -1208,9 +1208,9 @@ func (client *Command) HIncrBy(key string, field string, increment int64) (int64
 //
 // Example:
 //
-//	 _, err := client.HSet("key", map[string]string{"field": "10"})
-//	 hincrByFloatResult, err := client.HIncrByFloat("key", "field", 1.5)
-//		// hincrByFloatResult: 11.5
+//	_, err := client.HSet("key", map[string]string{"field": "10"})
+//	hincrByFloatResult, err := client.HIncrByFloat("key", "field", 1.5)
+//	// hincrByFloatResult: 11.5
 //
 // [valkey.io]: https://valkey.io/commands/hincrbyfloat/
 func (client *Command) HIncrByFloat(key string, field string, increment float64) (float64, error) {
@@ -1263,9 +1263,9 @@ func (client *baseClient) HScan(key string, cursor string) (string, []string, er
 //
 // Parameters:
 //
-//		key - The key of the hash.
-//		cursor - The cursor that points to the next iteration of results. A value of "0" indicates the start of the search.
-//	 options - The [api.HashScanOptions].
+//	key - The key of the hash.
+//	cursor - The cursor that points to the next iteration of results. A value of "0" indicates the start of the search.
+//	options - The [api.HashScanOptions].
 //
 // Return value:
 //
@@ -1277,13 +1277,13 @@ func (client *baseClient) HScan(key string, cursor string) (string, []string, er
 //
 // Example:
 //
-//	 // Assume key contains a hash {{"a": "1"}, {"b", "2"}}
-//		opts := options.NewHashScanOptionsBuilder().SetMatch("a")
-//		resCursor, resCollection, err = client.HScan(key, initialCursor, opts)
-//	 // resCursor = {0 false}
-//	 // resCollection = [{a false} {1 false}]
-//	 // The resCollection only contains the hash map entry that matches with the match option provided with the command
-//	 // input.
+//	// Assume key contains a hash {{"a": "1"}, {"b", "2"}}
+//	opts := options.NewHashScanOptionsBuilder().SetMatch("a")
+//	resCursor, resCollection, err = client.HScan(key, initialCursor, opts)
+//	// resCursor = {0 false}
+//	// resCollection = [{a false} {1 false}]
+//	// The resCollection only contains the hash map entry that matches with the match option provided with the command
+//	// input.
 //
 // [valkey.io]: https://valkey.io/commands/hscan/
 func (client *baseClient) HScanWithOptions(
@@ -1631,8 +1631,8 @@ func (client *Command) SRem(key string, members []string) (int64, error) {
 //
 // Parameters:
 //
-//		 destination - The key of the destination set.
-//	  keys - The keys from which to retrieve the set members.
+//	destination - The key of the destination set.
+//	keys - The keys from which to retrieve the set members.
 //
 // Return value:
 //
@@ -1847,8 +1847,8 @@ func (client *baseClient) SInter(keys []string) (map[string]struct{}, error) {
 //
 // Parameters:
 //
-//		 destination - The key of the destination set.
-//	  keys - The keys from which to retrieve the set members.
+//	destination - The key of the destination set.
+//	keys - The keys from which to retrieve the set members.
 //
 // Return value:
 //
@@ -2024,14 +2024,14 @@ func (client *Command) SPop(key string) (Result[string], error) {
 //
 // Example:
 //
-//		 client.SAdd("myKey", []string{"one", "two"})
-//	  value1, err := client.SMIsMember("myKey", []string{"two", "three"})
-//	  // value1[0].Value(): true
-//	  // value1[1].Value(): false
-//	  // err: nil
-//	  value2, err := client.SPop("nonExistingKey", []string{"one"})
-//	  // value2[0].Value(): false
-//	  // err: nil
+//	client.SAdd("myKey", []string{"one", "two"})
+//	value1, err := client.SMIsMember("myKey", []string{"two", "three"})
+//	// value1[0].Value(): true
+//	// value1[1].Value(): false
+//	// err: nil
+//	value2, err := client.SPop("nonExistingKey", []string{"one"})
+//	// value2[0].Value(): false
+//	// err: nil
 //
 // [valkey.io]: https://valkey.io/commands/smismember/
 func (client *Command) SMIsMember(key string, members []string) ([]bool, error) {
@@ -2210,8 +2210,8 @@ func (client *baseClient) SScanWithOptions(
 //
 // Example:
 //
-//		 moved := SMove("set1", "set2", "element")
-//	  fmt.Println(moved.Value()) // Output: true
+//	moved := SMove("set1", "set2", "element")
+//	fmt.Println(moved.Value()) // Output: true
 //
 // [valkey.io]: https://valkey.io/commands/smove/
 func (client *Command) SMove(source string, destination string, member string) (bool, error) {
@@ -3566,12 +3566,12 @@ func (client *Command) PfCount(keys []string) (int64, error) {
 //
 // Note:
 //
-//		 In cluster mode, if keys in keys map to different hash slots, the command
-//	  will be split across these slots and executed separately for each. This means the command
-//	  is atomic only at the slot level. If one or more slot-specific requests fail, the entire
-//	  call will return the first encountered error, even though some requests may have succeeded
-//	  while others did not. If this behavior impacts your application logic, consider splitting
-//	  the request into sub-requests per slot to ensure atomicity.
+//	In cluster mode, if keys in keys map to different hash slots, the command
+//	will be split across these slots and executed separately for each. This means the command
+//	is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+//	call will return the first encountered error, even though some requests may have succeeded
+//	while others did not. If this behavior impacts your application logic, consider splitting
+//	the request into sub-requests per slot to ensure atomicity.
 //
 // Parameters:
 //
@@ -3631,12 +3631,12 @@ func (client *baseClient) Type(key string) (string, error) {
 //
 // Note:
 //
-//		 In cluster mode, if keys in keys map to different hash slots, the command
-//	  will be split across these slots and executed separately for each. This means the command
-//	  is atomic only at the slot level. If one or more slot-specific requests fail, the entire
-//	  call will return the first encountered error, even though some requests may have succeeded
-//	  while others did not. If this behavior impacts your application logic, consider splitting
-//	  the request into sub-requests per slot to ensure atomicity.
+//	In cluster mode, if keys in keys map to different hash slots, the command
+//	will be split across these slots and executed separately for each. This means the command
+//	is atomic only at the slot level. If one or more slot-specific requests fail, the entire
+//	call will return the first encountered error, even though some requests may have succeeded
+//	while others did not. If this behavior impacts your application logic, consider splitting
+//	the request into sub-requests per slot to ensure atomicity.
 //
 // Parameters:
 //
@@ -3682,11 +3682,11 @@ func (client *Command) Touch(keys []string) (int64, error) {
 //
 // Example:
 //
-//	 result, err := client.Rename([]string{"key", "newkey"})
-//		if err != nil {
-//		    // handle error
-//		}
-//		fmt.Println(result) // Output: OK
+//	result, err := client.Rename([]string{"key", "newkey"})
+//	if err != nil {
+//	    // handle error
+//	}
+//	fmt.Println(result) // Output: OK
 //
 // [valkey.io]: https://valkey.io/commands/rename/
 func (client *baseClient) Rename(key string, newKey string) (string, error) {
@@ -3714,11 +3714,11 @@ func (client *baseClient) Rename(key string, newKey string) (string, error) {
 //
 // Example:
 //
-//	 result, err := client.Renamenx([]string{"key", "newkey"})
-//		if err != nil {
-//		    // handle error
-//		}
-//		fmt.Println(result) // Output: true
+//	result, err := client.Renamenx([]string{"key", "newkey"})
+//	if err != nil {
+//	    // handle error
+//	}
+//	fmt.Println(result) // Output: true
 //
 // [valkey.io]: https://valkey.io/commands/renamenx/
 func (client *Command) Renamenx(key string, newKey string) (bool, error) {
@@ -4650,11 +4650,11 @@ func (client *Command) ZRangeWithScores(
 //
 // Example:
 //
-//	 result, err := client.Persist([]string{"key"})
-//		if err != nil {
-//		    // handle error
-//		}
-//		fmt.Println(result) // Output: true
+//	result, err := client.Persist([]string{"key"})
+//	if err != nil {
+//	    // handle error
+//	}
+//	fmt.Println(result) // Output: true
 //
 // [valkey.io]: https://valkey.io/commands/persist/
 func (client *Command) Persist(key string) (bool, error) {
@@ -4686,9 +4686,9 @@ func (client *Command) Persist(key string) (bool, error) {
 //	 membersScores := map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0 }
 //	 zAddResult, err := client.ZAdd(key1, membersScores)
 //	 zCountRange := options.NewZCountRangeBuilder(
-//			options.NewInfiniteScoreBoundary(options.NegativeInfinity),
-//		 	options.NewInfiniteScoreBoundary(options.PositiveInfinity),
-//		)
+//		 options.NewInfiniteScoreBoundary(options.NegativeInfinity),
+//		 options.NewInfiniteScoreBoundary(options.PositiveInfinity),
+//	 )
 //	 zCountResult, err := client.ZCount(key1, zCountRange)
 //	 if err != nil {
 //	    // Handle err
@@ -5496,9 +5496,9 @@ func (client *baseClient) XGroupCreateWithOptions(
 //
 // Parameters:
 //
-//	 key - The key to create.
-//		ttl - The expiry time (in milliseconds). If 0, the key will persist.
-//	 value - The serialized value to deserialize and assign to key.
+//	key - The key to create.
+//	ttl - The expiry time (in milliseconds). If 0, the key will persist.
+//	value - The serialized value to deserialize and assign to key.
 //
 // Return value:
 //
@@ -5522,10 +5522,10 @@ func (client *baseClient) Restore(key string, ttl int64, value string) (Result[s
 //
 // Parameters:
 //
-//	 key - The key to create.
-//		ttl - The expiry time (in milliseconds). If 0, the key will persist.
-//	 value - The serialized value to deserialize and assign to key.
-//	 restoreOptions - Set restore options with replace and absolute TTL modifiers, object idletime and frequency
+//	key - The key to create.
+//	ttl - The expiry time (in milliseconds). If 0, the key will persist.
+//	value - The serialized value to deserialize and assign to key.
+//	restoreOptions - Set restore options with replace and absolute TTL modifiers, object idletime and frequency
 //
 // Return value:
 //
@@ -5571,11 +5571,11 @@ func (client *baseClient) RestoreWithOptions(key string, ttl int64,
 //
 // Example:
 //
-//	 result, err := client.Dump([]string{"key"})
-//		if err != nil {
-//		    // handle error
-//		}
-//		fmt.Println(result.Value()) // Output: (Serialized Value)
+//	result, err := client.Dump([]string{"key"})
+//	if err != nil {
+//	    // handle error
+//	}
+//	fmt.Println(result.Value()) // Output: (Serialized Value)
 //
 // [valkey.io]: https://valkey.io/commands/dump/
 func (client *baseClient) Dump(key string) (Result[string], error) {
@@ -5631,11 +5631,11 @@ func (client *baseClient) ObjectEncoding(key string) (Result[string], error) {
 //
 // For example:
 //
-//	 result, err := client.Echo("Hello World")
-//		if err != nil {
-//		    // handle error
-//		}
-//		fmt.Println(result.Value()) // Output: Hello World
+//	result, err := client.Echo("Hello World")
+//	if err != nil {
+//	    // handle error
+//	}
+//	fmt.Println(result.Value()) // Output: Hello World
 //
 // [valkey.io]: https://valkey.io/commands/echo/
 func (client *baseClient) Echo(message string) (Result[string], error) {
@@ -6056,7 +6056,7 @@ func (client *baseClient) SortStoreWithOptions(
 //
 // Example:
 //
-//	//Creates the consumer "myconsumer" in consumer group "mygroup"
+//	// Creates the consumer "myconsumer" in consumer group "mygroup"
 //	success, err := client.xgroupCreateConsumer("mystream", "mygroup", "myconsumer")
 //	if err == nil && success {
 //	 fmt.Println("Consumer created")
