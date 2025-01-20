@@ -6708,3 +6708,45 @@ func (suite *GlideTestSuite) TestSortStoreWithOptions_ByPattern() {
 		assert.Equal(suite.T(), resultList, sortedValues)
 	})
 }
+
+func (suite *GlideTestSuite) TestCopy() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := "testKey1_" + uuid.New().String()
+		key2 := "testKey2_" + uuid.New().String()
+		value := "hello"
+		t := suite.T()
+		suite.verifyOK(client.Set(key, value))
+
+		// Test 1: Check the copy command
+		resultCopy, err := client.Copy(key, key2)
+		assert.Nil(t, err)
+		assert.True(t, resultCopy)
+
+		// Test 2: Check if the value stored at the source is same with destination key.
+		resultGet, err := client.Get(key2)
+		assert.Nil(t, err)
+		assert.Equal(t, value, resultGet.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestCopyWithOptions() {
+	suite.runWithDefaultClients(func(client api.BaseClient) {
+		key := "testKey1_" + uuid.New().String()
+		key2 := "testKey2_" + uuid.New().String()
+		value := "hello"
+		t := suite.T()
+		suite.verifyOK(client.Set(key, value))
+		suite.verifyOK(client.Set(key2, "World"))
+
+		// Test 1: Check the copy command with options
+		optsCopy := api.NewCopyOptionsBuilder().SetReplace()
+		resultCopy, err := client.CopyWithOptions(key, key2, optsCopy)
+		assert.Nil(t, err)
+		assert.True(t, resultCopy)
+
+		// Test 2: Check if the value stored at the source is same with destination key.
+		resultGet, err := client.Get(key2)
+		assert.Nil(t, err)
+		assert.Equal(t, value, resultGet.Value())
+	})
+}

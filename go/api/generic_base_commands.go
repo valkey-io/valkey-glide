@@ -705,4 +705,55 @@ type GenericBaseCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/sort/
 	SortReadOnlyWithOptions(key string, sortOptions *options.SortOptions) ([]Result[string], error)
+
+	// Copies the value stored at the source to the destination key if the
+	// destination key does not yet exist.
+	//
+	// Note:
+	//	 When in cluster mode, both source and destination must map to the same hash slot.
+	//
+	// Parameters:
+	//   source - The key to the source value.
+	//   destination - The key where the value should be copied to.
+	//
+	// Return value:
+	//  true if source was copied
+	//	false if source was not copied.
+	//
+	// Example:
+	//  result, err := client.Copy([]string{"source, destination"})
+	//	if err != nil {
+	//	    // handle error
+	//	}
+	//	fmt.Println(result) // Output: true
+	//
+	// [valkey.io]: https://valkey.io/commands/copy/
+	Copy(source string, destination string) (bool, error)
+
+	// Copies the value stored at the source to the destination key. When
+	// replace is true, removes the destination key first if it already
+	// exists, otherwise performs no action.
+	//
+	// Note:
+	//	 When in cluster mode, both source and destination must map to the same hash slot.
+	//
+	// Parameters:
+	//   source - The key to the source value.
+	//   destination - The key where the value should be copied to.
+	//   copyOptions - Set copy options with replace and DB destination-db
+
+	// Return value:
+	//  true if source was copied
+	//	false if source was not copied.
+	//
+	// Example:
+	//  copyOptions := api.NewCopyOptionsBuilder().SetDBDestination(2).SetReplace()
+	//  result, err := client.Copy([]string{"source, destination",copyOptions})
+	//	if err != nil {
+	//	    // handle error
+	//	}
+	//	fmt.Println(result) // Output: true
+	//
+	// [valkey.io]: https://valkey.io/commands/copy/
+	CopyWithOptions(source string, destination string, option *CopyOptions) (bool, error)
 }

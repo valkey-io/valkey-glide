@@ -355,3 +355,41 @@ func (opts *RestoreOptions) toArgs() ([]string, error) {
 	}
 	return args, err
 }
+
+// Optional arguments to Copy(source string, destination string, option *CopyOptions)
+//
+// [valkey.io]: https://valkey.io/commands/Copy/
+type CopyOptions struct {
+	// The REPLACE option removes the destination key before copying the value to it.
+	replace string
+	// Option allows specifying an alternative logical database index for the destination key
+	dbDestination int64
+}
+
+func NewCopyOptionsBuilder() *CopyOptions {
+	return &CopyOptions{}
+}
+
+// Custom setter methods to removes the destination key before copying the value to it.
+func (restoreOption *CopyOptions) SetReplace() *CopyOptions {
+	restoreOption.replace = Replace_keyword
+	return restoreOption
+}
+
+// Custom setter methods to allows specifying an alternative logical database index for the destination key.
+func (restoreOption *CopyOptions) SetDBDestination(destinationDB int64) *CopyOptions {
+	restoreOption.dbDestination = destinationDB
+	return restoreOption
+}
+
+func (opts *CopyOptions) toArgs() ([]string, error) {
+	args := []string{}
+	var err error
+	if opts.replace != "" {
+		args = append(args, string(opts.replace))
+	}
+	if opts.dbDestination != 0 {
+		args = append(args, "DB", utils.IntToString(opts.dbDestination))
+	}
+	return args, err
+}
