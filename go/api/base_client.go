@@ -2890,7 +2890,7 @@ func (client *baseClient) SortStoreWithOptions(
 //
 //	//Creates the consumer "myconsumer" in consumer group "mygroup"
 //	success, err := client.xgroupCreateConsumer("mystream", "mygroup", "myconsumer").get();
-//	if err == nill && success {
+//	if err == nil && success {
 //	 fmt.Println("Consumer created")
 //	}
 //
