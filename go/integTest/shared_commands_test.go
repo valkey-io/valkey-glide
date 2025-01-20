@@ -4098,7 +4098,7 @@ func sendWithCustomCommand(suite *GlideTestSuite, client api.BaseClient, args []
 	var res any
 	var err error
 	switch c := client.(type) {
-	case api.GlideClient:
+	case api.IGlideClient:
 		res, err = c.CustomCommand(args)
 	case api.GlideClusterClient:
 		res, err = c.CustomCommand(args)
@@ -4396,7 +4396,7 @@ func (suite *GlideTestSuite) TestXRead() {
 
 		// ensure that commands doesn't time out even if timeout > request timeout
 		var testClient api.BaseClient
-		if _, ok := client.(api.GlideClient); ok {
+		if _, ok := client.(api.IGlideClient); ok {
 			testClient = suite.client(api.NewGlideClientConfiguration().
 				WithAddress(&suite.standaloneHosts[0]).
 				WithUseTLS(suite.tls))
@@ -5412,7 +5412,7 @@ func (suite *GlideTestSuite) TestXPending() {
 		// each use of CustomCommand would make the tests difficult to read and maintain. These tests can be
 		// collapsed once the native commands are added in a subsequent release.
 
-		execStandalone := func(client api.GlideClient) {
+		execStandalone := func(client api.IGlideClient) {
 			// 1. Arrange the data
 			key := uuid.New().String()
 			groupName := "group" + uuid.New().String()
@@ -5568,7 +5568,7 @@ func (suite *GlideTestSuite) TestXPending() {
 		// this is only needed in order to be able to use custom commands.
 		// Once the native commands are added, this logic will be refactored.
 		switch c := client.(type) {
-		case api.GlideClient:
+		case api.IGlideClient:
 			execStandalone(c)
 		case api.GlideClusterClient:
 			execCluster(c)
@@ -5586,7 +5586,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 		// each use of CustomCommand would make the tests difficult to read and maintain. These tests can be
 		// collapsed once the native commands are added in a subsequent release.
 
-		execStandalone := func(client api.GlideClient) {
+		execStandalone := func(client api.IGlideClient) {
 			// 1. Arrange the data
 			key := uuid.New().String()
 			missingKey := uuid.New().String()
@@ -5892,7 +5892,7 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 		// this is only needed in order to be able to use custom commands.
 		// Once the native commands are added, this logic will be refactored.
 		switch c := client.(type) {
-		case api.GlideClient:
+		case api.IGlideClient:
 			execStandalone(c)
 		case api.GlideClusterClient:
 			execCluster(c)

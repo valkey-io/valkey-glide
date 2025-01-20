@@ -11,31 +11,31 @@ import (
 )
 
 // GlideClient interface compliance check.
-var _ GlideClient = (*glideClient)(nil)
+var _ IGlideClient = (*GlideClient)(nil)
 
-// GlideClient is a client used for connection in Standalone mode.
-type GlideClient interface {
+// IGlideClient is a client used for connection in Standalone mode.
+type IGlideClient interface {
 	BaseClient
 	GenericCommands
 	ServerManagementCommands
 }
 
-// glideClient implements standalone mode operations by extending baseClient functionality.
-type glideClient struct {
+// GlideClient implements standalone mode operations by extending baseClient functionality.
+type GlideClient struct {
 	*baseClient
 }
 
-// NewGlideClient creates a [GlideClient] in standalone mode using the given [GlideClientConfiguration].
-func NewGlideClient(config *GlideClientConfiguration) (GlideClient, error) {
+// NewGlideClient creates a [IGlideClient] in standalone mode using the given [GlideClientConfiguration].
+func NewGlideClient(config *GlideClientConfiguration) (IGlideClient, error) {
 	client, err := createClient(config)
 	if err != nil {
 		return nil, err
 	}
 
-	return &glideClient{client}, nil
+	return &GlideClient{client}, nil
 }
 
-func (client *glideClient) CustomCommand(args []string) (interface{}, error) {
+func (client *GlideClient) CustomCommand(args []string) (interface{}, error) {
 	res, err := client.executeCommand(C.CustomCommand, args)
 	if err != nil {
 		return nil, err
@@ -43,7 +43,7 @@ func (client *glideClient) CustomCommand(args []string) (interface{}, error) {
 	return handleInterfaceResponse(res)
 }
 
-func (client *glideClient) ConfigSet(parameters map[string]string) (string, error) {
+func (client *GlideClient) ConfigSet(parameters map[string]string) (string, error) {
 	result, err := client.executeCommand(C.ConfigSet, utils.MapToString(parameters))
 	if err != nil {
 		return "", err
@@ -51,7 +51,7 @@ func (client *glideClient) ConfigSet(parameters map[string]string) (string, erro
 	return handleStringResponse(result)
 }
 
-func (client *glideClient) ConfigGet(args []string) (map[string]string, error) {
+func (client *GlideClient) ConfigGet(args []string) (map[string]string, error) {
 	res, err := client.executeCommand(C.ConfigGet, args)
 	if err != nil {
 		return nil, err
@@ -59,7 +59,7 @@ func (client *glideClient) ConfigGet(args []string) (map[string]string, error) {
 	return handleStringToStringMapResponse(res)
 }
 
-func (client *glideClient) Select(index int64) (string, error) {
+func (client *GlideClient) Select(index int64) (string, error) {
 	result, err := client.executeCommand(C.Select, []string{utils.IntToString(index)})
 	if err != nil {
 		return "", err
