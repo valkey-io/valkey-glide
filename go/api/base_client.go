@@ -2957,6 +2957,10 @@ func (client *baseClient) XGroupDelConsumer(
 //
 // For example:
 //
+//	//Assuming streamId1 and streamId2 already exist.
+//	xackResult, err := client.XAck("key", "groupName", []string{"streamId1", "streamId2"})
+//	fmt.Println(xackResult) // 2
+//
 // [valkey.io]: https://valkey.io/commands/xack/
 func (client *baseClient) XAck(key string, group string, ids []string) (int64, error) {
 	result, err := client.executeCommand(C.XAck, append([]string{key, group}, ids...))
